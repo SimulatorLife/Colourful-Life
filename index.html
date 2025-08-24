@@ -9,27 +9,34 @@
   </style>
 </head>
 <body>
+  <button id="pauseButton">Pause</button>
   <canvas id="gameCanvas"></canvas>
   <script>
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
-  canvas.width = 800;
-  canvas.height = 800;
-  const cellSize = 8;
+  canvas.width = 1000;
+  canvas.height = 1000;
+  const cellSize = 10;
   const rows = canvas.height / cellSize;
   const cols = canvas.width / cellSize;
-  const colors = [
-    '#FFB6C1', // pastel red
-    '#98FB98', // pastel green
-    '#ADD8E6', // pastel blue
-    '#FFFACD', // pastel yellow
-    '#FFAEC9', // pastel magenta
-    '#E0FFFF', // pastel cyan
-    '#FBEFD5', // pastel white
-    '#FFA07A', // pastel orange
-    '#E6A8D7', // pastel purple
-    '#8CBED6'  // pastel dark blue
-  ];
+  const pauseButton = document.getElementById('pauseButton');
+  let paused = false;
+
+  function togglePause() {
+    paused = !paused;
+    pauseButton.textContent = paused ? 'Resume' : 'Pause';
+    if (!paused) {
+      requestAnimationFrame(update);
+    }
+  }
+
+  pauseButton.addEventListener('click', togglePause);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'p' || e.key === 'P') {
+      togglePause();
+    }
+  });
+  const colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'];
   const reservedColors = {
     flood: 'rgba(0, 0, 255, 0.5)',
     drought: 'rgba(210, 180, 140, 0.5)',
@@ -37,9 +44,8 @@
     coldwave: 'rgba(135, 206, 235, 0.5)',
   };
 
-  const chanceToMutate = 0.01;
-  const maxAge = 10;
-  const geneMutationRange = 0.1;
+  const chanceToMutate = 0.1;
+  const geneMutationRange = 0.2;
   let eventCounter = 0;
   let currentEvent = generateRandomEvent(); // Initialize with an event;
 
@@ -58,7 +64,7 @@
     static inheritPreferences(parentA, parentB) {
       const preferences = parentA.preferences.map((prefA, index) => {
         const prefB = parentB.preferences[index];
-        return (prefA + prefB) / 2 + (Math.random() * 0.1 - 0.05); // Inherit preferences with a slight mutation
+        return (prefA + prefB) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2); // Inherit preferences with a slight mutation
       });
 
       return preferences;
@@ -133,7 +139,6 @@
     }
   }
 
-
   function countNeighbors(row, col) {
     const neighbors = {};
 
@@ -167,7 +172,6 @@
 
     return bestMate;
   }
-
 
   function findTargets(row, col, cell, highDensity) {
     const mates = [];
@@ -273,7 +277,7 @@
     const row = parentA.row;
     const col = parentA.col;
 
-    // Inherit the color from both parents with a slight chance of mutation
+    // Randomly inherit one parent's color, with a chance to mutate to a different color
     let newColor = Math.random() < 0.5 ? parentA.color : parentB.color;
     if (Math.random() < chanceToMutate) {
       const availableColors = colors.filter(color => color !== newColor);
@@ -344,6 +348,9 @@
   }
 
   function update() {
+    if (paused) {
+      return;
+    }
     updateGrid();
     drawGrid();
     requestAnimationFrame(update);
@@ -351,7 +358,9 @@
 
   initGrid();
   drawGrid();
-  requestAnimationFrame(update);
+  if (!paused) {
+    requestAnimationFrame(update);
+  }
   </script>
 
   </body>

@@ -57,10 +57,11 @@
       this.preferences = preferences;
     }
   }
-
+  let nextCellId = 0;
 
   class Cell {
     constructor(row, col, genes) {
+      this.id = nextCellId++;
       this.genes = genes;
       this.row = row;
       this.prevRow = null;
@@ -96,7 +97,7 @@
   function generateRandomEvent() {
     const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
     const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-    const duration = Math.floor(Math.random() * 500) + 100; // Event duration between 100 and 600 frames
+    const duration = Math.floor(Math.random() * 501) + 100; // Event duration between 100 and 600 frames
     const strength = Math.random(); // Event strength between 0 and 1
     const affectedArea = {
       x: Math.floor(Math.random() * cols),
@@ -395,9 +396,9 @@
           grid[newRow][newCol] = offspring;
         } else if (society.some(member => member.target === target)) {
           if (Math.random() < cell.cooperate) {
-            society.push({id: id, target: target, cooperate: true})
+            society.push({id: cell.id, target: target, cooperate: true})
           } else {
-            society.push({id: id, target: target, cooperate: false})
+            society.push({id: cell.id, target: target, cooperate: false})
           }
         }
 
