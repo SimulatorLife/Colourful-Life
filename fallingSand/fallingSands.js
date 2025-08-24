@@ -52,9 +52,23 @@ function update() {
     for (let x = 0; x < gridWidth; x++) {
       // Falling Sands logic
       if (grid[y][x] === SAND) {
-        if (y < gridHeight - 1 && grid[y + 1][x] === 0) {
-          newGrid[y][x] = 0;
-          newGrid[y + 1][x] = SAND;
+        if (y < gridHeight - 1) {
+          // try to fall straight down first
+          if (grid[y + 1][x] === 0) {
+            newGrid[y][x] = 0;
+            newGrid[y + 1][x] = SAND;
+          } else {
+            // check down-left and down-right
+            const options = [];
+            if (x > 0 && grid[y + 1][x - 1] === 0) options.push(-1);
+            if (x < gridWidth - 1 && grid[y + 1][x + 1] === 0) options.push(1);
+
+            if (options.length > 0) {
+              const dir = options[Math.floor(Math.random() * options.length)];
+              newGrid[y][x] = 0;
+              newGrid[y + 1][x + dir] = SAND;
+            }
+          }
         }
       }
 
