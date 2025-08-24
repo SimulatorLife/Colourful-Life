@@ -346,7 +346,7 @@
   function updateGrid() {
     const populationDensity = calculatePopulationDensity();
     // TODO: Population density should be more localized to each cell's neighborhood (maybe split overall density into a grid of 9 local densities plus immediate neighbors)
-    const highDensity = populationDensity > 0.1; // Adjust the threshold for high density as needed
+    const highDensity = populationDensity > 0.1 + Math.random() * 0.2; // Adjust the threshold for high density as needed
 
     if (eventCounter % 2000 === 0) {
       currentEvent = generateRandomEvent();
@@ -370,10 +370,10 @@
             continue;
           }
 
-          const starving = cell.hunger > 0.7;  // TODO: Make starvation threshold dynamic based on genes
+          const starving = cell.hunger > Math.max(0.5 + Math.random(), 1);  // TODO: Make starvation threshold dynamic based on genes
 
           if (starving) {  // TODO: Make sight-hunger influence be dynamic based on genes
-            cell.sight = Math.max(1, cell.sight - 1); // Decrease sight if starving
+            cell.sight = Math.max(1, cell.sight - cell.hunger); // Decrease sight if starving
           }
 
           const { mates, enemies, society } = findTargets(row, col, cell, highDensity);
