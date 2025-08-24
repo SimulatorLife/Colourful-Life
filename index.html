@@ -291,7 +291,7 @@
     const row = parentA.row;
     const col = parentA.col;
 
-    // Inherit the color from both parents with a slight chance of mutation
+    // Randomly inherit one parent's color, with a chance to mutate to a different color
     let newColor = Math.random() < 0.5 ? parentA.color : parentB.color;
     if (Math.random() < chanceToMutate) {
       const availableColors = colors.filter(color => color !== newColor);
