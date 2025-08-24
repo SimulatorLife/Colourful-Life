@@ -53,12 +53,12 @@
     constructor(row, col, color, sight, initPreferences, initGenes) {
       this.row = row;
       this.col = col;
-      this.color = color;
+      this.color = color || Cell.genesToColor(this.genes);
       this.age = 0;
       this.sight = sight;
       this.preferences = initPreferences;
       this.hunger = 0;
-      this.genes = initGenes;
+      this.genes = initGenes || Cell.randomGenes();
     }
 
     static inheritPreferences(parentA, parentB) {
@@ -77,6 +77,56 @@
       });
       return newGenes;
     }
+  
+    static randomGenes() {
+        const genes = [];
+        for (let a = 0; a < 6; a++) {
+          const weights = [];
+          for (let i = 0; i < 5; i++) {
+            weights.push(Math.random() * 2 - 1);
+          }
+          genes.push(weights);
+        }
+        return genes;
+      }
+
+    static genesToColor(genes) {
+      // Map the first three action weight sums to RGB
+      const sums = genes.slice(0, 3).map(arr => arr.reduce((s, w) => s + w, 0));
+      const norm = (v) => Math.max(0, Math.min(255, Math.floor((v + 5) / 10 * 255)));
+      const r = norm(sums[0]);
+      const g = norm(sums[1]);
+      const b = norm(sums[2]);
+      return `rgb(${r},${g},${b})`;
+    }
+
+    decide(n, e, s, w) {
+      const inputs = [1, n, e, s, w];
+      const scores = this.genes.map(weights =>
+        weights.reduce((sum, weight, idx) => sum + weight * inputs[idx], 0)
+      );
+      let max = scores[0];
+      let index = 0;
+      for (let i = 1; i < scores.length; i++) {
+        if (scores[i] > max) { max = scores[i]; index = i; }
+      }
+      return index; // 0..5
+    }
+
+    cloneWithMutation() {
+      const mutated = this.genes.map(row =>
+        row.map(w => w + (Math.random() * 0.2 - 0.1))
+      );
+      return new Cell(this.row, this.col, mutated);
+    }
+
+    manageHunger(highDensity) {
+        this.hunger += highDensity ? 0.2 : 0.01;  // TODO: Make this dynamic and consider LOCAL population density (based on neighbors/proximity)
+        if (this.hunger >= 1) {  // TODO: Cells should have different starvation levels based on genes
+          return true; // Starved to death
+        }
+        return false; // Still alive
+      }
   }
 
   function generateRandomEvent() {
@@ -91,14 +141,6 @@
       height: Math.floor(Math.random() * (rows / 4)) + 1,
     };
     return { eventType, duration, affectedArea, strength };
-  }
-
-  function manageHunger(cell, highDensity) {
-    cell.hunger += highDensity ? 0.2 : 0.01;  // TODO: Make this dynamic and consider LOCAL population density (based on neighbors/proximity)
-    if (cell.hunger >= 1) {  // TODO: Cells should have different starvation levels based on genes
-      return true; // Starved to death
-    }
-    return false; // Still alive
   }
 
   const grid = new Array(rows).fill(null).map(() => new Array(cols).fill(null));
@@ -136,6 +178,15 @@
         currentEvent.affectedArea.width * cellSize,
         currentEvent.affectedArea.height * cellSize,
       );
+    }
+  }
+
+  function seed(count) {
+    for (let i = 0; i < count; i++) {
+      const spot = randomEmptyCell();
+      if (spot) {
+        grid[spot.r][spot.c] = new Cell(spot.r, spot.c);
+      }
     }
   }
 
@@ -314,7 +365,7 @@
         if (cell) {
           applyEventEffects(cell, row, col, currentEvent);
 
-          if (manageHunger(cell, highDensity)) {
+          if (cell.manageHunger(highDensity)) {
             grid[row][col] = null; // Remove the cell if it starved to death
             continue;
           }
