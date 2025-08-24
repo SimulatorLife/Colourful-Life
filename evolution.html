@@ -1,133 +1,231 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Evolution with Energy</title>
-    <style>
-        canvas {
-            border: 1px solid #000;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neural Life</title>
+  <style>
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: #000;
+    }
+    #info {
+      color: #fff;
+      text-align: center;
+      font-family: sans-serif;
+      margin-top: 8px;
+    }
+    #log {
+      max-height: 120px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.5);
+      padding: 4px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+  </style>
 </head>
 <body>
-<canvas id="world"></canvas>
-<script>
-const canvas = document.getElementById('world');
-const ctx = canvas.getContext('2d');
-canvas.width = 600;
-canvas.height = 400;
+  <canvas id="world"></canvas>
+  <div id="info">
+    <div id="stats"></div>
+    <div id="log"></div>
+  </div>
+  <script>
+  const canvas = document.getElementById('world');
+  const ctx = canvas.getContext('2d');
+  canvas.width = 800;
+  canvas.height = 800;
+  const CELL_SIZE = 6;
+  const COLS = canvas.width / CELL_SIZE;
+  const ROWS = canvas.height / CELL_SIZE;
+  const statsDiv = document.getElementById('stats');
+  const logDiv = document.getElementById('log');
+  let tick = 0;
 
-const cellSize = 10;
-const cols = Math.floor(canvas.width / cellSize);
-const rows = Math.floor(canvas.height / cellSize);
-
-// Grid storing organisms
-const organisms = [];
-
-// Secondary grid storing energy available on each tile
-const maxTileEnergy = 5;
-const regenRate = 0.05; // energy regenerated per tick per tile
-const energyGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => maxTileEnergy / 2));
-
-class Cell {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.energy = 5;
+  class Cell {
+    constructor(row, col, genes) {
+      this.row = row;
+      this.col = col;
+      this.energy = 5;
+      this.genes = genes || Cell.randomGenes();
+      this.color = Cell.genesToColor(this.genes);
     }
 
-    move() {
-        if (this.energy <= 0) return; // cannot move without energy
-        // simple random movement to neighbouring tile
-        const dx = Math.floor(Math.random() * 3) - 1;
-        const dy = Math.floor(Math.random() * 3) - 1;
-        const newX = Math.max(0, Math.min(cols - 1, this.x + dx));
-        const newY = Math.max(0, Math.min(rows - 1, this.y + dy));
-        this.x = newX;
-        this.y = newY;
-        this.energy -= 0.2; // moving costs energy
-    }
-
-    harvest() {
-        const tileEnergy = energyGrid[this.y][this.x];
-        if (tileEnergy > 0) {
-            const gained = Math.min(1, tileEnergy);
-            energyGrid[this.y][this.x] -= gained;
-            this.energy += gained;
+    static randomGenes() {
+      const genes = [];
+      for (let a = 0; a < 6; a++) {
+        const weights = [];
+        for (let i = 0; i < 5; i++) {
+          weights.push(Math.random() * 2 - 1);
         }
+        genes.push(weights);
+      }
+      return genes;
     }
 
-    reproduce(targetArray) {
-        if (this.energy >= 10) {
-            this.energy /= 2; // share energy with child
-            const child = new Cell(this.x, this.y);
-            child.energy = this.energy;
-            targetArray.push(child);
+    static genesToColor(genes) {
+      // Map the first three action weight sums to RGB
+      const sums = genes.slice(0, 3).map(arr => arr.reduce((s, w) => s + w, 0));
+      const norm = (v) => Math.max(0, Math.min(255, Math.floor((v + 5) / 10 * 255)));
+      const r = norm(sums[0]);
+      const g = norm(sums[1]);
+      const b = norm(sums[2]);
+      return `rgb(${r},${g},${b})`;
+    }
+
+    decide(n, e, s, w) {
+      const inputs = [1, n, e, s, w];
+      const scores = this.genes.map(weights =>
+        weights.reduce((sum, weight, idx) => sum + weight * inputs[idx], 0)
+      );
+      let max = scores[0];
+      let index = 0;
+      for (let i = 1; i < scores.length; i++) {
+        if (scores[i] > max) { max = scores[i]; index = i; }
+      }
+      return index; // 0..5
+    }
+
+    cloneWithMutation() {
+      const mutated = this.genes.map(row =>
+        row.map(w => w + (Math.random() * 0.2 - 0.1))
+      );
+      return new Cell(this.row, this.col, mutated);
+    }
+  }
+
+  const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+
+  function randomEmptyCell() {
+    const cells = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (!grid[r][c]) cells.push({ r, c });
+      }
+    }
+    return cells[Math.floor(Math.random() * cells.length)];
+  }
+
+  function seed(count) {
+    for (let i = 0; i < count; i++) {
+      const spot = randomEmptyCell();
+      if (spot) {
+        grid[spot.r][spot.c] = new Cell(spot.r, spot.c);
+      }
+    }
+  }
+
+  function step() {
+    const cells = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (grid[r][c]) cells.push(grid[r][c]);
+      }
+    }
+
+    const dead = new Set();
+
+    for (const cell of cells) {
+      if (dead.has(cell)) continue;
+
+      let r = cell.row;
+      let c = cell.col;
+
+      cell.energy -= 0.01;
+      if (cell.energy <= 0) { grid[r][c] = null; continue; }
+
+      const n = r > 0 && grid[r-1][c] ? 1 : 0;
+      const e = c < COLS-1 && grid[r][c+1] ? 1 : 0;
+      const s = r < ROWS-1 && grid[r+1][c] ? 1 : 0;
+      const w = c > 0 && grid[r][c-1] ? 1 : 0;
+
+      const action = cell.decide(n, e, s, w);
+      const dirs = [ [-1,0], [0,1], [1,0], [0,-1] ];
+      if (action < 4) {
+        const [dr, dc] = dirs[action];
+        const nr = r + dr, nc = c + dc;
+        if (nr >=0 && nr < ROWS && nc >=0 && nc < COLS && !grid[nr][nc]) {
+          grid[nr][nc] = cell;
+          grid[r][c] = null;
+          cell.row = nr; cell.col = nc;
         }
-    }
-
-    tick(targetArray) {
-        this.move();
-        this.harvest();
-        this.reproduce(targetArray);
-    }
-
-    draw() {
-        ctx.fillStyle = 'black';
-        ctx.fillRect(this.x * cellSize, this.y * cellSize, cellSize, cellSize);
-    }
-}
-
-function regenerateEnergy() {
-    for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-            energyGrid[y][x] = Math.min(maxTileEnergy, energyGrid[y][x] + regenRate);
+      } else if (action === 4) { // reproduce
+        if (cell.energy > 6) {
+          const empty = dirs
+            .map(([dr,dc]) => ({r:r+dr,c:c+dc}))
+            .filter(p => p.r>=0 && p.r<ROWS && p.c>=0 && p.c<COLS && !grid[p.r][p.c]);
+          if (empty.length) {
+            const spot = empty[Math.floor(Math.random()*empty.length)];
+            const child = cell.cloneWithMutation();
+            child.row = spot.r; child.col = spot.c;
+            child.energy = 3;
+            grid[spot.r][spot.c] = child;
+            cell.energy -= 3;
+            logEvent(`reproduce @ ${spot.r},${spot.c}`);
+          }
         }
-    }
-}
-
-function drawEnergy() {
-    for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-            const energy = energyGrid[y][x] / maxTileEnergy; // 0 to 1
-            const color = `rgba(0, 255, 0, ${energy})`;
-            ctx.fillStyle = color;
-            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+      } else if (action === 5) { // attack
+        const neighbours = dirs
+          .map(([dr,dc]) => ({r:r+dr,c:c+dc}))
+          .filter(p => p.r>=0 && p.r<ROWS && p.c>=0 && p.c<COLS && grid[p.r][p.c]);
+        if (neighbours.length) {
+          const spot = neighbours[Math.floor(Math.random()*neighbours.length)];
+          const target = grid[spot.r][spot.c];
+          grid[spot.r][spot.c] = null;
+          dead.add(target);
+          cell.energy += 2;
+          logEvent(`attack @ ${spot.r},${spot.c}`);
         }
+      }
     }
-}
+  }
 
-function step() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    regenerateEnergy();
-    drawEnergy();
-
-    // Work on a snapshot to avoid newly added cells acting this tick
-    const snapshot = organisms.slice();
-    const updatedOrganisms = [];
-
-    for (const org of snapshot) {
-        org.tick(updatedOrganisms);
-        if (org.energy > 0) {
-            updatedOrganisms.push(org);
-            org.draw();
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = grid[r][c];
+        if (cell) {
+          ctx.fillStyle = cell.color;
+          ctx.fillRect(c*CELL_SIZE, r*CELL_SIZE, CELL_SIZE, CELL_SIZE);
         }
+      }
     }
+  }
 
-    // Replace the original array with the updated set of organisms
-    organisms.length = 0;
-    organisms.push(...updatedOrganisms);
+  function loop() {
+    step();
+    draw();
+    tick++;
+    const population = countCells();
+    statsDiv.textContent = `Tick: ${tick} | Population: ${population}`;
+    requestAnimationFrame(loop);
+  }
 
-    requestAnimationFrame(step);
-}
+  seed(200);
+  loop();
+  function countCells() {
+    let count = 0;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (grid[r][c]) count++;
+      }
+    }
+    return count;
+  }
 
-// Seed initial cells
-for (let i = 0; i < 10; i++) {
-    organisms.push(new Cell(Math.floor(cols / 2), Math.floor(rows / 2)));
-}
+  function logEvent(msg) {
+    const entry = document.createElement('div');
+    entry.textContent = msg;
+    logDiv.appendChild(entry);
+    if (logDiv.childNodes.length > 50) {
+      logDiv.removeChild(logDiv.firstChild);
+    }
+    logDiv.scrollTop = logDiv.scrollHeight;
+  }
 
-step();
-</script>
+  </script>
 </body>
 </html>
