@@ -58,19 +58,19 @@ class Cell {
         }
     }
 
-    reproduce() {
+    reproduce(targetArray) {
         if (this.energy >= 10) {
             this.energy /= 2; // share energy with child
             const child = new Cell(this.x, this.y);
             child.energy = this.energy;
-            organisms.push(child);
+            targetArray.push(child);
         }
     }
 
-    tick() {
+    tick(targetArray) {
         this.move();
         this.harvest();
-        this.reproduce();
+        this.reproduce(targetArray);
     }
 
     draw() {
@@ -103,16 +103,22 @@ function step() {
     regenerateEnergy();
     drawEnergy();
 
-    // Update organisms
-    for (let i = organisms.length - 1; i >= 0; i--) {
-        const org = organisms[i];
-        org.tick();
-        if (org.energy <= 0) {
-            organisms.splice(i, 1);
-        } else {
+    // Work on a snapshot to avoid newly added cells acting this tick
+    const snapshot = organisms.slice();
+    const updatedOrganisms = [];
+
+    for (const org of snapshot) {
+        org.tick(updatedOrganisms);
+        if (org.energy > 0) {
+            updatedOrganisms.push(org);
             org.draw();
         }
     }
+
+    // Replace the original array with the updated set of organisms
+    organisms.length = 0;
+    organisms.push(...updatedOrganisms);
+
     requestAnimationFrame(step);
 }
 
