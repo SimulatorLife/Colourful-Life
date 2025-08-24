@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Colourful Life Simulation</title>
+  <style>
+  canvas { display: block; margin: 0 auto; background-color: #000; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = 800;
+  canvas.height = 800;
+  const cellSize = 8;
+  const rows = canvas.height / cellSize;
+  const cols = canvas.width / cellSize;
+  const colors = [
+    '#FFB6C1', // pastel red
+    '#98FB98', // pastel green
+    '#ADD8E6', // pastel blue
+    '#FFFACD', // pastel yellow
+    '#FFAEC9', // pastel magenta
+    '#E0FFFF', // pastel cyan
+    '#FBEFD5', // pastel white
+    '#FFA07A', // pastel orange
+    '#E6A8D7', // pastel purple
+    '#8CBED6'  // pastel dark blue
+  ];
+  const reservedColors = {
+    flood: 'rgba(0, 0, 255, 0.5)',
+    drought: 'rgba(210, 180, 140, 0.5)',
+    heatwave: 'rgba(255, 140, 0, 0.5)',
+    coldwave: 'rgba(135, 206, 235, 0.5)',
+  };
+  const grid = new Array(rows).fill(null).map(() => new Array(cols).fill(null));
+  const organisms = []; // Create an empty array to store the organisms
+  const chanceToMutate = 0.01;
+  const maxAge = 100;
+  const geneMutationRange = 0.1;
+  const societyPreferenceThreshold = 0.5;
+  let eventCounter = 0;
+  let currentEvent = generateRandomEvent();
+
+  class Genes {
+    constructor(colorIndex, sight, eventAwareness, curiosity, movementPattern, moveProbability, societyFormation, preferences) {
+      this.colorIndex = Math.round(colorIndex);
+      this.sight = Math.min(Math.max(sight, 0), 5);
+      this.eventAwareness = eventAwareness;
+      this.curiosity = curiosity;
+      this.movementPattern = movementPattern;
+      this.moveProbability = moveProbability;
+      this.societyFormation = societyFormation;
+      this.preferences = preferences;
+    }
+  }
+  let nextCellId = 0;
+
+  class Cell {
+    constructor(row, col, genes) {
+      this.id = nextCellId++;
+      this.genes = genes;
+      this.row = row;
+      this.prevRow = null;
+      this.prevCol = null;
+      this.col = col;
+      this.colour = colors[Math.round(genes.colorIndex)];
+      this.age = 0;
+      this.hunger = 0;
+      this.currentSight = genes.sight; // can be changed w/o changing gene's sight value
+      this.updated = false;
+    }
+  }
+
+  function createRandomCell(row, col) {
+    const preferences = Array.from({ length: colors.length }, () => Math.random());
+    const movementPattern = Array.from({ length: 8 }, () => Math.random());
+    const societyFormation = Math.random();
+    const genes = new Genes(
+      Math.random() * (colors.length - 1),
+      Math.random() * 5,
+      Math.random(),
+      Math.random(),
+      movementPattern,
+      Math.random(),
+      societyFormation,
+      preferences
+    );
+
+    return new Cell(row, col, genes);
+  }
+
+
+  function generateRandomEvent() {
+    const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
+    const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+    const duration = Math.floor(Math.random() * 501) + 100; // Event duration between 100 and 600 frames
+    const strength = Math.random(); // Event strength between 0 and 1
+    const affectedArea = {
+      x: Math.floor(Math.random() * cols),
+      y: Math.floor(Math.random() * rows),
+      width: Math.floor(Math.random() * (cols / 4)) + 1,
+      height: Math.floor(Math.random() * (rows / 4)) + 1,
+    };
+    return { eventType, duration, affectedArea, strength };
+  }
+
+  function manageHunger(cell, highDensity) {
+    cell.hunger += highDensity ? 0.02 : 0.01;
+    if (cell.hunger >= 1) {
+      return true; // Starved to death
+    }
+    return false; // Still alive
+  }
+
+  function initGrid() {
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (Math.random() < 0.05) {
+          const newOrganism = createRandomCell(row, col);
+          organisms.push(newOrganism);
+          grid[row][col] = newOrganism;
+        }
+      }
+    }
+  }
+
+  function drawGrid() {
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (grid[row][col]) {
+          ctx.fillStyle = grid[row][col].color;
+          ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+        } else {
+          ctx.clearRect(col * cellSize, row * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+
+    // Draw the event area
+    if (currentEvent) {
+      ctx.fillStyle = reservedColors[currentEvent.eventType];
+      ctx.fillRect(
+        currentEvent.affectedArea.x * cellSize,
+        currentEvent.affectedArea.y * cellSize,
+        currentEvent.affectedArea.width * cellSize,
+        currentEvent.affectedArea.height * cellSize,
+      );
+    }
+}
+
+
+  function countNeighbors(row, col) {
+    const neighbors = {};
+
+    for (let x = -1; x <= 1; x++) {
+      for (let y = -1; y <= 1; y++) {
+        if (x === 0 && y === 0) continue;
+        const newRow = (row + y + rows) % rows;
+        const newCol = (col + x + cols) % cols;
+        const color = grid[newRow][newCol]?.color;
+        if (color) {
+          neighbors[color] = (neighbors[color] || 0) + 1;
+        }
+      }
+    }
+
+    return neighbors;
+  }
+
+  function findBestMate(cell, potentialMates) {
+    let bestMate = null;
+    let highestPreference = -Infinity;
+
+    potentialMates.forEach(mate => {
+      const preference = cell.genes.preferences[colors.indexOf(mate.color)];
+      if (preference > highestPreference) {
+        highestPreference = preference;
+        bestMate = mate;
+      }
+    });
+
+    return bestMate;
+  }
+
+  function findTargets(row, col, cell, highDensity) {
+      const mates = [];
+      const enemies = [];
+      const society = [];
+      const societyFormationThreshold = cell.genes.societyFormation;
+      const roundedSight = Math.round(cell.currentSight);
+      if (roundedSight >= 1) {
+        for (let x = -roundedSight; x <= roundedSight; x++) {
+          for (let y = -roundedSight; y <= roundedSight; y++) {
+            if (x === 0 && y === 0) continue;
+            const newRow = Math.floor((row + y + rows) % rows);
+            const newCol = Math.floor((col + x + cols) % cols);
+            const target = grid[newRow][newCol];
+            if (target) {
+              const targetPreference = cell.genes.preferences[colors.indexOf(target.color)];
+              if (targetPreference >= societyPreferenceThreshold) {
+                society.push({ row: newRow, col: newCol, target });
+              } else if (highDensity || targetPreference <= 0.5) {
+                enemies.push({ row: newRow, col: newCol, target });
+              } else {
+                mates.push({ row: newRow, col: newCol, target });
+              }
+            }
+          }
+        }
+      }
+
+      return { mates, enemies, society };
+  }
+
+  function moveToTarget(row, col, targetRow, targetCol) {
+      const newRow = row + Math.sign(targetRow - row);
+      const newCol = col + Math.sign(targetCol - col);
+
+      if (newRow >= 0 && newRow < rows && newCol >= 0 && newCol < cols && !grid[newRow][newCol]) {
+        grid[newRow][newCol] = grid[row][col];
+        grid[row][col] = null;
+        return true;
+      }
+      return false;
+  }
+
+
+  function moveRandomly(row, col, cell) {
+    const moveChance = Math.random();
+
+    if (moveChance <= cell.genes.moveProbability) {
+      let newRow, newCol;
+      let attempts = 0;
+      const maxAttempts = 8;
+
+      do {
+        newRow = row + Math.floor(Math.random() * 3) - 1;
+        newCol = col + Math.floor(Math.random() * 3) - 1;
+        attempts++;
+      } while (
+        (newRow === cell.prevRow && newCol === cell.prevCol) ||
+        newRow < 0 ||
+        newRow >= rows ||
+        newCol < 0 ||
+        newCol >= cols ||
+        grid[newRow][newCol] ||
+        attempts >= maxAttempts
+      );
+
+      if (attempts < maxAttempts) {
+        grid[newRow][newCol] = cell;
+        grid[row][col] = null;
+
+        cell.prevRow = row;
+        cell.prevCol = col;
+      }
+    }
+  }
+
+  function calculatePopulationDensity() {
+    let population = 0;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (grid[row][col]) {
+          population++;
+        }
+      }
+    }
+    return population / (rows * cols);
+  }
+
+  function applyEventEffects(cell, row, col, currentEvent) {
+    if (
+      currentEvent &&
+      row >= currentEvent.affectedArea.y &&
+      row < currentEvent.affectedArea.y + currentEvent.affectedArea.height &&
+      col >= currentEvent.affectedArea.x &&
+      col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
+    ) {
+      switch (currentEvent.eventType) {
+        case 'flood':
+        // Apply flood effects, e.g., remove certain organisms or reduce their energy
+        break;
+        case 'drought':
+        // Apply drought effects, e.g., increase hunger, reduce energy
+        break;
+        case 'heatwave':
+        // Apply heatwave effects, e.g., remove certain organisms or increase their hunger
+        break;
+        case 'coldwave':
+        // Apply coldwave effects, e.g., reduce energy or movement speed
+        break;
+      }
+    }
+  }
+
+  function breed(parentA, parentB) {
+    const row = parentA.row;
+    const col = parentA.col;
+
+    const preferences = parentA.genes.preferences.map((pref, index) => {
+      return (pref + parentB.genes.preferences[index]) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2);
+    });
+
+    const newGenes = new Genes(
+      (parentA.genes.colorIndex + parentB.genes.colorIndex) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2),
+      (parentA.genes.sight + parentB.genes.sight) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2),
+      (parentA.genes.eventAwareness + parentB.genes.eventAwareness) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2),
+      (parentA.genes.curiosity + parentB.genes.curiosity) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2),
+      (parentA.genes.movementPattern + parentB.genes.movementPattern) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2),
+      (parentA.genes.moveProbability + parentB.genes.moveProbability) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2),
+      (parentA.genes.societyFormation + parentB.genes.societyFormation) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2),
+      preferences
+    );
+
+    const offspring = new Cell(row, col, newGenes);
+    return offspring;
+  }
+
+  function getNextDirection(cell) {
+    const randomValue = Math.random();
+    let cumulativeProbability = 0;
+
+    for (let i = 0; i < cell.genes.movementPattern.length; i++) {
+      cumulativeProbability += cell.genes.movementPattern[i];
+      if (randomValue < cumulativeProbability || i === cell.genes.movementPattern.length - 1) {
+        return i;
+      }
+    }
+
+    return cell.genes.movementPattern.length - 1;
+  }
+
+  function updateGrid() {
+    const populationDensity = calculatePopulationDensity();
+    const highDensity = populationDensity > 0.2; // Adjust the threshold for high density as needed
+
+    if (eventCounter % 2000 === 0) {
+      currentEvent = generateRandomEvent();
+    }
+
+    if (currentEvent && eventCounter % (2000 + currentEvent.duration) === 0) {
+      currentEvent = generateRandomEvent();
+    }
+
+    eventCounter++;
+
+    for (const organism of organisms) {
+      const row = organism.row;
+      const col = organism.col;
+
+      const cell = grid[row][col];
+
+      if (!cell || cell.updated) continue;
+      organism.updated = true;
+
+      applyEventEffects(cell, row, col, currentEvent);
+
+      if (manageHunger(cell, highDensity)) {
+        grid[row][col] = null; // Remove the cell if it starved to death
+        organisms.splice(organisms.indexOf(organism), 1); // Remove the organism from the array
+        continue;
+      }
+
+      const starving = cell.hunger > 0.7;
+
+      if (starving) {
+        cell.currentSight = Math.max(1, cell.currentSight - 1); // Decrease sight if starving
+      }
+
+      const { mates, enemies, society } = findTargets(row, col, cell, highDensity);
+
+      const dir = getNextDirection(cell);
+      const dRow = [-1, -1, -1, 0, 0, 1, 1, 1][dir];
+      const dCol = [-1, 0, 1, -1, 1, -1, 0, 1][dir];
+
+      const newRow = Math.floor((row + dRow + rows) % rows);
+      const newCol = Math.floor((col + dCol + cols) % cols);
+
+      if (!grid[newRow][newCol]) {
+        grid[newRow][newCol] = cell;
+        grid[row][col] = null;
+        organism.row = newRow;
+        organism.col = newCol;
+      } else {
+        const target = grid[newRow][newCol];
+
+        if (mates.some(mate => mate.target === target)) {
+          const bestMate = findBestMate(cell, mates);
+          const offspring = breed(cell, bestMate);
+          organisms.push(offspring); // Add the offspring to the array
+          grid[newRow][newCol] = offspring;
+        } else if (society.some(member => member.target === target)) {
+          if (Math.random() < cell.cooperate) {
+            society.push({id: cell.id, target: target, cooperate: true})
+          } else {
+            society.push({id: cell.id, target: target, cooperate: false})
+          }
+        }
+
+        if (cell.genes.societyFormation > societyPreferenceThreshold && society.length > 0) {
+          // The cell wants to join a society if it exists
+          const closestSociety = society.reduce((prev, curr) => {
+            const distToPrev = Math.sqrt((prev.row - row) ** 2 + (prev.col - col) ** 2);
+            const distToCurr = Math.sqrt((curr.row - row) ** 2 + (curr.col - col) ** 2);
+            return distToCurr < distToPrev ? curr : prev;
+          }, society[0]);
+
+          if (closestSociety) {
+            moveToTarget(row, col, closestSociety.row, closestSociety.col);
+            continue;
+          }
+        }
+
+        if (mates.length) {
+            const bestMate = findBestMate(cell, mates.map(mate => mate.target));
+            const bestMateCoordinates = mates.find(mate => mate.target === bestMate);
+            if (bestMateCoordinates && moveToTarget(row, col, bestMateCoordinates.row, bestMateCoordinates.col)) {
+                const offspring = breed(grid[row][col], grid[bestMateCoordinates.row][bestMateCoordinates.col]);
+                organisms.push(offspring);
+                grid[row][col] = offspring;
+                cell.updated = false;
+            }
+        }
+
+        if (enemies.length > 0) {
+          // The cell wants to attack the enemy with the highest preference
+          const highestPreferenceEnemy = enemies.reduce((prev, curr) => {
+            const preference = cell.genes.preferences[colors.indexOf(curr.target.color)];
+            return preference > cell.genes.preferences[colors.indexOf(prev.target.color)] ? curr : prev;
+          }, enemies[0]);
+
+          if (highestPreferenceEnemy) {
+            moveToTarget(row, col, highestPreferenceEnemy.row, highestPreferenceEnemy.col);
+            continue;
+          }
+        }
+
+        moveRandomly(row, col, cell);
+      }
+    }
+  }
+
+  function update() {
+    updateGrid();
+    drawGrid();
+    requestAnimationFrame(update);
+  }
+
+  initGrid();
+  drawGrid();
+  requestAnimationFrame(update);
+  </script>
+
+  </body>
+  </html>

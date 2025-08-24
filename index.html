@@ -9,28 +9,34 @@
   </style>
 </head>
 <body>
+  <button id="pauseButton">Pause</button>
   <canvas id="gameCanvas"></canvas>
   <script>
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
-  canvas.width = 800;
-  canvas.height = 800;
-  const cellSize = 8;
+  canvas.width = 1000;
+  canvas.height = 1000;
+  const cellSize = 10;
   const rows = canvas.height / cellSize;
   const cols = canvas.width / cellSize;
-  const cellColors = [
-    '#FFB6C1', // pastel red
-    '#98FB98', // pastel green
-    '#ADD8E6', // pastel blue
-    '#FFFACD', // pastel yellow
-    '#FFAEC9', // pastel magenta
-    '#E0FFFF', // pastel cyan
-    '#FBEFD5', // pastel white
-    '#FFA07A', // pastel orange
-    '#E6A8D7', // pastel purple
-    '#8CBED6'  // pastel dark blue
-  ];
+  const pauseButton = document.getElementById('pauseButton');
+  let paused = false;
 
+  function togglePause() {
+    paused = !paused;
+    pauseButton.textContent = paused ? 'Resume' : 'Pause';
+    if (!paused) {
+      requestAnimationFrame(update);
+    }
+  }
+
+  pauseButton.addEventListener('click', togglePause);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'p' || e.key === 'P') {
+      togglePause();
+    }
+  });
+  const cellColors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'];
   const reservedColors = {
     flood: 'rgba(0, 0, 255, 0.5)',
     drought: 'rgba(210, 180, 140, 0.5)',
@@ -38,8 +44,8 @@
     coldwave: 'rgba(135, 206, 235, 0.5)',
   };
 
-  const chanceToMutate = 0.01;
-  const geneMutationRange = 0.1;
+  const chanceToMutate = 0.1;
+  const geneMutationRange = 0.2;
   let eventCounter = 0;
   let currentEvent = generateRandomEvent(); // Initialize with an event
 
@@ -48,24 +54,24 @@
   const energyGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => maxTileEnergy / 2));
 
   class Cell {
-    static maxAge = 10;
+    static maxAge = 10;  // TODO: Implement age-related behavior
 
     constructor(row, col, color, sight, initPreferences, initGenes, neurons) {
       this.row = row;
       this.col = col;
-      this.color = color;
+      this.color = color || Cell.genesToColor(this.genes);
       this.age = 0;
       this.sight = sight;
       this.preferences = initPreferences;
       this.energy = maxTileEnergy / 2;
-      this.genes = initGenes;
+      this.genes = initGenes || Cell.randomGenes();
       this.neurons = neurons;
     }
 
     static inheritPreferences(parentA, parentB) {
       const preferences = parentA.preferences.map((prefA, index) => {
         const prefB = parentB.preferences[index];
-        return (prefA + prefB) / 2 + (Math.random() * 0.1 - 0.05); // Inherit preferences with a slight mutation
+        return (prefA + prefB) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2); // Inherit preferences with a slight mutation
       });
 
       return preferences;
@@ -78,23 +84,27 @@
       });
       return newGenes;
     }
-
-    manageEnergy(isHighDensity) {
-      this.energy -= isHighDensity ? 0.05 : 0.02;
-      if (this.energy <= 0) {
-        return true; // Starved to death
+  
+    static randomGenes() {
+        const genes = [];
+        for (let a = 0; a < 6; a++) {
+          const weights = [];
+          for (let i = 0; i < 5; i++) {
+            weights.push(Math.random() * 2 - 1);
+          }
+          genes.push(weights);
+        }
+        return genes;
       }
-      return false; // Still alive
-    }
 
-    decideMove() {
-      const [up, down, left, right] = this.genes;
-      const total = up + down + left + right;
-      const r = Math.random() * total;
-      if (r < up) return { dr: -1, dc: 0 };
-      if (r < up + down) return { dr: 1, dc: 0 };
-      if (r < up + down + left) return { dr: 0, dc: -1 };
-      return { dr: 0, dc: 1 };
+    static genesToColor(genes) {
+      // Map the first three action weight sums to RGB
+      const sums = genes.slice(0, 3).map(arr => arr.reduce((s, w) => s + w, 0));
+      const norm = (v) => Math.max(0, Math.min(255, Math.floor((v + 5) / 10 * 255)));
+      const r = norm(sums[0]);
+      const g = norm(sums[1]);
+      const b = norm(sums[2]);
+      return `rgb(${r},${g},${b})`;
     }
 
     findBestMate(potentialMates) {
@@ -111,7 +121,42 @@
 
       return bestMate;
     }
-  
+
+    decide(n, e, s, w) {
+      const inputs = [1, n, e, s, w];
+      const scores = this.genes.map(weights =>
+        weights.reduce((sum, weight, idx) => sum + weight * inputs[idx], 0)
+      );
+      let max = scores[0];
+      let index = 0;
+      for (let i = 1; i < scores.length; i++) {
+        if (scores[i] > max) { max = scores[i]; index = i; }
+      }
+      return index; // 0..5
+    }
+
+    decideMove() {
+      const [up, down, left, right] = this.genes;
+      const total = up + down + left + right;
+      const r = Math.random() * total;
+      if (r < up) return { dr: -1, dc: 0 };
+      if (r < up + down) return { dr: 1, dc: 0 };
+      if (r < up + down + left) return { dr: 0, dc: -1 };
+      return { dr: 0, dc: 1 };
+    }
+
+    // TODO: Implement cloning with mutation – can some cells reproduce asexually?
+    cloneWithMutation() {
+      const mutated = this.genes.map(row =>
+        row.map(w => w + (Math.random() * 0.2 - 0.1))
+      );
+      return new Cell(this.row, this.col, mutated);
+    }
+
+    manageEnergy(isHighDensity) {
+      this.energy -= isHighDensity ? 0.8 : 0.055;  // TODO: Make this dynamic/based on genes and based on the actual population, and consider LOCAL population density (based on neighbors/proximity)
+      return this.energy <= 0;  // TODO: Cells should have different starvation levels based on genes
+    }
   }
 
   function generateRandomEvent() {
@@ -182,6 +227,16 @@
     }
   }
 
+  // TODO: Implement seeding behavior
+  function seed(count) {
+    for (let i = 0; i < count; i++) {
+      const spot = randomEmptyCell();
+      if (spot) {
+        grid[spot.r][spot.c] = new Cell(spot.r, spot.c);
+      }
+    }
+  }
+
   function countNeighbors(row, col) {
     const neighbors = {};
 
@@ -230,42 +285,27 @@
     return { mates, enemies, society };
   }
 
-  function moveToTarget(row, col, targetRow, targetCol) {
-    const newRow = row + Math.sign(targetRow - row);
-    const newCol = col + Math.sign(targetCol - col);
-    const nextRow = (newRow + rows) % rows;
-    const nextCol = (newCol + cols) % cols;
-
-    if (!grid[nextRow][nextCol]) {
-      grid[nextRow][nextCol] = grid[row][col];
+  function tryMove(row, col, dr, dc) {
+    const nr = (row + dr + rows) % rows;
+    const nc = (col + dc + cols) % cols;
+    if (!grid[nr][nc]) {
+      grid[nr][nc] = grid[row][col];
       grid[row][col] = null;
-      consumeEnergy(grid[nextRow][nextCol], nextRow, nextCol);
+      consumeEnergy(grid[nr][nc], nr, nc);
     }
   }
 
-  function moveAwayFromTarget(row, col, targetRow, targetCol) {
-    const newRow = row - Math.sign(targetRow - row);
-    const newCol = col - Math.sign(targetCol - col);
-    const nextRow = (newRow + rows) % rows;
-    const nextCol = (newCol + cols) % cols;
+  function moveToTarget(row, col, targetRow, targetCol) {
+    tryMove(row, col, Math.sign(targetRow - row), Math.sign(targetCol - col));
+  }
 
-    if (!grid[nextRow][nextCol]) {
-      grid[nextRow][nextCol] = grid[row][col];
-      grid[row][col] = null;
-      consumeEnergy(grid[nextRow][nextCol], nextRow, nextCol);
-    }
+  function moveAwayFromTarget(row, col, targetRow, targetCol) {
+    tryMove(row, col, -Math.sign(targetRow - row), -Math.sign(targetCol - col));
   }
 
   function moveRandomly(row, col, cell) {
     const { dr, dc } = cell.decideMove();
-    const newRow = (row + dr + rows) % rows;
-    const newCol = (col + dc + cols) % cols;
-
-    if (!grid[newRow][newCol]) {
-      grid[newRow][newCol] = cell;
-      grid[row][col] = null;
-      consumeEnergy(cell, newRow, newCol);
-    }
+    tryMove(row, col, dr, dc);
   }
 
   function calculatePopulationDensity() {
@@ -309,7 +349,7 @@
     const row = parentA.row;
     const col = parentA.col;
 
-    // Inherit the color from both parents with a slight chance of mutation
+    // Randomly inherit one parent's color, with a chance to mutate to a different color
     let newColor = Math.random() < 0.5 ? parentA.color : parentB.color;
     if (Math.random() < chanceToMutate) {
       const availableColors = cellColors.filter(color => color !== newColor);
@@ -329,17 +369,18 @@
 
   function updateGrid() {
     const populationDensity = calculatePopulationDensity();
-    const highDensity = populationDensity > 0.2; // Adjust the threshold for high density as needed
+
+    // TODO: Population density should be more localized to each cell's neighborhood (maybe split overall density into a grid of 9 local densities plus immediate neighbors)
+    const highDensity = populationDensity > 0.1 + Math.random() * 0.2; // Adjust the threshold for high density as needed
     regenerateEnergyGrid();
 
+    // TODO: Are these two separate if statements needed?
     if (eventCounter % 2000 === 0) {
       currentEvent = generateRandomEvent();
     }
-
     if (currentEvent && eventCounter % (2000 + currentEvent.duration) === 0) {
       currentEvent = generateRandomEvent();
     }
-
     eventCounter++;
 
     for (let row = 0; row < rows; row++) {
@@ -354,10 +395,12 @@
             continue;
           }
 
-          const starving = cell.energy < 1;
+          // TODO: Make starvation threshold dynamic based on genes
+          // TODO: Move starvation calculation-function into Cell class
+          const starving = cell.hunger > Math.max(0.5 + Math.random(), 1);
 
-          if (starving) {
-            cell.sight = Math.max(1, cell.sight - 1); // Decrease sight if starving
+          if (starving) {  // TODO: Make sight-hunger influence be dynamic based on genes
+            cell.sight = Math.max(1, cell.sight - cell.hunger); // Decrease sight if starving
           }
 
           const { mates, enemies, society } = findTargets(row, col, cell, highDensity);
@@ -365,18 +408,19 @@
           if (mates.length > 0) {
             const bestMate = cell.findBestMate(mates);
             if (bestMate) {
-              moveToTarget(row, col, bestMate.row, bestMate.col);
+              moveToTarget(row, col, bestMate.row, bestMate.col);  // TODO: Ensure two cells can never occupy the same space; they should move next to each other
 
-              if (Math.random() < 0.1 && cell.energy > 2 && bestMate.target.energy > 2) {
+              if (Math.random() < 0.1 && cell.energy > 2 && bestMate.target.energy > 2) {  // TODO: Make reproduction chance dynamic based on genes
                 const offspring = breed(cell, bestMate.target);
                 grid[row][col] = offspring;
               }
             }
           } else if (enemies.length > 0) {
+            // TODO: Make avoidance behavior dynamic based on genes – some cells should want to avoid, fight, etc.
             const enemyToAvoid = enemies[Math.floor(Math.random() * enemies.length)];
             moveAwayFromTarget(row, col, enemyToAvoid.row, enemyToAvoid.col);
           } else {
-            moveRandomly(row, col, cell);
+            moveRandomly(row, col, cell);  // TODO: Cells should have different movement behaviors based on genes
           }
         }
       }
@@ -384,6 +428,9 @@
   }
 
   function update() {
+    if (paused) {
+      return;
+    }
     updateGrid();
     drawGrid();
     requestAnimationFrame(update);
@@ -391,7 +438,9 @@
 
   initGrid();
   drawGrid();
-  requestAnimationFrame(update);
+  if (!paused) {
+    requestAnimationFrame(update);
+  }
   </script>
 
   </body>
