@@ -102,54 +102,65 @@
   }
 
   function step() {
+    const cells = [];
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        const cell = grid[r][c];
-        if (!cell) continue;
+        if (grid[r][c]) cells.push(grid[r][c]);
+      }
+    }
 
-        cell.energy -= 0.01;
-        if (cell.energy <= 0) { grid[r][c] = null; continue; }
+    const dead = new Set();
 
-        const n = r > 0 && grid[r-1][c] ? 1 : 0;
-        const e = c < COLS-1 && grid[r][c+1] ? 1 : 0;
-        const s = r < ROWS-1 && grid[r+1][c] ? 1 : 0;
-        const w = c > 0 && grid[r][c-1] ? 1 : 0;
+    for (const cell of cells) {
+      if (dead.has(cell)) continue;
 
-        const action = cell.decide(n, e, s, w);
-        const dirs = [ [-1,0], [0,1], [1,0], [0,-1] ];
-        if (action < 4) {
-          const [dr, dc] = dirs[action];
-          const nr = r + dr, nc = c + dc;
-          if (nr >=0 && nr < ROWS && nc >=0 && nc < COLS && !grid[nr][nc]) {
-            grid[nr][nc] = cell;
-            grid[r][c] = null;
-            cell.row = nr; cell.col = nc;
-          }
-        } else if (action === 4) { // reproduce
-          if (cell.energy > 6) {
-            const empty = dirs
-              .map(([dr,dc]) => ({r:r+dr,c:c+dc}))
-              .filter(p => p.r>=0 && p.r<ROWS && p.c>=0 && p.c<COLS && !grid[p.r][p.c]);
-            if (empty.length) {
-              const spot = empty[Math.floor(Math.random()*empty.length)];
-              const child = cell.cloneWithMutation();
-              child.row = spot.r; child.col = spot.c;
-              child.energy = 3;
-              grid[spot.r][spot.c] = child;
-              cell.energy -= 3;
-              logEvent(`reproduce @ ${spot.r},${spot.c}`);
-            }
-          }
-        } else if (action === 5) { // attack
-          const neighbours = dirs
+      let r = cell.row;
+      let c = cell.col;
+
+      cell.energy -= 0.01;
+      if (cell.energy <= 0) { grid[r][c] = null; continue; }
+
+      const n = r > 0 && grid[r-1][c] ? 1 : 0;
+      const e = c < COLS-1 && grid[r][c+1] ? 1 : 0;
+      const s = r < ROWS-1 && grid[r+1][c] ? 1 : 0;
+      const w = c > 0 && grid[r][c-1] ? 1 : 0;
+
+      const action = cell.decide(n, e, s, w);
+      const dirs = [ [-1,0], [0,1], [1,0], [0,-1] ];
+      if (action < 4) {
+        const [dr, dc] = dirs[action];
+        const nr = r + dr, nc = c + dc;
+        if (nr >=0 && nr < ROWS && nc >=0 && nc < COLS && !grid[nr][nc]) {
+          grid[nr][nc] = cell;
+          grid[r][c] = null;
+          cell.row = nr; cell.col = nc;
+        }
+      } else if (action === 4) { // reproduce
+        if (cell.energy > 6) {
+          const empty = dirs
             .map(([dr,dc]) => ({r:r+dr,c:c+dc}))
-            .filter(p => p.r>=0 && p.r<ROWS && p.c>=0 && p.c<COLS && grid[p.r][p.c]);
-          if (neighbours.length) {
-            const target = neighbours[Math.floor(Math.random()*neighbours.length)];
-            grid[target.r][target.c] = null;
-            cell.energy += 2;
-            logEvent(`attack @ ${target.r},${target.c}`);
+            .filter(p => p.r>=0 && p.r<ROWS && p.c>=0 && p.c<COLS && !grid[p.r][p.c]);
+          if (empty.length) {
+            const spot = empty[Math.floor(Math.random()*empty.length)];
+            const child = cell.cloneWithMutation();
+            child.row = spot.r; child.col = spot.c;
+            child.energy = 3;
+            grid[spot.r][spot.c] = child;
+            cell.energy -= 3;
+            logEvent(`reproduce @ ${spot.r},${spot.c}`);
           }
+        }
+      } else if (action === 5) { // attack
+        const neighbours = dirs
+          .map(([dr,dc]) => ({r:r+dr,c:c+dc}))
+          .filter(p => p.r>=0 && p.r<ROWS && p.c>=0 && p.c<COLS && grid[p.r][p.c]);
+        if (neighbours.length) {
+          const spot = neighbours[Math.floor(Math.random()*neighbours.length)];
+          const target = grid[spot.r][spot.c];
+          grid[spot.r][spot.c] = null;
+          dead.add(target);
+          cell.energy += 2;
+          logEvent(`attack @ ${spot.r},${spot.c}`);
         }
       }
     }
