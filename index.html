@@ -253,38 +253,31 @@
     return { mates, enemies, society };
   }
 
-  function moveToTarget(row, col, targetRow, targetCol) {
-    const newRow = row + Math.sign(targetRow - row);
-    const newCol = col + Math.sign(targetCol - col);
-    const nextRow = (newRow + rows) % rows;
-    const nextCol = (newCol + cols) % cols;
-
-    if (!grid[nextRow][nextCol]) {
-      grid[nextRow][nextCol] = grid[row][col];
+  function tryMove(row, col, dr, dc) {
+    const nr = (row + dr + rows) % rows;
+    const nc = (col + dc + cols) % cols;
+    if (!grid[nr][nc]) {
+      grid[nr][nc] = grid[row][col];
       grid[row][col] = null;
     }
+  }
+
+  function moveToTarget(row, col, targetRow, targetCol) {
+    tryMove(row, col, Math.sign(targetRow - row), Math.sign(targetCol - col));
   }
 
   function moveAwayFromTarget(row, col, targetRow, targetCol) {
-    const newRow = row - Math.sign(targetRow - row);
-    const newCol = col - Math.sign(targetCol - col);
-    const nextRow = (newRow + rows) % rows;
-    const nextCol = (newCol + cols) % cols;
-
-    if (!grid[nextRow][nextCol]) {
-      grid[nextRow][nextCol] = grid[row][col];
-      grid[row][col] = null;
-    }
+    tryMove(row, col, -Math.sign(targetRow - row), -Math.sign(targetCol - col));
   }
 
   function moveRandomly(row, col, cell) {
-    const newRow = (row + Math.floor(Math.random() * 3) - 1 + rows) % rows;
-    const newCol = (col + Math.floor(Math.random() * 3) - 1 + cols) % cols;
-
-    if (!grid[newRow][newCol]) {
-      grid[newRow][newCol] = cell;
-      grid[row][col] = null;
-    }
+    const dirs = [
+      [-1, 0], [0, 1], [1, 0], [0, -1],
+      [1, 1], [-1, -1], [1, -1], [-1, 1],
+      [0, 0]
+    ];
+    const [dr, dc] = dirs[Math.floor(Math.random() * dirs.length)];
+    tryMove(row, col, dr, dc);
   }
 
   function calculatePopulationDensity() {
