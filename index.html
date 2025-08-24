@@ -271,12 +271,9 @@
   }
 
   function moveRandomly(row, col, cell) {
-    const dirs = [
-      [-1, 0], [0, 1], [1, 0], [0, -1],
-      [1, 1], [-1, -1], [1, -1], [-1, 1],
-      [0, 0]
-    ];
-    const [dr, dc] = dirs[Math.floor(Math.random() * dirs.length)];
+    // pick a random offset -1, 0 or 1 for both row and col (includes staying put)
+    const dr = Math.floor(Math.random() * 3) - 1;
+    const dc = Math.floor(Math.random() * 3) - 1;
     tryMove(row, col, dr, dc);
   }
 
