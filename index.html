@@ -9,6 +9,7 @@
   </style>
 </head>
 <body>
+  <button id="pauseButton">Pause</button>
   <canvas id="gameCanvas"></canvas>
   <script>
   const canvas = document.getElementById('gameCanvas');
@@ -18,6 +19,23 @@
   const cellSize = 8;
   const rows = canvas.height / cellSize;
   const cols = canvas.width / cellSize;
+  const pauseButton = document.getElementById('pauseButton');
+  let paused = false;
+
+  function togglePause() {
+    paused = !paused;
+    pauseButton.textContent = paused ? 'Resume' : 'Pause';
+    if (!paused) {
+      requestAnimationFrame(update);
+    }
+  }
+
+  pauseButton.addEventListener('click', togglePause);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'p' || e.key === 'P') {
+      togglePause();
+    }
+  });
   const colors = [
     '#FFB6C1', // pastel red
     '#98FB98', // pastel green
@@ -344,6 +362,9 @@
   }
 
   function update() {
+    if (paused) {
+      return;
+    }
     updateGrid();
     drawGrid();
     requestAnimationFrame(update);
@@ -351,7 +372,9 @@
 
   initGrid();
   drawGrid();
-  requestAnimationFrame(update);
+  if (!paused) {
+    requestAnimationFrame(update);
+  }
   </script>
 
   </body>
