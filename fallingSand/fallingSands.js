@@ -15,20 +15,7 @@ const TOOL = { SAND: 1, LIFE: 2 };
 let mouseDown = false;
 let drawState = TOOL.SAND;
 
-function getNeighbors(x, y) {
-  const neighbors = [];
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx >= 0 && nx < gridWidth && ny >= 0 && ny < gridHeight) {
-        neighbors.push(grid[ny][nx]);
-      }
-    }
-  }
-  return neighbors;
-}
+const getNeighbors = require("./getNeighbors"); // shared neighbor utility
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -73,7 +60,7 @@ function update() {
       }
 
       // Conway's Game of Life logic
-      const neighbors = getNeighbors(x, y);
+      const neighbors = getNeighbors(grid, x, y);
       const liveNeighbors = neighbors.filter((n) => n === LIFE).length;
 
       if (grid[y][x] === LIFE) {

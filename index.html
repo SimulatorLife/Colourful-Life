@@ -271,9 +271,11 @@
   }
 
   function moveRandomly(row, col, cell) {
+
     // pick a random offset -1, 0 or 1 for both row and col (includes staying put)
     const dr = Math.floor(Math.random() * 3) - 1;
     const dc = Math.floor(Math.random() * 3) - 1;
+
     tryMove(row, col, dr, dc);
   }
 
