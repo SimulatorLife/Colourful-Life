@@ -76,7 +76,7 @@
   function generateRandomEvent() {
     const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
     const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-    const duration = Math.floor(Math.random() * 500) + 100; // Event duration between 100 and 600 frames
+    const duration = Math.floor(Math.random() * 501) + 100; // Event duration between 100 and 600 frames
     const strength = Math.random(); // Event strength between 0 and 1
     const affectedArea = {
       x: Math.floor(Math.random() * cols),
@@ -210,6 +210,18 @@
     }
   }
 
+  function moveAwayFromTarget(row, col, targetRow, targetCol) {
+    const newRow = row - Math.sign(targetRow - row);
+    const newCol = col - Math.sign(targetCol - col);
+    const nextRow = (newRow + rows) % rows;
+    const nextCol = (newCol + cols) % cols;
+
+    if (!grid[nextRow][nextCol]) {
+      grid[nextRow][nextCol] = grid[row][col];
+      grid[row][col] = null;
+    }
+  }
+
   function moveRandomly(row, col, cell) {
     const newRow = (row + Math.floor(Math.random() * 3) - 1 + rows) % rows;
     const newCol = (col + Math.floor(Math.random() * 3) - 1 + cols) % cols;
@@ -322,7 +334,7 @@
             }
           } else if (enemies.length > 0) {
             const enemyToAvoid = enemies[Math.floor(Math.random() * enemies.length)];
-            moveToTarget(row, col, enemyToAvoid.row, enemyToAvoid.col);
+            moveAwayFromTarget(row, col, enemyToAvoid.row, enemyToAvoid.col);
           } else {
             moveRandomly(row, col, cell);
           }
