@@ -94,8 +94,8 @@
   }
 
   function manageHunger(cell, highDensity) {
-    cell.hunger += highDensity ? 0.02 : 0.01;
-    if (cell.hunger >= 1) {
+    cell.hunger += highDensity ? 0.2 : 0.01;  // TODO: Make this dynamic and consider LOCAL population density (based on neighbors/proximity)
+    if (cell.hunger >= 1) {  // TODO: Cells should have different starvation levels based on genes
       return true; // Starved to death
     }
     return false; // Still alive
@@ -294,7 +294,8 @@
 
   function updateGrid() {
     const populationDensity = calculatePopulationDensity();
-    const highDensity = populationDensity > 0.2; // Adjust the threshold for high density as needed
+    // TODO: Population density should be more localized to each cell's neighborhood (maybe split overall density into a grid of 9 local densities plus immediate neighbors)
+    const highDensity = populationDensity > 0.1; // Adjust the threshold for high density as needed
 
     if (eventCounter % 2000 === 0) {
       currentEvent = generateRandomEvent();
@@ -318,9 +319,9 @@
             continue;
           }
 
-          const starving = cell.hunger > 0.7;
+          const starving = cell.hunger > 0.7;  // TODO: Make starvation threshold dynamic based on genes
 
-          if (starving) {
+          if (starving) {  // TODO: Make sight-hunger influence be dynamic based on genes
             cell.sight = Math.max(1, cell.sight - 1); // Decrease sight if starving
           }
 
@@ -331,12 +332,13 @@
             if (bestMate) {
               moveToTarget(row, col, bestMate.row, bestMate.col);
 
-              if (Math.random() < 0.1) {
+              if (Math.random() < 0.1) {  // TODO: Make reproduction chance dynamic based on genes
                 const offspring = breed(cell, bestMate.target);
                 grid[row][col] = offspring;
               }
             }
           } else if (enemies.length > 0) {
+            // TODO: Make avoidance behavior dynamic based on genes
             const enemyToAvoid = enemies[Math.floor(Math.random() * enemies.length)];
             moveAwayFromTarget(row, col, enemyToAvoid.row, enemyToAvoid.col);
           } else {
