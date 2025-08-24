@@ -35,8 +35,9 @@
         let eventCounter = 0;
 
         class Genes {
-            constructor(color, sight, eventAwareness, curiosity, movementPattern, moveProbability, societyFormation, preferences) {
-                this.color = colors[color];
+            constructor(colorIndex, sight, eventAwareness, curiosity, movementPattern, moveProbability, societyFormation, preferences) {
+                this.colorIndex = Math.round(colorIndex);
+                this.color = colors[this.colorIndex];
                 this.sight = sight;
                 this.eventAwareness = eventAwareness;
                 this.curiosity = curiosity;
@@ -51,8 +52,8 @@
             constructor(row, col, genes) {
                 this.row = row;
                 this.col = col;
-                this.colour = colors[genes.colorIndex];
                 this.genes = genes;
+                this.color = genes.color;
                 this.hunger = 0;
                 this.currentSight = this.genes.sight;
                 this.society = [];
@@ -84,7 +85,7 @@
                         const col = (this.col + dc + cols) % cols;
                         const other = grid[row][col];
 
-                        if (other && other !== this && other.color === this.color) {
+                        if (other && other !== this && other.genes.colorIndex === this.genes.colorIndex) {
                             targetRow = row;
                             targetCol = col;
                             break;
