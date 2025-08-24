@@ -18,7 +18,7 @@
   const cellSize = 8;
   const rows = canvas.height / cellSize;
   const cols = canvas.width / cellSize;
-  const colors = [
+  const cellColors = [
     '#FFB6C1', // pastel red
     '#98FB98', // pastel green
     '#ADD8E6', // pastel blue
@@ -30,6 +30,7 @@
     '#E6A8D7', // pastel purple
     '#8CBED6'  // pastel dark blue
   ];
+
   const reservedColors = {
     flood: 'rgba(0, 0, 255, 0.5)',
     drought: 'rgba(210, 180, 140, 0.5)',
@@ -38,16 +39,17 @@
   };
 
   const chanceToMutate = 0.01;
-  const maxAge = 10;
   const geneMutationRange = 0.1;
   let eventCounter = 0;
-  let currentEvent = generateRandomEvent(); // Initialize with an event;
+  let currentEvent = generateRandomEvent(); // Initialize with an event
 
   const maxTileEnergy = 5;
-  const regenRate = 0.05;
+  const energyRegenRate = 0.05;
   const energyGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => maxTileEnergy / 2));
 
   class Cell {
+    static maxAge = 10;
+
     constructor(row, col, color, sight, initPreferences, initGenes, neurons) {
       this.row = row;
       this.col = col;
@@ -76,6 +78,40 @@
       });
       return newGenes;
     }
+
+    manageEnergy(isHighDensity) {
+      this.energy -= isHighDensity ? 0.05 : 0.02;
+      if (this.energy <= 0) {
+        return true; // Starved to death
+      }
+      return false; // Still alive
+    }
+
+    decideMove() {
+      const [up, down, left, right] = this.genes;
+      const total = up + down + left + right;
+      const r = Math.random() * total;
+      if (r < up) return { dr: -1, dc: 0 };
+      if (r < up + down) return { dr: 1, dc: 0 };
+      if (r < up + down + left) return { dr: 0, dc: -1 };
+      return { dr: 0, dc: 1 };
+    }
+
+    findBestMate(potentialMates) {
+      let bestMate = null;
+      let highestPreference = -Infinity;
+
+      potentialMates.forEach(mate => {
+        const preference = this.preferences[cellColors.indexOf(mate.target.color)];
+        if (preference > highestPreference) {
+          highestPreference = preference;
+          bestMate = mate;
+        }
+      });
+
+      return bestMate;
+    }
+  
   }
 
   function generateRandomEvent() {
@@ -92,14 +128,6 @@
     return { eventType, duration, affectedArea, strength };
   }
 
-  function manageEnergy(cell, highDensity) {
-    cell.energy -= highDensity ? 0.05 : 0.02;
-    if (cell.energy <= 0) {
-      return true; // Starved to death
-    }
-    return false; // Still alive
-  }
-
   function consumeEnergy(cell, row, col) {
     const available = energyGrid[row][col];
     const take = Math.min(1, available);
@@ -110,7 +138,7 @@
   function regenerateEnergyGrid() {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        energyGrid[r][c] = Math.min(maxTileEnergy, energyGrid[r][c] + regenRate);
+        energyGrid[r][c] = Math.min(maxTileEnergy, energyGrid[r][c] + energyRegenRate);
       }
     }
   }
@@ -122,9 +150,9 @@
       for (let col = 0; col < cols; col++) {
         if (Math.random() < 0.05) {
           const genes = Array.from({ length: 4 }, () => Math.random()); // movement weights
-          const preferences = colors.map(() => Math.random());
+          const preferences = cellColors.map(() => Math.random());
           const neurons = Math.floor(Math.random() * 5) + 1;
-          grid[row][col] = new Cell(row, col, colors[Math.floor(Math.random() * colors.length)], Math.floor(Math.random() * 5) + 1, preferences, genes, neurons);
+          grid[row][col] = new Cell(row, col, cellColors[Math.floor(Math.random() * cellColors.length)], Math.floor(Math.random() * 5) + 1, preferences, genes, neurons);
         }
       }
     }
@@ -154,7 +182,6 @@
     }
   }
 
-
   function countNeighbors(row, col) {
     const neighbors = {};
 
@@ -174,22 +201,6 @@
 
   }
 
-  function findBestMate(cell, potentialMates) {
-    let bestMate = null;
-    let highestPreference = -Infinity;
-
-    potentialMates.forEach(mate => {
-      const preference = cell.preferences[colors.indexOf(mate.target.color)];
-      if (preference > highestPreference) {
-        highestPreference = preference;
-        bestMate = mate;
-      }
-    });
-
-    return bestMate;
-  }
-
-
   function findTargets(row, col, cell, highDensity) {
     const mates = [];
     const enemies = [];
@@ -205,7 +216,7 @@
           if (target.color === cell.color) {
             society.push({ row: newRow, col: newCol, target });
           } else {
-            const targetPreference = cell.preferences[colors.indexOf(target.color)];
+            const targetPreference = cell.preferences[cellColors.indexOf(target.color)];
             if (highDensity || targetPreference <= 0.5) {
               enemies.push({ row: newRow, col: newCol, target });
             } else {
@@ -217,16 +228,6 @@
     }
 
     return { mates, enemies, society };
-  }
-
-  function decideMove(cell) {
-    const [up, down, left, right] = cell.genes;
-    const total = up + down + left + right;
-    const r = Math.random() * total;
-    if (r < up) return { dr: -1, dc: 0 };
-    if (r < up + down) return { dr: 1, dc: 0 };
-    if (r < up + down + left) return { dr: 0, dc: -1 };
-    return { dr: 0, dc: 1 };
   }
 
   function moveToTarget(row, col, targetRow, targetCol) {
@@ -256,7 +257,7 @@
   }
 
   function moveRandomly(row, col, cell) {
-    const { dr, dc } = decideMove(cell);
+    const { dr, dc } = cell.decideMove();
     const newRow = (row + dr + rows) % rows;
     const newCol = (col + dc + cols) % cols;
 
@@ -311,7 +312,7 @@
     // Inherit the color from both parents with a slight chance of mutation
     let newColor = Math.random() < 0.5 ? parentA.color : parentB.color;
     if (Math.random() < chanceToMutate) {
-      const availableColors = colors.filter(color => color !== newColor);
+      const availableColors = cellColors.filter(color => color !== newColor);
       newColor = availableColors[Math.floor(Math.random() * availableColors.length)];
     }
 
@@ -348,7 +349,7 @@
         if (cell) {
           applyEventEffects(cell, row, col, currentEvent);
 
-          if (manageEnergy(cell, highDensity)) {
+          if (cell.manageEnergy(highDensity)) {
             grid[row][col] = null; // Remove the cell if it starved to death
             continue;
           }
@@ -362,7 +363,7 @@
           const { mates, enemies, society } = findTargets(row, col, cell, highDensity);
 
           if (mates.length > 0) {
-            const bestMate = findBestMate(cell, mates);
+            const bestMate = cell.findBestMate(mates);
             if (bestMate) {
               moveToTarget(row, col, bestMate.row, bestMate.col);
 
