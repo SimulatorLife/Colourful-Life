@@ -43,16 +43,21 @@
   let eventCounter = 0;
   let currentEvent = generateRandomEvent(); // Initialize with an event;
 
+  const maxTileEnergy = 5;
+  const regenRate = 0.05;
+  const energyGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => maxTileEnergy / 2));
+
   class Cell {
-    constructor(row, col, color, sight, initPreferences, initGenes) {
+    constructor(row, col, color, sight, initPreferences, initGenes, neurons) {
       this.row = row;
       this.col = col;
       this.color = color;
       this.age = 0;
       this.sight = sight;
       this.preferences = initPreferences;
-      this.hunger = 0;
+      this.energy = maxTileEnergy / 2;
       this.genes = initGenes;
+      this.neurons = neurons;
     }
 
     static inheritPreferences(parentA, parentB) {
@@ -87,12 +92,27 @@
     return { eventType, duration, affectedArea, strength };
   }
 
-  function manageHunger(cell, highDensity) {
-    cell.hunger += highDensity ? 0.02 : 0.01;
-    if (cell.hunger >= 1) {
+  function manageEnergy(cell, highDensity) {
+    cell.energy -= highDensity ? 0.05 : 0.02;
+    if (cell.energy <= 0) {
       return true; // Starved to death
     }
     return false; // Still alive
+  }
+
+  function consumeEnergy(cell, row, col) {
+    const available = energyGrid[row][col];
+    const take = Math.min(1, available);
+    energyGrid[row][col] -= take;
+    cell.energy = Math.min(maxTileEnergy, cell.energy + take);
+  }
+
+  function regenerateEnergyGrid() {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        energyGrid[r][c] = Math.min(maxTileEnergy, energyGrid[r][c] + regenRate);
+      }
+    }
   }
 
   const grid = new Array(rows).fill(null).map(() => new Array(cols).fill(null));
@@ -101,9 +121,10 @@
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         if (Math.random() < 0.05) {
-          const genes = Array.from({ length: 5 }, () => Math.random()); // Initialize random genes
+          const genes = Array.from({ length: 4 }, () => Math.random()); // movement weights
           const preferences = colors.map(() => Math.random());
-          grid[row][col] = new Cell(row, col, colors[Math.floor(Math.random() * colors.length)], Math.floor(Math.random() * 5) + 1, preferences, genes);
+          const neurons = Math.floor(Math.random() * 5) + 1;
+          grid[row][col] = new Cell(row, col, colors[Math.floor(Math.random() * colors.length)], Math.floor(Math.random() * 5) + 1, preferences, genes, neurons);
         }
       }
     }
@@ -198,6 +219,16 @@
     return { mates, enemies, society };
   }
 
+  function decideMove(cell) {
+    const [up, down, left, right] = cell.genes;
+    const total = up + down + left + right;
+    const r = Math.random() * total;
+    if (r < up) return { dr: -1, dc: 0 };
+    if (r < up + down) return { dr: 1, dc: 0 };
+    if (r < up + down + left) return { dr: 0, dc: -1 };
+    return { dr: 0, dc: 1 };
+  }
+
   function moveToTarget(row, col, targetRow, targetCol) {
     const newRow = row + Math.sign(targetRow - row);
     const newCol = col + Math.sign(targetCol - col);
@@ -207,6 +238,7 @@
     if (!grid[nextRow][nextCol]) {
       grid[nextRow][nextCol] = grid[row][col];
       grid[row][col] = null;
+      consumeEnergy(grid[nextRow][nextCol], nextRow, nextCol);
     }
   }
 
@@ -219,16 +251,19 @@
     if (!grid[nextRow][nextCol]) {
       grid[nextRow][nextCol] = grid[row][col];
       grid[row][col] = null;
+      consumeEnergy(grid[nextRow][nextCol], nextRow, nextCol);
     }
   }
 
   function moveRandomly(row, col, cell) {
-    const newRow = (row + Math.floor(Math.random() * 3) - 1 + rows) % rows;
-    const newCol = (col + Math.floor(Math.random() * 3) - 1 + cols) % cols;
+    const { dr, dc } = decideMove(cell);
+    const newRow = (row + dr + rows) % rows;
+    const newCol = (col + dc + cols) % cols;
 
     if (!grid[newRow][newCol]) {
       grid[newRow][newCol] = cell;
       grid[row][col] = null;
+      consumeEnergy(cell, newRow, newCol);
     }
   }
 
@@ -257,10 +292,10 @@
         // Apply flood effects, e.g., remove certain organisms or reduce their energy
         break;
         case 'drought':
-        // Apply drought effects, e.g., increase hunger, reduce energy
+        // Apply drought effects, e.g., reduce available energy
         break;
         case 'heatwave':
-        // Apply heatwave effects, e.g., remove certain organisms or increase their hunger
+        // Apply heatwave effects, e.g., remove certain organisms or drain their energy
         break;
         case 'coldwave':
         // Apply coldwave effects, e.g., reduce energy or movement speed
@@ -282,8 +317,11 @@
 
     const offspringPreferences = Cell.inheritPreferences(parentA, parentB);
     const newGenes = Cell.inheritGenes(parentA, parentB);
-
-    const offspring = new Cell(row, col, newColor, parentA.sight, offspringPreferences, newGenes);
+    const neurons = Math.max(1, Math.round((parentA.neurons + parentB.neurons) / 2));
+    const offspring = new Cell(row, col, newColor, parentA.sight, offspringPreferences, newGenes, neurons);
+    offspring.energy = (parentA.energy + parentB.energy) / 4;
+    parentA.energy /= 2;
+    parentB.energy /= 2;
 
     return offspring;
   }
@@ -291,6 +329,7 @@
   function updateGrid() {
     const populationDensity = calculatePopulationDensity();
     const highDensity = populationDensity > 0.2; // Adjust the threshold for high density as needed
+    regenerateEnergyGrid();
 
     if (eventCounter % 2000 === 0) {
       currentEvent = generateRandomEvent();
@@ -309,12 +348,12 @@
         if (cell) {
           applyEventEffects(cell, row, col, currentEvent);
 
-          if (manageHunger(cell, highDensity)) {
+          if (manageEnergy(cell, highDensity)) {
             grid[row][col] = null; // Remove the cell if it starved to death
             continue;
           }
 
-          const starving = cell.hunger > 0.7;
+          const starving = cell.energy < 1;
 
           if (starving) {
             cell.sight = Math.max(1, cell.sight - 1); // Decrease sight if starving
@@ -327,7 +366,7 @@
             if (bestMate) {
               moveToTarget(row, col, bestMate.row, bestMate.col);
 
-              if (Math.random() < 0.1) {
+              if (Math.random() < 0.1 && cell.energy > 2 && bestMate.target.energy > 2) {
                 const offspring = breed(cell, bestMate.target);
                 grid[row][col] = offspring;
               }

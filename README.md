@@ -1,12 +1,8 @@
 # Colourful Life
 
-This repository is a playground of JavaScript cellular automata.  Several HTML files demonstrate progressively more complex simulations:
+This repository is a playground of JavaScript cellular automata.  The various experiments have been merged into a single consolidated simulation:
 
-- `colourful-life.html` – a multi-color Game of Life variant where offspring mutate their color.
-- `colourful_life_v2.html` – introduces a `Genes` class and basic inheritance/mutation.
-- `colourful_life_genes.html` – adds explicit classes and movement/behavior logic.
-- `index.html` – the most feature-rich simulation with environmental events, hunger, reproduction, and social behavior.
-- `life-v2.html` – an unrelated experiment with organisms that roam and replicate.
+- `index.html` – colorful cells form organisms that evolve through genes, simple neuron-like movement, energy-based survival, and breeding while facing environmental events.
 
 The `fallingSand/` directory contains a falling-sand and Game of Life hybrid implemented with both p5.js and canvas-only versions.
 
@@ -14,6 +10,8 @@ The `fallingSand/` directory contains a falling-sand and Game of Life hybrid imp
 
 - **Grid-based cells**: simulations use a 2D array to track cells/particles and update them each frame.
 - **Genes and mutation**: advanced versions assign each cell genetic traits that blend and mutate during reproduction.
+- **Neuron-inspired movement**: gene weights influence direction choices, giving each organism a rudimentary nervous system.
+- **Energy and evolution**: organisms gather energy from tiles, spend it to move and reproduce, and perish when depleted.
 - **Environmental events**: floods, droughts, heatwaves, and coldwaves affect regions and influence cell survival.
 - **Rendering loop**: `requestAnimationFrame` drives updates and drawing to an HTML `<canvas>`.
 
