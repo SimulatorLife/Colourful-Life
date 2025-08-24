@@ -96,7 +96,7 @@
   function generateRandomEvent() {
     const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
     const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-    const duration = Math.floor(Math.random() * 500) + 100; // Event duration between 100 and 600 frames
+    const duration = Math.floor(Math.random() * 501) + 100; // Event duration between 100 and 600 frames
     const strength = Math.random(); // Event strength between 0 and 1
     const affectedArea = {
       x: Math.floor(Math.random() * cols),
