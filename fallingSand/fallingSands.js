@@ -15,7 +15,7 @@ const TOOL = { SAND: 1, LIFE: 2 };
 let mouseDown = false;
 let drawState = TOOL.SAND;
 
-const getNeighbors = require("./getNeighbors");
+const getNeighbors = require("./getNeighbors"); // shared neighbor utility
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
