@@ -35,7 +35,8 @@
       }
 
       updateColour() {
-        const index = Math.abs(Math.floor(this.genes.weights[0] * colours.length)) % colours.length;
+        const weight = Math.min(1, Math.max(0, this.genes.weights[0]));
+        const index = Math.floor(weight * colours.length) % colours.length;
         this.colour = colours[index];
       }
     }
@@ -53,7 +54,10 @@
     }
 
     function mutateGenes(weights) {
-      return weights.map(w => w + (Math.random() * 2 - 1) * geneMutationRange);
+      return weights.map(w => {
+        const mutated = w + (Math.random() * 2 - 1) * geneMutationRange;
+        return Math.min(1, Math.max(0, mutated));
+      });
     }
 
     function draw() {
