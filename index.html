@@ -54,7 +54,7 @@
   const energyGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => maxTileEnergy / 2));
 
   class Cell {
-    static maxAge = 10;  // TODO: Implement age-related behavior
+    static maxAge = 10;
 
     constructor(row, col, color, sight, initPreferences, initGenes, neurons) {
       this.row = row;
@@ -393,7 +393,7 @@
         if (cell) {
           // Age the cell and remove it if it exceeds its lifespan
           cell.age++;
-          if (cell.age > cell.lifespan) {
+          if (cell.age >= cell.lifespan) {
             grid[row][col] = null;
             continue;
           }
