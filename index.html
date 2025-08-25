@@ -226,14 +226,37 @@
       );
     }
   }
-
-  // TODO: Implement seeding behavior
-  function seed(count) {
-    for (let i = 0; i < count; i++) {
-      const spot = randomEmptyCell();
-      if (spot) {
-        grid[spot.r][spot.c] = new Cell(spot.r, spot.c);
+  
+  // Seeding logic
+  function randomEmptyCell() {
+    const empty = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!grid[r][c]) empty.push({ r, c });
       }
+    }
+    return empty.length ? empty[Math.floor(Math.random() * empty.length)] : null;
+  }
+
+  // Seed new cells if the population drops below a minimum threshold
+  function seed(minPopulation) {
+    const current = Math.floor(calculatePopulationDensity() * rows * cols);
+    if (current >= minPopulation) return;
+
+    const toSeed = minPopulation - current;
+    for (let i = 0; i < toSeed; i++) {
+      const spot = randomEmptyCell();
+      if (!spot) break;
+
+      const genes = Array.from({ length: 4 }, () => Math.random());
+      const preferences = cellColors.map(() => Math.random());
+      const neurons = Math.floor(Math.random() * 5) + 1;
+      const sight = Math.floor(Math.random() * 5) + 1;
+      const color = cellColors[Math.floor(Math.random() * cellColors.length)];
+
+      const newCell = new Cell(spot.r, spot.c, color, sight, preferences, genes, neurons);
+      newCell.energy = maxTileEnergy / 2;
+      grid[spot.r][spot.c] = newCell;
     }
   }
 
@@ -369,6 +392,8 @@
 
   function updateGrid() {
     const populationDensity = calculatePopulationDensity();
+    const minPopulation = Math.floor(rows * cols * 0.05);
+    seed(minPopulation);
 
     // TODO: Population density should be more localized to each cell's neighborhood (maybe split overall density into a grid of 9 local densities plus immediate neighbors)
     const highDensity = populationDensity > 0.1 + Math.random() * 0.2; // Adjust the threshold for high density as needed
