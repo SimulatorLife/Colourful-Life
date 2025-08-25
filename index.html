@@ -59,12 +59,15 @@
     constructor(row, col, color, sight, initPreferences, initGenes, neurons) {
       this.row = row;
       this.col = col;
+      this.genes = initGenes || Cell.randomGenes();
       this.color = color || Cell.genesToColor(this.genes);
       this.age = 0;
+      // Lifespan can be slightly adjusted based on a gene value
+      const lifespanAdj = this.genes[0]?.[0] || 0;
+      this.lifespan = Math.max(1, Math.round(Cell.maxAge + lifespanAdj));
       this.sight = sight;
       this.preferences = initPreferences;
       this.energy = maxTileEnergy / 2;
-      this.genes = initGenes || Cell.randomGenes();
       this.neurons = neurons;
     }
 
@@ -388,6 +391,13 @@
         const cell = grid[row][col];
 
         if (cell) {
+          // Age the cell and remove it if it exceeds its lifespan
+          cell.age++;
+          if (cell.age > cell.lifespan) {
+            grid[row][col] = null;
+            continue;
+          }
+
           applyEventEffects(cell, row, col, currentEvent);
 
           if (cell.manageEnergy(highDensity)) {
