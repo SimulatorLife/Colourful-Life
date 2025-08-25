@@ -50,7 +50,7 @@
   let currentEvent = generateRandomEvent(); // Initialize with an event
 
   class Cell {
-    static maxAge = 10;
+    static maxAge = 1000;
 
     constructor(row, col, color, sight, initPreferences, initGenes, neurons, energy = randomRange(0.5, 2)) {
       this.row = row;
@@ -60,7 +60,7 @@
       this.age = 0;
       // Lifespan can be slightly adjusted based on a gene value
       const lifespanAdj = this.genes[0]?.[0] || 0;
-      this.lifespan = Math.max(1, Math.round(Cell.maxAge + lifespanAdj));
+      this.lifespan = Math.round(randomRange(Cell.maxAge / 2, Cell.maxAge) + (lifespanAdj * 100));
       this.sight = Math.max(0, sight);
       this.preferences = initPreferences;
       this.energy = energy;
@@ -197,14 +197,6 @@
     return Math.random() < chance;
   }
 
-  function randomRange(min, max) {
-    return Math.random() * (max - min) + min;
-  }
-
-  function randomPercent(chance) {
-    return Math.random() < chance;
-  }
-
   function generateRandomEvent() {
     const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
     const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
@@ -221,8 +213,8 @@
 
   class GridManager {
 
-    static maxTileEnergy = 10;
-    static energyRegenRate = 0.2;
+    static maxTileEnergy = 5;
+    static energyRegenRate = 0.15;
 
     constructor(rows, cols) {
       this.rows = rows;
@@ -345,7 +337,7 @@
               if (bestMate) {
                 moveToTarget(this.grid, row, col, bestMate.row, bestMate.col);  // TODO: Ensure two cells can never occupy the same space; they should move next to each other
 
-                if (randomPercent(0.6) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {  // TODO: Make reproduction chance dynamic based on genes
+                if (randomPercent(0.4) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {  // TODO: Make reproduction chance dynamic based on genes
                   const offspring = Cell.breed(cell, bestMate.target);
                   this.grid[row][col] = offspring;  // TODO: Implement proper placement for offspring – ensure it doesn't overlap with existing cells
                 }
