@@ -155,7 +155,13 @@
 
     manageEnergy(isHighDensity) {
       this.energy -= isHighDensity ? 0.8 : 0.055;  // TODO: Make this dynamic/based on genes and based on the actual population, and consider LOCAL population density (based on neighbors/proximity)
-      return this.energy <= 0;  // TODO: Cells should have different starvation levels based on genes
+      return this.energy <= this.starvationThreshold();
+    }
+
+    starvationThreshold() {
+      const gene = this.genes[5][0];
+      const normalized = (gene + 1) / 2;
+      return normalized * maxTileEnergy;
     }
   }
 
