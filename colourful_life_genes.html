@@ -261,17 +261,21 @@
     }
   }
 
-  function calculatePopulationDensity() {
-    let population = 0;
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        if (grid[row][col]) {
-          population++;
+    function calculateLocalDensity(row, col, radius = 2) {
+      let count = 0;
+      const area = (2 * radius + 1) ** 2 - 1;
+      for (let dr = -radius; dr <= radius; dr++) {
+        for (let dc = -radius; dc <= radius; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const r = (row + dr + rows) % rows;
+          const c = (col + dc + cols) % cols;
+          if (grid[r][c]) {
+            count++;
+          }
         }
       }
+      return count / area;
     }
-    return population / (rows * cols);
-  }
 
   function applyEventEffects(cell, row, col, currentEvent) {
     if (
@@ -335,9 +339,7 @@
     return cell.genes.movementPattern.length - 1;
   }
 
-  function updateGrid() {
-    const populationDensity = calculatePopulationDensity();
-    const highDensity = populationDensity > 0.2; // Adjust the threshold for high density as needed
+    function updateGrid() {
 
     if (eventCounter % 2000 === 0) {
       currentEvent = generateRandomEvent();
@@ -349,22 +351,25 @@
 
     eventCounter++;
 
-    for (const organism of organisms) {
-      const row = organism.row;
-      const col = organism.col;
+      for (const organism of organisms) {
+        const row = organism.row;
+        const col = organism.col;
 
-      const cell = grid[row][col];
+        const cell = grid[row][col];
 
-      if (!cell || cell.updated) continue;
-      organism.updated = true;
+        if (!cell || cell.updated) continue;
+        organism.updated = true;
 
-      applyEventEffects(cell, row, col, currentEvent);
+        const localDensity = calculateLocalDensity(row, col);
+        const highDensity = localDensity > 0.2; // Adjust the threshold for high density as needed
 
-      if (manageHunger(cell, highDensity)) {
-        grid[row][col] = null; // Remove the cell if it starved to death
-        organisms.splice(organisms.indexOf(organism), 1); // Remove the organism from the array
-        continue;
-      }
+        applyEventEffects(cell, row, col, currentEvent);
+
+        if (manageHunger(cell, highDensity)) {
+          grid[row][col] = null; // Remove the cell if it starved to death
+          organisms.splice(organisms.indexOf(organism), 1); // Remove the organism from the array
+          continue;
+        }
 
       const starving = cell.hunger > 0.7;
 

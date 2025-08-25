@@ -153,8 +153,10 @@
       return new Cell(this.row, this.col, mutated);
     }
 
-    manageEnergy(isHighDensity) {
-      this.energy -= isHighDensity ? 0.8 : 0.055;  // TODO: Make this dynamic/based on genes and based on the actual population, and consider LOCAL population density (based on neighbors/proximity)
+    manageEnergy(localDensity) {
+      const baseCost = 0.055;
+      const densityCost = 0.745 * localDensity; // scales up to previous high-density cost
+      this.energy -= baseCost + densityCost;
       return this.energy <= 0;  // TODO: Cells should have different starvation levels based on genes
     }
   }
@@ -308,16 +310,20 @@
     tryMove(row, col, dr, dc);
   }
 
-  function calculatePopulationDensity() {
-    let population = 0;
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        if (grid[row][col]) {
-          population++;
+  function calculateLocalDensity(row, col, radius = 2) {
+    let count = 0;
+    const area = (2 * radius + 1) ** 2 - 1; // exclude the cell itself
+    for (let dr = -radius; dr <= radius; dr++) {
+      for (let dc = -radius; dc <= radius; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        const r = (row + dr + rows) % rows;
+        const c = (col + dc + cols) % cols;
+        if (grid[r][c]) {
+          count++;
         }
       }
     }
-    return population / (rows * cols);
+    return count / area;
   }
 
   function applyEventEffects(cell, row, col, currentEvent) {
@@ -368,10 +374,6 @@
   }
 
   function updateGrid() {
-    const populationDensity = calculatePopulationDensity();
-
-    // TODO: Population density should be more localized to each cell's neighborhood (maybe split overall density into a grid of 9 local densities plus immediate neighbors)
-    const highDensity = populationDensity > 0.1 + Math.random() * 0.2; // Adjust the threshold for high density as needed
     regenerateEnergyGrid();
 
     // TODO: Are these two separate if statements needed?
@@ -388,9 +390,12 @@
         const cell = grid[row][col];
 
         if (cell) {
+          const localDensity = calculateLocalDensity(row, col);
+          const highDensity = localDensity > 0.1 + Math.random() * 0.2; // Adjust the threshold for high density as needed
+
           applyEventEffects(cell, row, col, currentEvent);
 
-          if (cell.manageEnergy(highDensity)) {
+          if (cell.manageEnergy(localDensity)) {
             grid[row][col] = null; // Remove the cell if it starved to death
             continue;
           }
