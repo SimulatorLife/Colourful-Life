@@ -50,16 +50,22 @@
   let currentEvent = generateRandomEvent(); // Initialize with an event
 
   class Cell {
-    static maxAge = 10;  // TODO: Implement age-related behavior
+    static maxAge = 10;
 
     constructor(row, col, color, sight, initPreferences, initGenes, neurons, energy = randomRange(0.5, 2)) {
       this.row = row;
       this.col = col;
+      this.genes = initGenes || Cell.randomGenes();
       this.color = color || Cell.genesToColor(this.genes);
       this.age = 0;
+      // Lifespan can be slightly adjusted based on a gene value
+      const lifespanAdj = this.genes[0]?.[0] || 0;
+      this.lifespan = Math.max(1, Math.round(Cell.maxAge + lifespanAdj));
       this.sight = Math.max(0, sight);
       this.preferences = initPreferences;
       this.energy = energy;
+      this.sight = Math.max(0, sight);
+      this.preferences = initPreferences;
       this.genes = initGenes || Cell.randomGenes();
       this.neurons = neurons;
     }
@@ -191,6 +197,14 @@
     return Math.random() < chance;
   }
 
+  function randomRange(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  function randomPercent(chance) {
+    return Math.random() < chance;
+  }
+
   function generateRandomEvent() {
     const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
     const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
@@ -298,8 +312,15 @@
           const cell = this.grid[row][col];
 
           if (cell) {
+            // Age the cell and remove it if it exceeds its lifespan
+            cell.age++;
+            if (cell.age >= cell.lifespan) {
+              this.grid[row][col] = null;
+              continue;
+            }
+
             applyEventEffects(cell, row, col, currentEvent);
-          
+
             // Let the cell consume energy from the environment before losing energy
             this.consumeEnergy(cell, row, col);
           
