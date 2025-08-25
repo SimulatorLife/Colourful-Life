@@ -153,8 +153,20 @@
       return new Cell(this.row, this.col, mutated);
     }
 
-    manageEnergy(isHighDensity) {
-      this.energy -= isHighDensity ? 0.8 : 0.055;  // TODO: Make this dynamic/based on genes and based on the actual population, and consider LOCAL population density (based on neighbors/proximity)
+    manageEnergy(row, col) {
+      // Determine local population density
+      const neighborCounts = countNeighbors(row, col);
+      const neighbors = Object.values(neighborCounts).reduce((sum, n) => sum + n, 0);
+
+      // Use the last gene row as a simple metabolism indicator. Higher absolute
+      // values increase the amount of energy consumed each tick.
+      const metabolism = this.genes[5]?.reduce((s, g) => s + Math.abs(g), 0) /
+        (this.genes[5]?.length || 1);
+
+      // Base energy loss is scaled by both metabolism and local density.
+      const energyLoss = 0.05 * (1 + metabolism) * (1 + neighbors);
+      this.energy -= energyLoss;
+
       return this.energy <= 0;  // TODO: Cells should have different starvation levels based on genes
     }
   }
@@ -390,7 +402,7 @@
         if (cell) {
           applyEventEffects(cell, row, col, currentEvent);
 
-          if (cell.manageEnergy(highDensity)) {
+            if (cell.manageEnergy(row, col)) {
             grid[row][col] = null; // Remove the cell if it starved to death
             continue;
           }
