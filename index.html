@@ -249,9 +249,8 @@
       const sight = Math.floor(Math.random() * 5) + 1;
       const color = cellColors[Math.floor(Math.random() * cellColors.length)];
 
-      const newCell = new Cell(r, c, color, sight, preferences, genes, neurons);
-      newCell.energy = maxTileEnergy / 2;
-      grid[r][c] = newCell;
+    const newCell = new Cell(r, c, color, sight, preferences, genes, neurons);
+    grid[r][c] = newCell;
     }
   }
 
