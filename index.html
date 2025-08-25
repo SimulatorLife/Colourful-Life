@@ -64,6 +64,9 @@
       this.sight = Math.max(0, sight);
       this.preferences = initPreferences;
       this.energy = energy;
+      this.sight = Math.max(0, sight);
+      this.preferences = initPreferences;
+      this.genes = initGenes || Cell.randomGenes();
       this.neurons = neurons;
     }
 
@@ -176,8 +179,22 @@
 
     manageEnergy(isHighDensity) {
       this.energy -= isHighDensity ? 0.8 : 0.055;  // TODO: Make this dynamic/based on genes and based on the actual population, and consider LOCAL population density (based on neighbors/proximity)
-      return this.energy <= 0;  // TODO: Cells should have different starvation levels based on genes
+      return this.energy <= this.starvationThreshold();
     }
+
+    starvationThreshold() {
+      const gene = this.genes[5][0];
+      const normalized = (gene + 1) / 2;
+      return normalized * GridManager.maxTileEnergy;
+    }
+  }
+
+  function randomRange(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  function randomPercent(chance) {
+    return Math.random() < chance;
   }
 
   function randomRange(min, max) {
@@ -306,7 +323,7 @@
 
             // Let the cell consume energy from the environment before losing energy
             this.consumeEnergy(cell, row, col);
-
+          
             if (cell.manageEnergy(highDensity)) {
               this.grid[row][col] = null; // Remove the cell if it starved to death
               continue;
