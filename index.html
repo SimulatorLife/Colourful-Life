@@ -51,6 +51,7 @@
 
   const maxTileEnergy = 5;
   const energyRegenRate = 0.05;
+  const baseEnergyLoss = 0.05;
   const energyGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => maxTileEnergy / 2));
 
   class Cell {
@@ -156,7 +157,8 @@
     manageEnergy(row, col) {
       // Determine local population density
       const neighborCounts = countNeighbors(row, col);
-      const neighbors = Object.values(neighborCounts).reduce((sum, n) => sum + n, 0);
+      const neighborTotal = Object.values(neighborCounts).reduce((sum, n) => sum + n, 0);
+      const density = neighborTotal / 8; // Normalize to [0, 1]
 
       // Use the last gene row as a simple metabolism indicator. Higher absolute
       // values increase the amount of energy consumed each tick.
@@ -164,7 +166,7 @@
         (this.genes[5]?.length || 1);
 
       // Base energy loss is scaled by both metabolism and local density.
-      const energyLoss = 0.05 * (1 + metabolism) * (1 + neighbors);
+      const energyLoss = baseEnergyLoss * (1 + metabolism) * (1 + density);
       this.energy -= energyLoss;
 
       return this.energy <= 0;  // TODO: Cells should have different starvation levels based on genes
