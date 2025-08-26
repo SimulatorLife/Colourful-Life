@@ -44,7 +44,7 @@
     coldwave: 'rgba(135, 206, 235, 0.5)',
   };
 
-  const chanceToMutate = 0.1;
+  const chanceToMutate = 0.15;
   const geneMutationRange = 0.2;
   let eventCounter = 0;
   let currentEvent = generateRandomEvent(); // Initialize with an event
@@ -214,7 +214,7 @@
   class GridManager {
 
     static maxTileEnergy = 5;
-    static energyRegenRate = 0.15;
+    static energyRegenRate = 0.25;
 
     constructor(rows, cols) {
       this.rows = rows;
