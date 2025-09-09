@@ -260,7 +260,7 @@
           this.energyGrid[r][c] = Math.min(GridManager.maxTileEnergy, this.energyGrid[r][c] + GridManager.energyRegenRate);
         }
       }
-    }
+  }
 
     getCell(row, col) {
       return this.grid[row][col];
@@ -318,17 +318,17 @@
           
             // Let the cell consume energy from the environment before losing energy
             this.consumeEnergy(cell, row, col);
-          
-              if (cell.manageEnergy(highDensity)) {
-                this.grid[row][col] = null; // Remove the cell if it starved to death
-                continue;
-              }
 
-              const starving = cell.hunger > cell.starvationThreshold();
+            if (cell.manageEnergy(highDensity)) {
+              this.grid[row][col] = null; // Remove the cell if it starved to death
+              continue;
+            }
 
-              if (starving) {  // TODO: Make sight-hunger influence be dynamic based on genes
-                cell.sight = Math.max(1, cell.sight - cell.hunger); // Decrease sight if starving
-              }
+            const starving = cell.hunger > cell.starvationThreshold();
+
+            if (starving) {  // TODO: Make sight-hunger influence be dynamic based on genes
+              cell.sight = Math.max(1, cell.sight - cell.hunger); // Decrease sight if starving
+            }
 
             const { mates, enemies, society } = this.findTargets(row, col, cell, highDensity);
 
