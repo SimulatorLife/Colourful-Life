@@ -282,10 +282,10 @@
       const highDensity = populationDensity > 0.5 + Math.random() * 0.2; // Adjust the threshold for high density as needed
       this.regenerateEnergyGrid();
 
-      if (eventCounter === eventEndCounter) {
+      if (currentEvent && eventCounter === eventEndCounter) {
         currentEvent = null;
       }
-      if (eventCounter === nextEventCounter) {
+      if (!currentEvent && eventCounter === nextEventCounter) {
         currentEvent = generateRandomEvent();
         eventEndCounter = eventCounter + currentEvent.duration;
         nextEventCounter = eventEndCounter + 2000;
