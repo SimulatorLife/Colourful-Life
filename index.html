@@ -44,22 +44,28 @@
     coldwave: 'rgba(135, 206, 235, 0.5)',
   };
 
-  const chanceToMutate = 0.1;
+  const chanceToMutate = 0.15;
   const geneMutationRange = 0.2;
   let eventCounter = 0;
   let currentEvent = generateRandomEvent(); // Initialize with an event
 
   class Cell {
-    static maxAge = 10;  // TODO: Implement age-related behavior
+    static maxAge = 1000;
 
     constructor(row, col, color, sight, initPreferences, initGenes, neurons, energy = randomRange(0.5, 2)) {
       this.row = row;
       this.col = col;
+      this.genes = initGenes || Cell.randomGenes();
       this.color = color || Cell.genesToColor(this.genes);
       this.age = 0;
+      // Lifespan can be slightly adjusted based on a gene value
+      const lifespanAdj = this.genes[0]?.[0] || 0;
+      this.lifespan = Math.round(randomRange(Cell.maxAge / 2, Cell.maxAge) + (lifespanAdj * 100));
       this.sight = Math.max(0, sight);
       this.preferences = initPreferences;
       this.energy = energy;
+      this.sight = Math.max(0, sight);
+      this.preferences = initPreferences;
       this.genes = initGenes || Cell.randomGenes();
       this.neurons = neurons;
     }
@@ -175,7 +181,13 @@
       const baseCost = 0.055;
       const densityCost = 0.745 * localDensity; // scales up to previous high-density cost
       this.energy -= baseCost + densityCost;
-      return this.energy <= 0;  // TODO: Cells should have different starvation levels based on genes
+      return this.energy <= this.starvationThreshold();
+    }
+
+    starvationThreshold() {
+      const gene = this.genes[5][0];
+      const normalized = (gene + 1) / 2;
+      return normalized * GridManager.maxTileEnergy;
     }
   }
 
@@ -203,8 +215,8 @@
 
   class GridManager {
 
-    static maxTileEnergy = 10;
-    static energyRegenRate = 0.2;
+    static maxTileEnergy = 5;
+    static energyRegenRate = 0.25;
 
     constructor(rows, cols) {
       this.rows = rows;
@@ -290,6 +302,13 @@
           const cell = this.grid[row][col];
 
           if (cell) {
+            // Age the cell and remove it if it exceeds its lifespan
+            cell.age++;
+            if (cell.age >= cell.lifespan) {
+              this.grid[row][col] = null;
+              continue;
+            }
+
             const localDensity = this.calculateLocalDensity(row, col);
             const highDensity = localDensity > 0.1 + Math.random() * 0.2; // Adjust the threshold for high density as needed
 
@@ -319,7 +338,7 @@
               if (bestMate) {
                 moveToTarget(this.grid, row, col, bestMate.row, bestMate.col);  // TODO: Ensure two cells can never occupy the same space; they should move next to each other
 
-                if (randomPercent(0.6) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {  // TODO: Make reproduction chance dynamic based on genes
+                if (randomPercent(0.4) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {  // TODO: Make reproduction chance dynamic based on genes
                   const offspring = Cell.breed(cell, bestMate.target);
                   this.grid[row][col] = offspring;  // TODO: Implement proper placement for offspring – ensure it doesn't overlap with existing cells
                 }
@@ -334,18 +353,6 @@
           }
         }
       }
-    }
-
-    calculatePopulationDensity() {
-      let population = 0;
-      for (let row = 0; row < this.rows; row++) {
-        for (let col = 0; col < this.cols; col++) {
-          if (this.grid[row][col]) {
-            population++;
-          }
-        }
-      }
-      return population / (this.rows * this.cols);
     }
 
     calculateLocalDensity(row, col, radius = 2) {
