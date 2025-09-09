@@ -2,8 +2,9 @@ const { test } = require('uvu');
 const assert = require('uvu/assert');
 
 class Cell {
-  constructor(genes = Cell.randomGenes()) {
+  constructor(genes = Cell.randomGenes(), energy = 1) {
     this.genes = genes;
+    this.energy = energy;
   }
 
   static randomGenes() {
@@ -17,6 +18,15 @@ class Cell {
       return Math.min(1, Math.max(0, mutated));
     });
     return new Cell(newGenes);
+  }
+
+  manageEnergy(isHighDensity) {
+    this.energy -= isHighDensity ? 0.8 : 0.055;
+    return this.energy <= this.starvationThreshold();
+  }
+
+  starvationThreshold() {
+    return this.genes[0];
   }
 }
 
@@ -70,6 +80,13 @@ test('randomEmptyCell finds an empty spot or null when full', () => {
     [3, 4],
   ];
   assert.is(withMockedRandom([0], () => randomEmptyCell(filled)), null);
+});
+
+test('manageEnergy uses gene-derived starvation threshold', () => {
+  const cell = new Cell([0.2, 0, 0, 0, 0], 0.25);
+  assert.is(cell.manageEnergy(false), true);
+  const cell2 = new Cell([0, 0, 0, 0, 0], 0.25);
+  assert.is(cell2.manageEnergy(false), false);
 });
 
 test.run();
