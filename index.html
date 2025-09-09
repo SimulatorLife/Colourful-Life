@@ -44,23 +44,28 @@
     coldwave: 'rgba(135, 206, 235, 0.5)',
   };
 
-  const chanceToMutate = 0.1;
+  const chanceToMutate = 0.15;
   const geneMutationRange = 0.2;
   let eventCounter = 0;
   let currentEvent = generateRandomEvent(); // Initialize with an event
 
   class Cell {
-    static maxAge = 10;  // TODO: Implement age-related behavior
+    static maxAge = 1000;
 
-    constructor(row, col, color, sight, initPreferences, initGenes, neurons, energy = randomRange(0.5, 2)) {
+  constructor(row, col, color, sight, initPreferences, initGenes, neurons, energy = randomRange(0.5, 2)) {
       this.row = row;
       this.col = col;
+      this.genes = initGenes || Cell.randomGenes();
       this.color = color || Cell.genesToColor(this.genes);
       this.age = 0;
+      // Lifespan can be slightly adjusted based on a gene value
+      const lifespanAdj = this.genes[0]?.[0] || 0;
+      this.lifespan = Math.round(
+        randomRange(Cell.maxAge / 2, Cell.maxAge) + lifespanAdj * 100
+      );
       this.sight = Math.max(0, sight);
       this.preferences = initPreferences;
       this.energy = energy;
-      this.genes = initGenes || Cell.randomGenes();
       this.neurons = neurons;
       this.hunger = 0;
     }
@@ -222,8 +227,8 @@
 
   class GridManager {
 
-    static maxTileEnergy = 10;
-    static energyRegenRate = 0.2;
+    static maxTileEnergy = 5;
+    static energyRegenRate = 0.25;
 
     constructor(rows, cols) {
       this.rows = rows;
@@ -314,11 +319,17 @@
           const cell = this.grid[row][col];
 
           if (cell) {
+            // Age the cell and remove it if it exceeds its lifespan
+            cell.age++;
+            if (cell.age >= cell.lifespan) {
+              this.grid[row][col] = null;
+              continue;
+            }
+
             applyEventEffects(cell, row, col, currentEvent);
-          
+
             // Let the cell consume energy from the environment before losing energy
             this.consumeEnergy(cell, row, col);
-
             if (cell.manageEnergy(highDensity)) {
               this.grid[row][col] = null; // Remove the cell if it starved to death
               continue;
@@ -337,7 +348,7 @@
               if (bestMate) {
                 moveToTarget(this.grid, row, col, bestMate.row, bestMate.col);  // TODO: Ensure two cells can never occupy the same space; they should move next to each other
 
-                if (randomPercent(0.6) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {  // TODO: Make reproduction chance dynamic based on genes
+                if (randomPercent(0.4) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {  // TODO: Make reproduction chance dynamic based on genes
                   const offspring = Cell.breed(cell, bestMate.target);
                   this.grid[row][col] = offspring;  // TODO: Implement proper placement for offspring – ensure it doesn't overlap with existing cells
                 }
