@@ -92,6 +92,28 @@
       return offspring;
     }
 
+    static breed(parentA, parentB) {
+      const row = parentA.row;
+      const col = parentA.col;
+
+      // Randomly inherit one parent's color, with a chance to mutate to a different color
+      let newColor = Math.random() < 0.5 ? parentA.color : parentB.color;
+      if (Math.random() < chanceToMutate) {
+        const availableColors = cellColors.filter(color => color !== newColor);
+        newColor = availableColors[Math.floor(Math.random() * availableColors.length)];
+      }
+
+      const offspringPreferences = Cell.inheritPreferences(parentA, parentB);
+      const newGenes = Cell.inheritGenes(parentA, parentB);
+      const neurons = Math.max(1, Math.round((parentA.neurons + parentB.neurons) / 2));
+      const offspringEnergy = Math.max((parentA.energy + parentB.energy) / 2, 0.5);
+      const offspring = new Cell(row, col, newColor, parentA.sight, offspringPreferences, newGenes, neurons, offspringEnergy);
+      parentA.energy /= 2;
+      parentB.energy /= 2;
+
+      return offspring;
+    }
+
     static inheritPreferences(parentA, parentB) {
       const preferences = parentA.preferences.map((prefA, index) => {
         const prefB = parentB.preferences[index];
@@ -103,8 +125,12 @@
 
     static inheritGenes(parentA, parentB) {
       const newGenes = parentA.genes.map((geneA, index) => {
-        const geneB = parentB.genes[index];
-        return (geneA + geneB) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2);
+        const geneB = parentB.genes[index] || [];
+        return geneA.map((w, i) => {
+          const wb = geneB[i] ?? 0;
+          const avg = (w + wb) / 2;
+          return avg + (Math.random() * geneMutationRange - geneMutationRange / 2);
+        });
       });
       return newGenes;
     }
@@ -169,14 +195,6 @@
       return { dr: 0, dc: 1 };
     }
 
-    // TODO: Implement cloning with mutation – can some cells reproduce asexually?
-    cloneWithMutation() {
-      const mutated = this.genes.map(row =>
-        row.map(w => w + (Math.random() * 0.2 - 0.1))
-      );
-      return new Cell(this.row, this.col, mutated);
-    }
-
     manageEnergy(row, col) {
       // Determine local population density
       const neighborCounts = countNeighbors(row, col);
@@ -188,9 +206,10 @@
 
       // Use the last gene row as a simple metabolism indicator. Higher absolute
       // values increase the amount of energy consumed each tick.
-      const metabolism =
-        this.genes[5]?.reduce((s, g) => s + Math.abs(g), 0) /
-        (this.genes[5]?.length || 1);
+      const geneRow = this.genes?.[5];
+      const metabolism = Array.isArray(geneRow)
+        ? geneRow.reduce((s, g) => s + Math.abs(g), 0) / (geneRow.length || 1)
+        : Math.abs(Number(geneRow) || 0);
 
       // Base energy loss is scaled by both metabolism and local density.
       const energyLoss = baseEnergyLoss * (1 + metabolism) * (1 + density);
