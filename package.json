@@ -2,10 +2,10 @@
   "name": "code",
   "version": "1.0.0",
   "description": "",
-  "main": "fallingSands.js",
   "scripts": {
     "start": "parcel index.html",
     "build": "parcel build index.html",
+    "serve": "node server.js",
     "test": "uvu ./test"
   },
   "repository": {

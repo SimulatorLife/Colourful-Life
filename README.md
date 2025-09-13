@@ -20,13 +20,16 @@ The `fallingSand/` directory contains a falling-sand and Game of Life hybrid imp
 The project uses [Parcel](https://parceljs.org/) for local development:
 
 ```bash
-npm run start    # serve index.html with Parcel
-npm run build    # build assets for production
+npm ci
+npm run start    # Parcel dev server
+npm run build    # Production build
+npm run serve    # Simple static server (no bundling)
 ```
+
+Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., Parcel dev server or `npm run serve`).
 
 ## Ideas for Exploration
 
 - Add new gene traits or environmental events.
 - Experiment with performance optimizations like typed arrays or offscreen canvases.
 - Extract logic into modules and consider adding tests or UI controls.
-
