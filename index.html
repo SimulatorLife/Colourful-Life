@@ -21,7 +21,10 @@
 <body>
   <button id="pauseButton">Pause</button>
   <canvas id="gameCanvas"></canvas>
-  <script>
+  <script type="module">
+    import UIManager from './uiManager.js';
+    import EventManager from './eventManager.js';
+
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     canvas.width = 1000;
@@ -29,24 +32,9 @@
     const cellSize = 10;
     const rows = canvas.height / cellSize;
     const cols = canvas.width / cellSize;
-    const pauseButton = document.getElementById('pauseButton');
-    let paused = false;
 
-    function togglePause() {
-      // TODO: Move to separate UI manager class/file
-      paused = !paused;
-      pauseButton.textContent = paused ? 'Resume' : 'Pause';
-      if (!paused) {
-        requestAnimationFrame(update);
-      }
-    }
+    const eventManager = new EventManager(rows, cols);
 
-    pauseButton.addEventListener('click', togglePause);
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'p' || e.key === 'P') {
-        togglePause();
-      }
-    });
     const cellColors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'];
     const reservedColors = {
       flood: 'rgba(0, 0, 255, 0.5)',
@@ -54,9 +42,6 @@
       heatwave: 'rgba(255, 140, 0, 0.5)',
       coldwave: 'rgba(135, 206, 235, 0.5)',
     };
-
-    let eventCounter = 0;  // TODO: Make a standalone EventManager class to handle events
-    let currentEvent = generateRandomEvent(); // Initialize with an event
     
     class Cell {
 
@@ -273,21 +258,6 @@
       return Math.random() < chance;
     }
 
-    function generateRandomEvent() {
-
-      const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
-      const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-      const duration = Math.floor(Math.random() * 501) + 100; // Event duration between 100 and 600 frames
-      const strength = Math.random(); // Event strength between 0 and 1
-      const affectedArea = {
-        x: Math.floor(Math.random() * cols),
-        y: Math.floor(Math.random() * rows),
-        width: Math.floor(Math.random() * (cols / 4)) + 1,
-        height: Math.floor(Math.random() * (rows / 4)) + 1,
-      };
-      return { eventType, duration, affectedArea, strength };
-    }
-
     class GridManager {
 
       // Static properties
@@ -345,13 +315,13 @@
             }
           }
         }
-        if (currentEvent) {
-          ctx.fillStyle = reservedColors[currentEvent.eventType];
+        if (eventManager.currentEvent) {
+          ctx.fillStyle = reservedColors[eventManager.currentEvent.eventType];
           ctx.fillRect(
-            currentEvent.affectedArea.x * cellSize,
-            currentEvent.affectedArea.y * cellSize,
-            currentEvent.affectedArea.width * cellSize,
-            currentEvent.affectedArea.height * cellSize,
+            eventManager.currentEvent.affectedArea.x * cellSize,
+            eventManager.currentEvent.affectedArea.y * cellSize,
+            eventManager.currentEvent.affectedArea.width * cellSize,
+            eventManager.currentEvent.affectedArea.height * cellSize,
           );
         }
       }
@@ -365,11 +335,7 @@
         const highDensity = populationDensity > 0.5 + Math.random() * 0.2;
         this.regenerateEnergyGrid();
 
-        if (!currentEvent || eventCounter % currentEvent.duration === 0) {
-          currentEvent = generateRandomEvent();
-          eventCounter = 0;
-        }
-        eventCounter++;
+        eventManager.updateEvent();
 
         for (let row = 0; row < this.rows; row++) {
           for (let col = 0; col < this.cols; col++) {
@@ -379,7 +345,7 @@
             cell.age++;
             if (cell.age >= cell.lifespan) { this.grid[row][col] = null; continue; }
 
-            applyEventEffects(cell, row, col, currentEvent);
+            eventManager.applyEventEffects(cell, row, col);
             this.consumeEnergy(cell, row, col);
             if (cell.manageEnergy(row, col)) { this.grid[row][col] = null; continue; }
 
@@ -558,33 +524,8 @@
       );
     }
 
-    function applyEventEffects(cell, row, col, currentEvent) {
-      if (
-        currentEvent &&
-        row >= currentEvent.affectedArea.y &&
-        row < currentEvent.affectedArea.y + currentEvent.affectedArea.height &&
-        col >= currentEvent.affectedArea.x &&
-        col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
-      ) {
-        switch (currentEvent.eventType) {
-          case 'flood':
-            // Apply flood effects, e.g., remove certain organisms or reduce their energy
-            break;
-          case 'drought':
-            // Apply drought effects, e.g., reduce available energy
-            break;
-          case 'heatwave':
-            // Apply heatwave effects, e.g., remove certain organisms or drain their energy
-            break;
-          case 'coldwave':
-            // Apply coldwave effects, e.g., reduce energy or movement speed
-            break;
-        }
-      }
-    }
-
     function update() {
-      if (paused) {
+      if (uiManager.isPaused()) {
         return;
       }
 
@@ -595,6 +536,7 @@
 
     // Create grid using class
     const grid = new GridManager(rows, cols);
+    const uiManager = new UIManager(update);
     requestAnimationFrame(update);
   </script>
 
