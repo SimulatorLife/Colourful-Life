@@ -21,11 +21,6 @@ class Cell {
   }
   manageEnergy(isHighDensity) {
     this.energy -= isHighDensity ? 0.8 : 0.055;
-    return this.energy <= this.starvationThreshold();
-  }
-
-  starvationThreshold() {
-    return this.genes[0];
   }
 }
 
@@ -81,10 +76,12 @@ test('randomEmptyCell finds an empty spot or null when full', () => {
   assert.is(withMockedRandom([0], () => randomEmptyCell(filled)), null);
 });
 
-test('manageEnergy uses gene-derived starvation threshold', () => {
+test('manageEnergy depletes energy and death occurs at zero', () => {
   const cell = new Cell([0.2, 0, 0, 0, 0], 0.25);
-  assert.is(cell.manageEnergy(false), true);
-  const cell2 = new Cell([0, 0, 0, 0, 0], 0.25);
-  assert.is(cell2.manageEnergy(false), false);
+  cell.manageEnergy(false);
+  assert.is(cell.energy < 0.25, true);
+  const cell2 = new Cell([0, 0, 0, 0, 0], 0.1);
+  cell2.manageEnergy(true);
+  assert.is(cell2.energy <= 0, true);
 });
 test.run();
