@@ -34,6 +34,8 @@
   <canvas id="gameCanvas"></canvas>
   <script type="module">
     import { randomRange, randomPercent } from './utils.js';
+    import UIManager from './uiManager.js';
+    import EventManager from './eventManager.js';
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -42,27 +44,12 @@
     const cellSize = 10;
     const rows = canvas.height / cellSize;
     const cols = canvas.width / cellSize;
-    const pauseButton = document.getElementById('pauseButton');
-    let paused = false;
     // Simulation speed control
     let updatesPerSecond = 50; // updates per second
     let lastUpdateTime = 0;
 
-    function togglePause() {
-      // TODO: Move to separate UI manager class/file
-      paused = !paused;
-      pauseButton.textContent = paused ? 'Resume' : 'Pause';
-      if (!paused) {
-        requestAnimationFrame(update);
-      }
-    }
+    const eventManager = new EventManager(rows, cols);
 
-    pauseButton.addEventListener('click', togglePause);
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'p' || e.key === 'P') {
-        togglePause();
-      }
-    });
     // Colors are derived from genes; no fixed palette
     const reservedColors = {
       flood: 'rgba(0, 0, 255, 0.5)',
@@ -70,9 +57,6 @@
       heatwave: 'rgba(255, 140, 0, 0.5)',
       coldwave: 'rgba(135, 206, 235, 0.5)',
     };
-
-    let eventCounter = 0;  // TODO: Make a standalone EventManager class to handle events
-    let currentEvent = generateRandomEvent(); // Initialize with an event
     // Tunables (wired to UI)
     let SOCIETY_SIMILARITY = 0.85;
     let ENEMY_SIMILARITY = 0.5;
@@ -417,22 +401,7 @@
       }
     }
 
-    function generateRandomEvent() {
-
-      const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
-      const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-      const duration = Math.floor(Math.random() * 501) + 100; // Event duration between 100 and 600 frames
-      const strength = Math.random(); // Event strength between 0 and 1
-      const affectedArea = {
-        x: Math.floor(Math.random() * cols),
-        y: Math.floor(Math.random() * rows),
-        width: Math.floor(Math.random() * (cols / 4)) + 1,
-        height: Math.floor(Math.random() * (rows / 4)) + 1,
-      };
-      return { eventType, duration, affectedArea, strength };
-    }
-
-      class GridManager {
+    class GridManager {
 
       // Static properties
       static maxTileEnergy = 5;
@@ -487,13 +456,13 @@
             }
           }
         }
-        if (currentEvent) {
-          ctx.fillStyle = reservedColors[currentEvent.eventType];
+        if (eventManager.currentEvent) {
+          ctx.fillStyle = reservedColors[eventManager.currentEvent.eventType];
           ctx.fillRect(
-            currentEvent.affectedArea.x * cellSize,
-            currentEvent.affectedArea.y * cellSize,
-            currentEvent.affectedArea.width * cellSize,
-            currentEvent.affectedArea.height * cellSize,
+            eventManager.currentEvent.affectedArea.x * cellSize,
+            eventManager.currentEvent.affectedArea.y * cellSize,
+            eventManager.currentEvent.affectedArea.width * cellSize,
+            eventManager.currentEvent.affectedArea.height * cellSize,
           );
         }
       }
@@ -507,11 +476,7 @@
         const highDensity = populationDensity > 0.5 + Math.random() * 0.2;
         this.regenerateEnergyGrid();
 
-        if (!currentEvent || eventCounter % currentEvent.duration === 0) {
-          currentEvent = generateRandomEvent();
-          eventCounter = 0;
-        }
-        eventCounter++;
+        eventManager.updateEvent();
 
         const processed = new WeakSet();
         for (let row = 0; row < this.rows; row++) {
@@ -523,7 +488,7 @@
             cell.age++;
             if (cell.age >= cell.lifespan) { this.grid[row][col] = null; continue; }
 
-            applyEventEffects(cell, row, col, currentEvent);
+            applyEventEffects(cell, row, col, eventManager.currentEvent);
             this.consumeEnergy(cell, row, col);
             cell.manageEnergy(row, col);
             if (cell.energy <= 0) { this.grid[row][col] = null; continue; }
@@ -746,9 +711,8 @@
         cell.energy = Math.max(0, Math.min(GridManager.maxTileEnergy, cell.energy));
       }
     }
-
     function update() {
-      if (paused) {
+      if (uiManager.isPaused()) {
         return;
       }
 
@@ -764,6 +728,7 @@
 
     // Create grid using class
     const grid = new GridManager(rows, cols);
+    const uiManager = new UIManager(update);
     requestAnimationFrame(update);
   </script>
 
