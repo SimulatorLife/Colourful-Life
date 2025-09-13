@@ -237,7 +237,6 @@
       static baseEnergyLoss = 0.05;
       static chanceToMutate = 0.15;
       static geneMutationRange = 0.2;
-      static maxAge = 1000;  // TODO: Adjust based on genes; cells should have a 'base' lifespan but no hard limit
 
       constructor(row, col, dna, energy) {
         this.row = row;
@@ -298,6 +297,12 @@
         return this.dna.similarity(other.dna);
       }
 
+      static computeLifespan(genes) {
+        const gene = genes?.[0]?.[0] ?? 0;
+        const factor = Math.max(0, 1 + gene);
+        return Math.round(600 * factor + randomRange(0, 600));
+      }
+
       findBestMate(potentialMates) {
         let bestMate = null;
         let highestPreference = -Infinity;
@@ -354,7 +359,6 @@
         return { dr: 0, dc: 1 };
       }
 
-      // TODO: Consolidate starvation/hunger and energy into the same thing; just energy
       manageEnergy(row, col) {
         // Determine local population density
         const neighborCounts = countNeighbors(row, col);
@@ -521,7 +525,8 @@
 
             applyEventEffects(cell, row, col, currentEvent);
             this.consumeEnergy(cell, row, col);
-            if (cell.manageEnergy(row, col)) { this.grid[row][col] = null; continue; }
+            cell.manageEnergy(row, col);
+            if (cell.energy <= 0) { this.grid[row][col] = null; continue; }
 
             const { mates, enemies, society } = this.findTargets(row, col, cell, highDensity);
             if (mates.length > 0) {
