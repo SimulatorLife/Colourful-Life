@@ -250,7 +250,6 @@
   }
 
   class GridManager {
-<<<<<<< HEAD
 
     static maxTileEnergy = 5;
     static energyRegenRate = 0.25;
@@ -463,18 +462,6 @@
       const color = cellColors[Math.floor(Math.random() * cellColors.length)];
       const newCell = new Cell(r, c, color, sight, preferences, genes, neurons);
       grid.setCell(r, c, newCell);
-=======
-
-    static maxTileEnergy = 5;
-    static energyRegenRate = 0.25;
-
-    constructor(rows, cols) {
-      this.rows = rows;
-      this.cols = cols;
-      this.grid = new Array(rows).fill(null).map(() => new Array(cols).fill(null));
-      this.energyGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => GridManager.maxTileEnergy / 2));  // TODO: Make each cell start with a random amount of energy, and largely zero
-      this.init();
-    }
 
     init() {
       for (let row = 0; row < this.rows; row++) {
