@@ -221,16 +221,11 @@
       return this.energy <= this.starvationThreshold();
     }
 
-<<<<<<< HEAD
+ 
     
 
     
-=======
-    manageEnergy(isHighDensity) {
-      this.energy -= isHighDensity ? 0.8 : 0.055;  // TODO: Make this dynamic/based on genes and based on the actual population, and consider LOCAL population density (based on neighbors/proximity)
-      return this.energy <= this.starvationThreshold();
-    }
-
+ 
     starvationThreshold() {
       const gene = this.genes[5][0];
       const normalized = (gene + 1) / 2;
@@ -244,16 +239,10 @@
 
   function randomPercent(chance) {
     return Math.random() < chance;
->>>>>>> pr/26
+ 
   }
 
-  function randomRange(min, max) {
-    return Math.random() * (max - min) + min;
-  }
-
-  function randomPercent(chance) {
-    return Math.random() < chance;
-  }
+ 
 
   
 
@@ -272,7 +261,7 @@
   }
 
   class GridManager {
-<<<<<<< HEAD
+ 
 
     static maxTileEnergy = 5;
     static energyRegenRate = 0.25;
@@ -285,66 +274,7 @@
       this.init();
     }
 
-    init() {
-      for (let row = 0; row < this.rows; row++) {
-        for (let col = 0; col < this.cols; col++) {
-          if (Math.random() < 0.05) {
-            const genes = Cell.randomGenes(); // properly structured genes
-            const preferences = cellColors.map(() => Math.random());
-            const neurons = Math.floor(Math.random() * 5) + 1;
-            this.grid[row][col] = new Cell(row, col, cellColors[Math.floor(Math.random() * cellColors.length)], Math.floor(Math.random() * 5) + 1, preferences, genes, neurons);
-          }
-        }
-      }
-    }
-
-    consumeEnergy(cell, row, col) {
-      const available = this.energyGrid[row][col];
-      const take = Math.min(1, available);
-      this.energyGrid[row][col] -= take;
-      cell.energy = Math.min(GridManager.maxTileEnergy, cell.energy + take);
-    }
-
-    regenerateEnergyGrid() {
-      for (let r = 0; r < this.rows; r++) {
-        for (let c = 0; c < this.cols; c++) {
-          this.energyGrid[r][c] = Math.min(GridManager.maxTileEnergy, this.energyGrid[r][c] + GridManager.energyRegenRate);
-        }
-      }
-  }
-
-    getCell(row, col) {
-      return this.grid[row][col];
-    }
-
-    setCell(row, col, cell) {
-      this.grid[row][col] = cell;
-    }
-
-    draw() {
-      for (let row = 0; row < this.rows; row++) {
-        for (let col = 0; col < this.cols; col++) {
-          const cell = this.getCell(row, col);
-          if (cell) {
-            ctx.fillStyle = cell.color;
-            ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-          } else {
-            ctx.clearRect(col * cellSize, row * cellSize, cellSize, cellSize);
-          }
-        }
-      }
-
-      // Draw the event area
-      if (currentEvent) {
-        ctx.fillStyle = reservedColors[currentEvent.eventType];
-        ctx.fillRect(
-          currentEvent.affectedArea.x * cellSize,
-          currentEvent.affectedArea.y * cellSize,
-          currentEvent.affectedArea.width * cellSize,
-          currentEvent.affectedArea.height * cellSize,
-        );
-      }
-    }
+    
   
     update() {
       const populationDensity = this.calculatePopulationDensity();
@@ -486,7 +416,7 @@
       const newCell = new Cell(r, c, color, sight, preferences, genes, neurons);
       grid.setCell(r, c, newCell);
 
-=======
+ 
 
     static maxTileEnergy = 5;
     static energyRegenRate = 0.25;
@@ -499,7 +429,7 @@
       this.init();
     }
 
->>>>>>> pr/26
+ 
     init() {
       for (let row = 0; row < this.rows; row++) {
         for (let col = 0; col < this.cols; col++) {
@@ -558,8 +488,6 @@
           currentEvent.affectedArea.width * cellSize,
           currentEvent.affectedArea.height * cellSize,
         );
-<<<<<<< HEAD
-=======
       }
     }
   
@@ -679,15 +607,7 @@
   }
 
   // TODO: Implement seeding behavior – seed should correspond to gene sequence: 2 cells with the same seed should act exactly the same (in a vacuum)
-  function seed(count) {
-    for (let i = 0; i < count; i++) {
-      const spot = randomEmptyCell();
-      if (spot) {
-        grid.setCell(spot.r, spot.c, new Cell(spot.r, spot.c));
->>>>>>> pr/26
-      }
-    }
-  
+
     update() {
       const populationDensity = this.calculatePopulationDensity();
 
