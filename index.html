@@ -106,7 +106,7 @@
       parentB.energy /= 2;
 
       return offspring;
->>>>>>> pr/27
+ 
     }
 
     static breed(parentA, parentB) {
@@ -283,9 +283,7 @@
   }
 
   class GridManager {
-<<<<<<< HEAD
  
-
     static maxTileEnergy = 5;
     static energyRegenRate = 0.25;
 
@@ -507,13 +505,8 @@
           currentEvent.affectedArea.width * cellSize,
           currentEvent.affectedArea.height * cellSize,
         );
-<<<<<<< HEAD
-=======
       }
     }
-  
-    update() {
-      const populationDensity = this.calculatePopulationDensity();
 
       // TODO: Population density should be more localized to each cell's neighborhood (maybe split overall density into a grid of 9 local densities plus immediate neighbors)
       const highDensity = populationDensity > 0.5 + Math.random() * 0.2; // Adjust the threshold for high density as needed
