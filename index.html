@@ -305,13 +305,13 @@
     }
   
     update() {
-<<<<<<< HEAD
       const populationDensity = this.calculatePopulationDensity();
+      const minPopulation = Math.floor(this.rows * this.cols * 0.05);
+      const currentPopulation = Math.floor(populationDensity * this.rows * this.cols);
+      seed(currentPopulation, minPopulation);
 
       // TODO: Population density should be more localized to each cell's neighborhood (maybe split overall density into a grid of 9 local densities plus immediate neighbors)
       const highDensity = populationDensity > 0.5 + Math.random() * 0.2; // Adjust the threshold for high density as needed
-=======
->>>>>>> pr/23
       this.regenerateEnergyGrid();
 
       // Start a new event when the current one ends
@@ -333,21 +333,12 @@
               continue;
             }
 
-<<<<<<< HEAD
-=======
-            const localDensity = this.calculateLocalDensity(row, col);
-            const highDensity = localDensity > 0.1 + Math.random() * 0.2; // Adjust the threshold for high density as needed
->>>>>>> pr/23
+            
             applyEventEffects(cell, row, col, currentEvent);
 
             // Let the cell consume energy from the environment before losing energy
             this.consumeEnergy(cell, row, col);
-<<<<<<< HEAD
-
             if (cell.manageEnergy(row, col)) {
-=======
-            if (cell.manageEnergy(localDensity)) {
->>>>>>> pr/23
               this.grid[row][col] = null; // Remove the cell if it starved to death
               continue;
             }
@@ -429,14 +420,6 @@
   }
 
   // TODO: Implement seeding behavior – seed should correspond to gene sequence: 2 cells with the same seed should act exactly the same (in a vacuum)
-  function seed(count) {
-    for (let i = 0; i < count; i++) {
-      const spot = randomEmptyCell();
-      if (spot) {
-        grid.setCell(spot.r, spot.c, new Cell(spot.r, spot.c));
-      }
- 
-
   // Seed new cells if the population drops below a minimum threshold
   function seed(current, minPopulation) {
     if (current >= minPopulation) return;
