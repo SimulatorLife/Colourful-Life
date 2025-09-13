@@ -68,9 +68,6 @@
       this.preferences = initPreferences;
       this.energy = energy;
       this.neurons = neurons;
-<<<<<<< HEAD
-      this.strategy = Math.random();
- 
       // Gene-controlled strategy for enemy encounters: 0..1 mapped to
       // avoid, fight, cooperate.
       this.strategy = Math.random();
@@ -241,21 +238,6 @@
       return this.energy <= this.starvationThreshold();
     }
 
-<<<<<<< HEAD
- 
-    
-
-    
- 
-    starvationThreshold() {
-      const gene = this.genes[5][0];
-      const normalized = (gene + 1) / 2;
-      return normalized * GridManager.maxTileEnergy;
-=======
-    manageEnergy(isHighDensity) {
-      this.energy -= isHighDensity ? 0.8 : 0.055;  // TODO: Make this dynamic/based on genes and based on the actual population, and consider LOCAL population density (based on neighbors/proximity)
-      return this.energy <= this.starvationThreshold();
->>>>>>> pr/27
     }
 
     starvationThreshold() {
@@ -457,8 +439,6 @@
       const newCell = new Cell(r, c, color, sight, preferences, genes, neurons);
       grid.setCell(r, c, newCell);
 
- 
-
     static maxTileEnergy = 5;
     static energyRegenRate = 0.25;
 
@@ -469,21 +449,6 @@
       this.energyGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => GridManager.maxTileEnergy / 2));  // TODO: Make each cell start with a random amount of energy, and largely zero
       this.init();
     }
-
- 
-=======
-    static maxTileEnergy = 5;
-    static energyRegenRate = 0.25;
-
-    constructor(rows, cols) {
-      this.rows = rows;
-      this.cols = cols;
-      this.grid = new Array(rows).fill(null).map(() => new Array(cols).fill(null));
-      this.energyGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => GridManager.maxTileEnergy / 2));  // TODO: Make each cell start with a random amount of energy, and largely zero
-      this.init();
-    }
-
->>>>>>> pr/27
     init() {
       for (let row = 0; row < this.rows; row++) {
         for (let col = 0; col < this.cols; col++) {
@@ -681,15 +646,6 @@
   }
 
   // TODO: Implement seeding behavior – seed should correspond to gene sequence: 2 cells with the same seed should act exactly the same (in a vacuum)
-  function seed(count) {
-    for (let i = 0; i < count; i++) {
-      const spot = randomEmptyCell();
-      if (spot) {
-        grid.setCell(spot.r, spot.c, new Cell(spot.r, spot.c));
->>>>>>> pr/27
-      }
-    }
-  
     update() {
       const populationDensity = this.calculatePopulationDensity();
 
