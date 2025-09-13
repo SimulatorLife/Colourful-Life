@@ -93,6 +93,7 @@
       return offspring;
     }
 
+//
     static breed(parentA, parentB) {
       const row = parentA.row;
       const col = parentA.col;
@@ -220,9 +221,30 @@
       return this.energy <= this.starvationThreshold();
     }
 
+<<<<<<< HEAD
     
 
     
+=======
+    manageEnergy(isHighDensity) {
+      this.energy -= isHighDensity ? 0.8 : 0.055;  // TODO: Make this dynamic/based on genes and based on the actual population, and consider LOCAL population density (based on neighbors/proximity)
+      return this.energy <= this.starvationThreshold();
+    }
+
+    starvationThreshold() {
+      const gene = this.genes[5][0];
+      const normalized = (gene + 1) / 2;
+      return normalized * GridManager.maxTileEnergy;
+    }
+  }
+
+  function randomRange(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  function randomPercent(chance) {
+    return Math.random() < chance;
+>>>>>>> pr/26
   }
 
   function randomRange(min, max) {
@@ -250,6 +272,7 @@
   }
 
   class GridManager {
+<<<<<<< HEAD
 
     static maxTileEnergy = 5;
     static energyRegenRate = 0.25;
@@ -463,6 +486,20 @@
       const newCell = new Cell(r, c, color, sight, preferences, genes, neurons);
       grid.setCell(r, c, newCell);
 
+=======
+
+    static maxTileEnergy = 5;
+    static energyRegenRate = 0.25;
+
+    constructor(rows, cols) {
+      this.rows = rows;
+      this.cols = cols;
+      this.grid = new Array(rows).fill(null).map(() => new Array(cols).fill(null));
+      this.energyGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => GridManager.maxTileEnergy / 2));  // TODO: Make each cell start with a random amount of energy, and largely zero
+      this.init();
+    }
+
+>>>>>>> pr/26
     init() {
       for (let row = 0; row < this.rows; row++) {
         for (let col = 0; col < this.cols; col++) {
@@ -521,6 +558,133 @@
           currentEvent.affectedArea.width * cellSize,
           currentEvent.affectedArea.height * cellSize,
         );
+<<<<<<< HEAD
+=======
+      }
+    }
+  
+    update() {
+      const populationDensity = this.calculatePopulationDensity();
+
+      // TODO: Population density should be more localized to each cell's neighborhood (maybe split overall density into a grid of 9 local densities plus immediate neighbors)
+      const highDensity = populationDensity > 0.5 + Math.random() * 0.2; // Adjust the threshold for high density as needed
+      this.regenerateEnergyGrid();
+
+      if (currentEvent && eventCounter === eventEndCounter) {
+        currentEvent = null;
+      }
+      if (!currentEvent && eventCounter === nextEventCounter) {
+        currentEvent = generateRandomEvent();
+        eventEndCounter = eventCounter + currentEvent.duration;
+        nextEventCounter = eventEndCounter + 2000;
+      }
+      eventCounter++;
+
+      for (let row = 0; row < this.rows; row++) {
+        for (let col = 0; col < this.cols; col++) {
+          const cell = this.grid[row][col];
+
+          if (cell) {
+            // Age the cell and remove it if it exceeds its lifespan
+            cell.age++;
+            if (cell.age >= cell.lifespan) {
+              this.grid[row][col] = null;
+              continue;
+            }
+
+            applyEventEffects(cell, row, col, currentEvent);
+
+            // Let the cell consume energy from the environment before losing energy
+            this.consumeEnergy(cell, row, col);
+          
+            if (cell.manageEnergy(highDensity)) {
+              this.grid[row][col] = null; // Remove the cell if it starved to death
+              continue;
+            }
+
+            // TODO: Make starvation threshold dynamic based on genes
+            // TODO: Move starvation calculation-function into Cell class
+            const starving = cell.energy > 0.5 + Math.random();
+
+            // TODO: Current logic relies on sight being a whole-number, so this commented-out part breaks things
+            // if (starving) {  // TODO: Make sight-energy influence be dynamic based on genes
+            //   cell.sight = Math.max(1, cell.sight - cell.energy); // Decrease sight if starving
+            // }
+
+            const { mates, enemies, society } = this.findTargets(row, col, cell, highDensity);
+
+            if (mates.length > 0) {
+              const bestMate = cell.findBestMate(mates);
+              if (bestMate) {
+                moveToTarget(this.grid, row, col, bestMate.row, bestMate.col);  // TODO: Ensure two cells can never occupy the same space; they should move next to each other
+
+                if (randomPercent(0.4) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {  // TODO: Make reproduction chance dynamic based on genes
+                  const offspring = Cell.breed(cell, bestMate.target);
+                  this.grid[row][col] = offspring;  // TODO: Implement proper placement for offspring – ensure it doesn't overlap with existing cells
+                }
+              }
+            } else if (enemies.length > 0) {
+              // TODO: Make avoidance behavior dynamic based on genes – some cells should want to avoid, fight, etc.
+              const enemyToAvoid = enemies[Math.floor(Math.random() * enemies.length)];
+              moveAwayFromTarget(this.grid, row, col, enemyToAvoid.row, enemyToAvoid.col);
+            } else {
+              moveRandomly(this.grid, row, col, cell);  // TODO: Cells should have different movement behaviors based on genes
+            }
+          }
+        }
+      }
+    }
+
+    calculatePopulationDensity() {
+      let population = 0;
+      for (let row = 0; row < this.rows; row++) {
+        for (let col = 0; col < this.cols; col++) {
+          if (this.grid[row][col]) {
+            population++;
+          }
+        }
+      }
+      return population / (this.rows * this.cols);
+    }
+
+    findTargets(row, col, cell, isHighDensity = false) {    // TODO: Pass population density instead of flag here and make targeting conditions more flexible based on density
+      const mates = [];
+      const enemies = [];
+      const society = [];
+
+      for (let x = -cell.sight; x <= cell.sight; x++) {
+        for (let y = -cell.sight; y <= cell.sight; y++) {
+          if (x === 0 && y === 0) continue;
+          const newRow = (row + y + this.rows) % this.rows;
+          const newCol = (col + x + this.cols) % this.cols;
+          const target = this.grid[newRow][newCol];
+          if (target) {
+            if (target.color === cell.color) {
+              society.push({ row: newRow, col: newCol, target });
+            } else {
+              const targetPreference = cell.preferences[cellColors.indexOf(target.color)];
+              if (isHighDensity || targetPreference <= 0.5) {
+                enemies.push({ row: newRow, col: newCol, target });
+              } else {
+                mates.push({ row: newRow, col: newCol, target });
+              }
+            }
+          }
+        }
+      }
+
+      return { mates, enemies, society };
+    }
+
+  }
+
+  // TODO: Implement seeding behavior – seed should correspond to gene sequence: 2 cells with the same seed should act exactly the same (in a vacuum)
+  function seed(count) {
+    for (let i = 0; i < count; i++) {
+      const spot = randomEmptyCell();
+      if (spot) {
+        grid.setCell(spot.r, spot.c, new Cell(spot.r, spot.c));
+>>>>>>> pr/26
       }
     }
   
