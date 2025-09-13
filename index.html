@@ -92,28 +92,7 @@
       return offspring;
     }
 
-    static breed(parentA, parentB) {
-      const row = parentA.row;
-      const col = parentA.col;
-
-      // Randomly inherit one parent's color, with a chance to mutate to a different color
-      let newColor = Math.random() < 0.5 ? parentA.color : parentB.color;
-      if (Math.random() < chanceToMutate) {
-        const availableColors = cellColors.filter(color => color !== newColor);
-        newColor = availableColors[Math.floor(Math.random() * availableColors.length)];
-      }
-
-      const offspringPreferences = Cell.inheritPreferences(parentA, parentB);
-      const newGenes = Cell.inheritGenes(parentA, parentB);
-      const neurons = Math.max(1, Math.round((parentA.neurons + parentB.neurons) / 2));
-      const offspringEnergy = Math.max((parentA.energy + parentB.energy) / 2, 0.5);
-      const offspring = new Cell(row, col, newColor, parentA.sight, offspringPreferences, newGenes, neurons, offspringEnergy);
-      parentA.energy /= 2;
-      parentB.energy /= 2;
-
-      return offspring;
-    }
-
+    // breed method defined once above
     static inheritPreferences(parentA, parentB) {
       const preferences = parentA.preferences.map((prefA, index) => {
         const prefB = parentB.preferences[index];
@@ -223,6 +202,20 @@
       const normalized = (gene + 1) / 2;
       return normalized * GridManager.maxTileEnergy;
     }
+
+    starvationThreshold() {
+      const gene = this.genes[5][0];
+      const normalized = (gene + 1) / 2;
+      return normalized * GridManager.maxTileEnergy;
+    }
+  }
+
+  function randomRange(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  function randomPercent(chance) {
+    return Math.random() < chance;
   }
 
   function randomRange(min, max) {
@@ -249,8 +242,8 @@
 
   class GridManager {
 
-    static maxTileEnergy = 10;
-    static energyRegenRate = 0.2;
+    static maxTileEnergy = 5;
+    static energyRegenRate = 0.25;
 
     constructor(rows, cols) {
       this.rows = rows;
@@ -373,12 +366,7 @@
               if (bestMate) {
                 moveToTarget(this.grid, row, col, bestMate.row, bestMate.col);  // TODO: Ensure two cells can never occupy the same space; they should move next to each other
 
-                if (
-                  randomPercent(0.4) &&
-                  cell.energy >= 0.5 &&
-                  bestMate.target.energy >= 0.5
-                ) {
-                  // TODO: Make reproduction chance dynamic based on genes
+                if (randomPercent(0.4) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {  // TODO: Make reproduction chance dynamic based on genes
                   const offspring = Cell.breed(cell, bestMate.target);
                   this.grid[row][col] = offspring;  // TODO: Implement proper placement for offspring – ensure it doesn't overlap with existing cells
                 }
