@@ -19,7 +19,6 @@ class Cell {
     });
     return new Cell(newGenes);
   }
-
   manageEnergy(isHighDensity) {
     this.energy -= isHighDensity ? 0.8 : 0.055;
     return this.energy <= this.starvationThreshold();
@@ -88,5 +87,4 @@ test('manageEnergy uses gene-derived starvation threshold', () => {
   const cell2 = new Cell([0, 0, 0, 0, 0], 0.25);
   assert.is(cell2.manageEnergy(false), false);
 });
-
 test.run();
