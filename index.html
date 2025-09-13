@@ -362,56 +362,73 @@
         const currentPopulation = Math.floor(populationDensity * this.rows * this.cols);
         seed(currentPopulation, minPopulation);
 
-        const highDensity = populationDensity > 0.5 + Math.random() * 0.2;
         this.regenerateEnergyGrid();
-
-        if (!currentEvent || eventCounter % currentEvent.duration === 0) {
-          currentEvent = generateRandomEvent();
-          eventCounter = 0;
-        }
-        eventCounter++;
+        this.handleEvents();
 
         for (let row = 0; row < this.rows; row++) {
           for (let col = 0; col < this.cols; col++) {
             const cell = this.grid[row][col];
             if (!cell) continue;
-
-            cell.age++;
-            if (cell.age >= cell.lifespan) { this.grid[row][col] = null; continue; }
-
-            applyEventEffects(cell, row, col, currentEvent);
-            this.consumeEnergy(cell, row, col);
-            if (cell.manageEnergy(row, col)) { this.grid[row][col] = null; continue; }
-
-            const { mates, enemies } = this.findTargets(row, col, cell, highDensity);
-            if (mates.length > 0) {
-              const bestMate = cell.findBestMate(mates);
-              if (bestMate) {
-                moveToTarget(this.grid, row, col, bestMate.row, bestMate.col);
-                if (randomPercent(0.4) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {
-                  const offspring = Cell.breed(cell, bestMate.target);
-                  this.grid[row][col] = offspring;
-                }
-              }
-            } else if (enemies.length > 0) {
-              const targetEnemy = enemies[Math.floor(Math.random() * enemies.length)];
-              const behavior = cell.strategy;
-              if (behavior < 0.33) {
-                moveAwayFromTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
-              } else if (behavior < 0.66) {
-                const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
-                if (dist <= 1) fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
-                else moveToTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
-              } else {
-                const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
-                if (dist <= 1) cooperateWithEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
-                else moveToTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
-              }
-            } else {
-              moveRandomly(this.grid, row, col, cell);
-            }
+            this.processCell(row, col, cell, populationDensity);
           }
         }
+      }
+
+      handleEvents() {
+        if (!currentEvent || eventCounter % currentEvent.duration === 0) {
+          currentEvent = generateRandomEvent();
+          eventCounter = 0;
+        }
+        eventCounter++;
+      }
+
+      processCell(row, col, cell, populationDensity) {
+        cell.age++;
+        if (cell.age >= cell.lifespan) { this.grid[row][col] = null; return; }
+
+        applyEventEffects(cell, row, col, currentEvent);
+        this.consumeEnergy(cell, row, col);
+        if (cell.manageEnergy(row, col)) { this.grid[row][col] = null; return; }
+
+        const { mates, enemies } = this.findTargets(row, col, cell, populationDensity);
+        if (mates.length > 0) {
+          this.handleReproduction(row, col, cell, mates);
+        } else if (enemies.length > 0) {
+          this.handleCombat(row, col, cell, enemies);
+        } else {
+          this.handleMovement(row, col, cell);
+        }
+      }
+
+      handleReproduction(row, col, cell, mates) {
+        const bestMate = cell.findBestMate(mates);
+        if (bestMate) {
+          moveToTarget(this.grid, row, col, bestMate.row, bestMate.col);
+          if (randomPercent(0.4) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {
+            const offspring = Cell.breed(cell, bestMate.target);
+            this.grid[row][col] = offspring;
+          }
+        }
+      }
+
+      handleCombat(row, col, cell, enemies) {
+        const targetEnemy = enemies[Math.floor(Math.random() * enemies.length)];
+        const behavior = cell.strategy;
+        if (behavior < 0.33) {
+          moveAwayFromTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
+        } else if (behavior < 0.66) {
+          const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
+          if (dist <= 1) fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
+          else moveToTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
+        } else {
+          const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
+          if (dist <= 1) cooperateWithEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
+          else moveToTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
+        }
+      }
+
+      handleMovement(row, col, cell) {
+        moveRandomly(this.grid, row, col, cell);
       }
 
       calculatePopulationDensity() {
@@ -426,10 +443,11 @@
         return population / (this.rows * this.cols);
       }
 
-      findTargets(row, col, cell, isHighDensity = false) {    // TODO: Pass population density variable instead of flag here and make targeting conditions more flexible based on density
+      findTargets(row, col, cell, populationDensity = 0) {
         const mates = [];
         const enemies = [];
         const society = [];
+        const enemyThreshold = 0.5 + populationDensity * 0.5;
 
         for (let x = -cell.sight; x <= cell.sight; x++) {
           for (let y = -cell.sight; y <= cell.sight; y++) {
@@ -442,7 +460,7 @@
                 society.push({ row: newRow, col: newCol, target });
               } else {
                 const targetPreference = cell.preferences[cellColors.indexOf(target.color)];
-                if (isHighDensity || targetPreference <= 0.5) {
+                if (targetPreference <= enemyThreshold) {
                   enemies.push({ row: newRow, col: newCol, target });
                 } else {
                   mates.push({ row: newRow, col: newCol, target });
