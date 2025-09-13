@@ -352,7 +352,6 @@ class GridManager {
       }
   }
 
-<<<<<<< HEAD
   update() {
     const populationDensity = this.calculatePopulationDensity();
     const minPopulation = Math.floor(this.rows * this.cols * 0.05);
@@ -514,15 +513,7 @@ class GridManager {
   }
 
   // TODO: Implement seeding behavior – seed should correspond to gene sequence: 2 cells with the same seed should act exactly the same (in a vacuum)
-  function seed(count) {
-    for (let i = 0; i < count; i++) {
-      const spot = randomEmptyCell();
-      if (spot) {
-        grid.setCell(spot.r, spot.c, new Cell(spot.r, spot.c));
->>>>>>> pr/28
-      }
-    }
-  }
+  
 
   calculatePopulationDensity() {
     let population = 0;
@@ -634,7 +625,6 @@ function countNeighbors(row, col) {
   function moveRandomly(gridArr, row, col, cell) {
     const { dr, dc } = cell.decideMove();
     return tryMove(gridArr, row, col, dr, dc);
-<<<<<<< HEAD
   }
 
   function fightEnemy(manager, attackerRow, attackerCol, targetRow, targetCol) {
@@ -660,8 +650,6 @@ function countNeighbors(row, col) {
       GridManager.maxTileEnergy,
       partner.energy + share,
     );
-=======
->>>>>>> pr/28
   }
 
   function applyEventEffects(cell, row, col, currentEvent) {
