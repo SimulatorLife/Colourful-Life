@@ -206,8 +206,6 @@
     }
   }
 
-  
-
   function randomRange(min, max) {
     return Math.random() * (max - min) + min;
   }
@@ -215,6 +213,8 @@
   function randomPercent(chance) {
     return Math.random() < chance;
   }
+
+  
 
   function generateRandomEvent() {
     const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
@@ -231,7 +231,6 @@
   }
 
   class GridManager {
- 
 
     static maxTileEnergy = 5;
     static energyRegenRate = 0.25;
@@ -306,10 +305,13 @@
     }
   
     update() {
+<<<<<<< HEAD
       const populationDensity = this.calculatePopulationDensity();
 
       // TODO: Population density should be more localized to each cell's neighborhood (maybe split overall density into a grid of 9 local densities plus immediate neighbors)
       const highDensity = populationDensity > 0.5 + Math.random() * 0.2; // Adjust the threshold for high density as needed
+=======
+>>>>>>> pr/23
       this.regenerateEnergyGrid();
 
       // Start a new event when the current one ends
@@ -331,12 +333,21 @@
               continue;
             }
 
+<<<<<<< HEAD
+=======
+            const localDensity = this.calculateLocalDensity(row, col);
+            const highDensity = localDensity > 0.1 + Math.random() * 0.2; // Adjust the threshold for high density as needed
+>>>>>>> pr/23
             applyEventEffects(cell, row, col, currentEvent);
 
             // Let the cell consume energy from the environment before losing energy
             this.consumeEnergy(cell, row, col);
+<<<<<<< HEAD
 
             if (cell.manageEnergy(row, col)) {
+=======
+            if (cell.manageEnergy(localDensity)) {
+>>>>>>> pr/23
               this.grid[row][col] = null; // Remove the cell if it starved to death
               continue;
             }
@@ -352,16 +363,16 @@
 
             const { mates, enemies, society } = this.findTargets(row, col, cell, highDensity);
 
-            if (mates.length > 0) {
-      const bestMate = cell.findBestMate(mates);
-      if (bestMate) {
-        moveToTarget(this.grid, row, col, bestMate.row, bestMate.col);  // TODO: Ensure two cells can never occupy the same space; they should move next to each other
+          if (mates.length > 0) {
+              const bestMate = cell.findBestMate(mates);
+              if (bestMate) {
+                moveToTarget(this.grid, row, col, bestMate.row, bestMate.col);  // TODO: Ensure two cells can never occupy the same space; they should move next to each other
 
-        if (randomPercent(0.4) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {  // TODO: Make reproduction chance dynamic based on genes
-          const offspring = Cell.breed(cell, bestMate.target);
-          this.grid[row][col] = offspring;  // TODO: Implement proper placement for offspring – ensure it doesn't overlap with existing cells
-        }
-      }
+                if (randomPercent(0.4) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {  // TODO: Make reproduction chance dynamic based on genes
+                  const offspring = Cell.breed(cell, bestMate.target);
+                  this.grid[row][col] = offspring;  // TODO: Implement proper placement for offspring – ensure it doesn't overlap with existing cells
+                }
+              }
             } else if (enemies.length > 0) {
               // TODO: Make avoidance behavior dynamic based on genes – some cells should want to avoid, fight, etc.
               const enemyToAvoid = enemies[Math.floor(Math.random() * enemies.length)];
