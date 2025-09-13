@@ -113,7 +113,7 @@
         );
         const strategy =
           (parentA.strategy + parentB.strategy) / 2 +
-          (Math.random() * geneMutationRange - geneMutationRange / 2);
+          (Math.random() * Cell.geneMutationRange - Cell.geneMutationRange / 2);
         offspring.strategy = Math.min(1, Math.max(0, strategy));
         parentA.energy /= 2;
         parentB.energy /= 2;
@@ -136,7 +136,7 @@
           return geneA.map((w, i) => {
             const wb = geneB[i] ?? 0;
             const avg = (w + wb) / 2;
-            return avg + (Math.random() * geneMutationRange - geneMutationRange / 2);
+            return avg + (Math.random() * Cell.geneMutationRange - Cell.geneMutationRange / 2);
           });
         });
         return newGenes;
@@ -220,7 +220,7 @@
           : Math.abs(Number(geneRow) || 0);
 
         // Base energy loss is scaled by both metabolism and local density.
-        const energyLoss = baseEnergyLoss * (1 + metabolism) * (1 + density);
+        const energyLoss = Cell.baseEnergyLoss * (1 + metabolism) * (1 + density);
         this.energy -= energyLoss;
 
         return this.energy <= this.starvationThreshold();
