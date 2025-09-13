@@ -33,13 +33,13 @@
     let paused = false;
 
     function togglePause() {
+      // TODO: Move to separate UI manager class/file
       paused = !paused;
       pauseButton.textContent = paused ? 'Resume' : 'Pause';
       if (!paused) {
         requestAnimationFrame(update);
       }
     }
-    // Static property assigned after class definition (see near bottom of class Cell)
 
     pauseButton.addEventListener('click', togglePause);
     document.addEventListener('keydown', (e) => {
@@ -55,12 +55,15 @@
       coldwave: 'rgba(135, 206, 235, 0.5)',
     };
 
-    const chanceToMutate = 0.15;
-    const geneMutationRange = 0.2;
-    let eventCounter = 0;
+    let eventCounter = 0;  // TODO: Make a standalone EventManager class to handle events
     let currentEvent = generateRandomEvent(); // Initialize with an event
-    const baseEnergyLoss = 0.05;
+    
     class Cell {
+
+      static baseEnergyLoss = 0.05;
+      static chanceToMutate = 0.15;
+      static geneMutationRange = 0.2;
+      static maxAge = 1000;  // TODO: Adjust based on genes; cells should have a 'base' lifespan but no hard limit
 
       constructor(row, col, color, sight, initPreferences, initGenes, neurons, energy = randomRange(0.5, 2), movementGenes) {
         this.row = row;
@@ -70,7 +73,7 @@
         this.age = 0;
         // Lifespan can be slightly adjusted based on a gene value
         const lifespanAdj = this.genes[0]?.[0] || 0;
-        this.lifespan = Math.round(
+        this.lifespan = Math.round(  // TODO: Clean up/condense lifespan calculation
           randomRange(Cell.maxAge / 2, Cell.maxAge) + (lifespanAdj * 100)
         );
         this.sight = Math.max(0, sight);
@@ -83,13 +86,13 @@
         this.movementGenes = movementGenes || Cell.randomMovementGenes?.() || null;
       }
 
-      static breed(parentA, parentB) {
+      static breed(parentA, parentB) {  // TODO: Add comments, clarify parameters
         const row = parentA.row;
         const col = parentA.col;
 
         // Randomly inherit one parent's color, with a chance to mutate to a different color
         let newColor = Math.random() < 0.5 ? parentA.color : parentB.color;
-        if (Math.random() < chanceToMutate) {
+        if (Math.random() < Cell.chanceToMutate) {
           const availableColors = cellColors.filter(color => color !== newColor);
           newColor = availableColors[Math.floor(Math.random() * availableColors.length)];
         }
@@ -117,11 +120,11 @@
 
         return offspring;
       }
-      // breed method defined once above
+
       static inheritPreferences(parentA, parentB) {
         const preferences = parentA.preferences.map((prefA, index) => {
           const prefB = parentB.preferences[index];
-          return (prefA + prefB) / 2 + (Math.random() * geneMutationRange - geneMutationRange / 2); // Inherit preferences with a slight mutation
+          return (prefA + prefB) / 2 + (Math.random() * Cell.geneMutationRange - Cell.geneMutationRange / 2); // Inherit preferences with a slight mutation
         });
 
         return preferences;
@@ -176,7 +179,7 @@
         return bestMate;
       }
 
-      decide(n, e, s, w) {
+      decide(n, e, s, w) {  // TODO: Clarify what this does, add comments, add function description
         const inputs = [1, n, e, s, w];
         const scores = this.genes.map(weights =>
           weights.reduce((sum, weight, idx) => sum + weight * inputs[idx], 0)
@@ -199,6 +202,7 @@
         return { dr: 0, dc: 1 };
       }
 
+      // TODO: Consolidate starvation/hunger and energy into the same thing; just energy
       manageEnergy(row, col) {
         // Determine local population density
         const neighborCounts = countNeighbors(row, col);
@@ -259,15 +263,15 @@
       }
     }
 
+    // TODO: Move utility functions like this to a separate module/file
     function randomRange(min, max) {
       return Math.random() * (max - min) + min;
     }
 
+    // TODO: Move utility functions like this to a separate module/file
     function randomPercent(chance) {
       return Math.random() < chance;
     }
-
-
 
     function generateRandomEvent() {
 
@@ -285,6 +289,10 @@
     }
 
     class GridManager {
+
+      // Static properties
+      static maxTileEnergy = 5;
+      static energyRegenRate = 0.25;
 
       constructor(rows, cols) {
         this.rows = rows;
@@ -348,7 +356,7 @@
         }
       }
 
-      update() {
+      update() {  // TODO: Break this function up into smaller functions & make it more readable
         const populationDensity = this.calculatePopulationDensity();
         const minPopulation = Math.floor(this.rows * this.cols * 0.05);
         const currentPopulation = Math.floor(populationDensity * this.rows * this.cols);
@@ -418,7 +426,7 @@
         return population / (this.rows * this.cols);
       }
 
-      findTargets(row, col, cell, isHighDensity = false) {    // TODO: Pass population density instead of flag here and make targeting conditions more flexible based on density
+      findTargets(row, col, cell, isHighDensity = false) {    // TODO: Pass population density variable instead of flag here and make targeting conditions more flexible based on density
         const mates = [];
         const enemies = [];
         const society = [];
@@ -449,15 +457,9 @@
 
     }
 
-    // TODO: Implement seeding behavior – seed should correspond to gene sequence: 2 cells with the same seed should act exactly the same (in a vacuum)
+    // TODO: Lots of the following methods should be moved to the Cell, EventManager, or GridManager classes
 
-    // Static property
-    Cell.maxAge = 1000;
-
-    // Static properties
-    GridManager.maxTileEnergy = 5;
-    GridManager.energyRegenRate = 0.25;
-
+    // TODO: Improve seeding behavior – seed should correspond to gene sequence: 2 cells with the same seed should act exactly the same (in a vacuum)
     // Seed new cells if the population drops below a minimum threshold
     function seed(current, minPopulation) {
       if (current >= minPopulation) return;
