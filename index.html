@@ -86,7 +86,16 @@
         this.movementGenes = movementGenes || Cell.randomMovementGenes?.() || null;
       }
 
-      static breed(parentA, parentB) {  // TODO: Add comments, clarify parameters
+      /**
+       * Create a new cell by combining traits from two parents.
+       * The offspring inherits position, color, genes, and other
+       * attributes from its parents with a chance for mutation.
+       *
+       * @param {Cell} parentA - First parent providing location and traits.
+       * @param {Cell} parentB - Second parent contributing traits.
+       * @returns {Cell} A new child cell placed at parentA's position.
+       */
+      static breed(parentA, parentB) {
         const row = parentA.row;
         const col = parentA.col;
 
@@ -179,17 +188,36 @@
         return bestMate;
       }
 
-      decide(n, e, s, w) {  // TODO: Clarify what this does, add comments, add function description
+      /**
+       * Determine which action to take based on input signals from the
+       * north, east, south, and west. Each potential action corresponds
+       * to a row in `this.genes`, and its score is the dot product of the
+       * row's weights with the input vector. The index of the highest
+       * score is returned.
+       *
+       * @param {number} n - Stimulus from the northern neighbor.
+       * @param {number} e - Stimulus from the eastern neighbor.
+       * @param {number} s - Stimulus from the southern neighbor.
+       * @param {number} w - Stimulus from the western neighbor.
+       * @returns {number} Index of the selected action (0-5).
+       */
+      decide(n, e, s, w) {
+        // Include a constant bias term plus directional inputs
         const inputs = [1, n, e, s, w];
+        // Score each possible action by multiplying weights with inputs
         const scores = this.genes.map(weights =>
           weights.reduce((sum, weight, idx) => sum + weight * inputs[idx], 0)
         );
+        // Identify the index of the highest scoring action
         let max = scores[0];
         let index = 0;
         for (let i = 1; i < scores.length; i++) {
-          if (scores[i] > max) { max = scores[i]; index = i; }
+          if (scores[i] > max) {
+            max = scores[i];
+            index = i;
+          }
         }
-        return index; // 0..5
+        return index; // Action index 0..5
       }
 
       decideMove() {
