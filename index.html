@@ -20,6 +20,17 @@
 
 <body>
   <button id="pauseButton">Pause</button>
+  <div id="controls" style="color:#ddd; font-family: sans-serif; max-width:1000px; margin:8px auto; display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+    <label>Society ≥ <span id="socVal">0.85</span>
+      <input id="socSlider" type="range" min="0" max="1" step="0.01" value="0.85">
+    </label>
+    <label>Enemy ≤ <span id="eneVal">0.50</span>
+      <input id="eneSlider" type="range" min="0" max="1" step="0.01" value="0.50">
+    </label>
+    <label>Event Strength × <span id="evtVal">1.0</span>
+      <input id="evtSlider" type="range" min="0" max="3" step="0.05" value="1.0">
+    </label>
+  </div>
   <canvas id="gameCanvas"></canvas>
   <script>
     const canvas = document.getElementById('gameCanvas');
@@ -31,6 +42,9 @@
     const cols = canvas.width / cellSize;
     const pauseButton = document.getElementById('pauseButton');
     let paused = false;
+    // Simulation speed control
+    let updatesPerSecond = 50; // updates per second
+    let lastUpdateTime = 0;
 
     function togglePause() {
       // TODO: Move to separate UI manager class/file
@@ -57,9 +71,41 @@
 
     let eventCounter = 0;  // TODO: Make a standalone EventManager class to handle events
     let currentEvent = generateRandomEvent(); // Initialize with an event
-    // Similarity thresholds
-    const SOCIETY_SIMILARITY = 0.85;
-    const ENEMY_SIMILARITY = 0.5;
+    // Tunables (wired to UI)
+    let SOCIETY_SIMILARITY = 0.85;
+    let ENEMY_SIMILARITY = 0.5;
+    let EVENT_STRENGTH_MULTIPLIER = 1.0;
+    const socSlider = document.getElementById('socSlider');
+    const eneSlider = document.getElementById('eneSlider');
+    const evtSlider = document.getElementById('evtSlider');
+    const socVal = document.getElementById('socVal');
+    const eneVal = document.getElementById('eneVal');
+    const evtVal = document.getElementById('evtVal');
+    socSlider.addEventListener('input', () => { SOCIETY_SIMILARITY = parseFloat(socSlider.value); socVal.textContent = SOCIETY_SIMILARITY.toFixed(2); });
+    eneSlider.addEventListener('input', () => { ENEMY_SIMILARITY = parseFloat(eneSlider.value); eneVal.textContent = ENEMY_SIMILARITY.toFixed(2); });
+    evtSlider.addEventListener('input', () => { EVENT_STRENGTH_MULTIPLIER = parseFloat(evtSlider.value); evtVal.textContent = EVENT_STRENGTH_MULTIPLIER.toFixed(2); });
+    // Attach speed slider dynamically to the controls bar
+    (function attachSpeedControl(){
+      const controls = document.getElementById('controls');
+      if (!controls) return;
+      const label = document.createElement('label');
+      label.innerHTML = 'Speed <span id="spdVal"></span> ups';
+      const input = document.createElement('input');
+      input.id = 'spdSlider';
+      input.type = 'range';
+      input.min = '1';
+      input.max = '60';
+      input.step = '1';
+      input.value = String(updatesPerSecond);
+      label.appendChild(input);
+      controls.appendChild(label);
+      const spdVal = label.querySelector('#spdVal');
+      spdVal.textContent = String(updatesPerSecond);
+      input.addEventListener('input', () => {
+        updatesPerSecond = parseInt(input.value, 10) || 1;
+        spdVal.textContent = String(updatesPerSecond);
+      });
+    })();
     
     // Deterministic PRNG seeded by DNA
     function mulberry32(seed) {
@@ -102,6 +148,10 @@
           cautious: rnd(),
         };
       }
+      interactionGenes() {
+        const rnd = this.prng();
+        return { avoid: rnd(), fight: rnd(), cooperate: rnd() };
+      }
       reproductionProb() {
         const rnd = this.prng();
         // Bias by green channel (resource affinity): 0.2..0.6
@@ -130,6 +180,11 @@
       mutationRange() {
         const rnd = this.prng();
         return 6 + Math.floor(rnd()*20); // 6..25
+      }
+      starvationThresholdFrac() {
+        // Higher green -> better resource efficiency, lower threshold
+        // Map to 0.2..0.8
+        return 0.8 - (this.g / 255) * 0.6;
       }
       neurons() {
         const rnd = this.prng();
@@ -199,6 +254,7 @@
         // avoid, fight, cooperate.
         this.strategy = this.dna.strategy();
         this.movementGenes = this.dna.movementGenes();
+        this.interactionGenes = this.dna.interactionGenes();
       }
 
       static breed(parentA, parentB) {  // TODO: Add comments, clarify parameters
@@ -293,9 +349,7 @@
       }
 
       starvationThreshold() {
-        const gene = this.genes[5][0];
-        const normalized = (gene + 1) / 2;
-        return normalized * GridManager.maxTileEnergy;
+        return this.dna.starvationThresholdFrac() * GridManager.maxTileEnergy;
       }
 
       static randomMovementGenes() {
@@ -435,10 +489,12 @@
         }
         eventCounter++;
 
+        const processed = new WeakSet();
         for (let row = 0; row < this.rows; row++) {
           for (let col = 0; col < this.cols; col++) {
             const cell = this.grid[row][col];
-            if (!cell) continue;
+            if (!cell || processed.has(cell)) continue;
+            processed.add(cell);
 
             cell.age++;
             if (cell.age >= cell.lifespan) { this.grid[row][col] = null; continue; }
@@ -447,7 +503,7 @@
             this.consumeEnergy(cell, row, col);
             if (cell.manageEnergy(row, col)) { this.grid[row][col] = null; continue; }
 
-            const { mates, enemies } = this.findTargets(row, col, cell, highDensity);
+            const { mates, enemies, society } = this.findTargets(row, col, cell, highDensity);
             if (mates.length > 0) {
               const bestMate = cell.findBestMate(mates);
               if (bestMate) {
@@ -460,10 +516,13 @@
               }
             } else if (enemies.length > 0) {
               const targetEnemy = enemies[Math.floor(Math.random() * enemies.length)];
-              const behavior = cell.strategy;
-              if (behavior < 0.33) {
+              // Choose interaction by DNA interaction genes
+              const { avoid, fight, cooperate } = cell.interactionGenes;
+              const total = avoid + fight + cooperate;
+              const roll = Math.random() * total;
+              if (roll < avoid) {
                 moveAwayFromTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
-              } else if (behavior < 0.66) {
+              } else if (roll < avoid + fight) {
                 const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
                 if (dist <= 1) fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
                 else moveToTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
@@ -473,7 +532,8 @@
                 else moveToTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
               }
             } else {
-              moveRandomly(this.grid, row, col, cell);
+              // Use DNA-driven movement strategy when idle
+              cell.executeMovementStrategy(this.grid, row, col, mates, enemies, society || []);
             }
           }
         }
@@ -580,11 +640,21 @@
     }
 
     function moveToTarget(gridArr, row, col, targetRow, targetCol) {
-      return tryMove(gridArr, row, col, Math.sign(targetRow - row), Math.sign(targetCol - col));
+      const dRow = targetRow - row;
+      const dCol = targetCol - col;
+      let dr = 0, dc = 0;
+      if (Math.abs(dRow) >= Math.abs(dCol)) dr = Math.sign(dRow);
+      else dc = Math.sign(dCol);
+      return tryMove(gridArr, row, col, dr, dc);
     }
 
     function moveAwayFromTarget(gridArr, row, col, targetRow, targetCol) {
-      return tryMove(gridArr, row, col, -Math.sign(targetRow - row), -Math.sign(targetCol - col));
+      const dRow = targetRow - row;
+      const dCol = targetCol - col;
+      let dr = 0, dc = 0;
+      if (Math.abs(dRow) >= Math.abs(dCol)) dr = -Math.sign(dRow);
+      else dc = -Math.sign(dCol);
+      return tryMove(gridArr, row, col, dr, dc);
     }
 
     function moveRandomly(gridArr, row, col, cell) {
@@ -625,7 +695,7 @@
         col >= currentEvent.affectedArea.x &&
         col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
       ) {
-        const s = currentEvent.strength;
+        const s = currentEvent.strength * EVENT_STRENGTH_MULTIPLIER;
         switch (currentEvent.eventType) {
           case 'flood': {
             const resist = cell.dna.floodResist();
@@ -657,7 +727,12 @@
         return;
       }
 
-      grid.update();
+      const now = performance.now();
+      const interval = 1000 / Math.max(1, updatesPerSecond);
+      if (now - lastUpdateTime >= interval) {
+        lastUpdateTime = now;
+        grid.update();
+      }
       grid.draw();
       requestAnimationFrame(update);
     }
