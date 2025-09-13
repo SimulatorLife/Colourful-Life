@@ -21,7 +21,9 @@
 <body>
   <button id="pauseButton">Pause</button>
   <canvas id="gameCanvas"></canvas>
-  <script>
+  <script type="module">
+    import { randomRange, randomPercent } from './utils.js';
+
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     canvas.width = 1000;
@@ -261,16 +263,6 @@
           moveRandomly(gridArr, row, col, this);
         }
       }
-    }
-
-    // TODO: Move utility functions like this to a separate module/file
-    function randomRange(min, max) {
-      return Math.random() * (max - min) + min;
-    }
-
-    // TODO: Move utility functions like this to a separate module/file
-    function randomPercent(chance) {
-      return Math.random() < chance;
     }
 
     function generateRandomEvent() {
