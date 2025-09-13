@@ -218,14 +218,6 @@
     return Math.random() < chance;
   }
 
-  function randomRange(min, max) {
-    return Math.random() * (max - min) + min;
-  }
-
-  function randomPercent(chance) {
-    return Math.random() < chance;
-  }
-
   function generateRandomEvent() {
     const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
     const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
