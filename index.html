@@ -462,7 +462,7 @@
             eventManager.currentEvent.affectedArea.x * cellSize,
             eventManager.currentEvent.affectedArea.y * cellSize,
             eventManager.currentEvent.affectedArea.width * cellSize,
-            eventManager.currentEvent.affectedArea.height * cellSize,
+            eventManager.currentEvent.affectedArea.height * cellSize
           );
         }
       }
@@ -673,7 +673,7 @@
       cell.energy -= share;
       partner.energy = Math.min(
         GridManager.maxTileEnergy,
-        partner.energy + share,
+        partner.energy + share
       );
     }
 
