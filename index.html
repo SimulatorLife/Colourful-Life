@@ -197,11 +197,7 @@
       return this.energy <= this.starvationThreshold();
     }
 
-    starvationThreshold() {
-      const gene = this.genes[5][0];
-      const normalized = (gene + 1) / 2;
-      return normalized * GridManager.maxTileEnergy;
-    }
+    
 
     starvationThreshold() {
       const gene = this.genes[5][0];
