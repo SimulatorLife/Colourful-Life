@@ -205,7 +205,7 @@
       // TODO: Consolidate starvation/hunger and energy into the same thing; just energy
       manageEnergy(row, col) {
         // Determine local population density
-        const neighborCounts = countNeighbors(row, col);
+        const neighborCounts = grid.countNeighbors(row, col);
         const neighborTotal = Object.values(neighborCounts).reduce(
           (sum, n) => sum + n,
           0
@@ -249,16 +249,16 @@
         return 'cautious';
       }
 
-      executeMovementStrategy(gridArr, row, col, mates, enemies, society) {
+      executeMovementStrategy(manager, row, col, mates, enemies, society) {
         const strategy = this.chooseMovementStrategy();
         if (strategy === 'pursuit' && society.length > 0) {
           const target = society[Math.floor(Math.random() * society.length)];
-          moveToTarget(gridArr, row, col, target.row, target.col);
+          manager.moveToTarget(row, col, target.row, target.col);
         } else if (strategy === 'cautious' && society.length > 0) {
           const target = society[Math.floor(Math.random() * society.length)];
-          moveAwayFromTarget(gridArr, row, col, target.row, target.col);
+          manager.moveAwayFromTarget(row, col, target.row, target.col);
         } else {
-          moveRandomly(gridArr, row, col, this);
+          manager.moveRandomly(row, col);
         }
       }
     }
@@ -286,6 +286,33 @@
         height: Math.floor(Math.random() * (rows / 4)) + 1,
       };
       return { eventType, duration, affectedArea, strength };
+    }
+
+    class EventManager {
+      static applyEventEffects(cell, row, col, currentEvent) {
+        if (
+          currentEvent &&
+          row >= currentEvent.affectedArea.y &&
+          row < currentEvent.affectedArea.y + currentEvent.affectedArea.height &&
+          col >= currentEvent.affectedArea.x &&
+          col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
+        ) {
+          switch (currentEvent.eventType) {
+            case 'flood':
+              // Apply flood effects, e.g., remove certain organisms or reduce their energy
+              break;
+            case 'drought':
+              // Apply drought effects, e.g., reduce available energy
+              break;
+            case 'heatwave':
+              // Apply heatwave effects, e.g., remove certain organisms or drain their energy
+              break;
+            case 'coldwave':
+              // Apply coldwave effects, e.g., reduce energy or movement speed
+              break;
+          }
+        }
+      }
     }
 
     class GridManager {
@@ -360,7 +387,7 @@
         const populationDensity = this.calculatePopulationDensity();
         const minPopulation = Math.floor(this.rows * this.cols * 0.05);
         const currentPopulation = Math.floor(populationDensity * this.rows * this.cols);
-        seed(currentPopulation, minPopulation);
+        this.seed(currentPopulation, minPopulation);
 
         const highDensity = populationDensity > 0.5 + Math.random() * 0.2;
         this.regenerateEnergyGrid();
@@ -379,7 +406,7 @@
             cell.age++;
             if (cell.age >= cell.lifespan) { this.grid[row][col] = null; continue; }
 
-            applyEventEffects(cell, row, col, currentEvent);
+            EventManager.applyEventEffects(cell, row, col, currentEvent);
             this.consumeEnergy(cell, row, col);
             if (cell.manageEnergy(row, col)) { this.grid[row][col] = null; continue; }
 
@@ -387,7 +414,7 @@
             if (mates.length > 0) {
               const bestMate = cell.findBestMate(mates);
               if (bestMate) {
-                moveToTarget(this.grid, row, col, bestMate.row, bestMate.col);
+                this.moveToTarget(row, col, bestMate.row, bestMate.col);
                 if (randomPercent(0.4) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {
                   const offspring = Cell.breed(cell, bestMate.target);
                   this.grid[row][col] = offspring;
@@ -397,18 +424,18 @@
               const targetEnemy = enemies[Math.floor(Math.random() * enemies.length)];
               const behavior = cell.strategy;
               if (behavior < 0.33) {
-                moveAwayFromTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
+                this.moveAwayFromTarget(row, col, targetEnemy.row, targetEnemy.col);
               } else if (behavior < 0.66) {
                 const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
-                if (dist <= 1) fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
-                else moveToTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
+                if (dist <= 1) this.fightEnemy(row, col, targetEnemy.row, targetEnemy.col);
+                else this.moveToTarget(row, col, targetEnemy.row, targetEnemy.col);
               } else {
                 const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
-                if (dist <= 1) cooperateWithEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
-                else moveToTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
+                if (dist <= 1) this.cooperateWithEnemy(row, col, targetEnemy.row, targetEnemy.col);
+                else this.moveToTarget(row, col, targetEnemy.row, targetEnemy.col);
               }
             } else {
-              moveRandomly(this.grid, row, col, cell);
+              this.moveRandomly(row, col);
             }
           }
         }
@@ -455,132 +482,101 @@
         return { mates, enemies, society };
       }
 
-    }
+      seed(current, minPopulation) {
+        if (current >= minPopulation) return;
 
-    // TODO: Lots of the following methods should be moved to the Cell, EventManager, or GridManager classes
-
-    // TODO: Improve seeding behavior – seed should correspond to gene sequence: 2 cells with the same seed should act exactly the same (in a vacuum)
-    // Seed new cells if the population drops below a minimum threshold
-    function seed(current, minPopulation) {
-      if (current >= minPopulation) return;
-
-      const empty = [];
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          if (!grid.getCell(r, c)) empty.push({ r, c });
-        }
-      }
-
-      const toSeed = Math.min(minPopulation - current, empty.length);
-      for (let i = 0; i < toSeed; i++) {
-        const idx = Math.floor(Math.random() * empty.length);
-        const { r, c } = empty.splice(idx, 1)[0];
-        const genes = Cell.randomGenes();
-        const preferences = cellColors.map(() => Math.random());
-        const neurons = Math.floor(Math.random() * 5) + 1;
-        const sight = Math.floor(Math.random() * 5) + 1;
-        const color = cellColors[Math.floor(Math.random() * cellColors.length)];
-        const newCell = new Cell(r, c, color, sight, preferences, genes, neurons);
-        grid.setCell(r, c, newCell);
-      }
-    }
-
-    function countNeighbors(row, col) {
-      const neighbors = {};
-
-      for (let x = -1; x <= 1; x++) {
-        for (let y = -1; y <= 1; y++) {
-          if (x === 0 && y === 0) continue;
-          const newRow = (row + y + rows) % rows;
-          const newCol = (col + x + cols) % cols;
-          const cell = grid.getCell(newRow, newCol);
-          const color = cell?.color;
-          if (color) {
-            neighbors[color] = (neighbors[color] || 0) + 1;
+        const empty = [];
+        for (let r = 0; r < this.rows; r++) {
+          for (let c = 0; c < this.cols; c++) {
+            if (!this.getCell(r, c)) empty.push({ r, c });
           }
         }
-      }
 
-      return neighbors;
-
-    }
-
-    /**
-     * Move a cell in the grid from (sr, sc) to (dr, dc)
-     */
-    function tryMove(gridArr, sr, sc, dr, dc) {
-      const nr = (sr + dr + rows) % rows;
-      const nc = (sc + dc + cols) % cols;
-      const dcell = gridArr[nr][nc];
-      if (!dcell) {  // Check if the destination cell is empty
-        gridArr[nr][nc] = gridArr[sr][sc];
-        gridArr[sr][sc] = null;
-        return true;
-      }
-      return false;
-    }
-
-    function moveToTarget(gridArr, row, col, targetRow, targetCol) {
-      return tryMove(gridArr, row, col, Math.sign(targetRow - row), Math.sign(targetCol - col));
-    }
-
-    function moveAwayFromTarget(gridArr, row, col, targetRow, targetCol) {
-      return tryMove(gridArr, row, col, -Math.sign(targetRow - row), -Math.sign(targetCol - col));
-    }
-
-    function moveRandomly(gridArr, row, col, cell) {
-      const { dr, dc } = cell.decideMove();
-      return tryMove(gridArr, row, col, dr, dc);
-    }
-
-    function fightEnemy(manager, attackerRow, attackerCol, targetRow, targetCol) {
-      const attacker = manager.grid[attackerRow][attackerCol];
-      const defender = manager.grid[targetRow][targetCol];
-      if (!defender) return;
-      if (attacker.energy >= defender.energy) {
-        manager.grid[targetRow][targetCol] = attacker;
-        manager.grid[attackerRow][attackerCol] = null;
-        manager.consumeEnergy(attacker, targetRow, targetCol);
-      } else {
-        manager.grid[attackerRow][attackerCol] = null;
-      }
-    }
-
-    function cooperateWithEnemy(manager, row, col, targetRow, targetCol) {
-      const cell = manager.grid[row][col];
-      const partner = manager.grid[targetRow][targetCol];
-      if (!partner) return;
-      const share = Math.min(1, cell.energy / 2);
-      cell.energy -= share;
-      partner.energy = Math.min(
-        GridManager.maxTileEnergy,
-        partner.energy + share,
-      );
-    }
-
-    function applyEventEffects(cell, row, col, currentEvent) {
-      if (
-        currentEvent &&
-        row >= currentEvent.affectedArea.y &&
-        row < currentEvent.affectedArea.y + currentEvent.affectedArea.height &&
-        col >= currentEvent.affectedArea.x &&
-        col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
-      ) {
-        switch (currentEvent.eventType) {
-          case 'flood':
-            // Apply flood effects, e.g., remove certain organisms or reduce their energy
-            break;
-          case 'drought':
-            // Apply drought effects, e.g., reduce available energy
-            break;
-          case 'heatwave':
-            // Apply heatwave effects, e.g., remove certain organisms or drain their energy
-            break;
-          case 'coldwave':
-            // Apply coldwave effects, e.g., reduce energy or movement speed
-            break;
+        const toSeed = Math.min(minPopulation - current, empty.length);
+        for (let i = 0; i < toSeed; i++) {
+          const idx = Math.floor(Math.random() * empty.length);
+          const { r, c } = empty.splice(idx, 1)[0];
+          const genes = Cell.randomGenes();
+          const preferences = cellColors.map(() => Math.random());
+          const neurons = Math.floor(Math.random() * 5) + 1;
+          const sight = Math.floor(Math.random() * 5) + 1;
+          const color = cellColors[Math.floor(Math.random() * cellColors.length)];
+          const newCell = new Cell(r, c, color, sight, preferences, genes, neurons);
+          this.setCell(r, c, newCell);
         }
       }
+
+      countNeighbors(row, col) {
+        const neighbors = {};
+
+        for (let x = -1; x <= 1; x++) {
+          for (let y = -1; y <= 1; y++) {
+            if (x === 0 && y === 0) continue;
+            const newRow = (row + y + this.rows) % this.rows;
+            const newCol = (col + x + this.cols) % this.cols;
+            const cell = this.getCell(newRow, newCol);
+            const color = cell?.color;
+            if (color) {
+              neighbors[color] = (neighbors[color] || 0) + 1;
+            }
+          }
+        }
+
+        return neighbors;
+      }
+
+      tryMove(sr, sc, dr, dc) {
+        const nr = (sr + dr + this.rows) % this.rows;
+        const nc = (sc + dc + this.cols) % this.cols;
+        const dcell = this.grid[nr][nc];
+        if (!dcell) {
+          this.grid[nr][nc] = this.grid[sr][sc];
+          this.grid[sr][sc] = null;
+          return true;
+        }
+        return false;
+      }
+
+      moveToTarget(row, col, targetRow, targetCol) {
+        return this.tryMove(row, col, Math.sign(targetRow - row), Math.sign(targetCol - col));
+      }
+
+      moveAwayFromTarget(row, col, targetRow, targetCol) {
+        return this.tryMove(row, col, -Math.sign(targetRow - row), -Math.sign(targetCol - col));
+      }
+
+      moveRandomly(row, col) {
+        const cell = this.grid[row][col];
+        if (!cell) return false;
+        const { dr, dc } = cell.decideMove();
+        return this.tryMove(row, col, dr, dc);
+      }
+
+      fightEnemy(attackerRow, attackerCol, targetRow, targetCol) {
+        const attacker = this.grid[attackerRow][attackerCol];
+        const defender = this.grid[targetRow][targetCol];
+        if (!defender) return;
+        if (attacker.energy >= defender.energy) {
+          this.grid[targetRow][targetCol] = attacker;
+          this.grid[attackerRow][attackerCol] = null;
+          this.consumeEnergy(attacker, targetRow, targetCol);
+        } else {
+          this.grid[attackerRow][attackerCol] = null;
+        }
+      }
+
+      cooperateWithEnemy(row, col, targetRow, targetCol) {
+        const cell = this.grid[row][col];
+        const partner = this.grid[targetRow][targetCol];
+        if (!partner) return;
+        const share = Math.min(1, cell.energy / 2);
+        cell.energy -= share;
+        partner.energy = Math.min(
+          GridManager.maxTileEnergy,
+          partner.energy + share,
+        );
+      }
+
     }
 
     function update() {
