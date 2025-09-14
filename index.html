@@ -128,18 +128,23 @@
           this.g = g | 0;
           this.b = b | 0;
         }
+
         static random(rng = Math.random) {
           return new DNA(Math.floor(rng() * 256), Math.floor(rng() * 256), Math.floor(rng() * 256));
         }
+
         toColor() {
           return `rgb(${this.r},${this.g},${this.b})`;
         }
+
         seed() {
           return (this.r | (this.g << 8) | (this.b << 16)) >>> 0;
         }
+
         prng() {
           return createRNG(this.seed());
         }
+
         // Expand RGB genome to a 6x5 weight matrix in [-1,1]
         weights() {
           const rnd = this.prng();
@@ -156,6 +161,7 @@
 
           return rows;
         }
+
         movementGenes() {
           const rnd = this.prng();
 
@@ -165,11 +171,13 @@
             cautious: rnd(),
           };
         }
+
         interactionGenes() {
           const rnd = this.prng();
 
           return { avoid: rnd(), fight: rnd(), cooperate: rnd() };
         }
+
         reproductionProb() {
           const rnd = this.prng();
           // Bias by green channel (resource affinity): 0.2..0.6
@@ -178,70 +186,89 @@
           // small deterministic jitter
           return Math.min(0.8, Math.max(0.05, base * (0.9 + rnd() * 0.2)));
         }
+
         initialEnergy(maxEnergy = 5) {
           const brightness = (this.r + this.g + this.b) / (3 * 255);
 
           return Math.max(0.5, Math.min(maxEnergy, 0.5 + brightness * (maxEnergy - 0.5)));
         }
-        lifespanBase(maxAge = 1000) {
+
+        lifespan(maxAge = 1000) {
           const rnd = this.prng();
           // Map blue to longer life; add small deterministic variation
           const base = 0.5 + (this.b / 255) * 0.5; // 0.5..1.0 of maxAge
+          const lifespanAdj = ((this.b - 127.5) / 255) * 100;
 
-          return Math.round(maxAge * (base * (0.95 + rnd() * 0.1)));
+          return Math.max(
+            Cell.minAge,
+            Math.round(maxAge * (base * (0.95 + rnd() * 0.1))) + lifespanAdj
+          );
         }
+
         floodResist() {
           return this.b / 255;
         }
+
         heatResist() {
           return this.r / 255;
         }
+
         droughtResist() {
           return this.g / 255;
         }
+
         coldResist() {
           return (this.g + this.b) / (2 * 255);
         }
+
         mutationChance() {
           const rnd = this.prng();
 
           return 0.08 + rnd() * 0.2; // 0.08..0.28
         }
+
         mutationRange() {
           const rnd = this.prng();
 
           return 6 + Math.floor(rnd() * 20); // 6..25
         }
+
         starvationThresholdFrac() {
           // Higher green -> better resource efficiency, lower threshold
           // Map to 0.2..0.8
           return 0.8 - (this.g / 255) * 0.6;
         }
+
         neurons() {
           const rnd = this.prng();
 
           return Math.max(1, Math.floor(rnd() * 5) + 1);
         }
+
         sight() {
           const rnd = this.prng();
 
           return Math.max(1, Math.floor(rnd() * 5) + 1);
         }
+
         baseEnergyLossScale() {
           // Higher brightness -> higher metabolism
           const brightness = (this.r + this.g + this.b) / (3 * 255);
 
           return 0.5 + brightness; // 0.5..1.5 scale
         }
+
         strategy() {
           const rnd = this.prng();
 
           return rnd(); // 0..1
         }
+
         lifespanAdj() {
           // Map blue channel to lifespan adjustment roughly -50..+50
           return ((this.b - 127.5) / 255) * 100;
         }
+
         reproduceWith(other, mutationChance = 0.15, mutationRange = 12) {
           const mix = (a, b) => {
             let v = Math.round((a + b) / 2);
@@ -275,6 +302,7 @@
         static baseEnergyLoss = 0.05;
         static chanceToMutate = 0.15;
         static geneMutationRange = 0.2;
+        static minAge = 100;
 
         constructor(row, col, dna, energy) {
           this.row = row;
@@ -283,19 +311,11 @@
           this.genes = this.dna.weights();
           this.color = this.dna.toColor();
           this.age = 0;
-          // Lifespan can be slightly adjusted based on a gene value
-          const lifespanAdj = this.dna.lifespanAdj();
-
-          this.lifespan = Math.max(
-            100,
-            Math.min(Cell.maxAge * 2, this.dna.lifespanBase(Cell.maxAge) + lifespanAdj)
-          );
+          this.lifespan = this.dna.lifespan(Cell.maxAge);
           this.sight = this.dna.sight();
           this.energy = energy ?? this.dna.initialEnergy(GridManager.maxTileEnergy);
           this.neurons = this.dna.neurons();
-          // Gene-controlled strategy for enemy encounters: 0..1 mapped to
-          // avoid, fight, cooperate.
-          this.strategy = this.dna.strategy();
+          this.strategy = this.dna.strategy(); // Gene-controlled strategy for enemy encounters: 0..1: avoid, fight, cooperate
           this.movementGenes = this.dna.movementGenes();
           this.interactionGenes = this.dna.interactionGenes();
         }
