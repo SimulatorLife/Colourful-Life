@@ -11,7 +11,7 @@ export default class UIManager {
     this.densityEffectMultiplier = 1.0; // scales density influence (0..2)
     this.showDensity = false;
     this.showEnergy = false;
-
+    this.showFitness = false;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
     this.sidebar = document.createElement('div');
@@ -178,12 +178,6 @@ export default class UIManager {
       'Overlay tile energy levels as a heatmap',
       this.showEnergy,
       (v) => (this.showEnergy = v)
-    );
-    addToggle(
-      'Show Fitness Heatmap',
-      'Overlay cell fitness as a heatmap',
-      this.showFitness,
-      (v) => (this.showFitness = v)
     );
     addToggle(
       'Show Fitness Heatmap',
