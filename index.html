@@ -33,7 +33,7 @@
   </div>
   <canvas id="gameCanvas"></canvas>
   <script type="module">
-    import { randomRange, randomPercent } from './utils.js';
+    import { randomRange, randomPercent, createRNG } from './utils.js';
     import UIManager from './uiManager.js';
     import EventManager from './eventManager.js';
 
@@ -107,8 +107,12 @@
       constructor(r, g, b) {
         this.r = r|0; this.g = g|0; this.b = b|0;
       }
-      static random() {
-        return new DNA(Math.floor(Math.random()*256), Math.floor(Math.random()*256), Math.floor(Math.random()*256));
+      static random(rng = Math.random) {
+        return new DNA(
+          Math.floor(rng() * 256),
+          Math.floor(rng() * 256),
+          Math.floor(rng() * 256)
+        );
       }
       toColor() { return `rgb(${this.r},${this.g},${this.b})`; }
       seed() { return (this.r | (this.g << 8) | (this.b << 16)) >>> 0; }
@@ -475,7 +479,6 @@
 
         const highDensity = populationDensity > 0.5 + Math.random() * 0.2;
         this.regenerateEnergyGrid();
-
         eventManager.updateEvent();
 
         const processed = new WeakSet();
@@ -541,7 +544,7 @@
         return population / (this.rows * this.cols);
       }
 
-      findTargets(row, col, cell, isHighDensity = false) {    // TODO: Pass population density variable instead of flag here and make targeting conditions more flexible based on density
+      findTargets(row, col, cell, isHighDensity = false) {
         const mates = [];
         const enemies = [];
         const society = [];
@@ -574,8 +577,10 @@
 
     // TODO: Improve seeding behavior – seed should correspond to gene sequence: 2 cells with the same seed should act exactly the same (in a vacuum)
     // Seed new cells if the population drops below a minimum threshold
-    function seed(current, minPopulation) {
-      if (current >= minPopulation) return;
+      function seed(current, minPopulation, seedValue) {
+        if (current >= minPopulation) return;
+
+        const rng = seedValue !== undefined ? createRNG(seedValue) : Math.random;
 
       const empty = [];
       for (let r = 0; r < rows; r++) {
@@ -586,9 +591,9 @@
 
       const toSeed = Math.min(minPopulation - current, empty.length);
       for (let i = 0; i < toSeed; i++) {
-        const idx = Math.floor(Math.random() * empty.length);
+        const idx = Math.floor(rng() * empty.length);
         const { r, c } = empty.splice(idx, 1)[0];
-        const dna = DNA.random();
+        const dna = DNA.random(rng);
         const newCell = new Cell(r, c, dna);
         grid.setCell(r, c, newCell);
       }
