@@ -8,6 +8,7 @@ function getNeighbors(grid, x, y) {
       if (dx === 0 && dy === 0) continue;
       const nx = x + dx;
       const ny = y + dy;
+
       if (nx >= 0 && nx < gridWidth && ny >= 0 && ny < gridHeight) {
         neighbors.push(grid[ny][nx]);
       }

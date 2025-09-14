@@ -17,6 +17,7 @@ export default class EventManager {
       width: Math.floor(Math.random() * (this.cols / 4)) + 1,
       height: Math.floor(Math.random() * (this.rows / 4)) + 1,
     };
+
     return { eventType, duration, affectedArea, strength };
   }
 
@@ -30,6 +31,7 @@ export default class EventManager {
 
   applyEventEffects(cell, row, col) {
     const event = this.currentEvent;
+
     if (
       event &&
       row >= event.affectedArea.y &&

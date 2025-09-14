@@ -47,11 +47,13 @@ function update() {
           } else {
             // check down-left and down-right
             const options = [];
+
             if (x > 0 && grid[y + 1][x - 1] === 0) options.push(-1);
             if (x < gridWidth - 1 && grid[y + 1][x + 1] === 0) options.push(1);
 
             if (options.length > 0) {
               const dir = options[Math.floor(Math.random() * options.length)];
+
               newGrid[y][x] = 0;
               newGrid[y + 1][x + dir] = SAND;
             }
@@ -82,6 +84,7 @@ function drawParticle(e) {
   const rect = canvas.getBoundingClientRect();
   const x = Math.floor((e.clientX - rect.left) / gridSize);
   const y = Math.floor((e.clientY - rect.top) / gridSize);
+
   grid[y][x] = drawState;
 }
 
@@ -111,6 +114,7 @@ canvas.addEventListener('mousedown', (e) => {
   const rect = canvas.getBoundingClientRect();
   const x = Math.floor((e.clientX - rect.left) / gridSize);
   const y = Math.floor((e.clientY - rect.top) / gridSize);
+
   grid[y][x] = drawState;
   drawParticle(e);
 });

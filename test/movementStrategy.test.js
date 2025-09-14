@@ -10,8 +10,10 @@ class Cell {
     const { wandering, pursuit, cautious } = this.movementGenes;
     const total = wandering + pursuit + cautious;
     const r = Math.random() * total;
+
     if (r < wandering) return 'wandering';
     if (r < wandering + pursuit) return 'pursuit';
+
     return 'cautious';
   }
 }
@@ -19,6 +21,7 @@ class Cell {
 function withMockedRandom(values, fn) {
   const original = Math.random;
   let i = 0;
+
   Math.random = () => values[i++];
   try {
     return fn();

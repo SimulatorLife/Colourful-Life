@@ -35,6 +35,7 @@
     <script>
       const canvas = document.getElementById('world');
       const ctx = canvas.getContext('2d');
+
       canvas.width = 600;
       canvas.height = 600;
       const CELL_SIZE = 6;
@@ -55,13 +56,16 @@
 
         static randomGenes(rng = Math.random) {
           const genes = [];
+
           for (let a = 0; a < 6; a++) {
             const weights = [];
+
             for (let i = 0; i < 5; i++) {
               weights.push(rng() * 2 - 1);
             }
             genes.push(weights);
           }
+
           return genes;
         }
 
@@ -72,6 +76,7 @@
           const r = norm(sums[0]);
           const g = norm(sums[1]);
           const b = norm(sums[2]);
+
           return `rgb(${r},${g},${b})`;
         }
 
@@ -82,17 +87,20 @@
           );
           let max = scores[0];
           let index = 0;
+
           for (let i = 1; i < scores.length; i++) {
             if (scores[i] > max) {
               max = scores[i];
               index = i;
             }
           }
+
           return index; // 0..5
         }
 
         cloneWithMutation() {
           const mutated = this.genes.map((row) => row.map((w) => w + (Math.random() * 0.2 - 0.1)));
+
           return new Cell(this.row, this.col, mutated);
         }
       }
@@ -101,26 +109,32 @@
 
       function createRNG(seed) {
         seed = seed >>> 0;
+
         return function () {
           seed = (seed * 1664525 + 1013904223) >>> 0;
+
           return seed / 4294967296;
         };
       }
 
       function randomEmptyCell(rng = Math.random) {
         const cells = [];
+
         for (let r = 0; r < ROWS; r++) {
           for (let c = 0; c < COLS; c++) {
             if (!grid[r][c]) cells.push({ r, c });
           }
         }
+
         return cells[Math.floor(rng() * cells.length)];
       }
 
       function seed(count, seedValue) {
         const rng = seedValue !== undefined ? createRNG(seedValue) : Math.random;
+
         for (let i = 0; i < count; i++) {
           const spot = randomEmptyCell(rng);
+
           if (spot) {
             grid[spot.r][spot.c] = new Cell(spot.r, spot.c, Cell.randomGenes(rng));
           }
@@ -129,6 +143,7 @@
 
       function step() {
         const cells = [];
+
         for (let r = 0; r < ROWS; r++) {
           for (let c = 0; c < COLS; c++) {
             if (grid[r][c]) cells.push(grid[r][c]);
@@ -161,10 +176,12 @@
             [1, 0],
             [0, -1],
           ];
+
           if (action < 4) {
             const [dr, dc] = dirs[action];
             const nr = r + dr,
               nc = c + dc;
+
             if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && !grid[nr][nc]) {
               grid[nr][nc] = cell;
               grid[r][c] = null;
@@ -177,9 +194,11 @@
               const empty = dirs
                 .map(([dr, dc]) => ({ r: r + dr, c: c + dc }))
                 .filter((p) => p.r >= 0 && p.r < ROWS && p.c >= 0 && p.c < COLS && !grid[p.r][p.c]);
+
               if (empty.length) {
                 const spot = empty[Math.floor(Math.random() * empty.length)];
                 const child = cell.cloneWithMutation();
+
                 child.row = spot.r;
                 child.col = spot.c;
                 child.energy = 3;
@@ -193,9 +212,11 @@
             const neighbours = dirs
               .map(([dr, dc]) => ({ r: r + dr, c: c + dc }))
               .filter((p) => p.r >= 0 && p.r < ROWS && p.c >= 0 && p.c < COLS && grid[p.r][p.c]);
+
             if (neighbours.length) {
               const spot = neighbours[Math.floor(Math.random() * neighbours.length)];
               const target = grid[spot.r][spot.c];
+
               grid[spot.r][spot.c] = null;
               dead.add(target);
               cell.energy += 2;
@@ -210,6 +231,7 @@
         for (let r = 0; r < ROWS; r++) {
           for (let c = 0; c < COLS; c++) {
             const cell = grid[r][c];
+
             if (cell) {
               ctx.fillStyle = cell.color;
               ctx.fillRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
@@ -223,24 +245,29 @@
         draw();
         tick++;
         const population = countCells();
+
         statsDiv.textContent = `Tick: ${tick} | Population: ${population}`;
         requestAnimationFrame(loop);
       }
 
       seed(200);
       loop();
+
       function countCells() {
         let count = 0;
+
         for (let r = 0; r < ROWS; r++) {
           for (let c = 0; c < COLS; c++) {
             if (grid[r][c]) count++;
           }
         }
+
         return count;
       }
 
       function logEvent(msg) {
         const entry = document.createElement('div');
+
         entry.textContent = msg;
         logDiv.appendChild(entry);
         if (logDiv.childNodes.length > 50) {
