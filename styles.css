@@ -1,0 +1,88 @@
+/* Global styles */
+html,
+body {
+  height: 100%;
+}
+body {
+  background-color: #222;
+  margin: 0;
+}
+
+/* Canvas */
+canvas {
+  display: block;
+  margin: 0 auto;
+  background-color: #000;
+}
+
+/* App layout */
+.app-layout {
+  display: flex;
+  gap: 12px;
+  max-width: 1200px;
+  margin: 8px auto;
+  align-items: flex-start;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+#gameCanvas {
+  flex: 1 1 auto;
+  box-shadow: 0 0 0 1px #111;
+}
+
+/* Controls panel */
+.controls-panel {
+  width: 300px;
+  color: #ddd;
+  font-family: sans-serif;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 12px;
+  position: sticky;
+  top: 8px;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+}
+.controls-panel h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #eee;
+}
+.controls-panel button {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  background: #2b2b2b;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.controls-panel button:hover {
+  background: #333;
+}
+.control-row {
+  display: block;
+  margin: 10px 0;
+  cursor: default;
+}
+.control-name {
+  font-size: 12px;
+  color: #bbb;
+  margin-bottom: 4px;
+}
+.control-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.control-line input[type='range'] {
+  flex: 1 1 auto;
+}
+.control-value {
+  min-width: 42px;
+  text-align: right;
+  color: #aaa;
+  font-variant-numeric: tabular-nums;
+}

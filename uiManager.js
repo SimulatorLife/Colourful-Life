@@ -8,6 +8,7 @@ export default class UIManager {
     this.enemySimilarity = 0.5; // <= considered enemy
     this.eventStrengthMultiplier = 1.0; // scales event effects
     this.updatesPerSecond = 50; // simulation speed
+    this.densityEffectMultiplier = 1.0; // scales density influence (0..2)
 
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
@@ -129,6 +130,19 @@ export default class UIManager {
       onInput: (v) => (this.updatesPerSecond = Math.max(1, Math.round(v))),
     });
 
+    // Density effect multiplier
+    addSlider({
+      label: 'Density Effect ×',
+      min: 0,
+      max: 2,
+      step: 0.05,
+      value: this.densityEffectMultiplier,
+      title:
+        'Scales how strongly population density affects energy, aggression, and breeding (0..2)',
+      format: (v) => v.toFixed(2),
+      onInput: (v) => (this.densityEffectMultiplier = Math.max(0, v)),
+    });
+
     return panel;
   }
 
@@ -154,5 +168,8 @@ export default class UIManager {
   }
   getUpdatesPerSecond() {
     return this.updatesPerSecond;
+  }
+  getDensityEffectMultiplier() {
+    return this.densityEffectMultiplier;
   }
 }
