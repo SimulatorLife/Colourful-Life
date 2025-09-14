@@ -18,34 +18,9 @@
   </head>
 
   <body>
-    <button id="pauseButton">Pause</button>
-    <div
-      id="controls"
-      style="
-        color: #ddd;
-        font-family: sans-serif;
-        max-width: 1000px;
-        margin: 8px auto;
-        display: flex;
-        gap: 16px;
-        align-items: center;
-        flex-wrap: wrap;
-      "
-    >
-      <label
-        >Society ≥ <span id="socVal">0.85</span>
-        <input id="socSlider" type="range" min="0" max="1" step="0.01" value="0.85" />
-      </label>
-      <label
-        >Enemy ≤ <span id="eneVal">0.50</span>
-        <input id="eneSlider" type="range" min="0" max="1" step="0.01" value="0.50" />
-      </label>
-      <label
-        >Event Strength × <span id="evtVal">1.0</span>
-        <input id="evtSlider" type="range" min="0" max="3" step="0.05" value="1.0" />
-      </label>
+    <div id="app" class="app-layout">
+      <canvas id="gameCanvas"></canvas>
     </div>
-    <canvas id="gameCanvas"></canvas>
     <script type="module">
       import { randomRange, randomPercent, createRNG } from './utils.js';
       import UIManager from './uiManager.js';
@@ -59,74 +34,33 @@
       const cellSize = 8;
       const rows = canvas.height / cellSize;
       const cols = canvas.width / cellSize;
-      // Simulation speed control
-      let updatesPerSecond = 50; // updates per second
       let lastUpdateTime = 0;
 
       const eventManager = new EventManager(rows, cols);
-
-      // Colors are derived from genes; no fixed palette
-      const reservedColors = {
-        flood: 'rgba(0, 0, 255, 0.5)',
-        drought: 'rgba(210, 180, 140, 0.5)',
-        heatwave: 'rgba(255, 140, 0, 0.5)',
-        coldwave: 'rgba(135, 206, 235, 0.5)',
-      };
-
-      // Tunables (wired to UI)
-      let SOCIETY_SIMILARITY = 0.85;
-      let ENEMY_SIMILARITY = 0.5;
-      let EVENT_STRENGTH_MULTIPLIER = 1.0;
-      const socSlider = document.getElementById('socSlider');
-      const eneSlider = document.getElementById('eneSlider');
-      const evtSlider = document.getElementById('evtSlider');
-      const socVal = document.getElementById('socVal');
-      const eneVal = document.getElementById('eneVal');
-      const evtVal = document.getElementById('evtVal');
 
       // Population density helpers
       const DENSITY_RADIUS = 1; // Moore neighborhood radius for density calc
       const clamp = (x, min, max) => Math.max(min, Math.min(max, x));
       const lerp = (a, b, t) => a + (b - a) * (t < 0 ? 0 : t > 1 ? 1 : t);
 
-      socSlider.addEventListener('input', () => {
-        SOCIETY_SIMILARITY = parseFloat(socSlider.value);
-        socVal.textContent = SOCIETY_SIMILARITY.toFixed(2);
-      });
-      eneSlider.addEventListener('input', () => {
-        ENEMY_SIMILARITY = parseFloat(eneSlider.value);
-        eneVal.textContent = ENEMY_SIMILARITY.toFixed(2);
-      });
-      evtSlider.addEventListener('input', () => {
-        EVENT_STRENGTH_MULTIPLIER = parseFloat(evtSlider.value);
-        evtVal.textContent = EVENT_STRENGTH_MULTIPLIER.toFixed(2);
-      });
-      // Attach speed slider dynamically to the controls bar
-      (function attachSpeedControl() {
-        const controls = document.getElementById('controls');
+      // (Controls moved into UIManager)
+      // Layout styles
+      const style = document.createElement('style');
 
-        if (!controls) return;
-        const label = document.createElement('label');
-
-        label.innerHTML = 'Speed <span id="spdVal"></span> ups';
-        const input = document.createElement('input');
-
-        input.id = 'spdSlider';
-        input.type = 'range';
-        input.min = '1';
-        input.max = '60';
-        input.step = '1';
-        input.value = String(updatesPerSecond);
-        label.appendChild(input);
-        controls.appendChild(label);
-        const spdVal = label.querySelector('#spdVal');
-
-        spdVal.textContent = String(updatesPerSecond);
-        input.addEventListener('input', () => {
-          updatesPerSecond = parseInt(input.value, 10) || 1;
-          spdVal.textContent = String(updatesPerSecond);
-        });
-      })();
+      style.textContent = `
+        .app-layout { display: flex; gap: 12px; max-width: 1200px; margin: 8px auto; align-items: flex-start; }
+        #gameCanvas { flex: 1 1 auto; box-shadow: 0 0 0 1px #111; }
+        .controls-panel { width: 300px; color: #ddd; font-family: sans-serif; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 12px; position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow: auto; }
+        .controls-panel h3 { margin: 0 0 8px; font-size: 16px; color: #eee; }
+        .controls-panel button { width: 100%; margin-bottom: 10px; padding: 6px 10px; background: #2b2b2b; color: #eee; border: 1px solid #444; border-radius: 4px; cursor: pointer; }
+        .controls-panel button:hover { background: #333; }
+        .control-row { display: block; margin: 10px 0; cursor: default; }
+        .control-name { font-size: 12px; color: #bbb; margin-bottom: 4px; }
+        .control-line { display: flex; align-items: center; gap: 8px; }
+        .control-line input[type="range"] { flex: 1 1 auto; }
+        .control-value { min-width: 42px; text-align: right; color: #aaa; font-variant-numeric: tabular-nums; }
+      `;
+      document.head.appendChild(style);
 
       class DNA {
         constructor(r, g, b) {
@@ -654,7 +588,7 @@
             }
           }
           if (eventManager.currentEvent) {
-            ctx.fillStyle = reservedColors[eventManager.currentEvent.eventType];
+            ctx.fillStyle = eventManager.getEventColor();
             ctx.fillRect(
               eventManager.currentEvent.affectedArea.x * cellSize,
               eventManager.currentEvent.affectedArea.y * cellSize,
@@ -804,9 +738,12 @@
               if (target) {
                 const similarity = cell.similarityTo(target);
 
-                if (similarity >= SOCIETY_SIMILARITY) {
+                if (similarity >= uiManager.getSocietySimilarity()) {
                   society.push({ row: newRow, col: newCol, target });
-                } else if (similarity <= ENEMY_SIMILARITY || randomPercent(enemyBias)) {
+                } else if (
+                  similarity <= uiManager.getEnemySimilarity() ||
+                  randomPercent(enemyBias)
+                ) {
                   enemies.push({ row: newRow, col: newCol, target });
                 } else {
                   mates.push({ row: newRow, col: newCol, target });
@@ -929,7 +866,7 @@
           col >= currentEvent.affectedArea.x &&
           col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
         ) {
-          const s = currentEvent.strength * EVENT_STRENGTH_MULTIPLIER;
+          const s = currentEvent.strength * uiManager.getEventStrengthMultiplier();
 
           switch (currentEvent.eventType) {
             case 'flood': {
@@ -967,7 +904,7 @@
         }
 
         const now = performance.now();
-        const interval = 1000 / Math.max(1, updatesPerSecond);
+        const interval = 1000 / Math.max(1, uiManager.getUpdatesPerSecond());
 
         if (now - lastUpdateTime >= interval) {
           lastUpdateTime = now;
@@ -977,9 +914,9 @@
         requestAnimationFrame(update);
       }
 
-      // Create grid using class
+      // Create grid and UI
       const grid = new GridManager(rows, cols);
-      const uiManager = new UIManager(update);
+      const uiManager = new UIManager(update, '#app');
 
       requestAnimationFrame(update);
     </script>

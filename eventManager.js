@@ -1,11 +1,22 @@
 import { randomRange } from './utils.js';
 
 export default class EventManager {
+  static EVENT_COLORS = {
+    flood: 'rgba(0, 0, 255, 0.5)',
+    drought: 'rgba(210, 180, 140, 0.5)',
+    heatwave: 'rgba(255, 140, 0, 0.5)',
+    coldwave: 'rgba(135, 206, 235, 0.5)',
+  };
+
   constructor(rows, cols) {
     this.rows = rows;
     this.cols = cols;
     this.eventCounter = 0;
     this.currentEvent = this.generateRandomEvent();
+  }
+
+  getEventColor() {
+    return EventManager.EVENT_COLORS[this.currentEvent.eventType];
   }
 
   generateRandomEvent() {
