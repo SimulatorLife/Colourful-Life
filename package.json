@@ -10,7 +10,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint --ext .js,.html .",
-    "lint:fix": "eslint --ext .js,.html . --fix"
+    "lint:fix": "eslint --ext .js,.html . --fix",
+    "prepare": "husky"
   },
   "repository": {
     "type": "git",
@@ -23,7 +24,18 @@
     "url": "https://github.com/henrylkirk/Colourful-Life/issues"
   },
   "homepage": "https://github.com/henrylkirk/Colourful-Life#readme",
+  "lint-staged": {
+    "*.{js,html}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,md,json}": [
+      "prettier --write"
+    ]
+  },
   "devDependencies": {
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-html": "^8.1.3",
