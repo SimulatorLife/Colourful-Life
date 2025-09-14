@@ -1,10 +1,6 @@
 # Colourful Life
 
-This repository is a playground of JavaScript cellular automata. The various experiments have been merged into a single consolidated simulation:
-
-- `index.html` – colorful cells form organisms that evolve through genes, simple neuron-like movement, energy-based survival, and breeding while facing environmental events.
-
-The `fallingSand/` directory contains a falling-sand and Game of Life hybrid implemented with both p5.js and canvas-only versions.
+This repository is a JavaScript playground simulation, inspired by cellular automata.
 
 ## Key Concepts
 
@@ -12,6 +8,8 @@ The `fallingSand/` directory contains a falling-sand and Game of Life hybrid imp
 - **Genes and mutation**: advanced versions assign each cell genetic traits that blend and mutate during reproduction.
 - **Neuron-inspired movement**: gene weights influence direction choices, giving each organism a rudimentary nervous system.
 - **Energy and evolution**: organisms gather energy from tiles, spend it to move and reproduce, and perish when depleted.
+  - Death leaves residue: when a cell dies (age, starvation, or combat), a fraction of its remaining energy is deposited back into the tile as nutrients. Environmental events modulate how much residue persists.
+  - Events shape resources: floods boost tile regeneration; droughts and heatwaves suppress it and add per-tile drain; coldwaves slow cycling and preserve residues. Reproduction probability scales with local tile energy and current event pressure.
 - **Density-aware behavior**: local population density increases aggression, reduces reproduction probability, nudges movement toward caution, and slightly raises energy costs.
 - **Environmental events**: floods, droughts, heatwaves, and coldwaves affect regions and influence cell survival.
 - **Rendering loop**: `requestAnimationFrame` drives updates and drawing to an HTML `<canvas>`.
@@ -34,9 +32,3 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 ### Formatting
 
 This repo uses [Prettier](https://prettier.io/) for consistent formatting. Run `npm run format` before committing, or add it to your editor's "format on save" using the Prettier extension.
-
-## Ideas for Exploration
-
-- Add new gene traits or environmental events.
-- Experiment with performance optimizations like typed arrays or offscreen canvases.
-- Extract logic into modules and consider adding tests or UI controls.

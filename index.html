@@ -255,6 +255,8 @@
         // Static properties
         static maxTileEnergy = 5;
         static energyRegenRate = 0.25;
+        static deathResidueFrac = 0.6;
+        static minDeathResidue = 0.2;
 
         constructor(rows, cols) {
           this.rows = rows;
@@ -287,14 +289,96 @@
         }
 
         regenerateEnergyGrid() {
+          // Regenerate per-tile energy, modulated by active environmental event
+          const ev = eventManager.currentEvent;
+          const sMul = uiManager.getEventStrengthMultiplier?.() ?? 1.0;
+
           for (let r = 0; r < this.rows; r++) {
             for (let c = 0; c < this.cols; c++) {
-              this.energyGrid[r][c] = Math.min(
-                GridManager.maxTileEnergy,
-                this.energyGrid[r][c] + GridManager.energyRegenRate
+              let regen = GridManager.energyRegenRate;
+              let drain = 0;
+
+              if (
+                ev &&
+                r >= ev.affectedArea.y &&
+                r < ev.affectedArea.y + ev.affectedArea.height &&
+                c >= ev.affectedArea.x &&
+                c < ev.affectedArea.x + ev.affectedArea.width
+              ) {
+                const s = (ev.strength || 0) * sMul;
+
+                switch (ev.eventType) {
+                  case 'flood':
+                    regen += 0.5 * s; // nutrient influx
+                    break;
+                  case 'drought':
+                    regen *= Math.max(0, 1 - 0.8 * s);
+                    drain += 0.15 * s; // soil dries out
+                    break;
+                  case 'heatwave':
+                    regen *= Math.max(0, 1 - 0.5 * s);
+                    drain += 0.08 * s; // faster decay
+                    break;
+                  case 'coldwave':
+                    regen *= Math.max(0, 1 - 0.3 * s); // slower cycling
+                    break;
+                }
+              }
+              const next = Math.max(
+                0,
+                Math.min(GridManager.maxTileEnergy, this.energyGrid[r][c] + regen - drain)
               );
+
+              this.energyGrid[r][c] = next;
             }
           }
+        }
+
+        dropEnergyAt(row, col, baseAmount) {
+          if (!Number.isFinite(baseAmount) || baseAmount <= 0) return;
+          let amount = baseAmount;
+          const ev = eventManager.currentEvent;
+          const sMul = uiManager.getEventStrengthMultiplier?.() ?? 1.0;
+
+          if (
+            ev &&
+            row >= ev.affectedArea.y &&
+            row < ev.affectedArea.y + ev.affectedArea.height &&
+            col >= ev.affectedArea.x &&
+            col < ev.affectedArea.x + ev.affectedArea.width
+          ) {
+            const s = (ev.strength || 0) * sMul;
+
+            switch (ev.eventType) {
+              case 'flood':
+                amount *= Math.max(0, 1 - 0.6 * s); // washed away
+                break;
+              case 'heatwave':
+                amount *= Math.max(0, 1 - 0.4 * s); // scorched
+                break;
+              case 'drought':
+                amount *= Math.max(0.5, 1 - 0.3 * s); // some loss
+                break;
+              case 'coldwave':
+                amount *= 1 + 0.3 * s; // preserved
+                break;
+            }
+          }
+          if (amount <= 0) return;
+          this.energyGrid[row][col] = Math.min(
+            GridManager.maxTileEnergy,
+            this.energyGrid[row][col] + amount
+          );
+        }
+
+        takeTileEnergy(row, col, amount) {
+          if (!Number.isFinite(amount) || amount <= 0) return 0;
+          const avail = this.energyGrid[row][col];
+          const take = Math.min(amount, avail);
+
+          this.energyGrid[row][col] = avail - take;
+
+          return take;
         }
 
         getCell(row, col) {
@@ -371,6 +455,13 @@
 
               cell.age++;
               if (cell.age >= cell.lifespan) {
+                // Natural death leaves residue
+                const drop = Math.max(
+                  GridManager.minDeathResidue,
+                  (cell.energy || 0) * GridManager.deathResidueFrac
+                );
+
+                this.dropEnergyAt(row, col, drop);
                 this.grid[row][col] = null;
                 stats.onDeath();
                 continue;
@@ -380,6 +471,8 @@
               this.consumeEnergy(cell, row, col);
               cell.manageEnergy(row, col);
               if (cell.energy <= 0) {
+                // Starvation still leaves a small residue
+                this.dropEnergyAt(row, col, GridManager.minDeathResidue);
                 this.grid[row][col] = null;
                 stats.onDeath();
                 continue;
@@ -402,7 +495,41 @@
                     cell.density.reproduction.min,
                     effD
                   );
-                  const reproProb = clamp(baseReproProb * reproMul, 0.01, 0.95);
+                  // Tie reproduction to local tile energy and events
+                  const tileEFrac = this.energyGrid[row][col] / GridManager.maxTileEnergy;
+                  let eventReproMul = 1.0;
+                  const ev = eventManager.currentEvent;
+
+                  if (
+                    ev &&
+                    row >= ev.affectedArea.y &&
+                    row < ev.affectedArea.y + ev.affectedArea.height &&
+                    col >= ev.affectedArea.x &&
+                    col < ev.affectedArea.x + ev.affectedArea.width
+                  ) {
+                    const s = ev.strength * uiManager.getEventStrengthMultiplier();
+
+                    switch (ev.eventType) {
+                      case 'flood':
+                        eventReproMul *= 1.0 + 0.2 * s; // abundance
+                        break;
+                      case 'drought':
+                        eventReproMul *= Math.max(0.3, 1.0 - 0.6 * s);
+                        break;
+                      case 'heatwave':
+                        eventReproMul *= Math.max(0.4, 1.0 - 0.5 * s);
+                        break;
+                      case 'coldwave':
+                        eventReproMul *= Math.max(0.5, 1.0 - 0.3 * s);
+                        break;
+                    }
+                  }
+                  const energySiteMul = 0.25 + 0.75 * tileEFrac; // poor tiles suppress breeding
+                  const reproProb = clamp(
+                    baseReproProb * reproMul * energySiteMul * eventReproMul,
+                    0.005,
+                    0.95
+                  );
 
                   if (
                     randomPercent(reproProb) &&
@@ -412,6 +539,8 @@
                     const offspring = Cell.breed(cell, bestMate.target);
 
                     this.grid[row][col] = offspring;
+                    // Pay an environmental energy cost for reproduction
+                    this.takeTileEnergy(row, col, 0.8);
                     stats.onBirth();
                   }
                 }
@@ -590,6 +719,12 @@
 
         if (!defender) return;
         if (attacker.energy >= defender.energy) {
+          // Defender dies here; drop residue on the target tile before moving attacker in
+          manager.dropEnergyAt(
+            targetRow,
+            targetCol,
+            Math.max(GridManager.minDeathResidue, defender.energy * GridManager.deathResidueFrac)
+          );
           manager.grid[targetRow][targetCol] = attacker;
           manager.grid[attackerRow][attackerCol] = null;
           manager.consumeEnergy(attacker, targetRow, targetCol);
@@ -598,6 +733,12 @@
           attacker.fightsWon = (attacker.fightsWon || 0) + 1;
           defender.fightsLost = (defender.fightsLost || 0) + 1;
         } else {
+          // Attacker dies at its origin; drop residue there
+          manager.dropEnergyAt(
+            attackerRow,
+            attackerCol,
+            Math.max(GridManager.minDeathResidue, attacker.energy * GridManager.deathResidueFrac)
+          );
           manager.grid[attackerRow][attackerCol] = null;
           stats.onFight();
           stats.onDeath();
@@ -740,6 +881,7 @@
       }
 
       function drawFitnessHeatmap() {
+        // TODO: Instead of normalizing, use an exponential scale so we can better visualize differences
         // Normalize by max fitness across current cells
         let maxF = 0;
 
@@ -769,7 +911,7 @@
               cell.energy / GridManager.maxTileEnergy +
               (cell.lifespan ? cell.age / cell.lifespan : 0);
             const t = f / maxF; // 0..1
-            const a = (t * 0.45).toFixed(3);
+            const a = (t * 0.99).toFixed(3);
 
             ctx.fillStyle = `rgba(255,255,0,${a})`;
             ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
