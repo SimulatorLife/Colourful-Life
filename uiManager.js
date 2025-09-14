@@ -4,10 +4,10 @@ export default class UIManager {
     this.paused = false;
 
     // Settings with sensible defaults
-    this.societySimilarity = 0.85; // >= considered ally
-    this.enemySimilarity = 0.5; // <= considered enemy
+    this.societySimilarity = 0.8; // >= considered ally
+    this.enemySimilarity = 0.6; // <= considered enemy
     this.eventStrengthMultiplier = 1.0; // scales event effects
-    this.updatesPerSecond = 50; // simulation speed
+    this.updatesPerSecond = 60; // simulation speed
     this.densityEffectMultiplier = 1.0; // scales density influence (0..2)
     this.showDensity = false;
     this.showEnergy = false;
@@ -179,6 +179,18 @@ export default class UIManager {
       this.showEnergy,
       (v) => (this.showEnergy = v)
     );
+    addToggle(
+      'Show Fitness Heatmap',
+      'Overlay cell fitness as a heatmap',
+      this.showFitness,
+      (v) => (this.showFitness = v)
+    );
+    addToggle(
+      'Show Fitness Heatmap',
+      'Overlay cell fitness as a heatmap',
+      this.showFitness,
+      (v) => (this.showFitness = v)
+    );
 
     // Density effect multiplier
     addSlider({
@@ -272,6 +284,9 @@ export default class UIManager {
   getShowEnergy() {
     return this.showEnergy;
   }
+  getShowFitness() {
+    return this.showFitness;
+  }
 
   renderMetrics(stats, snapshot) {
     if (!this.metricsBox) return;
@@ -330,5 +345,51 @@ export default class UIManager {
       else ctx.lineTo(x, y);
     });
     ctx.stroke();
+  }
+
+  renderLeaderboard(top) {
+    if (!this.leaderBox) {
+      // create holder if missing (older layout)
+      this.leaderBox = document.createElement('div');
+      this.leaderBox.className = 'metrics-box';
+      this.sidebar?.appendChild(this.leaderBox);
+    }
+    this.leaderBox.innerHTML = '';
+    const add = (label, value, color) => {
+      const row = document.createElement('div');
+
+      row.className = 'control-line';
+      const left = document.createElement('div');
+
+      left.className = 'control-name';
+      if (color) {
+        const sw = document.createElement('span');
+
+        sw.style.display = 'inline-block';
+        sw.style.width = '10px';
+        sw.style.height = '10px';
+        sw.style.background = color;
+        sw.style.marginRight = '6px';
+        left.appendChild(sw);
+      }
+      const text = document.createElement('span');
+
+      text.textContent = label;
+      left.appendChild(text);
+      const right = document.createElement('div');
+
+      right.className = 'control-value';
+      right.textContent = value;
+      row.appendChild(left);
+      row.appendChild(right);
+      this.leaderBox.appendChild(row);
+    };
+
+    top.forEach((e, i) => {
+      const label = `#${i + 1}`;
+      const value = `fit ${e.fitness.toFixed(2)} | off ${e.offspring} | win ${e.fightsWon} | age ${e.age}`;
+
+      add(label, value, e.color);
+    });
   }
 }
