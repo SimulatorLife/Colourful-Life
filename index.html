@@ -479,7 +479,6 @@
 
         const highDensity = populationDensity > 0.5 + Math.random() * 0.2;
         this.regenerateEnergyGrid();
-
         eventManager.updateEvent();
 
         const processed = new WeakSet();
@@ -545,7 +544,7 @@
         return population / (this.rows * this.cols);
       }
 
-      findTargets(row, col, cell, isHighDensity = false) {    // TODO: Pass population density variable instead of flag here and make targeting conditions more flexible based on density
+      findTargets(row, col, cell, isHighDensity = false) {
         const mates = [];
         const enemies = [];
         const society = [];
