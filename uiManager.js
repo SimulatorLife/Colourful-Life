@@ -9,11 +9,18 @@ export default class UIManager {
     this.eventStrengthMultiplier = 1.0; // scales event effects
     this.updatesPerSecond = 50; // simulation speed
     this.densityEffectMultiplier = 1.0; // scales density influence (0..2)
+    this.showDensity = false;
+    this.showEnergy = false;
 
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
-    this.panel = this.#buildPanel();
-    this.root.appendChild(this.panel);
+    this.sidebar = document.createElement('div');
+    this.sidebar.className = 'sidebar';
+    this.root.appendChild(this.sidebar);
+    this.controlsPanel = this.#buildControlsPanel();
+    this.insightsPanel = this.#buildInsightsPanel();
+    this.sidebar.appendChild(this.controlsPanel);
+    this.sidebar.appendChild(this.insightsPanel);
 
     // Keyboard toggle
     document.addEventListener('keydown', (e) => {
@@ -21,7 +28,7 @@ export default class UIManager {
     });
   }
 
-  #buildPanel() {
+  #buildControlsPanel() {
     const panel = document.createElement('div');
 
     panel.id = 'controls';
@@ -130,6 +137,49 @@ export default class UIManager {
       onInput: (v) => (this.updatesPerSecond = Math.max(1, Math.round(v))),
     });
 
+    // Overlay toggles
+    const overlayHeader = document.createElement('h4');
+
+    overlayHeader.textContent = 'Overlays';
+    overlayHeader.style.margin = '12px 0 6px';
+    panel.appendChild(overlayHeader);
+
+    const addToggle = (label, title, initial, onChange) => {
+      const row = document.createElement('label');
+
+      row.className = 'control-row';
+      row.title = title;
+      const line = document.createElement('div');
+
+      line.className = 'control-line';
+      const input = document.createElement('input');
+
+      input.type = 'checkbox';
+      input.checked = initial;
+      input.addEventListener('input', () => onChange(input.checked));
+      const name = document.createElement('div');
+
+      name.className = 'control-name';
+      name.textContent = label;
+      line.appendChild(input);
+      line.appendChild(name);
+      row.appendChild(line);
+      panel.appendChild(row);
+    };
+
+    addToggle(
+      'Show Density Heatmap',
+      'Overlay local population density as a heatmap',
+      this.showDensity,
+      (v) => (this.showDensity = v)
+    );
+    addToggle(
+      'Show Energy Heatmap',
+      'Overlay tile energy levels as a heatmap',
+      this.showEnergy,
+      (v) => (this.showEnergy = v)
+    );
+
     // Density effect multiplier
     addSlider({
       label: 'Density Effect ×',
@@ -142,6 +192,50 @@ export default class UIManager {
       format: (v) => v.toFixed(2),
       onInput: (v) => (this.densityEffectMultiplier = Math.max(0, v)),
     });
+
+    return panel;
+  }
+
+  #buildInsightsPanel() {
+    const panel = document.createElement('div');
+
+    panel.className = 'insights-panel';
+    const heading = document.createElement('h3');
+
+    heading.textContent = 'Evolution Insights';
+    panel.appendChild(heading);
+
+    // Metrics section
+    const metricsHeader = document.createElement('h4');
+
+    metricsHeader.textContent = 'Metrics';
+    metricsHeader.style.margin = '4px 0 6px';
+    panel.appendChild(metricsHeader);
+
+    this.metricsBox = document.createElement('div');
+    this.metricsBox.className = 'metrics-box';
+    panel.appendChild(this.metricsBox);
+
+    // Sparklines canvases
+    const cap1 = document.createElement('div');
+
+    cap1.className = 'control-name';
+    cap1.textContent = 'Population (last 200)';
+    panel.appendChild(cap1);
+    this.sparkPop = document.createElement('canvas');
+    this.sparkPop.width = 260;
+    this.sparkPop.height = 40;
+    panel.appendChild(this.sparkPop);
+
+    const cap2 = document.createElement('div');
+
+    cap2.className = 'control-name';
+    cap2.textContent = 'Diversity (last 200)';
+    panel.appendChild(cap2);
+    this.sparkDiv2Canvas = document.createElement('canvas');
+    this.sparkDiv2Canvas.width = 260;
+    this.sparkDiv2Canvas.height = 40;
+    panel.appendChild(this.sparkDiv2Canvas);
 
     return panel;
   }
@@ -171,5 +265,70 @@ export default class UIManager {
   }
   getDensityEffectMultiplier() {
     return this.densityEffectMultiplier;
+  }
+  getShowDensity() {
+    return this.showDensity;
+  }
+  getShowEnergy() {
+    return this.showEnergy;
+  }
+
+  renderMetrics(stats, snapshot) {
+    if (!this.metricsBox) return;
+    this.metricsBox.innerHTML = '';
+    const s = snapshot;
+    const add = (name, value, title) => {
+      const row = document.createElement('div');
+
+      row.className = 'control-line';
+      if (title) row.title = title;
+      const left = document.createElement('div');
+
+      left.className = 'control-name';
+      left.textContent = name;
+      const right = document.createElement('div');
+
+      right.className = 'control-value';
+      right.textContent = value;
+      row.appendChild(left);
+      row.appendChild(right);
+      this.metricsBox.appendChild(row);
+    };
+
+    add('Population', String(s.population), 'Total living cells');
+    add('Births', String(s.births), 'Births in the last tick');
+    add('Deaths', String(s.deaths), 'Deaths in the last tick');
+    add('Growth', String(s.growth), 'Births - Deaths');
+    add('Mean Energy', s.meanEnergy.toFixed(2), 'Average energy per cell');
+    add('Mean Age', s.meanAge.toFixed(1), 'Average age of living cells');
+    add('Diversity', s.diversity.toFixed(3), 'Estimated mean pairwise genetic distance');
+
+    this.drawSpark(this.sparkPop, stats.history.population, '#88d');
+    this.drawSpark(this.sparkDiv2Canvas, stats.history.diversity, '#d88');
+  }
+
+  drawSpark(canvas, data, color = '#88d') {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+    if (data.length < 2) return;
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const span = max - min || 1;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    data.forEach((v, i) => {
+      const x = (i / (data.length - 1)) * (w - 1);
+      const y = h - ((v - min) / span) * (h - 1) - 1;
+
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
   }
 }

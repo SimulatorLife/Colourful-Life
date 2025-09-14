@@ -29,6 +29,13 @@ canvas {
   flex: 1 1 auto;
   box-shadow: 0 0 0 1px #111;
 }
+/* Sidebar stacks panels vertically */
+.sidebar {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
 /* Controls panel */
 .controls-panel {
@@ -85,4 +92,20 @@ canvas {
   text-align: right;
   color: #aaa;
   font-variant-numeric: tabular-nums;
+}
+
+/* Insights panel */
+.insights-panel {
+  width: 300px;
+  color: #ddd;
+  font-family: sans-serif;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 12px;
+}
+.insights-panel h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #eee;
 }

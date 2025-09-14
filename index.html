@@ -16,6 +16,7 @@
       import UIManager from './uiManager.js';
       import EventManager from './eventManager.js';
       import DNA from './genome.js';
+      import Stats from './stats.js';
 
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
@@ -28,6 +29,7 @@
       let lastUpdateTime = 0;
 
       const eventManager = new EventManager(rows, cols);
+      const stats = new Stats(200);
 
       // Population density helpers
       const DENSITY_RADIUS = 1; // Moore neighborhood radius for density calc
@@ -364,6 +366,7 @@
               cell.age++;
               if (cell.age >= cell.lifespan) {
                 this.grid[row][col] = null;
+                stats.onDeath();
                 continue;
               }
 
@@ -372,6 +375,7 @@
               cell.manageEnergy(row, col);
               if (cell.energy <= 0) {
                 this.grid[row][col] = null;
+                stats.onDeath();
                 continue;
               }
 
@@ -402,6 +406,7 @@
                     const offspring = Cell.breed(cell, bestMate.target);
 
                     this.grid[row][col] = offspring;
+                    stats.onBirth();
                   }
                 }
               } else if (enemies.length > 0) {
@@ -582,8 +587,12 @@
           manager.grid[targetRow][targetCol] = attacker;
           manager.grid[attackerRow][attackerCol] = null;
           manager.consumeEnergy(attacker, targetRow, targetCol);
+          stats.onFight();
+          stats.onDeath();
         } else {
           manager.grid[attackerRow][attackerCol] = null;
+          stats.onFight();
+          stats.onDeath();
         }
       }
 
@@ -596,6 +605,7 @@
 
         cell.energy -= share;
         partner.energy = Math.min(GridManager.maxTileEnergy, partner.energy + share);
+        stats.onCooperate();
       }
 
       function applyEventEffects(cell, row, col, currentEvent) {
@@ -648,10 +658,49 @@
 
         if (now - lastUpdateTime >= interval) {
           lastUpdateTime = now;
+          stats.resetTick();
           grid.update();
+          const snapshot = stats.updateFromGrid(grid);
+
+          uiManager.renderMetrics(stats, snapshot);
         }
         grid.draw();
+        // overlays
+        drawOverlays();
         requestAnimationFrame(update);
+      }
+
+      function drawOverlays() {
+        if (uiManager.getShowEnergy()) drawEnergyHeatmap();
+        if (uiManager.getShowDensity()) drawDensityHeatmap();
+      }
+
+      function drawEnergyHeatmap() {
+        const a = 0.55;
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const e = grid.energyGrid[r][c] / GridManager.maxTileEnergy; // 0..1
+
+            if (e <= 0) continue;
+            ctx.fillStyle = `rgba(0,255,0,${(e * a).toFixed(3)})`;
+            ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+          }
+        }
+      }
+
+      function drawDensityHeatmap() {
+        const a = 0.35;
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const d = grid.localDensity(r, c, 1); // 0..1
+
+            if (d <= 0) continue;
+            ctx.fillStyle = `rgba(255,0,0,${(d * a).toFixed(3)})`;
+            ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+          }
+        }
       }
 
       // Create grid and UI
