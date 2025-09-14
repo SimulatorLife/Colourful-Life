@@ -53,6 +53,7 @@
 
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
+
       canvas.width = 800;
       canvas.height = 800;
       const cellSize = 8;
@@ -81,6 +82,7 @@
       const socVal = document.getElementById('socVal');
       const eneVal = document.getElementById('eneVal');
       const evtVal = document.getElementById('evtVal');
+
       socSlider.addEventListener('input', () => {
         SOCIETY_SIMILARITY = parseFloat(socSlider.value);
         socVal.textContent = SOCIETY_SIMILARITY.toFixed(2);
@@ -96,10 +98,13 @@
       // Attach speed slider dynamically to the controls bar
       (function attachSpeedControl() {
         const controls = document.getElementById('controls');
+
         if (!controls) return;
         const label = document.createElement('label');
+
         label.innerHTML = 'Speed <span id="spdVal"></span> ups';
         const input = document.createElement('input');
+
         input.id = 'spdSlider';
         input.type = 'range';
         input.min = '1';
@@ -109,6 +114,7 @@
         label.appendChild(input);
         controls.appendChild(label);
         const spdVal = label.querySelector('#spdVal');
+
         spdVal.textContent = String(updatesPerSecond);
         input.addEventListener('input', () => {
           updatesPerSecond = parseInt(input.value, 10) || 1;
@@ -138,17 +144,21 @@
         weights() {
           const rnd = this.prng();
           const rows = [];
+
           for (let a = 0; a < 6; a++) {
             const row = [];
+
             for (let i = 0; i < 5; i++) {
               row.push(rnd() * 2 - 1);
             }
             rows.push(row);
           }
+
           return rows;
         }
         movementGenes() {
           const rnd = this.prng();
+
           return {
             wandering: rnd(),
             pursuit: rnd(),
@@ -157,23 +167,27 @@
         }
         interactionGenes() {
           const rnd = this.prng();
+
           return { avoid: rnd(), fight: rnd(), cooperate: rnd() };
         }
         reproductionProb() {
           const rnd = this.prng();
           // Bias by green channel (resource affinity): 0.2..0.6
           const base = 0.2 + (this.g / 255) * 0.4;
+
           // small deterministic jitter
           return Math.min(0.8, Math.max(0.05, base * (0.9 + rnd() * 0.2)));
         }
         initialEnergy(maxEnergy = 5) {
           const brightness = (this.r + this.g + this.b) / (3 * 255);
+
           return Math.max(0.5, Math.min(maxEnergy, 0.5 + brightness * (maxEnergy - 0.5)));
         }
         lifespanBase(maxAge = 1000) {
           const rnd = this.prng();
           // Map blue to longer life; add small deterministic variation
           const base = 0.5 + (this.b / 255) * 0.5; // 0.5..1.0 of maxAge
+
           return Math.round(maxAge * (base * (0.95 + rnd() * 0.1)));
         }
         floodResist() {
@@ -190,10 +204,12 @@
         }
         mutationChance() {
           const rnd = this.prng();
+
           return 0.08 + rnd() * 0.2; // 0.08..0.28
         }
         mutationRange() {
           const rnd = this.prng();
+
           return 6 + Math.floor(rnd() * 20); // 6..25
         }
         starvationThresholdFrac() {
@@ -203,19 +219,23 @@
         }
         neurons() {
           const rnd = this.prng();
+
           return Math.max(1, Math.floor(rnd() * 5) + 1);
         }
         sight() {
           const rnd = this.prng();
+
           return Math.max(1, Math.floor(rnd() * 5) + 1);
         }
         baseEnergyLossScale() {
           // Higher brightness -> higher metabolism
           const brightness = (this.r + this.g + this.b) / (3 * 255);
+
           return 0.5 + brightness; // 0.5..1.5 scale
         }
         strategy() {
           const rnd = this.prng();
+
           return rnd(); // 0..1
         }
         lifespanAdj() {
@@ -225,11 +245,14 @@
         reproduceWith(other, mutationChance = 0.15, mutationRange = 12) {
           const mix = (a, b) => {
             let v = Math.round((a + b) / 2);
+
             if (Math.random() < mutationChance) {
               v += Math.floor((Math.random() * 2 - 1) * mutationRange);
             }
+
             return Math.max(0, Math.min(255, v));
           };
+
           return new DNA(mix(this.r, other.r), mix(this.g, other.g), mix(this.b, other.b));
         }
         similarity(other) {
@@ -238,6 +261,7 @@
             dz = this.b - other.b;
           const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
           const maxDist = Math.sqrt(3 * 255 * 255);
+
           return 1 - dist / maxDist;
         }
       }
@@ -261,6 +285,7 @@
           this.age = 0;
           // Lifespan can be slightly adjusted based on a gene value
           const lifespanAdj = this.dna.lifespanAdj();
+
           this.lifespan = Math.max(
             100,
             Math.min(Cell.maxAge * 2, this.dna.lifespanBase(Cell.maxAge) + lifespanAdj)
@@ -292,12 +317,12 @@
           const chance = (parentA.dna.mutationChance() + parentB.dna.mutationChance()) / 2;
           const range = Math.round((parentA.dna.mutationRange() + parentB.dna.mutationRange()) / 2);
           const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range);
-          const neurons = Math.max(1, Math.round((parentA.neurons + parentB.neurons) / 2));
           const offspringEnergy = Math.max((parentA.energy + parentB.energy) / 2, 0.5);
           const offspring = new Cell(row, col, childDNA, offspringEnergy);
           const strategy =
             (parentA.strategy + parentB.strategy) / 2 +
             (Math.random() * Cell.geneMutationRange - Cell.geneMutationRange / 2);
+
           offspring.strategy = Math.min(1, Math.max(0, strategy));
           parentA.energy /= 2;
           parentB.energy /= 2;
@@ -312,6 +337,7 @@
         static computeLifespan(genes) {
           const gene = genes?.[0]?.[0] ?? 0;
           const factor = Math.max(0, 1 + gene);
+
           return Math.round(600 * factor + randomRange(0, 600));
         }
 
@@ -321,6 +347,7 @@
 
           potentialMates.forEach((mate) => {
             const preference = this.similarityTo(mate.target);
+
             if (preference > highestPreference) {
               highestPreference = preference;
               bestMate = mate;
@@ -353,21 +380,25 @@
           // Identify the index of the highest scoring action
           let max = scores[0];
           let index = 0;
+
           for (let i = 1; i < scores.length; i++) {
             if (scores[i] > max) {
               max = scores[i];
               index = i;
             }
           }
+
           return index; // Action index 0..5
         }
 
         decideMove() {
           // Simple uniform random cardinal move; could be refined via DNA
           const r = Math.floor(Math.random() * 4);
+
           if (r === 0) return { dr: -1, dc: 0 };
           if (r === 1) return { dr: 1, dc: 0 };
           if (r === 2) return { dr: 0, dc: -1 };
+
           return { dr: 0, dc: 1 };
         }
 
@@ -387,6 +418,7 @@
           // Base energy loss is scaled by metabolism, local density, and DNA-driven metabolism scale.
           const energyLoss =
             Cell.baseEnergyLoss * this.dna.baseEnergyLossScale() * (1 + metabolism) * (1 + density);
+
           this.energy -= energyLoss;
 
           return this.energy <= this.starvationThreshold();
@@ -408,18 +440,23 @@
           const { wandering, pursuit, cautious } = this.movementGenes;
           const total = wandering + pursuit + cautious;
           const r = Math.random() * total;
+
           if (r < wandering) return 'wandering';
           if (r < wandering + pursuit) return 'pursuit';
+
           return 'cautious';
         }
 
         executeMovementStrategy(gridArr, row, col, mates, enemies, society) {
           const strategy = this.chooseMovementStrategy();
+
           if (strategy === 'pursuit' && society.length > 0) {
             const target = society[Math.floor(Math.random() * society.length)];
+
             moveToTarget(gridArr, row, col, target.row, target.col);
           } else if (strategy === 'cautious' && society.length > 0) {
             const target = society[Math.floor(Math.random() * society.length)];
+
             moveAwayFromTarget(gridArr, row, col, target.row, target.col);
           } else {
             moveRandomly(gridArr, row, col, this);
@@ -447,6 +484,7 @@
             for (let col = 0; col < this.cols; col++) {
               if (Math.random() < 0.05) {
                 const dna = DNA.random();
+
                 this.grid[row][col] = new Cell(row, col, dna);
               }
             }
@@ -456,6 +494,7 @@
         consumeEnergy(cell, row, col) {
           const available = this.energyGrid[row][col];
           const take = Math.min(1, available);
+
           this.energyGrid[row][col] -= take;
           cell.energy = Math.min(GridManager.maxTileEnergy, cell.energy + take);
         }
@@ -482,6 +521,7 @@
           for (let row = 0; row < this.rows; row++) {
             for (let col = 0; col < this.cols; col++) {
               const cell = this.getCell(row, col);
+
               if (cell) {
                 ctx.fillStyle = cell.color;
                 ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
@@ -506,16 +546,20 @@
           const populationDensity = this.calculatePopulationDensity();
           const minPopulation = Math.floor(this.rows * this.cols * 0.05);
           const currentPopulation = Math.floor(populationDensity * this.rows * this.cols);
+
           seed(currentPopulation, minPopulation);
 
           const highDensity = populationDensity > 0.5 + Math.random() * 0.2;
+
           this.regenerateEnergyGrid();
           eventManager.updateEvent();
 
           const processed = new WeakSet();
+
           for (let row = 0; row < this.rows; row++) {
             for (let col = 0; col < this.cols; col++) {
               const cell = this.grid[row][col];
+
               if (!cell || processed.has(cell)) continue;
               processed.add(cell);
 
@@ -534,18 +578,22 @@
               }
 
               const { mates, enemies, society } = this.findTargets(row, col, cell, highDensity);
+
               if (mates.length > 0) {
                 const bestMate = cell.findBestMate(mates);
+
                 if (bestMate) {
                   moveToTarget(this.grid, row, col, bestMate.row, bestMate.col);
                   const reproProb =
                     (cell.dna.reproductionProb() + bestMate.target.dna.reproductionProb()) / 2;
+
                   if (
                     randomPercent(reproProb) &&
                     cell.energy >= 0.5 &&
                     bestMate.target.energy >= 0.5
                   ) {
                     const offspring = Cell.breed(cell, bestMate.target);
+
                     this.grid[row][col] = offspring;
                   }
                 }
@@ -555,6 +603,7 @@
                 const { avoid, fight, cooperate } = cell.interactionGenes;
                 const total = avoid + fight + cooperate;
                 const roll = Math.random() * total;
+
                 if (roll < avoid) {
                   moveAwayFromTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
                 } else if (roll < avoid + fight) {
@@ -562,6 +611,7 @@
                     Math.abs(targetEnemy.row - row),
                     Math.abs(targetEnemy.col - col)
                   );
+
                   if (dist <= 1) fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
                   else moveToTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
                 } else {
@@ -569,6 +619,7 @@
                     Math.abs(targetEnemy.row - row),
                     Math.abs(targetEnemy.col - col)
                   );
+
                   if (dist <= 1)
                     cooperateWithEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
                   else moveToTarget(this.grid, row, col, targetEnemy.row, targetEnemy.col);
@@ -583,6 +634,7 @@
 
         calculatePopulationDensity() {
           let population = 0;
+
           for (let row = 0; row < this.rows; row++) {
             for (let col = 0; col < this.cols; col++) {
               if (this.grid[row][col]) {
@@ -590,6 +642,7 @@
               }
             }
           }
+
           return population / (this.rows * this.cols);
         }
 
@@ -604,8 +657,10 @@
               const newRow = (row + y + this.rows) % this.rows;
               const newCol = (col + x + this.cols) % this.cols;
               const target = this.grid[newRow][newCol];
+
               if (target) {
                 const similarity = cell.similarityTo(target);
+
                 if (similarity >= SOCIETY_SIMILARITY) {
                   society.push({ row: newRow, col: newCol, target });
                 } else if (isHighDensity || similarity <= ENEMY_SIMILARITY) {
@@ -631,6 +686,7 @@
         const rng = seedValue !== undefined ? createRNG(seedValue) : Math.random;
 
         const empty = [];
+
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
             if (!grid.getCell(r, c)) empty.push({ r, c });
@@ -638,11 +694,13 @@
         }
 
         const toSeed = Math.min(minPopulation - current, empty.length);
+
         for (let i = 0; i < toSeed; i++) {
           const idx = Math.floor(rng() * empty.length);
           const { r, c } = empty.splice(idx, 1)[0];
           const dna = DNA.random(rng);
           const newCell = new Cell(r, c, dna);
+
           grid.setCell(r, c, newCell);
         }
       }
@@ -657,6 +715,7 @@
             const newCol = (col + x + cols) % cols;
             const cell = grid.getCell(newRow, newCol);
             const color = cell?.color;
+
             if (color) {
               neighbors[color] = (neighbors[color] || 0) + 1;
             }
@@ -673,12 +732,15 @@
         const nr = (sr + dr + rows) % rows;
         const nc = (sc + dc + cols) % cols;
         const dcell = gridArr[nr][nc];
+
         if (!dcell) {
           // Check if the destination cell is empty
           gridArr[nr][nc] = gridArr[sr][sc];
           gridArr[sr][sc] = null;
+
           return true;
         }
+
         return false;
       }
 
@@ -687,8 +749,10 @@
         const dCol = targetCol - col;
         let dr = 0,
           dc = 0;
+
         if (Math.abs(dRow) >= Math.abs(dCol)) dr = Math.sign(dRow);
         else dc = Math.sign(dCol);
+
         return tryMove(gridArr, row, col, dr, dc);
       }
 
@@ -697,19 +761,23 @@
         const dCol = targetCol - col;
         let dr = 0,
           dc = 0;
+
         if (Math.abs(dRow) >= Math.abs(dCol)) dr = -Math.sign(dRow);
         else dc = -Math.sign(dCol);
+
         return tryMove(gridArr, row, col, dr, dc);
       }
 
       function moveRandomly(gridArr, row, col, cell) {
         const { dr, dc } = cell.decideMove();
+
         return tryMove(gridArr, row, col, dr, dc);
       }
 
       function fightEnemy(manager, attackerRow, attackerCol, targetRow, targetCol) {
         const attacker = manager.grid[attackerRow][attackerCol];
         const defender = manager.grid[targetRow][targetCol];
+
         if (!defender) return;
         if (attacker.energy >= defender.energy) {
           manager.grid[targetRow][targetCol] = attacker;
@@ -723,8 +791,10 @@
       function cooperateWithEnemy(manager, row, col, targetRow, targetCol) {
         const cell = manager.grid[row][col];
         const partner = manager.grid[targetRow][targetCol];
+
         if (!partner) return;
         const share = Math.min(1, cell.energy / 2);
+
         cell.energy -= share;
         partner.energy = Math.min(GridManager.maxTileEnergy, partner.energy + share);
       }
@@ -738,24 +808,29 @@
           col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
         ) {
           const s = currentEvent.strength * EVENT_STRENGTH_MULTIPLIER;
+
           switch (currentEvent.eventType) {
             case 'flood': {
               const resist = cell.dna.floodResist();
+
               cell.energy -= 0.3 * s * (1 - resist);
               break;
             }
             case 'drought': {
               const resist = cell.dna.droughtResist();
+
               cell.energy -= 0.25 * s * (1 - resist);
               break;
             }
             case 'heatwave': {
               const resist = cell.dna.heatResist();
+
               cell.energy -= 0.35 * s * (1 - resist);
               break;
             }
             case 'coldwave': {
               const resist = cell.dna.coldResist();
+
               cell.energy -= 0.2 * s * (1 - resist);
               break;
             }
@@ -763,6 +838,7 @@
           cell.energy = Math.max(0, Math.min(GridManager.maxTileEnergy, cell.energy));
         }
       }
+
       function update() {
         if (uiManager.isPaused()) {
           return;
@@ -770,6 +846,7 @@
 
         const now = performance.now();
         const interval = 1000 / Math.max(1, updatesPerSecond);
+
         if (now - lastUpdateTime >= interval) {
           lastUpdateTime = now;
           grid.update();
@@ -781,6 +858,7 @@
       // Create grid using class
       const grid = new GridManager(rows, cols);
       const uiManager = new UIManager(update);
+
       requestAnimationFrame(update);
     </script>
   </body>
