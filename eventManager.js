@@ -1,3 +1,5 @@
+import { randomRange } from './utils.js';
+
 export default class EventManager {
   constructor(rows, cols) {
     this.rows = rows;
@@ -8,14 +10,14 @@ export default class EventManager {
 
   generateRandomEvent() {
     const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
-    const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-    const duration = Math.floor(Math.random() * 501) + 100; // Event duration between 100 and 600 frames
-    const strength = Math.random(); // Event strength between 0 and 1
+    const eventType = eventTypes[Math.floor(randomRange(0, eventTypes.length))];
+    const duration = Math.floor(randomRange(0, 501)) + 100; // 100..600 frames
+    const strength = randomRange(0, 1); // 0..1
     const affectedArea = {
-      x: Math.floor(Math.random() * this.cols),
-      y: Math.floor(Math.random() * this.rows),
-      width: Math.floor(Math.random() * (this.cols / 4)) + 1,
-      height: Math.floor(Math.random() * (this.rows / 4)) + 1,
+      x: Math.floor(randomRange(0, this.cols)),
+      y: Math.floor(randomRange(0, this.rows)),
+      width: Math.max(10, Math.floor(randomRange(0, this.cols / 4)) + 1),
+      height: Math.max(10, Math.floor(randomRange(0, this.rows / 4)) + 1),
     };
 
     return { eventType, duration, affectedArea, strength };

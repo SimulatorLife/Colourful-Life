@@ -6,9 +6,19 @@ export function randomPercent(chance) {
   return Math.random() < chance;
 }
 
-export function mulberry32(seed) {
+export function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+/*
+ * Deterministic PRNG factory (Mulberry32)
+ */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+
   return function () {
-    let t = (seed += 0x6d2b79f5);
+    a += 0x6d2b79f5;
+    let t = a;
 
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
@@ -18,6 +28,5 @@ export function mulberry32(seed) {
 }
 
 export function createRNG(seed) {
-  // Unified RNG: alias to mulberry32 for consistent behavior
-  return mulberry32(seed >>> 0);
+  return mulberry32(seed);
 }

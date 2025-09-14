@@ -12,6 +12,7 @@ The `fallingSand/` directory contains a falling-sand and Game of Life hybrid imp
 - **Genes and mutation**: advanced versions assign each cell genetic traits that blend and mutate during reproduction.
 - **Neuron-inspired movement**: gene weights influence direction choices, giving each organism a rudimentary nervous system.
 - **Energy and evolution**: organisms gather energy from tiles, spend it to move and reproduce, and perish when depleted.
+- **Density-aware behavior**: local population density increases aggression, reduces reproduction probability, nudges movement toward caution, and slightly raises energy costs.
 - **Environmental events**: floods, droughts, heatwaves, and coldwaves affect regions and influence cell survival.
 - **Rendering loop**: `requestAnimationFrame` drives updates and drawing to an HTML `<canvas>`.
 
