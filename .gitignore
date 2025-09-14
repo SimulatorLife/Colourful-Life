@@ -1,1 +1,10 @@
 node_modules
+.parcel-cache/**
+dist
+.env
+.DS_Store
+.vscode
+.idea
+*.log
+coverage
+*.tsbuildinfo
