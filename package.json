@@ -6,7 +6,9 @@
     "start": "parcel index.html",
     "build": "parcel build index.html",
     "serve": "node server.js",
-    "test": "uvu ./test"
+    "test": "uvu ./test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "repository": {
     "type": "git",
@@ -21,6 +23,7 @@
   "homepage": "https://github.com/henrylkirk/Colourful-Life#readme",
   "devDependencies": {
     "parcel": "^2.8.3",
+    "prettier": "^3.6.2",
     "uvu": "^0.5.6"
   }
 }

@@ -3,7 +3,7 @@ const assert = require('uvu/assert');
 
 function createRNG(seed) {
   seed = seed >>> 0;
-  return function() {
+  return function () {
     seed = (seed * 1664525 + 1013904223) >>> 0;
     return seed / 4294967296;
   };

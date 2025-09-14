@@ -1,5 +1,5 @@
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 const gridSize = 5;
 const gridWidth = Math.floor(canvas.width / gridSize);
 const gridHeight = Math.floor(canvas.height / gridSize);
@@ -7,15 +7,15 @@ let grid = Array.from({ length: gridHeight }, () => Array(gridWidth).fill(0));
 
 const SAND = 1;
 const LIFE = 2;
-const sandColour = "#FFD700";
-const lifeColour = "#00FF00";
+const sandColour = '#FFD700';
+const lifeColour = '#00FF00';
 
 const TOOL = { SAND: 1, LIFE: 2 };
 
 let mouseDown = false;
 let drawState = TOOL.SAND;
 
-const getNeighbors = require("./getNeighbors"); // shared neighbor utility
+const getNeighbors = require('./getNeighbors'); // shared neighbor utility
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -79,12 +79,11 @@ function update() {
 }
 
 function drawParticle(e) {
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((e.clientX - rect.left) / gridSize);
-    const y = Math.floor((e.clientY - rect.top) / gridSize);
-    grid[y][x] = drawState;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / gridSize);
+  const y = Math.floor((e.clientY - rect.top) / gridSize);
+  grid[y][x] = drawState;
 }
-
 
 function gameLoop() {
   update();
@@ -92,7 +91,7 @@ function gameLoop() {
   requestAnimationFrame(gameLoop);
 }
 
-canvas.addEventListener("mouseup", () => {
+canvas.addEventListener('mouseup', () => {
   mouseDown = false;
 });
 
@@ -101,42 +100,38 @@ canvas.addEventListener("mouseup", () => {
 //     drawParticle(e);
 // });
 
-canvas.addEventListener("mousemove", (e) => {
-    if (mouseDown) {
-        drawParticle(e);
-    }
-});
-
-
-canvas.addEventListener("mousedown", (e) => {
-    mouseDown = true;
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((e.clientX - rect.left) / gridSize);
-    const y = Math.floor((e.clientY - rect.top) / gridSize);
-    grid[y][x] = drawState;
+canvas.addEventListener('mousemove', (e) => {
+  if (mouseDown) {
     drawParticle(e);
+  }
 });
 
+canvas.addEventListener('mousedown', (e) => {
+  mouseDown = true;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / gridSize);
+  const y = Math.floor((e.clientY - rect.top) / gridSize);
+  grid[y][x] = drawState;
+  drawParticle(e);
+});
 
-canvas.addEventListener("contextmenu", (e) => {
+canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault();
 });
 
-const selectSandBtn = document.getElementById("selectSand");
-const selectLifeBtn = document.getElementById("selectLife");
+const selectSandBtn = document.getElementById('selectSand');
+const selectLifeBtn = document.getElementById('selectLife');
 
-selectSandBtn.addEventListener("click", () => {
-    drawState = TOOL.SAND;
-    selectSandBtn.classList.add("active");
-    selectLifeBtn.classList.remove("active");
+selectSandBtn.addEventListener('click', () => {
+  drawState = TOOL.SAND;
+  selectSandBtn.classList.add('active');
+  selectLifeBtn.classList.remove('active');
 });
 
-selectLifeBtn.addEventListener("click", () => {
-    drawState = TOOL.LIFE;
-    selectSandBtn.classList.remove("active");
-    selectLifeBtn.classList.add("active");
+selectLifeBtn.addEventListener('click', () => {
+  drawState = TOOL.LIFE;
+  selectSandBtn.classList.remove('active');
+  selectLifeBtn.classList.add('active');
 });
-
-
 
 gameLoop();

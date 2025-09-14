@@ -1,0 +1,9 @@
+.parcel-cache/
+dist/
+node_modules/
+coverage/
+build/
+tmp/
+*.min.js
+*.min.css
+

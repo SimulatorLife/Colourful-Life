@@ -12,7 +12,7 @@ class Cell {
   }
 
   cloneWithMutation(mutationRate = 0.1) {
-    const newGenes = this.genes.map(g => {
+    const newGenes = this.genes.map((g) => {
       const mutation = (Math.random() * 2 - 1) * mutationRate;
       const mutated = g + mutation;
       return Math.min(1, Math.max(0, mutated));
@@ -73,7 +73,10 @@ test('randomEmptyCell finds an empty spot or null when full', () => {
     [1, 2],
     [3, 4],
   ];
-  assert.is(withMockedRandom([0], () => randomEmptyCell(filled)), null);
+  assert.is(
+    withMockedRandom([0], () => randomEmptyCell(filled)),
+    null
+  );
 });
 
 test('manageEnergy depletes energy and death occurs at zero', () => {

@@ -32,9 +32,18 @@ test('chooseMovementStrategy selects based on gene weights', () => {
   const pursuer = new Cell({ wandering: 0, pursuit: 1, cautious: 0 });
   const cautious = new Cell({ wandering: 0, pursuit: 0, cautious: 1 });
 
-  assert.is(withMockedRandom([0], () => wanderer.chooseMovementStrategy()), 'wandering');
-  assert.is(withMockedRandom([0], () => pursuer.chooseMovementStrategy()), 'pursuit');
-  assert.is(withMockedRandom([0], () => cautious.chooseMovementStrategy()), 'cautious');
+  assert.is(
+    withMockedRandom([0], () => wanderer.chooseMovementStrategy()),
+    'wandering'
+  );
+  assert.is(
+    withMockedRandom([0], () => pursuer.chooseMovementStrategy()),
+    'pursuit'
+  );
+  assert.is(
+    withMockedRandom([0], () => cautious.chooseMovementStrategy()),
+    'cautious'
+  );
 });
 
 test.run();

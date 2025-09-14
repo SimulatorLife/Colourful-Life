@@ -1,6 +1,6 @@
 # Colourful Life
 
-This repository is a playground of JavaScript cellular automata.  The various experiments have been merged into a single consolidated simulation:
+This repository is a playground of JavaScript cellular automata. The various experiments have been merged into a single consolidated simulation:
 
 - `index.html` – colorful cells form organisms that evolve through genes, simple neuron-like movement, energy-based survival, and breeding while facing environmental events.
 
@@ -24,9 +24,15 @@ npm ci
 npm run start    # Parcel dev server
 npm run build    # Production build
 npm run serve    # Simple static server (no bundling)
+npm run format   # Format code with Prettier
+npm run format:check  # Check formatting without writing
 ```
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., Parcel dev server or `npm run serve`).
+
+### Formatting
+
+This repo uses [Prettier](https://prettier.io/) for consistent formatting. Run `npm run format` before committing, or add it to your editor's "format on save" using the Prettier extension.
 
 ## Ideas for Exploration
 

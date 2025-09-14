@@ -41,4 +41,3 @@ http
   .listen(port, () => {
     console.log(`Serving ${root} on http://localhost:${port}`);
   });
-
