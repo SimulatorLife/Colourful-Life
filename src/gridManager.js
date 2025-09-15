@@ -293,12 +293,12 @@ export default class GridManager {
   }
 
   findTargets(row, col, cell) {
-    const uiManager = window.uiManager;
+    const uiManager = this.uiManager;
     const mates = [];
     const enemies = [];
     const society = [];
     const d = this.localDensity(row, col, DENSITY_RADIUS);
-    const effD = clamp(d * uiManager.getDensityEffectMultiplier(), 0, 1);
+    const effD = clamp(d * (uiManager?.getDensityEffectMultiplier?.() ?? 1), 0, 1);
     const enemyBias = lerp(cell.density.enemyBias.min, cell.density.enemyBias.max, effD);
 
     for (let x = -cell.sight; x <= cell.sight; x++) {
@@ -311,9 +311,12 @@ export default class GridManager {
         if (target) {
           const similarity = cell.similarityTo(target);
 
-          if (similarity >= uiManager.getSocietySimilarity()) {
+          if (similarity >= (uiManager?.getSocietySimilarity?.() ?? 1)) {
             society.push({ row: newRow, col: newCol, target });
-          } else if (similarity <= uiManager.getEnemySimilarity() || randomPercent(enemyBias)) {
+          } else if (
+            similarity <= (uiManager?.getEnemySimilarity?.() ?? 0) ||
+            randomPercent(enemyBias)
+          ) {
             enemies.push({ row: newRow, col: newCol, target });
           } else {
             mates.push({ row: newRow, col: newCol, target });
