@@ -12,11 +12,13 @@
       <canvas id="gameCanvas"></canvas>
     </div>
     <script type="module">
+      /* eslint-disable prettier/prettier */
       import { randomRange, randomPercent } from './utils.js';
       import UIManager from './uiManager.js';
       import EventManager from './eventManager.js';
       import DNA from './genome.js';
       import Stats from './stats.js';
+      import { computeFitness } from './src/fitness.js';
 
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
@@ -888,11 +890,7 @@
             const cell = grid.getCell(r, c);
 
             if (!cell) continue;
-            const fitness =
-              (cell.fightsWon - cell.fightsLost) * 0.5 +
-              (cell.offspring || 0) * 1.5 +
-              cell.energy / GridManager.maxTileEnergy +
-              (cell.lifespan ? cell.age / cell.lifespan : 0);
+            const fitness = computeFitness(cell);
 
             cells.push({
               fitness,
@@ -954,43 +952,23 @@
             const cell = grid.getCell(r, c);
 
             if (!cell) continue;
-            const f =
-              (cell.fightsWon - cell.fightsLost) * 0.5 +
-              (cell.offspring || 0) * 1.5 +
-              cell.energy / GridManager.maxTileEnergy +
-              (cell.lifespan ? cell.age / cell.lifespan : 0);
+            const f = computeFitness(cell);
 
             fitnesses.push(f);
           }
         }
         if (fitnesses.length === 0) return;
         fitnesses.sort((a, b) => a - b);
-        const topFrac = 0.3; // show top 30%
-        const idx = Math.max(
-          0,
-          Math.min(fitnesses.length - 1, Math.floor((1 - topFrac) * fitnesses.length))
-        );
-        const thresh = fitnesses[idx];
         const maxF = fitnesses[fitnesses.length - 1] || 0;
-        const span = Math.max(1e-6, maxF - thresh);
 
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
             const cell = grid.getCell(r, c);
 
             if (!cell) continue;
-            const f =
-              (cell.fightsWon - cell.fightsLost) * 0.5 +
-              (cell.offspring || 0) * 1.5 +
-              cell.energy / GridManager.maxTileEnergy +
-              (cell.lifespan ? cell.age / cell.lifespan : 0);
-
-            if (f < thresh) continue; // keep non-top dimmed by the scene tint
-            const u = (f - thresh) / span; // 0..1 within top band
-            const k = 6.0; // contrast
-            const denom = Math.exp(k) - 1;
-            const exp01 = denom > 0 ? (Math.exp(k * u) - 1) / denom : u;
-            const a = (Math.max(0, Math.min(1, exp01)) * 0.99).toFixed(3);
+            const f = computeFitness(cell);
+            const t = f / maxF; // 0..1
+            const a = (t * 0.45).toFixed(3);
 
             ctx.fillStyle = `rgba(255,255,0,${a})`;
             ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
