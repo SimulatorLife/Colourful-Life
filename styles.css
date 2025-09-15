@@ -37,8 +37,8 @@ canvas {
   gap: 12px;
 }
 
-/* Controls panel */
-.controls-panel {
+/* Base panel styling */
+.panel {
   width: 300px;
   color: #ddd;
   font-family: sans-serif;
@@ -46,6 +46,10 @@ canvas {
   border: 1px solid #333;
   border-radius: 8px;
   padding: 12px;
+}
+
+/* Controls panel */
+.controls-panel {
   position: sticky;
   top: 8px;
   max-height: calc(100vh - 16px);
@@ -96,16 +100,20 @@ canvas {
 
 /* Insights panel */
 .insights-panel {
-  width: 300px;
-  color: #ddd;
-  font-family: sans-serif;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 8px;
-  padding: 12px;
+  /* inherits from .panel */
 }
 .insights-panel h3 {
   margin: 0 0 8px;
   font-size: 16px;
   color: #eee;
+}
+
+/* Metrics and leaderboard boxes */
+.metrics-box {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.leaderBox {
+  /* inherits width from .panel */
 }

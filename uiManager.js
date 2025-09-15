@@ -32,7 +32,7 @@ export default class UIManager {
     const panel = document.createElement('div');
 
     panel.id = 'controls';
-    panel.className = 'controls-panel';
+    panel.className = 'panel controls-panel';
 
     // Title
     const heading = document.createElement('h3');
@@ -205,7 +205,7 @@ export default class UIManager {
   #buildInsightsPanel() {
     const panel = document.createElement('div');
 
-    panel.className = 'insights-panel';
+    panel.className = 'panel insights-panel';
     const heading = document.createElement('h3');
 
     heading.textContent = 'Evolution Insights';
@@ -219,7 +219,7 @@ export default class UIManager {
     panel.appendChild(metricsHeader);
 
     this.metricsBox = document.createElement('div');
-    this.metricsBox.className = 'metrics-box';
+    this.metricsBox.className = 'panel metrics-box';
     panel.appendChild(this.metricsBox);
 
     // Sparklines canvases
@@ -345,7 +345,7 @@ export default class UIManager {
     if (!this.leaderBox) {
       // create holder if missing (older layout)
       this.leaderBox = document.createElement('div');
-      this.leaderBox.className = 'metrics-box';
+      this.leaderBox.className = 'panel leaderBox';
       this.sidebar?.appendChild(this.leaderBox);
     }
     this.leaderBox.innerHTML = '';
