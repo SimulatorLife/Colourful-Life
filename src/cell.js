@@ -1,6 +1,6 @@
 import DNA from '../genome.js';
 import { randomRange, clamp } from '../utils.js';
-import { DENSITY_RADIUS, lerp, moveToTarget, moveAwayFromTarget, moveRandomly } from './helpers.js';
+import { lerp, moveToTarget, moveAwayFromTarget, moveRandomly } from './helpers.js';
 
 export default class Cell {
   // TODO: The cells' colors should BE their genes. The RGB values should BE the DNA
@@ -110,11 +110,8 @@ export default class Cell {
     return { dr: 0, dc: 1 };
   }
 
-  manageEnergy(row, col) {
-    const grid = window.grid;
-    const uiManager = window.uiManager;
-    const density = grid.localDensity(row, col, DENSITY_RADIUS);
-    const effD = clamp(density * uiManager.getDensityEffectMultiplier(), 0, 1);
+  manageEnergy(row, col, { localDensity, densityEffectMultiplier, maxTileEnergy }) {
+    const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
     const geneRow = this.genes?.[5];
     const metabolism = Array.isArray(geneRow)
       ? geneRow.reduce((s, g) => s + Math.abs(g), 0) / (geneRow.length || 1)
@@ -125,11 +122,11 @@ export default class Cell {
 
     this.energy -= energyLoss;
 
-    return this.energy <= this.starvationThreshold();
+    return this.energy <= this.starvationThreshold(maxTileEnergy);
   }
 
-  starvationThreshold() {
-    return this.dna.starvationThresholdFrac() * (window.GridManager?.maxTileEnergy ?? 5);
+  starvationThreshold(maxTileEnergy = 5) {
+    return this.dna.starvationThresholdFrac() * maxTileEnergy;
   }
 
   static randomMovementGenes() {
@@ -140,10 +137,9 @@ export default class Cell {
     };
   }
 
-  chooseMovementStrategy(localDensity = 0) {
+  chooseMovementStrategy(localDensity = 0, densityEffectMultiplier = 1) {
     let { wandering, pursuit, cautious } = this.movementGenes;
-    const uiManager = window.uiManager;
-    const effD = clamp(localDensity * uiManager.getDensityEffectMultiplier(), 0, 1);
+    const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
     const cautiousMul = lerp(this.density.cautious.min, this.density.cautious.max, effD);
     const pursuitMul = lerp(this.density.pursuit.max, this.density.pursuit.min, effD);
     const cautiousScaled = Math.max(0, cautious * cautiousMul);
@@ -158,12 +154,16 @@ export default class Cell {
     return 'cautious';
   }
 
-  executeMovementStrategy(gridArr, row, col, mates, enemies, society) {
-    const grid = window.grid;
-    const rows = window.rows;
-    const cols = window.cols;
-    const localDensity = grid.localDensity(row, col, DENSITY_RADIUS);
-    const strategy = this.chooseMovementStrategy(localDensity);
+  executeMovementStrategy(
+    gridArr,
+    row,
+    col,
+    mates,
+    enemies,
+    society,
+    { localDensity, densityEffectMultiplier, rows, cols }
+  ) {
+    const strategy = this.chooseMovementStrategy(localDensity, densityEffectMultiplier);
 
     if (strategy === 'pursuit' && society.length > 0) {
       const target = society[Math.floor(randomRange(0, society.length))];
@@ -178,9 +178,7 @@ export default class Cell {
     }
   }
 
-  applyEventEffects(row, col, currentEvent) {
-    const uiManager = window.uiManager;
-
+  applyEventEffects(row, col, currentEvent, eventStrengthMultiplier = 1, maxTileEnergy = 5) {
     if (
       currentEvent &&
       row >= currentEvent.affectedArea.y &&
@@ -188,7 +186,7 @@ export default class Cell {
       col >= currentEvent.affectedArea.x &&
       col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
     ) {
-      const s = currentEvent.strength * uiManager.getEventStrengthMultiplier();
+      const s = currentEvent.strength * eventStrengthMultiplier;
 
       switch (currentEvent.eventType) {
         case 'flood':
@@ -204,14 +202,11 @@ export default class Cell {
           this.energy -= 0.2 * s * (1 - this.dna.coldResist());
           break;
       }
-      const maxE = window.GridManager?.maxTileEnergy ?? 5;
-
-      this.energy = Math.max(0, Math.min(maxE, this.energy));
+      this.energy = Math.max(0, Math.min(maxTileEnergy, this.energy));
     }
   }
 
-  fightEnemy(manager, attackerRow, attackerCol, targetRow, targetCol) {
-    const stats = window.stats;
+  fightEnemy(manager, attackerRow, attackerCol, targetRow, targetCol, stats) {
     const attacker = this; // should be manager.grid[attackerRow][attackerCol]
     const defender = manager.grid[targetRow][targetCol];
 
@@ -220,30 +215,28 @@ export default class Cell {
       manager.grid[targetRow][targetCol] = attacker;
       manager.grid[attackerRow][attackerCol] = null;
       manager.consumeEnergy(attacker, targetRow, targetCol);
-      stats.onFight();
-      stats.onDeath();
+      stats?.onFight?.();
+      stats?.onDeath?.();
       attacker.fightsWon = (attacker.fightsWon || 0) + 1;
       defender.fightsLost = (defender.fightsLost || 0) + 1;
     } else {
       manager.grid[attackerRow][attackerCol] = null;
-      stats.onFight();
-      stats.onDeath();
+      stats?.onFight?.();
+      stats?.onDeath?.();
       defender.fightsWon = (defender.fightsWon || 0) + 1;
       attacker.fightsLost = (attacker.fightsLost || 0) + 1;
     }
   }
 
-  cooperateWithEnemy(manager, row, col, targetRow, targetCol) {
-    const stats = window.stats;
+  cooperateWithEnemy(manager, row, col, targetRow, targetCol, maxTileEnergy = 5, stats) {
     const cell = this; // same as manager.grid[row][col]
     const partner = manager.grid[targetRow][targetCol];
 
     if (!partner) return;
-    const maxE = window.GridManager?.maxTileEnergy ?? 5;
     const share = Math.min(1, cell.energy / 2);
 
     cell.energy -= share;
-    partner.energy = Math.min(maxE, partner.energy + share);
-    stats.onCooperate();
+    partner.energy = Math.min(maxTileEnergy, partner.energy + share);
+    stats?.onCooperate?.();
   }
 }

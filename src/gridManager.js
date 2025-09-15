@@ -7,13 +7,22 @@ export default class GridManager {
   static maxTileEnergy = 5;
   static energyRegenRate = 0.25;
 
-  constructor(rows, cols) {
+  constructor(
+    rows,
+    cols,
+    { eventManager, uiManager = null, ctx = null, cellSize = 8, stats } = {}
+  ) {
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
     this.energyGrid = Array.from({ length: rows }, () =>
       Array.from({ length: cols }, () => GridManager.maxTileEnergy / 2)
     );
+    this.eventManager = eventManager || window.eventManager;
+    this.uiManager = uiManager || window.uiManager;
+    this.ctx = ctx || window.ctx;
+    this.cellSize = cellSize || window.cellSize || 8;
+    this.stats = stats || window.stats;
     this.init();
   }
 
@@ -96,9 +105,9 @@ export default class GridManager {
   }
 
   draw() {
-    const ctx = window.ctx;
-    const cellSize = window.cellSize;
-    const eventManager = window.eventManager;
+    const ctx = this.ctx;
+    const cellSize = this.cellSize;
+    const eventManager = this.eventManager;
 
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
@@ -124,9 +133,9 @@ export default class GridManager {
   }
 
   update() {
-    const uiManager = window.uiManager;
-    const stats = window.stats;
-    const eventManager = window.eventManager;
+    const uiManager = this.uiManager;
+    const stats = this.stats;
+    const eventManager = this.eventManager;
     const populationDensity = this.calculatePopulationDensity();
     const minPopulation = Math.floor(this.rows * this.cols * 0.05);
     const currentPopulation = Math.floor(populationDensity * this.rows * this.cols);
@@ -149,9 +158,21 @@ export default class GridManager {
           stats.onDeath();
           continue;
         }
-        cell.applyEventEffects(row, col, eventManager.currentEvent);
+        cell.applyEventEffects(
+          row,
+          col,
+          eventManager.currentEvent,
+          uiManager.getEventStrengthMultiplier?.() ?? 1,
+          GridManager.maxTileEnergy
+        );
         this.consumeEnergy(cell, row, col);
-        cell.manageEnergy(row, col);
+        const localDensity = this.localDensity(row, col, DENSITY_RADIUS);
+
+        cell.manageEnergy(row, col, {
+          localDensity,
+          densityEffectMultiplier: uiManager.getDensityEffectMultiplier?.() ?? 1,
+          maxTileEnergy: GridManager.maxTileEnergy,
+        });
         if (cell.energy <= 0) {
           this.grid[row][col] = null;
           stats.onDeath();
@@ -208,7 +229,7 @@ export default class GridManager {
           } else if (roll < avoidW + fightW) {
             const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
 
-            if (dist <= 1) cell.fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
+            if (dist <= 1) cell.fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col, stats);
             else
               moveToTarget(
                 this.grid,
@@ -223,7 +244,15 @@ export default class GridManager {
             const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
 
             if (dist <= 1)
-              cell.cooperateWithEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
+              cell.cooperateWithEnemy(
+                this,
+                row,
+                col,
+                targetEnemy.row,
+                targetEnemy.col,
+                GridManager.maxTileEnergy,
+                stats
+              );
             else
               moveToTarget(
                 this.grid,
@@ -236,7 +265,14 @@ export default class GridManager {
               );
           }
         } else {
-          cell.executeMovementStrategy(this.grid, row, col, mates, enemies, society || []);
+          const localDensity2 = this.localDensity(row, col, DENSITY_RADIUS);
+
+          cell.executeMovementStrategy(this.grid, row, col, mates, enemies, society || [], {
+            localDensity: localDensity2,
+            densityEffectMultiplier: uiManager.getDensityEffectMultiplier?.() ?? 1,
+            rows: this.rows,
+            cols: this.cols,
+          });
         }
       }
     }
@@ -289,5 +325,3 @@ export default class GridManager {
     return { mates, enemies, society };
   }
 }
-
-window.GridManager = GridManager;

@@ -23,7 +23,7 @@
 
       canvas.width = 800;
       canvas.height = 800;
-      const cellSize = 8;
+      const cellSize = 10;
       const rows = canvas.height / cellSize;
       const cols = canvas.width / cellSize;
       let lastUpdateTime = 0;
@@ -40,10 +40,12 @@
 
       // Layout styles moved to styles.css
 
-      const grid = new GridManager(rows, cols);
+      const grid = new GridManager(rows, cols, { eventManager, ctx, cellSize, stats });
 
       window.grid = grid;
       const uiManager = new UIManager(update, '#app');
+
+      grid.uiManager = uiManager;
 
       window.uiManager = uiManager;
 
@@ -76,7 +78,7 @@
             const cell = grid.getCell(r, c);
 
             if (!cell) continue;
-            const fitness = computeFitness(cell);
+            const fitness = computeFitness(cell, GridManager.maxTileEnergy);
 
             cells.push({
               fitness,
@@ -135,7 +137,7 @@
             const cell = grid.getCell(r, c);
 
             if (!cell) continue;
-            const f = computeFitness(cell);
+            const f = computeFitness(cell, GridManager.maxTileEnergy);
 
             if (f > maxF) maxF = f;
           }
