@@ -257,6 +257,11 @@
         static energyRegenRate = 0.25;
         static deathResidueFrac = 0.6;
         static minDeathResidue = 0.2;
+        static sunFluxBase = 0.08;
+        static sunCellCaptureFrac = 0.55;
+        static sunPeriodTicks = 1200;
+        static densityRegenFactor = 0.6;
+        static occupiedRegenPenalty = 0.3;
 
         constructor(rows, cols) {
           this.rows = rows;
@@ -265,6 +270,7 @@
           this.energyGrid = Array.from({ length: rows }, () =>
             Array.from({ length: cols }, () => GridManager.maxTileEnergy / 2)
           );
+          this.tick = 0;
           this.init();
         }
 
@@ -288,15 +294,63 @@
           cell.energy = Math.min(GridManager.maxTileEnergy, cell.energy + take);
         }
 
+        getSunlightLevel() {
+          const T = Math.max(120, GridManager.sunPeriodTicks);
+          const phase = (this.tick % T) / T;
+
+          return 0.5 + 0.5 * Math.sin(2 * Math.PI * phase);
+        }
+
         regenerateEnergyGrid() {
-          // Regenerate per-tile energy, modulated by active environmental event
+          // Regenerate per-tile energy, modulated by density, occupancy, events, and sunlight
           const ev = eventManager.currentEvent;
           const sMul = uiManager.getEventStrengthMultiplier?.() ?? 1.0;
+          const sunLevel = this.getSunlightLevel();
+          // Global sunlight baseline; region-specific adjustments are applied per tile below
+          const baseSunFlux = GridManager.sunFluxBase * sunLevel;
 
           for (let r = 0; r < this.rows; r++) {
             for (let c = 0; c < this.cols; c++) {
               let regen = GridManager.energyRegenRate;
               let drain = 0;
+              const occ = this.grid[r][c] != null;
+              const localD = this.localDensity(r, c, 1);
+              const densityMul = Math.max(0, 1 - GridManager.densityRegenFactor * localD);
+              const occupiedMul = occ ? Math.max(0, 1 - GridManager.occupiedRegenPenalty) : 1;
+
+              // Event effects on soil processes
+              if (
+                ev &&
+                r >= ev.affectedArea.y &&
+                r < ev.affectedArea.y + ev.affectedArea.height &&
+                c >= ev.affectedArea.x &&
+                c < ev.affectedArea.x + ev.affectedArea.width
+              ) {
+                const s = (ev.strength || 0) * sMul;
+
+                switch (ev.eventType) {
+                  case 'flood':
+                    regen += 0.5 * s;
+                    break;
+                  case 'drought':
+                    regen *= Math.max(0, 1 - 0.8 * s);
+                    drain += 0.15 * s;
+                    break;
+                  case 'heatwave':
+                    regen *= Math.max(0, 1 - 0.5 * s);
+                    drain += 0.08 * s;
+                    break;
+                  case 'coldwave':
+                    regen *= Math.max(0, 1 - 0.3 * s);
+                    break;
+                }
+              }
+
+              // Apply soil regen with local modifiers
+              let tile = this.energyGrid[r][c] + (regen - drain) * densityMul * occupiedMul;
+
+              // Sunlight flux per tile (region-adjusted) with direct capture by occupants
+              let sunFlux = baseSunFlux;
 
               if (
                 ev &&
@@ -309,27 +363,34 @@
 
                 switch (ev.eventType) {
                   case 'flood':
-                    regen += 0.5 * s; // nutrient influx
+                    sunFlux *= Math.max(0.3, 1 - 0.7 * s);
                     break;
                   case 'drought':
-                    regen *= Math.max(0, 1 - 0.8 * s);
-                    drain += 0.15 * s; // soil dries out
+                    sunFlux *= 1 + 0.5 * s;
                     break;
                   case 'heatwave':
-                    regen *= Math.max(0, 1 - 0.5 * s);
-                    drain += 0.08 * s; // faster decay
+                    sunFlux *= 1 + 0.6 * s;
                     break;
                   case 'coldwave':
-                    regen *= Math.max(0, 1 - 0.3 * s); // slower cycling
+                    sunFlux *= Math.max(0.2, 1 - 0.8 * s);
                     break;
                 }
               }
-              const next = Math.max(
-                0,
-                Math.min(GridManager.maxTileEnergy, this.energyGrid[r][c] + regen - drain)
-              );
 
-              this.energyGrid[r][c] = next;
+              if (occ) {
+                const cell = this.grid[r][c];
+                const eff = Math.max(0, Math.min(1, cell?.dna?.droughtResist?.() ?? 0));
+                const capture = sunFlux * GridManager.sunCellCaptureFrac * eff;
+
+                if (capture > 0 && cell) {
+                  cell.energy = Math.min(GridManager.maxTileEnergy, cell.energy + capture);
+                }
+                tile += sunFlux * (1 - GridManager.sunCellCaptureFrac);
+              } else {
+                tile += sunFlux;
+              }
+
+              this.energyGrid[r][c] = Math.max(0, Math.min(GridManager.maxTileEnergy, tile));
             }
           }
         }
@@ -433,6 +494,7 @@
 
         update() {
           // TODO: Break this function up into smaller functions & make it more readable
+          this.tick++;
           const populationDensity = this.calculatePopulationDensity();
           const minPopulation = Math.floor(this.rows * this.cols * 0.05);
           const currentPopulation = Math.floor(populationDensity * this.rows * this.cols);
@@ -881,9 +943,11 @@
       }
 
       function drawFitnessHeatmap() {
-        // TODO: Instead of normalizing, use an exponential scale so we can better visualize differences
-        // Normalize by max fitness across current cells
-        let maxF = 0;
+        // Dim the scene so top performers pop
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Exponential mapping for the top X% by fitness
+        const fitnesses = [];
 
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
@@ -896,10 +960,20 @@
               cell.energy / GridManager.maxTileEnergy +
               (cell.lifespan ? cell.age / cell.lifespan : 0);
 
-            if (f > maxF) maxF = f;
+            fitnesses.push(f);
           }
         }
-        if (maxF <= 0) return;
+        if (fitnesses.length === 0) return;
+        fitnesses.sort((a, b) => a - b);
+        const topFrac = 0.3; // show top 30%
+        const idx = Math.max(
+          0,
+          Math.min(fitnesses.length - 1, Math.floor((1 - topFrac) * fitnesses.length))
+        );
+        const thresh = fitnesses[idx];
+        const maxF = fitnesses[fitnesses.length - 1] || 0;
+        const span = Math.max(1e-6, maxF - thresh);
+
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
             const cell = grid.getCell(r, c);
@@ -910,8 +984,13 @@
               (cell.offspring || 0) * 1.5 +
               cell.energy / GridManager.maxTileEnergy +
               (cell.lifespan ? cell.age / cell.lifespan : 0);
-            const t = f / maxF; // 0..1
-            const a = (t * 0.99).toFixed(3);
+
+            if (f < thresh) continue; // keep non-top dimmed by the scene tint
+            const u = (f - thresh) / span; // 0..1 within top band
+            const k = 6.0; // contrast
+            const denom = Math.exp(k) - 1;
+            const exp01 = denom > 0 ? (Math.exp(k * u) - 1) / denom : u;
+            const a = (Math.max(0, Math.min(1, exp01)) * 0.99).toFixed(3);
 
             ctx.fillStyle = `rgba(255,255,0,${a})`;
             ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);

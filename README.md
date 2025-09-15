@@ -10,6 +10,7 @@ This repository is a JavaScript playground simulation, inspired by cellular auto
 - **Energy and evolution**: organisms gather energy from tiles, spend it to move and reproduce, and perish when depleted.
   - Death leaves residue: when a cell dies (age, starvation, or combat), a fraction of its remaining energy is deposited back into the tile as nutrients. Environmental events modulate how much residue persists.
   - Events shape resources: floods boost tile regeneration; droughts and heatwaves suppress it and add per-tile drain; coldwaves slow cycling and preserve residues. Reproduction probability scales with local tile energy and current event pressure.
+  - Sunlight coupling: a day–night cycle injects external energy. Occupied tiles route a portion directly to the occupant (photosynthesis weighted by the green gene), with the rest entering the environment. High local density and occupied tiles reduce soil regeneration (competition/shading).
 - **Density-aware behavior**: local population density increases aggression, reduces reproduction probability, nudges movement toward caution, and slightly raises energy costs.
 - **Environmental events**: floods, droughts, heatwaves, and coldwaves affect regions and influence cell survival.
 - **Rendering loop**: `requestAnimationFrame` drives updates and drawing to an HTML `<canvas>`.
