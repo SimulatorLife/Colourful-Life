@@ -12,11 +12,13 @@
       <canvas id="gameCanvas"></canvas>
     </div>
     <script type="module">
+      /* eslint-disable prettier/prettier */
       import { randomRange, randomPercent } from './utils.js';
       import UIManager from './uiManager.js';
       import EventManager from './eventManager.js';
       import DNA from './genome.js';
       import Stats from './stats.js';
+      import { computeFitness } from './src/fitness.js';
 
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
@@ -685,11 +687,7 @@
             const cell = grid.getCell(r, c);
 
             if (!cell) continue;
-            const fitness =
-              (cell.fightsWon - cell.fightsLost) * 0.5 +
-              (cell.offspring || 0) * 1.5 +
-              cell.energy / GridManager.maxTileEnergy +
-              (cell.lifespan ? cell.age / cell.lifespan : 0);
+            const fitness = computeFitness(cell);
 
             cells.push({
               fitness,
@@ -748,11 +746,7 @@
             const cell = grid.getCell(r, c);
 
             if (!cell) continue;
-            const f =
-              (cell.fightsWon - cell.fightsLost) * 0.5 +
-              (cell.offspring || 0) * 1.5 +
-              cell.energy / GridManager.maxTileEnergy +
-              (cell.lifespan ? cell.age / cell.lifespan : 0);
+            const f = computeFitness(cell);
 
             if (f > maxF) maxF = f;
           }
@@ -763,11 +757,7 @@
             const cell = grid.getCell(r, c);
 
             if (!cell) continue;
-            const f =
-              (cell.fightsWon - cell.fightsLost) * 0.5 +
-              (cell.offspring || 0) * 1.5 +
-              cell.energy / GridManager.maxTileEnergy +
-              (cell.lifespan ? cell.age / cell.lifespan : 0);
+            const f = computeFitness(cell);
             const t = f / maxF; // 0..1
             const a = (t * 0.45).toFixed(3);
 
