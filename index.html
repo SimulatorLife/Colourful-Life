@@ -16,7 +16,8 @@
       import EventManager from './eventManager.js';
       import Stats from './stats.js';
       import GridManager from './src/gridManager.js';
-      import { computeFitness } from './src/fitness.js';
+      import { drawOverlays } from './src/overlays.js';
+      import { computeLeaderboard } from './src/leaderboard.js';
 
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
@@ -31,23 +32,10 @@
       const eventManager = new EventManager(rows, cols);
       const stats = new Stats(200);
 
-      window.ctx = ctx;
-      window.cellSize = cellSize;
-      window.rows = rows;
-      window.cols = cols;
-      window.eventManager = eventManager;
-      window.stats = stats;
-
-      // Layout styles moved to styles.css
-
       const grid = new GridManager(rows, cols, { eventManager, ctx, cellSize, stats });
-
-      window.grid = grid;
       const uiManager = new UIManager(update, '#app');
 
       grid.uiManager = uiManager;
-
-      window.uiManager = uiManager;
 
       requestAnimationFrame(update);
 
@@ -69,99 +57,20 @@
         }
         grid.draw();
         // overlays
-        drawOverlays();
+        drawOverlays(grid, ctx, cellSize, {
+          showEnergy: uiManager.getShowEnergy(),
+          showDensity: uiManager.getShowDensity(),
+          showFitness: uiManager.getShowFitness(),
+          maxTileEnergy: GridManager.maxTileEnergy,
+        });
         // leaderboard (top 5 by composite fitness)
-        const cells = [];
+        const top = computeLeaderboard(grid, 5, GridManager.maxTileEnergy);
 
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            const cell = grid.getCell(r, c);
-
-            if (!cell) continue;
-            const fitness = computeFitness(cell, GridManager.maxTileEnergy);
-
-            cells.push({
-              fitness,
-              offspring: cell.offspring || 0,
-              fightsWon: cell.fightsWon || 0,
-              age: cell.age,
-              color: cell.color,
-            });
-          }
-        }
-        cells.sort((a, b) => b.fitness - a.fitness);
-        uiManager.renderLeaderboard(cells.slice(0, 5));
+        uiManager.renderLeaderboard(top);
         requestAnimationFrame(update);
       }
 
-      function drawOverlays() {
-        if (uiManager.getShowEnergy()) drawEnergyHeatmap();
-        if (uiManager.getShowDensity()) drawDensityHeatmap();
-        if (uiManager.getShowFitness()) drawFitnessHeatmap();
-      }
-
-      function drawEnergyHeatmap() {
-        const a = 0.99;
-
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            const e = grid.energyGrid[r][c] / GridManager.maxTileEnergy; // 0..1
-
-            if (e <= 0) continue;
-            ctx.fillStyle = `rgba(0,255,0,${(e * a).toFixed(3)})`;
-            ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
-          }
-        }
-      }
-
-      function drawDensityHeatmap() {
-        const a = 0.35;
-
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            const d = grid.localDensity(r, c, 1); // 0..1
-
-            if (d <= 0) continue;
-            ctx.fillStyle = `rgba(255,0,0,${(d * a).toFixed(3)})`;
-            ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
-          }
-        }
-      }
-
-      function drawFitnessHeatmap() {
-        // Normalize by max fitness across current cells
-        let maxF = 0;
-
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            const cell = grid.getCell(r, c);
-
-            if (!cell) continue;
-            const f = computeFitness(cell, GridManager.maxTileEnergy);
-
-            if (f > maxF) maxF = f;
-          }
-        }
-        if (maxF <= 0) return;
-
-        // Dim the scene so top performers pop
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            const cell = grid.getCell(r, c);
-
-            if (!cell) continue;
-            const f = computeFitness(cell);
-            const t = f / maxF; // 0..1
-            const a = (t * 0.45).toFixed(3);
-
-            ctx.fillStyle = `rgba(255,255,0,${a})`;
-            ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
-          }
-        }
-      }
+      // overlays and leaderboard moved to modules
     </script>
   </body>
 </html>
