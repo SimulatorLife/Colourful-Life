@@ -132,8 +132,12 @@ export default class GridManager {
     }
   }
 
-  update() {
-    const uiManager = this.uiManager;
+  update({
+    densityEffectMultiplier = 1,
+    societySimilarity = 1,
+    enemySimilarity = 0,
+    eventStrengthMultiplier = 1,
+  } = {}) {
     const stats = this.stats;
     const eventManager = this.eventManager;
     const populationDensity = this.calculatePopulationDensity();
@@ -162,7 +166,7 @@ export default class GridManager {
           row,
           col,
           eventManager.currentEvent,
-          uiManager.getEventStrengthMultiplier?.() ?? 1,
+          eventStrengthMultiplier,
           GridManager.maxTileEnergy
         );
         this.consumeEnergy(cell, row, col);
@@ -170,7 +174,7 @@ export default class GridManager {
 
         cell.manageEnergy(row, col, {
           localDensity,
-          densityEffectMultiplier: uiManager.getDensityEffectMultiplier?.() ?? 1,
+          densityEffectMultiplier,
           maxTileEnergy: GridManager.maxTileEnergy,
         });
         if (cell.energy <= 0) {
@@ -178,7 +182,11 @@ export default class GridManager {
           stats.onDeath();
           continue;
         }
-        const { mates, enemies, society } = this.findTargets(row, col, cell);
+        const { mates, enemies, society } = this.findTargets(row, col, cell, {
+          densityEffectMultiplier,
+          societySimilarity,
+          enemySimilarity,
+        });
 
         if (mates.length > 0) {
           const bestMate = cell.findBestMate(mates);
@@ -188,7 +196,7 @@ export default class GridManager {
             const baseReproProb =
               (cell.dna.reproductionProb() + bestMate.target.dna.reproductionProb()) / 2;
             const localDensity = this.localDensity(row, col, DENSITY_RADIUS);
-            const effD = clamp(localDensity * uiManager.getDensityEffectMultiplier(), 0, 1);
+            const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
             const reproMul = lerp(
               cell.density.reproduction.max,
               cell.density.reproduction.min,
@@ -207,7 +215,7 @@ export default class GridManager {
           const targetEnemy = enemies[Math.floor(randomRange(0, enemies.length))];
           const { avoid, fight, cooperate } = cell.interactionGenes;
           const localDensity = this.localDensity(row, col, DENSITY_RADIUS);
-          const effD = clamp(localDensity * uiManager.getDensityEffectMultiplier(), 0, 1);
+          const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
           const fightMul = lerp(cell.density.fight.min, cell.density.fight.max, effD);
           const coopMul = lerp(cell.density.cooperate.max, cell.density.cooperate.min, effD);
           const fightW = Math.max(0.0001, fight * fightMul);
@@ -269,7 +277,7 @@ export default class GridManager {
 
           cell.executeMovementStrategy(this.grid, row, col, mates, enemies, society || [], {
             localDensity: localDensity2,
-            densityEffectMultiplier: uiManager.getDensityEffectMultiplier?.() ?? 1,
+            densityEffectMultiplier,
             rows: this.rows,
             cols: this.cols,
           });
@@ -292,13 +300,17 @@ export default class GridManager {
     return population / (this.rows * this.cols);
   }
 
-  findTargets(row, col, cell) {
-    const uiManager = this.uiManager;
+  findTargets(
+    row,
+    col,
+    cell,
+    { densityEffectMultiplier = 1, societySimilarity = 1, enemySimilarity = 0 } = {}
+  ) {
     const mates = [];
     const enemies = [];
     const society = [];
     const d = this.localDensity(row, col, DENSITY_RADIUS);
-    const effD = clamp(d * (uiManager?.getDensityEffectMultiplier?.() ?? 1), 0, 1);
+    const effD = clamp(d * densityEffectMultiplier, 0, 1);
     const enemyBias = lerp(cell.density.enemyBias.min, cell.density.enemyBias.max, effD);
 
     for (let x = -cell.sight; x <= cell.sight; x++) {
@@ -311,12 +323,9 @@ export default class GridManager {
         if (target) {
           const similarity = cell.similarityTo(target);
 
-          if (similarity >= (uiManager?.getSocietySimilarity?.() ?? 1)) {
+          if (similarity >= societySimilarity) {
             society.push({ row: newRow, col: newCol, target });
-          } else if (
-            similarity <= (uiManager?.getEnemySimilarity?.() ?? 0) ||
-            randomPercent(enemyBias)
-          ) {
+          } else if (similarity <= enemySimilarity || randomPercent(enemyBias)) {
             enemies.push({ row: newRow, col: newCol, target });
           } else {
             mates.push({ row: newRow, col: newCol, target });

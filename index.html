@@ -50,7 +50,12 @@
         if (now - lastUpdateTime >= interval) {
           lastUpdateTime = now;
           stats.resetTick();
-          grid.update();
+          grid.update({
+            densityEffectMultiplier: uiManager.getDensityEffectMultiplier(),
+            societySimilarity: uiManager.getSocietySimilarity(),
+            enemySimilarity: uiManager.getEnemySimilarity(),
+            eventStrengthMultiplier: uiManager.getEventStrengthMultiplier(),
+          });
           const snapshot = stats.updateFromGrid(grid);
 
           uiManager.renderMetrics(stats, snapshot);
