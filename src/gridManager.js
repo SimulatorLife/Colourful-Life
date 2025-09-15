@@ -3,84 +3,6 @@ import DNA from '../genome.js';
 import Cell from './cell.js';
 import { DENSITY_RADIUS, lerp, moveToTarget, moveAwayFromTarget } from './helpers.js';
 
-function fightEnemy(manager, attackerRow, attackerCol, targetRow, targetCol) {
-  const stats = window.stats;
-  const attacker = manager.grid[attackerRow][attackerCol];
-  const defender = manager.grid[targetRow][targetCol];
-
-  if (!defender) return;
-  if (attacker.energy >= defender.energy) {
-    manager.grid[targetRow][targetCol] = attacker;
-    manager.grid[attackerRow][attackerCol] = null;
-    manager.consumeEnergy(attacker, targetRow, targetCol);
-    stats.onFight();
-    stats.onDeath();
-    attacker.fightsWon = (attacker.fightsWon || 0) + 1;
-    defender.fightsLost = (defender.fightsLost || 0) + 1;
-  } else {
-    manager.grid[attackerRow][attackerCol] = null;
-    stats.onFight();
-    stats.onDeath();
-    defender.fightsWon = (defender.fightsWon || 0) + 1;
-    attacker.fightsLost = (attacker.fightsLost || 0) + 1;
-  }
-}
-
-function cooperateWithEnemy(manager, row, col, targetRow, targetCol) {
-  const stats = window.stats;
-  const cell = manager.grid[row][col];
-  const partner = manager.grid[targetRow][targetCol];
-
-  if (!partner) return;
-  const share = Math.min(1, cell.energy / 2);
-
-  cell.energy -= share;
-  partner.energy = Math.min(GridManager.maxTileEnergy, partner.energy + share);
-  stats.onCooperate();
-}
-
-function applyEventEffects(cell, row, col, currentEvent) {
-  const uiManager = window.uiManager;
-
-  if (
-    currentEvent &&
-    row >= currentEvent.affectedArea.y &&
-    row < currentEvent.affectedArea.y + currentEvent.affectedArea.height &&
-    col >= currentEvent.affectedArea.x &&
-    col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
-  ) {
-    const s = currentEvent.strength * uiManager.getEventStrengthMultiplier();
-
-    switch (currentEvent.eventType) {
-      case 'flood': {
-        const resist = cell.dna.floodResist();
-
-        cell.energy -= 0.3 * s * (1 - resist);
-        break;
-      }
-      case 'drought': {
-        const resist = cell.dna.droughtResist();
-
-        cell.energy -= 0.25 * s * (1 - resist);
-        break;
-      }
-      case 'heatwave': {
-        const resist = cell.dna.heatResist();
-
-        cell.energy -= 0.35 * s * (1 - resist);
-        break;
-      }
-      case 'coldwave': {
-        const resist = cell.dna.coldResist();
-
-        cell.energy -= 0.2 * s * (1 - resist);
-        break;
-      }
-    }
-    cell.energy = Math.max(0, Math.min(GridManager.maxTileEnergy, cell.energy));
-  }
-}
-
 export default class GridManager {
   static maxTileEnergy = 5;
   static energyRegenRate = 0.25;
@@ -227,7 +149,7 @@ export default class GridManager {
           stats.onDeath();
           continue;
         }
-        applyEventEffects(cell, row, col, eventManager.currentEvent);
+        cell.applyEventEffects(row, col, eventManager.currentEvent);
         this.consumeEnergy(cell, row, col);
         cell.manageEnergy(row, col);
         if (cell.energy <= 0) {
@@ -286,7 +208,7 @@ export default class GridManager {
           } else if (roll < avoidW + fightW) {
             const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
 
-            if (dist <= 1) fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
+            if (dist <= 1) cell.fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
             else
               moveToTarget(
                 this.grid,
@@ -300,7 +222,8 @@ export default class GridManager {
           } else {
             const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
 
-            if (dist <= 1) cooperateWithEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
+            if (dist <= 1)
+              cell.cooperateWithEnemy(this, row, col, targetEnemy.row, targetEnemy.col);
             else
               moveToTarget(
                 this.grid,

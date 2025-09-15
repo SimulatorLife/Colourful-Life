@@ -3,7 +3,7 @@ const assert = require('uvu/assert');
 
 test('computeFitness calculates composite fitness', async () => {
   global.GridManager = { maxTileEnergy: 5 };
-  const { computeFitness } = await import('../src/fitness.js');
+  const { computeFitness } = await import('../src/fitness.mjs');
   const cell = {
     fightsWon: 2,
     fightsLost: 1,
@@ -19,7 +19,7 @@ test('computeFitness calculates composite fitness', async () => {
 
 test('computeFitness handles minimal stats', async () => {
   global.GridManager = { maxTileEnergy: 5 };
-  const { computeFitness } = await import('../src/fitness.js');
+  const { computeFitness } = await import('../src/fitness.mjs');
   const cell = {
     fightsWon: 0,
     fightsLost: 0,

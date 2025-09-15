@@ -3,10 +3,16 @@ import { randomRange, clamp } from '../utils.js';
 import { DENSITY_RADIUS, lerp, moveToTarget, moveAwayFromTarget, moveRandomly } from './helpers.js';
 
 export default class Cell {
+  // TODO: The cells' colors should BE their genes. The RGB values should BE the DNA
+  // Each value (0-255) represents genes that control behavior
+  // Every one of the cell's preferences, inheritable traits, etc. is derived from these genes
+  // This will make it easier to visualize evolution and relationships between cells: for any given cell,
+  // its color is a direct representation of its genetic code
   static baseEnergyLoss = 0.05;
   static chanceToMutate = 0.15;
   static geneMutationRange = 0.2;
   static minAge = 100;
+  static maxAge = 1200;
 
   constructor(row, col, dna, energy) {
     this.row = row;
@@ -170,5 +176,74 @@ export default class Cell {
     } else {
       moveRandomly(gridArr, row, col, this, rows, cols);
     }
+  }
+
+  applyEventEffects(row, col, currentEvent) {
+    const uiManager = window.uiManager;
+
+    if (
+      currentEvent &&
+      row >= currentEvent.affectedArea.y &&
+      row < currentEvent.affectedArea.y + currentEvent.affectedArea.height &&
+      col >= currentEvent.affectedArea.x &&
+      col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
+    ) {
+      const s = currentEvent.strength * uiManager.getEventStrengthMultiplier();
+
+      switch (currentEvent.eventType) {
+        case 'flood':
+          this.energy -= 0.3 * s * (1 - this.dna.floodResist());
+          break;
+        case 'drought':
+          this.energy -= 0.25 * s * (1 - this.dna.droughtResist());
+          break;
+        case 'heatwave':
+          this.energy -= 0.35 * s * (1 - this.dna.heatResist());
+          break;
+        case 'coldwave':
+          this.energy -= 0.2 * s * (1 - this.dna.coldResist());
+          break;
+      }
+      const maxE = window.GridManager?.maxTileEnergy ?? 5;
+
+      this.energy = Math.max(0, Math.min(maxE, this.energy));
+    }
+  }
+
+  fightEnemy(manager, attackerRow, attackerCol, targetRow, targetCol) {
+    const stats = window.stats;
+    const attacker = this; // should be manager.grid[attackerRow][attackerCol]
+    const defender = manager.grid[targetRow][targetCol];
+
+    if (!defender) return;
+    if (attacker.energy >= defender.energy) {
+      manager.grid[targetRow][targetCol] = attacker;
+      manager.grid[attackerRow][attackerCol] = null;
+      manager.consumeEnergy(attacker, targetRow, targetCol);
+      stats.onFight();
+      stats.onDeath();
+      attacker.fightsWon = (attacker.fightsWon || 0) + 1;
+      defender.fightsLost = (defender.fightsLost || 0) + 1;
+    } else {
+      manager.grid[attackerRow][attackerCol] = null;
+      stats.onFight();
+      stats.onDeath();
+      defender.fightsWon = (defender.fightsWon || 0) + 1;
+      attacker.fightsLost = (attacker.fightsLost || 0) + 1;
+    }
+  }
+
+  cooperateWithEnemy(manager, row, col, targetRow, targetCol) {
+    const stats = window.stats;
+    const cell = this; // same as manager.grid[row][col]
+    const partner = manager.grid[targetRow][targetCol];
+
+    if (!partner) return;
+    const maxE = window.GridManager?.maxTileEnergy ?? 5;
+    const share = Math.min(1, cell.energy / 2);
+
+    cell.energy -= share;
+    partner.energy = Math.min(maxE, partner.energy + share);
+    stats.onCooperate();
   }
 }
