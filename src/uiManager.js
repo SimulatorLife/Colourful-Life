@@ -1,14 +1,18 @@
 export default class UIManager {
-  constructor(updateCallback, mountSelector = '#app') {
+  constructor(updateCallback, mountSelector = '#app', actions = {}) {
     this.updateCallback = updateCallback;
+    this.actions = actions || {};
     this.paused = false;
 
     // Settings with sensible defaults
-    this.societySimilarity = 0.8; // >= considered ally
-    this.enemySimilarity = 0.6; // <= considered enemy
+    this.societySimilarity = 0.7; // >= considered ally
+    this.enemySimilarity = 0.4; // <= considered enemy
     this.eventStrengthMultiplier = 1.0; // scales event effects
-    this.updatesPerSecond = 60; // simulation speed
+    this.eventFrequencyMultiplier = 1.0; // how often events spawn
+    this.speedMultiplier = 1.0; // simulation speed relative to 60 updates/sec
     this.densityEffectMultiplier = 1.0; // scales density influence (0..2)
+    this.energyRegenRate = 0.09; // base logistic regen rate (0..0.2)
+    this.energyDiffusionRate = 0.18; // neighbor diffusion rate (0..0.5)
     this.showDensity = false;
     this.showEnergy = false;
     this.showFitness = false;
@@ -80,6 +84,19 @@ export default class UIManager {
     pauseBtn.addEventListener('click', () => this.togglePause());
     body.appendChild(pauseBtn);
     this.pauseButton = pauseBtn;
+
+    // Burst new cells
+    const burstBtn = document.createElement('button');
+
+    burstBtn.id = 'burstButton';
+    burstBtn.textContent = 'Burst New Cells';
+    burstBtn.title = 'Spawn a cluster of new cells at a random spot';
+    burstBtn.addEventListener('click', () => {
+      if (typeof this.actions.burst === 'function') this.actions.burst();
+      else if (window.grid && typeof window.grid.burstRandomCells === 'function')
+        window.grid.burstRandomCells();
+    });
+    body.appendChild(burstBtn);
 
     // Helper to make slider rows
     const addSlider = (opts) => {
@@ -157,15 +174,28 @@ export default class UIManager {
       onInput: (v) => (this.eventStrengthMultiplier = v),
     });
 
-    // Simulation speed
+    // Event frequency multiplier
     addSlider({
-      label: 'Speed (updates/sec)',
-      min: 1,
-      max: 60,
-      step: 1,
-      value: this.updatesPerSecond,
-      title: 'How many updates per second to run (1..60)',
-      onInput: (v) => (this.updatesPerSecond = Math.max(1, Math.round(v))),
+      label: 'Event Frequency ×',
+      min: 0,
+      max: 3,
+      step: 0.1,
+      value: this.eventFrequencyMultiplier,
+      title: 'How often events spawn (0 disables new events)',
+      format: (v) => v.toFixed(1),
+      onInput: (v) => (this.eventFrequencyMultiplier = Math.max(0, v)),
+    });
+
+    // Simulation speed multiplier (baseline 60 updates/sec)
+    addSlider({
+      label: 'Speed ×',
+      min: 0.5,
+      max: 8,
+      step: 0.5,
+      value: this.speedMultiplier,
+      title: 'Speed multiplier relative to 60 updates/sec (0.5x..8x)',
+      format: (v) => `${v.toFixed(1)}x`,
+      onInput: (v) => (this.speedMultiplier = Math.max(0.1, v)),
     });
 
     // Overlay toggles
@@ -228,6 +258,30 @@ export default class UIManager {
         'Scales how strongly population density affects energy, aggression, and breeding (0..2)',
       format: (v) => v.toFixed(2),
       onInput: (v) => (this.densityEffectMultiplier = Math.max(0, v)),
+    });
+
+    // Energy regen base rate
+    addSlider({
+      label: 'Energy Regen Rate',
+      min: 0,
+      max: 0.2,
+      step: 0.005,
+      value: this.energyRegenRate,
+      title: 'Base logistic regeneration rate toward max energy (0..0.2)',
+      format: (v) => v.toFixed(3),
+      onInput: (v) => (this.energyRegenRate = Math.max(0, v)),
+    });
+
+    // Energy diffusion rate
+    addSlider({
+      label: 'Energy Diffusion Rate',
+      min: 0,
+      max: 0.5,
+      step: 0.01,
+      value: this.energyDiffusionRate,
+      title: 'How quickly energy smooths between tiles (0..0.5)',
+      format: (v) => v.toFixed(2),
+      onInput: (v) => (this.energyDiffusionRate = Math.max(0, v)),
     });
 
     // Collapsible behavior
@@ -370,10 +424,19 @@ export default class UIManager {
     return this.eventStrengthMultiplier;
   }
   getUpdatesPerSecond() {
-    return this.updatesPerSecond;
+    return Math.max(1, Math.round(60 * this.speedMultiplier));
   }
   getDensityEffectMultiplier() {
     return this.densityEffectMultiplier;
+  }
+  getEventFrequencyMultiplier() {
+    return this.eventFrequencyMultiplier;
+  }
+  getEnergyRegenRate() {
+    return this.energyRegenRate;
+  }
+  getEnergyDiffusionRate() {
+    return this.energyDiffusionRate;
   }
   getShowDensity() {
     return this.showDensity;

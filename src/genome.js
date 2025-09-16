@@ -134,6 +134,13 @@ export class DNA {
     return 0.5 + brightness; // 0.5..1.5 scale
   }
 
+  // How efficiently a cell can harvest tile energy per tick (0.2..0.8)
+  forageRate() {
+    const g = this.g / 255;
+
+    return 0.2 + 0.6 * g;
+  }
+
   strategy() {
     const rnd = this.prngFor('strategy');
 

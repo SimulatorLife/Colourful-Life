@@ -7,7 +7,7 @@ export default class Cell {
   // Every one of the cell's preferences, inheritable traits, etc. is derived from these genes
   // This will make it easier to visualize evolution and relationships between cells: for any given cell,
   // its color is a direct representation of its genetic code
-  static baseEnergyLoss = 0.05;
+  static baseEnergyLoss = 0.035;
   static chanceToMutate = 0.15;
   static geneMutationRange = 0.2;
   static minAge = 100;

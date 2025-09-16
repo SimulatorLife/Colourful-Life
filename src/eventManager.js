@@ -11,13 +11,20 @@ export default class EventManager {
   constructor(rows, cols) {
     this.rows = rows;
     this.cols = cols;
-    this.eventCounter = 0;
     this.cooldown = 0;
-    this.currentEvent = this.generateRandomEvent();
+    this.activeEvents = [];
+    this.currentEvent = null;
+    // start with one event for visibility
+    const e = this.generateRandomEvent();
+
+    this.activeEvents.push(e);
+    this.currentEvent = e;
   }
 
   getEventColor() {
-    return EventManager.EVENT_COLORS[this.currentEvent.eventType];
+    return this.currentEvent
+      ? EventManager.EVENT_COLORS[this.currentEvent.eventType]
+      : 'rgba(0,0,0,0)';
   }
 
   generateRandomEvent() {
@@ -33,27 +40,31 @@ export default class EventManager {
       height: Math.max(10, Math.floor(randomRange(6, this.rows / 3))),
     };
 
-    return { eventType, duration, affectedArea, strength };
+    return { eventType, duration, affectedArea, strength, remaining: duration };
   }
 
-  updateEvent() {
-    if (this.cooldown > 0) {
-      this.cooldown--;
+  updateEvent(frequencyMultiplier = 1, maxConcurrent = 2) {
+    // Update existing events and remove finished
+    this.activeEvents.forEach((ev) => (ev.remaining = Math.max(0, ev.remaining - 1)));
+    this.activeEvents = this.activeEvents.filter((ev) => ev.remaining > 0);
 
-      return;
+    // Spawn new events when cooldown expires
+    if (this.cooldown > 0) this.cooldown--;
+    const canSpawn =
+      this.activeEvents.length < Math.max(0, maxConcurrent) && frequencyMultiplier > 0;
+
+    if (this.cooldown <= 0 && canSpawn) {
+      const ev = this.generateRandomEvent();
+
+      this.activeEvents.push(ev);
+      // Next cooldown scales inversely with frequency multiplier
+      const base = Math.floor(randomRange(180, 480));
+
+      this.cooldown = Math.max(0, Math.floor(base / Math.max(0.01, frequencyMultiplier)));
     }
-    if (!this.currentEvent) {
-      this.currentEvent = this.generateRandomEvent();
-      this.eventCounter = 0;
-    } else {
-      this.eventCounter++;
-      if (this.eventCounter >= this.currentEvent.duration) {
-        // End event and schedule a cooldown before the next one
-        this.currentEvent = null;
-        this.eventCounter = 0;
-        this.cooldown = Math.floor(randomRange(180, 480));
-      }
-    }
+
+    // Maintain compatibility: expose the first active event as currentEvent
+    this.currentEvent = this.activeEvents.length > 0 ? this.activeEvents[0] : null;
   }
 
   applyEventEffects(cell, row, col) {

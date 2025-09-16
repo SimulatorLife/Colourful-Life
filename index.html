@@ -33,7 +33,9 @@
       const stats = new Stats(1000);
 
       const grid = new GridManager(rows, cols, { eventManager, ctx, cellSize, stats });
-      const uiManager = new UIManager(update, '#app');
+      const uiManager = new UIManager(update, '#app', {
+        burst: () => grid.burstRandomCells({ count: 200, radius: 6 }),
+      });
 
       requestAnimationFrame(update);
 
@@ -48,11 +50,15 @@
         if (now - lastUpdateTime >= interval) {
           lastUpdateTime = now;
           stats.resetTick();
+          // update events with frequency and allow up to 2 concurrent
+          eventManager.updateEvent(uiManager.getEventFrequencyMultiplier(), 2);
           grid.update({
             densityEffectMultiplier: uiManager.getDensityEffectMultiplier(),
             societySimilarity: uiManager.getSocietySimilarity(),
             enemySimilarity: uiManager.getEnemySimilarity(),
             eventStrengthMultiplier: uiManager.getEventStrengthMultiplier(),
+            energyRegenRate: uiManager.getEnergyRegenRate(),
+            energyDiffusionRate: uiManager.getEnergyDiffusionRate(),
           });
           // record current event strength for insight charts
           stats.logEvent(eventManager.currentEvent, uiManager.getEventStrengthMultiplier());
