@@ -13,6 +13,7 @@
   },
   "rules": {
     "prettier/prettier": "error",
+    "no-unused-vars": "off",
     "padding-line-between-statements": [
       "error",
       { "blankLine": "always", "prev": "*", "next": "return" },
