@@ -47,7 +47,7 @@ export default class GridManager {
   }
 
   static moveRandomly(gridArr, row, col, cell, rows, cols) {
-    const { dr, dc } = cell.decideMove();
+    const { dr, dc } = cell.decideRandomMove();
 
     return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols);
   }

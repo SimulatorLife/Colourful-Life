@@ -37,6 +37,13 @@ canvas {
   gap: 12px;
 }
 
+.left-sidebar {
+  order: 0;
+}
+.right-sidebar {
+  order: 2;
+}
+
 /* Base panel styling */
 .panel {
   width: 300px;
@@ -46,6 +53,25 @@ canvas {
   border: 1px solid #333;
   border-radius: 8px;
   padding: 12px;
+}
+
+/* Collapsible panels */
+.panel .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.panel .panel-header h3,
+.panel .panel-header h4 {
+  margin: 0;
+}
+.panel .panel-body {
+  margin-top: 8px;
+}
+.panel.collapsed .panel-body {
+  display: none;
 }
 
 /* Controls panel */

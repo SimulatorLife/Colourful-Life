@@ -99,12 +99,13 @@ export default class Cell {
     return best;
   }
 
-  decideMove() {
-    const r = Math.floor(randomRange(0, 4));
+  decideRandomMove() {
+    const r = Math.floor(randomRange(0, 5));
 
     if (r === 0) return { dr: -1, dc: 0 };
     if (r === 1) return { dr: 1, dc: 0 };
     if (r === 2) return { dr: 0, dc: -1 };
+    if (r === 3) return { dr: 0, dc: 0 };
 
     return { dr: 0, dc: 1 };
   }

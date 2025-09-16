@@ -14,13 +14,27 @@ export default class UIManager {
     this.showFitness = false;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
-    this.sidebar = document.createElement('div');
-    this.sidebar.className = 'sidebar';
-    this.root.appendChild(this.sidebar);
+    const canvasEl = this.root.querySelector('#gameCanvas');
+
+    // Create split sidebars (left: controls, right: insights)
+    this.leftSidebar = document.createElement('div');
+    this.leftSidebar.className = 'sidebar left-sidebar';
+    this.rightSidebar = document.createElement('div');
+    this.rightSidebar.className = 'sidebar right-sidebar';
+    // Insert left before canvas and right after canvas
+    if (canvasEl) {
+      this.root.insertBefore(this.leftSidebar, canvasEl);
+      if (canvasEl.nextSibling) this.root.insertBefore(this.rightSidebar, canvasEl.nextSibling);
+      else this.root.appendChild(this.rightSidebar);
+    } else {
+      // Fallback: append both
+      this.root.appendChild(this.leftSidebar);
+      this.root.appendChild(this.rightSidebar);
+    }
     this.controlsPanel = this.#buildControlsPanel();
     this.insightsPanel = this.#buildInsightsPanel();
-    this.sidebar.appendChild(this.controlsPanel);
-    this.sidebar.appendChild(this.insightsPanel);
+    this.leftSidebar.appendChild(this.controlsPanel);
+    this.rightSidebar.appendChild(this.insightsPanel);
 
     // Keyboard toggle
     document.addEventListener('keydown', (e) => {
@@ -34,11 +48,24 @@ export default class UIManager {
     panel.id = 'controls';
     panel.className = 'panel controls-panel';
 
-    // Title
+    // Header + collapsible body
+    const header = document.createElement('div');
+
+    header.className = 'panel-header';
     const heading = document.createElement('h3');
 
     heading.textContent = 'Simulation Controls';
-    panel.appendChild(heading);
+    const toggle = document.createElement('button');
+
+    toggle.textContent = '–';
+    toggle.className = 'panel-toggle';
+    header.appendChild(heading);
+    header.appendChild(toggle);
+    panel.appendChild(header);
+    const body = document.createElement('div');
+
+    body.className = 'panel-body';
+    panel.appendChild(body);
 
     // Pause/Resume
     const pauseBtn = document.createElement('button');
@@ -47,7 +74,7 @@ export default class UIManager {
     pauseBtn.textContent = 'Pause';
     pauseBtn.title = 'Pause/resume the simulation (shortcut: P)';
     pauseBtn.addEventListener('click', () => this.togglePause());
-    panel.appendChild(pauseBtn);
+    body.appendChild(pauseBtn);
     this.pauseButton = pauseBtn;
 
     // Helper to make slider rows
@@ -85,7 +112,7 @@ export default class UIManager {
       line.appendChild(valSpan);
       row.appendChild(name);
       row.appendChild(line);
-      panel.appendChild(row);
+      body.appendChild(row);
 
       return input;
     };
@@ -142,7 +169,7 @@ export default class UIManager {
 
     overlayHeader.textContent = 'Overlays';
     overlayHeader.style.margin = '12px 0 6px';
-    panel.appendChild(overlayHeader);
+    body.appendChild(overlayHeader);
 
     const addToggle = (label, title, initial, onChange) => {
       const row = document.createElement('label');
@@ -164,7 +191,7 @@ export default class UIManager {
       line.appendChild(input);
       line.appendChild(name);
       row.appendChild(line);
-      panel.appendChild(row);
+      body.appendChild(row);
     };
 
     addToggle(
@@ -199,6 +226,20 @@ export default class UIManager {
       onInput: (v) => (this.densityEffectMultiplier = Math.max(0, v)),
     });
 
+    // Collapsible behavior
+    const toggleCollapsed = () => {
+      panel.classList.toggle('collapsed');
+      toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
+    };
+
+    header.addEventListener('click', (e) => {
+      if (e.target === toggle || e.target === heading) toggleCollapsed();
+    });
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCollapsed();
+    });
+
     return panel;
   }
 
@@ -206,72 +247,100 @@ export default class UIManager {
     const panel = document.createElement('div');
 
     panel.className = 'panel insights-panel';
+    // Header + collapsible body
+    const header = document.createElement('div');
+
+    header.className = 'panel-header';
     const heading = document.createElement('h3');
 
     heading.textContent = 'Evolution Insights';
-    panel.appendChild(heading);
+    const toggle = document.createElement('button');
+
+    toggle.textContent = '–';
+    toggle.className = 'panel-toggle';
+    header.appendChild(heading);
+    header.appendChild(toggle);
+    panel.appendChild(header);
+    const body = document.createElement('div');
+
+    body.className = 'panel-body';
+    panel.appendChild(body);
 
     // Metrics section
     const metricsHeader = document.createElement('h4');
 
     metricsHeader.textContent = 'Metrics';
     metricsHeader.style.margin = '4px 0 6px';
-    panel.appendChild(metricsHeader);
+    body.appendChild(metricsHeader);
 
     this.metricsBox = document.createElement('div');
     this.metricsBox.className = 'panel metrics-box';
-    panel.appendChild(this.metricsBox);
+    body.appendChild(this.metricsBox);
 
     // Sparklines canvases
     const cap1 = document.createElement('div');
 
     cap1.className = 'control-name';
     cap1.textContent = 'Population';
-    panel.appendChild(cap1);
+    body.appendChild(cap1);
     this.sparkPop = document.createElement('canvas');
     this.sparkPop.width = 260;
     this.sparkPop.height = 40;
-    panel.appendChild(this.sparkPop);
+    body.appendChild(this.sparkPop);
 
     const cap2 = document.createElement('div');
 
     cap2.className = 'control-name';
     cap2.textContent = 'Diversity';
-    panel.appendChild(cap2);
+    body.appendChild(cap2);
     this.sparkDiv2Canvas = document.createElement('canvas');
     this.sparkDiv2Canvas.width = 260;
     this.sparkDiv2Canvas.height = 40;
-    panel.appendChild(this.sparkDiv2Canvas);
+    body.appendChild(this.sparkDiv2Canvas);
 
     const cap3 = document.createElement('div');
 
     cap3.className = 'control-name';
     cap3.textContent = 'Mean Energy';
-    panel.appendChild(cap3);
+    body.appendChild(cap3);
     this.sparkEnergy = document.createElement('canvas');
     this.sparkEnergy.width = 260;
     this.sparkEnergy.height = 40;
-    panel.appendChild(this.sparkEnergy);
+    body.appendChild(this.sparkEnergy);
 
     const cap4 = document.createElement('div');
 
     cap4.className = 'control-name';
     cap4.textContent = 'Growth';
-    panel.appendChild(cap4);
+    body.appendChild(cap4);
     this.sparkGrowth = document.createElement('canvas');
     this.sparkGrowth.width = 260;
     this.sparkGrowth.height = 40;
-    panel.appendChild(this.sparkGrowth);
+    body.appendChild(this.sparkGrowth);
 
     const cap5 = document.createElement('div');
 
     cap5.className = 'control-name';
     cap5.textContent = 'Event Strength';
-    panel.appendChild(cap5);
+    body.appendChild(cap5);
     this.sparkEvent = document.createElement('canvas');
     this.sparkEvent.width = 260;
     this.sparkEvent.height = 40;
-    panel.appendChild(this.sparkEvent);
+    body.appendChild(this.sparkEvent);
+
+    // Collapsible behavior
+    const toggleCollapsed = () => {
+      panel.classList.toggle('collapsed');
+      toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
+    };
+
+    header.addEventListener('click', (e) => {
+      if (e.target === toggle || e.target === heading) toggleCollapsed();
+    });
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCollapsed();
+    });
 
     return panel;
   }
@@ -376,10 +445,10 @@ export default class UIManager {
 
   renderLeaderboard(top) {
     if (!this.leaderBox) {
-      // create holder if missing (older layout)
+      // create holder if missing
       this.leaderBox = document.createElement('div');
       this.leaderBox.className = 'panel leaderBox';
-      this.sidebar?.appendChild(this.leaderBox);
+      this.rightSidebar?.appendChild(this.leaderBox);
     }
     this.leaderBox.innerHTML = '';
     const add = (label, value, color) => {
