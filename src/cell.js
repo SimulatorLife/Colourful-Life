@@ -1,6 +1,5 @@
 import DNA from './genome.js';
 import { randomRange, clamp, lerp } from './utils.js';
-import { moveToTarget, moveAwayFromTarget, moveRandomly } from './helpers.js';
 
 export default class Cell {
   // TODO: The cells' colors should BE their genes. The RGB values should BE the DNA
@@ -161,7 +160,15 @@ export default class Cell {
     mates,
     enemies,
     society,
-    { localDensity, densityEffectMultiplier, rows, cols }
+    {
+      localDensity,
+      densityEffectMultiplier,
+      rows,
+      cols,
+      moveToTarget,
+      moveAwayFromTarget,
+      moveRandomly,
+    }
   ) {
     const strategy = this.chooseMovementStrategy(localDensity, densityEffectMultiplier);
 

@@ -1,11 +1,56 @@
 import { randomRange, randomPercent, clamp, lerp } from './utils.js';
 import DNA from './genome.js';
 import Cell from './cell.js';
-import { DENSITY_RADIUS, moveToTarget, moveAwayFromTarget } from './helpers.js';
 
 export default class GridManager {
   static maxTileEnergy = 5;
   static energyRegenRate = 0.25;
+  static DENSITY_RADIUS = 1;
+
+  static tryMove(gridArr, sr, sc, dr, dc, rows, cols) {
+    const nr = (sr + dr + rows) % rows;
+    const nc = (sc + dc + cols) % cols;
+    const dcell = gridArr[nr][nc];
+
+    if (!dcell) {
+      gridArr[nr][nc] = gridArr[sr][sc];
+      gridArr[sr][sc] = null;
+
+      return true;
+    }
+
+    return false;
+  }
+
+  static moveToTarget(gridArr, row, col, targetRow, targetCol, rows, cols) {
+    const dRow = targetRow - row;
+    const dCol = targetCol - col;
+    let dr = 0,
+      dc = 0;
+
+    if (Math.abs(dRow) >= Math.abs(dCol)) dr = Math.sign(dRow);
+    else dc = Math.sign(dCol);
+
+    return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols);
+  }
+
+  static moveAwayFromTarget(gridArr, row, col, targetRow, targetCol, rows, cols) {
+    const dRow = targetRow - row;
+    const dCol = targetCol - col;
+    let dr = 0,
+      dc = 0;
+
+    if (Math.abs(dRow) >= Math.abs(dCol)) dr = -Math.sign(dRow);
+    else dc = -Math.sign(dCol);
+
+    return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols);
+  }
+
+  static moveRandomly(gridArr, row, col, cell, rows, cols) {
+    const { dr, dc } = cell.decideMove();
+
+    return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols);
+  }
 
   constructor(rows, cols, { eventManager, ctx = null, cellSize = 8, stats } = {}) {
     this.rows = rows;
@@ -165,7 +210,7 @@ export default class GridManager {
           GridManager.maxTileEnergy
         );
         this.consumeEnergy(cell, row, col);
-        const localDensity = this.localDensity(row, col, DENSITY_RADIUS);
+        const localDensity = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
 
         cell.manageEnergy(row, col, {
           localDensity,
@@ -187,8 +232,16 @@ export default class GridManager {
           const bestMate = cell.findBestMate(mates);
 
           if (bestMate) {
-            moveToTarget(this.grid, row, col, bestMate.row, bestMate.col, this.rows, this.cols);
-            const localDensity = this.localDensity(row, col, DENSITY_RADIUS);
+            GridManager.moveToTarget(
+              this.grid,
+              row,
+              col,
+              bestMate.row,
+              bestMate.col,
+              this.rows,
+              this.cols
+            );
+            const localDensity = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
             const reproProb = cell.computeReproductionProbability(bestMate.target, {
               localDensity,
               densityEffectMultiplier,
@@ -203,14 +256,14 @@ export default class GridManager {
           }
         } else if (enemies.length > 0) {
           const targetEnemy = enemies[Math.floor(randomRange(0, enemies.length))];
-          const localDensity = this.localDensity(row, col, DENSITY_RADIUS);
+          const localDensity = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
           const action = cell.chooseInteractionAction({
             localDensity,
             densityEffectMultiplier,
           });
 
           if (action === 'avoid') {
-            moveAwayFromTarget(
+            GridManager.moveAwayFromTarget(
               this.grid,
               row,
               col,
@@ -224,7 +277,7 @@ export default class GridManager {
 
             if (dist <= 1) cell.fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col, stats);
             else
-              moveToTarget(
+              GridManager.moveToTarget(
                 this.grid,
                 row,
                 col,
@@ -247,7 +300,7 @@ export default class GridManager {
                 stats
               );
             else
-              moveToTarget(
+              GridManager.moveToTarget(
                 this.grid,
                 row,
                 col,
@@ -258,13 +311,16 @@ export default class GridManager {
               );
           }
         } else {
-          const localDensity2 = this.localDensity(row, col, DENSITY_RADIUS);
+          const localDensity2 = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
 
           cell.executeMovementStrategy(this.grid, row, col, mates, enemies, society || [], {
             localDensity: localDensity2,
             densityEffectMultiplier,
             rows: this.rows,
             cols: this.cols,
+            moveToTarget: GridManager.moveToTarget,
+            moveAwayFromTarget: GridManager.moveAwayFromTarget,
+            moveRandomly: GridManager.moveRandomly,
           });
         }
       }
@@ -294,7 +350,7 @@ export default class GridManager {
     const mates = [];
     const enemies = [];
     const society = [];
-    const d = this.localDensity(row, col, DENSITY_RADIUS);
+    const d = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
     const effD = clamp(d * densityEffectMultiplier, 0, 1);
     const enemyBias = lerp(cell.density.enemyBias.min, cell.density.enemyBias.max, effD);
 

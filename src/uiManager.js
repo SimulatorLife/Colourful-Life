@@ -226,7 +226,7 @@ export default class UIManager {
     const cap1 = document.createElement('div');
 
     cap1.className = 'control-name';
-    cap1.textContent = 'Population (last 200)';
+    cap1.textContent = 'Population';
     panel.appendChild(cap1);
     this.sparkPop = document.createElement('canvas');
     this.sparkPop.width = 260;
@@ -236,7 +236,7 @@ export default class UIManager {
     const cap2 = document.createElement('div');
 
     cap2.className = 'control-name';
-    cap2.textContent = 'Diversity (last 200)';
+    cap2.textContent = 'Diversity';
     panel.appendChild(cap2);
     this.sparkDiv2Canvas = document.createElement('canvas');
     this.sparkDiv2Canvas.width = 260;
