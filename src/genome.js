@@ -63,6 +63,62 @@ export class DNA {
     return { avoid: rnd(), fight: rnd(), cooperate: rnd() };
   }
 
+  // Willingness to take risks (0..1). Higher -> more likely to pick fights.
+  riskTolerance() {
+    const r = this.r / 255;
+
+    return r; // simple mapping
+  }
+
+  // Preference to exploit known good tiles vs explore (0..1)
+  exploitationBias() {
+    const g = this.g / 255;
+
+    return g; // resource affinity biases exploitation
+  }
+
+  // Tendency to stay near allies (0..1)
+  cohesion() {
+    const b = this.b / 255;
+
+    return b; // blue biases social cohesion
+  }
+
+  // Event recovery mitigation (0..1). Higher reduces event damage.
+  recoveryRate() {
+    const brightness = (this.r + this.g + this.b) / (3 * 255);
+
+    return brightness; // brighter genomes recover better
+  }
+
+  // DNA-driven activity rate: how often a cell attempts actions per tick
+  activityRate() {
+    const brightness = (this.r + this.g + this.b) / (3 * 255);
+
+    return 0.3 + 0.7 * brightness; // 0.3..1.0
+  }
+
+  // Fraction of current energy invested in offspring
+  parentalInvestmentFrac() {
+    const b = this.b / 255;
+
+    return 0.2 + 0.5 * b; // 0.2..0.7
+  }
+
+  // How strongly aging increases maintenance costs and reduces fertility
+  senescenceRate() {
+    const b = this.b / 255;
+
+    return 0.1 + 0.4 * (1 - b); // 0.1..0.5
+  }
+
+  // Combat effectiveness multiplier
+  combatPower() {
+    const r = this.r / 255;
+
+    return 0.8 + 0.9 * r; // 0.8..1.7
+  }
+
   // DNA-derived social thresholds
   allyThreshold() {
     // Bluer genomes prefer tighter kin groups

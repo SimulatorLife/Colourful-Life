@@ -362,6 +362,12 @@ export default class GridManager {
           stats.onDeath();
           continue;
         }
+        // Activity gate: some genomes idle more/less per tick
+        const act = typeof cell.dna.activityRate === 'function' ? cell.dna.activityRate() : 1;
+
+        if (Math.random() > act) {
+          continue;
+        }
         const { mates, enemies, society } = this.findTargets(row, col, cell, {
           densityEffectMultiplier,
           societySimilarity,
@@ -510,8 +516,10 @@ export default class GridManager {
       this.densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
     const effD = clamp(d * densityEffectMultiplier, 0, 1);
     let enemyBias = lerp(cell.density.enemyBias.min, cell.density.enemyBias.max, effD);
+    // Modulate random enemy bias by DNA risk tolerance
+    const risk = typeof cell.dna.riskTolerance === 'function' ? cell.dna.riskTolerance() : 0.5;
 
-    enemyBias = Math.max(0, enemyBias * 0.7);
+    enemyBias = Math.max(0, enemyBias * (0.4 + 0.8 * risk));
     const allyT =
       typeof cell.dna.allyThreshold === 'function' ? cell.dna.allyThreshold() : societySimilarity;
     const enemyT =

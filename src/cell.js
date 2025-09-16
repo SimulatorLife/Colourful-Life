@@ -47,15 +47,23 @@ export default class Cell {
     const thr =
       ((parentA.dna.reproductionThresholdFrac() + parentB.dna.reproductionThresholdFrac()) / 2) *
       maxE;
-    const offspringEnergy = Math.max((parentA.energy + parentB.energy) / 2, thr);
+    const investA = Math.min(
+      parentA.energy,
+      parentA.energy * (parentA.dna.parentalInvestmentFrac?.() ?? 0.4)
+    );
+    const investB = Math.min(
+      parentB.energy,
+      parentB.energy * (parentB.dna.parentalInvestmentFrac?.() ?? 0.4)
+    );
+    const offspringEnergy = Math.max(thr, investA + investB);
     const offspring = new Cell(row, col, childDNA, offspringEnergy);
     const strategy =
       (parentA.strategy + parentB.strategy) / 2 +
       (Math.random() * Cell.geneMutationRange - Cell.geneMutationRange / 2);
 
     offspring.strategy = Math.min(1, Math.max(0, strategy));
-    parentA.energy /= 2;
-    parentB.energy /= 2;
+    parentA.energy = Math.max(0, parentA.energy - investA);
+    parentB.energy = Math.max(0, parentB.energy - investB);
     parentA.offspring = (parentA.offspring || 0) + 1;
     parentB.offspring = (parentB.offspring || 0) + 1;
 
@@ -129,10 +137,13 @@ export default class Cell {
     const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
     const metabolism = this.metabolism;
     const energyDensityMult = lerp(this.density.energyLoss.min, this.density.energyLoss.max, effD);
+    const ageFrac = this.lifespan > 0 ? this.age / this.lifespan : 0;
+    const sen = typeof this.dna.senescenceRate === 'function' ? this.dna.senescenceRate() : 0;
     const energyLoss =
       this.dna.energyLossBase() *
       this.dna.baseEnergyLossScale() *
       (1 + metabolism) *
+      (1 + sen * ageFrac) *
       energyDensityMult;
     // cognitive/perception overhead derived from DNA
     const cognitiveLoss = this.dna.cognitiveCost(this.neurons, this.sight, effD);
@@ -212,7 +223,17 @@ export default class Cell {
 
       return moveRandomly(gridArr, row, col, this, rows, cols);
     }
-    // wandering: bias toward best energy neighbor if provided
+    // wandering: try cohesion toward allies first
+    if (Array.isArray(society) && society.length > 0) {
+      const coh = typeof this.dna.cohesion === 'function' ? this.dna.cohesion() : 0;
+
+      if (Math.random() < coh) {
+        const target = this.#nearest(society, row, col);
+
+        if (target) return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
+      }
+    }
+    // then bias toward best energy neighbor if provided
     if (typeof getEnergyAt === 'function') {
       const dirs = [
         { dr: -1, dc: 0 },
@@ -237,7 +258,12 @@ export default class Cell {
       const g = this.movementGenes || { wandering: 1, pursuit: 1, cautious: 1 };
       const total =
         Math.max(0, g.wandering) + Math.max(0, g.pursuit) + Math.max(0, g.cautious) || 1;
-      const pExploit = 0.5 + 0.4 * (Math.max(0, g.wandering) / total);
+      const dnaExploit =
+        typeof this.dna.exploitationBias === 'function' ? this.dna.exploitationBias() : 0.5;
+      const pExploit = Math.max(
+        0.05,
+        Math.min(0.95, 0.3 + 0.4 * (Math.max(0, g.wandering) / total) + 0.3 * dnaExploit)
+      );
 
       if (best && Math.random() < pExploit) {
         if (typeof tryMove === 'function')
@@ -254,8 +280,13 @@ export default class Cell {
     const baseReproProb = (this.dna.reproductionProb() + partner.dna.reproductionProb()) / 2;
     const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
     const reproMul = lerp(this.density.reproduction.max, this.density.reproduction.min, effD);
+    const sA = typeof this.dna.senescenceRate === 'function' ? this.dna.senescenceRate() : 0;
+    const sB = typeof partner.dna.senescenceRate === 'function' ? partner.dna.senescenceRate() : 0;
+    const aA = this.lifespan > 0 ? this.age / this.lifespan : 0;
+    const aB = partner.lifespan > 0 ? partner.age / partner.lifespan : 0;
+    const senPenalty = 1 - 0.5 * (sA * aA + sB * aB);
 
-    return Math.min(0.95, Math.max(0.01, baseReproProb * reproMul));
+    return Math.min(0.95, Math.max(0.01, baseReproProb * reproMul * Math.max(0.2, senPenalty)));
   }
 
   chooseInteractionAction({ localDensity, densityEffectMultiplier }) {
@@ -283,7 +314,10 @@ export default class Cell {
       col >= currentEvent.affectedArea.x &&
       col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
     ) {
-      const s = currentEvent.strength * eventStrengthMultiplier;
+      const s =
+        currentEvent.strength *
+        eventStrengthMultiplier *
+        (1 - 0.5 * (this.dna.recoveryRate?.() ?? 0));
 
       switch (currentEvent.eventType) {
         case 'flood':
@@ -311,7 +345,11 @@ export default class Cell {
     // Apply fight energy cost to both participants (DNA-driven)
     attacker.energy = Math.max(0, attacker.energy - attacker.dna.fightCost());
     defender.energy = Math.max(0, defender.energy - defender.dna.fightCost());
-    if (attacker.energy >= defender.energy) {
+    // Resolve by DNA-based combat power
+    const atkPower = attacker.energy * (attacker.dna.combatPower?.() ?? 1);
+    const defPower = defender.energy * (defender.dna.combatPower?.() ?? 1);
+
+    if (atkPower >= defPower) {
       manager.grid[targetRow][targetCol] = attacker;
       manager.grid[attackerRow][attackerCol] = null;
       manager.consumeEnergy(attacker, targetRow, targetCol);
