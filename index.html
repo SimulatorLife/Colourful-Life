@@ -12,9 +12,9 @@
       <canvas id="gameCanvas"></canvas>
     </div>
     <script type="module">
-      import UIManager from './uiManager.js';
-      import EventManager from './eventManager.js';
-      import Stats from './stats.js';
+      import UIManager from './src/uiManager.js';
+      import EventManager from './src/eventManager.js';
+      import Stats from './src/stats.js';
       import GridManager from './src/gridManager.js';
       import { drawOverlays } from './src/overlays.js';
       import { computeLeaderboard } from './src/leaderboard.js';
@@ -30,12 +30,10 @@
       let lastUpdateTime = 0;
 
       const eventManager = new EventManager(rows, cols);
-      const stats = new Stats(200);
+      const stats = new Stats(1000);
 
       const grid = new GridManager(rows, cols, { eventManager, ctx, cellSize, stats });
       const uiManager = new UIManager(update, '#app');
-
-      grid.uiManager = uiManager;
 
       requestAnimationFrame(update);
 

@@ -1,6 +1,6 @@
-import DNA from '../genome.js';
-import { randomRange, clamp } from '../utils.js';
-import { lerp, moveToTarget, moveAwayFromTarget, moveRandomly } from './helpers.js';
+import DNA from './genome.js';
+import { randomRange, clamp, lerp } from './utils.js';
+import { moveToTarget, moveAwayFromTarget, moveRandomly } from './helpers.js';
 
 export default class Cell {
   // TODO: The cells' colors should BE their genes. The RGB values should BE the DNA
@@ -176,6 +176,31 @@ export default class Cell {
     } else {
       moveRandomly(gridArr, row, col, this, rows, cols);
     }
+  }
+
+  computeReproductionProbability(partner, { localDensity, densityEffectMultiplier }) {
+    const baseReproProb = (this.dna.reproductionProb() + partner.dna.reproductionProb()) / 2;
+    const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
+    const reproMul = lerp(this.density.reproduction.max, this.density.reproduction.min, effD);
+
+    return Math.min(0.95, Math.max(0.01, baseReproProb * reproMul));
+  }
+
+  chooseInteractionAction({ localDensity, densityEffectMultiplier }) {
+    const { avoid, fight, cooperate } = this.interactionGenes;
+    const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
+    const fightMul = lerp(this.density.fight.min, this.density.fight.max, effD);
+    const coopMul = lerp(this.density.cooperate.max, this.density.cooperate.min, effD);
+    const fightW = Math.max(0.0001, fight * fightMul);
+    const coopW = Math.max(0.0001, cooperate * coopMul);
+    const avoidW = Math.max(0.0001, avoid);
+    const total = avoidW + fightW + coopW;
+    const roll = randomRange(0, total);
+
+    if (roll < avoidW) return 'avoid';
+    if (roll < avoidW + fightW) return 'fight';
+
+    return 'cooperate';
   }
 
   applyEventEffects(row, col, currentEvent, eventStrengthMultiplier = 1, maxTileEnergy = 5) {

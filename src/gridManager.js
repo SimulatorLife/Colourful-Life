@@ -1,17 +1,13 @@
-import { randomRange, randomPercent, clamp } from '../utils.js';
-import DNA from '../genome.js';
+import { randomRange, randomPercent, clamp, lerp } from './utils.js';
+import DNA from './genome.js';
 import Cell from './cell.js';
-import { DENSITY_RADIUS, lerp, moveToTarget, moveAwayFromTarget } from './helpers.js';
+import { DENSITY_RADIUS, moveToTarget, moveAwayFromTarget } from './helpers.js';
 
 export default class GridManager {
   static maxTileEnergy = 5;
   static energyRegenRate = 0.25;
 
-  constructor(
-    rows,
-    cols,
-    { eventManager, uiManager = null, ctx = null, cellSize = 8, stats } = {}
-  ) {
+  constructor(rows, cols, { eventManager, ctx = null, cellSize = 8, stats } = {}) {
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
@@ -19,7 +15,6 @@ export default class GridManager {
       Array.from({ length: cols }, () => GridManager.maxTileEnergy / 2)
     );
     this.eventManager = eventManager || window.eventManager;
-    this.uiManager = uiManager || window.uiManager;
     this.ctx = ctx || window.ctx;
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
@@ -193,16 +188,11 @@ export default class GridManager {
 
           if (bestMate) {
             moveToTarget(this.grid, row, col, bestMate.row, bestMate.col, this.rows, this.cols);
-            const baseReproProb =
-              (cell.dna.reproductionProb() + bestMate.target.dna.reproductionProb()) / 2;
             const localDensity = this.localDensity(row, col, DENSITY_RADIUS);
-            const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
-            const reproMul = lerp(
-              cell.density.reproduction.max,
-              cell.density.reproduction.min,
-              effD
-            );
-            const reproProb = clamp(baseReproProb * reproMul, 0.01, 0.95);
+            const reproProb = cell.computeReproductionProbability(bestMate.target, {
+              localDensity,
+              densityEffectMultiplier,
+            });
 
             if (randomPercent(reproProb) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {
               const offspring = Cell.breed(cell, bestMate.target);
@@ -213,18 +203,13 @@ export default class GridManager {
           }
         } else if (enemies.length > 0) {
           const targetEnemy = enemies[Math.floor(randomRange(0, enemies.length))];
-          const { avoid, fight, cooperate } = cell.interactionGenes;
           const localDensity = this.localDensity(row, col, DENSITY_RADIUS);
-          const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
-          const fightMul = lerp(cell.density.fight.min, cell.density.fight.max, effD);
-          const coopMul = lerp(cell.density.cooperate.max, cell.density.cooperate.min, effD);
-          const fightW = Math.max(0.0001, fight * fightMul);
-          const coopW = Math.max(0.0001, cooperate * coopMul);
-          const avoidW = Math.max(0.0001, avoid);
-          const total = avoidW + fightW + coopW;
-          const roll = randomRange(0, total);
+          const action = cell.chooseInteractionAction({
+            localDensity,
+            densityEffectMultiplier,
+          });
 
-          if (roll < avoidW) {
+          if (action === 'avoid') {
             moveAwayFromTarget(
               this.grid,
               row,
@@ -234,7 +219,7 @@ export default class GridManager {
               this.rows,
               this.cols
             );
-          } else if (roll < avoidW + fightW) {
+          } else if (action === 'fight') {
             const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
 
             if (dist <= 1) cell.fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col, stats);

@@ -1,7 +1,5 @@
 export const DENSITY_RADIUS = 1; // Moore neighborhood radius for density calc
 
-export const lerp = (a, b, t) => a + (b - a) * (t < 0 ? 0 : t > 1 ? 1 : t);
-
 export function tryMove(gridArr, sr, sc, dr, dc, rows, cols) {
   const nr = (sr + dr + rows) % rows;
   const nc = (sc + dc + cols) % cols;
