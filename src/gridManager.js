@@ -1,15 +1,23 @@
 import { randomRange, randomPercent, clamp, lerp } from './utils.js';
 import DNA from './genome.js';
 import Cell from './cell.js';
-import EventManager from './eventManager.js';
+// EventManager used via instance; no direct import needed here
+import {
+  MAX_TILE_ENERGY,
+  ENERGY_REGEN_RATE_DEFAULT,
+  ENERGY_DIFFUSION_RATE_DEFAULT,
+  DENSITY_RADIUS_DEFAULT,
+  REGEN_DENSITY_PENALTY,
+  CONSUMPTION_DENSITY_PENALTY,
+} from './config.js';
 
 export default class GridManager {
-  static maxTileEnergy = 5;
+  static maxTileEnergy = MAX_TILE_ENERGY;
   // Base per-tick regen before modifiers; logistic to max, density-aware
-  static energyRegenRate = 0.06;
+  static energyRegenRate = ENERGY_REGEN_RATE_DEFAULT;
   // Fraction to diffuse toward neighbors each tick
-  static energyDiffusionRate = 0.1;
-  static DENSITY_RADIUS = 1;
+  static energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT;
+  static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
 
   static tryMove(gridArr, sr, sc, dr, dc, rows, cols) {
     const nr = (sr + dr + rows) % rows;
@@ -17,8 +25,16 @@ export default class GridManager {
     const dcell = gridArr[nr][nc];
 
     if (!dcell) {
-      gridArr[nr][nc] = gridArr[sr][sc];
+      const moving = gridArr[sr][sc];
+
+      gridArr[nr][nc] = moving;
       gridArr[sr][sc] = null;
+      // Charge movement energy cost to the mover if available
+      if (moving && typeof moving === 'object' && moving.energy != null && moving.dna) {
+        const cost = typeof moving.dna.moveCost === 'function' ? moving.dna.moveCost() : 0.005;
+
+        moving.energy = Math.max(0, moving.energy - cost);
+      }
 
       return true;
     }
@@ -63,6 +79,7 @@ export default class GridManager {
     this.energyGrid = Array.from({ length: rows }, () =>
       Array.from({ length: cols }, () => GridManager.maxTileEnergy / 2)
     );
+    this.energyNext = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.eventManager = eventManager || window.eventManager;
     this.ctx = ctx || window.ctx;
     this.cellSize = cellSize || window.cellSize || 8;
@@ -110,8 +127,10 @@ export default class GridManager {
     const base = typeof cell.dna.forageRate === 'function' ? cell.dna.forageRate() : 0.4;
     const density =
       this.densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
-    const crowdPenalty = Math.max(0, 1 - 0.5 * density);
-    const cap = clamp(base * crowdPenalty, 0.15, 0.5);
+    const crowdPenalty = Math.max(0, 1 - CONSUMPTION_DENSITY_PENALTY * density);
+    const minCap = typeof cell.dna.harvestCapMin === 'function' ? cell.dna.harvestCapMin() : 0.1;
+    const maxCap = typeof cell.dna.harvestCapMax === 'function' ? cell.dna.harvestCapMax() : 0.5;
+    const cap = Math.max(minCap, Math.min(maxCap, base * crowdPenalty));
     const take = Math.min(cap, available);
 
     this.energyGrid[row][col] -= take;
@@ -126,7 +145,7 @@ export default class GridManager {
     densityGrid = null
   ) {
     const maxE = GridManager.maxTileEnergy;
-    const next = Array.from({ length: this.rows }, () => Array(this.cols));
+    const next = this.energyNext;
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
@@ -140,7 +159,7 @@ export default class GridManager {
           ? densityGrid[r][c]
           : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
 
-        regen *= Math.max(0, 1 - 0.5 * density);
+        regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * density);
 
         // Events modulate regen/drain (handle multiple)
         const evs = Array.isArray(events) ? events : events ? [events] : [];
@@ -188,7 +207,14 @@ export default class GridManager {
         next[r][c] = val;
       }
     }
+    // Swap buffers and clear the buffer for next tick writes
+    const cur = this.energyGrid;
+
     this.energyGrid = next;
+    this.energyNext = cur;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) this.energyNext[r][c] = 0;
+    }
   }
 
   getCell(row, col) {
@@ -197,6 +223,12 @@ export default class GridManager {
 
   setCell(row, col, cell) {
     this.grid[row][col] = cell;
+  }
+
+  getDensityAt(row, col) {
+    return (
+      this.densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS)
+    );
   }
 
   // Precompute density for all tiles (fraction of occupied neighbors)
@@ -248,21 +280,25 @@ export default class GridManager {
     const cellSize = this.cellSize;
     const eventManager = this.eventManager;
 
+    // Clear full canvas once
+    ctx.clearRect(0, 0, this.cols * cellSize, this.rows * cellSize);
+    // Draw cells only
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         const cell = this.getCell(row, col);
 
-        if (cell) {
-          ctx.fillStyle = cell.color;
-          ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-        } else {
-          ctx.clearRect(col * cellSize, row * cellSize, cellSize, cellSize);
-        }
+        if (!cell) continue;
+        ctx.fillStyle = cell.color;
+        ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
       }
     }
+    // Draw active events overlays
     if (eventManager.activeEvents && eventManager.activeEvents.length > 0) {
       for (const ev of eventManager.activeEvents) {
-        ctx.fillStyle = EventManager.EVENT_COLORS?.[ev.eventType] || 'rgba(255,255,255,0.15)';
+        ctx.fillStyle =
+          typeof eventManager.getColor === 'function'
+            ? eventManager.getColor(ev)
+            : 'rgba(255,255,255,0.15)';
         ctx.fillRect(
           ev.affectedArea.x * cellSize,
           ev.affectedArea.y * cellSize,
@@ -354,7 +390,18 @@ export default class GridManager {
               densityEffectMultiplier,
             });
 
-            if (randomPercent(reproProb) && cell.energy >= 0.5 && bestMate.target.energy >= 0.5) {
+            const thrFracA =
+              typeof cell.dna.reproductionThresholdFrac === 'function'
+                ? cell.dna.reproductionThresholdFrac()
+                : 0.4;
+            const thrFracB =
+              typeof bestMate.target.dna.reproductionThresholdFrac === 'function'
+                ? bestMate.target.dna.reproductionThresholdFrac()
+                : 0.4;
+            const thrA = thrFracA * GridManager.maxTileEnergy;
+            const thrB = thrFracB * GridManager.maxTileEnergy;
+
+            if (randomPercent(reproProb) && cell.energy >= thrA && bestMate.target.energy >= thrB) {
               const offspring = Cell.breed(cell, bestMate.target);
 
               this.grid[row][col] = offspring;
@@ -464,7 +511,11 @@ export default class GridManager {
     const effD = clamp(d * densityEffectMultiplier, 0, 1);
     let enemyBias = lerp(cell.density.enemyBias.min, cell.density.enemyBias.max, effD);
 
-    enemyBias = Math.max(0, enemyBias * 0.7); // reduce incidental fights ~30%
+    enemyBias = Math.max(0, enemyBias * 0.7);
+    const allyT =
+      typeof cell.dna.allyThreshold === 'function' ? cell.dna.allyThreshold() : societySimilarity;
+    const enemyT =
+      typeof cell.dna.enemyThreshold === 'function' ? cell.dna.enemyThreshold() : enemySimilarity;
 
     for (let x = -cell.sight; x <= cell.sight; x++) {
       for (let y = -cell.sight; y <= cell.sight; y++) {
@@ -476,9 +527,9 @@ export default class GridManager {
         if (target) {
           const similarity = cell.similarityTo(target);
 
-          if (similarity >= societySimilarity) {
+          if (similarity >= allyT) {
             society.push({ row: newRow, col: newCol, target });
-          } else if (similarity <= enemySimilarity || randomPercent(enemyBias)) {
+          } else if (similarity <= enemyT || randomPercent(enemyBias)) {
             enemies.push({ row: newRow, col: newCol, target });
           } else {
             mates.push({ row: newRow, col: newCol, target });

@@ -63,6 +63,20 @@ export class DNA {
     return { avoid: rnd(), fight: rnd(), cooperate: rnd() };
   }
 
+  // DNA-derived social thresholds
+  allyThreshold() {
+    // Bluer genomes prefer tighter kin groups
+    const b = this.b / 255;
+
+    return 0.5 + 0.4 * b; // 0.5..0.9
+  }
+  enemyThreshold() {
+    // Redder genomes classify more as enemies (lower threshold)
+    const r = this.r / 255;
+
+    return 0.6 - 0.4 * r; // 0.2..0.6
+  }
+
   reproductionProb() {
     const rnd = this.prngFor('reproductionProb');
     // Bias by green channel (resource affinity): 0.2..0.6
@@ -134,11 +148,77 @@ export class DNA {
     return 0.5 + brightness; // 0.5..1.5 scale
   }
 
+  // Lifespan derived solely from DNA, without external clamps
+  lifespanDNA() {
+    const rnd = this.prngFor('lifespan');
+    const b = this.b / 255;
+    // Blue channel biases toward longevity; add small noise
+    const base = 300 + b * 900; // 300..1200
+    const noise = (rnd() - 0.5) * 120; // +/-60
+    const adj = this.lifespanAdj();
+
+    return Math.max(10, Math.round(base + noise + adj));
+  }
+
+  // DNA-derived base energy loss per tick (before scale)
+  energyLossBase() {
+    // Greener genomes are more efficient
+    const g = this.g / 255;
+
+    return 0.015 + (1 - g) * 0.03; // ~0.015..0.045
+  }
+
   // How efficiently a cell can harvest tile energy per tick (0.2..0.8)
   forageRate() {
     const g = this.g / 255;
 
     return 0.2 + 0.6 * g;
+  }
+
+  // Absolute caps (energy units per tick) for harvesting; DNA-driven
+  harvestCapMin() {
+    const b = this.b / 255;
+
+    return 0.03 + 0.12 * b; // 0.03..0.15
+  }
+  harvestCapMax() {
+    const g = this.g / 255;
+
+    return 0.25 + 0.6 * g; // 0.25..0.85
+  }
+
+  // Energy cost characteristics for actions
+  moveCost() {
+    const b = this.b / 255;
+
+    return 0.002 + 0.006 * b; // 0.002..0.008
+  }
+  fightCost() {
+    const r = this.r / 255;
+
+    return 0.01 + 0.03 * r; // 0.01..0.04
+  }
+
+  // Cognitive/perception cost based on neurons and sight
+  cognitiveCost(neurons, sight, effDensity = 0) {
+    const brightness = (this.r + this.g + this.b) / (3 * 255);
+    const base = 0.0004 + 0.0008 * (1 - brightness); // efficient genomes pay less
+
+    return base * (neurons + 0.5 * sight) * (0.5 + 0.5 * effDensity);
+  }
+
+  // Reproduction energy threshold as a fraction of max tile energy
+  reproductionThresholdFrac() {
+    const g = this.g / 255;
+
+    return 0.25 + 0.35 * (1 - g); // 0.25..0.60 (greener -> lower threshold)
+  }
+
+  // Cooperation share fraction of current energy
+  cooperateShareFrac() {
+    const b = this.b / 255;
+
+    return 0.2 + 0.4 * b; // 0.2..0.6
   }
 
   strategy() {

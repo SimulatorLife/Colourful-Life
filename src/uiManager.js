@@ -433,6 +433,7 @@ export default class UIManager {
   getEventStrengthMultiplier() {
     return this.eventStrengthMultiplier;
   }
+  // Returns effective updates/sec derived from 60 * speedMultiplier
   getUpdatesPerSecond() {
     return Math.max(1, Math.round(60 * this.speedMultiplier));
   }

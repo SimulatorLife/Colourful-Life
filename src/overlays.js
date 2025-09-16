@@ -1,5 +1,20 @@
 import { computeFitness } from './fitness.js';
 
+function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = '0,0,0') {
+  const rows = grid.rows;
+  const cols = grid.cols;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const a = alphaAt(r, c);
+
+      if (a <= 0) continue;
+      ctx.fillStyle = `rgba(${color},${a.toFixed(3)})`;
+      ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+    }
+  }
+}
+
 export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   const { showEnergy, showDensity, showFitness, maxTileEnergy = 5 } = opts;
 
@@ -9,35 +24,30 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
 }
 
 export function drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy = 5) {
-  const rows = grid.rows;
-  const cols = grid.cols;
-  const a = 0.99;
+  const scale = 0.99;
 
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const e = grid.energyGrid[r][c] / maxTileEnergy;
-
-      if (e <= 0) continue;
-      ctx.fillStyle = `rgba(0,255,0,${(e * a).toFixed(3)})`;
-      ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
-    }
-  }
+  drawScalarHeatmap(
+    grid,
+    ctx,
+    cellSize,
+    (r, c) => (grid.energyGrid[r][c] / maxTileEnergy) * scale,
+    '0,255,0'
+  );
 }
 
 export function drawDensityHeatmap(grid, ctx, cellSize) {
-  const rows = grid.rows;
-  const cols = grid.cols;
-  const a = 0.35;
+  const scale = 0.35;
 
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const d = grid.localDensity(r, c, 1);
-
-      if (d <= 0) continue;
-      ctx.fillStyle = `rgba(255,0,0,${(d * a).toFixed(3)})`;
-      ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
-    }
-  }
+  drawScalarHeatmap(
+    grid,
+    ctx,
+    cellSize,
+    (r, c) =>
+      (typeof grid.getDensityAt === 'function'
+        ? grid.getDensityAt(r, c)
+        : grid.localDensity(r, c, 1)) * scale,
+    '255,0,0'
+  );
 }
 
 export function drawFitnessHeatmap(grid, ctx, cellSize, maxTileEnergy = 5) {

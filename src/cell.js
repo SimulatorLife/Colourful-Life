@@ -7,11 +7,9 @@ export default class Cell {
   // Every one of the cell's preferences, inheritable traits, etc. is derived from these genes
   // This will make it easier to visualize evolution and relationships between cells: for any given cell,
   // its color is a direct representation of its genetic code
-  static baseEnergyLoss = 0.035;
+  // Energy costs and thresholds are DNA-derived (see genome.js)
   static chanceToMutate = 0.15;
   static geneMutationRange = 0.2;
-  static minAge = 100;
-  static maxAge = 1200;
 
   constructor(row, col, dna, energy) {
     this.row = row;
@@ -20,7 +18,7 @@ export default class Cell {
     this.genes = this.dna.weights();
     this.color = this.dna.toColor();
     this.age = 0;
-    this.lifespan = this.dna.lifespan(Cell.maxAge, Cell.minAge);
+    this.lifespan = this.dna.lifespanDNA();
     this.sight = this.dna.sight();
     this.energy = energy ?? this.dna.initialEnergy(window.GridManager?.maxTileEnergy ?? 5);
     this.neurons = this.dna.neurons();
@@ -28,6 +26,12 @@ export default class Cell {
     this.movementGenes = this.dna.movementGenes();
     this.interactionGenes = this.dna.interactionGenes();
     this.density = this.dna.densityResponses();
+    // Cache metabolism from gene row 5 to avoid per-tick recompute
+    const geneRow = this.genes?.[5];
+
+    this.metabolism = Array.isArray(geneRow)
+      ? geneRow.reduce((s, g) => s + Math.abs(g), 0) / (geneRow.length || 1)
+      : Math.abs(Number(geneRow) || 0);
     this.offspring = 0;
     this.fightsWon = 0;
     this.fightsLost = 0;
@@ -39,7 +43,11 @@ export default class Cell {
     const chance = (parentA.dna.mutationChance() + parentB.dna.mutationChance()) / 2;
     const range = Math.round((parentA.dna.mutationRange() + parentB.dna.mutationRange()) / 2);
     const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range);
-    const offspringEnergy = Math.max((parentA.energy + parentB.energy) / 2, 0.5);
+    const maxE = window.GridManager?.maxTileEnergy ?? 5;
+    const thr =
+      ((parentA.dna.reproductionThresholdFrac() + parentB.dna.reproductionThresholdFrac()) / 2) *
+      maxE;
+    const offspringEnergy = Math.max((parentA.energy + parentB.energy) / 2, thr);
     const offspring = new Cell(row, col, childDNA, offspringEnergy);
     const strategy =
       (parentA.strategy + parentB.strategy) / 2 +
@@ -58,12 +66,7 @@ export default class Cell {
     return this.dna.similarity(other.dna);
   }
 
-  static computeLifespan(genes) {
-    const gene = genes?.[0]?.[0] ?? 0;
-    const factor = Math.max(0, 1 + gene);
-
-    return Math.round(600 * factor + randomRange(0, 600));
-  }
+  // Lifespan is fully DNA-dictated via genome.lifespanDNA()
 
   findBestMate(potentialMates) {
     let bestMate = null;
@@ -100,31 +103,41 @@ export default class Cell {
   }
 
   decideRandomMove() {
-    // 50% chance to stay still; otherwise pick one of 4 directions uniformly
-    if (Math.random() < 0.5) return { dr: 0, dc: 0 };
+    // DNA-driven rest probability: more cautious genomes rest more
+    const g = this.movementGenes || { wandering: 0.33, pursuit: 0.33, cautious: 0.34 };
+    const w = Math.max(0, g.wandering);
+    const p = Math.max(0, g.pursuit);
+    const c = Math.max(0, g.cautious);
+    const total = w + p + c || 1;
+    const pStay = Math.max(0, Math.min(0.9, 0.15 + 0.7 * (c / total)));
+
+    if (Math.random() < pStay) return { dr: 0, dc: 0 };
+    // Otherwise pick one of 4 directions uniformly
     switch ((Math.random() * 4) | 0) {
       case 0:
-        return { dr: -1, dc: 0 }; // up
+        return { dr: -1, dc: 0 };
       case 1:
-        return { dr: 1, dc: 0 }; // down
+        return { dr: 1, dc: 0 };
       case 2:
-        return { dr: 0, dc: -1 }; // left
+        return { dr: 0, dc: -1 };
       default:
-        return { dr: 0, dc: 1 }; // right
+        return { dr: 0, dc: 1 };
     }
   }
 
   manageEnergy(row, col, { localDensity, densityEffectMultiplier, maxTileEnergy }) {
     const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
-    const geneRow = this.genes?.[5];
-    const metabolism = Array.isArray(geneRow)
-      ? geneRow.reduce((s, g) => s + Math.abs(g), 0) / (geneRow.length || 1)
-      : Math.abs(Number(geneRow) || 0);
+    const metabolism = this.metabolism;
     const energyDensityMult = lerp(this.density.energyLoss.min, this.density.energyLoss.max, effD);
     const energyLoss =
-      Cell.baseEnergyLoss * this.dna.baseEnergyLossScale() * (1 + metabolism) * energyDensityMult;
+      this.dna.energyLossBase() *
+      this.dna.baseEnergyLossScale() *
+      (1 + metabolism) *
+      energyDensityMult;
+    // cognitive/perception overhead derived from DNA
+    const cognitiveLoss = this.dna.cognitiveCost(this.neurons, this.sight, effD);
 
-    this.energy -= energyLoss;
+    this.energy -= energyLoss + cognitiveLoss;
 
     return this.energy <= this.starvationThreshold(maxTileEnergy);
   }
@@ -295,6 +308,9 @@ export default class Cell {
     const defender = manager.grid[targetRow][targetCol];
 
     if (!defender) return;
+    // Apply fight energy cost to both participants (DNA-driven)
+    attacker.energy = Math.max(0, attacker.energy - attacker.dna.fightCost());
+    defender.energy = Math.max(0, defender.energy - defender.dna.fightCost());
     if (attacker.energy >= defender.energy) {
       manager.grid[targetRow][targetCol] = attacker;
       manager.grid[attackerRow][attackerCol] = null;
@@ -317,7 +333,7 @@ export default class Cell {
     const partner = manager.grid[targetRow][targetCol];
 
     if (!partner) return;
-    const share = Math.min(1, cell.energy / 2);
+    const share = Math.min(maxTileEnergy, cell.energy * cell.dna.cooperateShareFrac());
 
     cell.energy -= share;
     partner.energy = Math.min(maxTileEnergy, partner.energy + share);
