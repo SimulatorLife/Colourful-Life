@@ -5,6 +5,9 @@ export default class Stats {
     this.history = {
       population: [],
       diversity: [],
+      energy: [],
+      growth: [],
+      eventStrength: [],
     };
     this.totals = { ticks: 0, births: 0, deaths: 0, fights: 0, cooperations: 0 };
   }
@@ -81,6 +84,8 @@ export default class Stats {
 
     this.pushHistory('population', pop);
     this.pushHistory('diversity', diversity);
+    this.pushHistory('energy', meanEnergy);
+    this.pushHistory('growth', this.births - this.deaths);
 
     return {
       population: pop,
@@ -93,6 +98,12 @@ export default class Stats {
       meanAge,
       diversity,
     };
+  }
+
+  logEvent(event, multiplier = 1) {
+    const s = event ? (event.strength || 0) * multiplier : 0;
+
+    this.pushHistory('eventStrength', s);
   }
 
   pushHistory(key, value) {

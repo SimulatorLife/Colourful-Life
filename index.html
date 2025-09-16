@@ -54,6 +54,8 @@
             enemySimilarity: uiManager.getEnemySimilarity(),
             eventStrengthMultiplier: uiManager.getEventStrengthMultiplier(),
           });
+          // record current event strength for insight charts
+          stats.logEvent(eventManager.currentEvent, uiManager.getEventStrengthMultiplier());
           const snapshot = stats.updateFromGrid(grid);
 
           uiManager.renderMetrics(stats, snapshot);

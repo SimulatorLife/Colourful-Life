@@ -107,13 +107,44 @@ export default class GridManager {
     cell.energy = Math.min(GridManager.maxTileEnergy, cell.energy + take);
   }
 
-  regenerateEnergyGrid() {
+  regenerateEnergyGrid(currentEvent = null, eventStrengthMultiplier = 1) {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        this.energyGrid[r][c] = Math.min(
+        let regen = GridManager.energyRegenRate;
+        let drain = 0;
+
+        if (
+          currentEvent &&
+          r >= currentEvent.affectedArea.y &&
+          r < currentEvent.affectedArea.y + currentEvent.affectedArea.height &&
+          c >= currentEvent.affectedArea.x &&
+          c < currentEvent.affectedArea.x + currentEvent.affectedArea.width
+        ) {
+          const s = (currentEvent.strength || 0) * (eventStrengthMultiplier || 1);
+
+          switch (currentEvent.eventType) {
+            case 'flood':
+              regen += 0.5 * s;
+              break;
+            case 'drought':
+              regen *= Math.max(0, 1 - 0.8 * s);
+              drain += 0.12 * s;
+              break;
+            case 'heatwave':
+              regen *= Math.max(0, 1 - 0.5 * s);
+              drain += 0.08 * s;
+              break;
+            case 'coldwave':
+              regen *= Math.max(0, 1 - 0.3 * s);
+              break;
+          }
+        }
+        const next = Math.min(
           GridManager.maxTileEnergy,
-          this.energyGrid[r][c] + GridManager.energyRegenRate
+          Math.max(0, this.energyGrid[r][c] + regen - drain)
         );
+
+        this.energyGrid[r][c] = next;
       }
     }
   }
@@ -186,7 +217,7 @@ export default class GridManager {
 
     this.seed(currentPopulation, minPopulation);
 
-    this.regenerateEnergyGrid();
+    this.regenerateEnergyGrid(eventManager.currentEvent, eventStrengthMultiplier);
     eventManager.updateEvent();
     const processed = new WeakSet();
 
@@ -321,6 +352,7 @@ export default class GridManager {
             moveToTarget: GridManager.moveToTarget,
             moveAwayFromTarget: GridManager.moveAwayFromTarget,
             moveRandomly: GridManager.moveRandomly,
+            getEnergyAt: (rr, cc) => this.energyGrid[rr][cc] / GridManager.maxTileEnergy,
           });
         }
       }

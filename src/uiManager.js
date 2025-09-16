@@ -243,6 +243,36 @@ export default class UIManager {
     this.sparkDiv2Canvas.height = 40;
     panel.appendChild(this.sparkDiv2Canvas);
 
+    const cap3 = document.createElement('div');
+
+    cap3.className = 'control-name';
+    cap3.textContent = 'Mean Energy';
+    panel.appendChild(cap3);
+    this.sparkEnergy = document.createElement('canvas');
+    this.sparkEnergy.width = 260;
+    this.sparkEnergy.height = 40;
+    panel.appendChild(this.sparkEnergy);
+
+    const cap4 = document.createElement('div');
+
+    cap4.className = 'control-name';
+    cap4.textContent = 'Growth';
+    panel.appendChild(cap4);
+    this.sparkGrowth = document.createElement('canvas');
+    this.sparkGrowth.width = 260;
+    this.sparkGrowth.height = 40;
+    panel.appendChild(this.sparkGrowth);
+
+    const cap5 = document.createElement('div');
+
+    cap5.className = 'control-name';
+    cap5.textContent = 'Event Strength';
+    panel.appendChild(cap5);
+    this.sparkEvent = document.createElement('canvas');
+    this.sparkEvent.width = 260;
+    this.sparkEvent.height = 40;
+    panel.appendChild(this.sparkEvent);
+
     return panel;
   }
 
@@ -314,6 +344,9 @@ export default class UIManager {
 
     this.drawSpark(this.sparkPop, stats.history.population, '#88d');
     this.drawSpark(this.sparkDiv2Canvas, stats.history.diversity, '#d88');
+    this.drawSpark(this.sparkEnergy, stats.history.energy, '#8d8');
+    this.drawSpark(this.sparkGrowth, stats.history.growth, '#dd8');
+    this.drawSpark(this.sparkEvent, stats.history.eventStrength, '#b85');
   }
 
   drawSpark(canvas, data, color = '#88d') {

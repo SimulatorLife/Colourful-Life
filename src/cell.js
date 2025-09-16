@@ -81,22 +81,22 @@ export default class Cell {
     return bestMate;
   }
 
-  decide(n, e, s, w) {
-    const inputs = [1, n, e, s, w];
-    const scores = this.genes.map((weights) =>
-      weights.reduce((sum, weight, idx) => sum + weight * inputs[idx], 0)
-    );
-    let max = scores[0];
-    let index = 0;
+  // Internal: nearest target utility
+  #nearest(list, row, col) {
+    if (!list || list.length === 0) return null;
+    let best = null;
+    let bestDist = Infinity;
 
-    for (let i = 1; i < scores.length; i++) {
-      if (scores[i] > max) {
-        max = scores[i];
-        index = i;
+    for (const t of list) {
+      const d = Math.max(Math.abs(t.row - row), Math.abs(t.col - col));
+
+      if (d < bestDist) {
+        best = t;
+        bestDist = d;
       }
     }
 
-    return index;
+    return best;
   }
 
   decideMove() {
@@ -168,21 +168,72 @@ export default class Cell {
       moveToTarget,
       moveAwayFromTarget,
       moveRandomly,
+      getEnergyAt,
     }
   ) {
     const strategy = this.chooseMovementStrategy(localDensity, densityEffectMultiplier);
 
-    if (strategy === 'pursuit' && society.length > 0) {
-      const target = society[Math.floor(randomRange(0, society.length))];
+    if (strategy === 'pursuit') {
+      const target =
+        this.#nearest(enemies, row, col) ||
+        this.#nearest(mates, row, col) ||
+        this.#nearest(society, row, col);
 
-      moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
-    } else if (strategy === 'cautious' && society.length > 0) {
-      const target = society[Math.floor(randomRange(0, society.length))];
+      if (target) return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
 
-      moveAwayFromTarget(gridArr, row, col, target.row, target.col, rows, cols);
-    } else {
-      moveRandomly(gridArr, row, col, this, rows, cols);
+      return moveRandomly(gridArr, row, col, this, rows, cols);
     }
+    if (strategy === 'cautious') {
+      const threat =
+        this.#nearest(enemies, row, col) ||
+        this.#nearest(mates, row, col) ||
+        this.#nearest(society, row, col);
+
+      if (threat) return moveAwayFromTarget(gridArr, row, col, threat.row, threat.col, rows, cols);
+
+      return moveRandomly(gridArr, row, col, this, rows, cols);
+    }
+    // wandering: bias toward best energy neighbor if provided
+    if (typeof getEnergyAt === 'function') {
+      const dirs = [
+        { dr: -1, dc: 0 },
+        { dr: 1, dc: 0 },
+        { dr: 0, dc: -1 },
+        { dr: 0, dc: 1 },
+      ];
+      let best = null;
+      let bestE = -Infinity;
+
+      for (const d of dirs) {
+        const rr = (row + d.dr + rows) % rows;
+        const cc = (col + d.dc + cols) % cols;
+        const occPenalty = gridArr[rr][cc] ? -1 : 0;
+        const e = (getEnergyAt(rr, cc) ?? 0) + occPenalty;
+
+        if (e > bestE) {
+          bestE = e;
+          best = d;
+        }
+      }
+      const g = this.movementGenes || { wandering: 1, pursuit: 1, cautious: 1 };
+      const total =
+        Math.max(0, g.wandering) + Math.max(0, g.pursuit) + Math.max(0, g.cautious) || 1;
+      const pExploit = 0.5 + 0.4 * (Math.max(0, g.wandering) / total);
+
+      if (best && Math.random() < pExploit) {
+        // Prefer direct move if helper provided; fallback to random
+        return typeof moveRandomly === 'function'
+          ? gridArr[(row + best.dr + rows) % rows][(col + best.dc + cols) % cols] == null
+            ? ((gridArr[(row + best.dr + rows) % rows][(col + best.dc + cols) % cols] =
+                gridArr[row][col]),
+              (gridArr[row][col] = null),
+              true)
+            : moveRandomly(gridArr, row, col, this, rows, cols)
+          : false;
+      }
+    }
+
+    return moveRandomly(gridArr, row, col, this, rows, cols);
   }
 
   computeReproductionProbability(partner, { localDensity, densityEffectMultiplier }) {

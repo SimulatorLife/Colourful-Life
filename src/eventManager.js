@@ -12,6 +12,7 @@ export default class EventManager {
     this.rows = rows;
     this.cols = cols;
     this.eventCounter = 0;
+    this.cooldown = 0;
     this.currentEvent = this.generateRandomEvent();
   }
 
@@ -22,24 +23,37 @@ export default class EventManager {
   generateRandomEvent() {
     const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
     const eventType = eventTypes[Math.floor(randomRange(0, eventTypes.length))];
-    const duration = Math.floor(randomRange(0, 501)) + 100; // 100..600 frames
-    const strength = randomRange(0, 1); // 0..1
+    // Bias durations so events are visible but not constant
+    const duration = Math.floor(randomRange(300, 900)); // frames
+    const strength = randomRange(0.25, 1); // 0.25..1
     const affectedArea = {
       x: Math.floor(randomRange(0, this.cols)),
       y: Math.floor(randomRange(0, this.rows)),
-      width: Math.max(10, Math.floor(randomRange(0, this.cols / 4)) + 1),
-      height: Math.max(10, Math.floor(randomRange(0, this.rows / 4)) + 1),
+      width: Math.max(10, Math.floor(randomRange(6, this.cols / 3))),
+      height: Math.max(10, Math.floor(randomRange(6, this.rows / 3))),
     };
 
     return { eventType, duration, affectedArea, strength };
   }
 
   updateEvent() {
-    if (!this.currentEvent || this.eventCounter % this.currentEvent.duration === 0) {
+    if (this.cooldown > 0) {
+      this.cooldown--;
+
+      return;
+    }
+    if (!this.currentEvent) {
       this.currentEvent = this.generateRandomEvent();
       this.eventCounter = 0;
+    } else {
+      this.eventCounter++;
+      if (this.eventCounter >= this.currentEvent.duration) {
+        // End event and schedule a cooldown before the next one
+        this.currentEvent = null;
+        this.eventCounter = 0;
+        this.cooldown = Math.floor(randomRange(180, 480));
+      }
     }
-    this.eventCounter++;
   }
 
   applyEventEffects(cell, row, col) {
@@ -52,20 +66,8 @@ export default class EventManager {
       col >= event.affectedArea.x &&
       col < event.affectedArea.x + event.affectedArea.width
     ) {
-      switch (event.eventType) {
-        case 'flood':
-          // Apply flood effects, e.g., remove certain organisms or reduce their energy
-          break;
-        case 'drought':
-          // Apply drought effects, e.g., reduce available energy
-          break;
-        case 'heatwave':
-          // Apply heatwave effects, e.g., remove certain organisms or drain their energy
-          break;
-        case 'coldwave':
-          // Apply coldwave effects, e.g., reduce energy or movement speed
-          break;
-      }
+      // Event effects on individual cells are handled in Cell.applyEventEffects
+      // This hook is reserved for global side-effects if needed.
     }
   }
 }
