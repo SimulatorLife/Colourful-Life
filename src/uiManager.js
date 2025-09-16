@@ -50,6 +50,70 @@ export default class UIManager {
     });
   }
 
+  // Reusable checkbox row helper
+  #addCheckbox(body, label, title, initial, onChange) {
+    const row = document.createElement('label');
+
+    row.className = 'control-row';
+    row.title = title;
+    const line = document.createElement('div');
+
+    line.className = 'control-line';
+    const input = document.createElement('input');
+
+    input.type = 'checkbox';
+    input.checked = initial;
+    input.addEventListener('input', () => onChange(input.checked));
+    const name = document.createElement('div');
+
+    name.className = 'control-name';
+    name.textContent = label;
+    line.appendChild(input);
+    line.appendChild(name);
+    row.appendChild(line);
+    body.appendChild(row);
+
+    return input;
+  }
+
+  // Utility to create a collapsible panel with a header
+  #createPanel(title) {
+    const panel = document.createElement('div');
+
+    panel.className = 'panel';
+    const header = document.createElement('div');
+
+    header.className = 'panel-header';
+    const heading = document.createElement('h3');
+
+    heading.textContent = title;
+    const toggle = document.createElement('button');
+
+    toggle.textContent = '–';
+    toggle.className = 'panel-toggle';
+    header.appendChild(heading);
+    header.appendChild(toggle);
+    panel.appendChild(header);
+    const body = document.createElement('div');
+
+    body.className = 'panel-body';
+    panel.appendChild(body);
+    const toggleCollapsed = () => {
+      panel.classList.toggle('collapsed');
+      toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
+    };
+
+    header.addEventListener('click', (e) => {
+      if (e.target === toggle || e.target === heading) toggleCollapsed();
+    });
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCollapsed();
+    });
+
+    return { panel, header, heading, toggle, body };
+  }
+
   #buildControlsPanel() {
     const panel = document.createElement('div');
 
@@ -205,28 +269,8 @@ export default class UIManager {
     overlayHeader.style.margin = '12px 0 6px';
     body.appendChild(overlayHeader);
 
-    const addToggle = (label, title, initial, onChange) => {
-      const row = document.createElement('label');
-
-      row.className = 'control-row';
-      row.title = title;
-      const line = document.createElement('div');
-
-      line.className = 'control-line';
-      const input = document.createElement('input');
-
-      input.type = 'checkbox';
-      input.checked = initial;
-      input.addEventListener('input', () => onChange(input.checked));
-      const name = document.createElement('div');
-
-      name.className = 'control-name';
-      name.textContent = label;
-      line.appendChild(input);
-      line.appendChild(name);
-      row.appendChild(line);
-      body.appendChild(row);
-    };
+    const addToggle = (label, title, initial, onChange) =>
+      this.#addCheckbox(body, label, title, initial, onChange);
 
     addToggle(
       'Show Density Heatmap',
@@ -302,27 +346,7 @@ export default class UIManager {
   }
 
   #buildInsightsPanel() {
-    const panel = document.createElement('div');
-
-    panel.className = 'panel insights-panel';
-    // Header + collapsible body
-    const header = document.createElement('div');
-
-    header.className = 'panel-header';
-    const heading = document.createElement('h3');
-
-    heading.textContent = 'Evolution Insights';
-    const toggle = document.createElement('button');
-
-    toggle.textContent = '–';
-    toggle.className = 'panel-toggle';
-    header.appendChild(heading);
-    header.appendChild(toggle);
-    panel.appendChild(header);
-    const body = document.createElement('div');
-
-    body.className = 'panel-body';
-    panel.appendChild(body);
+    const { panel, body } = this.#createPanel('Evolution Insights');
 
     // Metrics section
     const metricsHeader = document.createElement('h4');
@@ -385,20 +409,6 @@ export default class UIManager {
     this.sparkEvent.width = 260;
     this.sparkEvent.height = 40;
     body.appendChild(this.sparkEvent);
-
-    // Collapsible behavior
-    const toggleCollapsed = () => {
-      panel.classList.toggle('collapsed');
-      toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
-    };
-
-    header.addEventListener('click', (e) => {
-      if (e.target === toggle || e.target === heading) toggleCollapsed();
-    });
-    toggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleCollapsed();
-    });
 
     return panel;
   }
@@ -512,40 +522,9 @@ export default class UIManager {
 
   renderLeaderboard(top) {
     if (!this.leaderPanel) {
-      // create consistent collapsible panel
-      const panel = document.createElement('div');
+      const { panel, body } = this.#createPanel('Leaderboard');
 
-      panel.className = 'panel leaderboard-panel';
-      const header = document.createElement('div');
-
-      header.className = 'panel-header';
-      const heading = document.createElement('h3');
-
-      heading.textContent = 'Leaderboard';
-      const toggle = document.createElement('button');
-
-      toggle.textContent = '–';
-      toggle.className = 'panel-toggle';
-      header.appendChild(heading);
-      header.appendChild(toggle);
-      panel.appendChild(header);
-      const body = document.createElement('div');
-
-      body.className = 'panel-body';
-      panel.appendChild(body);
-      const toggleCollapsed = () => {
-        panel.classList.toggle('collapsed');
-        toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
-      };
-
-      header.addEventListener('click', (e) => {
-        if (e.target === toggle || e.target === heading) toggleCollapsed();
-      });
-      toggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleCollapsed();
-      });
-
+      panel.classList.add('leaderboard-panel');
       this.bottomRow?.appendChild(panel);
       this.leaderPanel = panel;
       this.leaderBody = body;

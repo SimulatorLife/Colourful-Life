@@ -174,6 +174,7 @@ export default class Cell {
       moveAwayFromTarget,
       moveRandomly,
       getEnergyAt,
+      tryMove,
     }
   ) {
     const strategy = this.chooseMovementStrategy(localDensity, densityEffectMultiplier);
@@ -226,15 +227,10 @@ export default class Cell {
       const pExploit = 0.5 + 0.4 * (Math.max(0, g.wandering) / total);
 
       if (best && Math.random() < pExploit) {
-        // Prefer direct move if helper provided; fallback to random
-        return typeof moveRandomly === 'function'
-          ? gridArr[(row + best.dr + rows) % rows][(col + best.dc + cols) % cols] == null
-            ? ((gridArr[(row + best.dr + rows) % rows][(col + best.dc + cols) % cols] =
-                gridArr[row][col]),
-              (gridArr[row][col] = null),
-              true)
-            : moveRandomly(gridArr, row, col, this, rows, cols)
-          : false;
+        if (typeof tryMove === 'function')
+          return tryMove(gridArr, row, col, best.dr, best.dc, rows, cols);
+
+        return moveRandomly(gridArr, row, col, this, rows, cols);
       }
     }
 

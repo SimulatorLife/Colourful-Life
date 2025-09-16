@@ -67,6 +67,7 @@ export default class GridManager {
     this.ctx = ctx || window.ctx;
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
+    this.densityGrid = null;
     this.init();
   }
 
@@ -107,7 +108,8 @@ export default class GridManager {
     const available = this.energyGrid[row][col];
     // DNA-driven harvest with density penalty
     const base = typeof cell.dna.forageRate === 'function' ? cell.dna.forageRate() : 0.4;
-    const density = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
+    const density =
+      this.densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
     const crowdPenalty = Math.max(0, 1 - 0.5 * density);
     const cap = clamp(base * crowdPenalty, 0.15, 0.5);
     const take = Math.min(cap, available);
@@ -120,7 +122,8 @@ export default class GridManager {
     events = null,
     eventStrengthMultiplier = 1,
     R = GridManager.energyRegenRate,
-    D = GridManager.energyDiffusionRate
+    D = GridManager.energyDiffusionRate,
+    densityGrid = null
   ) {
     const maxE = GridManager.maxTileEnergy;
     const next = Array.from({ length: this.rows }, () => Array(this.cols));
@@ -133,7 +136,9 @@ export default class GridManager {
         let drain = 0;
 
         // Density reduces local regen (overgrazing effect)
-        const density = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
+        const density = densityGrid
+          ? densityGrid[r][c]
+          : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
 
         regen *= Math.max(0, 1 - 0.5 * density);
 
@@ -192,6 +197,32 @@ export default class GridManager {
 
   setCell(row, col, cell) {
     this.grid[row][col] = cell;
+  }
+
+  // Precompute density for all tiles (fraction of occupied neighbors)
+  computeDensityGrid(radius = GridManager.DENSITY_RADIUS) {
+    const out = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+
+    for (let row = 0; row < this.rows; row++) {
+      for (let col = 0; col < this.cols; col++) {
+        let count = 0,
+          total = 0;
+
+        for (let dx = -radius; dx <= radius; dx++) {
+          for (let dy = -radius; dy <= radius; dy++) {
+            if (dx === 0 && dy === 0) continue;
+            const rr = (row + dy + this.rows) % this.rows;
+            const cc = (col + dx + this.cols) % this.cols;
+
+            total++;
+            if (this.grid[rr][cc]) count++;
+          }
+        }
+        out[row][col] = total > 0 ? count / total : 0;
+      }
+    }
+
+    return out;
   }
 
   localDensity(row, col, radius = 1) {
@@ -253,11 +284,15 @@ export default class GridManager {
     const stats = this.stats;
     const eventManager = this.eventManager;
 
+    // Precompute density grid for this tick
+    this.densityGrid = this.computeDensityGrid(GridManager.DENSITY_RADIUS);
+
     this.regenerateEnergyGrid(
       eventManager.activeEvents || [],
       eventStrengthMultiplier,
       energyRegenRate,
-      energyDiffusionRate
+      energyDiffusionRate,
+      this.densityGrid
     );
     const processed = new WeakSet();
 
@@ -279,7 +314,7 @@ export default class GridManager {
           cell.applyEventEffects(row, col, ev, eventStrengthMultiplier, GridManager.maxTileEnergy);
         }
         this.consumeEnergy(cell, row, col);
-        const localDensity = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
+        const localDensity = this.densityGrid[row][col];
 
         cell.manageEnergy(row, col, {
           localDensity,
@@ -313,7 +348,7 @@ export default class GridManager {
               this.rows,
               this.cols
             );
-            const localDensity = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
+            const localDensity = this.densityGrid[row][col];
             const reproProb = cell.computeReproductionProbability(bestMate.target, {
               localDensity,
               densityEffectMultiplier,
@@ -383,7 +418,7 @@ export default class GridManager {
               );
           }
         } else {
-          const localDensity2 = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
+          const localDensity2 = this.densityGrid[row][col];
 
           cell.executeMovementStrategy(this.grid, row, col, mates, enemies, society || [], {
             localDensity: localDensity2,
@@ -393,6 +428,7 @@ export default class GridManager {
             moveToTarget: GridManager.moveToTarget,
             moveAwayFromTarget: GridManager.moveAwayFromTarget,
             moveRandomly: GridManager.moveRandomly,
+            tryMove: GridManager.tryMove,
             getEnergyAt: (rr, cc) => this.energyGrid[rr][cc] / GridManager.maxTileEnergy,
           });
         }
@@ -423,7 +459,8 @@ export default class GridManager {
     const mates = [];
     const enemies = [];
     const society = [];
-    const d = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
+    const d =
+      this.densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
     const effD = clamp(d * densityEffectMultiplier, 0, 1);
     let enemyBias = lerp(cell.density.enemyBias.min, cell.density.enemyBias.max, effD);
 
