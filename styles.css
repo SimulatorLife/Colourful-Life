@@ -1,11 +1,30 @@
 /* Global styles */
+:root {
+  --bg: #222;
+  --panel-bg: #1a1a1a;
+  --panel-border: #333;
+  --text: #ddd;
+  --muted: #bbb;
+  --muted-2: #aaa;
+  --control-bg: #2b2b2b;
+  --control-bg-hover: #333;
+  --shadow: #111;
+  --radius: 8px;
+  --gap: 12px;
+  --pad: 12px;
+  --font:
+    ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans,
+    Helvetica Neue, Arial, sans-serif;
+}
 html,
 body {
   height: 100%;
 }
 body {
-  background-color: #222;
+  background-color: var(--bg);
   margin: 0;
+  color: var(--text);
+  font-family: var(--font);
 }
 
 /* Canvas */
@@ -19,7 +38,7 @@ canvas {
 .app-layout {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--gap);
   max-width: 1200px;
   margin: 8px auto;
   align-items: stretch;
@@ -28,17 +47,17 @@ canvas {
 }
 #gameCanvas {
   flex: 1 1 auto;
-  box-shadow: 0 0 0 1px #111;
-  max-width: 100%;
+  box-shadow: 0 0 0 1px var(--shadow);
+  max-width: min(50%, 800px); /* 50% or 800px, whichever is smaller */
 }
 .main-row {
   display: flex;
-  gap: 12px;
+  gap: var(--gap);
   align-items: flex-start;
 }
 .bottom-row {
   display: flex;
-  gap: 12px;
+  gap: var(--gap);
   flex-wrap: wrap;
 }
 /* Sidebar stacks panels vertically */
@@ -46,7 +65,7 @@ canvas {
   width: 300px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--gap);
 }
 
 .right-sidebar {
@@ -56,12 +75,11 @@ canvas {
 /* Base panel styling */
 .panel {
   width: 300px;
-  color: #ddd;
-  font-family: sans-serif;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 8px;
-  padding: 12px;
+  color: var(--text);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: var(--pad);
 }
 
 /* Collapsible panels */
@@ -75,6 +93,21 @@ canvas {
 .panel .panel-header h3,
 .panel .panel-header h4 {
   margin: 0;
+}
+.panel .panel-toggle {
+  appearance: none;
+  border: 1px solid var(--panel-border);
+  background: var(--control-bg);
+  color: var(--text);
+  border-radius: 4px;
+  width: 28px;
+  height: 24px;
+  line-height: 22px;
+  text-align: center;
+  cursor: pointer;
+}
+.panel .panel-toggle:hover {
+  background: var(--control-bg-hover);
 }
 .panel .panel-body {
   margin-top: 8px;
@@ -99,14 +132,14 @@ canvas {
   width: 100%;
   margin-bottom: 10px;
   padding: 6px 10px;
-  background: #2b2b2b;
+  background: var(--control-bg);
   color: #eee;
   border: 1px solid #444;
   border-radius: 4px;
   cursor: pointer;
 }
 .controls-panel button:hover {
-  background: #333;
+  background: var(--control-bg-hover);
 }
 .control-row {
   display: block;
@@ -115,12 +148,13 @@ canvas {
 }
 .control-name {
   font-size: 12px;
-  color: #bbb;
+  color: var(--muted);
   margin-bottom: 4px;
 }
 .control-line {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
 }
 .control-line input[type='range'] {
@@ -129,15 +163,18 @@ canvas {
 .control-value {
   min-width: 42px;
   text-align: right;
-  color: #aaa;
+  color: var(--muted-2);
   font-variant-numeric: tabular-nums;
 }
 
-/* Insights panel */
-.insights-panel {
-  /* inherits from .panel */
-}
 .insights-panel h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #eee;
+}
+
+/* Leaderboard panel */
+.leaderboard-panel h3 {
   margin: 0 0 8px;
   font-size: 16px;
   color: #eee;
@@ -147,8 +184,4 @@ canvas {
 .metrics-box {
   width: 100%;
   box-sizing: border-box;
-}
-
-.leaderBox {
-  /* inherits width from .panel */
 }

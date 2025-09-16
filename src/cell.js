@@ -100,15 +100,18 @@ export default class Cell {
   }
 
   decideRandomMove() {
-    const moves = [
-      { dr: -1, dc: 0 }, // up
-      { dr: 1, dc: 0 }, // down
-      { dr: 0, dc: -1 }, // left
-      { dr: 0, dc: 1 }, // right
-      { dr: 0, dc: 0 }, // stay
-    ];
-
-    return moves[Math.floor(randomRange(0, moves.length))];
+    // 50% chance to stay still; otherwise pick one of 4 directions uniformly
+    if (Math.random() < 0.5) return { dr: 0, dc: 0 };
+    switch ((Math.random() * 4) | 0) {
+      case 0:
+        return { dr: -1, dc: 0 }; // up
+      case 1:
+        return { dr: 1, dc: 0 }; // down
+      case 2:
+        return { dr: 0, dc: -1 }; // left
+      default:
+        return { dr: 0, dc: 1 }; // right
+    }
   }
 
   manageEnergy(row, col, { localDensity, densityEffectMultiplier, maxTileEnergy }) {

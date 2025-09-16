@@ -278,7 +278,7 @@ export default class UIManager {
     body.appendChild(metricsHeader);
 
     this.metricsBox = document.createElement('div');
-    this.metricsBox.className = 'panel metrics-box';
+    this.metricsBox.className = 'metrics-box';
     body.appendChild(this.metricsBox);
 
     // Sparklines canvases
@@ -448,13 +448,46 @@ export default class UIManager {
   }
 
   renderLeaderboard(top) {
-    if (!this.leaderBox) {
-      // create holder if missing and place in bottom row
-      this.leaderBox = document.createElement('div');
-      this.leaderBox.className = 'panel leaderBox';
-      this.bottomRow?.appendChild(this.leaderBox);
+    if (!this.leaderPanel) {
+      // create consistent collapsible panel
+      const panel = document.createElement('div');
+
+      panel.className = 'panel leaderboard-panel';
+      const header = document.createElement('div');
+
+      header.className = 'panel-header';
+      const heading = document.createElement('h3');
+
+      heading.textContent = 'Leaderboard';
+      const toggle = document.createElement('button');
+
+      toggle.textContent = '–';
+      toggle.className = 'panel-toggle';
+      header.appendChild(heading);
+      header.appendChild(toggle);
+      panel.appendChild(header);
+      const body = document.createElement('div');
+
+      body.className = 'panel-body';
+      panel.appendChild(body);
+      const toggleCollapsed = () => {
+        panel.classList.toggle('collapsed');
+        toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
+      };
+
+      header.addEventListener('click', (e) => {
+        if (e.target === toggle || e.target === heading) toggleCollapsed();
+      });
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleCollapsed();
+      });
+
+      this.bottomRow?.appendChild(panel);
+      this.leaderPanel = panel;
+      this.leaderBody = body;
     }
-    this.leaderBox.innerHTML = '';
+    this.leaderBody.innerHTML = '';
     const add = (label, value, color) => {
       const row = document.createElement('div');
 
@@ -482,7 +515,7 @@ export default class UIManager {
       right.textContent = value;
       row.appendChild(left);
       row.appendChild(right);
-      this.leaderBox.appendChild(row);
+      this.leaderBody.appendChild(row);
     };
 
     top.forEach((e, i) => {
