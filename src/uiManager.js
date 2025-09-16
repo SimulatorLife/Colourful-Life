@@ -16,25 +16,29 @@ export default class UIManager {
     this.root = document.querySelector(mountSelector) || document.body;
     const canvasEl = this.root.querySelector('#gameCanvas');
 
-    // Create split sidebars (left: controls, right: insights)
-    this.leftSidebar = document.createElement('div');
-    this.leftSidebar.className = 'sidebar left-sidebar';
+    // Build two rows: main (canvas + right controls) and bottom (insights + leaderboard)
+    this.mainRow = document.createElement('div');
+    this.mainRow.className = 'main-row';
     this.rightSidebar = document.createElement('div');
     this.rightSidebar.className = 'sidebar right-sidebar';
-    // Insert left before canvas and right after canvas
+    this.bottomRow = document.createElement('div');
+    this.bottomRow.className = 'bottom-row';
+
     if (canvasEl) {
-      this.root.insertBefore(this.leftSidebar, canvasEl);
-      if (canvasEl.nextSibling) this.root.insertBefore(this.rightSidebar, canvasEl.nextSibling);
-      else this.root.appendChild(this.rightSidebar);
+      this.root.insertBefore(this.mainRow, canvasEl);
+      this.mainRow.appendChild(canvasEl);
+      this.mainRow.appendChild(this.rightSidebar);
+      if (this.mainRow.nextSibling)
+        this.root.insertBefore(this.bottomRow, this.mainRow.nextSibling);
+      else this.root.appendChild(this.bottomRow);
     } else {
-      // Fallback: append both
-      this.root.appendChild(this.leftSidebar);
-      this.root.appendChild(this.rightSidebar);
+      this.root.appendChild(this.mainRow);
+      this.root.appendChild(this.bottomRow);
     }
     this.controlsPanel = this.#buildControlsPanel();
     this.insightsPanel = this.#buildInsightsPanel();
-    this.leftSidebar.appendChild(this.controlsPanel);
-    this.rightSidebar.appendChild(this.insightsPanel);
+    this.rightSidebar.appendChild(this.controlsPanel);
+    this.bottomRow.appendChild(this.insightsPanel);
 
     // Keyboard toggle
     document.addEventListener('keydown', (e) => {
@@ -445,10 +449,10 @@ export default class UIManager {
 
   renderLeaderboard(top) {
     if (!this.leaderBox) {
-      // create holder if missing
+      // create holder if missing and place in bottom row
       this.leaderBox = document.createElement('div');
       this.leaderBox.className = 'panel leaderBox';
-      this.rightSidebar?.appendChild(this.leaderBox);
+      this.bottomRow?.appendChild(this.leaderBox);
     }
     this.leaderBox.innerHTML = '';
     const add = (label, value, color) => {

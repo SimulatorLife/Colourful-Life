@@ -100,14 +100,15 @@ export default class Cell {
   }
 
   decideRandomMove() {
-    const r = Math.floor(randomRange(0, 5));
+    const moves = [
+      { dr: -1, dc: 0 }, // up
+      { dr: 1, dc: 0 }, // down
+      { dr: 0, dc: -1 }, // left
+      { dr: 0, dc: 1 }, // right
+      { dr: 0, dc: 0 }, // stay
+    ];
 
-    if (r === 0) return { dr: -1, dc: 0 };
-    if (r === 1) return { dr: 1, dc: 0 };
-    if (r === 2) return { dr: 0, dc: -1 };
-    if (r === 3) return { dr: 0, dc: 0 };
-
-    return { dr: 0, dc: 1 };
+    return moves[Math.floor(randomRange(0, moves.length))];
   }
 
   manageEnergy(row, col, { localDensity, densityEffectMultiplier, maxTileEnergy }) {
