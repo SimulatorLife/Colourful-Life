@@ -1,5 +1,15 @@
 import { computeFitness } from './fitness.js';
 
+function getDefaultMaxTileEnergy() {
+  const gridManager = typeof globalThis !== 'undefined' ? globalThis.GridManager : undefined;
+
+  if (gridManager && gridManager.maxTileEnergy != null) {
+    return gridManager.maxTileEnergy;
+  }
+
+  return 5;
+}
+
 function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = '0,0,0') {
   const rows = grid.rows;
   const cols = grid.cols;
@@ -16,14 +26,14 @@ function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = '0,0,0') {
 }
 
 export function drawOverlays(grid, ctx, cellSize, opts = {}) {
-  const { showEnergy, showDensity, showFitness, maxTileEnergy = 5 } = opts;
+  const { showEnergy, showDensity, showFitness, maxTileEnergy = getDefaultMaxTileEnergy() } = opts;
 
   if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);
   if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
   if (showFitness) drawFitnessHeatmap(grid, ctx, cellSize, maxTileEnergy);
 }
 
-export function drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy = 5) {
+export function drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy = getDefaultMaxTileEnergy()) {
   const scale = 0.99;
 
   drawScalarHeatmap(
@@ -50,7 +60,7 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
   );
 }
 
-export function drawFitnessHeatmap(grid, ctx, cellSize, maxTileEnergy = 5) {
+export function drawFitnessHeatmap(grid, ctx, cellSize, maxTileEnergy = getDefaultMaxTileEnergy()) {
   const rows = grid.rows;
   const cols = grid.cols;
   let maxF = 0;
