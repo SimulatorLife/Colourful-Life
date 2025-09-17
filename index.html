@@ -30,7 +30,7 @@
       let lastUpdateTime = 0;
 
       const eventManager = new EventManager(rows, cols);
-      const stats = new Stats(1000);
+      const stats = new Stats();
 
       const grid = new GridManager(rows, cols, { eventManager, ctx, cellSize, stats });
       const uiManager = new UIManager(update, '#app', {

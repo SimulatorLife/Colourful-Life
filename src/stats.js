@@ -1,5 +1,5 @@
 export default class Stats {
-  constructor(historySize = 200) {
+  constructor(historySize = 10000) {
     this.historySize = historySize;
     this.resetTick();
     this.history = {

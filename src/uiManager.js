@@ -254,10 +254,10 @@ export default class UIManager {
     addSlider({
       label: 'Speed ×',
       min: 0.5,
-      max: 8,
+      max: 100,
       step: 0.5,
       value: this.speedMultiplier,
-      title: 'Speed multiplier relative to 60 updates/sec (0.5x..8x)',
+      title: 'Speed multiplier relative to 60 updates/sec (0.5x..100x)',
       format: (v) => `${v.toFixed(1)}x`,
       onInput: (v) => (this.speedMultiplier = Math.max(0.1, v)),
     });
