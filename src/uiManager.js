@@ -1,3 +1,5 @@
+import { ENERGY_REGEN_RATE_DEFAULT, ENERGY_DIFFUSION_RATE_DEFAULT } from './config.js';
+
 export default class UIManager {
   constructor(updateCallback, mountSelector = '#app', actions = {}) {
     this.updateCallback = updateCallback;
@@ -11,8 +13,8 @@ export default class UIManager {
     this.eventFrequencyMultiplier = 1.0; // how often events spawn
     this.speedMultiplier = 1.0; // simulation speed relative to 60 updates/sec
     this.densityEffectMultiplier = 1.0; // scales density influence (0..2)
-    this.energyRegenRate = 0.09; // base logistic regen rate (0..0.2)
-    this.energyDiffusionRate = 0.18; // neighbor diffusion rate (0..0.5)
+    this.energyRegenRate = ENERGY_REGEN_RATE_DEFAULT; // base logistic regen rate (0..0.2)
+    this.energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT; // neighbor diffusion rate (0..0.5)
     this.showDensity = false;
     this.showEnergy = false;
     this.showFitness = false;
