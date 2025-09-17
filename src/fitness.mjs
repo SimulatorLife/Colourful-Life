@@ -1,6 +1,8 @@
-export function computeFitness(cell) {
+export function computeFitness(cell, maxTileEnergy) {
+  const gridManager = typeof globalThis !== 'undefined' ? globalThis.GridManager : undefined;
   const maxEnergy =
-    typeof GridManager !== 'undefined' && GridManager.maxTileEnergy ? GridManager.maxTileEnergy : 1;
+    maxTileEnergy ??
+    (gridManager && gridManager.maxTileEnergy != null ? gridManager.maxTileEnergy : 1);
 
   return (
     (cell.fightsWon - cell.fightsLost) * 0.5 +

@@ -33,3 +33,9 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 ### Formatting
 
 This repo uses [Prettier](https://prettier.io/) for consistent formatting. Run `npm run format` before committing, or add it to your editor's "format on save" using the Prettier extension.
+
+### Configuration defaults
+
+Energy-related defaults for the simulation are centralized in `src/config.js`. The UI sliders read
+`ENERGY_REGEN_RATE_DEFAULT` and `ENERGY_DIFFUSION_RATE_DEFAULT` from this shared module so that the
+controls always reflect the same baseline values used by the grid manager.

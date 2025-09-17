@@ -29,6 +29,10 @@ export default class GridManager {
 
       gridArr[nr][nc] = moving;
       gridArr[sr][sc] = null;
+      if (moving && typeof moving === 'object') {
+        if ('row' in moving) moving.row = nr;
+        if ('col' in moving) moving.col = nc;
+      }
       // Charge movement energy cost to the mover if available
       if (moving && typeof moving === 'object' && moving.energy != null && moving.dna) {
         const cost = typeof moving.dna.moveCost === 'function' ? moving.dna.moveCost() : 0.005;
