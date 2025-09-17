@@ -1,6 +1,7 @@
 import { randomRange, randomPercent, clamp, lerp } from './utils.js';
 import DNA from './genome.js';
 import Cell from './cell.js';
+import { computeFitness } from './fitness.js';
 // EventManager used via instance; no direct import needed here
 import {
   MAX_TILE_ENERGY,
@@ -89,6 +90,7 @@ export default class GridManager {
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
     this.densityGrid = null;
+    this.lastSnapshot = null;
     this.init();
   }
 
@@ -324,6 +326,8 @@ export default class GridManager {
     const stats = this.stats;
     const eventManager = this.eventManager;
 
+    this.lastSnapshot = null;
+
     // Precompute density grid for this tick
     this.densityGrid = this.computeDensityGrid(GridManager.DENSITY_RADIUS);
 
@@ -491,6 +495,50 @@ export default class GridManager {
         }
       }
     }
+
+    this.lastSnapshot = this.buildSnapshot();
+
+    return this.lastSnapshot;
+  }
+
+  buildSnapshot(maxTileEnergy = GridManager.maxTileEnergy) {
+    const snapshot = {
+      rows: this.rows,
+      cols: this.cols,
+      population: 0,
+      totalEnergy: 0,
+      totalAge: 0,
+      maxFitness: 0,
+      cells: [],
+      entries: [],
+    };
+
+    for (let row = 0; row < this.rows; row++) {
+      for (let col = 0; col < this.cols; col++) {
+        const cell = this.grid[row][col];
+
+        if (!cell) continue;
+
+        const fitness = computeFitness(cell, maxTileEnergy);
+
+        snapshot.population++;
+        snapshot.totalEnergy += cell.energy;
+        snapshot.totalAge += cell.age;
+        snapshot.cells.push(cell);
+        snapshot.entries.push({ row, col, cell, fitness });
+        if (fitness > snapshot.maxFitness) snapshot.maxFitness = fitness;
+      }
+    }
+
+    return snapshot;
+  }
+
+  getLastSnapshot() {
+    if (!this.lastSnapshot) {
+      this.lastSnapshot = this.buildSnapshot();
+    }
+
+    return this.lastSnapshot;
   }
 
   calculatePopulationDensity() {

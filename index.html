@@ -33,6 +33,7 @@
       const stats = new Stats();
 
       const grid = new GridManager(rows, cols, { eventManager, ctx, cellSize, stats });
+      let lastSnapshot = grid.getLastSnapshot();
       const uiManager = new UIManager(update, '#app', {
         burst: () => grid.burstRandomCells({ count: 200, radius: 6 }),
       });
@@ -52,7 +53,7 @@
           stats.resetTick();
           // update events with frequency and allow up to 2 concurrent
           eventManager.updateEvent(uiManager.getEventFrequencyMultiplier(), 2);
-          grid.update({
+          const snapshot = grid.update({
             densityEffectMultiplier: uiManager.getDensityEffectMultiplier(),
             societySimilarity: uiManager.getSocietySimilarity(),
             enemySimilarity: uiManager.getEnemySimilarity(),
@@ -60,11 +61,13 @@
             energyRegenRate: uiManager.getEnergyRegenRate(),
             energyDiffusionRate: uiManager.getEnergyDiffusionRate(),
           });
+
+          lastSnapshot = snapshot;
           // record current event strength for insight charts
           stats.logEvent(eventManager.currentEvent, uiManager.getEventStrengthMultiplier());
-          const snapshot = stats.updateFromGrid(grid);
+          const metrics = stats.updateFromSnapshot(snapshot);
 
-          uiManager.renderMetrics(stats, snapshot);
+          uiManager.renderMetrics(stats, metrics);
         }
         grid.draw();
         // overlays
@@ -73,9 +76,10 @@
           showDensity: uiManager.getShowDensity(),
           showFitness: uiManager.getShowFitness(),
           maxTileEnergy: GridManager.maxTileEnergy,
+          snapshot: lastSnapshot,
         });
         // leaderboard (top 5 by composite fitness)
-        const top = computeLeaderboard(grid, 5, GridManager.maxTileEnergy);
+        const top = computeLeaderboard(lastSnapshot, 5);
 
         uiManager.renderLeaderboard(top);
         requestAnimationFrame(update);

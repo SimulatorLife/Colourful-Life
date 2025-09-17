@@ -1,0 +1,56 @@
+const { test } = require('uvu');
+const assert = require('uvu/assert');
+
+const gridManagerModulePromise = import('../src/gridManager.js');
+const leaderboardModulePromise = import('../src/leaderboard.js');
+
+function createStubCell(data) {
+  return {
+    fightsWon: 0,
+    fightsLost: 0,
+    offspring: 0,
+    lifespan: 10,
+    color: '#000',
+    ...data,
+  };
+}
+
+test('buildSnapshot aggregates living cells for downstream consumers', async () => {
+  const { default: GridManager } = await gridManagerModulePromise;
+  const { computeLeaderboard } = await leaderboardModulePromise;
+  const originalInit = GridManager.prototype.init;
+
+  try {
+    GridManager.prototype.init = function initStub() {};
+    const gm = new GridManager(2, 2, {
+      eventManager: { activeEvents: [] },
+      ctx: { fillStyle: null, fillRect() {} },
+      cellSize: 1,
+      stats: { onBirth() {}, onDeath() {}, onFight() {}, onCooperate() {} },
+    });
+
+    gm.grid = [
+      [createStubCell({ energy: 4, age: 2, fightsWon: 1, offspring: 1, color: '#111' }), null],
+      [null, createStubCell({ energy: 2, age: 5, fightsLost: 1, color: '#222' })],
+    ];
+
+    const snapshot = gm.buildSnapshot(10);
+
+    assert.is(snapshot.population, 2);
+    assert.is(snapshot.totalEnergy, 6);
+    assert.is(snapshot.totalAge, 7);
+    assert.is(snapshot.cells.length, 2);
+    assert.is(snapshot.entries.length, 2);
+    assert.ok(snapshot.maxFitness > 0);
+    assert.equal(snapshot.entries.map(({ row, col }) => `${row},${col}`).sort(), ['0,0', '1,1']);
+
+    const leaderboard = computeLeaderboard(snapshot, 2);
+
+    assert.is(leaderboard.length, 2);
+    assert.ok(leaderboard[0].fitness >= leaderboard[1].fitness);
+  } finally {
+    GridManager.prototype.init = originalInit;
+  }
+});
+
+test.run();
