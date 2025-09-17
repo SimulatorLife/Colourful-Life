@@ -1,6 +1,16 @@
 import { computeFitness } from './fitness.js';
 
-export function computeLeaderboard(grid, topN = 5, maxTileEnergy = 5) {
+function getDefaultMaxTileEnergy() {
+  const gridManager = typeof globalThis !== 'undefined' ? globalThis.GridManager : undefined;
+
+  if (gridManager && gridManager.maxTileEnergy != null) {
+    return gridManager.maxTileEnergy;
+  }
+
+  return 5;
+}
+
+export function computeLeaderboard(grid, topN = 5, maxTileEnergy = getDefaultMaxTileEnergy()) {
   const rows = grid.rows;
   const cols = grid.cols;
   const items = [];
