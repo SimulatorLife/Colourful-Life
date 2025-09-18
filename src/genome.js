@@ -1,15 +1,127 @@
 import { clamp, createRNG, randomRange } from './utils.js';
 
-// Genome modeled as loci; currently r,g,b act as loci to preserve behavior
+/**
+ * Gene loci mapping. The first three indices are reserved for RGB rendering,
+ * while the remaining loci control simulation traits. Values are stored as
+ * bytes (0-255) so they can be mapped into useful ranges per accessor.
+ */
+export const GENE_LOCI = Object.freeze({
+  COLOR_R: 0,
+  COLOR_G: 1,
+  COLOR_B: 2,
+  RISK: 3,
+  EXPLORATION: 4,
+  COHESION: 5,
+  RECOVERY: 6,
+  ACTIVITY: 7,
+  PARENTAL: 8,
+  SENESCENCE: 9,
+  COMBAT: 10,
+  ALLY: 11,
+  ENEMY: 12,
+  FERTILITY: 13,
+  ENERGY_EFFICIENCY: 14,
+  ENERGY_CAPACITY: 15,
+  MUTATION_RATE: 16,
+  MUTATION_RANGE: 17,
+  NEURAL: 18,
+  SENSE: 19,
+  FORAGING: 20,
+  MOVEMENT: 21,
+  STRATEGY: 22,
+  RESIST_FLOOD: 23,
+  RESIST_HEAT: 24,
+  RESIST_DROUGHT: 25,
+  RESIST_COLD: 26,
+  DENSITY: 27,
+  COOPERATION: 28,
+});
+
+const DEFAULT_GENE_COUNT = Math.max(...Object.values(GENE_LOCI)) + 1;
+
+const clampGene = (value) => {
+  if (Number.isNaN(value)) return 0;
+
+  return Math.max(0, Math.min(255, value | 0));
+};
+
 export class DNA {
-  constructor(r, g, b) {
-    this.r = r | 0;
-    this.g = g | 0;
-    this.b = b | 0;
+  constructor(rOrGenes = 0, g = 0, b = 0, options = {}) {
+    let geneCount = options.geneCount ?? DEFAULT_GENE_COUNT;
+    let genesInput = null;
+
+    if (Array.isArray(rOrGenes) || rOrGenes instanceof Uint8Array) {
+      genesInput = rOrGenes;
+    } else if (
+      typeof rOrGenes === 'object' &&
+      rOrGenes !== null &&
+      !(rOrGenes instanceof Uint8Array)
+    ) {
+      const config = rOrGenes;
+
+      geneCount = config.geneCount ?? geneCount;
+      genesInput = config.genes ?? genesInput;
+    }
+
+    this.genes = new Uint8Array(geneCount);
+
+    if (genesInput) {
+      const limit = Math.min(genesInput.length ?? 0, geneCount);
+
+      for (let i = 0; i < limit; i++) {
+        this.genes[i] = clampGene(genesInput[i]);
+      }
+    } else {
+      this.genes[GENE_LOCI.COLOR_R] = clampGene(rOrGenes);
+      this.genes[GENE_LOCI.COLOR_G] = clampGene(g);
+      this.genes[GENE_LOCI.COLOR_B] = clampGene(b);
+    }
   }
 
-  static random(rng = Math.random) {
-    return new DNA(Math.floor(rng() * 256), Math.floor(rng() * 256), Math.floor(rng() * 256));
+  static random(rng = Math.random, geneCount = DEFAULT_GENE_COUNT) {
+    const genes = new Uint8Array(geneCount);
+
+    for (let i = 0; i < geneCount; i++) {
+      genes[i] = Math.floor(rng() * 256) & 0xff;
+    }
+
+    return new DNA({ genes, geneCount });
+  }
+
+  get length() {
+    return this.genes.length;
+  }
+
+  get r() {
+    return this.geneAt(GENE_LOCI.COLOR_R);
+  }
+
+  set r(value) {
+    this.genes[GENE_LOCI.COLOR_R] = clampGene(value);
+  }
+
+  get g() {
+    return this.geneAt(GENE_LOCI.COLOR_G);
+  }
+
+  set g(value) {
+    this.genes[GENE_LOCI.COLOR_G] = clampGene(value);
+  }
+
+  get b() {
+    return this.geneAt(GENE_LOCI.COLOR_B);
+  }
+
+  set b(value) {
+    this.genes[GENE_LOCI.COLOR_B] = clampGene(value);
+  }
+
+  geneAt(index) {
+    return index >= 0 && index < this.genes.length ? this.genes[index] : 0;
+  }
+
+  geneFraction(index) {
+    return this.geneAt(index) / 255;
   }
 
   toColor() {
@@ -17,7 +129,14 @@ export class DNA {
   }
 
   seed() {
-    return (this.r | (this.g << 8) | (this.b << 16)) >>> 0;
+    let hash = 2166136261;
+
+    for (let i = 0; i < this.genes.length; i++) {
+      hash ^= this.genes[i];
+      hash = Math.imul(hash, 16777619);
+    }
+
+    return hash >>> 0;
   }
 
   prng() {
@@ -65,82 +184,64 @@ export class DNA {
 
   // Willingness to take risks (0..1). Higher -> more likely to pick fights.
   riskTolerance() {
-    const r = this.r / 255;
-
-    return r; // simple mapping
+    return this.geneFraction(GENE_LOCI.RISK);
   }
 
   // Preference to exploit known good tiles vs explore (0..1)
   exploitationBias() {
-    const g = this.g / 255;
-
-    return g; // resource affinity biases exploitation
+    return this.geneFraction(GENE_LOCI.EXPLORATION);
   }
 
   // Tendency to stay near allies (0..1)
   cohesion() {
-    const b = this.b / 255;
-
-    return b; // blue biases social cohesion
+    return this.geneFraction(GENE_LOCI.COHESION);
   }
 
   // Event recovery mitigation (0..1). Higher reduces event damage.
   recoveryRate() {
-    const brightness = (this.r + this.g + this.b) / (3 * 255);
-
-    return brightness; // brighter genomes recover better
+    return this.geneFraction(GENE_LOCI.RECOVERY);
   }
 
   // DNA-driven activity rate: how often a cell attempts actions per tick
   activityRate() {
-    const brightness = (this.r + this.g + this.b) / (3 * 255);
-
-    return 0.3 + 0.7 * brightness; // 0.3..1.0
+    return 0.3 + 0.7 * this.geneFraction(GENE_LOCI.ACTIVITY);
   }
 
   // Fraction of current energy invested in offspring
   parentalInvestmentFrac() {
-    const b = this.b / 255;
-
-    return 0.2 + 0.5 * b; // 0.2..0.7
+    return 0.2 + 0.5 * this.geneFraction(GENE_LOCI.PARENTAL);
   }
 
   // How strongly aging increases maintenance costs and reduces fertility
   senescenceRate() {
-    const b = this.b / 255;
-
-    return 0.1 + 0.4 * (1 - b); // 0.1..0.5
+    return 0.1 + 0.4 * (1 - this.geneFraction(GENE_LOCI.SENESCENCE));
   }
 
   // Combat effectiveness multiplier
   combatPower() {
-    const r = this.r / 255;
-
-    return 0.8 + 0.9 * r; // 0.8..1.7
+    return 0.8 + 0.9 * this.geneFraction(GENE_LOCI.COMBAT);
   }
 
   // DNA-derived social thresholds
   allyThreshold() {
-    // Bluer genomes prefer tighter kin groups
-    const b = this.b / 255;
-
-    return 0.5 + 0.4 * b; // 0.5..0.9
+    return 0.5 + 0.4 * this.geneFraction(GENE_LOCI.ALLY);
   }
   enemyThreshold() {
-    // Redder genomes classify more as enemies (lower threshold)
-    const r = this.r / 255;
-
-    return 0.6 - 0.4 * r; // 0.2..0.6
+    return 0.6 - 0.4 * this.geneFraction(GENE_LOCI.ENEMY);
   }
 
   reproductionProb() {
     const rnd = this.prngFor('reproductionProb');
-    const r = this.r / 255;
-    const g = this.g / 255;
-    const b = this.b / 255;
-    // Red contributes boldness, green steadies fertility, blue tempers boldness
-    const boldness = clamp(0.55 * r + 0.25 * g + 0.2 * (1 - b), 0, 1);
-    const synergy = clamp(0.35 * g + 0.35 * b + 0.3 * (1 - Math.abs(r - g)), 0, 1);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const boldness = clamp(0.5 * risk + 0.5 * fertility, 0, 1);
+    const synergy = clamp(
+      0.35 * cooperation + 0.35 * efficiency + 0.3 * (1 - Math.abs(risk - fertility)),
+      0,
+      1
+    );
     const base = 0.18 + 0.6 * boldness; // 0.18..0.78
     const synergyAdj = 0.75 + 0.35 * synergy; // 0.75..1.10
     const noise = 0.9 + rnd() * 0.2; // 0.9..1.1
@@ -149,87 +250,97 @@ export class DNA {
   }
 
   initialEnergy(maxEnergy = 5) {
-    const brightness = (this.r + this.g + this.b) / (3 * 255);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
+    const value = 0.5 + capacity * (maxEnergy - 0.5);
 
-    return Math.max(0.5, Math.min(maxEnergy, 0.5 + brightness * (maxEnergy - 0.5)));
+    return Math.max(0.5, Math.min(maxEnergy, value));
   }
 
   lifespan(maxAge = 1000, minAge = 100) {
     const rnd = this.prngFor('lifespan');
-    const base = 0.5 + (this.b / 255) * 0.5; // 0.5..1.0 of maxAge
-    const lifespanAdj = ((this.b - 127.5) / 255) * 100;
+    const longevity = this.geneFraction(GENE_LOCI.SENESCENCE);
+    const resilience = this.geneFraction(GENE_LOCI.RESIST_COLD);
+    const base = 0.45 + 0.55 * ((longevity + resilience) / 2); // 0.45..1.0
+    const lifespanAdj = this.lifespanAdj();
     const v = Math.round(maxAge * (base * (0.95 + rnd() * 0.1))) + lifespanAdj;
 
     return Math.max(minAge, v);
   }
 
   floodResist() {
-    return this.b / 255;
+    return this.geneFraction(GENE_LOCI.RESIST_FLOOD);
   }
   heatResist() {
-    return this.r / 255;
+    return this.geneFraction(GENE_LOCI.RESIST_HEAT);
   }
   droughtResist() {
-    return this.g / 255;
+    return this.geneFraction(GENE_LOCI.RESIST_DROUGHT);
   }
   coldResist() {
-    return (this.g + this.b) / (2 * 255);
+    return this.geneFraction(GENE_LOCI.RESIST_COLD);
   }
 
   // Probability (0..1) to blend alleles during crossover instead of inheriting a pure channel
   crossoverMix() {
     const rnd = this.prngFor('crossoverMix');
-    const red = this.r / 255;
-    const green = this.g / 255;
-    const blue = this.b / 255;
-    const cooperation = 0.25 + 0.45 * green; // greener genomes blend more
-    const temperament = 0.2 * (blue - red); // red skews toward purity, blue toward blending
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const cohesion = this.geneFraction(GENE_LOCI.COHESION);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const base = 0.25 + 0.45 * cooperation;
+    const temperament = 0.2 * (cohesion - risk);
     const jitter = (rnd() - 0.5) * 0.2; // deterministic per-genome variance
 
-    return clamp(cooperation + temperament + jitter, 0, 1);
+    return clamp(base + temperament + jitter, 0, 1);
   }
 
   mutationChance() {
     const rnd = this.prngFor('mutationChance');
+    const rate = this.geneFraction(GENE_LOCI.MUTATION_RATE);
+    const base = 0.04 + rate * 0.22;
+    const jitter = (rnd() - 0.5) * 0.05;
 
-    return 0.08 + rnd() * 0.2; // 0.08..0.28
+    return clamp(base + jitter, 0.02, 0.3);
   }
 
   mutationRange() {
     const rnd = this.prngFor('mutationRange');
+    const span = this.geneFraction(GENE_LOCI.MUTATION_RANGE);
 
-    return 6 + Math.floor(rnd() * 20); // 6..25
+    return 4 + Math.floor(span * 24 + rnd() * 4); // ~4..32
   }
 
   starvationThresholdFrac() {
-    // Higher green -> better resource efficiency, lower threshold
-    return 0.8 - (this.g / 255) * 0.6; // 0.2..0.8
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+
+    return 0.8 - efficiency * 0.6; // 0.2..0.8
   }
 
   neurons() {
     const rnd = this.prngFor('neurons');
+    const neuro = this.geneFraction(GENE_LOCI.NEURAL);
 
-    return Math.max(1, Math.floor(rnd() * 5) + 1);
+    return Math.max(1, Math.floor(neuro * 4 + rnd() * 2) + 1);
   }
 
   sight() {
     const rnd = this.prngFor('sight');
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
 
-    return Math.max(1, Math.floor(rnd() * 5) + 1);
+    return Math.max(1, Math.floor(sense * 4 + rnd() * 2) + 1);
   }
 
   baseEnergyLossScale() {
-    const brightness = (this.r + this.g + this.b) / (3 * 255);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
 
-    return 0.5 + brightness; // 0.5..1.5 scale
+    return 0.5 + capacity; // 0.5..1.5 scale
   }
 
   // Lifespan derived solely from DNA, without external clamps
   lifespanDNA() {
     const rnd = this.prngFor('lifespan');
-    const b = this.b / 255;
-    // Blue channel biases toward longevity; add small noise
-    const base = 300 + b * 900; // 300..1200
+    const longevity = this.geneFraction(GENE_LOCI.SENESCENCE);
+    const resilience = this.geneFraction(GENE_LOCI.RESIST_COLD);
+    const base = 300 + ((longevity + resilience) / 2) * 900; // 300..1200
     const noise = (rnd() - 0.5) * 120; // +/-60
     const adj = this.lifespanAdj();
 
@@ -238,101 +349,95 @@ export class DNA {
 
   // DNA-derived base energy loss per tick (before scale)
   energyLossBase() {
-    // Greener genomes are more efficient
-    const g = this.g / 255;
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
 
-    return 0.015 + (1 - g) * 0.03; // ~0.015..0.045
+    return 0.015 + (1 - efficiency) * 0.03; // ~0.015..0.045
   }
 
   // How efficiently a cell can harvest tile energy per tick (0.2..0.8)
   forageRate() {
-    const g = this.g / 255;
-
-    return 0.2 + 0.6 * g;
+    return 0.2 + 0.6 * this.geneFraction(GENE_LOCI.FORAGING);
   }
 
   // Absolute caps (energy units per tick) for harvesting; DNA-driven
   harvestCapMin() {
-    const b = this.b / 255;
+    const foraging = this.geneFraction(GENE_LOCI.FORAGING);
 
-    return 0.03 + 0.12 * b; // 0.03..0.15
+    return 0.03 + 0.12 * foraging; // 0.03..0.15
   }
   harvestCapMax() {
-    const g = this.g / 255;
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
 
-    return 0.25 + 0.6 * g; // 0.25..0.85
+    return 0.25 + 0.6 * capacity; // 0.25..0.85
   }
 
   // Energy cost characteristics for actions
   moveCost() {
-    const b = this.b / 255;
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
 
-    return 0.002 + 0.006 * b; // 0.002..0.008
+    return 0.002 + 0.006 * movement; // 0.002..0.008
   }
   fightCost() {
-    const r = this.r / 255;
+    const combat = this.geneFraction(GENE_LOCI.COMBAT);
 
-    return 0.01 + 0.03 * r; // 0.01..0.04
+    return 0.01 + 0.03 * combat; // 0.01..0.04
   }
 
   // Cognitive/perception cost based on neurons and sight
   cognitiveCost(neurons, sight, effDensity = 0) {
-    const brightness = (this.r + this.g + this.b) / (3 * 255);
-    const base = 0.0004 + 0.0008 * (1 - brightness); // efficient genomes pay less
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const base = 0.0004 + 0.0008 * (1 - efficiency); // efficient genomes pay less
 
     return base * (neurons + 0.5 * sight) * (0.5 + 0.5 * effDensity);
   }
 
   // Reproduction energy threshold as a fraction of max tile energy
   reproductionThresholdFrac() {
-    const r = this.r / 255;
-    const g = this.g / 255;
-    const b = this.b / 255;
-    const efficiency = clamp(0.45 * g + 0.25 * b, 0, 1);
-    const ambition = clamp(0.4 * r + 0.2 * (1 - b), 0, 1);
-    const cooperative = clamp(0.3 * b + 0.2 * g, 0, 1);
-    let threshold = 0.28 + 0.3 * (1 - efficiency) + 0.18 * ambition - 0.08 * cooperative;
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    let threshold = 0.28 + 0.3 * (1 - efficiency) + 0.18 * fertility - 0.08 * cooperation;
 
     return clamp(threshold, 0.22, 0.7);
   }
 
   // Cooperation share fraction of current energy
   cooperateShareFrac() {
-    const b = this.b / 255;
-
-    return 0.2 + 0.4 * b; // 0.2..0.6
+    return 0.2 + 0.4 * this.geneFraction(GENE_LOCI.COOPERATION); // 0.2..0.6
   }
 
   strategy() {
     const rnd = this.prngFor('strategy');
+    const anchor = this.geneFraction(GENE_LOCI.STRATEGY);
 
-    return rnd(); // 0..1
+    return clamp(anchor * 0.7 + rnd() * 0.3, 0, 1); // 0..1
   }
 
   lifespanAdj() {
-    return ((this.b - 127.5) / 255) * 100;
+    return Math.round((this.geneFraction(GENE_LOCI.SENESCENCE) - 0.5) * 200);
   }
 
   densityResponses() {
-    const r = this.r / 255;
-    const g = this.g / 255;
-    const b = this.b / 255;
-    const brightness = (this.r + this.g + this.b) / (3 * 255);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
 
-    const reproMax = 1.0 + g * 0.3;
-    const reproMin = 0.3 + g * 0.4;
-    const fightMin = 0.8 + r * 0.3;
-    const fightMax = 1.3 + r * 0.9;
-    const coopMax = 1.1 + b * 0.2;
-    const coopMin = 0.5 + b * 0.4;
-    const energyMin = 1.0 + brightness * 0.2;
-    const energyMax = 1.1 + (1 - g) * 0.6;
-    const cautiousMin = 1.0 + b * 0.2;
-    const cautiousMax = 1.2 + b * 0.8;
-    const pursuitMax = 1.0 + r * 0.2;
-    const pursuitMin = 0.6 + (1 - b) * 0.4;
-    const enemyBiasMin = 0.02 + r * 0.08;
-    const enemyBiasMax = 0.2 + r * 0.5;
+    const reproMax = 1.0 + efficiency * 0.3;
+    const reproMin = 0.3 + efficiency * 0.4;
+    const fightMin = 0.8 + risk * 0.3;
+    const fightMax = 1.3 + risk * 0.9;
+    const coopMax = 1.1 + cooperation * 0.2;
+    const coopMin = 0.5 + cooperation * 0.4;
+    const energyMin = 1.0 + density * 0.2;
+    const energyMax = 1.1 + (1 - efficiency) * 0.6;
+    const cautiousMin = 1.0 + (1 - movement) * 0.2;
+    const cautiousMax = 1.2 + (1 - movement) * 0.8;
+    const pursuitMax = 1.0 + movement * 0.2;
+    const pursuitMin = 0.6 + (1 - cooperation) * 0.4;
+    const enemyBiasMin = 0.02 + risk * 0.08;
+    const enemyBiasMax = 0.2 + risk * 0.5;
 
     return {
       reproduction: { min: reproMin, max: reproMax },
@@ -351,16 +456,9 @@ export class DNA {
     const blendB = typeof other?.crossoverMix === 'function' ? other.crossoverMix() : 0.5;
     const blendProbability = clamp((blendA + blendB) / 2, 0, 1);
     const range = Math.max(0, mutationRange | 0);
+    const geneCount = Math.max(this.length, other?.length ?? 0, DEFAULT_GENE_COUNT);
 
-    const mutate = (value) => {
-      if (rng() < mutationChance) {
-        value += Math.floor(randomRange(-1, 1, rng) * range);
-      }
-
-      return Math.max(0, Math.min(255, value));
-    };
-
-    const mixChannel = (a, b) => {
+    const mixGene = (a, b) => {
       let v;
 
       if (rng() < blendProbability) {
@@ -371,24 +469,41 @@ export class DNA {
         v = rng() < 0.5 ? a : b;
       }
 
-      return mutate(v);
+      if (rng() < mutationChance) {
+        v += Math.floor(randomRange(-1, 1, rng) * range);
+      }
+
+      return clampGene(v);
     };
 
-    return new DNA(
-      mixChannel(this.r, other.r),
-      mixChannel(this.g, other.g),
-      mixChannel(this.b, other.b)
-    );
+    const genes = new Uint8Array(geneCount);
+
+    for (let i = 0; i < geneCount; i++) {
+      const a = this.geneAt(i);
+      const b = other?.geneAt?.(i) ?? other?.genes?.[i] ?? 0;
+
+      genes[i] = mixGene(a, b);
+    }
+
+    return new DNA({ genes, geneCount });
   }
 
   similarity(other) {
-    const dx = this.r - other.r,
-      dy = this.g - other.g,
-      dz = this.b - other.b;
-    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    const maxDist = Math.sqrt(3 * 255 * 255);
+    if (!other) return 0;
 
-    return 1 - dist / maxDist;
+    const geneCount = Math.max(this.length, other.length ?? 0);
+    let distSq = 0;
+
+    for (let i = 0; i < geneCount; i++) {
+      const delta = this.geneAt(i) - (other.geneAt?.(i) ?? 0);
+
+      distSq += delta * delta;
+    }
+
+    const dist = Math.sqrt(distSq);
+    const maxDist = Math.sqrt(geneCount * 255 * 255);
+
+    return geneCount === 0 ? 1 : 1 - dist / maxDist;
   }
 }
 
