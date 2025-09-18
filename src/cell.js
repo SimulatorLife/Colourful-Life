@@ -46,26 +46,32 @@ export default class Cell {
     const range = Math.round((parentA.dna.mutationRange() + parentB.dna.mutationRange()) / 2);
     const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range);
     const maxE = window.GridManager?.maxTileEnergy ?? 5;
-    const thr =
-      ((parentA.dna.reproductionThresholdFrac() + parentB.dna.reproductionThresholdFrac()) / 2) *
-      maxE;
-    const investA = Math.min(
-      parentA.energy,
-      parentA.energy * (parentA.dna.parentalInvestmentFrac?.() ?? 0.4)
-    );
-    const investB = Math.min(
-      parentB.energy,
-      parentB.energy * (parentB.dna.parentalInvestmentFrac?.() ?? 0.4)
-    );
-    const offspringEnergy = Math.max(thr, investA + investB);
+    const starvationA = parentA.starvationThreshold(maxE);
+    const starvationB = parentB.starvationThreshold(maxE);
+    const calcInvestment = (parent, starvation) => {
+      const investFrac = parent.dna.parentalInvestmentFrac();
+      const desired = Math.max(0, Math.min(parent.energy, parent.energy * investFrac));
+      const maxSpend = Math.max(0, parent.energy - starvation);
+
+      return Math.min(desired, maxSpend);
+    };
+    const investA = calcInvestment(parentA, starvationA);
+    const investB = calcInvestment(parentB, starvationB);
+
+    if (investA <= 0 || investB <= 0) {
+      return null;
+    }
+
+    parentA.energy -= investA;
+    parentB.energy -= investB;
+
+    const offspringEnergy = investA + investB;
     const offspring = new Cell(row, col, childDNA, offspringEnergy);
     const strategy =
       (parentA.strategy + parentB.strategy) / 2 +
       (Math.random() * Cell.geneMutationRange - Cell.geneMutationRange / 2);
 
     offspring.strategy = Math.min(1, Math.max(0, strategy));
-    parentA.energy = Math.max(0, parentA.energy - investA);
-    parentB.energy = Math.max(0, parentB.energy - investB);
     parentA.offspring = (parentA.offspring || 0) + 1;
     parentB.offspring = (parentB.offspring || 0) + 1;
 

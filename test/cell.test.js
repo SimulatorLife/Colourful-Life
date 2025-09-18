@@ -6,6 +6,13 @@ let DNA;
 let clamp;
 let lerp;
 
+function investmentFor(energy, investFrac, starvation) {
+  const desired = Math.max(0, Math.min(energy, energy * investFrac));
+  const maxSpend = Math.max(0, energy - starvation);
+
+  return Math.min(desired, maxSpend);
+}
+
 function withMockedRandom(sequence, fn) {
   const original = Math.random;
   let index = 0;
@@ -66,7 +73,7 @@ test('manageEnergy applies DNA-driven metabolism and starvation rules', () => {
   assert.is(starving, expectedEnergy <= starvationThreshold);
 });
 
-test('breed enforces parental investment and reproduction thresholds', () => {
+test('breed spends parental investment energy without creating extra energy', () => {
   const dnaA = new DNA(10, 120, 200);
   const dnaB = new DNA(200, 80, 40);
   const parentA = new Cell(4, 5, dnaA, 8);
@@ -75,14 +82,16 @@ test('breed enforces parental investment and reproduction thresholds', () => {
   const energyBeforeB = parentB.energy;
   const investFracA = dnaA.parentalInvestmentFrac();
   const investFracB = dnaB.parentalInvestmentFrac();
-  const investA = Math.min(energyBeforeA, energyBeforeA * investFracA);
-  const investB = Math.min(energyBeforeB, energyBeforeB * investFracB);
-  const thresholdFrac = (dnaA.reproductionThresholdFrac() + dnaB.reproductionThresholdFrac()) / 2;
-  const threshold = thresholdFrac * window.GridManager.maxTileEnergy;
+  const maxTileEnergy = window.GridManager.maxTileEnergy;
+  const starvationA = parentA.starvationThreshold(maxTileEnergy);
+  const starvationB = parentB.starvationThreshold(maxTileEnergy);
+  const investA = investmentFor(energyBeforeA, investFracA, starvationA);
+  const investB = investmentFor(energyBeforeB, investFracB, starvationB);
+  const totalInvestment = investA + investB;
 
   const child = withMockedRandom([0.9, 0.9, 0.9, 0.5], () => Cell.breed(parentA, parentB));
 
-  const expectedEnergy = Math.max(threshold, investA + investB);
+  const expectedEnergy = totalInvestment;
 
   assert.ok(child instanceof Cell, 'breed should return a Cell');
   assert.is(child.row, parentA.row);
@@ -90,9 +99,80 @@ test('breed enforces parental investment and reproduction thresholds', () => {
   expectClose(child.energy, expectedEnergy, 1e-12, 'offspring energy');
   expectClose(parentA.energy, energyBeforeA - investA, 1e-12, 'parent A energy');
   expectClose(parentB.energy, energyBeforeB - investB, 1e-12, 'parent B energy');
-  assert.ok(child.energy >= threshold, 'offspring meets reproduction threshold');
+  expectClose(totalInvestment, energyBeforeA - parentA.energy + (energyBeforeB - parentB.energy));
+  assert.ok(child.energy <= totalInvestment, 'child energy never exceeds total investment');
   assert.is(parentA.offspring, 1);
   assert.is(parentB.offspring, 1);
+  assert.ok(parentA.energy >= starvationA, 'parent A never drops below starvation floor');
+  assert.ok(parentB.energy >= starvationB, 'parent B never drops below starvation floor');
+});
+
+test('breed returns null when either parent lacks investable energy', () => {
+  const dnaA = new DNA(240, 10, 10);
+  const dnaB = new DNA(240, 10, 10);
+  const parentA = new Cell(3, 4, dnaA, 0);
+  const parentB = new Cell(3, 4, dnaB, 2);
+  const energyBeforeA = parentA.energy;
+  const energyBeforeB = parentB.energy;
+  const starvationA = parentA.starvationThreshold(window.GridManager.maxTileEnergy);
+  const starvationB = parentB.starvationThreshold(window.GridManager.maxTileEnergy);
+
+  const offspring = Cell.breed(parentA, parentB);
+
+  assert.is(offspring, null, 'offspring should be null when investments are zero');
+  expectClose(parentA.energy, energyBeforeA, 1e-12, 'parent A energy unchanged');
+  expectClose(parentB.energy, energyBeforeB, 1e-12, 'parent B energy unchanged');
+  assert.is(parentA.offspring, 0);
+  assert.is(parentB.offspring, 0);
+  assert.ok(
+    parentA.energy <= starvationA,
+    'parent A remains at or below starvation floor when lacking energy'
+  );
+  assert.ok(
+    parentB.energy <= starvationB,
+    'parent B remains at or below starvation floor when lacking energy'
+  );
+});
+
+test('breed clamps investment so parents stop at starvation threshold', () => {
+  const dnaA = new DNA(30, 240, 220);
+  const dnaB = new DNA(200, 220, 60);
+  const parentA = new Cell(5, 6, dnaA, 6);
+  const parentB = new Cell(5, 6, dnaB, 4);
+  const maxTileEnergy = window.GridManager.maxTileEnergy;
+  const starvationA = parentA.starvationThreshold(maxTileEnergy);
+  const starvationB = parentB.starvationThreshold(maxTileEnergy);
+  const energyBeforeA = parentA.energy;
+  const energyBeforeB = parentB.energy;
+  const expectedInvestA = investmentFor(energyBeforeA, dnaA.parentalInvestmentFrac(), starvationA);
+  const expectedInvestB = investmentFor(energyBeforeB, dnaB.parentalInvestmentFrac(), starvationB);
+
+  assert.ok(starvationA > 0, 'starvation threshold should be positive');
+  assert.ok(starvationB > 0, 'starvation threshold should be positive');
+
+  const child = withMockedRandom([0.6, 0.6, 0.6, 0.5], () => Cell.breed(parentA, parentB));
+
+  assert.ok(child instanceof Cell, 'offspring should be produced when both can invest');
+  assert.ok(parentA.energy >= starvationA, 'parent A energy should not cross starvation threshold');
+  assert.ok(parentB.energy >= starvationB, 'parent B energy should not cross starvation threshold');
+  expectClose(
+    parentA.energy,
+    energyBeforeA - expectedInvestA,
+    1e-12,
+    'parent A investment matches clamp'
+  );
+  expectClose(
+    parentB.energy,
+    energyBeforeB - expectedInvestB,
+    1e-12,
+    'parent B investment matches clamp'
+  );
+  expectClose(
+    child.energy,
+    expectedInvestA + expectedInvestB,
+    1e-12,
+    'child energy equals combined investments'
+  );
 });
 
 test('breed applies mutation when RNG roll falls within mutation chance', () => {

@@ -393,8 +393,10 @@ export default class GridManager {
             if (randomPercent(reproProb) && cell.energy >= thrA && bestMate.target.energy >= thrB) {
               const offspring = Cell.breed(cell, bestMate.target);
 
-              this.grid[row][col] = offspring;
-              stats.onBirth();
+              if (offspring) {
+                this.grid[row][col] = offspring;
+                stats.onBirth();
+              }
             }
           }
         } else if (enemies.length > 0) {
