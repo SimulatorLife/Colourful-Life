@@ -81,6 +81,42 @@ export default class UIManager {
     return input;
   }
 
+  #appendControlRow(container, { label, value, title, color }) {
+    const row = document.createElement('div');
+
+    row.className = 'control-line';
+    if (title) row.title = title;
+
+    const nameEl = document.createElement('div');
+
+    nameEl.className = 'control-name';
+    if (color) {
+      const swatch = document.createElement('span');
+
+      swatch.style.display = 'inline-block';
+      swatch.style.width = '10px';
+      swatch.style.height = '10px';
+      swatch.style.marginRight = '6px';
+      swatch.style.background = color;
+      nameEl.appendChild(swatch);
+    }
+    const labelEl = document.createElement('span');
+
+    labelEl.textContent = label;
+    nameEl.appendChild(labelEl);
+
+    const valueEl = document.createElement('div');
+
+    valueEl.className = 'control-value';
+    valueEl.textContent = value;
+
+    row.appendChild(nameEl);
+    row.appendChild(valueEl);
+    container.appendChild(row);
+
+    return row;
+  }
+
   // Utility to create a collapsible panel with a header
   #createPanel(title) {
     const panel = document.createElement('div');
@@ -503,31 +539,42 @@ export default class UIManager {
     if (!this.metricsBox) return;
     this.metricsBox.innerHTML = '';
     const s = snapshot;
-    const add = (name, value, title) => {
-      const row = document.createElement('div');
 
-      row.className = 'control-line';
-      if (title) row.title = title;
-      const left = document.createElement('div');
-
-      left.className = 'control-name';
-      left.textContent = name;
-      const right = document.createElement('div');
-
-      right.className = 'control-value';
-      right.textContent = value;
-      row.appendChild(left);
-      row.appendChild(right);
-      this.metricsBox.appendChild(row);
-    };
-
-    add('Population', String(s.population), 'Total living cells');
-    add('Births', String(s.births), 'Births in the last tick');
-    add('Deaths', String(s.deaths), 'Deaths in the last tick');
-    add('Growth', String(s.growth), 'Births - Deaths');
-    add('Mean Energy', s.meanEnergy.toFixed(2), 'Average energy per cell');
-    add('Mean Age', s.meanAge.toFixed(1), 'Average age of living cells');
-    add('Diversity', s.diversity.toFixed(3), 'Estimated mean pairwise genetic distance');
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Population',
+      value: String(s.population),
+      title: 'Total living cells',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Births',
+      value: String(s.births),
+      title: 'Births in the last tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Deaths',
+      value: String(s.deaths),
+      title: 'Deaths in the last tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Growth',
+      value: String(s.growth),
+      title: 'Births - Deaths',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Mean Energy',
+      value: s.meanEnergy.toFixed(2),
+      title: 'Average energy per cell',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Mean Age',
+      value: s.meanAge.toFixed(1),
+      title: 'Average age of living cells',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Diversity',
+      value: s.diversity.toFixed(3),
+      title: 'Estimated mean pairwise genetic distance',
+    });
 
     this.drawSpark(this.sparkPop, stats.history.population, '#88d');
     this.drawSpark(this.sparkDiv2Canvas, stats.history.diversity, '#d88');
@@ -571,36 +618,6 @@ export default class UIManager {
       this.leaderBody = body;
     }
     this.leaderBody.innerHTML = '';
-    const add = (label, value, color) => {
-      const row = document.createElement('div');
-
-      row.className = 'control-line';
-      const left = document.createElement('div');
-
-      left.className = 'control-name';
-      if (color) {
-        const sw = document.createElement('span');
-
-        sw.style.display = 'inline-block';
-        sw.style.width = '10px';
-        sw.style.height = '10px';
-        sw.style.background = color;
-        sw.style.marginRight = '6px';
-        left.appendChild(sw);
-      }
-      const text = document.createElement('span');
-
-      text.textContent = label;
-      left.appendChild(text);
-      const right = document.createElement('div');
-
-      right.className = 'control-value';
-      right.textContent = value;
-      row.appendChild(left);
-      row.appendChild(right);
-      this.leaderBody.appendChild(row);
-    };
-
     top.forEach((e, i) => {
       const label = `#${i + 1}`;
       const smoothed = Number.isFinite(e.smoothedFitness) ? e.smoothedFitness : e.fitness;
@@ -611,7 +628,11 @@ export default class UIManager {
         ` | win ${e.fightsWon}` +
         ` | age ${e.age}`;
 
-      add(label, value, e.color);
+      this.#appendControlRow(this.leaderBody, {
+        label,
+        value,
+        color: e.color,
+      });
     });
   }
 }
