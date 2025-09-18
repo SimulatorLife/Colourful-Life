@@ -1,4 +1,4 @@
-import { getDefaultMaxTileEnergy } from './config.js';
+import { MAX_TILE_ENERGY } from './config.js';
 
 const FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
@@ -158,7 +158,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showEnergy,
     showDensity,
     showFitness,
-    maxTileEnergy = getDefaultMaxTileEnergy(),
+    maxTileEnergy = MAX_TILE_ENERGY,
     activeEvents,
     getEventColor,
     snapshot: providedSnapshot,
@@ -179,7 +179,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   }
 }
 
-export function drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy = getDefaultMaxTileEnergy()) {
+export function drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy = MAX_TILE_ENERGY) {
   const scale = 0.99;
 
   drawScalarHeatmap(

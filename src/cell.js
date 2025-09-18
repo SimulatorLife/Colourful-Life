@@ -3,12 +3,6 @@ import { randomRange, clamp, lerp } from './utils.js';
 import { isEventAffecting } from './eventManager.js';
 
 export default class Cell {
-  // TODO: The cells' colors should BE their genes. The RGB values should BE the DNA
-  // Each value (0-255) represents genes that control behavior
-  // Every one of the cell's preferences, inheritable traits, etc. is derived from these genes
-  // This will make it easier to visualize evolution and relationships between cells: for any given cell,
-  // its color is a direct representation of its genetic code
-  // Energy costs and thresholds are DNA-derived (see genome.js)
   static chanceToMutate = 0.15;
   static geneMutationRange = 0.2;
 

@@ -1,27 +1,31 @@
-import { ENERGY_REGEN_RATE_DEFAULT, ENERGY_DIFFUSION_RATE_DEFAULT } from './config.js';
+import {
+  ENERGY_REGEN_RATE_DEFAULT,
+  ENERGY_DIFFUSION_RATE_DEFAULT,
+  UI_SLIDER_CONFIG,
+} from './config.js';
 
 export default class UIManager {
-  constructor(updateCallback, mountSelector = '#app', actions = {}) {
+  constructor(updateCallback, mountSelector = '#app', actions = {}, layoutOptions = {}) {
     this.updateCallback = updateCallback;
     this.actions = actions || {};
     this.paused = false;
 
     // Settings with sensible defaults
-    this.societySimilarity = 0.7; // >= considered ally
-    this.enemySimilarity = 0.4; // <= considered enemy
-    this.eventStrengthMultiplier = 1.0; // scales event effects
-    this.eventFrequencyMultiplier = 1.0; // how often events spawn
-    this.speedMultiplier = 1.0; // simulation speed relative to 60 updates/sec
-    this.densityEffectMultiplier = 1.0; // scales density influence (0..2)
+    this.societySimilarity = UI_SLIDER_CONFIG.societySimilarity.default;
+    this.enemySimilarity = UI_SLIDER_CONFIG.enemySimilarity.default;
+    this.eventStrengthMultiplier = UI_SLIDER_CONFIG.eventStrengthMultiplier.default;
+    this.eventFrequencyMultiplier = UI_SLIDER_CONFIG.eventFrequencyMultiplier.default;
+    this.speedMultiplier = UI_SLIDER_CONFIG.speedMultiplier.default;
+    this.densityEffectMultiplier = UI_SLIDER_CONFIG.densityEffectMultiplier.default;
     this.energyRegenRate = ENERGY_REGEN_RATE_DEFAULT; // base logistic regen rate (0..0.2)
     this.energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT; // neighbor diffusion rate (0..0.5)
-    this.leaderboardIntervalMs = 750; // how often the leaderboard refreshes
+    this.leaderboardIntervalMs = UI_SLIDER_CONFIG.leaderboardIntervalMs.default;
+    this._lastSlowUiRender = Number.NEGATIVE_INFINITY; // shared throttle for fast-updating UI bits
     this.showDensity = false;
     this.showEnergy = false;
     this.showFitness = false;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
-    const canvasEl = this.root.querySelector('#gameCanvas');
 
     // Layout container with canvas on the left and sidebar on the right
     this.mainRow = document.createElement('div');
@@ -33,16 +37,17 @@ export default class UIManager {
     this.dashboardGrid = document.createElement('div');
     this.dashboardGrid.className = 'dashboard-grid';
     this.sidebar.appendChild(this.dashboardGrid);
+    this.mainRow.appendChild(this.canvasContainer);
+    this.mainRow.appendChild(this.sidebar);
+
+    const canvasEl = layoutOptions.canvasElement || this.#resolveNode(layoutOptions.canvasSelector);
+    const anchorNode =
+      this.#resolveNode(layoutOptions.before) || this.#resolveNode(layoutOptions.insertBefore);
 
     if (canvasEl) {
-      this.root.insertBefore(this.mainRow, canvasEl);
-      this.canvasContainer.appendChild(canvasEl);
-      this.mainRow.appendChild(this.canvasContainer);
-      this.mainRow.appendChild(this.sidebar);
+      this.attachCanvas(canvasEl, { before: anchorNode });
     } else {
-      this.root.appendChild(this.mainRow);
-      this.mainRow.appendChild(this.canvasContainer);
-      this.mainRow.appendChild(this.sidebar);
+      this.#ensureMainRowMounted(anchorNode);
     }
     this.controlsPanel = this.#buildControlsPanel();
     this.insightsPanel = this.#buildInsightsPanel();
@@ -53,6 +58,37 @@ export default class UIManager {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'p' || e.key === 'P') this.togglePause();
     });
+  }
+
+  attachCanvas(canvasElement, options = {}) {
+    const targetCanvas = this.#resolveNode(canvasElement);
+
+    if (!(targetCanvas instanceof HTMLElement)) return;
+    const anchor =
+      this.#resolveNode(options.before) || this.#resolveNode(options.insertBefore) || targetCanvas;
+
+    this.#ensureMainRowMounted(anchor);
+    this.canvasContainer.appendChild(targetCanvas);
+  }
+
+  #ensureMainRowMounted(anchor) {
+    if (this.mainRow.parentElement) return;
+
+    if (anchor?.parentElement) {
+      anchor.parentElement.insertBefore(this.mainRow, anchor);
+    } else {
+      this.root.appendChild(this.mainRow);
+    }
+  }
+
+  #resolveNode(candidate) {
+    if (!candidate) return null;
+    if (candidate instanceof Node) return candidate;
+    if (typeof candidate === 'string') {
+      return this.root.querySelector(candidate) || document.querySelector(candidate);
+    }
+
+    return null;
   }
 
   // Reusable checkbox row helper
@@ -207,12 +243,17 @@ export default class UIManager {
       return input;
     };
 
+    const applyFloor = (val, floor) => (floor === undefined ? val : Math.max(floor, val));
+    const sliderConfig = UI_SLIDER_CONFIG;
+
     // Ally similarity
+    const allyConfig = sliderConfig.societySimilarity;
+
     addSlider({
       label: 'Ally Similarity ≥',
-      min: 0,
-      max: 1,
-      step: 0.01,
+      min: allyConfig.min,
+      max: allyConfig.max,
+      step: allyConfig.step,
       value: this.societySimilarity,
       title: 'Minimum genetic similarity to consider another cell an ally (0..1)',
       format: (v) => v.toFixed(2),
@@ -220,11 +261,13 @@ export default class UIManager {
     });
 
     // Enemy threshold
+    const enemyConfig = sliderConfig.enemySimilarity;
+
     addSlider({
       label: 'Enemy Similarity ≤',
-      min: 0,
-      max: 1,
-      step: 0.01,
+      min: enemyConfig.min,
+      max: enemyConfig.max,
+      step: enemyConfig.step,
       value: this.enemySimilarity,
       title: 'Maximum genetic similarity to consider another cell an enemy (0..1)',
       format: (v) => v.toFixed(2),
@@ -232,11 +275,13 @@ export default class UIManager {
     });
 
     // Event strength multiplier
+    const eventStrengthConfig = sliderConfig.eventStrengthMultiplier;
+
     addSlider({
       label: 'Event Strength ×',
-      min: 0,
-      max: 3,
-      step: 0.05,
+      min: eventStrengthConfig.min,
+      max: eventStrengthConfig.max,
+      step: eventStrengthConfig.step,
       value: this.eventStrengthMultiplier,
       title: 'Scales the impact of environmental events (0..3)',
       format: (v) => v.toFixed(2),
@@ -244,27 +289,31 @@ export default class UIManager {
     });
 
     // Event frequency multiplier
+    const eventFrequencyConfig = sliderConfig.eventFrequencyMultiplier;
+
     addSlider({
       label: 'Event Frequency ×',
-      min: 0,
-      max: 3,
-      step: 0.1,
+      min: eventFrequencyConfig.min,
+      max: eventFrequencyConfig.max,
+      step: eventFrequencyConfig.step,
       value: this.eventFrequencyMultiplier,
       title: 'How often events spawn (0 disables new events)',
       format: (v) => v.toFixed(1),
-      onInput: (v) => (this.eventFrequencyMultiplier = Math.max(0, v)),
+      onInput: (v) => (this.eventFrequencyMultiplier = applyFloor(v, eventFrequencyConfig.floor)),
     });
 
     // Simulation speed multiplier (baseline 60 updates/sec)
+    const speedConfig = sliderConfig.speedMultiplier;
+
     addSlider({
       label: 'Speed ×',
-      min: 0.5,
-      max: 100,
-      step: 0.5,
+      min: speedConfig.min,
+      max: speedConfig.max,
+      step: speedConfig.step,
       value: this.speedMultiplier,
       title: 'Speed multiplier relative to 60 updates/sec (0.5x..100x)',
       format: (v) => `${v.toFixed(1)}x`,
-      onInput: (v) => (this.speedMultiplier = Math.max(0.1, v)),
+      onInput: (v) => (this.speedMultiplier = applyFloor(v, speedConfig.floor)),
     });
 
     // Overlay toggles
@@ -297,51 +346,59 @@ export default class UIManager {
     );
 
     // Density effect multiplier
+    const densityConfig = sliderConfig.densityEffectMultiplier;
+
     addSlider({
       label: 'Density Effect ×',
-      min: 0,
-      max: 2,
-      step: 0.05,
+      min: densityConfig.min,
+      max: densityConfig.max,
+      step: densityConfig.step,
       value: this.densityEffectMultiplier,
       title:
         'Scales how strongly population density affects energy, aggression, and breeding (0..2)',
       format: (v) => v.toFixed(2),
-      onInput: (v) => (this.densityEffectMultiplier = Math.max(0, v)),
+      onInput: (v) => (this.densityEffectMultiplier = applyFloor(v, densityConfig.floor)),
     });
 
     // Energy regen base rate
+    const regenConfig = sliderConfig.energyRegenRate;
+
     addSlider({
       label: 'Energy Regen Rate',
-      min: 0,
-      max: 0.2,
-      step: 0.005,
+      min: regenConfig.min,
+      max: regenConfig.max,
+      step: regenConfig.step,
       value: this.energyRegenRate,
       title: 'Base logistic regeneration rate toward max energy (0..0.2)',
       format: (v) => v.toFixed(3),
-      onInput: (v) => (this.energyRegenRate = Math.max(0, v)),
+      onInput: (v) => (this.energyRegenRate = applyFloor(v, regenConfig.floor)),
     });
 
     // Energy diffusion rate
+    const diffusionConfig = sliderConfig.energyDiffusionRate;
+
     addSlider({
       label: 'Energy Diffusion Rate',
-      min: 0,
-      max: 0.5,
-      step: 0.01,
+      min: diffusionConfig.min,
+      max: diffusionConfig.max,
+      step: diffusionConfig.step,
       value: this.energyDiffusionRate,
       title: 'How quickly energy smooths between tiles (0..0.5)',
       format: (v) => v.toFixed(2),
-      onInput: (v) => (this.energyDiffusionRate = Math.max(0, v)),
+      onInput: (v) => (this.energyDiffusionRate = applyFloor(v, diffusionConfig.floor)),
     });
+
+    const leaderboardConfig = sliderConfig.leaderboardIntervalMs;
 
     addSlider({
       label: 'Leaderboard Interval',
-      min: 100,
-      max: 3000,
-      step: 50,
+      min: leaderboardConfig.min,
+      max: leaderboardConfig.max,
+      step: leaderboardConfig.step,
       value: this.leaderboardIntervalMs,
       title: 'Delay between leaderboard refreshes in milliseconds (100..3000)',
       format: (v) => `${Math.round(v)} ms`,
-      onInput: (v) => (this.leaderboardIntervalMs = Math.max(0, v)),
+      onInput: (v) => (this.leaderboardIntervalMs = applyFloor(v, leaderboardConfig.floor)),
     });
 
     // Collapsible behavior
@@ -465,6 +522,17 @@ export default class UIManager {
   }
   getLeaderboardIntervalMs() {
     return this.leaderboardIntervalMs;
+  }
+  shouldRenderSlowUi(now) {
+    const interval = Math.max(0, this.leaderboardIntervalMs);
+
+    if (interval === 0 || now - this._lastSlowUiRender >= interval) {
+      this._lastSlowUiRender = now;
+
+      return true;
+    }
+
+    return false;
   }
   getShowDensity() {
     return this.showDensity;

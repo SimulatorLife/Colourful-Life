@@ -32,10 +32,18 @@
 
       const grid = new GridManager(rows, cols, { eventManager, ctx, cellSize, stats });
       let lastSnapshot = grid.getLastSnapshot();
-      let lastLeaderboardRenderTime = 0;
-      const uiManager = new UIManager(update, '#app', {
-        burst: () => grid.burstRandomCells({ count: 200, radius: 6 }),
-      });
+      let pendingSlowUiUpdate = false;
+      let lastMetrics = null;
+      const uiManager = new UIManager(
+        update,
+        '#app',
+        {
+          burst: () => grid.burstRandomCells({ count: 200, radius: 6 }),
+        },
+        {
+          canvasElement: canvas,
+        }
+      );
 
       requestAnimationFrame(update);
 
@@ -68,7 +76,8 @@
           stats.logEvent(eventManager.currentEvent, uiManager.getEventStrengthMultiplier());
           const metrics = stats.updateFromSnapshot(snapshot);
 
-          uiManager.renderMetrics(stats, metrics);
+          lastMetrics = metrics;
+          pendingSlowUiUpdate = true;
         }
         grid.draw();
         // overlays
@@ -81,14 +90,12 @@
           activeEvents: eventManager.activeEvents,
           getEventColor: eventManager.getColor?.bind(eventManager),
         });
-        // leaderboard (top 5 by composite fitness)
-        const leaderboardInterval = Math.max(0, uiManager.getLeaderboardIntervalMs());
-
-        if (tickOccurred || now - lastLeaderboardRenderTime >= leaderboardInterval) {
+        if (pendingSlowUiUpdate && uiManager.shouldRenderSlowUi(now)) {
+          if (lastMetrics) uiManager.renderMetrics(stats, lastMetrics);
           const top = computeLeaderboard(lastSnapshot, 5);
 
           uiManager.renderLeaderboard(top);
-          lastLeaderboardRenderTime = now;
+          pendingSlowUiUpdate = false;
         }
         requestAnimationFrame(update);
       }

@@ -98,10 +98,8 @@ export default class GridManager {
       for (let col = 0; col < this.cols; col++) {
         if (randomPercent(0.05)) {
           const dna = DNA.random();
-          const spawnEnergy = this.energyGrid[row][col];
 
-          this.grid[row][col] = new Cell(row, col, dna, spawnEnergy);
-          this.energyGrid[row][col] = 0;
+          this.spawnCell(row, col, { dna });
         }
       }
     }
@@ -122,11 +120,8 @@ export default class GridManager {
       const idx = Math.floor(randomRange(0, empty.length));
       const { r, c } = empty.splice(idx, 1)[0];
       const dna = DNA.random();
-      const spawnEnergy = this.energyGrid[r][c];
-      const newCell = new Cell(r, c, dna, spawnEnergy);
 
-      this.setCell(r, c, newCell);
-      this.energyGrid[r][c] = 0;
+      this.spawnCell(r, c, { dna });
     }
   }
 
@@ -227,6 +222,18 @@ export default class GridManager {
 
   setCell(row, col, cell) {
     this.grid[row][col] = cell;
+  }
+
+  spawnCell(row, col, { dna = DNA.random(), spawnEnergy, recordBirth = false } = {}) {
+    const energy = spawnEnergy ?? this.energyGrid[row][col];
+    const cell = new Cell(row, col, dna, energy);
+
+    this.setCell(row, col, cell);
+    this.energyGrid[row][col] = 0;
+
+    if (recordBirth) this.stats?.onBirth?.(cell);
+
+    return cell;
   }
 
   getDensityAt(row, col) {
@@ -563,7 +570,7 @@ export default class GridManager {
     return this.lastSnapshot;
   }
 
-  buildSnapshot(MAX_TILE_ENERGY = MAX_TILE_ENERGY) {
+  buildSnapshot(maxTileEnergy = MAX_TILE_ENERGY) {
     const snapshot = {
       rows: this.rows,
       cols: this.cols,
@@ -581,7 +588,7 @@ export default class GridManager {
 
         if (!cell) continue;
 
-        const fitness = computeFitness(cell, MAX_TILE_ENERGY);
+        const fitness = computeFitness(cell, maxTileEnergy);
         const previous = Number.isFinite(cell.fitnessScore) ? cell.fitnessScore : fitness;
         const smoothed = previous * 0.8 + fitness * 0.2;
 
@@ -694,11 +701,8 @@ export default class GridManager {
 
       if (!this.grid[rr][cc]) {
         const dna = DNA.random();
-        const spawnEnergy = this.energyGrid[rr][cc];
 
-        this.grid[rr][cc] = new Cell(rr, cc, dna, spawnEnergy);
-        this.energyGrid[rr][cc] = 0;
-        this.stats?.onBirth?.();
+        this.spawnCell(rr, cc, { dna, recordBirth: true });
         placed++;
       }
     }

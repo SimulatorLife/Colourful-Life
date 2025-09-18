@@ -3,24 +3,10 @@ const assert = require('uvu/assert');
 
 const configModulePromise = import('../src/config.js');
 
-test('getDefaultMaxTileEnergy returns GridManager value when available', async () => {
-  global.GridManager = { maxTileEnergy: 11 };
-  const { getDefaultMaxTileEnergy } = await configModulePromise;
+test('MAX_TILE_ENERGY exposes the config default', async () => {
+  const { MAX_TILE_ENERGY } = await configModulePromise;
 
-  const result = getDefaultMaxTileEnergy();
-
-  assert.is(result, 11);
-
-  delete global.GridManager;
-});
-
-test('getDefaultMaxTileEnergy falls back to config default when GridManager missing', async () => {
-  delete global.GridManager;
-  const { getDefaultMaxTileEnergy, MAX_TILE_ENERGY } = await configModulePromise;
-
-  const result = getDefaultMaxTileEnergy();
-
-  assert.is(result, MAX_TILE_ENERGY);
+  assert.is(MAX_TILE_ENERGY, 5);
 });
 
 test.run();
