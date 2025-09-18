@@ -247,8 +247,10 @@ export default class Cell {
       let bestE = -Infinity;
 
       for (const d of dirs) {
-        const rr = (row + d.dr + rows) % rows;
-        const cc = (col + d.dc + cols) % cols;
+        const rr = row + d.dr;
+        const cc = col + d.dc;
+
+        if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) continue;
         const occPenalty = gridArr[rr][cc] ? -1 : 0;
         const e = (getEnergyAt(rr, cc) ?? 0) + occPenalty;
 
