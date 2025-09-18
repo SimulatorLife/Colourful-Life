@@ -73,10 +73,10 @@ canvas {
 }
 
 .dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: var(--space-md);
-  align-content: start;
+  align-items: stretch;
 }
 
 @media (max-width: 1180px) {
@@ -93,7 +93,6 @@ canvas {
   }
   .dashboard-grid {
     width: 100%;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   }
 }
 
