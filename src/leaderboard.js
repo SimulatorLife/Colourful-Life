@@ -1,8 +1,8 @@
 export function computeLeaderboard(snapshot, topN = 5) {
-  const source = snapshot || {};
   const items = [];
+  const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
 
-  for (const entry of source.entries || []) {
+  for (const entry of entries) {
     const { cell, fitness, smoothedFitness } = entry || {};
 
     if (!cell || !Number.isFinite(fitness)) {
