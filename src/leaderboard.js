@@ -1,5 +1,4 @@
 export function computeLeaderboard(snapshot, topN = 5) {
-  const source = snapshot || {};
   const numericTopN = Number(topN);
   const sanitizedTopN = Number.isFinite(numericTopN) ? Math.max(0, Math.floor(numericTopN)) : 0;
 
@@ -7,6 +6,7 @@ export function computeLeaderboard(snapshot, topN = 5) {
     return [];
   }
 
+  const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
   const topItems = [];
 
   const compareItems = (a, b) => {
@@ -21,7 +21,7 @@ export function computeLeaderboard(snapshot, topN = 5) {
     return Number.isNaN(fitnessDiff) ? 0 : fitnessDiff;
   };
 
-  for (const entry of source.entries || []) {
+  for (const entry of entries) {
     const { cell, fitness, smoothedFitness } = entry || {};
 
     if (!cell || !Number.isFinite(fitness)) {
@@ -41,7 +41,6 @@ export function computeLeaderboard(snapshot, topN = 5) {
       age: Number.isFinite(cell?.age) ? cell.age : 0,
       color: cell?.color,
     };
-
     let inserted = false;
 
     for (let index = 0; index < topItems.length; index += 1) {

@@ -203,4 +203,28 @@ test('computeLeaderboard tolerates entries missing cell data', async () => {
   });
 });
 
+test('computeLeaderboard skips entries with non-finite fitness', async () => {
+  const { computeLeaderboard } = await leaderboardModulePromise;
+
+  const snapshot = {
+    entries: [
+      { cell: { offspring: 2, fightsWon: 3, age: 4 }, fitness: Number.NaN },
+      { cell: { offspring: 1, fightsWon: 1, age: 1 }, fitness: Number.POSITIVE_INFINITY },
+      { cell: { offspring: 0, fightsWon: 0, age: 2 }, fitness: 7, smoothedFitness: 6 },
+    ],
+  };
+
+  const leaderboard = computeLeaderboard(snapshot, 5);
+
+  assert.is(leaderboard.length, 1);
+  assert.equal(leaderboard[0], {
+    fitness: 7,
+    smoothedFitness: 6,
+    offspring: 0,
+    fightsWon: 0,
+    age: 2,
+    color: undefined,
+  });
+});
+
 test.run();
