@@ -659,6 +659,23 @@ export default class UIManager {
       title: 'Births - Deaths',
     });
     this.#appendControlRow(this.metricsBox, {
+      label: 'Skirmishes',
+      value: String(s.fights),
+      title: 'Skirmishes resolved last tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Cooperations',
+      value: String(s.cooperations),
+      title: 'Mutual aid events completed last tick',
+    });
+    const interactionTotal = s.fights + s.cooperations;
+
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Cooperation Share',
+      value: interactionTotal ? `${((s.cooperations / interactionTotal) * 100).toFixed(0)}%` : '—',
+      title: 'Share of cooperative interactions vs total interactions this tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
       label: 'Mean Energy',
       value: s.meanEnergy.toFixed(2),
       title: 'Average energy per cell',
