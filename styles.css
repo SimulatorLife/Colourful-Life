@@ -249,6 +249,24 @@ canvas {
   justify-content: space-between;
 }
 
+.metrics-group {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.metrics-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.metrics-group-rows {
+  display: grid;
+  gap: var(--space-sm);
+}
+
 .sparkline {
   width: 100%;
   height: auto;

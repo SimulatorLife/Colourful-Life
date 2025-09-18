@@ -646,6 +646,49 @@ export default class UIManager {
       title: 'Estimated mean pairwise genetic distance',
     });
 
+    const traitPresence = stats?.traitPresence;
+
+    if (traitPresence) {
+      const traitGroup = document.createElement('div');
+
+      traitGroup.className = 'metrics-group';
+
+      const traitHeading = document.createElement('div');
+
+      traitHeading.className = 'metrics-group-title';
+      traitHeading.textContent = 'Traits';
+      traitGroup.appendChild(traitHeading);
+
+      const traitRows = document.createElement('div');
+
+      traitRows.className = 'metrics-group-rows';
+      traitGroup.appendChild(traitRows);
+
+      const hasPopulation = traitPresence.population > 0;
+      const traitConfigs = [
+        { key: 'cooperation', label: 'Cooperation' },
+        { key: 'fighting', label: 'Fighting' },
+        { key: 'breeding', label: 'Breeding' },
+        { key: 'sight', label: 'Sight' },
+      ];
+
+      for (let i = 0; i < traitConfigs.length; i++) {
+        const trait = traitConfigs[i];
+        const count = traitPresence.counts?.[trait.key] ?? 0;
+        const fraction = traitPresence.fractions?.[trait.key] ?? 0;
+        const value = hasPopulation ? `${count} (${(fraction * 100).toFixed(0)}%)` : '—';
+        const tooltipBase = 'Active cells have a normalized value ≥ 60% for this trait.';
+
+        this.#appendControlRow(traitRows, {
+          label: trait.label,
+          value,
+          title: hasPopulation ? tooltipBase : `${tooltipBase} No living cells in population.`,
+        });
+      }
+
+      this.metricsBox.appendChild(traitGroup);
+    }
+
     this.drawSpark(this.sparkPop, stats.history.population, '#88d');
     this.drawSpark(this.sparkDiv2Canvas, stats.history.diversity, '#d88');
     this.drawSpark(this.sparkEnergy, stats.history.energy, '#8d8');
