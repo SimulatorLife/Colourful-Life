@@ -53,6 +53,108 @@ test('buildSnapshot aggregates living cells for downstream consumers', async () 
   }
 });
 
+test('computeLeaderboard returns top entries in descending fitness order', async () => {
+  const { computeLeaderboard } = await leaderboardModulePromise;
+
+  const snapshot = {
+    entries: [
+      {
+        fitness: 10,
+        smoothedFitness: 12,
+        cell: createStubCell({
+          fitnessScore: 9,
+          offspring: 5,
+          fightsWon: 3,
+          age: 7,
+          color: '#aa0',
+        }),
+      },
+      {
+        fitness: 8,
+        smoothedFitness: 11,
+        cell: createStubCell({
+          fitnessScore: 8,
+          offspring: 4,
+          fightsWon: 1,
+          age: 6,
+          color: '#bb1',
+        }),
+      },
+      {
+        fitness: 15,
+        smoothedFitness: 11,
+        cell: createStubCell({
+          fitnessScore: 8,
+          offspring: 2,
+          fightsWon: 4,
+          age: 4,
+          color: '#cc2',
+        }),
+      },
+      {
+        fitness: 9,
+        cell: createStubCell({
+          fitnessScore: 13,
+          offspring: 6,
+          fightsWon: 5,
+          age: 8,
+          color: '#dd3',
+        }),
+      },
+      {
+        fitness: 7,
+        cell: createStubCell({
+          offspring: 1,
+          fightsWon: 0,
+          age: 5,
+          color: '#ee4',
+        }),
+      },
+      {
+        fitness: 5,
+        cell: createStubCell({
+          offspring: 0,
+          fightsWon: 0,
+          age: 3,
+          color: '#ff5',
+        }),
+      },
+    ],
+  };
+
+  const leaderboard = computeLeaderboard(snapshot, 3);
+
+  assert.is(leaderboard.length, 3);
+  assert.equal(
+    leaderboard.map(({ color }) => color),
+    ['#dd3', '#aa0', '#cc2']
+  );
+  assert.equal(leaderboard[0], {
+    fitness: 9,
+    smoothedFitness: 13,
+    offspring: 6,
+    fightsWon: 5,
+    age: 8,
+    color: '#dd3',
+  });
+  assert.equal(leaderboard[1], {
+    fitness: 10,
+    smoothedFitness: 12,
+    offspring: 5,
+    fightsWon: 3,
+    age: 7,
+    color: '#aa0',
+  });
+  assert.equal(leaderboard[2], {
+    fitness: 15,
+    smoothedFitness: 11,
+    offspring: 2,
+    fightsWon: 4,
+    age: 4,
+    color: '#cc2',
+  });
+});
+
 test('computeLeaderboard sanitizes topN before slicing', async () => {
   const { computeLeaderboard } = await leaderboardModulePromise;
   const snapshot = {
@@ -60,17 +162,17 @@ test('computeLeaderboard sanitizes topN before slicing', async () => {
       {
         fitness: 10,
         smoothedFitness: 10,
-        cell: { offspring: 0, fightsWon: 0, age: 0, color: '#000', fitnessScore: 10 },
+        cell: createStubCell({ fitnessScore: 10, color: '#000' }),
       },
       {
         fitness: 8,
         smoothedFitness: 8,
-        cell: { offspring: 0, fightsWon: 0, age: 0, color: '#111', fitnessScore: 8 },
+        cell: createStubCell({ fitnessScore: 8, color: '#111' }),
       },
       {
         fitness: 6,
         smoothedFitness: 6,
-        cell: { offspring: 0, fightsWon: 0, age: 0, color: '#222', fitnessScore: 6 },
+        cell: createStubCell({ fitnessScore: 6, color: '#222' }),
       },
     ],
   };
@@ -100,4 +202,5 @@ test('computeLeaderboard tolerates entries missing cell data', async () => {
     color: undefined,
   });
 });
+
 test.run();
