@@ -517,19 +517,47 @@ export default class UIManager {
     body.appendChild(this.metricsBox);
 
     // Sparklines canvases
-    const sparkDescriptors = [
-      { label: 'Population', property: 'sparkPop' },
-      { label: 'Diversity', property: 'sparkDiv2Canvas' },
-      { label: 'Mean Energy', property: 'sparkEnergy' },
-      { label: 'Growth', property: 'sparkGrowth' },
-      { label: 'Event Strength', property: 'sparkEvent' },
+    const traitDescriptors = [
+      { key: 'cooperation', name: 'Cooperation' },
+      { key: 'fighting', name: 'Fighting' },
+      { key: 'breeding', name: 'Breeding' },
+      { key: 'sight', name: 'Sight' },
     ];
 
-    sparkDescriptors.forEach(({ label, property }) => {
+    const traitSparkDescriptors = traitDescriptors.flatMap(({ key, name }) => [
+      {
+        label: `${name} Activity (presence %)`,
+        property: `sparkTrait${name}Presence`,
+        traitKey: key,
+        traitType: 'presence',
+        color: '#f39c12',
+      },
+      {
+        label: `${name} Intensity (avg level)`,
+        property: `sparkTrait${name}Average`,
+        traitKey: key,
+        traitType: 'average',
+        color: '#3498db',
+      },
+    ]);
+
+    const sparkDescriptors = [
+      { label: 'Population', property: 'sparkPop', color: '#88d' },
+      { label: 'Diversity', property: 'sparkDiv2Canvas', color: '#d88' },
+      { label: 'Mean Energy', property: 'sparkEnergy', color: '#8d8' },
+      { label: 'Growth', property: 'sparkGrowth', color: '#dd8' },
+      { label: 'Event Strength', property: 'sparkEvent', color: '#b85' },
+      ...traitSparkDescriptors,
+    ];
+
+    this.traitSparkDescriptors = traitSparkDescriptors;
+
+    sparkDescriptors.forEach(({ label, property, color }) => {
       const caption = document.createElement('div');
 
       caption.className = 'control-name';
       caption.textContent = label;
+      if (color) caption.style.color = color;
       body.appendChild(caption);
 
       const canvas = document.createElement('canvas');
@@ -651,25 +679,35 @@ export default class UIManager {
     this.drawSpark(this.sparkEnergy, stats.history.energy, '#8d8');
     this.drawSpark(this.sparkGrowth, stats.history.growth, '#dd8');
     this.drawSpark(this.sparkEvent, stats.history.eventStrength, '#b85');
+
+    if (Array.isArray(this.traitSparkDescriptors)) {
+      this.traitSparkDescriptors.forEach(({ property, traitKey, traitType, color }) => {
+        const canvas = this[property];
+        const data = stats?.traitHistory?.[traitType]?.[traitKey];
+
+        this.drawSpark(canvas, Array.isArray(data) ? data : [], color);
+      });
+    }
   }
 
   drawSpark(canvas, data, color = '#88d') {
     if (!canvas) return;
+    const series = Array.isArray(data) ? data : [];
     const ctx = canvas.getContext('2d');
     const w = canvas.width;
     const h = canvas.height;
 
     ctx.clearRect(0, 0, w, h);
-    if (data.length < 2) return;
-    const min = Math.min(...data);
-    const max = Math.max(...data);
+    if (series.length < 2) return;
+    const min = Math.min(...series);
+    const max = Math.max(...series);
     const span = max - min || 1;
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    data.forEach((v, i) => {
-      const x = (i / (data.length - 1)) * (w - 1);
+    series.forEach((v, i) => {
+      const x = (i / (series.length - 1)) * (w - 1);
       const y = h - ((v - min) / span) * (h - 1) - 1;
 
       if (i === 0) ctx.moveTo(x, y);
