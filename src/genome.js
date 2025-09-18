@@ -1,4 +1,4 @@
-import { createRNG, randomRange, randomPercent } from './utils.js';
+import { clamp, createRNG, randomRange, randomPercent } from './utils.js';
 
 // Genome modeled as loci; currently r,g,b act as loci to preserve behavior
 export class DNA {
@@ -135,10 +135,17 @@ export class DNA {
 
   reproductionProb() {
     const rnd = this.prngFor('reproductionProb');
-    // Bias by green channel (resource affinity): 0.2..0.6
-    const base = 0.2 + (this.g / 255) * 0.4;
+    const r = this.r / 255;
+    const g = this.g / 255;
+    const b = this.b / 255;
+    // Red contributes boldness, green steadies fertility, blue tempers boldness
+    const boldness = clamp(0.55 * r + 0.25 * g + 0.2 * (1 - b), 0, 1);
+    const synergy = clamp(0.35 * g + 0.35 * b + 0.3 * (1 - Math.abs(r - g)), 0, 1);
+    const base = 0.18 + 0.6 * boldness; // 0.18..0.78
+    const synergyAdj = 0.75 + 0.35 * synergy; // 0.75..1.10
+    const noise = 0.9 + rnd() * 0.2; // 0.9..1.1
 
-    return Math.min(0.8, Math.max(0.05, base * (0.9 + rnd() * 0.2)));
+    return Math.min(0.9, Math.max(0.05, base * synergyAdj * noise));
   }
 
   initialEnergy(maxEnergy = 5) {
@@ -265,9 +272,15 @@ export class DNA {
 
   // Reproduction energy threshold as a fraction of max tile energy
   reproductionThresholdFrac() {
+    const r = this.r / 255;
     const g = this.g / 255;
+    const b = this.b / 255;
+    const efficiency = clamp(0.45 * g + 0.25 * b, 0, 1);
+    const ambition = clamp(0.4 * r + 0.2 * (1 - b), 0, 1);
+    const cooperative = clamp(0.3 * b + 0.2 * g, 0, 1);
+    let threshold = 0.28 + 0.3 * (1 - efficiency) + 0.18 * ambition - 0.08 * cooperative;
 
-    return 0.25 + 0.35 * (1 - g); // 0.25..0.60 (greener -> lower threshold)
+    return clamp(threshold, 0.22, 0.7);
   }
 
   // Cooperation share fraction of current energy
