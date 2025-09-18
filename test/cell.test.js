@@ -42,8 +42,9 @@ function predictDeterministicOffspring(dnaA, dnaB, mutationChance, mutationRange
   const blendB = typeof dnaB.crossoverMix === 'function' ? dnaB.crossoverMix() : 0.5;
   const blendProbability = clamp((blendA + blendB) / 2, 0, 1);
   const range = Math.max(0, mutationRange | 0);
+  const geneCount = Math.max(dnaA.length ?? 0, dnaB.length ?? 0);
 
-  const mixChannel = (a, b) => {
+  const mixGene = (a, b) => {
     let value;
 
     if (rng() < blendProbability) {
@@ -61,11 +62,13 @@ function predictDeterministicOffspring(dnaA, dnaB, mutationChance, mutationRange
     return Math.max(0, Math.min(255, value));
   };
 
-  return {
-    r: mixChannel(dnaA.r, dnaB.r),
-    g: mixChannel(dnaA.g, dnaB.g),
-    b: mixChannel(dnaA.b, dnaB.b),
-  };
+  const genes = new Uint8Array(geneCount);
+
+  for (let i = 0; i < geneCount; i++) {
+    genes[i] = mixGene(dnaA.geneAt(i), dnaB.geneAt(i));
+  }
+
+  return genes;
 }
 
 test('manageEnergy applies DNA-driven metabolism and starvation rules', () => {
@@ -133,12 +136,13 @@ test('breed applies deterministic crossover and honors forced mutation', () => {
 
   const chance = 1;
   const range = 12;
-  const expected = predictDeterministicOffspring(dnaA, dnaB, chance, range);
+  const expectedGenes = predictDeterministicOffspring(dnaA, dnaB, chance, range);
   const child = withMockedRandom([0.5], () => Cell.breed(parentA, parentB));
 
-  assert.is(child.dna.r, expected.r);
-  assert.is(child.dna.g, expected.g);
-  assert.is(child.dna.b, expected.b);
+  assert.is(child.dna.length, expectedGenes.length);
+  for (let i = 0; i < expectedGenes.length; i++) {
+    assert.is(child.dna.geneAt(i), expectedGenes[i]);
+  }
   expectClose(child.strategy, avgStrategy, 1e-12, 'strategy averages when mutation delta is zero');
 });
 
