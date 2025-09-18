@@ -59,28 +59,12 @@ export default class Stats {
   }
 
   // Compute per-tick aggregates and push to history
-  updateFromGrid(grid) {
+  updateFromSnapshot(snapshot) {
     this.totals.ticks++;
-    let pop = 0;
-    let energySum = 0;
-    let ageSum = 0;
-    const cells = [];
-
-    for (let r = 0; r < grid.rows; r++) {
-      for (let c = 0; c < grid.cols; c++) {
-        const cell = grid.getCell(r, c);
-
-        if (cell) {
-          pop++;
-          energySum += cell.energy;
-          ageSum += cell.age;
-          cells.push(cell);
-        }
-      }
-    }
-    const meanEnergy = pop ? energySum / pop : 0;
-    const meanAge = pop ? ageSum / pop : 0;
-    const diversity = this.estimateDiversity(cells);
+    const pop = snapshot?.population || 0;
+    const meanEnergy = pop ? snapshot.totalEnergy / pop : 0;
+    const meanAge = pop ? snapshot.totalAge / pop : 0;
+    const diversity = this.estimateDiversity(snapshot?.cells || []);
 
     this.pushHistory('population', pop);
     this.pushHistory('diversity', diversity);
