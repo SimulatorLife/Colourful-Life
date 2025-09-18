@@ -1,4 +1,3 @@
-import { computeFitness } from './fitness.js';
 import { getDefaultMaxTileEnergy } from './config.js';
 
 function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = '0,0,0') {
