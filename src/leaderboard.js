@@ -1,5 +1,7 @@
 export function computeLeaderboard(snapshot, topN = 5) {
   const source = snapshot || {};
+  const numericTopN = Number(topN);
+  const sanitizedTopN = Number.isFinite(numericTopN) ? Math.max(0, Math.floor(numericTopN)) : 0;
   const items = [];
 
   for (const { cell, fitness, smoothedFitness } of source.entries || []) {
@@ -19,5 +21,5 @@ export function computeLeaderboard(snapshot, topN = 5) {
   }
   items.sort((a, b) => b.smoothedFitness - a.smoothedFitness || b.fitness - a.fitness);
 
-  return items.slice(0, topN);
+  return items.slice(0, sanitizedTopN);
 }

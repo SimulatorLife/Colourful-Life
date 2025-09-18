@@ -53,4 +53,32 @@ test('buildSnapshot aggregates living cells for downstream consumers', async () 
   }
 });
 
+test('computeLeaderboard sanitizes topN before slicing', async () => {
+  const { computeLeaderboard } = await leaderboardModulePromise;
+  const snapshot = {
+    entries: [
+      {
+        fitness: 10,
+        smoothedFitness: 10,
+        cell: { offspring: 0, fightsWon: 0, age: 0, color: '#000', fitnessScore: 10 },
+      },
+      {
+        fitness: 8,
+        smoothedFitness: 8,
+        cell: { offspring: 0, fightsWon: 0, age: 0, color: '#111', fitnessScore: 8 },
+      },
+      {
+        fitness: 6,
+        smoothedFitness: 6,
+        cell: { offspring: 0, fightsWon: 0, age: 0, color: '#222', fitnessScore: 6 },
+      },
+    ],
+  };
+
+  assert.is(computeLeaderboard(snapshot, 0).length, 0);
+  assert.is(computeLeaderboard(snapshot, -5).length, 0);
+  assert.is(computeLeaderboard(snapshot, 1.8).length, 1);
+  assert.is(computeLeaderboard(snapshot, '2').length, 2);
+});
+
 test.run();
