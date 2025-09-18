@@ -15,6 +15,7 @@ export default class UIManager {
     this.densityEffectMultiplier = 1.0; // scales density influence (0..2)
     this.energyRegenRate = ENERGY_REGEN_RATE_DEFAULT; // base logistic regen rate (0..0.2)
     this.energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT; // neighbor diffusion rate (0..0.5)
+    this.leaderboardIntervalMs = 750; // how often the leaderboard refreshes
     this.showDensity = false;
     this.showEnergy = false;
     this.showFitness = false;
@@ -330,6 +331,17 @@ export default class UIManager {
       onInput: (v) => (this.energyDiffusionRate = Math.max(0, v)),
     });
 
+    addSlider({
+      label: 'Leaderboard Interval',
+      min: 100,
+      max: 3000,
+      step: 50,
+      value: this.leaderboardIntervalMs,
+      title: 'Delay between leaderboard refreshes in milliseconds (100..3000)',
+      format: (v) => `${Math.round(v)} ms`,
+      onInput: (v) => (this.leaderboardIntervalMs = Math.max(0, v)),
+    });
+
     // Collapsible behavior
     const toggleCollapsed = () => {
       panel.classList.toggle('collapsed');
@@ -450,6 +462,9 @@ export default class UIManager {
   }
   getEnergyDiffusionRate() {
     return this.energyDiffusionRate;
+  }
+  getLeaderboardIntervalMs() {
+    return this.leaderboardIntervalMs;
   }
   getShowDensity() {
     return this.showDensity;
