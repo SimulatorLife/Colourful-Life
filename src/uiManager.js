@@ -552,20 +552,29 @@ export default class UIManager {
 
     this.traitSparkDescriptors = traitSparkDescriptors;
 
+    const sparkGrid = document.createElement('div');
+
+    sparkGrid.className = 'sparkline-grid';
+    body.appendChild(sparkGrid);
+
     sparkDescriptors.forEach(({ label, property, color }) => {
+      const card = document.createElement('div');
       const caption = document.createElement('div');
 
+      card.className = 'sparkline-card';
       caption.className = 'control-name';
       caption.textContent = label;
       if (color) caption.style.color = color;
-      body.appendChild(caption);
 
       const canvas = document.createElement('canvas');
 
       canvas.className = 'sparkline';
-      canvas.width = 260;
+      canvas.width = 220;
       canvas.height = 40;
-      body.appendChild(canvas);
+
+      card.appendChild(caption);
+      card.appendChild(canvas);
+      sparkGrid.appendChild(card);
 
       this[property] = canvas;
     });
