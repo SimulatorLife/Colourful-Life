@@ -121,29 +121,10 @@ export default class UIManager {
   }
 
   #buildControlsPanel() {
-    const panel = document.createElement('div');
+    const { panel, body } = this.#createPanel('Simulation Controls');
 
     panel.id = 'controls';
-    panel.className = 'panel controls-panel';
-
-    // Header + collapsible body
-    const header = document.createElement('div');
-
-    header.className = 'panel-header';
-    const heading = document.createElement('h3');
-
-    heading.textContent = 'Simulation Controls';
-    const toggle = document.createElement('button');
-
-    toggle.textContent = '–';
-    toggle.className = 'panel-toggle';
-    header.appendChild(heading);
-    header.appendChild(toggle);
-    panel.appendChild(header);
-    const body = document.createElement('div');
-
-    body.className = 'panel-body';
-    panel.appendChild(body);
+    panel.classList.add('controls-panel');
 
     const addGrid = (className = '') => {
       const grid = document.createElement('div');
@@ -386,20 +367,6 @@ export default class UIManager {
       title: 'Delay between leaderboard refreshes in milliseconds (100..3000)',
       format: (v) => `${Math.round(v)} ms`,
       onInput: (v) => (this.leaderboardIntervalMs = Math.max(0, v)),
-    });
-
-    // Collapsible behavior
-    const toggleCollapsed = () => {
-      panel.classList.toggle('collapsed');
-      toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
-    };
-
-    header.addEventListener('click', (e) => {
-      if (e.target === toggle || e.target === heading) toggleCollapsed();
-    });
-    toggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleCollapsed();
     });
 
     return panel;
