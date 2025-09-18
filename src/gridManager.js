@@ -364,7 +364,9 @@ export default class GridManager {
           const bestMate = cell.findBestMate(matePool);
 
           if (bestMate) {
-            GridManager.moveToTarget(
+            const originalParentRow = cell.row;
+            const originalParentCol = cell.col;
+            const moveSucceeded = GridManager.moveToTarget(
               this.grid,
               row,
               col,
@@ -373,6 +375,10 @@ export default class GridManager {
               this.rows,
               this.cols
             );
+            const parentRow = cell.row;
+            const parentCol = cell.col;
+            const mateRow = bestMate.target.row;
+            const mateCol = bestMate.target.col;
             const localDensity = this.densityGrid[row][col];
             const reproProb = cell.computeReproductionProbability(bestMate.target, {
               localDensity,
@@ -391,10 +397,49 @@ export default class GridManager {
             const thrB = thrFracB * GridManager.maxTileEnergy;
 
             if (randomPercent(reproProb) && cell.energy >= thrA && bestMate.target.energy >= thrB) {
-              const offspring = Cell.breed(cell, bestMate.target);
+              const candidateSet = new Set();
+              const candidates = [];
+              const addCandidate = (r, c) => {
+                const wrappedRow = (r + this.rows) % this.rows;
+                const wrappedCol = (c + this.cols) % this.cols;
+                const key = `${wrappedRow},${wrappedCol}`;
 
-              this.grid[row][col] = offspring;
-              stats.onBirth();
+                if (!candidateSet.has(key)) {
+                  candidateSet.add(key);
+                  candidates.push({ r: wrappedRow, c: wrappedCol });
+                }
+              };
+              const addNeighbors = (baseRow, baseCol) => {
+                for (let dr = -1; dr <= 1; dr++) {
+                  for (let dc = -1; dc <= 1; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    addCandidate(baseRow + dr, baseCol + dc);
+                  }
+                }
+              };
+
+              if (moveSucceeded) {
+                addCandidate(originalParentRow, originalParentCol);
+                addNeighbors(originalParentRow, originalParentCol);
+              } else {
+                addCandidate(originalParentRow, originalParentCol);
+              }
+              addCandidate(parentRow, parentCol);
+              addCandidate(mateRow, mateCol);
+              addNeighbors(parentRow, parentCol);
+              addNeighbors(mateRow, mateCol);
+
+              const freeSlots = candidates.filter(({ r, c }) => !this.grid[r][c]);
+
+              if (freeSlots.length > 0) {
+                const spawn = freeSlots[Math.floor(randomRange(0, freeSlots.length))];
+                const offspring = Cell.breed(cell, bestMate.target);
+
+                offspring.row = spawn.r;
+                offspring.col = spawn.c;
+                this.grid[spawn.r][spawn.c] = offspring;
+                stats.onBirth();
+              }
             }
           }
         } else if (enemies.length > 0) {
