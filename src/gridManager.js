@@ -20,8 +20,10 @@ export default class GridManager {
   static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
 
   static tryMove(gridArr, sr, sc, dr, dc, rows, cols) {
-    const nr = (sr + dr + rows) % rows;
-    const nc = (sc + dc + cols) % cols;
+    const nr = sr + dr;
+    const nc = sc + dc;
+
+    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) return false;
     const dcell = gridArr[nr][nc];
 
     if (!dcell) {
@@ -197,12 +199,28 @@ export default class GridManager {
         }
 
         // Diffusion toward 4-neighbor mean
-        const up = this.energyGrid[(r - 1 + this.rows) % this.rows][c];
-        const down = this.energyGrid[(r + 1) % this.rows][c];
-        const left = this.energyGrid[r][(c - 1 + this.cols) % this.cols];
-        const right = this.energyGrid[r][(c + 1) % this.cols];
-        const neighAvg = (up + down + left + right) * 0.25;
-        const diff = D * (neighAvg - e);
+        let neighSum = 0;
+        let neighCount = 0;
+
+        if (r > 0) {
+          neighSum += this.energyGrid[r - 1][c];
+          neighCount++;
+        }
+        if (r < this.rows - 1) {
+          neighSum += this.energyGrid[r + 1][c];
+          neighCount++;
+        }
+        if (c > 0) {
+          neighSum += this.energyGrid[r][c - 1];
+          neighCount++;
+        }
+        if (c < this.cols - 1) {
+          neighSum += this.energyGrid[r][c + 1];
+          neighCount++;
+        }
+
+        const neighAvg = neighCount > 0 ? neighSum / neighCount : e;
+        const diff = neighCount > 0 ? D * (neighAvg - e) : 0;
 
         let val = e + regen - drain + diff;
 
@@ -243,8 +261,10 @@ export default class GridManager {
     for (let dx = -radius; dx <= radius; dx++) {
       for (let dy = -radius; dy <= radius; dy++) {
         if (dx === 0 && dy === 0) continue;
-        const rr = (row + dy + this.rows) % this.rows;
-        const cc = (col + dx + this.cols) % this.cols;
+        const rr = row + dy;
+        const cc = col + dx;
+
+        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
 
         total++;
         if (this.grid[rr][cc]) count++;
@@ -646,8 +666,10 @@ export default class GridManager {
     for (let x = -cell.sight; x <= cell.sight; x++) {
       for (let y = -cell.sight; y <= cell.sight; y++) {
         if (x === 0 && y === 0) continue;
-        const newRow = (row + y + this.rows) % this.rows;
-        const newCol = (col + x + this.cols) % this.cols;
+        const newRow = row + y;
+        const newCol = col + x;
+
+        if (newRow < 0 || newRow >= this.rows || newCol < 0 || newCol >= this.cols) continue;
         const target = this.grid[newRow][newCol];
 
         if (target) {
@@ -673,8 +695,10 @@ export default class GridManager {
 
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
-        const rr = (centerRow + dy + this.rows) % this.rows;
-        const cc = (centerCol + dx + this.cols) % this.cols;
+        const rr = centerRow + dy;
+        const cc = centerCol + dx;
+
+        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
 
         coords.push({ rr, cc });
       }
