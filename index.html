@@ -34,6 +34,7 @@
 
       const grid = new GridManager(rows, cols, { eventManager, ctx, cellSize, stats });
       let lastSnapshot = grid.getLastSnapshot();
+      let lastLeaderboardRenderTime = 0;
       const uiManager = new UIManager(update, '#app', {
         burst: () => grid.burstRandomCells({ count: 200, radius: 6 }),
       });
@@ -47,9 +48,11 @@
 
         const now = performance.now();
         const interval = 1000 / Math.max(1, uiManager.getUpdatesPerSecond());
+        let tickOccurred = false;
 
         if (now - lastUpdateTime >= interval) {
           lastUpdateTime = now;
+          tickOccurred = true;
           stats.resetTick();
           // update events with frequency and allow up to 2 concurrent
           eventManager.updateEvent(uiManager.getEventFrequencyMultiplier(), 2);
@@ -79,9 +82,14 @@
           snapshot: lastSnapshot,
         });
         // leaderboard (top 5 by composite fitness)
-        const top = computeLeaderboard(lastSnapshot, 5);
+        const leaderboardInterval = Math.max(0, uiManager.getLeaderboardIntervalMs());
 
-        uiManager.renderLeaderboard(top);
+        if (tickOccurred || now - lastLeaderboardRenderTime >= leaderboardInterval) {
+          const top = computeLeaderboard(lastSnapshot, 5);
+
+          uiManager.renderLeaderboard(top);
+          lastLeaderboardRenderTime = now;
+        }
         requestAnimationFrame(update);
       }
 
