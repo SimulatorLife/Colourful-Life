@@ -81,4 +81,23 @@ test('computeLeaderboard sanitizes topN before slicing', async () => {
   assert.is(computeLeaderboard(snapshot, '2').length, 2);
 });
 
+test('computeLeaderboard tolerates entries missing cell data', async () => {
+  const { computeLeaderboard } = await leaderboardModulePromise;
+
+  const snapshot = {
+    entries: [{ fitness: 10 }, { cell: {}, fitness: 5 }],
+  };
+
+  const leaderboard = computeLeaderboard(snapshot, 5);
+
+  assert.is(leaderboard.length, 1);
+  assert.equal(leaderboard[0], {
+    fitness: 5,
+    smoothedFitness: 5,
+    offspring: 0,
+    fightsWon: 0,
+    age: 0,
+    color: undefined,
+  });
+});
 test.run();

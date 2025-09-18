@@ -4,19 +4,25 @@ export function computeLeaderboard(snapshot, topN = 5) {
   const sanitizedTopN = Number.isFinite(numericTopN) ? Math.max(0, Math.floor(numericTopN)) : 0;
   const items = [];
 
-  for (const { cell, fitness, smoothedFitness } of source.entries || []) {
+  for (const entry of source.entries || []) {
+    const { cell, fitness, smoothedFitness } = entry || {};
+
+    if (!cell || !Number.isFinite(fitness)) {
+      continue;
+    }
+
     const smoothed =
-      smoothedFitness ??
+      (Number.isFinite(smoothedFitness) ? smoothedFitness : undefined) ??
       (Number.isFinite(cell?.fitnessScore) ? cell.fitnessScore : undefined) ??
       fitness;
 
     items.push({
       fitness,
       smoothedFitness: smoothed,
-      offspring: cell.offspring || 0,
-      fightsWon: cell.fightsWon || 0,
-      age: cell.age,
-      color: cell.color,
+      offspring: Number.isFinite(cell?.offspring) ? cell.offspring : 0,
+      fightsWon: Number.isFinite(cell?.fightsWon) ? cell.fightsWon : 0,
+      age: Number.isFinite(cell?.age) ? cell.age : 0,
+      color: cell?.color,
     });
   }
   items.sort((a, b) => b.smoothedFitness - a.smoothedFitness || b.fitness - a.fitness);
