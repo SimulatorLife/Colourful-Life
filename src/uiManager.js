@@ -22,29 +22,28 @@ export default class UIManager {
     this.root = document.querySelector(mountSelector) || document.body;
     const canvasEl = this.root.querySelector('#gameCanvas');
 
-    // Build two rows: main (canvas + right controls) and bottom (insights + leaderboard)
+    // Layout container with canvas on the left and sidebar on the right
     this.mainRow = document.createElement('div');
     this.mainRow.className = 'main-row';
-    this.rightSidebar = document.createElement('div');
-    this.rightSidebar.className = 'sidebar right-sidebar';
-    this.bottomRow = document.createElement('div');
-    this.bottomRow.className = 'bottom-row';
+    this.canvasContainer = document.createElement('div');
+    this.canvasContainer.className = 'canvas-container';
+    this.sidebar = document.createElement('div');
+    this.sidebar.className = 'sidebar';
 
     if (canvasEl) {
       this.root.insertBefore(this.mainRow, canvasEl);
-      this.mainRow.appendChild(canvasEl);
-      this.mainRow.appendChild(this.rightSidebar);
-      if (this.mainRow.nextSibling)
-        this.root.insertBefore(this.bottomRow, this.mainRow.nextSibling);
-      else this.root.appendChild(this.bottomRow);
+      this.canvasContainer.appendChild(canvasEl);
+      this.mainRow.appendChild(this.canvasContainer);
+      this.mainRow.appendChild(this.sidebar);
     } else {
       this.root.appendChild(this.mainRow);
-      this.root.appendChild(this.bottomRow);
+      this.mainRow.appendChild(this.canvasContainer);
+      this.mainRow.appendChild(this.sidebar);
     }
     this.controlsPanel = this.#buildControlsPanel();
     this.insightsPanel = this.#buildInsightsPanel();
-    this.rightSidebar.appendChild(this.controlsPanel);
-    this.bottomRow.appendChild(this.insightsPanel);
+    this.sidebar.appendChild(this.controlsPanel);
+    this.sidebar.appendChild(this.insightsPanel);
 
     // Keyboard toggle
     document.addEventListener('keydown', (e) => {
@@ -350,13 +349,6 @@ export default class UIManager {
   #buildInsightsPanel() {
     const { panel, body } = this.#createPanel('Evolution Insights');
 
-    // Metrics section
-    const metricsHeader = document.createElement('h4');
-
-    metricsHeader.textContent = 'Metrics';
-    metricsHeader.style.margin = '4px 0 6px';
-    body.appendChild(metricsHeader);
-
     this.metricsBox = document.createElement('div');
     this.metricsBox.className = 'metrics-box';
     body.appendChild(this.metricsBox);
@@ -368,6 +360,7 @@ export default class UIManager {
     cap1.textContent = 'Population';
     body.appendChild(cap1);
     this.sparkPop = document.createElement('canvas');
+    this.sparkPop.className = 'sparkline';
     this.sparkPop.width = 260;
     this.sparkPop.height = 40;
     body.appendChild(this.sparkPop);
@@ -378,6 +371,7 @@ export default class UIManager {
     cap2.textContent = 'Diversity';
     body.appendChild(cap2);
     this.sparkDiv2Canvas = document.createElement('canvas');
+    this.sparkDiv2Canvas.className = 'sparkline';
     this.sparkDiv2Canvas.width = 260;
     this.sparkDiv2Canvas.height = 40;
     body.appendChild(this.sparkDiv2Canvas);
@@ -388,6 +382,7 @@ export default class UIManager {
     cap3.textContent = 'Mean Energy';
     body.appendChild(cap3);
     this.sparkEnergy = document.createElement('canvas');
+    this.sparkEnergy.className = 'sparkline';
     this.sparkEnergy.width = 260;
     this.sparkEnergy.height = 40;
     body.appendChild(this.sparkEnergy);
@@ -398,6 +393,7 @@ export default class UIManager {
     cap4.textContent = 'Growth';
     body.appendChild(cap4);
     this.sparkGrowth = document.createElement('canvas');
+    this.sparkGrowth.className = 'sparkline';
     this.sparkGrowth.width = 260;
     this.sparkGrowth.height = 40;
     body.appendChild(this.sparkGrowth);
@@ -408,6 +404,7 @@ export default class UIManager {
     cap5.textContent = 'Event Strength';
     body.appendChild(cap5);
     this.sparkEvent = document.createElement('canvas');
+    this.sparkEvent.className = 'sparkline';
     this.sparkEvent.width = 260;
     this.sparkEvent.height = 40;
     body.appendChild(this.sparkEvent);
@@ -528,7 +525,7 @@ export default class UIManager {
       const { panel, body } = this.#createPanel('Leaderboard');
 
       panel.classList.add('leaderboard-panel');
-      this.bottomRow?.appendChild(panel);
+      this.sidebar?.appendChild(panel);
       this.leaderPanel = panel;
       this.leaderBody = body;
     }

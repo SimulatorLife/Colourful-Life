@@ -30,51 +30,61 @@ body {
 /* Canvas */
 canvas {
   display: block;
-  margin: 0 auto;
   background-color: #000;
 }
 
 /* App layout */
 .app-layout {
   display: flex;
-  flex-direction: column;
-  gap: var(--gap);
-  max-width: 1200px;
-  margin: 8px auto;
-  align-items: stretch;
-  padding: 0 8px;
+  justify-content: center;
+  padding: 16px;
   box-sizing: border-box;
 }
-#gameCanvas {
-  flex: 1 1 auto;
-  box-shadow: 0 0 0 1px var(--shadow);
-  max-width: min(50%, 800px); /* 50% or 800px, whichever is smaller */
-}
+
 .main-row {
   display: flex;
-  gap: var(--gap);
+  gap: clamp(16px, 3vw, 32px);
   align-items: flex-start;
+  width: min(1100px, 100%);
 }
-.bottom-row {
+
+.canvas-container {
+  flex: 1 1 0;
   display: flex;
-  gap: var(--gap);
-  flex-wrap: wrap;
+  justify-content: center;
 }
+
+#gameCanvas {
+  flex: 0 0 auto;
+  width: min(100%, 800px);
+  height: auto;
+  box-shadow: 0 0 0 1px var(--shadow);
+}
+
 /* Sidebar stacks panels vertically */
 .sidebar {
-  width: 300px;
+  flex: 0 0 320px;
   display: flex;
   flex-direction: column;
   gap: var(--gap);
 }
 
-.right-sidebar {
-  order: 2;
+@media (max-width: 1180px) {
+  .app-layout {
+    padding: 12px;
+  }
+  .main-row {
+    flex-direction: column;
+    align-items: center;
+  }
+  .sidebar {
+    width: min(100%, 360px);
+  }
 }
 
 /* Base panel styling */
 .panel {
-  width: 300px;
+  width: 100%;
   color: var(--text);
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
@@ -183,5 +193,19 @@ canvas {
 /* Metrics and leaderboard boxes */
 .metrics-box {
   width: 100%;
+  box-sizing: border-box;
+  display: grid;
+  gap: 6px;
+}
+
+.metrics-box .control-line {
+  justify-content: space-between;
+}
+
+.sparkline {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-bottom: 8px;
   box-sizing: border-box;
 }
