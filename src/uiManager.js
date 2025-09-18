@@ -135,33 +135,39 @@ export default class UIManager {
       return grid;
     };
 
-    const buttonRow = document.createElement('div');
+    const buttonRow = body.appendChild(document.createElement('div'));
 
     buttonRow.className = 'control-button-row';
-    body.appendChild(buttonRow);
 
-    // Pause/Resume
-    const pauseBtn = document.createElement('button');
+    const addControlButton = ({ id, label, title, onClick }) => {
+      const button = document.createElement('button');
 
-    pauseBtn.id = 'pauseButton';
-    pauseBtn.textContent = 'Pause';
-    pauseBtn.title = 'Pause/resume the simulation (shortcut: P)';
-    pauseBtn.addEventListener('click', () => this.togglePause());
-    buttonRow.appendChild(pauseBtn);
-    this.pauseButton = pauseBtn;
+      button.id = id;
+      button.textContent = label;
+      button.title = title;
+      button.addEventListener('click', onClick);
+      buttonRow.appendChild(button);
 
-    // Burst new cells
-    const burstBtn = document.createElement('button');
+      return button;
+    };
 
-    burstBtn.id = 'burstButton';
-    burstBtn.textContent = 'Burst New Cells';
-    burstBtn.title = 'Spawn a cluster of new cells at a random spot';
-    burstBtn.addEventListener('click', () => {
-      if (typeof this.actions.burst === 'function') this.actions.burst();
-      else if (window.grid && typeof window.grid.burstRandomCells === 'function')
-        window.grid.burstRandomCells();
+    this.pauseButton = addControlButton({
+      id: 'pauseButton',
+      label: 'Pause',
+      title: 'Pause/resume the simulation (shortcut: P)',
+      onClick: () => this.togglePause(),
     });
-    buttonRow.appendChild(burstBtn);
+
+    addControlButton({
+      id: 'burstButton',
+      label: 'Burst New Cells',
+      title: 'Spawn a cluster of new cells at a random spot',
+      onClick: () => {
+        if (typeof this.actions.burst === 'function') this.actions.burst();
+        else if (window.grid && typeof window.grid.burstRandomCells === 'function')
+          window.grid.burstRandomCells();
+      },
+    });
 
     // Helper to make slider rows
     const addSlider = (opts, parent = body) => {
