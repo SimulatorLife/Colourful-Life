@@ -103,6 +103,7 @@ export default class UIManager {
 
     body.className = 'panel-body';
     panel.appendChild(body);
+
     const toggleCollapsed = () => {
       panel.classList.toggle('collapsed');
       toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
@@ -144,6 +145,20 @@ export default class UIManager {
     body.className = 'panel-body';
     panel.appendChild(body);
 
+    const addGrid = (className = '') => {
+      const grid = document.createElement('div');
+
+      grid.className = `control-grid${className ? ` ${className}` : ''}`;
+      body.appendChild(grid);
+
+      return grid;
+    };
+
+    const buttonRow = document.createElement('div');
+
+    buttonRow.className = 'control-button-row';
+    body.appendChild(buttonRow);
+
     // Pause/Resume
     const pauseBtn = document.createElement('button');
 
@@ -151,7 +166,7 @@ export default class UIManager {
     pauseBtn.textContent = 'Pause';
     pauseBtn.title = 'Pause/resume the simulation (shortcut: P)';
     pauseBtn.addEventListener('click', () => this.togglePause());
-    body.appendChild(pauseBtn);
+    buttonRow.appendChild(pauseBtn);
     this.pauseButton = pauseBtn;
 
     // Burst new cells
@@ -165,10 +180,10 @@ export default class UIManager {
       else if (window.grid && typeof window.grid.burstRandomCells === 'function')
         window.grid.burstRandomCells();
     });
-    body.appendChild(burstBtn);
+    buttonRow.appendChild(burstBtn);
 
     // Helper to make slider rows
-    const addSlider = (opts) => {
+    const addSlider = (opts, parent = body) => {
       const { label, min, max, step, value, title, onInput, format = (v) => String(v) } = opts;
       const row = document.createElement('label');
 
@@ -202,58 +217,74 @@ export default class UIManager {
       line.appendChild(valSpan);
       row.appendChild(name);
       row.appendChild(line);
-      body.appendChild(row);
+      parent.appendChild(row);
 
       return input;
     };
 
+    const thresholdsGroup = addGrid();
+
     // Ally similarity
-    addSlider({
-      label: 'Ally Similarity ≥',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      value: this.societySimilarity,
-      title: 'Minimum genetic similarity to consider another cell an ally (0..1)',
-      format: (v) => v.toFixed(2),
-      onInput: (v) => (this.societySimilarity = v),
-    });
+    addSlider(
+      {
+        label: 'Ally Similarity ≥',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        value: this.societySimilarity,
+        title: 'Minimum genetic similarity to consider another cell an ally (0..1)',
+        format: (v) => v.toFixed(2),
+        onInput: (v) => (this.societySimilarity = v),
+      },
+      thresholdsGroup
+    );
 
     // Enemy threshold
-    addSlider({
-      label: 'Enemy Similarity ≤',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      value: this.enemySimilarity,
-      title: 'Maximum genetic similarity to consider another cell an enemy (0..1)',
-      format: (v) => v.toFixed(2),
-      onInput: (v) => (this.enemySimilarity = v),
-    });
+    addSlider(
+      {
+        label: 'Enemy Similarity ≤',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        value: this.enemySimilarity,
+        title: 'Maximum genetic similarity to consider another cell an enemy (0..1)',
+        format: (v) => v.toFixed(2),
+        onInput: (v) => (this.enemySimilarity = v),
+      },
+      thresholdsGroup
+    );
+
+    const eventsGroup = addGrid();
 
     // Event strength multiplier
-    addSlider({
-      label: 'Event Strength ×',
-      min: 0,
-      max: 3,
-      step: 0.05,
-      value: this.eventStrengthMultiplier,
-      title: 'Scales the impact of environmental events (0..3)',
-      format: (v) => v.toFixed(2),
-      onInput: (v) => (this.eventStrengthMultiplier = v),
-    });
+    addSlider(
+      {
+        label: 'Event Strength ×',
+        min: 0,
+        max: 3,
+        step: 0.05,
+        value: this.eventStrengthMultiplier,
+        title: 'Scales the impact of environmental events (0..3)',
+        format: (v) => v.toFixed(2),
+        onInput: (v) => (this.eventStrengthMultiplier = v),
+      },
+      eventsGroup
+    );
 
     // Event frequency multiplier
-    addSlider({
-      label: 'Event Frequency ×',
-      min: 0,
-      max: 3,
-      step: 0.1,
-      value: this.eventFrequencyMultiplier,
-      title: 'How often events spawn (0 disables new events)',
-      format: (v) => v.toFixed(1),
-      onInput: (v) => (this.eventFrequencyMultiplier = Math.max(0, v)),
-    });
+    addSlider(
+      {
+        label: 'Event Frequency ×',
+        min: 0,
+        max: 3,
+        step: 0.1,
+        value: this.eventFrequencyMultiplier,
+        title: 'How often events spawn (0 disables new events)',
+        format: (v) => v.toFixed(1),
+        onInput: (v) => (this.eventFrequencyMultiplier = Math.max(0, v)),
+      },
+      eventsGroup
+    );
 
     // Simulation speed multiplier (baseline 60 updates/sec)
     addSlider({
@@ -274,8 +305,10 @@ export default class UIManager {
     overlayHeader.style.margin = '12px 0 6px';
     body.appendChild(overlayHeader);
 
+    const overlayGrid = addGrid('control-grid--compact');
+
     const addToggle = (label, title, initial, onChange) =>
-      this.#addCheckbox(body, label, title, initial, onChange);
+      this.#addCheckbox(overlayGrid, label, title, initial, onChange);
 
     addToggle(
       'Show Density Heatmap',
@@ -296,42 +329,53 @@ export default class UIManager {
       (v) => (this.showFitness = v)
     );
 
+    const energyGroup = addGrid();
+
     // Density effect multiplier
-    addSlider({
-      label: 'Density Effect ×',
-      min: 0,
-      max: 2,
-      step: 0.05,
-      value: this.densityEffectMultiplier,
-      title:
-        'Scales how strongly population density affects energy, aggression, and breeding (0..2)',
-      format: (v) => v.toFixed(2),
-      onInput: (v) => (this.densityEffectMultiplier = Math.max(0, v)),
-    });
+    addSlider(
+      {
+        label: 'Density Effect ×',
+        min: 0,
+        max: 2,
+        step: 0.05,
+        value: this.densityEffectMultiplier,
+        title:
+          'Scales how strongly population density affects energy, aggression, and breeding (0..2)',
+        format: (v) => v.toFixed(2),
+        onInput: (v) => (this.densityEffectMultiplier = Math.max(0, v)),
+      },
+      energyGroup
+    );
 
     // Energy regen base rate
-    addSlider({
-      label: 'Energy Regen Rate',
-      min: 0,
-      max: 0.2,
-      step: 0.005,
-      value: this.energyRegenRate,
-      title: 'Base logistic regeneration rate toward max energy (0..0.2)',
-      format: (v) => v.toFixed(3),
-      onInput: (v) => (this.energyRegenRate = Math.max(0, v)),
-    });
+    addSlider(
+      {
+        label: 'Energy Regen Rate',
+        min: 0,
+        max: 0.2,
+        step: 0.005,
+        value: this.energyRegenRate,
+        title: 'Base logistic regeneration rate toward max energy (0..0.2)',
+        format: (v) => v.toFixed(3),
+        onInput: (v) => (this.energyRegenRate = Math.max(0, v)),
+      },
+      energyGroup
+    );
 
     // Energy diffusion rate
-    addSlider({
-      label: 'Energy Diffusion Rate',
-      min: 0,
-      max: 0.5,
-      step: 0.01,
-      value: this.energyDiffusionRate,
-      title: 'How quickly energy smooths between tiles (0..0.5)',
-      format: (v) => v.toFixed(2),
-      onInput: (v) => (this.energyDiffusionRate = Math.max(0, v)),
-    });
+    addSlider(
+      {
+        label: 'Energy Diffusion Rate',
+        min: 0,
+        max: 0.5,
+        step: 0.01,
+        value: this.energyDiffusionRate,
+        title: 'How quickly energy smooths between tiles (0..0.5)',
+        format: (v) => v.toFixed(2),
+        onInput: (v) => (this.energyDiffusionRate = Math.max(0, v)),
+      },
+      energyGroup
+    );
 
     addSlider({
       label: 'Leaderboard Interval',

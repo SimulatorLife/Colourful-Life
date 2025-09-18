@@ -168,10 +168,32 @@ canvas {
 .controls-panel button:hover {
   background: var(--color-accent-hover);
 }
+.control-button-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+.control-button-row button {
+  margin-bottom: 0;
+}
 .control-row {
   display: block;
   margin: var(--space-md) 0;
   cursor: default;
+}
+.control-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+.control-grid .control-row {
+  margin: 0;
+}
+.control-grid--compact {
+  gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 .control-name {
   font-size: 12px;
