@@ -9,11 +9,6 @@ export const REGEN_DENSITY_PENALTY = 0.5; // 1 - penalty * density
 export const CONSUMPTION_DENSITY_PENALTY = 0.5; // 1 - penalty * density
 
 export function getDefaultMaxTileEnergy() {
-  const gridManager = typeof globalThis !== 'undefined' ? globalThis.GridManager : undefined;
-
-  if (gridManager && gridManager.maxTileEnergy != null) {
-    return gridManager.maxTileEnergy;
-  }
-
+  // TODO: Remove this function and use the constant directly
   return MAX_TILE_ENERGY;
 }

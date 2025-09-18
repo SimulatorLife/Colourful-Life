@@ -13,7 +13,6 @@ import {
 } from './config.js';
 
 export default class GridManager {
-  static maxTileEnergy = MAX_TILE_ENERGY;
   // Base per-tick regen before modifiers; logistic to max, density-aware
   static energyRegenRate = ENERGY_REGEN_RATE_DEFAULT;
   // Fraction to diffuse toward neighbors each tick
@@ -82,7 +81,7 @@ export default class GridManager {
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
     this.energyGrid = Array.from({ length: rows }, () =>
-      Array.from({ length: cols }, () => GridManager.maxTileEnergy / 2)
+      Array.from({ length: cols }, () => MAX_TILE_ENERGY / 2)
     );
     this.energyNext = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.eventManager = eventManager || window.eventManager;
@@ -144,7 +143,7 @@ export default class GridManager {
     const take = Math.min(cap, available);
 
     this.energyGrid[row][col] -= take;
-    cell.energy = Math.min(GridManager.maxTileEnergy, cell.energy + take);
+    cell.energy = Math.min(MAX_TILE_ENERGY, cell.energy + take);
   }
 
   regenerateEnergyGrid(
@@ -154,7 +153,7 @@ export default class GridManager {
     D = GridManager.energyDiffusionRate,
     densityGrid = null
   ) {
-    const maxE = GridManager.maxTileEnergy;
+    const maxE = MAX_TILE_ENERGY;
     const next = this.energyNext;
 
     for (let r = 0; r < this.rows; r++) {
@@ -336,7 +335,7 @@ export default class GridManager {
     const events = eventManager.activeEvents || [];
 
     for (const ev of events) {
-      cell.applyEventEffects(row, col, ev, eventStrengthMultiplier, GridManager.maxTileEnergy);
+      cell.applyEventEffects(row, col, ev, eventStrengthMultiplier, MAX_TILE_ENERGY);
     }
 
     this.consumeEnergy(cell, row, col, densityGrid);
@@ -345,7 +344,7 @@ export default class GridManager {
     const starved = cell.manageEnergy(row, col, {
       localDensity,
       densityEffectMultiplier,
-      maxTileEnergy: GridManager.maxTileEnergy,
+      MAX_TILE_ENERGY: MAX_TILE_ENERGY,
     });
 
     if (starved || cell.energy <= 0) {
@@ -418,8 +417,8 @@ export default class GridManager {
       typeof bestMate.target.dna.reproductionThresholdFrac === 'function'
         ? bestMate.target.dna.reproductionThresholdFrac()
         : 0.4;
-    const thrA = thrFracA * GridManager.maxTileEnergy;
-    const thrB = thrFracB * GridManager.maxTileEnergy;
+    const thrA = thrFracA * MAX_TILE_ENERGY;
+    const thrB = thrFracB * MAX_TILE_ENERGY;
 
     if (randomPercent(reproProb) && cell.energy >= thrA && bestMate.target.energy >= thrB) {
       const offspring = Cell.breed(cell, bestMate.target);
@@ -482,7 +481,7 @@ export default class GridManager {
         col,
         targetEnemy.row,
         targetEnemy.col,
-        GridManager.maxTileEnergy,
+        MAX_TILE_ENERGY,
         stats
       );
     else
@@ -517,7 +516,7 @@ export default class GridManager {
       moveAwayFromTarget: GridManager.moveAwayFromTarget,
       moveRandomly: GridManager.moveRandomly,
       tryMove: GridManager.tryMove,
-      getEnergyAt: (rr, cc) => this.energyGrid[rr][cc] / GridManager.maxTileEnergy,
+      getEnergyAt: (rr, cc) => this.energyGrid[rr][cc] / MAX_TILE_ENERGY,
     });
   }
 
@@ -564,7 +563,7 @@ export default class GridManager {
     return this.lastSnapshot;
   }
 
-  buildSnapshot(maxTileEnergy = GridManager.maxTileEnergy) {
+  buildSnapshot(MAX_TILE_ENERGY = MAX_TILE_ENERGY) {
     const snapshot = {
       rows: this.rows,
       cols: this.cols,
@@ -582,7 +581,7 @@ export default class GridManager {
 
         if (!cell) continue;
 
-        const fitness = computeFitness(cell, maxTileEnergy);
+        const fitness = computeFitness(cell, MAX_TILE_ENERGY);
         const previous = Number.isFinite(cell.fitnessScore) ? cell.fitnessScore : fitness;
         const smoothed = previous * 0.8 + fitness * 0.2;
 
