@@ -1,6 +1,7 @@
 import DNA from './genome.js';
 import { randomRange, clamp, lerp } from './utils.js';
 import { isEventAffecting } from './eventManager.js';
+import { getEventEffect } from './eventEffects.js';
 
 export default class Cell {
   // TODO: The cells' colors should BE their genes. The RGB values should BE the DNA
@@ -308,25 +309,25 @@ export default class Cell {
 
   applyEventEffects(row, col, currentEvent, eventStrengthMultiplier = 1, maxTileEnergy = 5) {
     if (isEventAffecting(currentEvent, row, col)) {
-      const s =
-        currentEvent.strength *
-        eventStrengthMultiplier *
-        (1 - 0.5 * (this.dna.recoveryRate?.() ?? 0));
+      const effect = getEventEffect(currentEvent?.eventType);
 
-      switch (currentEvent.eventType) {
-        case 'flood':
-          this.energy -= 0.3 * s * (1 - this.dna.floodResist());
-          break;
-        case 'drought':
-          this.energy -= 0.25 * s * (1 - this.dna.droughtResist());
-          break;
-        case 'heatwave':
-          this.energy -= 0.35 * s * (1 - this.dna.heatResist());
-          break;
-        case 'coldwave':
-          this.energy -= 0.2 * s * (1 - this.dna.coldResist());
-          break;
+      if (effect?.cell) {
+        const s =
+          (currentEvent.strength || 0) *
+          (eventStrengthMultiplier || 1) *
+          (1 - 0.5 * (this.dna.recoveryRate?.() ?? 0));
+        const { energyLoss = 0, resistanceGene } = effect.cell;
+        const resistance = clamp(
+          typeof resistanceGene === 'string' && typeof this.dna?.[resistanceGene] === 'function'
+            ? this.dna[resistanceGene]()
+            : 0,
+          0,
+          1
+        );
+
+        this.energy -= energyLoss * s * (1 - resistance);
       }
+
       this.energy = Math.max(0, Math.min(maxTileEnergy, this.energy));
     }
   }

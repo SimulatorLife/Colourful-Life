@@ -3,6 +3,7 @@ import DNA from './genome.js';
 import Cell from './cell.js';
 import { computeFitness } from './fitness.js';
 import { isEventAffecting } from './eventManager.js';
+import { getEventEffect } from './eventEffects.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -176,25 +177,28 @@ export default class GridManager {
         const evs = Array.isArray(events) ? events : events ? [events] : [];
 
         for (const ev of evs) {
-          if (isEventAffecting(ev, r, c)) {
-            const s = (ev.strength || 0) * (eventStrengthMultiplier || 1);
+          if (!isEventAffecting(ev, r, c)) continue;
 
-            switch (ev.eventType) {
-              case 'flood':
-                regen += 0.25 * s;
-                break;
-              case 'drought':
-                regen *= Math.max(0, 1 - 0.7 * s);
-                drain += 0.1 * s;
-                break;
-              case 'heatwave':
-                regen *= Math.max(0, 1 - 0.45 * s);
-                drain += 0.08 * s;
-                break;
-              case 'coldwave':
-                regen *= Math.max(0, 1 - 0.25 * s);
-                break;
-            }
+          const s = (ev.strength || 0) * (eventStrengthMultiplier || 1);
+          const effect = getEventEffect(ev.eventType);
+
+          if (!effect || s === 0) continue;
+
+          const { regenScale, regenAdd, drainAdd } = effect;
+
+          if (regenScale) {
+            const { base = 1, change = 0, min = 0 } = regenScale;
+            const scale = Math.max(min, base + change * s);
+
+            regen *= scale;
+          }
+
+          if (typeof regenAdd === 'number') {
+            regen += regenAdd * s;
+          }
+
+          if (typeof drainAdd === 'number') {
+            drain += drainAdd * s;
           }
         }
 
