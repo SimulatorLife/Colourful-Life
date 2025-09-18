@@ -422,60 +422,30 @@ export default class UIManager {
     body.appendChild(this.metricsBox);
 
     // Sparklines canvases
-    const cap1 = document.createElement('div');
+    const sparkDescriptors = [
+      { label: 'Population', property: 'sparkPop' },
+      { label: 'Diversity', property: 'sparkDiv2Canvas' },
+      { label: 'Mean Energy', property: 'sparkEnergy' },
+      { label: 'Growth', property: 'sparkGrowth' },
+      { label: 'Event Strength', property: 'sparkEvent' },
+    ];
 
-    cap1.className = 'control-name';
-    cap1.textContent = 'Population';
-    body.appendChild(cap1);
-    this.sparkPop = document.createElement('canvas');
-    this.sparkPop.className = 'sparkline';
-    this.sparkPop.width = 260;
-    this.sparkPop.height = 40;
-    body.appendChild(this.sparkPop);
+    sparkDescriptors.forEach(({ label, property }) => {
+      const caption = document.createElement('div');
 
-    const cap2 = document.createElement('div');
+      caption.className = 'control-name';
+      caption.textContent = label;
+      body.appendChild(caption);
 
-    cap2.className = 'control-name';
-    cap2.textContent = 'Diversity';
-    body.appendChild(cap2);
-    this.sparkDiv2Canvas = document.createElement('canvas');
-    this.sparkDiv2Canvas.className = 'sparkline';
-    this.sparkDiv2Canvas.width = 260;
-    this.sparkDiv2Canvas.height = 40;
-    body.appendChild(this.sparkDiv2Canvas);
+      const canvas = document.createElement('canvas');
 
-    const cap3 = document.createElement('div');
+      canvas.className = 'sparkline';
+      canvas.width = 260;
+      canvas.height = 40;
+      body.appendChild(canvas);
 
-    cap3.className = 'control-name';
-    cap3.textContent = 'Mean Energy';
-    body.appendChild(cap3);
-    this.sparkEnergy = document.createElement('canvas');
-    this.sparkEnergy.className = 'sparkline';
-    this.sparkEnergy.width = 260;
-    this.sparkEnergy.height = 40;
-    body.appendChild(this.sparkEnergy);
-
-    const cap4 = document.createElement('div');
-
-    cap4.className = 'control-name';
-    cap4.textContent = 'Growth';
-    body.appendChild(cap4);
-    this.sparkGrowth = document.createElement('canvas');
-    this.sparkGrowth.className = 'sparkline';
-    this.sparkGrowth.width = 260;
-    this.sparkGrowth.height = 40;
-    body.appendChild(this.sparkGrowth);
-
-    const cap5 = document.createElement('div');
-
-    cap5.className = 'control-name';
-    cap5.textContent = 'Event Strength';
-    body.appendChild(cap5);
-    this.sparkEvent = document.createElement('canvas');
-    this.sparkEvent.className = 'sparkline';
-    this.sparkEvent.width = 260;
-    this.sparkEvent.height = 40;
-    body.appendChild(this.sparkEvent);
+      this[property] = canvas;
+    });
 
     return panel;
   }
