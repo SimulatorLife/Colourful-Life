@@ -40,14 +40,28 @@ export default class Cell {
     const chance = (parentA.dna.mutationChance() + parentB.dna.mutationChance()) / 2;
     const range = Math.round((parentA.dna.mutationRange() + parentB.dna.mutationRange()) / 2);
     const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range);
-    const investA = Math.min(
-      parentA.energy,
-      parentA.energy * (parentA.dna.parentalInvestmentFrac?.() ?? 0.4)
-    );
-    const investB = Math.min(
-      parentB.energy,
-      parentB.energy * (parentB.dna.parentalInvestmentFrac?.() ?? 0.4)
-    );
+    const maxTileEnergy =
+      typeof window !== 'undefined' && window.GridManager?.maxTileEnergy != null
+        ? window.GridManager.maxTileEnergy
+        : 5;
+    const calculateInvestment = (parent, starvation) => {
+      const fracFn = parent.dna?.parentalInvestmentFrac;
+      const investFrac = typeof fracFn === 'function' ? fracFn.call(parent.dna) : 0.4;
+      const desired = Math.max(0, Math.min(parent.energy, parent.energy * investFrac));
+      const maxSpend = Math.max(0, parent.energy - starvation);
+
+      return Math.min(desired, maxSpend);
+    };
+    const starvationA = parentA.starvationThreshold(maxTileEnergy);
+    const starvationB = parentB.starvationThreshold(maxTileEnergy);
+    const investA = calculateInvestment(parentA, starvationA);
+    const investB = calculateInvestment(parentB, starvationB);
+
+    if (investA <= 0 || investB <= 0) return null;
+
+    parentA.energy = Math.max(0, parentA.energy - investA);
+    parentB.energy = Math.max(0, parentB.energy - investB);
+
     const offspringEnergy = investA + investB;
     const offspring = new Cell(row, col, childDNA, offspringEnergy);
     const strategy =
@@ -55,8 +69,6 @@ export default class Cell {
       (Math.random() * Cell.geneMutationRange - Cell.geneMutationRange / 2);
 
     offspring.strategy = Math.min(1, Math.max(0, strategy));
-    parentA.energy = Math.max(0, parentA.energy - investA);
-    parentB.energy = Math.max(0, parentB.energy - investB);
     parentA.offspring = (parentA.offspring || 0) + 1;
     parentB.offspring = (parentB.offspring || 0) + 1;
 
@@ -70,17 +82,32 @@ export default class Cell {
   // Lifespan is fully DNA-dictated via genome.lifespanDNA()
 
   findBestMate(potentialMates) {
+    if (!Array.isArray(potentialMates) || potentialMates.length === 0) return null;
+
+    const pref = this.dna?.mateSimilarityPreference?.() ?? {};
+    const target = clamp(pref.target ?? 0.75, 0, 1);
+    const tolerance = Math.max(0.05, pref.tolerance ?? 0.25);
+    const kinBias = clamp(pref.kinBias ?? 0.5, 0, 1);
+    const dnaNoiseRng = this.dna?.prngFor ? this.dna.prngFor('mateChoice') : null;
+
     let bestMate = null;
-    let highestPreference = -Infinity;
+    let bestScore = -Infinity;
 
-    potentialMates.forEach((mate) => {
-      const preference = this.similarityTo(mate.target);
+    for (const mate of potentialMates) {
+      const similarity = this.similarityTo(mate.target);
+      const diff = Math.abs(similarity - target);
+      const targetScore = Math.max(0, 1 - diff / tolerance);
+      const kinScore = similarity;
+      let score = (1 - kinBias) * targetScore + kinBias * kinScore;
 
-      if (preference > highestPreference) {
-        highestPreference = preference;
+      if (dnaNoiseRng) score += (dnaNoiseRng() - 0.5) * 0.05;
+      score += (Math.random() - 0.5) * 0.05;
+
+      if (score > bestScore) {
+        bestScore = score;
         bestMate = mate;
       }
-    });
+    }
 
     return bestMate;
   }
@@ -132,12 +159,10 @@ export default class Cell {
     const energyDensityMult = lerp(this.density.energyLoss.min, this.density.energyLoss.max, effD);
     const ageFrac = this.lifespan > 0 ? this.age / this.lifespan : 0;
     const sen = typeof this.dna.senescenceRate === 'function' ? this.dna.senescenceRate() : 0;
-    const energyLoss =
-      this.dna.energyLossBase() *
-      this.dna.baseEnergyLossScale() *
-      (1 + metabolism) *
-      (1 + sen * ageFrac) *
-      energyDensityMult;
+    const baseLoss = this.dna.energyLossBase();
+    const lossScale =
+      this.dna.baseEnergyLossScale() * (1 + metabolism) * (1 + sen * ageFrac) * energyDensityMult;
+    const energyLoss = clamp(baseLoss * lossScale, 0.004, 0.35);
     // cognitive/perception overhead derived from DNA
     const cognitiveLoss = this.dna.cognitiveCost(this.neurons, this.sight, effD);
 

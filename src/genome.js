@@ -148,6 +148,23 @@ export class DNA {
     return Math.min(0.9, Math.max(0.05, base * synergyAdj * noise));
   }
 
+  // Target mate similarity band and tolerance
+  mateSimilarityPreference() {
+    const rnd = this.prngFor('mateSimilarityPreference');
+    const kinPull = this.b / 255;
+    const noveltyPush = this.r / 255;
+    const balance = this.g / 255;
+    const baseTarget = 0.5 + 0.35 * (kinPull - noveltyPush) + 0.15 * (balance - 0.5);
+    const jitter = (rnd() - 0.5) * 0.2;
+    const target = clamp(baseTarget + jitter, 0.05, 0.95);
+    const toleranceNoise = (rnd() - 0.5) * 0.1;
+    const tolerance = clamp(0.15 + 0.35 * (1 - balance) + toleranceNoise, 0.05, 0.6);
+    const kinBiasNoise = (rnd() - 0.5) * 0.1;
+    const kinBias = clamp(0.3 + 0.4 * kinPull - 0.2 * noveltyPush + kinBiasNoise, 0, 1);
+
+    return { target, tolerance, kinBias };
+  }
+
   initialEnergy(maxEnergy = 5) {
     const brightness = (this.r + this.g + this.b) / (3 * 255);
 
@@ -202,8 +219,12 @@ export class DNA {
   }
 
   starvationThresholdFrac() {
-    // Higher green -> better resource efficiency, lower threshold
-    return 0.8 - (this.g / 255) * 0.6; // 0.2..0.8
+    const r = this.r / 255;
+    const g = this.g / 255;
+    const b = this.b / 255;
+    const base = 0.48 - 0.14 * g - 0.08 * b + 0.08 * r;
+
+    return clamp(base, 0.25, 0.85);
   }
 
   neurons() {
@@ -238,17 +259,24 @@ export class DNA {
 
   // DNA-derived base energy loss per tick (before scale)
   energyLossBase() {
-    // Greener genomes are more efficient
+    const r = this.r / 255;
     const g = this.g / 255;
+    const b = this.b / 255;
+    const efficiency = 0.55 * g + 0.3 * b;
+    const drivePenalty = 0.45 * r + 0.2 * (1 - b);
+    const base = 0.018 + 0.02 * (1 - efficiency) + 0.01 * drivePenalty;
 
-    return 0.015 + (1 - g) * 0.03; // ~0.015..0.045
+    return clamp(base, 0.012, 0.055);
   }
 
-  // How efficiently a cell can harvest tile energy per tick (0.2..0.8)
+  // How efficiently a cell can harvest tile energy per tick (0.15..0.85)
   forageRate() {
+    const r = this.r / 255;
     const g = this.g / 255;
+    const b = this.b / 255;
+    const harvestFocus = 0.32 + 0.28 * g + 0.18 * b - 0.18 * r;
 
-    return 0.2 + 0.6 * g;
+    return clamp(harvestFocus, 0.15, 0.85);
   }
 
   // Absolute caps (energy units per tick) for harvesting; DNA-driven
@@ -258,9 +286,12 @@ export class DNA {
     return 0.03 + 0.12 * b; // 0.03..0.15
   }
   harvestCapMax() {
+    const r = this.r / 255;
     const g = this.g / 255;
+    const b = this.b / 255;
+    const raw = 0.28 + 0.32 * g + 0.2 * b - 0.18 * r;
 
-    return 0.25 + 0.6 * g; // 0.25..0.85
+    return clamp(raw, 0.2, 0.9);
   }
 
   // Energy cost characteristics for actions

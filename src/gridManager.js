@@ -131,13 +131,15 @@ export default class GridManager {
   consumeEnergy(cell, row, col, densityGrid = this.densityGrid) {
     const available = this.energyGrid[row][col];
     // DNA-driven harvest with density penalty
-    const base = typeof cell.dna.forageRate === 'function' ? cell.dna.forageRate() : 0.4;
+    const baseRate = typeof cell.dna.forageRate === 'function' ? cell.dna.forageRate() : 0.4;
+    const base = clamp(baseRate, 0.05, 1);
     const density =
       densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
     const crowdPenalty = Math.max(0, 1 - CONSUMPTION_DENSITY_PENALTY * density);
     const minCap = typeof cell.dna.harvestCapMin === 'function' ? cell.dna.harvestCapMin() : 0.1;
-    const maxCap = typeof cell.dna.harvestCapMax === 'function' ? cell.dna.harvestCapMax() : 0.5;
-    const cap = Math.max(minCap, Math.min(maxCap, base * crowdPenalty));
+    const maxCapRaw = typeof cell.dna.harvestCapMax === 'function' ? cell.dna.harvestCapMax() : 0.5;
+    const maxCap = Math.max(minCap, clamp(maxCapRaw, minCap, 1));
+    const cap = clamp(base * crowdPenalty, minCap, maxCap);
     const take = Math.min(cap, available);
 
     this.energyGrid[row][col] -= take;
@@ -424,6 +426,7 @@ export default class GridManager {
     { mates, society },
     { stats, densityGrid, densityEffectMultiplier }
   ) {
+    // Prefer direct mates; fall back to allied society so kin-seeking genomes still participate.
     const matePool = mates.length > 0 ? mates : society;
 
     if (matePool.length === 0) return false;
@@ -432,7 +435,21 @@ export default class GridManager {
 
     if (!bestMate) return false;
 
-    GridManager.moveToTarget(this.grid, row, col, bestMate.row, bestMate.col, this.rows, this.cols);
+    const originalParentRow = cell.row;
+    const originalParentCol = cell.col;
+    const moveSucceeded = GridManager.moveToTarget(
+      this.grid,
+      row,
+      col,
+      bestMate.row,
+      bestMate.col,
+      this.rows,
+      this.cols
+    );
+    const parentRow = cell.row;
+    const parentCol = cell.col;
+    const mateRow = bestMate.target.row;
+    const mateCol = bestMate.target.col;
 
     const localDensity = densityGrid[row][col];
     const reproProb = cell.computeReproductionProbability(bestMate.target, {
@@ -452,10 +469,48 @@ export default class GridManager {
     const thrB = thrFracB * MAX_TILE_ENERGY;
 
     if (randomPercent(reproProb) && cell.energy >= thrA && bestMate.target.energy >= thrB) {
-      const offspring = Cell.breed(cell, bestMate.target);
+      const candidates = [];
+      const candidateSet = new Set();
+      const addCandidate = (r, c) => {
+        const wrappedRow = (r + this.rows) % this.rows;
+        const wrappedCol = (c + this.cols) % this.cols;
+        const key = `${wrappedRow},${wrappedCol}`;
 
-      this.grid[row][col] = offspring;
-      stats.onBirth();
+        if (!candidateSet.has(key)) {
+          candidateSet.add(key);
+          candidates.push({ r: wrappedRow, c: wrappedCol });
+        }
+      };
+      const addNeighbors = (baseRow, baseCol) => {
+        for (let dr = -1; dr <= 1; dr += 1) {
+          for (let dc = -1; dc <= 1; dc += 1) {
+            if (dr === 0 && dc === 0) continue;
+
+            addCandidate(baseRow + dr, baseCol + dc);
+          }
+        }
+      };
+
+      addCandidate(originalParentRow, originalParentCol);
+      if (moveSucceeded) addNeighbors(originalParentRow, originalParentCol);
+      addCandidate(parentRow, parentCol);
+      addCandidate(mateRow, mateCol);
+      addNeighbors(parentRow, parentCol);
+      addNeighbors(mateRow, mateCol);
+
+      const freeSlots = candidates.filter(({ r, c }) => !this.grid[r][c]);
+
+      if (freeSlots.length > 0) {
+        const spawn = freeSlots[Math.floor(randomRange(0, freeSlots.length))];
+        const offspring = Cell.breed(cell, bestMate.target);
+
+        if (offspring) {
+          offspring.row = spawn.r;
+          offspring.col = spawn.c;
+          this.grid[spawn.r][spawn.c] = offspring;
+          stats.onBirth();
+        }
+      }
     }
 
     return true;

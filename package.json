@@ -6,7 +6,7 @@
     "start": "parcel ./index.html",
     "build": "parcel build ./index.html",
     "serve": "node src/server.js",
-    "test": "uvu ./test",
+    "test": "node --loader=@esbuild-kit/cjs-loader ./node_modules/uvu/bin.js ./test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint --ext .js,.html .",
@@ -34,12 +34,13 @@
     ]
   },
   "devDependencies": {
-    "husky": "^9.1.6",
-    "lint-staged": "^15.2.10",
+    "@esbuild-kit/cjs-loader": "^2.4.4",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-html": "^8.1.3",
     "eslint-plugin-prettier": "^5.5.4",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
     "parcel": "^2.8.3",
     "prettier": "^3.6.2",
     "uvu": "^0.5.6"
