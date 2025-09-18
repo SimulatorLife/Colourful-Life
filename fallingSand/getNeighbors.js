@@ -1,0 +1,20 @@
+function getNeighbors(grid, x, y) {
+  const neighbors = [];
+
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+
+      const nx = x + dx;
+      const ny = y + dy;
+
+      if (ny >= 0 && ny < grid.length && nx >= 0 && nx < grid[ny].length) {
+        neighbors.push(grid[ny][nx]);
+      }
+    }
+  }
+
+  return neighbors;
+}
+
+module.exports = getNeighbors;
