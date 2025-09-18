@@ -426,7 +426,8 @@ export default class GridManager {
     { mates, society },
     { stats, densityGrid, densityEffectMultiplier }
   ) {
-    // Prefer direct mates; fall back to allied society so kin-seeking genomes still participate.
+    // findTargets sorts potential partners into neutral mates and allies; fall back
+    // to the allied list so strongly kin-seeking genomes still have options.
     const matePool = mates.length > 0 ? mates : society;
 
     if (matePool.length === 0) return false;

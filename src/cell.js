@@ -101,7 +101,7 @@ export default class Cell {
       let score = (1 - kinBias) * targetScore + kinBias * kinScore;
 
       if (dnaNoiseRng) score += (dnaNoiseRng() - 0.5) * 0.05;
-      score += (Math.random() - 0.5) * 0.05;
+      score += (Math.random() - 0.5) * 0.05; // inject slight stochasticity
 
       if (score > bestScore) {
         bestScore = score;
