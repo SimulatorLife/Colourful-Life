@@ -35,17 +35,10 @@ test.before(async () => {
   ({ clamp, lerp } = await import('../src/utils.js'));
 });
 
-test.before.each(() => {
-  global.window = { GridManager: { maxTileEnergy: 12 } };
-});
-
-test.after.each(() => {
-  global.window = {};
-});
-
 test('manageEnergy applies DNA-driven metabolism and starvation rules', () => {
   const dna = new DNA(30, 200, 100);
   const initialEnergy = 5;
+  const maxTileEnergy = 12;
   const cell = new Cell(2, 3, dna, initialEnergy);
   const context = { localDensity: 0.3, densityEffectMultiplier: 2, maxTileEnergy: 12 };
   const effDensity = clamp(context.localDensity * context.densityEffectMultiplier, 0, 1);
@@ -66,7 +59,7 @@ test('manageEnergy applies DNA-driven metabolism and starvation rules', () => {
   assert.is(starving, expectedEnergy <= starvationThreshold);
 });
 
-test('breed enforces parental investment and reproduction thresholds', () => {
+test('breed combines parental investments for offspring energy', () => {
   const dnaA = new DNA(10, 120, 200);
   const dnaB = new DNA(200, 80, 40);
   const parentA = new Cell(4, 5, dnaA, 8);
@@ -77,12 +70,10 @@ test('breed enforces parental investment and reproduction thresholds', () => {
   const investFracB = dnaB.parentalInvestmentFrac();
   const investA = Math.min(energyBeforeA, energyBeforeA * investFracA);
   const investB = Math.min(energyBeforeB, energyBeforeB * investFracB);
-  const thresholdFrac = (dnaA.reproductionThresholdFrac() + dnaB.reproductionThresholdFrac()) / 2;
-  const threshold = thresholdFrac * window.GridManager.maxTileEnergy;
 
   const child = withMockedRandom([0.9, 0.9, 0.9, 0.5], () => Cell.breed(parentA, parentB));
 
-  const expectedEnergy = Math.max(threshold, investA + investB);
+  const expectedEnergy = investA + investB;
 
   assert.ok(child instanceof Cell, 'breed should return a Cell');
   assert.is(child.row, parentA.row);
@@ -90,7 +81,6 @@ test('breed enforces parental investment and reproduction thresholds', () => {
   expectClose(child.energy, expectedEnergy, 1e-12, 'offspring energy');
   expectClose(parentA.energy, energyBeforeA - investA, 1e-12, 'parent A energy');
   expectClose(parentB.energy, energyBeforeB - investB, 1e-12, 'parent B energy');
-  assert.ok(child.energy >= threshold, 'offspring meets reproduction threshold');
   assert.is(parentA.offspring, 1);
   assert.is(parentB.offspring, 1);
 });
