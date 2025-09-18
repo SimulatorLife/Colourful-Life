@@ -127,12 +127,12 @@ export default class GridManager {
     }
   }
 
-  consumeEnergy(cell, row, col) {
+  consumeEnergy(cell, row, col, densityGrid = this.densityGrid) {
     const available = this.energyGrid[row][col];
     // DNA-driven harvest with density penalty
     const base = typeof cell.dna.forageRate === 'function' ? cell.dna.forageRate() : 0.4;
     const density =
-      this.densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
+      densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
     const crowdPenalty = Math.max(0, 1 - CONSUMPTION_DENSITY_PENALTY * density);
     const minCap = typeof cell.dna.harvestCapMin === 'function' ? cell.dna.harvestCapMin() : 0.1;
     const maxCap = typeof cell.dna.harvestCapMax === 'function' ? cell.dna.harvestCapMax() : 0.5;
@@ -315,6 +315,234 @@ export default class GridManager {
     }
   }
 
+  prepareTick({ eventManager, eventStrengthMultiplier, energyRegenRate, energyDiffusionRate }) {
+    const densityGrid = this.computeDensityGrid(GridManager.DENSITY_RADIUS);
+
+    this.regenerateEnergyGrid(
+      eventManager.activeEvents || [],
+      eventStrengthMultiplier,
+      energyRegenRate,
+      energyDiffusionRate,
+      densityGrid
+    );
+
+    return { densityGrid };
+  }
+
+  processCell(
+    row,
+    col,
+    {
+      stats,
+      eventManager,
+      densityGrid,
+      processed,
+      densityEffectMultiplier,
+      societySimilarity,
+      enemySimilarity,
+      eventStrengthMultiplier,
+    }
+  ) {
+    const cell = this.grid[row][col];
+
+    if (!cell || processed.has(cell)) return;
+    processed.add(cell);
+    cell.age++;
+    if (cell.age >= cell.lifespan) {
+      this.grid[row][col] = null;
+      stats.onDeath();
+
+      return;
+    }
+
+    const events = eventManager.activeEvents || [];
+
+    for (const ev of events) {
+      cell.applyEventEffects(row, col, ev, eventStrengthMultiplier, GridManager.maxTileEnergy);
+    }
+
+    this.consumeEnergy(cell, row, col, densityGrid);
+    const localDensity = densityGrid[row][col];
+
+    const starved = cell.manageEnergy(row, col, {
+      localDensity,
+      densityEffectMultiplier,
+      maxTileEnergy: GridManager.maxTileEnergy,
+    });
+
+    if (starved || cell.energy <= 0) {
+      this.grid[row][col] = null;
+      stats.onDeath();
+
+      return;
+    }
+
+    const act = typeof cell.dna.activityRate === 'function' ? cell.dna.activityRate() : 1;
+
+    if (Math.random() > act) {
+      return;
+    }
+
+    const targets = this.findTargets(row, col, cell, {
+      densityEffectMultiplier,
+      societySimilarity,
+      enemySimilarity,
+    });
+
+    if (
+      this.handleReproduction(row, col, cell, targets, {
+        stats,
+        densityGrid,
+        densityEffectMultiplier,
+      })
+    ) {
+      return;
+    }
+
+    if (this.handleCombat(row, col, cell, targets, { stats, densityEffectMultiplier })) {
+      return;
+    }
+
+    this.handleMovement(row, col, cell, targets, {
+      densityGrid,
+      densityEffectMultiplier,
+    });
+  }
+
+  handleReproduction(
+    row,
+    col,
+    cell,
+    { mates, society },
+    { stats, densityGrid, densityEffectMultiplier }
+  ) {
+    const matePool = mates.length > 0 ? mates : society;
+
+    if (matePool.length === 0) return false;
+
+    const bestMate = cell.findBestMate(matePool);
+
+    if (!bestMate) return false;
+
+    GridManager.moveToTarget(this.grid, row, col, bestMate.row, bestMate.col, this.rows, this.cols);
+
+    const localDensity = densityGrid[row][col];
+    const reproProb = cell.computeReproductionProbability(bestMate.target, {
+      localDensity,
+      densityEffectMultiplier,
+    });
+
+    const thrFracA =
+      typeof cell.dna.reproductionThresholdFrac === 'function'
+        ? cell.dna.reproductionThresholdFrac()
+        : 0.4;
+    const thrFracB =
+      typeof bestMate.target.dna.reproductionThresholdFrac === 'function'
+        ? bestMate.target.dna.reproductionThresholdFrac()
+        : 0.4;
+    const thrA = thrFracA * GridManager.maxTileEnergy;
+    const thrB = thrFracB * GridManager.maxTileEnergy;
+
+    if (randomPercent(reproProb) && cell.energy >= thrA && bestMate.target.energy >= thrB) {
+      const offspring = Cell.breed(cell, bestMate.target);
+
+      this.grid[row][col] = offspring;
+      stats.onBirth();
+    }
+
+    return true;
+  }
+
+  handleCombat(row, col, cell, { enemies }, { stats, densityEffectMultiplier }) {
+    if (enemies.length === 0) return false;
+
+    const targetEnemy = enemies[Math.floor(randomRange(0, enemies.length))];
+    const localDensity = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
+    const action = cell.chooseInteractionAction({
+      localDensity,
+      densityEffectMultiplier,
+    });
+
+    if (action === 'avoid') {
+      GridManager.moveAwayFromTarget(
+        this.grid,
+        row,
+        col,
+        targetEnemy.row,
+        targetEnemy.col,
+        this.rows,
+        this.cols
+      );
+
+      return true;
+    }
+
+    const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
+
+    if (action === 'fight') {
+      if (dist <= 1) {
+        cell.fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col, stats);
+      } else {
+        GridManager.moveToTarget(
+          this.grid,
+          row,
+          col,
+          targetEnemy.row,
+          targetEnemy.col,
+          this.rows,
+          this.cols
+        );
+      }
+
+      return true;
+    }
+
+    if (dist <= 1)
+      cell.cooperateWithEnemy(
+        this,
+        row,
+        col,
+        targetEnemy.row,
+        targetEnemy.col,
+        GridManager.maxTileEnergy,
+        stats
+      );
+    else
+      GridManager.moveToTarget(
+        this.grid,
+        row,
+        col,
+        targetEnemy.row,
+        targetEnemy.col,
+        this.rows,
+        this.cols
+      );
+
+    return true;
+  }
+
+  handleMovement(
+    row,
+    col,
+    cell,
+    { mates, enemies, society },
+    { densityGrid, densityEffectMultiplier }
+  ) {
+    const localDensity = densityGrid[row][col];
+
+    cell.executeMovementStrategy(this.grid, row, col, mates, enemies, society || [], {
+      localDensity,
+      densityEffectMultiplier,
+      rows: this.rows,
+      cols: this.cols,
+      moveToTarget: GridManager.moveToTarget,
+      moveAwayFromTarget: GridManager.moveAwayFromTarget,
+      moveRandomly: GridManager.moveRandomly,
+      tryMove: GridManager.tryMove,
+      getEnergyAt: (rr, cc) => this.energyGrid[rr][cc] / GridManager.maxTileEnergy,
+    });
+  }
+
   update({
     densityEffectMultiplier = 1,
     societySimilarity = 1,
@@ -328,172 +556,28 @@ export default class GridManager {
 
     this.lastSnapshot = null;
 
-    // Precompute density grid for this tick
-    this.densityGrid = this.computeDensityGrid(GridManager.DENSITY_RADIUS);
-
-    this.regenerateEnergyGrid(
-      eventManager.activeEvents || [],
+    const { densityGrid } = this.prepareTick({
+      eventManager,
       eventStrengthMultiplier,
       energyRegenRate,
       energyDiffusionRate,
-      this.densityGrid
-    );
+    });
+
+    this.densityGrid = densityGrid;
     const processed = new WeakSet();
 
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
-        const cell = this.grid[row][col];
-
-        if (!cell || processed.has(cell)) continue;
-        processed.add(cell);
-        cell.age++;
-        if (cell.age >= cell.lifespan) {
-          this.grid[row][col] = null;
-          stats.onDeath();
-          continue;
-        }
-        const evs = eventManager.activeEvents || [];
-
-        for (const ev of evs) {
-          cell.applyEventEffects(row, col, ev, eventStrengthMultiplier, GridManager.maxTileEnergy);
-        }
-        this.consumeEnergy(cell, row, col);
-        const localDensity = this.densityGrid[row][col];
-
-        const starved = cell.manageEnergy(row, col, {
-          localDensity,
-          densityEffectMultiplier,
-          maxTileEnergy: GridManager.maxTileEnergy,
-        });
-
-        if (starved || cell.energy <= 0) {
-          this.grid[row][col] = null;
-          stats.onDeath();
-          continue;
-        }
-        // Activity gate: some genomes idle more/less per tick
-        const act = typeof cell.dna.activityRate === 'function' ? cell.dna.activityRate() : 1;
-
-        if (Math.random() > act) {
-          continue;
-        }
-        const { mates, enemies, society } = this.findTargets(row, col, cell, {
+        this.processCell(row, col, {
+          stats,
+          eventManager,
+          densityGrid,
+          processed,
           densityEffectMultiplier,
           societySimilarity,
           enemySimilarity,
+          eventStrengthMultiplier,
         });
-
-        // Prefer mates; if none, allow allies (society) as fallback
-        const matePool = mates.length > 0 ? mates : society;
-
-        if (matePool.length > 0) {
-          const bestMate = cell.findBestMate(matePool);
-
-          if (bestMate) {
-            GridManager.moveToTarget(
-              this.grid,
-              row,
-              col,
-              bestMate.row,
-              bestMate.col,
-              this.rows,
-              this.cols
-            );
-            const localDensity = this.densityGrid[row][col];
-            const reproProb = cell.computeReproductionProbability(bestMate.target, {
-              localDensity,
-              densityEffectMultiplier,
-            });
-
-            const thrFracA =
-              typeof cell.dna.reproductionThresholdFrac === 'function'
-                ? cell.dna.reproductionThresholdFrac()
-                : 0.4;
-            const thrFracB =
-              typeof bestMate.target.dna.reproductionThresholdFrac === 'function'
-                ? bestMate.target.dna.reproductionThresholdFrac()
-                : 0.4;
-            const thrA = thrFracA * GridManager.maxTileEnergy;
-            const thrB = thrFracB * GridManager.maxTileEnergy;
-
-            if (randomPercent(reproProb) && cell.energy >= thrA && bestMate.target.energy >= thrB) {
-              const offspring = Cell.breed(cell, bestMate.target);
-
-              this.grid[row][col] = offspring;
-              stats.onBirth();
-            }
-          }
-        } else if (enemies.length > 0) {
-          const targetEnemy = enemies[Math.floor(randomRange(0, enemies.length))];
-          const localDensity = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
-          const action = cell.chooseInteractionAction({
-            localDensity,
-            densityEffectMultiplier,
-          });
-
-          if (action === 'avoid') {
-            GridManager.moveAwayFromTarget(
-              this.grid,
-              row,
-              col,
-              targetEnemy.row,
-              targetEnemy.col,
-              this.rows,
-              this.cols
-            );
-          } else if (action === 'fight') {
-            const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
-
-            if (dist <= 1) cell.fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col, stats);
-            else
-              GridManager.moveToTarget(
-                this.grid,
-                row,
-                col,
-                targetEnemy.row,
-                targetEnemy.col,
-                this.rows,
-                this.cols
-              );
-          } else {
-            const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
-
-            if (dist <= 1)
-              cell.cooperateWithEnemy(
-                this,
-                row,
-                col,
-                targetEnemy.row,
-                targetEnemy.col,
-                GridManager.maxTileEnergy,
-                stats
-              );
-            else
-              GridManager.moveToTarget(
-                this.grid,
-                row,
-                col,
-                targetEnemy.row,
-                targetEnemy.col,
-                this.rows,
-                this.cols
-              );
-          }
-        } else {
-          const localDensity2 = this.densityGrid[row][col];
-
-          cell.executeMovementStrategy(this.grid, row, col, mates, enemies, society || [], {
-            localDensity: localDensity2,
-            densityEffectMultiplier,
-            rows: this.rows,
-            cols: this.cols,
-            moveToTarget: GridManager.moveToTarget,
-            moveAwayFromTarget: GridManager.moveAwayFromTarget,
-            moveRandomly: GridManager.moveRandomly,
-            tryMove: GridManager.tryMove,
-            getEnergyAt: (rr, cc) => this.energyGrid[rr][cc] / GridManager.maxTileEnergy,
-          });
-        }
       }
     }
 
