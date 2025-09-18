@@ -80,6 +80,8 @@
           showFitness: uiManager.getShowFitness(),
           maxTileEnergy: GridManager.maxTileEnergy,
           snapshot: lastSnapshot,
+          activeEvents: eventManager.activeEvents,
+          getEventColor: eventManager.getColor?.bind(eventManager),
         });
         // leaderboard (top 5 by composite fitness)
         const leaderboardInterval = Math.max(0, uiManager.getLeaderboardIntervalMs());
