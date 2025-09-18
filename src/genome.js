@@ -1,4 +1,4 @@
-import { createRNG, randomRange, randomPercent } from './utils.js';
+import { createRNG, randomRange, randomPercent, clamp } from './utils.js';
 
 // Genome modeled as loci; currently r,g,b act as loci to preserve behavior
 export class DNA {
@@ -182,8 +182,13 @@ export class DNA {
   }
 
   starvationThresholdFrac() {
-    // Higher green -> better resource efficiency, lower threshold
-    return 0.8 - (this.g / 255) * 0.6; // 0.2..0.8
+    const r = this.r / 255;
+    const g = this.g / 255;
+    const b = this.b / 255;
+    // Resource savvy genomes tolerate lean times; aggression and low blue raise caution
+    const base = 0.48 - 0.14 * g - 0.08 * b + 0.08 * r;
+
+    return clamp(base, 0.25, 0.85);
   }
 
   neurons() {
@@ -218,17 +223,26 @@ export class DNA {
 
   // DNA-derived base energy loss per tick (before scale)
   energyLossBase() {
-    // Greener genomes are more efficient
+    const r = this.r / 255;
     const g = this.g / 255;
+    const b = this.b / 255;
+    // Greens and blues promote efficiency, while red/aggression raises upkeep
+    const efficiency = 0.55 * g + 0.3 * b;
+    const drivePenalty = 0.45 * r + 0.2 * (1 - b);
+    const base = 0.018 + 0.02 * (1 - efficiency) + 0.01 * drivePenalty;
 
-    return 0.015 + (1 - g) * 0.03; // ~0.015..0.045
+    return clamp(base, 0.012, 0.055);
   }
 
-  // How efficiently a cell can harvest tile energy per tick (0.2..0.8)
+  // How efficiently a cell can harvest tile energy per tick (0.15..0.85)
   forageRate() {
+    const r = this.r / 255;
     const g = this.g / 255;
+    const b = this.b / 255;
+    // Balanced genomes harvest more consistently; high aggression reduces focus
+    const harvestFocus = 0.32 + 0.28 * g + 0.18 * b - 0.18 * r;
 
-    return 0.2 + 0.6 * g;
+    return clamp(harvestFocus, 0.15, 0.85);
   }
 
   // Absolute caps (energy units per tick) for harvesting; DNA-driven
@@ -238,9 +252,13 @@ export class DNA {
     return 0.03 + 0.12 * b; // 0.03..0.15
   }
   harvestCapMax() {
+    const r = this.r / 255;
     const g = this.g / 255;
+    const b = this.b / 255;
+    // Blues steady the harvest cap, green pushes higher but aggression taxes throughput
+    const raw = 0.28 + 0.32 * g + 0.2 * b - 0.18 * r;
 
-    return 0.25 + 0.6 * g; // 0.25..0.85
+    return clamp(raw, 0.2, 0.9);
   }
 
   // Energy cost characteristics for actions

@@ -136,13 +136,15 @@ export default class GridManager {
   consumeEnergy(cell, row, col, densityGrid = this.densityGrid) {
     const available = this.energyGrid[row][col];
     // DNA-driven harvest with density penalty
-    const base = typeof cell.dna.forageRate === 'function' ? cell.dna.forageRate() : 0.4;
+    const baseRate = typeof cell.dna.forageRate === 'function' ? cell.dna.forageRate() : 0.4;
+    const base = clamp(baseRate, 0.05, 1);
     const density =
       densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
     const crowdPenalty = Math.max(0, 1 - CONSUMPTION_DENSITY_PENALTY * density);
     const minCap = typeof cell.dna.harvestCapMin === 'function' ? cell.dna.harvestCapMin() : 0.1;
-    const maxCap = typeof cell.dna.harvestCapMax === 'function' ? cell.dna.harvestCapMax() : 0.5;
-    const cap = Math.max(minCap, Math.min(maxCap, base * crowdPenalty));
+    const maxCapRaw = typeof cell.dna.harvestCapMax === 'function' ? cell.dna.harvestCapMax() : 0.5;
+    const maxCap = Math.max(minCap, clamp(maxCapRaw, minCap, 1));
+    const cap = clamp(base * crowdPenalty, minCap, maxCap);
     const take = Math.min(cap, available);
 
     this.energyGrid[row][col] -= take;

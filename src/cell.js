@@ -138,12 +138,10 @@ export default class Cell {
     const energyDensityMult = lerp(this.density.energyLoss.min, this.density.energyLoss.max, effD);
     const ageFrac = this.lifespan > 0 ? this.age / this.lifespan : 0;
     const sen = typeof this.dna.senescenceRate === 'function' ? this.dna.senescenceRate() : 0;
-    const energyLoss =
-      this.dna.energyLossBase() *
-      this.dna.baseEnergyLossScale() *
-      (1 + metabolism) *
-      (1 + sen * ageFrac) *
-      energyDensityMult;
+    const baseLoss = this.dna.energyLossBase();
+    const lossScale =
+      this.dna.baseEnergyLossScale() * (1 + metabolism) * (1 + sen * ageFrac) * energyDensityMult;
+    const energyLoss = clamp(baseLoss * lossScale, 0.004, 0.35);
     // cognitive/perception overhead derived from DNA
     const cognitiveLoss = this.dna.cognitiveCost(this.neurons, this.sight, effD);
 
