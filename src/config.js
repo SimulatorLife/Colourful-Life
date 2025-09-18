@@ -7,3 +7,13 @@ export const DENSITY_RADIUS_DEFAULT = 1;
 // Penalties (scale 0..1) used in energy model
 export const REGEN_DENSITY_PENALTY = 0.5; // 1 - penalty * density
 export const CONSUMPTION_DENSITY_PENALTY = 0.5; // 1 - penalty * density
+
+export function getDefaultMaxTileEnergy() {
+  const gridManager = typeof globalThis !== 'undefined' ? globalThis.GridManager : undefined;
+
+  if (gridManager && gridManager.maxTileEnergy != null) {
+    return gridManager.maxTileEnergy;
+  }
+
+  return MAX_TILE_ENERGY;
+}

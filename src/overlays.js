@@ -1,12 +1,5 @@
-function getDefaultMaxTileEnergy() {
-  const gridManager = typeof globalThis !== 'undefined' ? globalThis.GridManager : undefined;
-
-  if (gridManager && gridManager.maxTileEnergy != null) {
-    return gridManager.maxTileEnergy;
-  }
-
-  return 5;
-}
+import { computeFitness } from './fitness.js';
+import { getDefaultMaxTileEnergy } from './config.js';
 
 function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = '0,0,0') {
   const rows = grid.rows;

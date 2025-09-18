@@ -32,21 +32,17 @@ export default class EventManager {
     return EventManager.EVENT_COLORS[ev.eventType];
   }
 
-  _randRange(min, max) {
-    return this.rng() * (max - min) + min;
-  }
-
   generateRandomEvent() {
     const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
-    const eventType = eventTypes[Math.floor(this._randRange(0, eventTypes.length))];
+    const eventType = eventTypes[Math.floor(randomRange(0, eventTypes.length, this.rng))];
     // Bias durations so events are visible but not constant
-    const duration = Math.floor(this._randRange(300, 900)); // frames
-    const strength = this._randRange(0.25, 1); // 0.25..1
+    const duration = Math.floor(randomRange(300, 900, this.rng)); // frames
+    const strength = randomRange(0.25, 1, this.rng); // 0.25..1
     const affectedArea = {
-      x: Math.floor(this._randRange(0, this.cols)),
-      y: Math.floor(this._randRange(0, this.rows)),
-      width: Math.max(10, Math.floor(this._randRange(6, this.cols / 3))),
-      height: Math.max(10, Math.floor(this._randRange(6, this.rows / 3))),
+      x: Math.floor(randomRange(0, this.cols, this.rng)),
+      y: Math.floor(randomRange(0, this.rows, this.rng)),
+      width: Math.max(10, Math.floor(randomRange(6, this.cols / 3, this.rng))),
+      height: Math.max(10, Math.floor(randomRange(6, this.rows / 3, this.rng))),
     };
 
     return { eventType, duration, affectedArea, strength, remaining: duration };
@@ -67,7 +63,7 @@ export default class EventManager {
 
       this.activeEvents.push(ev);
       // Next cooldown scales inversely with frequency multiplier
-      const base = Math.floor(this._randRange(180, 480));
+      const base = Math.floor(randomRange(180, 480, this.rng));
 
       this.cooldown = Math.max(0, Math.floor(base / Math.max(0.01, frequencyMultiplier)));
     }

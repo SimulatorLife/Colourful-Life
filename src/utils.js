@@ -1,5 +1,5 @@
-export function randomRange(min, max) {
-  return Math.random() * (max - min) + min;
+export function randomRange(min, max, rng = Math.random) {
+  return rng() * (max - min) + min;
 }
 
 export const lerp = (a, b, t) => a + (b - a) * (t < 0 ? 0 : t > 1 ? 1 : t);

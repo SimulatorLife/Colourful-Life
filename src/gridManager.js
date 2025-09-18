@@ -360,12 +360,13 @@ export default class GridManager {
         this.consumeEnergy(cell, row, col);
         const localDensity = this.densityGrid[row][col];
 
-        cell.manageEnergy(row, col, {
+        const starved = cell.manageEnergy(row, col, {
           localDensity,
           densityEffectMultiplier,
           maxTileEnergy: GridManager.maxTileEnergy,
         });
-        if (cell.energy <= 0) {
+
+        if (starved || cell.energy <= 0) {
           this.grid[row][col] = null;
           stats.onDeath();
           continue;
