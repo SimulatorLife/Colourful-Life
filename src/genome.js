@@ -1,4 +1,4 @@
-import { clamp, createRNG, randomRange, randomPercent } from './utils.js';
+import { clamp, createRNG, randomRange } from './utils.js';
 
 // Genome modeled as loci; currently r,g,b act as loci to preserve behavior
 export class DNA {
@@ -176,6 +176,19 @@ export class DNA {
     return (this.g + this.b) / (2 * 255);
   }
 
+  // Probability (0..1) to blend alleles during crossover instead of inheriting a pure channel
+  crossoverMix() {
+    const rnd = this.prngFor('crossoverMix');
+    const red = this.r / 255;
+    const green = this.g / 255;
+    const blue = this.b / 255;
+    const cooperation = 0.25 + 0.45 * green; // greener genomes blend more
+    const temperament = 0.2 * (blue - red); // red skews toward purity, blue toward blending
+    const jitter = (rnd() - 0.5) * 0.2; // deterministic per-genome variance
+
+    return clamp(cooperation + temperament + jitter, 0, 1);
+  }
+
   mutationChance() {
     const rnd = this.prngFor('mutationChance');
 
@@ -333,16 +346,39 @@ export class DNA {
   }
 
   reproduceWith(other, mutationChance = 0.15, mutationRange = 12) {
-    // Per-locus blend with mutation; equivalent to previous behavior
-    const mix = (a, b) => {
-      let v = Math.round((a + b) / 2);
+    const rng = this.prngFor('crossover');
+    const blendA = typeof this.crossoverMix === 'function' ? this.crossoverMix() : 0.5;
+    const blendB = typeof other?.crossoverMix === 'function' ? other.crossoverMix() : 0.5;
+    const blendProbability = clamp((blendA + blendB) / 2, 0, 1);
+    const range = Math.max(0, mutationRange | 0);
 
-      if (randomPercent(mutationChance)) v += Math.floor(randomRange(-1, 1) * mutationRange);
+    const mutate = (value) => {
+      if (rng() < mutationChance) {
+        value += Math.floor(randomRange(-1, 1, rng) * range);
+      }
 
-      return Math.max(0, Math.min(255, v));
+      return Math.max(0, Math.min(255, value));
     };
 
-    return new DNA(mix(this.r, other.r), mix(this.g, other.g), mix(this.b, other.b));
+    const mixChannel = (a, b) => {
+      let v;
+
+      if (rng() < blendProbability) {
+        const weight = rng();
+
+        v = Math.round(a * weight + b * (1 - weight));
+      } else {
+        v = rng() < 0.5 ? a : b;
+      }
+
+      return mutate(v);
+    };
+
+    return new DNA(
+      mixChannel(this.r, other.r),
+      mixChannel(this.g, other.g),
+      mixChannel(this.b, other.b)
+    );
   }
 
   similarity(other) {
