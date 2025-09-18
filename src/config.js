@@ -1,7 +1,7 @@
 // Centralized simulation config defaults
 export const MAX_TILE_ENERGY = 5;
-export const ENERGY_REGEN_RATE_DEFAULT = 0.09; // baseline logistic regen (per tick)
-export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.18; // smoothing between tiles (per tick)
+export const ENERGY_REGEN_RATE_DEFAULT = 0.015; // baseline logistic regen (per tick)
+export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.08; // smoothing between tiles (per tick)
 export const DENSITY_RADIUS_DEFAULT = 1;
 
 // UI defaults and slider bounds
