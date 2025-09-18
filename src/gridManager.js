@@ -284,7 +284,6 @@ export default class GridManager {
   draw() {
     const ctx = this.ctx;
     const cellSize = this.cellSize;
-    const eventManager = this.eventManager;
 
     // Clear full canvas once
     ctx.clearRect(0, 0, this.cols * cellSize, this.rows * cellSize);
@@ -296,21 +295,6 @@ export default class GridManager {
         if (!cell) continue;
         ctx.fillStyle = cell.color;
         ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-      }
-    }
-    // Draw active events overlays
-    if (eventManager.activeEvents && eventManager.activeEvents.length > 0) {
-      for (const ev of eventManager.activeEvents) {
-        ctx.fillStyle =
-          typeof eventManager.getColor === 'function'
-            ? eventManager.getColor(ev)
-            : 'rgba(255,255,255,0.15)';
-        ctx.fillRect(
-          ev.affectedArea.x * cellSize,
-          ev.affectedArea.y * cellSize,
-          ev.affectedArea.width * cellSize,
-          ev.affectedArea.height * cellSize
-        );
       }
     }
   }
