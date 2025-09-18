@@ -238,32 +238,7 @@ export default class GridManager {
   }
 
   // Precompute density for all tiles (fraction of occupied neighbors)
-  computeDensityGrid(radius = GridManager.DENSITY_RADIUS) {
-    const out = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
-
-    for (let row = 0; row < this.rows; row++) {
-      for (let col = 0; col < this.cols; col++) {
-        let count = 0,
-          total = 0;
-
-        for (let dx = -radius; dx <= radius; dx++) {
-          for (let dy = -radius; dy <= radius; dy++) {
-            if (dx === 0 && dy === 0) continue;
-            const rr = (row + dy + this.rows) % this.rows;
-            const cc = (col + dx + this.cols) % this.cols;
-
-            total++;
-            if (this.grid[rr][cc]) count++;
-          }
-        }
-        out[row][col] = total > 0 ? count / total : 0;
-      }
-    }
-
-    return out;
-  }
-
-  localDensity(row, col, radius = 1) {
+  #countNeighbors(row, col, radius = GridManager.DENSITY_RADIUS) {
     let count = 0;
     let total = 0;
 
@@ -277,6 +252,26 @@ export default class GridManager {
         if (this.grid[rr][cc]) count++;
       }
     }
+
+    return { count, total };
+  }
+
+  computeDensityGrid(radius = GridManager.DENSITY_RADIUS) {
+    const out = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+
+    for (let row = 0; row < this.rows; row++) {
+      for (let col = 0; col < this.cols; col++) {
+        const { count, total } = this.#countNeighbors(row, col, radius);
+
+        out[row][col] = total > 0 ? count / total : 0;
+      }
+    }
+
+    return out;
+  }
+
+  localDensity(row, col, radius = 1) {
+    const { count, total } = this.#countNeighbors(row, col, radius);
 
     return total > 0 ? count / total : 0;
   }
