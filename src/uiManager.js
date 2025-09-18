@@ -203,81 +203,168 @@ export default class UIManager {
       return input;
     };
 
-    const thresholdsGroup = addGrid();
+    const getSliderValue = (cfg) =>
+      typeof cfg.getValue === 'function' ? cfg.getValue() : this[cfg.prop];
 
-    // Ally similarity
-    addSlider(
+    const getSliderSetter = (cfg) => {
+      if (typeof cfg.setValue === 'function') return cfg.setValue;
+      if (cfg.prop)
+        return (value) => {
+          this[cfg.prop] = value;
+        };
+
+      return () => {};
+    };
+
+    const renderSlider = (cfg, parent = body) =>
+      addSlider(
+        {
+          label: cfg.label,
+          min: cfg.min,
+          max: cfg.max,
+          step: cfg.step,
+          value: getSliderValue(cfg),
+          title: cfg.title,
+          format: cfg.format,
+          onInput: getSliderSetter(cfg),
+        },
+        parent
+      );
+
+    const thresholdConfigs = [
       {
         label: 'Ally Similarity ≥',
         min: 0,
         max: 1,
         step: 0.01,
-        value: this.societySimilarity,
         title: 'Minimum genetic similarity to consider another cell an ally (0..1)',
         format: (v) => v.toFixed(2),
-        onInput: (v) => (this.societySimilarity = v),
+        getValue: () => this.societySimilarity,
+        setValue: (v) => {
+          this.societySimilarity = v;
+        },
       },
-      thresholdsGroup
-    );
-
-    // Enemy threshold
-    addSlider(
       {
         label: 'Enemy Similarity ≤',
         min: 0,
         max: 1,
         step: 0.01,
-        value: this.enemySimilarity,
         title: 'Maximum genetic similarity to consider another cell an enemy (0..1)',
         format: (v) => v.toFixed(2),
-        onInput: (v) => (this.enemySimilarity = v),
+        getValue: () => this.enemySimilarity,
+        setValue: (v) => {
+          this.enemySimilarity = v;
+        },
       },
-      thresholdsGroup
-    );
+    ];
 
-    const eventsGroup = addGrid();
-
-    // Event strength multiplier
-    addSlider(
+    const eventConfigs = [
       {
         label: 'Event Strength ×',
         min: 0,
         max: 3,
         step: 0.05,
-        value: this.eventStrengthMultiplier,
         title: 'Scales the impact of environmental events (0..3)',
         format: (v) => v.toFixed(2),
-        onInput: (v) => (this.eventStrengthMultiplier = v),
+        getValue: () => this.eventStrengthMultiplier,
+        setValue: (v) => {
+          this.eventStrengthMultiplier = v;
+        },
       },
-      eventsGroup
-    );
-
-    // Event frequency multiplier
-    addSlider(
       {
         label: 'Event Frequency ×',
         min: 0,
         max: 3,
         step: 0.1,
-        value: this.eventFrequencyMultiplier,
         title: 'How often events spawn (0 disables new events)',
         format: (v) => v.toFixed(1),
-        onInput: (v) => (this.eventFrequencyMultiplier = Math.max(0, v)),
+        getValue: () => this.eventFrequencyMultiplier,
+        setValue: (v) => {
+          this.eventFrequencyMultiplier = Math.max(0, v);
+        },
       },
-      eventsGroup
-    );
+    ];
 
-    // Simulation speed multiplier (baseline 60 updates/sec)
-    addSlider({
-      label: 'Speed ×',
-      min: 0.5,
-      max: 100,
-      step: 0.5,
-      value: this.speedMultiplier,
-      title: 'Speed multiplier relative to 60 updates/sec (0.5x..100x)',
-      format: (v) => `${v.toFixed(1)}x`,
-      onInput: (v) => (this.speedMultiplier = Math.max(0.1, v)),
-    });
+    const energyConfigs = [
+      {
+        label: 'Density Effect ×',
+        min: 0,
+        max: 2,
+        step: 0.05,
+        title:
+          'Scales how strongly population density affects energy, aggression, and breeding (0..2)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.densityEffectMultiplier,
+        setValue: (v) => {
+          this.densityEffectMultiplier = Math.max(0, v);
+        },
+      },
+      {
+        label: 'Energy Regen Rate',
+        min: 0,
+        max: 0.2,
+        step: 0.005,
+        title: 'Base logistic regeneration rate toward max energy (0..0.2)',
+        format: (v) => v.toFixed(3),
+        getValue: () => this.energyRegenRate,
+        setValue: (v) => {
+          this.energyRegenRate = Math.max(0, v);
+        },
+      },
+      {
+        label: 'Energy Diffusion Rate',
+        min: 0,
+        max: 0.5,
+        step: 0.01,
+        title: 'How quickly energy smooths between tiles (0..0.5)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.energyDiffusionRate,
+        setValue: (v) => {
+          this.energyDiffusionRate = Math.max(0, v);
+        },
+      },
+    ];
+
+    const generalConfigs = [
+      {
+        label: 'Speed ×',
+        min: 0.5,
+        max: 100,
+        step: 0.5,
+        title: 'Speed multiplier relative to 60 updates/sec (0.5x..100x)',
+        format: (v) => `${v.toFixed(1)}x`,
+        getValue: () => this.speedMultiplier,
+        setValue: (v) => {
+          this.speedMultiplier = Math.max(0.1, v);
+        },
+        position: 'beforeOverlays',
+      },
+      {
+        label: 'Leaderboard Interval',
+        min: 100,
+        max: 3000,
+        step: 50,
+        title: 'Delay between leaderboard refreshes in milliseconds (100..3000)',
+        format: (v) => `${Math.round(v)} ms`,
+        getValue: () => this.leaderboardIntervalMs,
+        setValue: (v) => {
+          this.leaderboardIntervalMs = Math.max(0, v);
+        },
+        position: 'afterEnergy',
+      },
+    ];
+
+    const thresholdsGroup = addGrid();
+
+    thresholdConfigs.forEach((cfg) => renderSlider(cfg, thresholdsGroup));
+
+    const eventsGroup = addGrid();
+
+    eventConfigs.forEach((cfg) => renderSlider(cfg, eventsGroup));
+
+    generalConfigs
+      .filter((cfg) => cfg.position === 'beforeOverlays')
+      .forEach((cfg) => renderSlider(cfg));
 
     // Overlay toggles
     const overlayHeader = document.createElement('h4');
@@ -312,62 +399,11 @@ export default class UIManager {
 
     const energyGroup = addGrid();
 
-    // Density effect multiplier
-    addSlider(
-      {
-        label: 'Density Effect ×',
-        min: 0,
-        max: 2,
-        step: 0.05,
-        value: this.densityEffectMultiplier,
-        title:
-          'Scales how strongly population density affects energy, aggression, and breeding (0..2)',
-        format: (v) => v.toFixed(2),
-        onInput: (v) => (this.densityEffectMultiplier = Math.max(0, v)),
-      },
-      energyGroup
-    );
+    energyConfigs.forEach((cfg) => renderSlider(cfg, energyGroup));
 
-    // Energy regen base rate
-    addSlider(
-      {
-        label: 'Energy Regen Rate',
-        min: 0,
-        max: 0.2,
-        step: 0.005,
-        value: this.energyRegenRate,
-        title: 'Base logistic regeneration rate toward max energy (0..0.2)',
-        format: (v) => v.toFixed(3),
-        onInput: (v) => (this.energyRegenRate = Math.max(0, v)),
-      },
-      energyGroup
-    );
-
-    // Energy diffusion rate
-    addSlider(
-      {
-        label: 'Energy Diffusion Rate',
-        min: 0,
-        max: 0.5,
-        step: 0.01,
-        value: this.energyDiffusionRate,
-        title: 'How quickly energy smooths between tiles (0..0.5)',
-        format: (v) => v.toFixed(2),
-        onInput: (v) => (this.energyDiffusionRate = Math.max(0, v)),
-      },
-      energyGroup
-    );
-
-    addSlider({
-      label: 'Leaderboard Interval',
-      min: 100,
-      max: 3000,
-      step: 50,
-      value: this.leaderboardIntervalMs,
-      title: 'Delay between leaderboard refreshes in milliseconds (100..3000)',
-      format: (v) => `${Math.round(v)} ms`,
-      onInput: (v) => (this.leaderboardIntervalMs = Math.max(0, v)),
-    });
+    generalConfigs
+      .filter((cfg) => cfg.position === 'afterEnergy')
+      .forEach((cfg) => renderSlider(cfg));
 
     return panel;
   }
