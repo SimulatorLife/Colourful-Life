@@ -44,8 +44,8 @@ canvas {
 .main-row {
   display: flex;
   gap: clamp(16px, 3vw, 32px);
-  align-items: flex-start;
-  width: min(1100px, 100%);
+  align-items: stretch;
+  width: min(1200px, 100%);
 }
 
 .canvas-container {
@@ -63,10 +63,15 @@ canvas {
 
 /* Sidebar stacks panels vertically */
 .sidebar {
-  flex: 0 0 320px;
-  display: flex;
-  flex-direction: column;
+  flex: 0 0 clamp(320px, 32vw, 520px);
+  max-width: clamp(320px, 32vw, 520px);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--gap);
+  align-content: start;
 }
 
 @media (max-width: 1180px) {
@@ -78,7 +83,12 @@ canvas {
     align-items: center;
   }
   .sidebar {
-    width: min(100%, 360px);
+    width: min(100%, 520px);
+    max-width: 100%;
+  }
+  .dashboard-grid {
+    width: 100%;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   }
 }
 
@@ -90,6 +100,7 @@ canvas {
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: var(--pad);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
 }
 
 /* Collapsible panels */
@@ -130,8 +141,10 @@ canvas {
 .controls-panel {
   position: sticky;
   top: 8px;
-  max-height: calc(100vh - 16px);
+  max-height: calc(100vh - 32px);
   overflow: auto;
+  grid-column: 1 / -1;
+  align-self: start;
 }
 .controls-panel h3 {
   margin: 0 0 8px;
