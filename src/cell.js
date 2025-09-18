@@ -1,5 +1,6 @@
 import DNA from './genome.js';
 import { randomRange, clamp, lerp } from './utils.js';
+import { isEventAffecting } from './eventManager.js';
 
 export default class Cell {
   // TODO: The cells' colors should BE their genes. The RGB values should BE the DNA
@@ -308,13 +309,7 @@ export default class Cell {
   }
 
   applyEventEffects(row, col, currentEvent, eventStrengthMultiplier = 1, maxTileEnergy = 5) {
-    if (
-      currentEvent &&
-      row >= currentEvent.affectedArea.y &&
-      row < currentEvent.affectedArea.y + currentEvent.affectedArea.height &&
-      col >= currentEvent.affectedArea.x &&
-      col < currentEvent.affectedArea.x + currentEvent.affectedArea.width
-    ) {
+    if (isEventAffecting(currentEvent, row, col)) {
       const s =
         currentEvent.strength *
         eventStrengthMultiplier *

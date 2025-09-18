@@ -2,7 +2,7 @@ import { randomRange, randomPercent, clamp, lerp } from './utils.js';
 import DNA from './genome.js';
 import Cell from './cell.js';
 import { computeFitness } from './fitness.js';
-// EventManager used via instance; no direct import needed here
+import { isEventAffecting } from './eventManager.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -171,12 +171,7 @@ export default class GridManager {
         const evs = Array.isArray(events) ? events : events ? [events] : [];
 
         for (const ev of evs) {
-          if (
-            r >= ev.affectedArea.y &&
-            r < ev.affectedArea.y + ev.affectedArea.height &&
-            c >= ev.affectedArea.x &&
-            c < ev.affectedArea.x + ev.affectedArea.width
-          ) {
+          if (isEventAffecting(ev, r, c)) {
             const s = (ev.strength || 0) * (eventStrengthMultiplier || 1);
 
             switch (ev.eventType) {
