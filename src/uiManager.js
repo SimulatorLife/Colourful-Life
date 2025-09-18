@@ -30,6 +30,9 @@ export default class UIManager {
     this.canvasContainer.className = 'canvas-container';
     this.sidebar = document.createElement('div');
     this.sidebar.className = 'sidebar';
+    this.dashboardGrid = document.createElement('div');
+    this.dashboardGrid.className = 'dashboard-grid';
+    this.sidebar.appendChild(this.dashboardGrid);
 
     if (canvasEl) {
       this.root.insertBefore(this.mainRow, canvasEl);
@@ -43,8 +46,8 @@ export default class UIManager {
     }
     this.controlsPanel = this.#buildControlsPanel();
     this.insightsPanel = this.#buildInsightsPanel();
-    this.sidebar.appendChild(this.controlsPanel);
-    this.sidebar.appendChild(this.insightsPanel);
+    this.dashboardGrid.appendChild(this.controlsPanel);
+    this.dashboardGrid.appendChild(this.insightsPanel);
 
     // Keyboard toggle
     document.addEventListener('keydown', (e) => {
@@ -540,7 +543,7 @@ export default class UIManager {
       const { panel, body } = this.#createPanel('Leaderboard');
 
       panel.classList.add('leaderboard-panel');
-      this.sidebar?.appendChild(panel);
+      this.dashboardGrid?.appendChild(panel);
       this.leaderPanel = panel;
       this.leaderBody = body;
     }
