@@ -26,6 +26,7 @@ export default class Cell {
     this.movementGenes = this.dna.movementGenes();
     this.interactionGenes = this.dna.interactionGenes();
     this.density = this.dna.densityResponses();
+    this.fitnessScore = null;
     // Cache metabolism from gene row 5 to avoid per-tick recompute
     const geneRow = this.genes?.[5];
 

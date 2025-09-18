@@ -565,7 +565,13 @@ export default class UIManager {
 
     top.forEach((e, i) => {
       const label = `#${i + 1}`;
-      const value = `fit ${e.fitness.toFixed(2)} | off ${e.offspring} | win ${e.fightsWon} | age ${e.age}`;
+      const smoothed = Number.isFinite(e.smoothedFitness) ? e.smoothedFitness : e.fitness;
+      const value =
+        `avg ${smoothed.toFixed(2)}` +
+        ` | inst ${e.fitness.toFixed(2)}` +
+        ` | off ${e.offspring}` +
+        ` | win ${e.fightsWon}` +
+        ` | age ${e.age}`;
 
       add(label, value, e.color);
     });
