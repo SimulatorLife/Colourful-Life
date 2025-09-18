@@ -23,6 +23,10 @@ export default class Cell {
     this.interactionGenes = this.dna.interactionGenes();
     this.density = this.dna.densityResponses();
     this.fitnessScore = null;
+    this.matePreferenceBias =
+      typeof this.dna.mateSimilarityBias === 'function' ? this.dna.mateSimilarityBias() : 0;
+    this.diversityAppetite =
+      typeof this.dna.diversityAppetite === 'function' ? this.dna.diversityAppetite() : 0;
     // Cache metabolism from gene row 5 to avoid per-tick recompute
     const geneRow = this.genes?.[5];
 
@@ -69,18 +73,110 @@ export default class Cell {
 
   // Lifespan is fully DNA-dictated via genome.lifespanDNA()
 
+  evaluateMateCandidate(mate = {}) {
+    if (!mate?.target) return null;
+
+    const similarity = this.similarityTo(mate.target);
+    const diversity = 1 - similarity;
+    const bias = this.matePreferenceBias ?? 0;
+    const appetite = this.diversityAppetite ?? 0;
+    const similarPull = similarity * (1 + Math.max(0, bias));
+    const diversePull = diversity * (1 + Math.max(0, -bias) + appetite);
+    const curiosityBonus = diversity * appetite * 0.5;
+    const preferenceScore = similarPull + diversePull + curiosityBonus;
+
+    return {
+      ...mate,
+      similarity,
+      diversity,
+      appetite,
+      mateBias: bias,
+      curiosityBonus,
+      preferenceScore,
+      selectionWeight: Math.max(0.0001, preferenceScore),
+    };
+  }
+
+  scorePotentialMates(potentialMates = []) {
+    const scored = [];
+
+    for (let i = 0; i < potentialMates.length; i++) {
+      const mate = potentialMates[i];
+
+      if (!mate?.target) continue;
+      if (
+        typeof mate.preferenceScore === 'number' &&
+        typeof mate.selectionWeight === 'number' &&
+        typeof mate.similarity === 'number'
+      ) {
+        scored.push(mate);
+        continue;
+      }
+
+      const evaluated = this.evaluateMateCandidate(mate);
+
+      if (evaluated) scored.push(evaluated);
+    }
+
+    return scored;
+  }
+
+  selectMateWeighted(potentialMates = []) {
+    const evaluated = this.scorePotentialMates(potentialMates).filter(
+      (m) => m && m.selectionWeight > 0 && m.target
+    );
+
+    if (evaluated.length === 0) return { chosen: null, evaluated: [], mode: 'none' };
+
+    const appetite = this.diversityAppetite ?? 0;
+    let mode = 'preference';
+    let chosen = null;
+
+    const curiosityChance = Math.min(0.5, appetite * 0.25);
+
+    if (evaluated.length > 1 && Math.random() < curiosityChance) {
+      const sorted = [...evaluated].sort((a, b) => b.diversity - a.diversity);
+      const tailSpan = Math.max(1, Math.ceil(sorted.length * (0.2 + appetite * 0.5)));
+      const idx = Math.min(sorted.length - 1, Math.floor(Math.random() * tailSpan));
+
+      chosen = sorted[idx];
+      mode = 'curiosity';
+    }
+
+    if (!chosen) {
+      const totalWeight = evaluated.reduce((sum, m) => sum + m.selectionWeight, 0);
+      let roll = Math.random() * (totalWeight || 1);
+
+      for (let i = 0; i < evaluated.length; i++) {
+        const candidate = evaluated[i];
+
+        roll -= candidate.selectionWeight;
+        if (roll <= 0) {
+          chosen = candidate;
+          break;
+        }
+      }
+
+      if (!chosen) chosen = evaluated[evaluated.length - 1];
+    }
+
+    return { chosen, evaluated, mode };
+  }
+
   findBestMate(potentialMates) {
+    const scored = this.scorePotentialMates(potentialMates);
     let bestMate = null;
     let highestPreference = -Infinity;
 
-    potentialMates.forEach((mate) => {
-      const preference = this.similarityTo(mate.target);
+    for (let i = 0; i < scored.length; i++) {
+      const mate = scored[i];
 
-      if (preference > highestPreference) {
-        highestPreference = preference;
+      if (!mate) continue;
+      if (mate.preferenceScore > highestPreference) {
+        highestPreference = mate.preferenceScore;
         bestMate = mate;
       }
-    });
+    }
 
     return bestMate;
   }

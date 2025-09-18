@@ -428,14 +428,22 @@ export default class GridManager {
 
     if (matePool.length === 0) return false;
 
-    const bestMate = cell.findBestMate(matePool);
+    const { chosen: selectedMate, evaluated, mode } = cell.selectMateWeighted(matePool);
 
-    if (!bestMate) return false;
+    if (!selectedMate || !selectedMate.target) return false;
 
-    GridManager.moveToTarget(this.grid, row, col, bestMate.row, bestMate.col, this.rows, this.cols);
+    GridManager.moveToTarget(
+      this.grid,
+      row,
+      col,
+      selectedMate.row,
+      selectedMate.col,
+      this.rows,
+      this.cols
+    );
 
     const localDensity = densityGrid[row][col];
-    const reproProb = cell.computeReproductionProbability(bestMate.target, {
+    const reproProb = cell.computeReproductionProbability(selectedMate.target, {
       localDensity,
       densityEffectMultiplier,
     });
@@ -445,18 +453,33 @@ export default class GridManager {
         ? cell.dna.reproductionThresholdFrac()
         : 0.4;
     const thrFracB =
-      typeof bestMate.target.dna.reproductionThresholdFrac === 'function'
-        ? bestMate.target.dna.reproductionThresholdFrac()
+      typeof selectedMate.target.dna.reproductionThresholdFrac === 'function'
+        ? selectedMate.target.dna.reproductionThresholdFrac()
         : 0.4;
     const thrA = thrFracA * MAX_TILE_ENERGY;
     const thrB = thrFracB * MAX_TILE_ENERGY;
+    const appetite = cell.diversityAppetite ?? 0;
+    const bias = cell.matePreferenceBias ?? 0;
+    const canBreed = cell.energy >= thrA && selectedMate.target.energy >= thrB;
+    let reproduced = false;
 
-    if (randomPercent(reproProb) && cell.energy >= thrA && bestMate.target.energy >= thrB) {
-      const offspring = Cell.breed(cell, bestMate.target);
+    if (canBreed && randomPercent(reproProb)) {
+      const offspring = Cell.breed(cell, selectedMate.target);
 
       this.grid[row][col] = offspring;
       stats.onBirth();
+      reproduced = true;
     }
+
+    stats?.recordMateChoice?.({
+      similarity: selectedMate.similarity ?? cell.similarityTo(selectedMate.target),
+      diversity: selectedMate.diversity ?? 1 - (selectedMate.similarity ?? 0),
+      appetite,
+      bias,
+      selectionMode: mode,
+      poolSize: evaluated.length,
+      success: reproduced,
+    });
 
     return true;
   }
@@ -686,12 +709,21 @@ export default class GridManager {
         if (target) {
           const similarity = cell.similarityTo(target);
 
+          const candidate = { row: newRow, col: newCol, target };
+
           if (similarity >= allyT) {
-            society.push({ row: newRow, col: newCol, target });
+            const evaluated = cell.evaluateMateCandidate({
+              ...candidate,
+              classification: 'society',
+            });
+
+            if (evaluated) society.push(evaluated);
           } else if (similarity <= enemyT || randomPercent(enemyBias)) {
             enemies.push({ row: newRow, col: newCol, target });
           } else {
-            mates.push({ row: newRow, col: newCol, target });
+            const evaluated = cell.evaluateMateCandidate({ ...candidate, classification: 'mate' });
+
+            if (evaluated) mates.push(evaluated);
           }
         }
       }
