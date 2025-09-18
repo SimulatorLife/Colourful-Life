@@ -9,7 +9,7 @@
 
   <body>
     <div id="app" class="app-layout">
-      <canvas id="gameCanvas"></canvas>
+      <canvas id="gameCanvas" style="width: 600px; height: 600px" width="600" height="600"></canvas>
     </div>
     <script type="module">
       import UIManager from './src/uiManager.js';
@@ -22,8 +22,6 @@
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
 
-      canvas.width = 800;
-      canvas.height = 800;
       const cellSize = 4;
       const rows = canvas.height / cellSize;
       const cols = canvas.width / cellSize;

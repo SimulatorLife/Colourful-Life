@@ -1,17 +1,23 @@
 /* Global styles */
 :root {
-  --bg: #222;
-  --panel-bg: #1a1a1a;
-  --panel-border: #333;
-  --text: #ddd;
-  --muted: #bbb;
-  --muted-2: #aaa;
-  --control-bg: #2b2b2b;
-  --control-bg-hover: #333;
-  --shadow: #111;
-  --radius: 8px;
-  --gap: 12px;
-  --pad: 12px;
+  /* Color palette */
+  --color-bg: #222;
+  --color-surface: #1a1a1a;
+  --color-border: #333;
+  --color-text: #ddd;
+  --color-text-subtle: #aaa;
+  --color-accent: #2b2b2b;
+  --color-accent-hover: #333;
+
+  /* Radius */
+  --radius-sm: 4px;
+
+  /* Spacing scale */
+  --space-sm: 4px;
+  --space-md: 12px;
+  --space-lg: 32px;
+
+  /* Typography */
   --font:
     ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans,
     Helvetica Neue, Arial, sans-serif;
@@ -21,9 +27,9 @@ body {
   height: 100%;
 }
 body {
-  background-color: var(--bg);
+  background-color: var(--color-bg);
   margin: 0;
-  color: var(--text);
+  color: var(--color-text);
   font-family: var(--font);
 }
 
@@ -37,13 +43,13 @@ canvas {
 .app-layout {
   display: flex;
   justify-content: center;
-  padding: 16px;
+  padding: var(--space-md);
   box-sizing: border-box;
 }
 
 .main-row {
   display: flex;
-  gap: clamp(16px, 3vw, 32px);
+  gap: clamp(var(--space-md), 3vw, var(--space-lg));
   align-items: stretch;
   width: min(1200px, 100%);
 }
@@ -56,9 +62,8 @@ canvas {
 
 #gameCanvas {
   flex: 0 0 auto;
-  width: min(100%, 800px);
-  height: auto;
-  box-shadow: 0 0 0 1px var(--shadow);
+  width: 600px;
+  height: 600px;
 }
 
 /* Sidebar stacks panels vertically */
@@ -70,13 +75,13 @@ canvas {
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--gap);
+  gap: var(--space-md);
   align-content: start;
 }
 
 @media (max-width: 1180px) {
   .app-layout {
-    padding: 12px;
+    padding: var(--space-md);
   }
   .main-row {
     flex-direction: column;
@@ -95,12 +100,11 @@ canvas {
 /* Base panel styling */
 .panel {
   width: 100%;
-  color: var(--text);
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: var(--radius);
-  padding: var(--pad);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
 }
 
 /* Collapsible panels */
@@ -117,10 +121,10 @@ canvas {
 }
 .panel .panel-toggle {
   appearance: none;
-  border: 1px solid var(--panel-border);
-  background: var(--control-bg);
-  color: var(--text);
-  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-accent);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
   width: 28px;
   height: 24px;
   line-height: 22px;
@@ -128,10 +132,10 @@ canvas {
   cursor: pointer;
 }
 .panel .panel-toggle:hover {
-  background: var(--control-bg-hover);
+  background: var(--color-accent-hover);
 }
 .panel .panel-body {
-  margin-top: 8px;
+  margin-top: var(--space-md);
 }
 .panel.collapsed .panel-body {
   display: none;
@@ -140,45 +144,45 @@ canvas {
 /* Controls panel */
 .controls-panel {
   position: sticky;
-  top: 8px;
-  max-height: calc(100vh - 32px);
+  top: var(--space-md);
+  max-height: calc(100vh - var(--space-lg));
   overflow: auto;
   grid-column: 1 / -1;
   align-self: start;
 }
 .controls-panel h3 {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-md);
   font-size: 16px;
-  color: #eee;
+  color: var(--color-text);
 }
 .controls-panel button {
   width: 100%;
-  margin-bottom: 10px;
-  padding: 6px 10px;
-  background: var(--control-bg);
-  color: #eee;
-  border: 1px solid #444;
-  border-radius: 4px;
+  margin-bottom: var(--space-md);
+  padding: var(--space-md) var(--space-md);
+  background: var(--color-accent);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 .controls-panel button:hover {
-  background: var(--control-bg-hover);
+  background: var(--color-accent-hover);
 }
 .control-row {
   display: block;
-  margin: 10px 0;
+  margin: var(--space-md) 0;
   cursor: default;
 }
 .control-name {
   font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 4px;
+  color: var(--color-text-subtle);
+  margin-bottom: var(--space-sm);
 }
 .control-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-md);
 }
 .control-line input[type='range'] {
   flex: 1 1 auto;
@@ -186,21 +190,21 @@ canvas {
 .control-value {
   min-width: 42px;
   text-align: right;
-  color: var(--muted-2);
+  color: var(--color-text-subtle);
   font-variant-numeric: tabular-nums;
 }
 
 .insights-panel h3 {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-md);
   font-size: 16px;
-  color: #eee;
+  color: var(--color-text);
 }
 
 /* Leaderboard panel */
 .leaderboard-panel h3 {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-md);
   font-size: 16px;
-  color: #eee;
+  color: var(--color-text);
 }
 
 /* Metrics and leaderboard boxes */
@@ -208,7 +212,7 @@ canvas {
   width: 100%;
   box-sizing: border-box;
   display: grid;
-  gap: 6px;
+  gap: var(--space-md);
 }
 
 .metrics-box .control-line {
@@ -219,6 +223,6 @@ canvas {
   width: 100%;
   height: auto;
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-md);
   box-sizing: border-box;
 }
