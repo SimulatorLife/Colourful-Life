@@ -129,10 +129,7 @@ export default class UIManager {
     if (color) {
       const swatch = document.createElement('span');
 
-      swatch.style.display = 'inline-block';
-      swatch.style.width = '10px';
-      swatch.style.height = '10px';
-      swatch.style.marginRight = '6px';
+      swatch.className = 'control-swatch';
       swatch.style.background = color;
       nameEl.appendChild(swatch);
     }
@@ -474,7 +471,7 @@ export default class UIManager {
     const overlayHeader = document.createElement('h4');
 
     overlayHeader.textContent = 'Overlays';
-    overlayHeader.style.margin = '12px 0 6px';
+    overlayHeader.className = 'overlay-header';
     body.appendChild(overlayHeader);
 
     const overlayGrid = addGrid('control-grid--compact');
