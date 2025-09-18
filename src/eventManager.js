@@ -1,5 +1,12 @@
 import { randomRange } from './utils.js';
 
+export function isEventAffecting(event, row, col) {
+  if (!event || !event.affectedArea) return false;
+  const { x, y, width, height } = event.affectedArea;
+
+  return row >= y && row < y + height && col >= x && col < x + width;
+}
+
 export default class EventManager {
   static EVENT_COLORS = {
     flood: 'rgba(0, 0, 255, 0.5)',
@@ -75,13 +82,7 @@ export default class EventManager {
   applyEventEffects(cell, row, col) {
     const event = this.currentEvent;
 
-    if (
-      event &&
-      row >= event.affectedArea.y &&
-      row < event.affectedArea.y + event.affectedArea.height &&
-      col >= event.affectedArea.x &&
-      col < event.affectedArea.x + event.affectedArea.width
-    ) {
+    if (isEventAffecting(event, row, col)) {
       // Event effects on individual cells are handled in Cell.applyEventEffects
       // This hook is reserved for global side-effects if needed.
     }

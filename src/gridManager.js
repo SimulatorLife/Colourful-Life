@@ -2,7 +2,7 @@ import { randomRange, randomPercent, clamp, lerp } from './utils.js';
 import DNA from './genome.js';
 import Cell from './cell.js';
 import { computeFitness } from './fitness.js';
-// EventManager used via instance; no direct import needed here
+import { isEventAffecting } from './eventManager.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -171,12 +171,7 @@ export default class GridManager {
         const evs = Array.isArray(events) ? events : events ? [events] : [];
 
         for (const ev of evs) {
-          if (
-            r >= ev.affectedArea.y &&
-            r < ev.affectedArea.y + ev.affectedArea.height &&
-            c >= ev.affectedArea.x &&
-            c < ev.affectedArea.x + ev.affectedArea.width
-          ) {
+          if (isEventAffecting(ev, r, c)) {
             const s = (ev.strength || 0) * (eventStrengthMultiplier || 1);
 
             switch (ev.eventType) {
@@ -238,32 +233,7 @@ export default class GridManager {
   }
 
   // Precompute density for all tiles (fraction of occupied neighbors)
-  computeDensityGrid(radius = GridManager.DENSITY_RADIUS) {
-    const out = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
-
-    for (let row = 0; row < this.rows; row++) {
-      for (let col = 0; col < this.cols; col++) {
-        let count = 0,
-          total = 0;
-
-        for (let dx = -radius; dx <= radius; dx++) {
-          for (let dy = -radius; dy <= radius; dy++) {
-            if (dx === 0 && dy === 0) continue;
-            const rr = (row + dy + this.rows) % this.rows;
-            const cc = (col + dx + this.cols) % this.cols;
-
-            total++;
-            if (this.grid[rr][cc]) count++;
-          }
-        }
-        out[row][col] = total > 0 ? count / total : 0;
-      }
-    }
-
-    return out;
-  }
-
-  localDensity(row, col, radius = 1) {
+  #countNeighbors(row, col, radius = GridManager.DENSITY_RADIUS) {
     let count = 0;
     let total = 0;
 
@@ -278,13 +248,32 @@ export default class GridManager {
       }
     }
 
+    return { count, total };
+  }
+
+  computeDensityGrid(radius = GridManager.DENSITY_RADIUS) {
+    const out = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+
+    for (let row = 0; row < this.rows; row++) {
+      for (let col = 0; col < this.cols; col++) {
+        const { count, total } = this.#countNeighbors(row, col, radius);
+
+        out[row][col] = total > 0 ? count / total : 0;
+      }
+    }
+
+    return out;
+  }
+
+  localDensity(row, col, radius = 1) {
+    const { count, total } = this.#countNeighbors(row, col, radius);
+
     return total > 0 ? count / total : 0;
   }
 
   draw() {
     const ctx = this.ctx;
     const cellSize = this.cellSize;
-    const eventManager = this.eventManager;
 
     // Clear full canvas once
     ctx.clearRect(0, 0, this.cols * cellSize, this.rows * cellSize);
@@ -296,21 +285,6 @@ export default class GridManager {
         if (!cell) continue;
         ctx.fillStyle = cell.color;
         ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-      }
-    }
-    // Draw active events overlays
-    if (eventManager.activeEvents && eventManager.activeEvents.length > 0) {
-      for (const ev of eventManager.activeEvents) {
-        ctx.fillStyle =
-          typeof eventManager.getColor === 'function'
-            ? eventManager.getColor(ev)
-            : 'rgba(255,255,255,0.15)';
-        ctx.fillRect(
-          ev.affectedArea.x * cellSize,
-          ev.affectedArea.y * cellSize,
-          ev.affectedArea.width * cellSize,
-          ev.affectedArea.height * cellSize
-        );
       }
     }
   }

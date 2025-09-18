@@ -56,4 +56,17 @@ test('EventManager respects injected RNG for deterministic events', async () => 
   assert.is(rng.getCalls(), sequence.length);
 });
 
+test('isEventAffecting checks if coordinates fall within event area', async () => {
+  const { isEventAffecting } = await import('../src/eventManager.js');
+  const event = {
+    affectedArea: { x: 5, y: 10, width: 3, height: 4 },
+  };
+
+  assert.ok(isEventAffecting(event, 10, 5), 'top-left corner included');
+  assert.ok(isEventAffecting(event, 13, 7), 'bottom-right boundary-1 included');
+  assert.not.ok(isEventAffecting(event, 14, 7), 'outside height excluded');
+  assert.not.ok(isEventAffecting(event, 12, 8), 'outside width excluded');
+  assert.not.ok(isEventAffecting(null, 10, 5), 'null event excluded');
+});
+
 test.run();

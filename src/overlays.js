@@ -26,6 +26,32 @@ function createFitnessPalette(steps, hue) {
   return palette;
 }
 
+export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
+  if (!ctx || !Array.isArray(activeEvents) || activeEvents.length === 0) return;
+
+  ctx.save();
+  for (const event of activeEvents) {
+    if (!event || !event.affectedArea) continue;
+
+    const { affectedArea } = event;
+    const color =
+      (typeof getColor === 'function' && getColor(event)) ||
+      event.color ||
+      'rgba(255,255,255,0.15)';
+
+    if (!color) continue;
+
+    ctx.fillStyle = color;
+    ctx.fillRect(
+      affectedArea.x * cellSize,
+      affectedArea.y * cellSize,
+      affectedArea.width * cellSize,
+      affectedArea.height * cellSize
+    );
+  }
+  ctx.restore();
+}
+
 function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = '0,0,0') {
   const rows = grid.rows;
   const cols = grid.cols;
@@ -128,8 +154,20 @@ function drawDensityLegend(ctx, cellSize, cols, rows, minDensity, maxDensity) {
 }
 
 export function drawOverlays(grid, ctx, cellSize, opts = {}) {
-  const { showEnergy, showDensity, showFitness, maxTileEnergy = getDefaultMaxTileEnergy() } = opts;
-  let { snapshot } = opts;
+  const {
+    showEnergy,
+    showDensity,
+    showFitness,
+    maxTileEnergy = getDefaultMaxTileEnergy(),
+    activeEvents,
+    getEventColor,
+    snapshot: providedSnapshot,
+  } = opts;
+  let snapshot = providedSnapshot;
+
+  if (Array.isArray(activeEvents) && activeEvents.length > 0) {
+    drawEventOverlays(ctx, cellSize, activeEvents, getEventColor);
+  }
 
   if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);
   if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
