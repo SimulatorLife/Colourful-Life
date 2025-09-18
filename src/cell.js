@@ -70,17 +70,32 @@ export default class Cell {
   // Lifespan is fully DNA-dictated via genome.lifespanDNA()
 
   findBestMate(potentialMates) {
+    if (!Array.isArray(potentialMates) || potentialMates.length === 0) return null;
+
+    const pref = this.dna?.mateSimilarityPreference?.() ?? {};
+    const target = clamp(pref.target ?? 0.75, 0, 1);
+    const tolerance = Math.max(0.05, pref.tolerance ?? 0.25);
+    const kinBias = clamp(pref.kinBias ?? 0.5, 0, 1);
+    const dnaNoiseRng = this.dna?.prngFor ? this.dna.prngFor('mateChoice') : null;
+
     let bestMate = null;
-    let highestPreference = -Infinity;
+    let bestScore = -Infinity;
 
-    potentialMates.forEach((mate) => {
-      const preference = this.similarityTo(mate.target);
+    for (const mate of potentialMates) {
+      const similarity = this.similarityTo(mate.target);
+      const diff = Math.abs(similarity - target);
+      const targetScore = Math.max(0, 1 - diff / tolerance);
+      const kinScore = similarity;
+      let score = (1 - kinBias) * targetScore + kinBias * kinScore;
 
-      if (preference > highestPreference) {
-        highestPreference = preference;
+      if (dnaNoiseRng) score += (dnaNoiseRng() - 0.5) * 0.05;
+      score += (Math.random() - 0.5) * 0.05; // inject slight stochasticity
+
+      if (score > bestScore) {
+        bestScore = score;
         bestMate = mate;
       }
-    });
+    }
 
     return bestMate;
   }

@@ -148,6 +148,26 @@ export class DNA {
     return Math.min(0.9, Math.max(0.05, base * synergyAdj * noise));
   }
 
+  // Target mate similarity and tolerance derived from genome
+  mateSimilarityPreference() {
+    const rnd = this.prngFor('mateSimilarityPreference');
+    const kinPull = this.b / 255; // blue pushes toward kin recognition
+    const noveltyPush = this.r / 255; // red rewards novelty and dispersal
+    const balance = this.g / 255; // green stabilizes the response
+
+    const baseTarget = 0.5 + 0.35 * (kinPull - noveltyPush) + 0.15 * (balance - 0.5);
+    const jitter = (rnd() - 0.5) * 0.2; // ±0.1 jitter keeps populations diverse
+    const target = clamp(baseTarget + jitter, 0.05, 0.95);
+
+    const toleranceNoise = (rnd() - 0.5) * 0.1;
+    const tolerance = clamp(0.15 + 0.35 * (1 - balance) + toleranceNoise, 0.05, 0.6);
+
+    const kinBiasNoise = (rnd() - 0.5) * 0.1;
+    const kinBias = clamp(0.3 + 0.4 * kinPull - 0.2 * noveltyPush + kinBiasNoise, 0, 1);
+
+    return { target, tolerance, kinBias };
+  }
+
   initialEnergy(maxEnergy = 5) {
     const brightness = (this.r + this.g + this.b) / (3 * 255);
 

@@ -6,6 +6,7 @@ This repository is a JavaScript playground simulation, inspired by cellular auto
 
 - **Grid-based cells**: simulations use a 2D array to track cells/particles and update them each frame.
 - **Genes and mutation**: advanced versions assign each cell genetic traits that blend and mutate during reproduction.
+  - Each genome also encodes a mating preference, targeting a similarity band (kin-loving to novelty-seeking) and tolerance width, so evolution can drift toward inbreeding or outbreeding strategies as conditions change.
 - **Neuron-inspired movement**: gene weights influence direction choices, giving each organism a rudimentary nervous system.
 - **Energy and evolution**: organisms gather energy from tiles, spend it to move and reproduce, and perish when depleted.
   - Death leaves residue: when a cell dies (age, starvation, or combat), a fraction of its remaining energy is deposited back into the tile as nutrients. Environmental events modulate how much residue persists.
