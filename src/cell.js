@@ -1,6 +1,7 @@
 import DNA from './genome.js';
 import { randomRange, clamp, lerp } from './utils.js';
 import { isEventAffecting } from './eventManager.js';
+import { getEventEffect } from './eventEffects.js';
 
 export default class Cell {
   static chanceToMutate = 0.15;
@@ -237,8 +238,10 @@ export default class Cell {
       let bestE = -Infinity;
 
       for (const d of dirs) {
-        const rr = (row + d.dr + rows) % rows;
-        const cc = (col + d.dc + cols) % cols;
+        const rr = row + d.dr;
+        const cc = col + d.dc;
+
+        if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) continue;
         const occPenalty = gridArr[rr][cc] ? -1 : 0;
         const e = (getEnergyAt(rr, cc) ?? 0) + occPenalty;
 
@@ -300,25 +303,25 @@ export default class Cell {
 
   applyEventEffects(row, col, currentEvent, eventStrengthMultiplier = 1, maxTileEnergy = 5) {
     if (isEventAffecting(currentEvent, row, col)) {
-      const s =
-        currentEvent.strength *
-        eventStrengthMultiplier *
-        (1 - 0.5 * (this.dna.recoveryRate?.() ?? 0));
+      const effect = getEventEffect(currentEvent?.eventType);
 
-      switch (currentEvent.eventType) {
-        case 'flood':
-          this.energy -= 0.3 * s * (1 - this.dna.floodResist());
-          break;
-        case 'drought':
-          this.energy -= 0.25 * s * (1 - this.dna.droughtResist());
-          break;
-        case 'heatwave':
-          this.energy -= 0.35 * s * (1 - this.dna.heatResist());
-          break;
-        case 'coldwave':
-          this.energy -= 0.2 * s * (1 - this.dna.coldResist());
-          break;
+      if (effect?.cell) {
+        const s =
+          (currentEvent.strength || 0) *
+          (eventStrengthMultiplier || 1) *
+          (1 - 0.5 * (this.dna.recoveryRate?.() ?? 0));
+        const { energyLoss = 0, resistanceGene } = effect.cell;
+        const resistance = clamp(
+          typeof resistanceGene === 'string' && typeof this.dna?.[resistanceGene] === 'function'
+            ? this.dna[resistanceGene]()
+            : 0,
+          0,
+          1
+        );
+
+        this.energy -= energyLoss * s * (1 - resistance);
       }
+
       this.energy = Math.max(0, Math.min(maxTileEnergy, this.energy));
     }
   }

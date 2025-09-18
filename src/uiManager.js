@@ -117,6 +117,42 @@ export default class UIManager {
     return input;
   }
 
+  #appendControlRow(container, { label, value, title, color }) {
+    const row = document.createElement('div');
+
+    row.className = 'control-line';
+    if (title) row.title = title;
+
+    const nameEl = document.createElement('div');
+
+    nameEl.className = 'control-name';
+    if (color) {
+      const swatch = document.createElement('span');
+
+      swatch.style.display = 'inline-block';
+      swatch.style.width = '10px';
+      swatch.style.height = '10px';
+      swatch.style.marginRight = '6px';
+      swatch.style.background = color;
+      nameEl.appendChild(swatch);
+    }
+    const labelEl = document.createElement('span');
+
+    labelEl.textContent = label;
+    nameEl.appendChild(labelEl);
+
+    const valueEl = document.createElement('div');
+
+    valueEl.className = 'control-value';
+    valueEl.textContent = value;
+
+    row.appendChild(nameEl);
+    row.appendChild(valueEl);
+    container.appendChild(row);
+
+    return row;
+  }
+
   // Utility to create a collapsible panel with a header
   #createPanel(title) {
     const panel = document.createElement('div');
@@ -139,6 +175,7 @@ export default class UIManager {
 
     body.className = 'panel-body';
     panel.appendChild(body);
+
     const toggleCollapsed = () => {
       panel.classList.toggle('collapsed');
       toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
@@ -156,55 +193,56 @@ export default class UIManager {
   }
 
   #buildControlsPanel() {
-    const panel = document.createElement('div');
+    const { panel, body } = this.#createPanel('Simulation Controls');
 
     panel.id = 'controls';
-    panel.className = 'panel controls-panel';
+    panel.classList.add('controls-panel');
 
-    // Header + collapsible body
-    const header = document.createElement('div');
+    const addGrid = (className = '') => {
+      const grid = document.createElement('div');
 
-    header.className = 'panel-header';
-    const heading = document.createElement('h3');
+      grid.className = `control-grid${className ? ` ${className}` : ''}`;
+      body.appendChild(grid);
 
-    heading.textContent = 'Simulation Controls';
-    const toggle = document.createElement('button');
+      return grid;
+    };
 
-    toggle.textContent = '–';
-    toggle.className = 'panel-toggle';
-    header.appendChild(heading);
-    header.appendChild(toggle);
-    panel.appendChild(header);
-    const body = document.createElement('div');
+    const buttonRow = body.appendChild(document.createElement('div'));
 
-    body.className = 'panel-body';
-    panel.appendChild(body);
+    buttonRow.className = 'control-button-row';
 
-    // Pause/Resume
-    const pauseBtn = document.createElement('button');
+    const addControlButton = ({ id, label, title, onClick }) => {
+      const button = document.createElement('button');
 
-    pauseBtn.id = 'pauseButton';
-    pauseBtn.textContent = 'Pause';
-    pauseBtn.title = 'Pause/resume the simulation (shortcut: P)';
-    pauseBtn.addEventListener('click', () => this.togglePause());
-    body.appendChild(pauseBtn);
-    this.pauseButton = pauseBtn;
+      button.id = id;
+      button.textContent = label;
+      button.title = title;
+      button.addEventListener('click', onClick);
+      buttonRow.appendChild(button);
 
-    // Burst new cells
-    const burstBtn = document.createElement('button');
+      return button;
+    };
 
-    burstBtn.id = 'burstButton';
-    burstBtn.textContent = 'Burst New Cells';
-    burstBtn.title = 'Spawn a cluster of new cells at a random spot';
-    burstBtn.addEventListener('click', () => {
-      if (typeof this.actions.burst === 'function') this.actions.burst();
-      else if (window.grid && typeof window.grid.burstRandomCells === 'function')
-        window.grid.burstRandomCells();
+    this.pauseButton = addControlButton({
+      id: 'pauseButton',
+      label: 'Pause',
+      title: 'Pause/resume the simulation (shortcut: P)',
+      onClick: () => this.togglePause(),
     });
-    body.appendChild(burstBtn);
+
+    addControlButton({
+      id: 'burstButton',
+      label: 'Burst New Cells',
+      title: 'Spawn a cluster of new cells at a random spot',
+      onClick: () => {
+        if (typeof this.actions.burst === 'function') this.actions.burst();
+        else if (window.grid && typeof window.grid.burstRandomCells === 'function')
+          window.grid.burstRandomCells();
+      },
+    });
 
     // Helper to make slider rows
-    const addSlider = (opts) => {
+    const addSlider = (opts, parent = body) => {
       const { label, min, max, step, value, title, onInput, format = (v) => String(v) } = opts;
       const row = document.createElement('label');
 
@@ -238,83 +276,199 @@ export default class UIManager {
       line.appendChild(valSpan);
       row.appendChild(name);
       row.appendChild(line);
-      body.appendChild(row);
+      parent.appendChild(row);
 
       return input;
     };
 
-    const applyFloor = (val, floor) => (floor === undefined ? val : Math.max(floor, val));
-    const sliderConfig = UI_SLIDER_CONFIG;
+    const getSliderValue = (cfg) =>
+      typeof cfg.getValue === 'function' ? cfg.getValue() : this[cfg.prop];
 
-    // Ally similarity
-    const allyConfig = sliderConfig.societySimilarity;
+    const getSliderSetter = (cfg) => {
+      if (typeof cfg.setValue === 'function') return cfg.setValue;
+      if (cfg.prop)
+        return (value) => {
+          this[cfg.prop] = value;
+        };
 
-    addSlider({
-      label: 'Ally Similarity ≥',
-      min: allyConfig.min,
-      max: allyConfig.max,
-      step: allyConfig.step,
-      value: this.societySimilarity,
-      title: 'Minimum genetic similarity to consider another cell an ally (0..1)',
-      format: (v) => v.toFixed(2),
-      onInput: (v) => (this.societySimilarity = v),
-    });
+      return () => {};
+    };
 
-    // Enemy threshold
-    const enemyConfig = sliderConfig.enemySimilarity;
+    const sliderConfig = UI_SLIDER_CONFIG || {};
 
-    addSlider({
-      label: 'Enemy Similarity ≤',
-      min: enemyConfig.min,
-      max: enemyConfig.max,
-      step: enemyConfig.step,
-      value: this.enemySimilarity,
-      title: 'Maximum genetic similarity to consider another cell an enemy (0..1)',
-      format: (v) => v.toFixed(2),
-      onInput: (v) => (this.enemySimilarity = v),
-    });
+    const withSliderConfig = (key, overrides) => {
+      const bounds = sliderConfig[key] || {};
+      const min = bounds.min ?? overrides.min ?? 0;
+      const max = bounds.max ?? overrides.max ?? 1;
+      const step = bounds.step ?? overrides.step ?? 0.01;
+      const floor = bounds.floor;
 
-    // Event strength multiplier
-    const eventStrengthConfig = sliderConfig.eventStrengthMultiplier;
+      return {
+        label: overrides.label,
+        min,
+        max,
+        step,
+        title: overrides.title,
+        format: overrides.format ?? ((v) => String(v)),
+        getValue: overrides.getValue,
+        setValue: (value) => {
+          const next = floor === undefined ? value : Math.max(floor, value);
 
-    addSlider({
-      label: 'Event Strength ×',
-      min: eventStrengthConfig.min,
-      max: eventStrengthConfig.max,
-      step: eventStrengthConfig.step,
-      value: this.eventStrengthMultiplier,
-      title: 'Scales the impact of environmental events (0..3)',
-      format: (v) => v.toFixed(2),
-      onInput: (v) => (this.eventStrengthMultiplier = v),
-    });
+          overrides.setValue(next);
+        },
+        position: overrides.position,
+      };
+    };
 
-    // Event frequency multiplier
-    const eventFrequencyConfig = sliderConfig.eventFrequencyMultiplier;
+    const renderSlider = (cfg, parent = body) =>
+      addSlider(
+        {
+          label: cfg.label,
+          min: cfg.min,
+          max: cfg.max,
+          step: cfg.step,
+          value: getSliderValue(cfg),
+          title: cfg.title,
+          format: cfg.format,
+          onInput: getSliderSetter(cfg),
+        },
+        parent
+      );
 
-    addSlider({
-      label: 'Event Frequency ×',
-      min: eventFrequencyConfig.min,
-      max: eventFrequencyConfig.max,
-      step: eventFrequencyConfig.step,
-      value: this.eventFrequencyMultiplier,
-      title: 'How often events spawn (0 disables new events)',
-      format: (v) => v.toFixed(1),
-      onInput: (v) => (this.eventFrequencyMultiplier = applyFloor(v, eventFrequencyConfig.floor)),
-    });
+    const thresholdConfigs = [
+      withSliderConfig('societySimilarity', {
+        label: 'Ally Similarity ≥',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        title: 'Minimum genetic similarity to consider another cell an ally (0..1)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.societySimilarity,
+        setValue: (v) => {
+          this.societySimilarity = v;
+        },
+      }),
+      withSliderConfig('enemySimilarity', {
+        label: 'Enemy Similarity ≤',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        title: 'Maximum genetic similarity to consider another cell an enemy (0..1)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.enemySimilarity,
+        setValue: (v) => {
+          this.enemySimilarity = v;
+        },
+      }),
+    ];
 
-    // Simulation speed multiplier (baseline 60 updates/sec)
-    const speedConfig = sliderConfig.speedMultiplier;
+    const eventConfigs = [
+      withSliderConfig('eventStrengthMultiplier', {
+        label: 'Event Strength ×',
+        min: 0,
+        max: 3,
+        step: 0.05,
+        title: 'Scales the impact of environmental events (0..3)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.eventStrengthMultiplier,
+        setValue: (v) => {
+          this.eventStrengthMultiplier = v;
+        },
+      }),
+      withSliderConfig('eventFrequencyMultiplier', {
+        label: 'Event Frequency ×',
+        min: 0,
+        max: 3,
+        step: 0.1,
+        title: 'How often events spawn (0 disables new events)',
+        format: (v) => v.toFixed(1),
+        getValue: () => this.eventFrequencyMultiplier,
+        setValue: (v) => {
+          this.eventFrequencyMultiplier = v;
+        },
+      }),
+    ];
 
-    addSlider({
-      label: 'Speed ×',
-      min: speedConfig.min,
-      max: speedConfig.max,
-      step: speedConfig.step,
-      value: this.speedMultiplier,
-      title: 'Speed multiplier relative to 60 updates/sec (0.5x..100x)',
-      format: (v) => `${v.toFixed(1)}x`,
-      onInput: (v) => (this.speedMultiplier = applyFloor(v, speedConfig.floor)),
-    });
+    const energyConfigs = [
+      withSliderConfig('densityEffectMultiplier', {
+        label: 'Density Effect ×',
+        min: 0,
+        max: 2,
+        step: 0.05,
+        title:
+          'Scales how strongly population density affects energy, aggression, and breeding (0..2)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.densityEffectMultiplier,
+        setValue: (v) => {
+          this.densityEffectMultiplier = v;
+        },
+      }),
+      withSliderConfig('energyRegenRate', {
+        label: 'Energy Regen Rate',
+        min: 0,
+        max: 0.2,
+        step: 0.005,
+        title: 'Base logistic regeneration rate toward max energy (0..0.2)',
+        format: (v) => v.toFixed(3),
+        getValue: () => this.energyRegenRate,
+        setValue: (v) => {
+          this.energyRegenRate = v;
+        },
+      }),
+      withSliderConfig('energyDiffusionRate', {
+        label: 'Energy Diffusion Rate',
+        min: 0,
+        max: 0.5,
+        step: 0.01,
+        title: 'How quickly energy smooths between tiles (0..0.5)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.energyDiffusionRate,
+        setValue: (v) => {
+          this.energyDiffusionRate = v;
+        },
+      }),
+    ];
+
+    const generalConfigs = [
+      withSliderConfig('speedMultiplier', {
+        label: 'Speed ×',
+        min: 0.5,
+        max: 100,
+        step: 0.5,
+        title: 'Speed multiplier relative to 60 updates/sec (0.5x..100x)',
+        format: (v) => `${v.toFixed(1)}x`,
+        getValue: () => this.speedMultiplier,
+        setValue: (v) => {
+          this.speedMultiplier = v;
+        },
+        position: 'beforeOverlays',
+      }),
+      withSliderConfig('leaderboardIntervalMs', {
+        label: 'Leaderboard Interval',
+        min: 100,
+        max: 3000,
+        step: 50,
+        title: 'Delay between leaderboard refreshes in milliseconds (100..3000)',
+        format: (v) => `${Math.round(v)} ms`,
+        getValue: () => this.leaderboardIntervalMs,
+        setValue: (v) => {
+          this.leaderboardIntervalMs = v;
+        },
+        position: 'afterEnergy',
+      }),
+    ];
+
+    const thresholdsGroup = addGrid();
+
+    thresholdConfigs.forEach((cfg) => renderSlider(cfg, thresholdsGroup));
+
+    const eventsGroup = addGrid();
+
+    eventConfigs.forEach((cfg) => renderSlider(cfg, eventsGroup));
+
+    generalConfigs
+      .filter((cfg) => cfg.position === 'beforeOverlays')
+      .forEach((cfg) => renderSlider(cfg));
 
     // Overlay toggles
     const overlayHeader = document.createElement('h4');
@@ -323,8 +477,10 @@ export default class UIManager {
     overlayHeader.style.margin = '12px 0 6px';
     body.appendChild(overlayHeader);
 
+    const overlayGrid = addGrid('control-grid--compact');
+
     const addToggle = (label, title, initial, onChange) =>
-      this.#addCheckbox(body, label, title, initial, onChange);
+      this.#addCheckbox(overlayGrid, label, title, initial, onChange);
 
     addToggle(
       'Show Density Heatmap',
@@ -345,75 +501,13 @@ export default class UIManager {
       (v) => (this.showFitness = v)
     );
 
-    // Density effect multiplier
-    const densityConfig = sliderConfig.densityEffectMultiplier;
+    const energyGroup = addGrid();
 
-    addSlider({
-      label: 'Density Effect ×',
-      min: densityConfig.min,
-      max: densityConfig.max,
-      step: densityConfig.step,
-      value: this.densityEffectMultiplier,
-      title:
-        'Scales how strongly population density affects energy, aggression, and breeding (0..2)',
-      format: (v) => v.toFixed(2),
-      onInput: (v) => (this.densityEffectMultiplier = applyFloor(v, densityConfig.floor)),
-    });
+    energyConfigs.forEach((cfg) => renderSlider(cfg, energyGroup));
 
-    // Energy regen base rate
-    const regenConfig = sliderConfig.energyRegenRate;
-
-    addSlider({
-      label: 'Energy Regen Rate',
-      min: regenConfig.min,
-      max: regenConfig.max,
-      step: regenConfig.step,
-      value: this.energyRegenRate,
-      title: 'Base logistic regeneration rate toward max energy (0..0.2)',
-      format: (v) => v.toFixed(3),
-      onInput: (v) => (this.energyRegenRate = applyFloor(v, regenConfig.floor)),
-    });
-
-    // Energy diffusion rate
-    const diffusionConfig = sliderConfig.energyDiffusionRate;
-
-    addSlider({
-      label: 'Energy Diffusion Rate',
-      min: diffusionConfig.min,
-      max: diffusionConfig.max,
-      step: diffusionConfig.step,
-      value: this.energyDiffusionRate,
-      title: 'How quickly energy smooths between tiles (0..0.5)',
-      format: (v) => v.toFixed(2),
-      onInput: (v) => (this.energyDiffusionRate = applyFloor(v, diffusionConfig.floor)),
-    });
-
-    const leaderboardConfig = sliderConfig.leaderboardIntervalMs;
-
-    addSlider({
-      label: 'Leaderboard Interval',
-      min: leaderboardConfig.min,
-      max: leaderboardConfig.max,
-      step: leaderboardConfig.step,
-      value: this.leaderboardIntervalMs,
-      title: 'Delay between leaderboard refreshes in milliseconds (100..3000)',
-      format: (v) => `${Math.round(v)} ms`,
-      onInput: (v) => (this.leaderboardIntervalMs = applyFloor(v, leaderboardConfig.floor)),
-    });
-
-    // Collapsible behavior
-    const toggleCollapsed = () => {
-      panel.classList.toggle('collapsed');
-      toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
-    };
-
-    header.addEventListener('click', (e) => {
-      if (e.target === toggle || e.target === heading) toggleCollapsed();
-    });
-    toggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleCollapsed();
-    });
+    generalConfigs
+      .filter((cfg) => cfg.position === 'afterEnergy')
+      .forEach((cfg) => renderSlider(cfg));
 
     return panel;
   }
@@ -426,60 +520,30 @@ export default class UIManager {
     body.appendChild(this.metricsBox);
 
     // Sparklines canvases
-    const cap1 = document.createElement('div');
+    const sparkDescriptors = [
+      { label: 'Population', property: 'sparkPop' },
+      { label: 'Diversity', property: 'sparkDiv2Canvas' },
+      { label: 'Mean Energy', property: 'sparkEnergy' },
+      { label: 'Growth', property: 'sparkGrowth' },
+      { label: 'Event Strength', property: 'sparkEvent' },
+    ];
 
-    cap1.className = 'control-name';
-    cap1.textContent = 'Population';
-    body.appendChild(cap1);
-    this.sparkPop = document.createElement('canvas');
-    this.sparkPop.className = 'sparkline';
-    this.sparkPop.width = 260;
-    this.sparkPop.height = 40;
-    body.appendChild(this.sparkPop);
+    sparkDescriptors.forEach(({ label, property }) => {
+      const caption = document.createElement('div');
 
-    const cap2 = document.createElement('div');
+      caption.className = 'control-name';
+      caption.textContent = label;
+      body.appendChild(caption);
 
-    cap2.className = 'control-name';
-    cap2.textContent = 'Diversity';
-    body.appendChild(cap2);
-    this.sparkDiv2Canvas = document.createElement('canvas');
-    this.sparkDiv2Canvas.className = 'sparkline';
-    this.sparkDiv2Canvas.width = 260;
-    this.sparkDiv2Canvas.height = 40;
-    body.appendChild(this.sparkDiv2Canvas);
+      const canvas = document.createElement('canvas');
 
-    const cap3 = document.createElement('div');
+      canvas.className = 'sparkline';
+      canvas.width = 260;
+      canvas.height = 40;
+      body.appendChild(canvas);
 
-    cap3.className = 'control-name';
-    cap3.textContent = 'Mean Energy';
-    body.appendChild(cap3);
-    this.sparkEnergy = document.createElement('canvas');
-    this.sparkEnergy.className = 'sparkline';
-    this.sparkEnergy.width = 260;
-    this.sparkEnergy.height = 40;
-    body.appendChild(this.sparkEnergy);
-
-    const cap4 = document.createElement('div');
-
-    cap4.className = 'control-name';
-    cap4.textContent = 'Growth';
-    body.appendChild(cap4);
-    this.sparkGrowth = document.createElement('canvas');
-    this.sparkGrowth.className = 'sparkline';
-    this.sparkGrowth.width = 260;
-    this.sparkGrowth.height = 40;
-    body.appendChild(this.sparkGrowth);
-
-    const cap5 = document.createElement('div');
-
-    cap5.className = 'control-name';
-    cap5.textContent = 'Event Strength';
-    body.appendChild(cap5);
-    this.sparkEvent = document.createElement('canvas');
-    this.sparkEvent.className = 'sparkline';
-    this.sparkEvent.width = 260;
-    this.sparkEvent.height = 40;
-    body.appendChild(this.sparkEvent);
+      this[property] = canvas;
+    });
 
     return panel;
   }
@@ -548,31 +612,42 @@ export default class UIManager {
     if (!this.metricsBox) return;
     this.metricsBox.innerHTML = '';
     const s = snapshot;
-    const add = (name, value, title) => {
-      const row = document.createElement('div');
 
-      row.className = 'control-line';
-      if (title) row.title = title;
-      const left = document.createElement('div');
-
-      left.className = 'control-name';
-      left.textContent = name;
-      const right = document.createElement('div');
-
-      right.className = 'control-value';
-      right.textContent = value;
-      row.appendChild(left);
-      row.appendChild(right);
-      this.metricsBox.appendChild(row);
-    };
-
-    add('Population', String(s.population), 'Total living cells');
-    add('Births', String(s.births), 'Births in the last tick');
-    add('Deaths', String(s.deaths), 'Deaths in the last tick');
-    add('Growth', String(s.growth), 'Births - Deaths');
-    add('Mean Energy', s.meanEnergy.toFixed(2), 'Average energy per cell');
-    add('Mean Age', s.meanAge.toFixed(1), 'Average age of living cells');
-    add('Diversity', s.diversity.toFixed(3), 'Estimated mean pairwise genetic distance');
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Population',
+      value: String(s.population),
+      title: 'Total living cells',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Births',
+      value: String(s.births),
+      title: 'Births in the last tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Deaths',
+      value: String(s.deaths),
+      title: 'Deaths in the last tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Growth',
+      value: String(s.growth),
+      title: 'Births - Deaths',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Mean Energy',
+      value: s.meanEnergy.toFixed(2),
+      title: 'Average energy per cell',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Mean Age',
+      value: s.meanAge.toFixed(1),
+      title: 'Average age of living cells',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Diversity',
+      value: s.diversity.toFixed(3),
+      title: 'Estimated mean pairwise genetic distance',
+    });
 
     this.drawSpark(this.sparkPop, stats.history.population, '#88d');
     this.drawSpark(this.sparkDiv2Canvas, stats.history.diversity, '#d88');
@@ -616,36 +691,6 @@ export default class UIManager {
       this.leaderBody = body;
     }
     this.leaderBody.innerHTML = '';
-    const add = (label, value, color) => {
-      const row = document.createElement('div');
-
-      row.className = 'control-line';
-      const left = document.createElement('div');
-
-      left.className = 'control-name';
-      if (color) {
-        const sw = document.createElement('span');
-
-        sw.style.display = 'inline-block';
-        sw.style.width = '10px';
-        sw.style.height = '10px';
-        sw.style.background = color;
-        sw.style.marginRight = '6px';
-        left.appendChild(sw);
-      }
-      const text = document.createElement('span');
-
-      text.textContent = label;
-      left.appendChild(text);
-      const right = document.createElement('div');
-
-      right.className = 'control-value';
-      right.textContent = value;
-      row.appendChild(left);
-      row.appendChild(right);
-      this.leaderBody.appendChild(row);
-    };
-
     top.forEach((e, i) => {
       const label = `#${i + 1}`;
       const smoothed = Number.isFinite(e.smoothedFitness) ? e.smoothedFitness : e.fitness;
@@ -656,7 +701,11 @@ export default class UIManager {
         ` | win ${e.fightsWon}` +
         ` | age ${e.age}`;
 
-      add(label, value, e.color);
+      this.#appendControlRow(this.leaderBody, {
+        label,
+        value,
+        color: e.color,
+      });
     });
   }
 }

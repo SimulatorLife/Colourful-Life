@@ -20,3 +20,16 @@ export const UI_SLIDER_CONFIG = {
 // Penalties (scale 0..1) used in energy model
 export const REGEN_DENSITY_PENALTY = 0.5; // 1 - penalty * density
 export const CONSUMPTION_DENSITY_PENALTY = 0.5; // 1 - penalty * density
+
+export function getDefaultMaxTileEnergy() {
+  if (typeof globalThis !== 'undefined') {
+    const gm = globalThis.GridManager;
+
+    if (gm && typeof gm.maxTileEnergy === 'number') {
+      return gm.maxTileEnergy;
+    }
+  }
+
+  // TODO: Remove this function and use the constant directly
+  return MAX_TILE_ENERGY;
+}

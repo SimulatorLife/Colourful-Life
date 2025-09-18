@@ -3,6 +3,7 @@ import DNA from './genome.js';
 import Cell from './cell.js';
 import { computeFitness } from './fitness.js';
 import { isEventAffecting } from './eventManager.js';
+import { getEventEffect } from './eventEffects.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -20,8 +21,10 @@ export default class GridManager {
   static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
 
   static tryMove(gridArr, sr, sc, dr, dc, rows, cols) {
-    const nr = (sr + dr + rows) % rows;
-    const nc = (sc + dc + cols) % cols;
+    const nr = sr + dr;
+    const nc = sc + dc;
+
+    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) return false;
     const dcell = gridArr[nr][nc];
 
     if (!dcell) {
@@ -169,35 +172,54 @@ export default class GridManager {
         const evs = Array.isArray(events) ? events : events ? [events] : [];
 
         for (const ev of evs) {
-          if (isEventAffecting(ev, r, c)) {
-            const s = (ev.strength || 0) * (eventStrengthMultiplier || 1);
+          if (!isEventAffecting(ev, r, c)) continue;
 
-            switch (ev.eventType) {
-              case 'flood':
-                regen += 0.25 * s;
-                break;
-              case 'drought':
-                regen *= Math.max(0, 1 - 0.7 * s);
-                drain += 0.1 * s;
-                break;
-              case 'heatwave':
-                regen *= Math.max(0, 1 - 0.45 * s);
-                drain += 0.08 * s;
-                break;
-              case 'coldwave':
-                regen *= Math.max(0, 1 - 0.25 * s);
-                break;
-            }
+          const s = (ev.strength || 0) * (eventStrengthMultiplier || 1);
+          const effect = getEventEffect(ev.eventType);
+
+          if (!effect || s === 0) continue;
+
+          const { regenScale, regenAdd, drainAdd } = effect;
+
+          if (regenScale) {
+            const { base = 1, change = 0, min = 0 } = regenScale;
+            const scale = Math.max(min, base + change * s);
+
+            regen *= scale;
+          }
+
+          if (typeof regenAdd === 'number') {
+            regen += regenAdd * s;
+          }
+
+          if (typeof drainAdd === 'number') {
+            drain += drainAdd * s;
           }
         }
 
         // Diffusion toward 4-neighbor mean
-        const up = this.energyGrid[(r - 1 + this.rows) % this.rows][c];
-        const down = this.energyGrid[(r + 1) % this.rows][c];
-        const left = this.energyGrid[r][(c - 1 + this.cols) % this.cols];
-        const right = this.energyGrid[r][(c + 1) % this.cols];
-        const neighAvg = (up + down + left + right) * 0.25;
-        const diff = D * (neighAvg - e);
+        let neighSum = 0;
+        let neighCount = 0;
+
+        if (r > 0) {
+          neighSum += this.energyGrid[r - 1][c];
+          neighCount++;
+        }
+        if (r < this.rows - 1) {
+          neighSum += this.energyGrid[r + 1][c];
+          neighCount++;
+        }
+        if (c > 0) {
+          neighSum += this.energyGrid[r][c - 1];
+          neighCount++;
+        }
+        if (c < this.cols - 1) {
+          neighSum += this.energyGrid[r][c + 1];
+          neighCount++;
+        }
+
+        const neighAvg = neighCount > 0 ? neighSum / neighCount : e;
+        const diff = neighCount > 0 ? D * (neighAvg - e) : 0;
 
         let val = e + regen - drain + diff;
 
@@ -250,8 +272,10 @@ export default class GridManager {
     for (let dx = -radius; dx <= radius; dx++) {
       for (let dy = -radius; dy <= radius; dy++) {
         if (dx === 0 && dy === 0) continue;
-        const rr = (row + dy + this.rows) % this.rows;
-        const cc = (col + dx + this.cols) % this.cols;
+        const rr = row + dy;
+        const cc = col + dx;
+
+        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
 
         total++;
         if (this.grid[rr][cc]) count++;
@@ -351,7 +375,7 @@ export default class GridManager {
     const starved = cell.manageEnergy(row, col, {
       localDensity,
       densityEffectMultiplier,
-      MAX_TILE_ENERGY: MAX_TILE_ENERGY,
+      maxTileEnergy: MAX_TILE_ENERGY,
     });
 
     if (starved || cell.energy <= 0) {
@@ -653,8 +677,10 @@ export default class GridManager {
     for (let x = -cell.sight; x <= cell.sight; x++) {
       for (let y = -cell.sight; y <= cell.sight; y++) {
         if (x === 0 && y === 0) continue;
-        const newRow = (row + y + this.rows) % this.rows;
-        const newCol = (col + x + this.cols) % this.cols;
+        const newRow = row + y;
+        const newCol = col + x;
+
+        if (newRow < 0 || newRow >= this.rows || newCol < 0 || newCol >= this.cols) continue;
         const target = this.grid[newRow][newCol];
 
         if (target) {
@@ -680,8 +706,10 @@ export default class GridManager {
 
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
-        const rr = (centerRow + dy + this.rows) % this.rows;
-        const cc = (centerCol + dx + this.cols) % this.cols;
+        const rr = centerRow + dy;
+        const cc = centerCol + dx;
+
+        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
 
         coords.push({ rr, cc });
       }
