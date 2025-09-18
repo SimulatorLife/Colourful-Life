@@ -20,7 +20,7 @@ export default class Cell {
     this.age = 0;
     this.lifespan = this.dna.lifespanDNA();
     this.sight = this.dna.sight();
-    this.energy = energy ?? this.dna.initialEnergy(window.GridManager?.maxTileEnergy ?? 5);
+    this.energy = energy;
     this.neurons = this.dna.neurons();
     this.strategy = this.dna.strategy();
     this.movementGenes = this.dna.movementGenes();
@@ -44,10 +44,6 @@ export default class Cell {
     const chance = (parentA.dna.mutationChance() + parentB.dna.mutationChance()) / 2;
     const range = Math.round((parentA.dna.mutationRange() + parentB.dna.mutationRange()) / 2);
     const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range);
-    const maxE = window.GridManager?.maxTileEnergy ?? 5;
-    const thr =
-      ((parentA.dna.reproductionThresholdFrac() + parentB.dna.reproductionThresholdFrac()) / 2) *
-      maxE;
     const investA = Math.min(
       parentA.energy,
       parentA.energy * (parentA.dna.parentalInvestmentFrac?.() ?? 0.4)
@@ -56,7 +52,7 @@ export default class Cell {
       parentB.energy,
       parentB.energy * (parentB.dna.parentalInvestmentFrac?.() ?? 0.4)
     );
-    const offspringEnergy = Math.max(thr, investA + investB);
+    const offspringEnergy = investA + investB;
     const offspring = new Cell(row, col, childDNA, offspringEnergy);
     const strategy =
       (parentA.strategy + parentB.strategy) / 2 +

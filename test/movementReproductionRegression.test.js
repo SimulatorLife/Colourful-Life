@@ -1,9 +1,6 @@
 const { test } = require('uvu');
 const assert = require('uvu/assert');
 
-global.window = global.window || {};
-global.window.GridManager = global.window.GridManager || { maxTileEnergy: 5 };
-
 test("GridManager.tryMove updates a cell's stored coordinates", async () => {
   const { default: GridManager } = await import('../src/gridManager.js');
   const { default: Cell } = await import('../src/cell.js');

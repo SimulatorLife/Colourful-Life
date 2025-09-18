@@ -99,8 +99,10 @@ export default class GridManager {
       for (let col = 0; col < this.cols; col++) {
         if (randomPercent(0.05)) {
           const dna = DNA.random();
+          const spawnEnergy = this.energyGrid[row][col];
 
-          this.grid[row][col] = new Cell(row, col, dna);
+          this.grid[row][col] = new Cell(row, col, dna, spawnEnergy);
+          this.energyGrid[row][col] = 0;
         }
       }
     }
@@ -121,9 +123,11 @@ export default class GridManager {
       const idx = Math.floor(randomRange(0, empty.length));
       const { r, c } = empty.splice(idx, 1)[0];
       const dna = DNA.random();
-      const newCell = new Cell(r, c, dna);
+      const spawnEnergy = this.energyGrid[r][c];
+      const newCell = new Cell(r, c, dna, spawnEnergy);
 
       this.setCell(r, c, newCell);
+      this.energyGrid[r][c] = 0;
     }
   }
 
@@ -633,8 +637,10 @@ export default class GridManager {
 
       if (!this.grid[rr][cc]) {
         const dna = DNA.random();
+        const spawnEnergy = this.energyGrid[rr][cc];
 
-        this.grid[rr][cc] = new Cell(rr, cc, dna);
+        this.grid[rr][cc] = new Cell(rr, cc, dna, spawnEnergy);
+        this.energyGrid[rr][cc] = 0;
         this.stats?.onBirth?.();
         placed++;
       }
