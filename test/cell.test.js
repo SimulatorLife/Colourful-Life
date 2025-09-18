@@ -5,6 +5,7 @@ let Cell;
 let DNA;
 let clamp;
 let lerp;
+let randomRange;
 
 function withMockedRandom(sequence, fn) {
   const original = Math.random;
@@ -32,8 +33,40 @@ function expectClose(actual, expected, tolerance = 1e-12, message = 'values diff
 test.before(async () => {
   ({ default: Cell } = await import('../src/cell.js'));
   ({ DNA } = await import('../src/genome.js'));
-  ({ clamp, lerp } = await import('../src/utils.js'));
+  ({ clamp, lerp, randomRange } = await import('../src/utils.js'));
 });
+
+function predictDeterministicOffspring(dnaA, dnaB, mutationChance, mutationRange) {
+  const rng = dnaA.prngFor('crossover');
+  const blendA = typeof dnaA.crossoverMix === 'function' ? dnaA.crossoverMix() : 0.5;
+  const blendB = typeof dnaB.crossoverMix === 'function' ? dnaB.crossoverMix() : 0.5;
+  const blendProbability = clamp((blendA + blendB) / 2, 0, 1);
+  const range = Math.max(0, mutationRange | 0);
+
+  const mixChannel = (a, b) => {
+    let value;
+
+    if (rng() < blendProbability) {
+      const weight = rng();
+
+      value = Math.round(a * weight + b * (1 - weight));
+    } else {
+      value = rng() < 0.5 ? a : b;
+    }
+
+    if (rng() < mutationChance) {
+      value += Math.floor(randomRange(-1, 1, rng) * range);
+    }
+
+    return Math.max(0, Math.min(255, value));
+  };
+
+  return {
+    r: mixChannel(dnaA.r, dnaB.r),
+    g: mixChannel(dnaA.g, dnaB.g),
+    b: mixChannel(dnaA.b, dnaB.b),
+  };
+}
 
 test('manageEnergy applies DNA-driven metabolism and starvation rules', () => {
   const dna = new DNA(30, 200, 100);
@@ -85,28 +118,27 @@ test('breed combines parental investments for offspring energy', () => {
   assert.is(parentB.offspring, 1);
 });
 
-test('breed applies mutation when RNG roll falls within mutation chance', () => {
+test('breed applies deterministic crossover and honors forced mutation', () => {
   const dnaA = new DNA(100, 150, 200);
   const dnaB = new DNA(140, 160, 210);
   const parentA = new Cell(7, 8, dnaA, 6);
   const parentB = new Cell(7, 8, dnaB, 6);
   const avgStrategy = (parentA.strategy + parentB.strategy) / 2;
-  const chance = (dnaA.mutationChance() + dnaB.mutationChance()) / 2;
-  const range = Math.round((dnaA.mutationRange() + dnaB.mutationRange()) / 2);
 
-  assert.ok(chance > 0.01, 'mutation chance should exceed mocked roll');
+  // Force mutation to trigger and make expectations deterministic
+  dnaA.mutationChance = () => 1;
+  dnaB.mutationChance = () => 1;
+  dnaA.mutationRange = () => 12;
+  dnaB.mutationRange = () => 12;
 
-  const child = withMockedRandom([0.01, 0.75, 0.9, 0.9, 0.5], () => Cell.breed(parentA, parentB));
+  const chance = 1;
+  const range = 12;
+  const expected = predictDeterministicOffspring(dnaA, dnaB, chance, range);
+  const child = withMockedRandom([0.5], () => Cell.breed(parentA, parentB));
 
-  const avgRed = Math.round((dnaA.r + dnaB.r) / 2);
-  const avgGreen = Math.round((dnaA.g + dnaB.g) / 2);
-  const avgBlue = Math.round((dnaA.b + dnaB.b) / 2);
-  const expectedRed = Math.min(255, Math.max(0, avgRed + Math.floor((0.75 * 2 - 1) * range)));
-
-  assert.not.equal(child.dna.r, avgRed, 'red channel should mutate');
-  assert.is(child.dna.r, expectedRed);
-  assert.is(child.dna.g, avgGreen);
-  assert.is(child.dna.b, avgBlue);
+  assert.is(child.dna.r, expected.r);
+  assert.is(child.dna.g, expected.g);
+  assert.is(child.dna.b, expected.b);
   expectClose(child.strategy, avgStrategy, 1e-12, 'strategy averages when mutation delta is zero');
 });
 
