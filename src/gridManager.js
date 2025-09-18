@@ -364,7 +364,7 @@ export default class GridManager {
     const starved = cell.manageEnergy(row, col, {
       localDensity,
       densityEffectMultiplier,
-      MAX_TILE_ENERGY: MAX_TILE_ENERGY,
+      maxTileEnergy: MAX_TILE_ENERGY,
     });
 
     if (starved || cell.energy <= 0) {
@@ -583,7 +583,7 @@ export default class GridManager {
     return this.lastSnapshot;
   }
 
-  buildSnapshot(MAX_TILE_ENERGY = MAX_TILE_ENERGY) {
+  buildSnapshot(maxTileEnergy = MAX_TILE_ENERGY) {
     const snapshot = {
       rows: this.rows,
       cols: this.cols,
@@ -601,7 +601,7 @@ export default class GridManager {
 
         if (!cell) continue;
 
-        const fitness = computeFitness(cell, MAX_TILE_ENERGY);
+        const fitness = computeFitness(cell, maxTileEnergy);
         const previous = Number.isFinite(cell.fitnessScore) ? cell.fitnessScore : fitness;
         const smoothed = previous * 0.8 + fitness * 0.2;
 
