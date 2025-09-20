@@ -447,6 +447,37 @@ export class DNA {
     return clamp(anchor * 0.7 + rnd() * 0.3, 0, 1); // 0..1
   }
 
+  // Preference (-1..1) for genetic similarity in mates. Positive -> likes similar, negative -> seeks diversity.
+  mateSimilarityBias() {
+    const rnd = this.prngFor('mateSimilarityBias');
+    const r = this.r / 255;
+    const g = this.g / 255;
+    const b = this.b / 255;
+    const homophily = (r - b) * 1.2; // red encourages kin attraction, blue encourages novelty
+    const stability = (g - 0.5) * 0.4; // green moderates extremes
+    const jitter = (rnd() - 0.5) * 0.6;
+
+    return clamp(homophily - stability + jitter, -1, 1);
+  }
+
+  // Curiosity/outbreeding appetite (0..1). Higher encourages sampling dissimilar mates.
+  diversityAppetite() {
+    const rnd = this.prngFor('diversityAppetite');
+    const g = this.g / 255;
+    const b = this.b / 255;
+    const bias = this.mateSimilarityBias();
+    const curiosityBase = 0.25 + 0.45 * b; // bluer genomes are more exploratory
+    const efficiencyBrake = 0.25 * g; // greener genomes conserve effort
+    const jitter = (rnd() - 0.5) * 0.3;
+    let appetite = curiosityBase - efficiencyBrake + jitter;
+
+    // Strong homophily dampens curiosity, heterophily boosts it
+    appetite += Math.max(0, -bias) * 0.4;
+    appetite -= Math.max(0, bias) * 0.3;
+
+    return clamp(appetite, 0, 1);
+  }
+
   lifespanAdj() {
     return Math.round((this.geneFraction(GENE_LOCI.SENESCENCE) - 0.5) * 200);
   }

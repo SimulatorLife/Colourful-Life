@@ -432,9 +432,18 @@ export default class GridManager {
 
     if (matePool.length === 0) return false;
 
-    const bestMate = cell.findBestMate(matePool);
+    const selection = cell.selectMateWeighted ? cell.selectMateWeighted(matePool) : null;
+    const selectedMate = selection?.chosen ?? null;
+    const evaluated = Array.isArray(selection?.evaluated) ? selection.evaluated : [];
+    const selectionMode = selection?.mode ?? 'preference';
 
-    if (!bestMate) return false;
+    let bestMate = selectedMate;
+
+    if (!bestMate || !bestMate.target) {
+      bestMate = cell.findBestMate(matePool);
+
+      if (!bestMate) return false;
+    }
 
     const originalParentRow = cell.row;
     const originalParentCol = cell.col;
@@ -468,6 +477,12 @@ export default class GridManager {
         : 0.4;
     const thrA = thrFracA * MAX_TILE_ENERGY;
     const thrB = thrFracB * MAX_TILE_ENERGY;
+    const appetite = cell.diversityAppetite ?? 0;
+    const bias = cell.matePreferenceBias ?? 0;
+    const selectionListSize = evaluated.length > 0 ? evaluated.length : matePool.length;
+    const selectionKind = selectedMate && selectedMate.target ? selectionMode : 'legacy';
+
+    let reproduced = false;
 
     if (randomPercent(reproProb) && cell.energy >= thrA && bestMate.target.energy >= thrB) {
       const candidates = [];
@@ -510,8 +525,24 @@ export default class GridManager {
           offspring.col = spawn.c;
           this.grid[spawn.r][spawn.c] = offspring;
           stats.onBirth();
+          reproduced = true;
         }
       }
+    }
+
+    if (stats?.recordMateChoice) {
+      const similarity = bestMate.similarity ?? cell.similarityTo(bestMate.target);
+      const diversity = bestMate.diversity ?? 1 - similarity;
+
+      stats.recordMateChoice({
+        similarity,
+        diversity,
+        appetite,
+        bias,
+        selectionMode: selectionKind,
+        poolSize: selectionListSize,
+        success: reproduced,
+      });
     }
 
     return true;
@@ -742,12 +773,21 @@ export default class GridManager {
         if (target) {
           const similarity = cell.similarityTo(target);
 
+          const candidate = { row: newRow, col: newCol, target };
+
           if (similarity >= allyT) {
-            society.push({ row: newRow, col: newCol, target });
+            const evaluated = cell.evaluateMateCandidate({
+              ...candidate,
+              classification: 'society',
+            });
+
+            if (evaluated) society.push(evaluated);
           } else if (similarity <= enemyT || randomPercent(enemyBias)) {
             enemies.push({ row: newRow, col: newCol, target });
           } else {
-            mates.push({ row: newRow, col: newCol, target });
+            const evaluated = cell.evaluateMateCandidate({ ...candidate, classification: 'mate' });
+
+            if (evaluated) mates.push(evaluated);
           }
         }
       }

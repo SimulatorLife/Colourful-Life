@@ -36,9 +36,13 @@ export default class Stats {
       energy: [],
       growth: [],
       eventStrength: [],
+      diversePairingRate: [],
+      meanDiversityAppetite: [],
     };
     this.totals = { ticks: 0, births: 0, deaths: 0, fights: 0, cooperations: 0 };
     this.traitHistory = { presence: {}, average: {} };
+    this.matingDiversityThreshold = 0.45;
+    this.lastMatingDebug = null;
 
     for (let i = 0; i < TRAIT_KEYS.length; i++) {
       const key = TRAIT_KEYS[i];
@@ -55,6 +59,16 @@ export default class Stats {
     this.deaths = 0;
     this.fights = 0;
     this.cooperations = 0;
+    this.mating = {
+      choices: 0,
+      successes: 0,
+      diverseChoices: 0,
+      diverseSuccesses: 0,
+      appetiteSum: 0,
+      selectionModes: { curiosity: 0, preference: 0 },
+      poolSizeSum: 0,
+    };
+    this.lastMatingDebug = null;
   }
 
   onBirth() {
@@ -105,11 +119,27 @@ export default class Stats {
     const meanAge = pop ? snapshot.totalAge / pop : 0;
     const diversity = this.estimateDiversity(cells);
     const traitPresence = this.computeTraitPresence(cells);
+    const mateStats = this.mating || {
+      choices: 0,
+      successes: 0,
+      diverseChoices: 0,
+      diverseSuccesses: 0,
+      appetiteSum: 0,
+      selectionModes: { curiosity: 0, preference: 0 },
+      poolSizeSum: 0,
+    };
+    const choiceCount = mateStats.choices || 0;
+    const successCount = mateStats.successes || 0;
+    const diverseChoiceRate = choiceCount ? mateStats.diverseChoices / choiceCount : 0;
+    const diverseSuccessRate = successCount ? mateStats.diverseSuccesses / successCount : 0;
+    const meanAppetite = choiceCount ? mateStats.appetiteSum / choiceCount : 0;
 
     this.pushHistory('population', pop);
     this.pushHistory('diversity', diversity);
     this.pushHistory('energy', meanEnergy);
     this.pushHistory('growth', this.births - this.deaths);
+    this.pushHistory('diversePairingRate', diverseSuccessRate);
+    this.pushHistory('meanDiversityAppetite', meanAppetite);
 
     this.traitPresence = traitPresence;
     for (let i = 0; i < TRAIT_KEYS.length; i++) {
@@ -130,6 +160,61 @@ export default class Stats {
       meanAge,
       diversity,
       traitPresence,
+      mateChoices: choiceCount,
+      successfulMatings: successCount,
+      diverseChoiceRate,
+      diverseMatingRate: diverseSuccessRate,
+      meanDiversityAppetite: meanAppetite,
+      curiositySelections: mateStats.selectionModes.curiosity,
+      lastMating: this.lastMatingDebug,
+    };
+  }
+
+  recordMateChoice({
+    similarity = 1,
+    diversity = 0,
+    appetite = 0,
+    bias = 0,
+    selectionMode = 'preference',
+    poolSize = 0,
+    success = false,
+  } = {}) {
+    if (!this.mating) {
+      this.mating = {
+        choices: 0,
+        successes: 0,
+        diverseChoices: 0,
+        diverseSuccesses: 0,
+        appetiteSum: 0,
+        selectionModes: { curiosity: 0, preference: 0 },
+        poolSizeSum: 0,
+      };
+    }
+
+    const threshold = this.matingDiversityThreshold;
+    const isDiverse = similarity < threshold;
+
+    this.mating.choices++;
+    this.mating.appetiteSum += appetite || 0;
+    this.mating.poolSizeSum += poolSize || 0;
+    if (isDiverse) this.mating.diverseChoices++;
+    if (selectionMode === 'curiosity') this.mating.selectionModes.curiosity++;
+    else this.mating.selectionModes.preference++;
+
+    if (success) {
+      this.mating.successes++;
+      if (isDiverse) this.mating.diverseSuccesses++;
+    }
+
+    this.lastMatingDebug = {
+      similarity,
+      diversity,
+      appetite,
+      bias,
+      selectionMode,
+      poolSize,
+      success,
+      threshold,
     };
   }
 
