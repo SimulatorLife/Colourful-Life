@@ -462,9 +462,15 @@ export default class GridManager {
     const mateCol = bestMate.target.col;
 
     const localDensity = densityGrid[row][col];
-    const reproProb = cell.computeReproductionProbability(bestMate.target, {
+    const baseProb = cell.computeReproductionProbability(bestMate.target, {
       localDensity,
       densityEffectMultiplier,
+    });
+    const { probability: reproProb } = cell.decideReproduction(bestMate.target, {
+      localDensity,
+      densityEffectMultiplier,
+      maxTileEnergy: MAX_TILE_ENERGY,
+      baseProbability: baseProb,
     });
 
     const thrFracA =
@@ -548,14 +554,17 @@ export default class GridManager {
     return true;
   }
 
-  handleCombat(row, col, cell, { enemies }, { stats, densityEffectMultiplier }) {
-    if (enemies.length === 0) return false;
+  handleCombat(row, col, cell, { enemies, society = [] }, { stats, densityEffectMultiplier }) {
+    if (!Array.isArray(enemies) || enemies.length === 0) return false;
 
     const targetEnemy = enemies[Math.floor(randomRange(0, enemies.length))];
     const localDensity = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
     const action = cell.chooseInteractionAction({
       localDensity,
       densityEffectMultiplier,
+      enemies,
+      allies: society,
+      maxTileEnergy: MAX_TILE_ENERGY,
     });
 
     if (action === 'avoid') {
@@ -635,6 +644,7 @@ export default class GridManager {
       moveRandomly: GridManager.moveRandomly,
       tryMove: GridManager.tryMove,
       getEnergyAt: (rr, cc) => this.energyGrid[rr][cc] / MAX_TILE_ENERGY,
+      maxTileEnergy: MAX_TILE_ENERGY,
     });
   }
 
