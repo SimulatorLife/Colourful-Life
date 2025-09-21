@@ -19,6 +19,7 @@ export default class GridManager {
   // Fraction to diffuse toward neighbors each tick
   static energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT;
   static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
+  static maxTileEnergy = MAX_TILE_ENERGY;
 
   static tryMove(gridArr, sr, sc, dr, dc, rows, cols) {
     const nr = sr + dr;
