@@ -995,7 +995,7 @@ export default class GridManager {
       });
     }
 
-    return true;
+    return reproduced;
   }
 
   handleCombat(row, col, cell, { enemies, society = [] }, { stats, densityEffectMultiplier }) {
