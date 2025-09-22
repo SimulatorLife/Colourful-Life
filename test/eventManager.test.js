@@ -21,8 +21,7 @@ function makeSequenceRng(sequence) {
   return rng;
 }
 
-function expectedEventFromSequence(sequence, rows, cols) {
-  const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
+function expectedEventFromSequence(sequence, rows, cols, eventTypes) {
   let idx = 0;
 
   const sample = (min, max) => min + sequence[idx++] * (max - min);
@@ -44,13 +43,16 @@ function expectedEventFromSequence(sequence, rows, cols) {
 }
 
 test('EventManager respects injected RNG for deterministic events', async () => {
-  const { default: EventManager } = await import('../src/eventManager.js');
+  const [{ default: EventManager }, { EVENT_TYPES }] = await Promise.all([
+    import('../src/eventManager.js'),
+    import('../src/eventEffects.js'),
+  ]);
   const rows = 40;
   const cols = 60;
   const sequence = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7];
   const rng = makeSequenceRng(sequence.slice());
   const manager = new EventManager(rows, cols, rng);
-  const expected = expectedEventFromSequence(sequence, rows, cols);
+  const expected = expectedEventFromSequence(sequence, rows, cols, EVENT_TYPES);
 
   assert.equal(manager.currentEvent, expected);
   assert.is(rng.getCalls(), sequence.length);
