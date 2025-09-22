@@ -352,6 +352,7 @@ export default class GridManager {
       societySimilarity,
       enemySimilarity,
       eventStrengthMultiplier,
+      mutationMultiplier,
     }
   ) {
     const cell = this.grid[row][col];
@@ -405,6 +406,7 @@ export default class GridManager {
         stats,
         densityGrid,
         densityEffectMultiplier,
+        mutationMultiplier,
       })
     ) {
       return;
@@ -425,7 +427,7 @@ export default class GridManager {
     col,
     cell,
     { mates, society },
-    { stats, densityGrid, densityEffectMultiplier }
+    { stats, densityGrid, densityEffectMultiplier, mutationMultiplier }
   ) {
     // findTargets sorts potential partners into neutral mates and allies; fall back
     // to the allied list so strongly kin-seeking genomes still have options.
@@ -525,7 +527,7 @@ export default class GridManager {
 
       if (freeSlots.length > 0) {
         const spawn = freeSlots[Math.floor(randomRange(0, freeSlots.length))];
-        const offspring = Cell.breed(cell, bestMate.target);
+        const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier);
 
         if (offspring) {
           offspring.row = spawn.r;
@@ -656,6 +658,7 @@ export default class GridManager {
     eventStrengthMultiplier = 1,
     energyRegenRate = GridManager.energyRegenRate,
     energyDiffusionRate = GridManager.energyDiffusionRate,
+    mutationMultiplier = 1,
   } = {}) {
     const stats = this.stats;
     const eventManager = this.eventManager;
@@ -683,6 +686,7 @@ export default class GridManager {
           societySimilarity,
           enemySimilarity,
           eventStrengthMultiplier,
+          mutationMultiplier,
         });
       }
     }

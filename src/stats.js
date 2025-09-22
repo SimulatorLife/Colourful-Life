@@ -38,11 +38,13 @@ export default class Stats {
       eventStrength: [],
       diversePairingRate: [],
       meanDiversityAppetite: [],
+      mutationMultiplier: [],
     };
     this.totals = { ticks: 0, births: 0, deaths: 0, fights: 0, cooperations: 0 };
     this.traitHistory = { presence: {}, average: {} };
     this.matingDiversityThreshold = 0.45;
     this.lastMatingDebug = null;
+    this.mutationMultiplier = 1;
 
     for (let i = 0; i < TRAIT_KEYS.length; i++) {
       const key = TRAIT_KEYS[i];
@@ -140,6 +142,9 @@ export default class Stats {
     this.pushHistory('growth', this.births - this.deaths);
     this.pushHistory('diversePairingRate', diverseSuccessRate);
     this.pushHistory('meanDiversityAppetite', meanAppetite);
+    if (typeof this.mutationMultiplier === 'number') {
+      this.pushHistory('mutationMultiplier', this.mutationMultiplier);
+    }
 
     this.traitPresence = traitPresence;
     for (let i = 0; i < TRAIT_KEYS.length; i++) {
@@ -167,6 +172,7 @@ export default class Stats {
       meanDiversityAppetite: meanAppetite,
       curiositySelections: mateStats.selectionModes.curiosity,
       lastMating: this.lastMatingDebug,
+      mutationMultiplier: this.mutationMultiplier,
     };
   }
 
@@ -222,6 +228,12 @@ export default class Stats {
     const s = event ? (event.strength || 0) * multiplier : 0;
 
     this.pushHistory('eventStrength', s);
+  }
+
+  setMutationMultiplier(multiplier = 1) {
+    const value = Number.isFinite(multiplier) ? Math.max(0, multiplier) : 1;
+
+    this.mutationMultiplier = value;
   }
 
   computeTraitPresence(cells = []) {
