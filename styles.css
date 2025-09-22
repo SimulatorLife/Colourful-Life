@@ -214,6 +214,13 @@ canvas {
   justify-content: space-between;
   gap: var(--space-md);
 }
+.control-line--checkbox {
+  justify-content: flex-start;
+  gap: var(--space-sm);
+}
+.control-line--checkbox .control-name {
+  margin-bottom: 0;
+}
 .control-line input[type='range'] {
   flex: 1 1 auto;
 }

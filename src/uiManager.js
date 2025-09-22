@@ -99,7 +99,7 @@ export default class UIManager {
     row.title = title;
     const line = document.createElement('div');
 
-    line.className = 'control-line';
+    line.className = 'control-line control-line--checkbox';
     const input = document.createElement('input');
 
     input.type = 'checkbox';
