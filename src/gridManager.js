@@ -2,6 +2,7 @@ import { randomRange, randomPercent, clamp, lerp } from './utils.js';
 import DNA from './genome.js';
 import Cell from './cell.js';
 import { computeFitness } from './fitness.js';
+import BrainDebugger from './brainDebugger.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
 import {
@@ -1172,6 +1173,10 @@ export default class GridManager {
         if (fitness > snapshot.maxFitness) snapshot.maxFitness = fitness;
       }
     }
+
+    const ranked = [...snapshot.entries].sort((a, b) => (b?.fitness ?? 0) - (a?.fitness ?? 0));
+
+    snapshot.brainSnapshots = BrainDebugger.captureFromEntries(ranked, { limit: 5 });
 
     return snapshot;
   }

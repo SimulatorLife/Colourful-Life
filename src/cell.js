@@ -1,4 +1,5 @@
 import DNA from './genome.js';
+import Brain, { OUTPUT_GROUPS } from './brain.js';
 import { randomRange, clamp, lerp } from './utils.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
@@ -40,13 +41,14 @@ export default class Cell {
     this.row = row;
     this.col = col;
     this.dna = dna || DNA.random();
+    this.brain = Brain.fromDNA(this.dna);
     this.genes = this.dna.weights();
     this.color = this.dna.toColor();
     this.age = 0;
     this.lifespan = this.dna.lifespanDNA();
     this.sight = this.dna.sight();
     this.energy = energy;
-    this.neurons = this.dna.neurons();
+    this.neurons = this.brain?.neuronCount || this.dna.neurons();
     this.strategy = this.dna.strategy();
     this.movementGenes = this.dna.movementGenes();
     this.interactionGenes = this.dna.interactionGenes();
@@ -56,7 +58,6 @@ export default class Cell {
       typeof this.dna.mateSimilarityBias === 'function' ? this.dna.mateSimilarityBias() : 0;
     this.diversityAppetite =
       typeof this.dna.diversityAppetite === 'function' ? this.dna.diversityAppetite() : 0;
-    this._policyCache = Object.create(null);
     this._neuralLoad = 0;
     this.lastEventPressure = 0;
     this._usedNeuralMovement = false;
@@ -281,9 +282,7 @@ export default class Cell {
   }
 
   #canUseNeuralPolicies() {
-    return (
-      typeof this.dna?.prngFor === 'function' && Number.isFinite(this.neurons) && this.neurons > 0
-    );
+    return Boolean(this.brain && this.brain.connectionCount > 0);
   }
 
   #averageSimilarity(list = []) {
@@ -320,18 +319,18 @@ export default class Cell {
     const mateSimilarity = this.#averageSimilarity(mates);
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
 
-    return [
-      energyFrac,
-      effD,
-      allyFrac,
-      enemyFrac,
-      mateFrac,
+    return {
+      energy: energyFrac,
+      effectiveDensity: effD,
+      allyFraction: allyFrac,
+      enemyFraction: enemyFrac,
+      mateFraction: mateFrac,
       allySimilarity,
       enemySimilarity,
       mateSimilarity,
-      ageFrac,
+      ageFraction: ageFrac,
       eventPressure,
-    ];
+    };
   }
 
   #interactionSensors({
@@ -353,17 +352,17 @@ export default class Cell {
       typeof this.dna?.riskTolerance === 'function' ? this.dna.riskTolerance() : 0.5;
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
 
-    return [
-      energyFrac,
-      effD,
-      enemyFrac,
-      allyFrac,
+    return {
+      energy: energyFrac,
+      effectiveDensity: effD,
+      enemyFraction: enemyFrac,
+      allyFraction: allyFrac,
       enemySimilarity,
       allySimilarity,
-      ageFrac,
+      ageFraction: ageFrac,
       riskTolerance,
       eventPressure,
-    ];
+    };
   }
 
   #reproductionSensors(
@@ -388,82 +387,70 @@ export default class Cell {
         : 0;
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
 
-    return [
-      energyFrac,
+    return {
+      energy: energyFrac,
       partnerEnergy,
-      effD,
-      similarity,
-      baseProbability,
-      ageFrac,
-      partnerAgeFrac,
-      senSelf,
-      senPartner,
+      effectiveDensity: effD,
+      partnerSimilarity: similarity,
+      baseReproductionProbability: baseProbability,
+      ageFraction: ageFrac,
+      partnerAgeFraction: partnerAgeFrac,
+      selfSenescence: senSelf,
+      partnerSenescence: senPartner,
       eventPressure,
-    ];
+    };
   }
 
-  evaluatePolicy(tag, inputs = [], outputSize = 1) {
+  #evaluateBrainGroup(group, sensors) {
     if (!this.#canUseNeuralPolicies()) return null;
-    const inputSize = Array.isArray(inputs) ? inputs.length : 0;
 
-    if (inputSize === 0 || !Number.isFinite(outputSize) || outputSize <= 0) return null;
-    const hiddenSize = Math.max(1, Math.floor(this.neurons));
-    const cacheKey = `${tag}:${inputSize}:${outputSize}:${hiddenSize}`;
-    let policy = this._policyCache[cacheKey];
+    const result = this.brain.evaluateGroup(group, sensors);
 
-    if (!policy) {
-      const rng = this.dna.prngFor(`policy:${tag}`);
-      const hiddenWeights = [];
+    if (!result || !result.values) return null;
 
-      for (let h = 0; h < hiddenSize; h++) {
-        const weights = [];
+    const activationLoad = Math.max(0, result.activationCount || 0);
 
-        for (let i = 0; i < inputSize; i++) weights.push(rng() * 2 - 1);
-        const bias = rng() * 2 - 1;
+    this._neuralLoad += activationLoad;
 
-        hiddenWeights.push({ weights, bias });
-      }
+    return result.values;
+  }
 
-      const outputWeights = [];
+  #mapLegacyStrategyToAction(strategy) {
+    switch (strategy) {
+      case 'pursuit':
+        return 'pursue';
+      case 'cautious':
+        return 'avoid';
+      default:
+        return 'explore';
+    }
+  }
 
-      for (let o = 0; o < outputSize; o++) {
-        const weights = [];
+  #decideMovementAction(context = {}) {
+    const sensors = this.#movementSensors(context);
+    const values = this.#evaluateBrainGroup('movement', sensors);
 
-        for (let h = 0; h < hiddenSize; h++) weights.push(rng() * 2 - 1);
-        const bias = rng() * 2 - 1;
+    if (!values) {
+      this._usedNeuralMovement = false;
 
-        outputWeights.push({ weights, bias });
-      }
-
-      policy = { inputSize, outputSize, hiddenSize, hiddenWeights, outputWeights };
-      this._policyCache[cacheKey] = policy;
+      return { action: null, usedBrain: false };
     }
 
-    if (policy.inputSize !== inputSize || policy.outputSize !== outputSize) return null;
+    const entries = OUTPUT_GROUPS.movement;
+    const logits = entries.map(({ key }) => values[key] ?? 0);
+    const labels = entries.map(({ key }) => key);
+    const probs = softmax(logits);
+    const action = sampleFromDistribution(probs, labels);
 
-    const hiddenActivations = policy.hiddenWeights.map(({ weights, bias }) => {
-      let sum = bias;
+    if (!action) {
+      this._usedNeuralMovement = false;
 
-      for (let i = 0; i < weights.length; i++) {
-        sum += weights[i] * (inputs[i] ?? 0);
-      }
+      return { action: null, usedBrain: false };
+    }
 
-      return Math.tanh(sum);
-    });
+    this._usedNeuralMovement = true;
 
-    const logits = policy.outputWeights.map(({ weights, bias }) => {
-      let sum = bias;
-
-      for (let i = 0; i < weights.length; i++) {
-        sum += weights[i] * (hiddenActivations[i] ?? 0);
-      }
-
-      return sum;
-    });
-
-    this._neuralLoad += policy.hiddenSize + policy.outputSize;
-
-    return logits;
+    return { action, usedBrain: true };
   }
 
   decideRandomMove() {
@@ -549,9 +536,7 @@ export default class Cell {
     society = [],
     maxTileEnergy = MAX_TILE_ENERGY,
   } = {}) {
-    const fallback = () =>
-      this.#legacyChooseMovementStrategy(localDensity, densityEffectMultiplier);
-    const inputs = this.#movementSensors({
+    const decision = this.#decideMovementAction({
       localDensity,
       densityEffectMultiplier,
       mates,
@@ -559,23 +544,14 @@ export default class Cell {
       society,
       maxTileEnergy,
     });
-    const logits = this.evaluatePolicy('movement-strategy', inputs, 3);
-    const labels = ['wandering', 'pursuit', 'cautious'];
 
-    if (Array.isArray(logits) && logits.length === labels.length) {
-      const probs = softmax(logits);
-      const choice = sampleFromDistribution(probs, labels);
-
-      if (choice) {
-        this._usedNeuralMovement = true;
-
-        return choice;
-      }
-    }
+    if (decision.usedBrain && decision.action) return decision.action;
 
     this._usedNeuralMovement = false;
 
-    return fallback();
+    const legacy = this.#legacyChooseMovementStrategy(localDensity, densityEffectMultiplier);
+
+    return this.#mapLegacyStrategyToAction(legacy);
   }
 
   #legacyExecuteMovementStrategy(
@@ -698,9 +674,9 @@ export default class Cell {
       society,
       maxTileEnergy,
     };
-    const strategy = this.chooseMovementStrategy(strategyContext);
+    const decision = this.#decideMovementAction(strategyContext);
 
-    if (!this._usedNeuralMovement) {
+    if (!decision.usedBrain || !decision.action) {
       return this.#legacyExecuteMovementStrategy(
         gridArr,
         row,
@@ -712,31 +688,7 @@ export default class Cell {
       );
     }
 
-    const inputs = this.#movementSensors(strategyContext);
-    const strategyEncoding = [
-      strategy === 'wandering' ? 1 : 0,
-      strategy === 'pursuit' ? 1 : 0,
-      strategy === 'cautious' ? 1 : 0,
-    ];
-    const logits = this.evaluatePolicy('movement-act', [...inputs, ...strategyEncoding], 5);
-
-    if (!Array.isArray(logits) || logits.length !== 5) {
-      this._usedNeuralMovement = false;
-
-      return this.#legacyExecuteMovementStrategy(
-        gridArr,
-        row,
-        col,
-        mates,
-        enemies,
-        society,
-        context
-      );
-    }
-
-    const probs = softmax(logits);
-    const actions = ['rest', 'pursue', 'avoid', 'cohere', 'explore'];
-    const chosen = sampleFromDistribution(probs, actions) || 'explore';
+    const chosen = decision.action;
     const nearestEnemy = this.#nearest(enemies, row, col);
     const nearestMate = this.#nearest(mates, row, col);
     const nearestAlly = this.#nearest(society, row, col);
@@ -850,24 +802,23 @@ export default class Cell {
       baseProbability = 0.5,
     } = context;
 
-    if (!this.#canUseNeuralPolicies()) {
-      return { probability: baseProbability, usedNetwork: false };
-    }
-
-    const inputs = this.#reproductionSensors(partner, {
+    const sensors = this.#reproductionSensors(partner, {
       localDensity,
       densityEffectMultiplier,
       maxTileEnergy,
       baseProbability,
     });
-    const logits = this.evaluatePolicy('reproduction', inputs, 2);
+    const values = this.#evaluateBrainGroup('reproduction', sensors);
 
-    if (!Array.isArray(logits) || logits.length !== 2) {
+    if (!values) {
       return { probability: baseProbability, usedNetwork: false };
     }
 
+    const entries = OUTPUT_GROUPS.reproduction;
+    const logits = entries.map(({ key }) => values[key] ?? 0);
     const probs = softmax(logits);
-    const yes = clamp(probs[1], 0, 1);
+    const acceptIndex = entries.findIndex((entry) => entry.key === 'accept');
+    const yes = acceptIndex >= 0 ? clamp(probs[acceptIndex] ?? 0, 0, 1) : 0;
     const probability = clamp((baseProbability + yes) / 2, 0, 1);
 
     return { probability, usedNetwork: true };
@@ -899,17 +850,19 @@ export default class Cell {
   } = {}) {
     const fallback = () =>
       this.#legacyChooseInteractionAction(localDensity, densityEffectMultiplier);
-    const inputs = this.#interactionSensors({
+    const sensors = this.#interactionSensors({
       localDensity,
       densityEffectMultiplier,
       enemies,
       allies,
       maxTileEnergy,
     });
-    const logits = this.evaluatePolicy('interaction', inputs, 3);
-    const labels = ['avoid', 'fight', 'cooperate'];
+    const values = this.#evaluateBrainGroup('interaction', sensors);
 
-    if (Array.isArray(logits) && logits.length === labels.length) {
+    if (values) {
+      const entries = OUTPUT_GROUPS.interaction;
+      const logits = entries.map(({ key }) => values[key] ?? 0);
+      const labels = entries.map(({ key }) => key);
       const probs = softmax(logits);
       const choice = sampleFromDistribution(probs, labels);
 
