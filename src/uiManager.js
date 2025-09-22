@@ -6,8 +6,12 @@ import {
 
 export default class UIManager {
   constructor(updateCallback, mountSelector = '#app', actions = {}, layoutOptions = {}) {
+    const { obstaclePresets = [], obstacleScenarios = [], ...actionFns } = actions || {};
+
     this.updateCallback = updateCallback;
-    this.actions = actions || {};
+    this.actions = actionFns;
+    this.obstaclePresets = Array.isArray(obstaclePresets) ? obstaclePresets : [];
+    this.obstacleScenarios = Array.isArray(obstacleScenarios) ? obstacleScenarios : [];
     this.paused = false;
 
     // Settings with sensible defaults
@@ -25,6 +29,10 @@ export default class UIManager {
     this.showDensity = false;
     this.showEnergy = false;
     this.showFitness = false;
+    this.showObstacles = true;
+    this.obstaclePreset = this.obstaclePresets[0]?.id ?? 'none';
+    this.obstacleScenario = this.obstacleScenarios[0]?.id ?? 'manual';
+    this.lingerPenalty = 0;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
 
@@ -279,6 +287,39 @@ export default class UIManager {
       return input;
     };
 
+    const addSelect = (opts, parent = body) => {
+      const { label, title, value, options = [], onChange } = opts;
+      const row = document.createElement('label');
+
+      row.className = 'control-row';
+      if (title) row.title = title;
+      const name = document.createElement('div');
+
+      name.className = 'control-name';
+      name.textContent = label;
+      const line = document.createElement('div');
+
+      line.className = 'control-line';
+      const select = document.createElement('select');
+
+      options.forEach((option) => {
+        const opt = document.createElement('option');
+
+        opt.value = option.value;
+        opt.textContent = option.label;
+        if (option.description) opt.title = option.description;
+        select.appendChild(opt);
+      });
+      select.value = value;
+      select.addEventListener('input', () => onChange?.(select.value));
+      line.appendChild(select);
+      row.appendChild(name);
+      row.appendChild(line);
+      parent.appendChild(row);
+
+      return select;
+    };
+
     const getSliderValue = (cfg) =>
       typeof cfg.getValue === 'function' ? cfg.getValue() : this[cfg.prop];
 
@@ -495,6 +536,12 @@ export default class UIManager {
       this.#addCheckbox(overlayGrid, label, title, initial, onChange);
 
     addToggle(
+      'Show Obstacles',
+      'Highlight impassable tiles such as walls and barriers',
+      this.showObstacles,
+      (v) => (this.showObstacles = v)
+    );
+    addToggle(
       'Show Density Heatmap',
       'Overlay local population density as a heatmap',
       this.showDensity,
@@ -512,6 +559,129 @@ export default class UIManager {
       this.showFitness,
       (v) => (this.showFitness = v)
     );
+
+    if (this.obstaclePresets.length > 0 || this.obstacleScenarios.length > 0) {
+      const obstacleHeader = document.createElement('h4');
+
+      obstacleHeader.textContent = 'Obstacles & Scenarios';
+      obstacleHeader.className = 'overlay-header';
+      body.appendChild(obstacleHeader);
+
+      const obstacleGrid = addGrid('control-grid--compact');
+
+      if (this.obstaclePresets.length > 0) {
+        const presetSelect = addSelect(
+          {
+            label: 'Layout Preset',
+            title: 'Choose a static obstacle layout to apply immediately.',
+            value: this.obstaclePreset,
+            options: this.obstaclePresets.map((preset) => ({
+              value: preset.id,
+              label: preset.label,
+              description: preset.description,
+            })),
+            onChange: (value) => {
+              this.obstaclePreset = value;
+            },
+          },
+          obstacleGrid
+        );
+
+        if (presetSelect) {
+          Array.from(presetSelect.options).forEach((opt) => {
+            if (!opt.title && opt.textContent) opt.title = opt.textContent;
+          });
+        }
+
+        const presetButtons = document.createElement('div');
+
+        presetButtons.className = 'control-line';
+        const applyLayoutButton = document.createElement('button');
+
+        applyLayoutButton.textContent = 'Apply Layout';
+        applyLayoutButton.title = 'Replace the current obstacle mask with the selected preset.';
+        applyLayoutButton.addEventListener('click', () => {
+          const args = [this.obstaclePreset, { clearExisting: true }];
+
+          if (typeof this.actions.applyObstaclePreset === 'function')
+            this.actions.applyObstaclePreset(...args);
+          else if (window.grid?.applyObstaclePreset) window.grid.applyObstaclePreset(...args);
+        });
+        const clearButton = document.createElement('button');
+
+        clearButton.textContent = 'Clear Obstacles';
+        clearButton.title = 'Remove all obstacles from the grid.';
+        clearButton.addEventListener('click', () => {
+          const args = ['none', { clearExisting: true }];
+
+          if (typeof this.actions.applyObstaclePreset === 'function')
+            this.actions.applyObstaclePreset(...args);
+          else if (window.grid?.applyObstaclePreset) window.grid.applyObstaclePreset(...args);
+        });
+        presetButtons.appendChild(applyLayoutButton);
+        presetButtons.appendChild(clearButton);
+        obstacleGrid.appendChild(presetButtons);
+      }
+
+      if (this.obstacleScenarios.length > 0) {
+        const scenarioSelect = addSelect(
+          {
+            label: 'Scenario Script',
+            title: 'Schedule obstacle changes to watch the population adapt.',
+            value: this.obstacleScenario,
+            options: this.obstacleScenarios.map((scenario) => ({
+              value: scenario.id,
+              label: scenario.label,
+              description: scenario.description,
+            })),
+            onChange: (value) => {
+              this.obstacleScenario = value;
+            },
+          },
+          obstacleGrid
+        );
+
+        if (scenarioSelect) {
+          Array.from(scenarioSelect.options).forEach((opt) => {
+            if (!opt.title && opt.textContent) opt.title = opt.textContent;
+          });
+        }
+
+        const scenarioButtons = document.createElement('div');
+
+        scenarioButtons.className = 'control-line';
+        const runButton = document.createElement('button');
+
+        runButton.textContent = 'Run Scenario';
+        runButton.title = 'Queue the selected scripted obstacle sequence.';
+        runButton.addEventListener('click', () => {
+          if (typeof this.actions.runObstacleScenario === 'function')
+            this.actions.runObstacleScenario(this.obstacleScenario);
+          else if (window.grid?.runObstacleScenario)
+            window.grid.runObstacleScenario(this.obstacleScenario);
+        });
+        scenarioButtons.appendChild(runButton);
+        obstacleGrid.appendChild(scenarioButtons);
+      }
+
+      const lingerSlider = withSliderConfig('lingerPenalty', {
+        label: 'Wall Linger Penalty',
+        min: 0,
+        max: 0.05,
+        step: 0.001,
+        title:
+          'Energy drained each tick a cell pushes against an obstacle (scales with repeated attempts).',
+        format: (v) => v.toFixed(3),
+        getValue: () => this.lingerPenalty,
+        setValue: (v) => {
+          this.lingerPenalty = v;
+          if (typeof this.actions.setLingerPenalty === 'function') this.actions.setLingerPenalty(v);
+          else if (window.grid?.setLingerPenalty) window.grid.setLingerPenalty(v);
+        },
+      });
+
+      renderSlider(lingerSlider, obstacleGrid);
+    }
 
     const energyGroup = addGrid();
 
@@ -659,6 +829,12 @@ export default class UIManager {
   }
   getShowFitness() {
     return this.showFitness;
+  }
+  getShowObstacles() {
+    return this.showObstacles;
+  }
+  getLingerPenalty() {
+    return this.lingerPenalty;
   }
 
   renderMetrics(stats, snapshot) {

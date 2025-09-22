@@ -595,6 +595,7 @@ export default class Cell {
       moveRandomly,
       getEnergyAt,
       tryMove,
+      isTileBlocked,
     } = {}
   ) {
     const strategy = this.#legacyChooseMovementStrategy(localDensity, densityEffectMultiplier);
@@ -645,6 +646,7 @@ export default class Cell {
         const cc = col + d.dc;
 
         if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) continue;
+        if (typeof isTileBlocked === 'function' && isTileBlocked(rr, cc)) continue;
         const occPenalty = gridArr[rr][cc] ? -1 : 0;
         const e = (getEnergyAt(rr, cc) ?? 0) + occPenalty;
 
@@ -685,6 +687,7 @@ export default class Cell {
       moveRandomly,
       getEnergyAt,
       tryMove,
+      isTileBlocked,
       maxTileEnergy = MAX_TILE_ENERGY,
     } = context;
     const strategyContext = {
@@ -754,6 +757,7 @@ export default class Cell {
         const cc = col + d.dc;
 
         if (rr < 0 || rr >= (rows ?? 0) || cc < 0 || cc >= (cols ?? 0)) continue;
+        if (typeof isTileBlocked === 'function' && isTileBlocked(rr, cc)) continue;
         const occupancyPenalty = gridArr?.[rr]?.[cc] ? -1 : 0;
         const energy = (getEnergyAt(rr, cc) ?? 0) + occupancyPenalty;
 

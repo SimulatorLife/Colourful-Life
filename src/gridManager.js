@@ -13,6 +13,62 @@ import {
   CONSUMPTION_DENSITY_PENALTY,
 } from './config.js';
 
+export const OBSTACLE_PRESETS = [
+  {
+    id: 'none',
+    label: 'Open Field',
+    description: 'Clears all obstacles for free movement.',
+  },
+  {
+    id: 'midline',
+    label: 'Midline Wall',
+    description: 'Single vertical barrier with regular gates.',
+  },
+  {
+    id: 'corridor',
+    label: 'Triple Corridor',
+    description: 'Two vertical walls that divide the map into three lanes.',
+  },
+  {
+    id: 'checkerboard',
+    label: 'Checkerboard Gaps',
+    description: 'Alternating impassable tiles to force weaving paths.',
+  },
+  {
+    id: 'perimeter',
+    label: 'Perimeter Ring',
+    description: 'Walls around the rim that keep populations in-bounds.',
+  },
+];
+
+export const OBSTACLE_SCENARIOS = [
+  {
+    id: 'manual',
+    label: 'Manual Control',
+    description: 'No scheduled obstacle changes.',
+    schedule: [],
+  },
+  {
+    id: 'mid-run-wall',
+    label: 'Mid-run Wall Drop',
+    description: 'Start open, then add a midline wall with gates after 600 ticks.',
+    schedule: [
+      { delay: 0, preset: 'none', clearExisting: true },
+      { delay: 600, preset: 'midline', clearExisting: true, presetOptions: { gapEvery: 12 } },
+    ],
+  },
+  {
+    id: 'pressure-maze',
+    label: 'Closing Maze',
+    description: 'Perimeter walls first, then corridors, ending with checkerboard choke points.',
+    schedule: [
+      { delay: 0, preset: 'perimeter', clearExisting: true },
+      { delay: 400, preset: 'corridor', append: true },
+      { delay: 900, preset: 'checkerboard', clearExisting: true, presetOptions: { tileSize: 3 } },
+    ],
+  },
+];
+
 export default class GridManager {
   // Base per-tick regen before modifiers; logistic to max, density-aware
   static energyRegenRate = ENERGY_REGEN_RATE_DEFAULT;
@@ -21,16 +77,63 @@ export default class GridManager {
   static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
   static maxTileEnergy = MAX_TILE_ENERGY;
 
-  static tryMove(gridArr, sr, sc, dr, dc, rows, cols) {
+  static tryMove(gridArr, sr, sc, dr, dc, rows, cols, options = {}) {
+    const {
+      obstacles = null,
+      lingerPenalty = 0,
+      penalizeOnBounds = true,
+      onBlocked = null,
+    } = options;
     const nr = sr + dr;
     const nc = sc + dc;
+    const moving = gridArr[sr][sc];
+    const applyWallPenalty = (reason) => {
+      if (!moving || typeof moving !== 'object' || moving.energy == null) return;
+      const base =
+        typeof lingerPenalty === 'function'
+          ? lingerPenalty({ cell: moving, reason, attemptedRow: nr, attemptedCol: nc })
+          : lingerPenalty;
+      const amount = Number.isFinite(base) ? Math.max(0, base) : 0;
 
-    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) return false;
+      if (amount <= 0) return;
+      const prior = moving.wallContactTicks || 0;
+      const scale = 1 + Math.min(prior, 6) * 0.25;
+
+      moving.energy = Math.max(0, moving.energy - amount * scale);
+      moving.wallContactTicks = prior + 1;
+    };
+    const clearWallPenalty = () => {
+      if (moving && typeof moving === 'object' && moving.wallContactTicks) {
+        moving.wallContactTicks = 0;
+      }
+    };
+
+    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) {
+      if (penalizeOnBounds) applyWallPenalty('bounds');
+      if (typeof onBlocked === 'function')
+        onBlocked({ reason: 'bounds', row: sr, col: sc, nextRow: nr, nextCol: nc, mover: moving });
+
+      return false;
+    }
+
+    if (obstacles && obstacles[nr]?.[nc]) {
+      applyWallPenalty('obstacle');
+      if (typeof onBlocked === 'function')
+        onBlocked({
+          reason: 'obstacle',
+          row: sr,
+          col: sc,
+          nextRow: nr,
+          nextCol: nc,
+          mover: moving,
+        });
+
+      return false;
+    }
+
     const dcell = gridArr[nr][nc];
 
     if (!dcell) {
-      const moving = gridArr[sr][sc];
-
       gridArr[nr][nc] = moving;
       gridArr[sr][sc] = null;
       if (moving && typeof moving === 'object') {
@@ -44,13 +147,15 @@ export default class GridManager {
         moving.energy = Math.max(0, moving.energy - cost);
       }
 
+      clearWallPenalty();
+
       return true;
     }
 
     return false;
   }
 
-  static moveToTarget(gridArr, row, col, targetRow, targetCol, rows, cols) {
+  static moveToTarget(gridArr, row, col, targetRow, targetCol, rows, cols, options = {}) {
     const dRow = targetRow - row;
     const dCol = targetCol - col;
     let dr = 0,
@@ -59,10 +164,10 @@ export default class GridManager {
     if (Math.abs(dRow) >= Math.abs(dCol)) dr = Math.sign(dRow);
     else dc = Math.sign(dCol);
 
-    return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols);
+    return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
   }
 
-  static moveAwayFromTarget(gridArr, row, col, targetRow, targetCol, rows, cols) {
+  static moveAwayFromTarget(gridArr, row, col, targetRow, targetCol, rows, cols, options = {}) {
     const dRow = targetRow - row;
     const dCol = targetCol - col;
     let dr = 0,
@@ -71,13 +176,13 @@ export default class GridManager {
     if (Math.abs(dRow) >= Math.abs(dCol)) dr = -Math.sign(dRow);
     else dc = -Math.sign(dCol);
 
-    return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols);
+    return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
   }
 
-  static moveRandomly(gridArr, row, col, cell, rows, cols) {
+  static moveRandomly(gridArr, row, col, cell, rows, cols, options = {}) {
     const { dr, dc } = cell.decideRandomMove();
 
-    return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols);
+    return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
   }
 
   constructor(rows, cols, { eventManager, ctx = null, cellSize = 8, stats } = {}) {
@@ -88,18 +193,336 @@ export default class GridManager {
       Array.from({ length: cols }, () => MAX_TILE_ENERGY / 2)
     );
     this.energyNext = Array.from({ length: rows }, () => Array(cols).fill(0));
+    this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
     this.eventManager = eventManager || window.eventManager;
     this.ctx = ctx || window.ctx;
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
     this.densityGrid = null;
     this.lastSnapshot = null;
+    this.lingerPenalty = 0;
+    this.obstacleSchedules = [];
+    this.currentObstaclePreset = 'none';
+    this.currentScenarioId = 'manual';
+    this.tickCount = 0;
+    this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
+      GridManager.tryMove(gridArr, sr, sc, dr, dc, rows, cols, this.#movementOptions());
+    this.boundMoveToTarget = (gridArr, row, col, targetRow, targetCol, rows, cols) =>
+      GridManager.moveToTarget(
+        gridArr,
+        row,
+        col,
+        targetRow,
+        targetCol,
+        rows,
+        cols,
+        this.#movementOptions()
+      );
+    this.boundMoveAwayFromTarget = (gridArr, row, col, targetRow, targetCol, rows, cols) =>
+      GridManager.moveAwayFromTarget(
+        gridArr,
+        row,
+        col,
+        targetRow,
+        targetCol,
+        rows,
+        cols,
+        this.#movementOptions()
+      );
+    this.boundMoveRandomly = (gridArr, row, col, cell, rows, cols) =>
+      GridManager.moveRandomly(gridArr, row, col, cell, rows, cols, this.#movementOptions());
     this.init();
+  }
+
+  #movementOptions() {
+    return {
+      obstacles: this.obstacles,
+      lingerPenalty: this.lingerPenalty,
+      penalizeOnBounds: true,
+    };
+  }
+
+  setLingerPenalty(value = 0) {
+    const numeric = Number(value);
+
+    this.lingerPenalty = Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
+  }
+
+  isObstacle(row, col) {
+    return Boolean(this.obstacles?.[row]?.[col]);
+  }
+
+  isTileBlocked(row, col) {
+    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return true;
+
+    return this.isObstacle(row, col);
+  }
+
+  clearObstacles() {
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        this.obstacles[r][c] = false;
+      }
+    }
+    this.currentObstaclePreset = 'none';
+  }
+
+  setObstacle(row, col, blocked = true, { evict = true } = {}) {
+    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return false;
+    const wasBlocked = this.obstacles[row][col];
+
+    if (blocked) {
+      this.obstacles[row][col] = true;
+      if (!wasBlocked && this.grid[row][col]) {
+        const occupant = this.grid[row][col];
+
+        this.grid[row][col] = null;
+        if (evict && this.stats?.onDeath) this.stats.onDeath();
+        if (occupant && occupant.energy != null) {
+          this.energyGrid[row][col] = 0;
+          this.energyNext[row][col] = 0;
+        }
+      } else {
+        this.energyGrid[row][col] = 0;
+        this.energyNext[row][col] = 0;
+      }
+    } else {
+      this.obstacles[row][col] = false;
+    }
+
+    return true;
+  }
+
+  paintVerticalWall(
+    col,
+    {
+      startRow = 0,
+      endRow = this.rows - 1,
+      gapEvery = 0,
+      gapOffset = 0,
+      thickness = 1,
+      evict = true,
+    } = {}
+  ) {
+    const normalizedStart = Math.max(0, startRow);
+    const normalizedEnd = Math.min(this.rows - 1, endRow);
+    const width = Math.max(1, Math.floor(thickness));
+
+    for (let offset = 0; offset < width; offset++) {
+      const cc = col + offset;
+
+      if (cc < 0 || cc >= this.cols) continue;
+      for (let r = normalizedStart; r <= normalizedEnd; r++) {
+        if (gapEvery > 0) {
+          const idx = r - normalizedStart + gapOffset;
+
+          if (idx % gapEvery === 0) continue;
+        }
+        this.setObstacle(r, cc, true, { evict });
+      }
+    }
+  }
+
+  paintHorizontalWall(
+    row,
+    {
+      startCol = 0,
+      endCol = this.cols - 1,
+      gapEvery = 0,
+      gapOffset = 0,
+      thickness = 1,
+      evict = true,
+    } = {}
+  ) {
+    const normalizedStart = Math.max(0, startCol);
+    const normalizedEnd = Math.min(this.cols - 1, endCol);
+    const height = Math.max(1, Math.floor(thickness));
+
+    for (let offset = 0; offset < height; offset++) {
+      const rr = row + offset;
+
+      if (rr < 0 || rr >= this.rows) continue;
+      for (let c = normalizedStart; c <= normalizedEnd; c++) {
+        if (gapEvery > 0) {
+          const idx = c - normalizedStart + gapOffset;
+
+          if (idx % gapEvery === 0) continue;
+        }
+        this.setObstacle(rr, c, true, { evict });
+      }
+    }
+  }
+
+  paintCheckerboard({
+    tileSize = 2,
+    offsetRow = 0,
+    offsetCol = 0,
+    blockParity = 0,
+    evict = true,
+  } = {}) {
+    const size = Math.max(1, Math.floor(tileSize));
+
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        const tileR = Math.floor((r + offsetRow) / size);
+        const tileC = Math.floor((c + offsetCol) / size);
+        const parity = (tileR + tileC) % 2;
+
+        if (parity === blockParity) this.setObstacle(r, c, true, { evict });
+      }
+    }
+  }
+
+  paintPerimeter({ thickness = 1, evict = true } = {}) {
+    const t = Math.max(1, Math.floor(thickness));
+
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        const onEdge = r < t || r >= this.rows - t || c < t || c >= this.cols - t;
+
+        if (onEdge) this.setObstacle(r, c, true, { evict });
+      }
+    }
+  }
+
+  applyObstaclePreset(
+    presetId,
+    { clearExisting = true, append = false, presetOptions = {}, evict = true } = {}
+  ) {
+    if (clearExisting && !append) this.clearObstacles();
+    const options = presetOptions || {};
+
+    switch (presetId) {
+      case 'none':
+        if (clearExisting) this.clearObstacles();
+        break;
+      case 'midline': {
+        const col = Math.floor(this.cols / 2);
+        const gapEvery = Math.max(0, Math.floor(options.gapEvery ?? 10));
+        const gapOffset = Math.floor(options.gapOffset ?? gapEvery / 2);
+        const thickness = Math.max(1, Math.floor(options.thickness ?? 1));
+
+        this.paintVerticalWall(col, { gapEvery, gapOffset, thickness, evict });
+        break;
+      }
+      case 'corridor': {
+        const gapEvery = Math.max(0, Math.floor(options.gapEvery ?? 12));
+        const thickness = Math.max(1, Math.floor(options.thickness ?? 1));
+        const first = Math.max(1, Math.floor(this.cols / 3));
+        const second = Math.min(this.cols - 2, Math.floor((2 * this.cols) / 3));
+
+        this.paintVerticalWall(first, { gapEvery, thickness, evict });
+        this.paintVerticalWall(second, {
+          gapEvery,
+          thickness,
+          evict,
+          gapOffset: Math.floor(gapEvery / 2),
+        });
+        break;
+      }
+      case 'checkerboard': {
+        const tileSize = Math.max(1, Math.floor(options.tileSize ?? 2));
+        const offsetRow = Math.floor(options.offsetRow ?? 0);
+        const offsetCol = Math.floor(options.offsetCol ?? 0);
+        const blockParity = Math.floor(options.blockParity ?? 0) % 2;
+
+        this.paintCheckerboard({ tileSize, offsetRow, offsetCol, blockParity, evict });
+        break;
+      }
+      case 'perimeter': {
+        const thickness = Math.max(1, Math.floor(options.thickness ?? 1));
+
+        this.paintPerimeter({ thickness, evict });
+        break;
+      }
+      default:
+        break;
+    }
+
+    this.currentObstaclePreset = presetId;
+  }
+
+  clearScheduledObstacles() {
+    this.obstacleSchedules = [];
+  }
+
+  scheduleObstaclePreset({
+    delay = 0,
+    preset = 'none',
+    presetOptions = {},
+    clearExisting = true,
+    append = false,
+    evict = true,
+  } = {}) {
+    const triggerTick = this.tickCount + Math.max(0, Math.floor(delay));
+
+    this.obstacleSchedules.push({
+      triggerTick,
+      preset,
+      clearExisting,
+      append,
+      presetOptions,
+      evict,
+    });
+    this.obstacleSchedules.sort((a, b) => a.triggerTick - b.triggerTick);
+  }
+
+  processScheduledObstacles() {
+    if (!Array.isArray(this.obstacleSchedules) || this.obstacleSchedules.length === 0) return;
+
+    while (
+      this.obstacleSchedules.length > 0 &&
+      this.obstacleSchedules[0].triggerTick <= this.tickCount
+    ) {
+      const next = this.obstacleSchedules.shift();
+
+      this.applyObstaclePreset(next.preset, {
+        clearExisting: next.clearExisting,
+        append: next.append,
+        presetOptions: next.presetOptions,
+        evict: next.evict,
+      });
+    }
+  }
+
+  runObstacleScenario(scenarioId, { resetSchedule = true } = {}) {
+    const scenario = OBSTACLE_SCENARIOS.find((s) => s.id === scenarioId);
+
+    if (!scenario) return false;
+    if (resetSchedule) this.clearScheduledObstacles();
+    this.currentScenarioId = scenario.id;
+
+    for (let i = 0; i < scenario.schedule.length; i++) {
+      const step = scenario.schedule[i];
+      const delay = Math.max(0, Math.floor(step.delay ?? 0));
+      const opts = {
+        clearExisting: step.clearExisting,
+        append: step.append,
+        presetOptions: step.presetOptions,
+        evict: step.evict ?? true,
+      };
+
+      if (delay === 0) this.applyObstaclePreset(step.preset, opts);
+      else
+        this.scheduleObstaclePreset({
+          delay,
+          preset: step.preset,
+          presetOptions: step.presetOptions,
+          clearExisting: step.clearExisting,
+          append: step.append,
+          evict: step.evict ?? true,
+        });
+    }
+
+    if (scenario.schedule.length === 0) this.currentObstaclePreset = 'none';
+
+    return true;
   }
 
   init() {
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
+        if (this.isObstacle(row, col)) continue;
         if (randomPercent(0.05)) {
           const dna = DNA.random();
 
@@ -115,7 +538,7 @@ export default class GridManager {
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        if (!this.getCell(r, c)) empty.push({ r, c });
+        if (!this.getCell(r, c) && !this.isObstacle(r, c)) empty.push({ r, c });
       }
     }
     const toSeed = Math.min(minPopulation - currentPopulation, empty.length);
@@ -250,6 +673,7 @@ export default class GridManager {
   }
 
   spawnCell(row, col, { dna = DNA.random(), spawnEnergy, recordBirth = false } = {}) {
+    if (this.isObstacle(row, col)) return null;
     const energy = spawnEnergy ?? this.energyGrid[row][col];
     const cell = new Cell(row, col, dna, energy);
 
@@ -314,6 +738,23 @@ export default class GridManager {
 
     // Clear full canvas once
     ctx.clearRect(0, 0, this.cols * cellSize, this.rows * cellSize);
+    if (this.obstacles) {
+      ctx.fillStyle = 'rgba(40,40,55,0.9)';
+      for (let row = 0; row < this.rows; row++) {
+        for (let col = 0; col < this.cols; col++) {
+          if (!this.obstacles[row][col]) continue;
+          ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+        }
+      }
+      ctx.strokeStyle = 'rgba(200,200,255,0.25)';
+      ctx.lineWidth = Math.max(1, cellSize * 0.1);
+      for (let row = 0; row < this.rows; row++) {
+        for (let col = 0; col < this.cols; col++) {
+          if (!this.obstacles[row][col]) continue;
+          ctx.strokeRect(col * cellSize + 0.5, row * cellSize + 0.5, cellSize - 1, cellSize - 1);
+        }
+      }
+    }
     // Draw cells only
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
@@ -450,7 +891,7 @@ export default class GridManager {
 
     const originalParentRow = cell.row;
     const originalParentCol = cell.col;
-    const moveSucceeded = GridManager.moveToTarget(
+    const moveSucceeded = this.boundMoveToTarget(
       this.grid,
       row,
       col,
@@ -501,7 +942,7 @@ export default class GridManager {
         const wrappedCol = (c + this.cols) % this.cols;
         const key = `${wrappedRow},${wrappedCol}`;
 
-        if (!candidateSet.has(key)) {
+        if (!candidateSet.has(key) && !this.isObstacle(wrappedRow, wrappedCol)) {
           candidateSet.add(key);
           candidates.push({ r: wrappedRow, c: wrappedCol });
         }
@@ -523,7 +964,7 @@ export default class GridManager {
       addNeighbors(parentRow, parentCol);
       addNeighbors(mateRow, mateCol);
 
-      const freeSlots = candidates.filter(({ r, c }) => !this.grid[r][c]);
+      const freeSlots = candidates.filter(({ r, c }) => !this.grid[r][c] && !this.isObstacle(r, c));
 
       if (freeSlots.length > 0) {
         const spawn = freeSlots[Math.floor(randomRange(0, freeSlots.length))];
@@ -571,7 +1012,7 @@ export default class GridManager {
     });
 
     if (action === 'avoid') {
-      GridManager.moveAwayFromTarget(
+      this.boundMoveAwayFromTarget(
         this.grid,
         row,
         col,
@@ -590,7 +1031,7 @@ export default class GridManager {
       if (dist <= 1) {
         cell.fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col, stats);
       } else {
-        GridManager.moveToTarget(
+        this.boundMoveToTarget(
           this.grid,
           row,
           col,
@@ -615,7 +1056,7 @@ export default class GridManager {
         stats
       );
     else
-      GridManager.moveToTarget(
+      this.boundMoveToTarget(
         this.grid,
         row,
         col,
@@ -642,12 +1083,13 @@ export default class GridManager {
       densityEffectMultiplier,
       rows: this.rows,
       cols: this.cols,
-      moveToTarget: GridManager.moveToTarget,
-      moveAwayFromTarget: GridManager.moveAwayFromTarget,
-      moveRandomly: GridManager.moveRandomly,
-      tryMove: GridManager.tryMove,
+      moveToTarget: this.boundMoveToTarget,
+      moveAwayFromTarget: this.boundMoveAwayFromTarget,
+      moveRandomly: this.boundMoveRandomly,
+      tryMove: this.boundTryMove,
       getEnergyAt: (rr, cc) => this.energyGrid[rr][cc] / MAX_TILE_ENERGY,
       maxTileEnergy: MAX_TILE_ENERGY,
+      isTileBlocked: (rr, cc) => this.isTileBlocked(rr, cc),
     });
   }
 
@@ -664,6 +1106,8 @@ export default class GridManager {
     const eventManager = this.eventManager;
 
     this.lastSnapshot = null;
+    this.tickCount += 1;
+    this.processScheduledObstacles();
 
     const { densityGrid } = this.prepareTick({
       eventManager,
@@ -838,7 +1282,7 @@ export default class GridManager {
     for (let i = 0; i < coords.length && placed < count; i++) {
       const { rr, cc } = coords[i];
 
-      if (!this.grid[rr][cc]) {
+      if (!this.grid[rr][cc] && !this.isObstacle(rr, cc)) {
         const dna = DNA.random();
 
         this.spawnCell(rr, cc, { dna, recordBirth: true });
@@ -857,3 +1301,6 @@ export default class GridManager {
     return this.burstAt(r, c, opts);
   }
 }
+
+GridManager.OBSTACLE_PRESETS = OBSTACLE_PRESETS;
+GridManager.OBSTACLE_SCENARIOS = OBSTACLE_SCENARIOS;

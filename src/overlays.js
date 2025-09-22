@@ -52,6 +52,38 @@ export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
   ctx.restore();
 }
 
+function drawObstacleMask(
+  grid,
+  ctx,
+  cellSize,
+  { fill = 'rgba(40,40,55,0.35)', outline = 'rgba(200,200,255,0.35)' } = {}
+) {
+  const mask = grid?.obstacles;
+
+  if (!Array.isArray(mask)) return;
+  ctx.save();
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = Math.max(1, cellSize * 0.12);
+  const rows = grid.rows || mask.length;
+  const cols = grid.cols || (mask[0]?.length ?? 0);
+
+  for (let r = 0; r < rows; r++) {
+    const rowMask = mask[r];
+
+    if (!rowMask) continue;
+    for (let c = 0; c < cols; c++) {
+      if (!rowMask[c]) continue;
+      const x = c * cellSize;
+      const y = r * cellSize;
+
+      ctx.fillRect(x, y, cellSize, cellSize);
+      ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
+    }
+  }
+  ctx.restore();
+}
+
 function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = '0,0,0') {
   const rows = grid.rows;
   const cols = grid.cols;
@@ -183,6 +215,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showEnergy,
     showDensity,
     showFitness,
+    showObstacles = true,
     maxTileEnergy = MAX_TILE_ENERGY,
     activeEvents,
     getEventColor,
@@ -194,6 +227,8 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   if (Array.isArray(activeEvents) && activeEvents.length > 0) {
     drawEventOverlays(ctx, cellSize, activeEvents, getEventColor);
   }
+
+  if (showObstacles) drawObstacleMask(grid, ctx, cellSize);
 
   if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);
   if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
