@@ -1,3 +1,4 @@
+import { EVENT_TYPES } from './eventEffects.js';
 import { randomRange } from './utils.js';
 
 export function isEventAffecting(event, row, col) {
@@ -40,8 +41,7 @@ export default class EventManager {
   }
 
   generateRandomEvent() {
-    const eventTypes = ['flood', 'drought', 'heatwave', 'coldwave'];
-    const eventType = eventTypes[Math.floor(randomRange(0, eventTypes.length, this.rng))];
+    const eventType = EVENT_TYPES[Math.floor(randomRange(0, EVENT_TYPES.length, this.rng))];
     // Bias durations so events are visible but not constant
     const duration = Math.floor(randomRange(300, 900, this.rng)); // frames
     const strength = randomRange(0.25, 1, this.rng); // 0.25..1

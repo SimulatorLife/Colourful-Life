@@ -37,6 +37,8 @@ export const EVENT_EFFECTS = {
   },
 };
 
+export const EVENT_TYPES = Object.freeze(Object.keys(EVENT_EFFECTS));
+
 export function getEventEffect(eventType) {
   return EVENT_EFFECTS[eventType] || null;
 }
