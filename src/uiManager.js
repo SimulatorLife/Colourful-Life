@@ -17,6 +17,7 @@ export default class UIManager {
     this.eventFrequencyMultiplier = UI_SLIDER_CONFIG.eventFrequencyMultiplier.default;
     this.speedMultiplier = UI_SLIDER_CONFIG.speedMultiplier.default;
     this.densityEffectMultiplier = UI_SLIDER_CONFIG.densityEffectMultiplier.default;
+    this.mutationMultiplier = UI_SLIDER_CONFIG.mutationMultiplier.default;
     this.energyRegenRate = ENERGY_REGEN_RATE_DEFAULT; // base logistic regen rate (0..0.2)
     this.energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT; // neighbor diffusion rate (0..0.5)
     this.leaderboardIntervalMs = UI_SLIDER_CONFIG.leaderboardIntervalMs.default;
@@ -427,6 +428,20 @@ export default class UIManager {
     ];
 
     const generalConfigs = [
+      withSliderConfig('mutationMultiplier', {
+        label: 'Mutation Rate ×',
+        min: 0,
+        max: 3,
+        step: 0.05,
+        title:
+          'Scales averaged parental mutation chance and range for offspring (0 disables mutation)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.mutationMultiplier,
+        setValue: (v) => {
+          this.mutationMultiplier = v;
+        },
+        position: 'beforeOverlays',
+      }),
       withSliderConfig('speedMultiplier', {
         label: 'Speed ×',
         min: 0.5,
@@ -547,6 +562,7 @@ export default class UIManager {
       { label: 'Mean Energy', property: 'sparkEnergy', color: '#8d8' },
       { label: 'Growth', property: 'sparkGrowth', color: '#dd8' },
       { label: 'Event Strength', property: 'sparkEvent', color: '#b85' },
+      { label: 'Mutation Multiplier', property: 'sparkMutation', color: '#6c5ce7' },
       ...traitSparkDescriptors,
     ];
 
@@ -609,6 +625,9 @@ export default class UIManager {
   getDensityEffectMultiplier() {
     return this.densityEffectMultiplier;
   }
+  getMutationMultiplier() {
+    return this.mutationMultiplier;
+  }
   getEventFrequencyMultiplier() {
     return this.eventFrequencyMultiplier;
   }
@@ -667,6 +686,16 @@ export default class UIManager {
       value: String(s.growth),
       title: 'Births - Deaths',
     });
+    if (typeof s.mutationMultiplier === 'number') {
+      const formatted = s.mutationMultiplier.toFixed(2);
+      const suffix = s.mutationMultiplier <= 0 ? '× (off)' : '×';
+
+      this.#appendControlRow(this.metricsBox, {
+        label: 'Mutation Multiplier',
+        value: `${formatted}${suffix}`,
+        title: 'Global multiplier applied to mutation chance and range for offspring',
+      });
+    }
     this.#appendControlRow(this.metricsBox, {
       label: 'Skirmishes',
       value: String(s.fights),
@@ -748,6 +777,7 @@ export default class UIManager {
     this.drawSpark(this.sparkEnergy, stats.history.energy, '#8d8');
     this.drawSpark(this.sparkGrowth, stats.history.growth, '#dd8');
     this.drawSpark(this.sparkEvent, stats.history.eventStrength, '#b85');
+    this.drawSpark(this.sparkMutation, stats.history.mutationMultiplier, '#6c5ce7');
 
     if (Array.isArray(this.traitSparkDescriptors)) {
       this.traitSparkDescriptors.forEach(({ property, traitKey, traitType, color }) => {

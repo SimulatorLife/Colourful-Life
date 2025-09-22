@@ -71,11 +71,15 @@ export default class Cell {
     this.fightsLost = 0;
   }
 
-  static breed(parentA, parentB) {
+  static breed(parentA, parentB, mutationMultiplier = 1) {
     const row = parentA.row;
     const col = parentA.col;
-    const chance = (parentA.dna.mutationChance() + parentB.dna.mutationChance()) / 2;
-    const range = Math.round((parentA.dna.mutationRange() + parentB.dna.mutationRange()) / 2);
+    const avgChance = (parentA.dna.mutationChance() + parentB.dna.mutationChance()) / 2;
+    const avgRange = (parentA.dna.mutationRange() + parentB.dna.mutationRange()) / 2;
+    const safeMultiplier = Number.isFinite(mutationMultiplier) ? mutationMultiplier : 1;
+    const effectiveMultiplier = Math.max(0, safeMultiplier);
+    const chance = Math.max(0, avgChance * effectiveMultiplier);
+    const range = Math.max(0, Math.round(avgRange * effectiveMultiplier));
     const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range);
     const maxTileEnergy =
       typeof window !== 'undefined' && window.GridManager?.maxTileEnergy != null

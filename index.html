@@ -62,6 +62,7 @@
           stats.resetTick();
           // update events with frequency and allow up to 2 concurrent
           eventManager.updateEvent(uiManager.getEventFrequencyMultiplier(), 2);
+          const mutationMultiplier = uiManager.getMutationMultiplier();
           const snapshot = grid.update({
             densityEffectMultiplier: uiManager.getDensityEffectMultiplier(),
             societySimilarity: uiManager.getSocietySimilarity(),
@@ -69,11 +70,13 @@
             eventStrengthMultiplier: uiManager.getEventStrengthMultiplier(),
             energyRegenRate: uiManager.getEnergyRegenRate(),
             energyDiffusionRate: uiManager.getEnergyDiffusionRate(),
+            mutationMultiplier,
           });
 
           lastSnapshot = snapshot;
           // record current event strength for insight charts
           stats.logEvent(eventManager.currentEvent, uiManager.getEventStrengthMultiplier());
+          stats.setMutationMultiplier(mutationMultiplier);
           const metrics = stats.updateFromSnapshot(snapshot);
 
           lastMetrics = metrics;
@@ -89,6 +92,7 @@
           snapshot: lastSnapshot,
           activeEvents: eventManager.activeEvents,
           getEventColor: eventManager.getColor?.bind(eventManager),
+          mutationMultiplier: uiManager.getMutationMultiplier(),
         });
         if (pendingSlowUiUpdate && uiManager.shouldRenderSlowUi(now)) {
           if (lastMetrics) uiManager.renderMetrics(stats, lastMetrics);
