@@ -241,4 +241,48 @@ test('breed applies deterministic crossover and honors forced mutation', () => {
   expectClose(child.strategy, avgStrategy, 1e-12, 'strategy averages when mutation delta is zero');
 });
 
+test('fightEnemy moves attacker into target tile and updates its coordinates after victory', () => {
+  const attackerDNA = new DNA(10, 20, 30);
+  const defenderDNA = new DNA(15, 25, 35);
+
+  attackerDNA.fightCost = () => 0;
+  defenderDNA.fightCost = () => 0;
+  attackerDNA.combatPower = () => 1;
+  defenderDNA.combatPower = () => 1;
+
+  const attacker = new Cell(0, 0, attackerDNA, 8);
+  const defender = new Cell(0, 1, defenderDNA, 4);
+
+  const grid = [
+    [attacker, defender],
+    [null, null],
+  ];
+  const consumeCalls = [];
+  const manager = {
+    grid,
+    consumeEnergy: (cell, row, col) => {
+      consumeCalls.push({ cell, row, col });
+    },
+  };
+  let fights = 0;
+  let deaths = 0;
+  const stats = {
+    onFight: () => fights++,
+    onDeath: () => deaths++,
+  };
+
+  attacker.fightEnemy(manager, 0, 0, 0, 1, stats);
+
+  assert.is(manager.grid[0][1], attacker, 'attacker occupies the target tile after winning');
+  assert.is(manager.grid[0][0], null, 'original attacker tile is emptied');
+  assert.is(attacker.row, 0, 'attacker row updates to target row');
+  assert.is(attacker.col, 1, 'attacker col updates to target col');
+  assert.is(attacker.fightsWon, 1, 'attacker records win');
+  assert.is(defender.fightsLost, 1, 'defender records loss');
+  assert.is(consumeCalls.length, 1, 'energy consumption triggered once');
+  assert.equal(consumeCalls[0], { cell: attacker, row: 0, col: 1 });
+  assert.is(fights, 1, 'fight stat increments once');
+  assert.is(deaths, 1, 'death stat increments once');
+});
+
 test.run();

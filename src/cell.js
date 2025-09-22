@@ -366,6 +366,8 @@ export default class Cell {
     if (atkPower >= defPower) {
       manager.grid[targetRow][targetCol] = attacker;
       manager.grid[attackerRow][attackerCol] = null;
+      attacker.row = targetRow;
+      attacker.col = targetCol;
       manager.consumeEnergy(attacker, targetRow, targetCol);
       stats?.onFight?.();
       stats?.onDeath?.();
