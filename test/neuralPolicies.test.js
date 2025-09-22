@@ -5,41 +5,103 @@ let Cell;
 let DNA;
 let clamp;
 let lerp;
+let Brain;
+let OUTPUT_GROUPS;
+let NEURAL_GENE_BYTES;
 
 function approxEqual(a, b, tolerance = 1e-9) {
   assert.ok(Math.abs(a - b) <= tolerance, `expected ${a} ≈ ${b}`);
+}
+
+function setNeuralGene(
+  dna,
+  index,
+  { source = 0, target = 0, weight = 0, activation = 2, enabled = true }
+) {
+  assert.ok(typeof dna?.neuralGeneCount === 'function', 'DNA must expose neuralGeneCount');
+  const neuralCount = dna.neuralGeneCount();
+
+  assert.ok(neuralCount > 0, 'DNA should reserve space for neural genes');
+  assert.ok(index >= 0 && index < neuralCount, 'neural gene index out of range');
+
+  const baseOffset = dna.genes.length - neuralCount * NEURAL_GENE_BYTES;
+  const offset = baseOffset + index * NEURAL_GENE_BYTES;
+  const clampedWeight = clamp(weight, -1, 1);
+  const rawWeight = Math.max(0, Math.min(4095, Math.round((clampedWeight + 1) * 2047.5)));
+  const geneValue =
+    ((source & 0xff) << 24) |
+    ((target & 0xff) << 16) |
+    ((rawWeight & 0xfff) << 4) |
+    ((activation & 0x7) << 1) |
+    (enabled ? 1 : 0);
+
+  dna.genes[offset] = (geneValue >>> 24) & 0xff;
+  dna.genes[offset + 1] = (geneValue >>> 16) & 0xff;
+  dna.genes[offset + 2] = (geneValue >>> 8) & 0xff;
+  dna.genes[offset + 3] = geneValue & 0xff;
 }
 
 test.before(async () => {
   ({ default: Cell } = await import('../src/cell.js'));
   ({ DNA } = await import('../src/genome.js'));
   ({ clamp, lerp } = await import('../src/utils.js'));
+  ({ default: Brain, OUTPUT_GROUPS, NEURAL_GENE_BYTES } = await import('../src/brain.js'));
 });
 
-test('evaluatePolicy produces deterministic, DNA-specific logits', () => {
+test('brain evaluateGroup produces deterministic, DNA-specific outputs', () => {
   const dnaA = new DNA(10, 20, 30);
   const dnaB = new DNA(150, 90, 40);
+  const pursueNode = OUTPUT_GROUPS.movement.find((entry) => entry.key === 'pursue');
+  const avoidNode = OUTPUT_GROUPS.movement.find((entry) => entry.key === 'avoid');
+
+  assert.ok(pursueNode && avoidNode, 'movement outputs should include pursue and avoid');
+  setNeuralGene(dnaA, 0, { source: 0, target: pursueNode.id, weight: 0.9 });
+  setNeuralGene(dnaB, 0, { source: 0, target: avoidNode.id, weight: 0.9 });
+
   const cellA = new Cell(0, 0, dnaA, 3);
   const cellB = new Cell(0, 0, dnaB, 3);
-  const inputs = [0.2, 0.4, 0.1, 0.3, 0.1, 0.2, 0.3, 0.1, 0.5, 0.0];
-  const logitsA1 = cellA.evaluatePolicy('movement-strategy', inputs, 3);
-  const logitsA2 = cellA.evaluatePolicy('movement-strategy', inputs, 3);
 
-  assert.is(Array.isArray(logitsA1), true);
-  assert.is(logitsA1.length, 3);
-  logitsA1.forEach((value, index) => {
-    approxEqual(value, logitsA2[index], 1e-9);
-  });
+  assert.ok(cellA.brain instanceof Brain, 'cellA should have an instantiated brain');
+  assert.ok(cellB.brain instanceof Brain, 'cellB should have an instantiated brain');
 
-  const logitsB = cellB.evaluatePolicy('movement-strategy', inputs, 3);
-  const identical = logitsA1.every((value, index) => Math.abs(value - logitsB[index]) < 1e-6);
+  const sensors = {
+    energy: 0.2,
+    effectiveDensity: 0.4,
+    allyFraction: 0.1,
+    enemyFraction: 0.3,
+    mateFraction: 0.15,
+    allySimilarity: 0.2,
+    enemySimilarity: 0.3,
+    mateSimilarity: 0.1,
+    ageFraction: 0.5,
+    eventPressure: 0.1,
+  };
 
-  assert.ok(!identical, 'different DNA should yield different policy logits');
+  const { values: valuesA1 } = cellA.brain.evaluateGroup('movement', sensors);
+  const { values: valuesA2 } = cellA.brain.evaluateGroup('movement', sensors);
+  const { values: valuesB } = cellB.brain.evaluateGroup('movement', sensors);
+
+  assert.ok(valuesA1 && valuesA2 && valuesB, 'brain evaluations should produce value maps');
+  approxEqual(valuesA1.pursue, valuesA2.pursue, 1e-9);
+  approxEqual(valuesA1.avoid, valuesA2.avoid, 1e-9);
+
+  const pursueDelta = Math.abs((valuesA1.pursue ?? 0) - (valuesB.pursue ?? 0));
+  const avoidDelta = Math.abs((valuesA1.avoid ?? 0) - (valuesB.avoid ?? 0));
+
+  assert.ok(
+    pursueDelta > 1e-6 || avoidDelta > 1e-6,
+    'different DNA should produce distinct movement outputs'
+  );
 });
 
 test('decideReproduction integrates neural policy with deterministic fallback', () => {
   const dnaA = new DNA(120, 200, 40);
   const dnaB = new DNA(200, 40, 160);
+  const acceptNode = OUTPUT_GROUPS.reproduction.find((entry) => entry.key === 'accept');
+
+  assert.ok(acceptNode, 'reproduction outputs should include accept');
+  setNeuralGene(dnaA, 0, { source: 0, target: acceptNode.id, weight: 0.5 });
+  setNeuralGene(dnaB, 0, { source: 0, target: acceptNode.id, weight: 0.25 });
   const cell = new Cell(0, 0, dnaA, 4);
   const partner = new Cell(0, 1, dnaB, 4);
 
@@ -58,6 +120,7 @@ test('decideReproduction integrates neural policy with deterministic fallback', 
 
   const fallbackCell = new Cell(0, 0, dnaA, 4);
 
+  fallbackCell.brain = null;
   fallbackCell.neurons = 0;
   const fallbackDecision = fallbackCell.decideReproduction(partner, context);
 
@@ -67,13 +130,26 @@ test('decideReproduction integrates neural policy with deterministic fallback', 
 
 test('neural evaluation contributes to cognitive maintenance cost', () => {
   const dna = new DNA(30, 200, 100);
+  const partnerDNA = new DNA(60, 90, 140);
+  const acceptNode = OUTPUT_GROUPS.reproduction.find((entry) => entry.key === 'accept');
+
+  assert.ok(acceptNode, 'reproduction outputs should include accept');
+  setNeuralGene(dna, 0, { source: 0, target: acceptNode.id, weight: 0.7 });
+  setNeuralGene(partnerDNA, 0, { source: 0, target: acceptNode.id, weight: 0.3 });
+
   const cell = new Cell(0, 0, dna, 6);
+  const partner = new Cell(0, 1, partnerDNA, 5);
 
   cell.age = cell.lifespan / 4;
-  const inputs = [0.5, 0.2, 0.3, 0.1, 0.2, 0.6, 0.4, 0.2, 0.3, 0.1];
-
-  cell.evaluatePolicy('movement-strategy', inputs, 3);
+  cell.decideReproduction(partner, {
+    localDensity: 0.25,
+    densityEffectMultiplier: 1,
+    maxTileEnergy: 10,
+    baseProbability: 0.55,
+  });
   const dynamicLoad = cell._neuralLoad;
+
+  assert.ok(dynamicLoad > 0, 'neural evaluation should add activation load');
   const context = { localDensity: 0.35, densityEffectMultiplier: 1.4, maxTileEnergy: 12 };
   const effDensity = clamp(context.localDensity * context.densityEffectMultiplier, 0, 1);
   const sen = typeof cell.dna.senescenceRate === 'function' ? cell.dna.senescenceRate() : 0;

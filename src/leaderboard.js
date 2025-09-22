@@ -7,6 +7,18 @@ export function computeLeaderboard(snapshot, topN = 5) {
   }
 
   const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
+  const brainSnapshots = Array.isArray(snapshot?.brainSnapshots) ? snapshot.brainSnapshots : [];
+  const brainLookup = new Map();
+
+  for (let i = 0; i < brainSnapshots.length; i++) {
+    const entry = brainSnapshots[i];
+
+    if (!entry) continue;
+
+    const key = `${entry.row},${entry.col}`;
+
+    if (!brainLookup.has(key)) brainLookup.set(key, entry);
+  }
   const topItems = [];
 
   const compareItems = (a, b) => {
@@ -41,6 +53,12 @@ export function computeLeaderboard(snapshot, topN = 5) {
       age: Number.isFinite(cell?.age) ? cell.age : 0,
       color: cell?.color,
     };
+    const key = `${entry.row},${entry.col}`;
+    const brain = brainLookup.get(key);
+
+    if (brain) {
+      item.brain = brain;
+    }
     let inserted = false;
 
     for (let index = 0; index < topItems.length; index += 1) {

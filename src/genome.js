@@ -1,4 +1,5 @@
 import { clamp, createRNG, randomRange } from './utils.js';
+import Brain, { NEURAL_GENE_BYTES } from './brain.js';
 
 /**
  * Gene loci mapping. The first three indices are reserved for RGB rendering,
@@ -37,7 +38,9 @@ export const GENE_LOCI = Object.freeze({
   COOPERATION: 28,
 });
 
-const DEFAULT_GENE_COUNT = Math.max(...Object.values(GENE_LOCI)) + 1;
+const BASE_GENE_COUNT = Math.max(...Object.values(GENE_LOCI)) + 1;
+const DEFAULT_NEURAL_CONNECTIONS = 16;
+const DEFAULT_TOTAL_GENE_COUNT = BASE_GENE_COUNT + DEFAULT_NEURAL_CONNECTIONS * NEURAL_GENE_BYTES;
 
 const clampGene = (value) => {
   if (Number.isNaN(value)) return 0;
@@ -47,7 +50,7 @@ const clampGene = (value) => {
 
 export class DNA {
   constructor(rOrGenes = 0, g = 0, b = 0, options = {}) {
-    let geneCount = options.geneCount ?? DEFAULT_GENE_COUNT;
+    let geneCount = options.geneCount ?? DEFAULT_TOTAL_GENE_COUNT;
     let genesInput = null;
 
     if (Array.isArray(rOrGenes) || rOrGenes instanceof Uint8Array) {
@@ -78,7 +81,7 @@ export class DNA {
     }
   }
 
-  static random(rng = Math.random, geneCount = DEFAULT_GENE_COUNT) {
+  static random(rng = Math.random, geneCount = DEFAULT_TOTAL_GENE_COUNT) {
     const genes = new Uint8Array(geneCount);
 
     for (let i = 0; i < geneCount; i++) {
@@ -153,6 +156,69 @@ export class DNA {
     }
 
     return createRNG(h >>> 0);
+  }
+
+  isLegacyGenome() {
+    const extraBytes = this.genes.length - BASE_GENE_COUNT;
+
+    return extraBytes < NEURAL_GENE_BYTES;
+  }
+
+  hasNeuralGenes() {
+    return !this.isLegacyGenome() && this.neuralGeneCount() > 0;
+  }
+
+  neuralGeneCount() {
+    const extraBytes = this.genes.length - BASE_GENE_COUNT;
+
+    if (extraBytes < NEURAL_GENE_BYTES) return 0;
+
+    return Math.floor(extraBytes / NEURAL_GENE_BYTES);
+  }
+
+  #decodeNeuralGene(index) {
+    const start = BASE_GENE_COUNT + index * NEURAL_GENE_BYTES;
+
+    if (start < BASE_GENE_COUNT || start + NEURAL_GENE_BYTES > this.genes.length) {
+      return null;
+    }
+
+    const b0 = this.genes[start];
+    const b1 = this.genes[start + 1];
+    const b2 = this.genes[start + 2];
+    const b3 = this.genes[start + 3];
+    const gene = (((b0 << 24) >>> 0) | (b1 << 16) | (b2 << 8) | b3) >>> 0;
+    const sourceId = (gene >>> 24) & 0xff;
+    const targetId = (gene >>> 16) & 0xff;
+    const weightRaw = (gene >>> 4) & 0xfff; // 12 bits
+    const activationType = (gene >>> 1) & 0x7;
+    const enabled = (gene & 0x1) === 1;
+    const weight = clamp(weightRaw / 2047.5 - 1, -1, 1);
+
+    return {
+      index,
+      raw: gene,
+      sourceId,
+      targetId,
+      weight,
+      activationType,
+      enabled,
+    };
+  }
+
+  neuralGenes() {
+    if (!this.hasNeuralGenes()) return [];
+
+    const count = this.neuralGeneCount();
+    const genes = [];
+
+    for (let i = 0; i < count; i++) {
+      const gene = this.#decodeNeuralGene(i);
+
+      if (gene) genes.push(gene);
+    }
+
+    return genes;
   }
 
   // Expand genome to a 6x5 weight matrix in [-1,1]
@@ -338,6 +404,27 @@ export class DNA {
   }
 
   neurons() {
+    if (this.hasNeuralGenes()) {
+      const sensorLimit = Brain?.SENSOR_COUNT ?? 0;
+      const nodes = new Set();
+      const genes = this.neuralGenes();
+
+      for (let i = 0; i < genes.length; i++) {
+        const gene = genes[i];
+
+        if (!gene || gene.enabled === false) continue;
+
+        if (Number.isFinite(gene.sourceId) && gene.sourceId >= sensorLimit) {
+          nodes.add(gene.sourceId);
+        }
+        if (Number.isFinite(gene.targetId) && gene.targetId >= sensorLimit) {
+          nodes.add(gene.targetId);
+        }
+      }
+
+      return Math.max(1, nodes.size || 1);
+    }
+
     const rnd = this.prngFor('neurons');
     const neuro = this.geneFraction(GENE_LOCI.NEURAL);
 
@@ -521,7 +608,7 @@ export class DNA {
     const blendB = typeof other?.crossoverMix === 'function' ? other.crossoverMix() : 0.5;
     const blendProbability = clamp((blendA + blendB) / 2, 0, 1);
     const range = Math.max(0, mutationRange | 0);
-    const geneCount = Math.max(this.length, other?.length ?? 0, DEFAULT_GENE_COUNT);
+    const geneCount = Math.max(this.length, other?.length ?? 0, DEFAULT_TOTAL_GENE_COUNT);
 
     const mixGene = (a, b) => {
       let v;
