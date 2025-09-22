@@ -6,6 +6,7 @@ let DNA;
 let clamp;
 let lerp;
 let randomRange;
+let createRNG;
 
 function investmentFor(energy, investFrac, starvation) {
   const desired = Math.max(0, Math.min(energy, energy * investFrac));
@@ -40,7 +41,7 @@ function expectClose(actual, expected, tolerance = 1e-12, message = 'values diff
 test.before(async () => {
   ({ default: Cell } = await import('../src/cell.js'));
   ({ DNA } = await import('../src/genome.js'));
-  ({ clamp, lerp, randomRange } = await import('../src/utils.js'));
+  ({ clamp, lerp, randomRange, createRNG } = await import('../src/utils.js'));
   if (typeof global.window === 'undefined') global.window = globalThis;
   if (!window.GridManager) window.GridManager = {};
   if (typeof window.GridManager.maxTileEnergy !== 'number') {
@@ -48,8 +49,10 @@ test.before(async () => {
   }
 });
 
-function predictDeterministicOffspring(dnaA, dnaB, mutationChance, mutationRange) {
-  const rng = dnaA.prngFor('crossover');
+function predictDeterministicOffspring(dnaA, dnaB, mutationChance, mutationRange, entropyRoll = 0) {
+  const parentSeed = (dnaA.seed() ^ dnaB.seed()) >>> 0;
+  const entropy = Math.floor(entropyRoll * 0xffffffff) >>> 0;
+  const rng = createRNG((parentSeed ^ entropy) >>> 0);
   const blendA = typeof dnaA.crossoverMix === 'function' ? dnaA.crossoverMix() : 0.5;
   const blendB = typeof dnaB.crossoverMix === 'function' ? dnaB.crossoverMix() : 0.5;
   const blendProbability = clamp((blendA + blendB) / 2, 0, 1);
@@ -231,8 +234,9 @@ test('breed applies deterministic crossover and honors forced mutation', () => {
 
   const chance = 1;
   const range = 12;
-  const expectedGenes = predictDeterministicOffspring(dnaA, dnaB, chance, range);
-  const child = withMockedRandom([0.5], () => Cell.breed(parentA, parentB));
+  const entropyRoll = 0.25;
+  const expectedGenes = predictDeterministicOffspring(dnaA, dnaB, chance, range, entropyRoll);
+  const child = withMockedRandom([entropyRoll, 0.5], () => Cell.breed(parentA, parentB));
 
   assert.is(child.dna.length, expectedGenes.length);
   for (let i = 0; i < expectedGenes.length; i++) {

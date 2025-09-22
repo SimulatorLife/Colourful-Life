@@ -516,7 +516,9 @@ export class DNA {
   }
 
   reproduceWith(other, mutationChance = 0.15, mutationRange = 12) {
-    const rng = this.prngFor('crossover');
+    const parentSeed = (this.seed() ^ (other?.seed?.() ?? 0)) >>> 0;
+    const entropy = Math.floor(Math.random() * 0xffffffff) >>> 0;
+    const rng = createRNG((parentSeed ^ entropy) >>> 0);
     const blendA = typeof this.crossoverMix === 'function' ? this.crossoverMix() : 0.5;
     const blendB = typeof other?.crossoverMix === 'function' ? other.crossoverMix() : 0.5;
     const blendProbability = clamp((blendA + blendB) / 2, 0, 1);
