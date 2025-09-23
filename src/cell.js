@@ -915,17 +915,16 @@ export default class Cell {
     const defPower = defender.energy * (defender.dna.combatPower?.() ?? 1);
 
     if (atkPower >= defPower) {
-      manager.grid[targetRow][targetCol] = attacker;
-      manager.grid[attackerRow][attackerCol] = null;
-      attacker.row = targetRow;
-      attacker.col = targetCol;
+      manager.clearCell(targetRow, targetCol);
+      manager.clearCell(attackerRow, attackerCol);
+      manager.setCell(targetRow, targetCol, attacker);
       manager.consumeEnergy(attacker, targetRow, targetCol);
       stats?.onFight?.();
       stats?.onDeath?.();
       attacker.fightsWon = (attacker.fightsWon || 0) + 1;
       defender.fightsLost = (defender.fightsLost || 0) + 1;
     } else {
-      manager.grid[attackerRow][attackerCol] = null;
+      manager.clearCell(attackerRow, attackerCol);
       stats?.onFight?.();
       stats?.onDeath?.();
       defender.fightsWon = (defender.fightsWon || 0) + 1;

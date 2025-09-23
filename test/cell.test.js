@@ -267,6 +267,18 @@ test('fightEnemy moves attacker into target tile and updates its coordinates aft
     consumeEnergy: (cell, row, col) => {
       consumeCalls.push({ cell, row, col });
     },
+    clearCell(row, col) {
+      if (this.grid[row] && this.grid[row][col]) {
+        this.grid[row][col] = null;
+      }
+    },
+    setCell(row, col, cell) {
+      if (cell) {
+        cell.row = row;
+        cell.col = col;
+      }
+      this.grid[row][col] = cell;
+    },
   };
   let fights = 0;
   let deaths = 0;
