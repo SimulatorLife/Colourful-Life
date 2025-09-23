@@ -345,8 +345,8 @@ export default class UIManager {
       toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
     };
 
-    header.addEventListener('click', (e) => {
-      if (e.target === toggle || e.target === heading) toggleCollapsed();
+    header.addEventListener('click', () => {
+      toggleCollapsed();
     });
     toggle.addEventListener('click', (e) => {
       e.stopPropagation();
