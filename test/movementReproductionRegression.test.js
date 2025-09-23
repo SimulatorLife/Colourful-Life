@@ -313,4 +313,46 @@ test('processCell continues to combat when reproduction fails', async () => {
   assert.is(births, 0);
 });
 
+test('density counts stay consistent through spawn, movement, and removal', async () => {
+  const { default: GridManager } = await import('../src/gridManager.js');
+  const { default: DNA } = await import('../src/genome.js');
+
+  const originalInit = GridManager.prototype.init;
+
+  try {
+    GridManager.prototype.init = function noopInit() {};
+    const gm = new GridManager(2, 2, {
+      eventManager: { activeEvents: [] },
+      stats: { onBirth() {}, onDeath() {}, onFight() {}, onCooperate() {} },
+    });
+
+    const dna = new DNA(1, 1, 1);
+
+    gm.spawnCell(0, 0, { dna });
+
+    let density = gm.computeDensityGrid();
+
+    assert.ok(Math.abs(density[0][1] - 1 / 3) < 1e-6);
+    assert.ok(Math.abs(density[1][0] - 1 / 3) < 1e-6);
+    assert.ok(Math.abs(density[1][1] - 1 / 3) < 1e-6);
+
+    const moved = gm.boundTryMove(gm.grid, 0, 0, 0, 1, gm.rows, gm.cols);
+
+    assert.ok(moved);
+
+    density = gm.computeDensityGrid();
+
+    assert.ok(Math.abs(density[0][0] - 1 / 3) < 1e-6);
+    assert.ok(Math.abs(density[0][1]) < 1e-6);
+
+    gm.removeCell(0, 1);
+
+    density = gm.computeDensityGrid();
+
+    assert.ok(density.every((row) => row.every((value) => Math.abs(value) < 1e-6)));
+  } finally {
+    GridManager.prototype.init = originalInit;
+  }
+});
+
 test.run();
