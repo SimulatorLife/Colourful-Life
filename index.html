@@ -16,6 +16,7 @@
       import EventManager from './src/eventManager.js';
       import Stats from './src/stats.js';
       import GridManager from './src/gridManager.js';
+      import SelectionManager from './src/selectionManager.js';
       import { drawOverlays } from './src/overlays.js';
       import { computeLeaderboard } from './src/leaderboard.js';
 
@@ -30,7 +31,14 @@
       const eventManager = new EventManager(rows, cols);
       const stats = new Stats();
 
-      const grid = new GridManager(rows, cols, { eventManager, ctx, cellSize, stats });
+      const selectionManager = new SelectionManager(rows, cols);
+      const grid = new GridManager(rows, cols, {
+        eventManager,
+        ctx,
+        cellSize,
+        stats,
+        selectionManager,
+      });
       let lastSnapshot = grid.getLastSnapshot();
       let pendingSlowUiUpdate = false;
       let lastMetrics = null;
@@ -39,6 +47,8 @@
         '#app',
         {
           burst: () => grid.burstRandomCells({ count: 200, radius: 6 }),
+          selectionManager,
+          getCellSize: () => cellSize,
         },
         {
           canvasElement: canvas,
@@ -89,6 +99,7 @@
           snapshot: lastSnapshot,
           activeEvents: eventManager.activeEvents,
           getEventColor: eventManager.getColor?.bind(eventManager),
+          selectionManager,
         });
         if (pendingSlowUiUpdate && uiManager.shouldRenderSlowUi(now)) {
           if (lastMetrics) uiManager.renderMetrics(stats, lastMetrics);

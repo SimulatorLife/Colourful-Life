@@ -43,6 +43,7 @@ export default class Stats {
     this.traitHistory = { presence: {}, average: {} };
     this.matingDiversityThreshold = 0.45;
     this.lastMatingDebug = null;
+    this.lastBlockedReproduction = null;
 
     for (let i = 0; i < TRAIT_KEYS.length; i++) {
       const key = TRAIT_KEYS[i];
@@ -67,8 +68,11 @@ export default class Stats {
       appetiteSum: 0,
       selectionModes: { curiosity: 0, preference: 0 },
       poolSizeSum: 0,
+      blocks: 0,
+      lastBlockReason: null,
     };
     this.lastMatingDebug = null;
+    this.lastBlockedReproduction = null;
   }
 
   onBirth() {
@@ -127,6 +131,8 @@ export default class Stats {
       appetiteSum: 0,
       selectionModes: { curiosity: 0, preference: 0 },
       poolSizeSum: 0,
+      blocks: 0,
+      lastBlockReason: null,
     };
     const choiceCount = mateStats.choices || 0;
     const successCount = mateStats.successes || 0;
@@ -167,6 +173,8 @@ export default class Stats {
       meanDiversityAppetite: meanAppetite,
       curiositySelections: mateStats.selectionModes.curiosity,
       lastMating: this.lastMatingDebug,
+      blockedMatings: mateStats.blocks || 0,
+      lastBlockedReproduction: this.lastBlockedReproduction,
     };
   }
 
@@ -188,6 +196,8 @@ export default class Stats {
         appetiteSum: 0,
         selectionModes: { curiosity: 0, preference: 0 },
         poolSizeSum: 0,
+        blocks: 0,
+        lastBlockReason: null,
       };
     }
 
@@ -215,6 +225,34 @@ export default class Stats {
       poolSize,
       success,
       threshold,
+      blockedReason: this.mating.lastBlockReason || undefined,
+    };
+    this.mating.lastBlockReason = null;
+  }
+
+  recordReproductionBlocked({ reason, parentA = null, parentB = null, spawn = null } = {}) {
+    if (!this.mating) {
+      this.mating = {
+        choices: 0,
+        successes: 0,
+        diverseChoices: 0,
+        diverseSuccesses: 0,
+        appetiteSum: 0,
+        selectionModes: { curiosity: 0, preference: 0 },
+        poolSizeSum: 0,
+        blocks: 0,
+        lastBlockReason: null,
+      };
+    }
+
+    this.mating.blocks = (this.mating.blocks || 0) + 1;
+    this.mating.lastBlockReason = reason || 'Blocked by reproductive zone';
+    this.lastBlockedReproduction = {
+      reason: this.mating.lastBlockReason,
+      parentA,
+      parentB,
+      spawn,
+      tick: this.totals.ticks,
     };
   }
 
