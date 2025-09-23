@@ -962,6 +962,12 @@ export default class UIManager {
       { label: 'Growth', property: 'sparkGrowth', color: '#dd8' },
       { label: 'Event Strength', property: 'sparkEvent', color: '#b85' },
       { label: 'Mutation Multiplier', property: 'sparkMutation', color: '#6c5ce7' },
+      { label: 'Diverse Pairing Rate', property: 'sparkDiversePairing', color: '#9b59b6' },
+      {
+        label: 'Mean Diversity Appetite',
+        property: 'sparkDiversityAppetite',
+        color: '#1abc9c',
+      },
       ...traitSparkDescriptors,
     ];
 
@@ -1134,6 +1140,23 @@ export default class UIManager {
       title: 'Estimated mean pairwise genetic distance',
     });
 
+    const mateChoicesValue = Number.isFinite(s.mateChoices) ? String(s.mateChoices) : '—';
+    const successfulMatingsValue = Number.isFinite(s.successfulMatings)
+      ? String(s.successfulMatings)
+      : '—';
+    const diverseChoiceRateValue = Number.isFinite(s.diverseChoiceRate)
+      ? `${(s.diverseChoiceRate * 100).toFixed(0)}%`
+      : '—';
+    const diverseMatingRateValue = Number.isFinite(s.diverseMatingRate)
+      ? `${(s.diverseMatingRate * 100).toFixed(0)}%`
+      : '—';
+    const meanDiversityAppetiteValue = Number.isFinite(s.meanDiversityAppetite)
+      ? s.meanDiversityAppetite.toFixed(2)
+      : '—';
+    const curiositySelectionsValue = Number.isFinite(s.curiositySelections)
+      ? String(s.curiositySelections)
+      : '—';
+
     if (typeof s.blockedMatings === 'number') {
       this.#appendControlRow(this.metricsBox, {
         label: 'Blocked Matings',
@@ -1149,6 +1172,37 @@ export default class UIManager {
         title: 'Most recent reason reproduction was denied',
       });
     }
+
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Mate Choices',
+      value: mateChoicesValue,
+      title: 'Potential mates evaluated by the population this tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Successful Matings',
+      value: successfulMatingsValue,
+      title: 'Pairs that successfully reproduced this tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Diverse Choice Rate',
+      value: diverseChoiceRateValue,
+      title: 'Share of mate choices favoring genetically diverse partners this tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Diverse Mating Rate',
+      value: diverseMatingRateValue,
+      title: 'Share of completed matings rated as genetically diverse this tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Mean Diversity Appetite',
+      value: meanDiversityAppetiteValue,
+      title: 'Average preferred genetic difference when selecting a mate',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Curiosity Selections',
+      value: curiositySelectionsValue,
+      title: 'Mate selections driven by curiosity-driven exploration this tick',
+    });
 
     const traitPresence = stats?.traitPresence;
 
@@ -1199,6 +1253,8 @@ export default class UIManager {
     this.drawSpark(this.sparkGrowth, stats.history.growth, '#dd8');
     this.drawSpark(this.sparkEvent, stats.history.eventStrength, '#b85');
     this.drawSpark(this.sparkMutation, stats.history.mutationMultiplier, '#6c5ce7');
+    this.drawSpark(this.sparkDiversePairing, stats.history.diversePairingRate, '#9b59b6');
+    this.drawSpark(this.sparkDiversityAppetite, stats.history.meanDiversityAppetite, '#1abc9c');
 
     if (Array.isArray(this.traitSparkDescriptors)) {
       this.traitSparkDescriptors.forEach(({ property, traitKey, traitType, color }) => {
