@@ -371,6 +371,16 @@ export default class UIManager {
       return grid;
     };
 
+    const addSectionHeading = (text) => {
+      const heading = document.createElement('h4');
+
+      heading.className = 'control-section-title';
+      heading.textContent = text;
+      body.appendChild(heading);
+
+      return heading;
+    };
+
     const buttonRow = body.appendChild(document.createElement('div'));
 
     buttonRow.className = 'control-button-row';
@@ -669,17 +679,22 @@ export default class UIManager {
       }),
     ];
 
+    addSectionHeading('Similarity Thresholds');
     const thresholdsGroup = addGrid();
 
     thresholdConfigs.forEach((cfg) => renderSlider(cfg, thresholdsGroup));
 
+    addSectionHeading('Environmental Events');
     const eventsGroup = addGrid();
 
     eventConfigs.forEach((cfg) => renderSlider(cfg, eventsGroup));
 
+    addSectionHeading('General Settings');
+    const generalGroup = addGrid();
+
     generalConfigs
       .filter((cfg) => cfg.position === 'beforeOverlays')
-      .forEach((cfg) => renderSlider(cfg));
+      .forEach((cfg) => renderSlider(cfg, generalGroup));
 
     // Overlay toggles
     const overlayHeader = document.createElement('h4');
@@ -896,13 +911,14 @@ export default class UIManager {
       this.#updateZoneSummary();
     }
 
+    addSectionHeading('Energy Dynamics');
     const energyGroup = addGrid();
 
     energyConfigs.forEach((cfg) => renderSlider(cfg, energyGroup));
 
     generalConfigs
       .filter((cfg) => cfg.position === 'afterEnergy')
-      .forEach((cfg) => renderSlider(cfg));
+      .forEach((cfg) => renderSlider(cfg, generalGroup));
 
     return panel;
   }

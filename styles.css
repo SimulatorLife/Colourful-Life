@@ -194,8 +194,14 @@ canvas {
   gap: var(--space-sm);
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
+.control-section-title,
 .overlay-header {
   margin: 12px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-subtle);
 }
 .control-name {
   font-size: 12px;
