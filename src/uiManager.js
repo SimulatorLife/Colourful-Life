@@ -1305,18 +1305,55 @@ export default class UIManager {
     top.forEach((e, i) => {
       const label = `#${i + 1}`;
       const smoothed = Number.isFinite(e.smoothedFitness) ? e.smoothedFitness : e.fitness;
-      const value =
-        `avg ${smoothed.toFixed(2)}` +
-        ` | inst ${e.fitness.toFixed(2)}` +
-        ` | off ${e.offspring}` +
-        ` | win ${e.fightsWon}` +
-        ` | age ${e.age}`;
+      const valueParts = [
+        `avg ${smoothed.toFixed(2)}`,
+        `inst ${e.fitness.toFixed(2)}`,
+        `off ${e.offspring}`,
+        `win ${e.fightsWon}`,
+        `age ${e.age}`,
+      ];
+      const baseValue = valueParts.join(' | ');
 
-      this.#appendControlRow(this.leaderBody, {
+      const brainStats = [];
+      const brain = e.brain;
+
+      if (brain) {
+        if (Number.isFinite(brain.neuronCount)) {
+          brainStats.push(`neurons ${brain.neuronCount}`);
+        }
+        if (Number.isFinite(brain.connectionCount)) {
+          brainStats.push(`connections ${brain.connectionCount}`);
+        }
+        if (Number.isFinite(brain.fitness)) {
+          brainStats.push(`brain ${brain.fitness.toFixed(2)}`);
+        }
+      }
+
+      const titleParts = [...valueParts];
+
+      if (brainStats.length > 0) {
+        titleParts.push(...brainStats);
+      }
+
+      const row = this.#appendControlRow(this.leaderBody, {
         label,
-        value,
+        value: baseValue,
+        title: titleParts.join(' | '),
         color: e.color,
       });
+
+      if (brainStats.length > 0) {
+        const detail = document.createElement('div');
+
+        detail.className = 'leaderboard-brain-info';
+        detail.textContent = brainStats.join(' | ');
+
+        const valueEl = row?.querySelector('.control-value');
+
+        if (valueEl) {
+          valueEl.appendChild(detail);
+        }
+      }
     });
   }
 }
