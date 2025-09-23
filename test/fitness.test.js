@@ -2,6 +2,7 @@ const { test } = require('uvu');
 const assert = require('uvu/assert');
 
 const computeFitnessModulePromise = import('../src/fitness.mjs');
+const configModulePromise = import('../src/config.js');
 
 test('computeFitness defaults to GridManager maxTileEnergy', async () => {
   global.GridManager = { maxTileEnergy: 8 };
@@ -23,6 +24,7 @@ test('computeFitness defaults to GridManager maxTileEnergy', async () => {
     cell.age / cell.lifespan;
 
   assert.is(result, expected);
+  delete global.GridManager;
 });
 
 test('computeFitness uses provided maxTileEnergy parameter', async () => {
@@ -41,6 +43,7 @@ test('computeFitness uses provided maxTileEnergy parameter', async () => {
   const expected = (1 - 0) * 0.5 + 2 * 1.5 + 1 / 4 + cell.age / cell.lifespan;
 
   assert.is(result, expected);
+  delete global.GridManager;
 });
 
 test('computeFitness handles minimal stats with explicit max energy', async () => {
@@ -57,6 +60,28 @@ test('computeFitness handles minimal stats with explicit max energy', async () =
   const result = computeFitness(cell, 5);
 
   assert.is(result, 0);
+});
+
+test('computeFitness falls back to config default max energy when no manager is available', async () => {
+  delete global.GridManager;
+  const [{ computeFitness }, { MAX_TILE_ENERGY }] = await Promise.all([
+    computeFitnessModulePromise,
+    configModulePromise,
+  ]);
+
+  const cell = {
+    fightsWon: 1,
+    fightsLost: 0,
+    offspring: 0,
+    energy: MAX_TILE_ENERGY,
+    age: 0,
+    lifespan: 1,
+  };
+
+  const result = computeFitness(cell);
+  const expected = (1 - 0) * 0.5 + 0 * 1.5 + MAX_TILE_ENERGY / MAX_TILE_ENERGY + 0 / 1;
+
+  assert.is(result, expected);
 });
 
 test.run();
