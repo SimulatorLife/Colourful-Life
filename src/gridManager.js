@@ -186,7 +186,11 @@ export default class GridManager {
     return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
   }
 
-  constructor(rows, cols, { eventManager, ctx = null, cellSize = 8, stats, maxTileEnergy } = {}) {
+  constructor(
+    rows,
+    cols,
+    { eventManager, ctx = null, cellSize = 8, stats, maxTileEnergy, selectionManager } = {}
+  ) {
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
@@ -201,6 +205,7 @@ export default class GridManager {
     this.ctx = ctx || window.ctx;
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
+    this.selectionManager = selectionManager || null;
     this.densityGrid = null;
     this.lastSnapshot = null;
     this.lingerPenalty = 0;
@@ -243,6 +248,10 @@ export default class GridManager {
       lingerPenalty: this.lingerPenalty,
       penalizeOnBounds: true,
     };
+  }
+
+  setSelectionManager(selectionManager) {
+    this.selectionManager = selectionManager || null;
   }
 
   setLingerPenalty(value = 0) {
@@ -936,8 +945,29 @@ export default class GridManager {
     const selectionKind = selectedMate && selectedMate.target ? selectionMode : 'legacy';
 
     let reproduced = false;
+    const zoneParents = this.selectionManager
+      ? this.selectionManager.validateReproductionArea({
+          parentA: { row: parentRow, col: parentCol },
+          parentB: { row: mateRow, col: mateCol },
+        })
+      : { allowed: true };
 
-    if (randomPercent(reproProb) && cell.energy >= thrA && bestMate.target.energy >= thrB) {
+    let blockedInfo = null;
+
+    if (!zoneParents.allowed) {
+      blockedInfo = {
+        reason: zoneParents.reason,
+        parentA: { row: parentRow, col: parentCol },
+        parentB: { row: mateRow, col: mateCol },
+      };
+    }
+
+    if (
+      !blockedInfo &&
+      randomPercent(reproProb) &&
+      cell.energy >= thrA &&
+      bestMate.target.energy >= thrB
+    ) {
       const candidates = [];
       const candidateSet = new Set();
       const addCandidate = (r, c) => {
@@ -968,19 +998,45 @@ export default class GridManager {
       addNeighbors(mateRow, mateCol);
 
       const freeSlots = candidates.filter(({ r, c }) => !this.grid[r][c] && !this.isObstacle(r, c));
+      const eligibleSlots =
+        this.selectionManager && freeSlots.length > 0 && this.selectionManager.hasActiveZones()
+          ? freeSlots.filter(({ r, c }) => this.selectionManager.isInActiveZone(r, c))
+          : freeSlots;
+      const slotPool = eligibleSlots.length > 0 ? eligibleSlots : freeSlots;
 
-      if (freeSlots.length > 0) {
-        const spawn = freeSlots[Math.floor(randomRange(0, freeSlots.length))];
-        const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier);
+      if (slotPool.length > 0) {
+        const spawn = slotPool[Math.floor(randomRange(0, slotPool.length))];
+        const zoneCheck = this.selectionManager
+          ? this.selectionManager.validateReproductionArea({
+              parentA: { row: parentRow, col: parentCol },
+              parentB: { row: mateRow, col: mateCol },
+              spawn: { row: spawn.r, col: spawn.c },
+            })
+          : { allowed: true };
 
-        if (offspring) {
-          offspring.row = spawn.r;
-          offspring.col = spawn.c;
-          this.grid[spawn.r][spawn.c] = offspring;
-          stats.onBirth();
-          reproduced = true;
+        if (!zoneCheck.allowed) {
+          blockedInfo = {
+            reason: zoneCheck.reason,
+            parentA: { row: parentRow, col: parentCol },
+            parentB: { row: mateRow, col: mateCol },
+            spawn: { row: spawn.r, col: spawn.c },
+          };
+        } else {
+          const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier);
+
+          if (offspring) {
+            offspring.row = spawn.r;
+            offspring.col = spawn.c;
+            this.grid[spawn.r][spawn.c] = offspring;
+            stats.onBirth();
+            reproduced = true;
+          }
         }
       }
+    }
+
+    if (blockedInfo && stats?.recordReproductionBlocked) {
+      stats.recordReproductionBlocked(blockedInfo);
     }
 
     if (stats?.recordMateChoice) {
@@ -998,7 +1054,7 @@ export default class GridManager {
       });
     }
 
-    return reproduced;
+    return reproduced || Boolean(blockedInfo);
   }
 
   handleCombat(row, col, cell, { enemies, society = [] }, { stats, densityEffectMultiplier }) {

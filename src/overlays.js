@@ -210,6 +210,39 @@ function drawDensityLegend(ctx, cellSize, cols, rows, minDensity, maxDensity) {
   ctx.restore();
 }
 
+function drawSelectionZones(selectionManager, ctx, cellSize) {
+  if (!selectionManager?.hasActiveZones()) return;
+
+  const zones = selectionManager.getActiveZones();
+  const rows = selectionManager.rows;
+  const cols = selectionManager.cols;
+
+  if (!Array.isArray(zones) || zones.length === 0) return;
+
+  ctx.save();
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      let color = null;
+
+      for (let i = 0; i < zones.length; i++) {
+        const zone = zones[i];
+
+        if (zone.contains(r, c)) {
+          color = zone.color || 'rgba(255,255,255,0.2)';
+
+          break;
+        }
+      }
+
+      if (!color) continue;
+
+      ctx.fillStyle = color;
+      ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+    }
+  }
+  ctx.restore();
+}
+
 export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   const {
     showEnergy,
@@ -221,13 +254,18 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     getEventColor,
     snapshot: providedSnapshot,
     mutationMultiplier,
+    selectionManager: explicitSelection,
   } = opts;
   let snapshot = providedSnapshot;
+  const selectionManager = explicitSelection || grid?.selectionManager;
 
   if (Array.isArray(activeEvents) && activeEvents.length > 0) {
     drawEventOverlays(ctx, cellSize, activeEvents, getEventColor);
   }
 
+  if (selectionManager) {
+    drawSelectionZones(selectionManager, ctx, cellSize);
+  }
   if (showObstacles) drawObstacleMask(grid, ctx, cellSize);
 
   if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);

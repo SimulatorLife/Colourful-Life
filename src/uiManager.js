@@ -13,6 +13,18 @@ export default class UIManager {
     this.obstaclePresets = Array.isArray(obstaclePresets) ? obstaclePresets : [];
     this.obstacleScenarios = Array.isArray(obstacleScenarios) ? obstacleScenarios : [];
     this.paused = false;
+    this.selectionManager = actions.selectionManager || null;
+    this.getCellSize =
+      typeof actions.getCellSize === 'function' ? actions.getCellSize.bind(actions) : () => 1;
+    this.selectionDrawingEnabled = false;
+    this.selectionDragStart = null;
+    this.canvasElement = null;
+    this.selectionDrawingActive = false;
+    this.selectionDragEnd = null;
+    this.drawZoneButton = null;
+    this.zoneSummaryEl = null;
+    this.patternCheckboxes = {};
+    this._selectionListenersInstalled = false;
 
     // Settings with sensible defaults
     this.societySimilarity = UI_SLIDER_CONFIG.societySimilarity.default;
@@ -73,11 +85,13 @@ export default class UIManager {
     const targetCanvas = this.#resolveNode(canvasElement);
 
     if (!(targetCanvas instanceof HTMLElement)) return;
+    this.canvasElement = targetCanvas;
     const anchor =
       this.#resolveNode(options.before) || this.#resolveNode(options.insertBefore) || targetCanvas;
 
     this.#ensureMainRowMounted(anchor);
     this.canvasContainer.appendChild(targetCanvas);
+    this.#installRegionDrawing();
   }
 
   #ensureMainRowMounted(anchor) {
@@ -98,6 +112,150 @@ export default class UIManager {
     }
 
     return null;
+  }
+
+  #scheduleUpdate() {
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(this.updateCallback);
+    } else if (typeof this.updateCallback === 'function') {
+      this.updateCallback();
+    }
+  }
+
+  #setDrawingEnabled(enabled) {
+    this.selectionDrawingEnabled = Boolean(enabled);
+
+    if (this.drawZoneButton) {
+      this.drawZoneButton.classList.toggle('active', this.selectionDrawingEnabled);
+      this.drawZoneButton.textContent = this.selectionDrawingEnabled
+        ? 'Cancel Drawing'
+        : 'Draw Custom Zone';
+    }
+
+    if (!this.selectionDrawingEnabled) {
+      this.selectionDragStart = null;
+      this.selectionDragEnd = null;
+      this.selectionDrawingActive = false;
+    }
+  }
+
+  #toggleRegionDrawing(nextState) {
+    const state = typeof nextState === 'boolean' ? nextState : !this.selectionDrawingEnabled;
+
+    this.#setDrawingEnabled(state);
+  }
+
+  #updateZoneSummary() {
+    if (!this.zoneSummaryEl) return;
+    const summary = this.selectionManager
+      ? this.selectionManager.describeActiveZones()
+      : 'All tiles eligible';
+
+    this.zoneSummaryEl.textContent = `Active zones: ${summary}`;
+  }
+
+  #canvasToGrid(event) {
+    if (!this.canvasElement) return null;
+
+    const rect = this.canvasElement.getBoundingClientRect();
+    const cellSize = Math.max(1, this.getCellSize());
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const col = Math.floor(x / cellSize);
+    const row = Math.floor(y / cellSize);
+    const maxCols = Math.floor(this.canvasElement.width / cellSize);
+    const maxRows = Math.floor(this.canvasElement.height / cellSize);
+
+    if (col < 0 || row < 0 || col >= maxCols || row >= maxRows) return null;
+
+    return { row, col };
+  }
+
+  #installRegionDrawing() {
+    if (!this.canvasElement || !this.selectionManager || this._selectionListenersInstalled) return;
+
+    this.selectionDrawingActive = false;
+    this.selectionDragEnd = null;
+
+    const canvas = this.canvasElement;
+    const handlePointerDown = (event) => {
+      if (!this.selectionDrawingEnabled) return;
+      const start = this.#canvasToGrid(event);
+
+      if (!start) return;
+
+      event.preventDefault();
+      this.selectionDrawingActive = true;
+      this.selectionDragStart = start;
+      this.selectionDragEnd = start;
+      if (typeof canvas.setPointerCapture === 'function') canvas.setPointerCapture(event.pointerId);
+    };
+
+    const handlePointerMove = (event) => {
+      if (!this.selectionDrawingActive || !this.selectionDrawingEnabled) return;
+      const point = this.#canvasToGrid(event);
+
+      if (point) this.selectionDragEnd = point;
+    };
+
+    const finalizeDrawing = (event) => {
+      if (!this.selectionDrawingActive) return;
+
+      event.preventDefault();
+      if (typeof canvas.releasePointerCapture === 'function') {
+        try {
+          canvas.releasePointerCapture(event.pointerId);
+        } catch (err) {
+          // ignore release errors
+        }
+      }
+
+      const end = this.#canvasToGrid(event) || this.selectionDragEnd;
+      const start = this.selectionDragStart;
+
+      if (start && end) {
+        const zone = this.selectionManager.addCustomRectangle(
+          start.row,
+          start.col,
+          end.row,
+          end.col
+        );
+
+        if (zone) {
+          this.#updateZoneSummary();
+          this.#scheduleUpdate();
+        }
+      }
+
+      this.selectionDrawingActive = false;
+      this.selectionDragStart = null;
+      this.selectionDragEnd = null;
+      this.#setDrawingEnabled(false);
+    };
+
+    const cancelDrawing = (event) => {
+      if (!this.selectionDrawingActive) return;
+      if (typeof canvas.releasePointerCapture === 'function') {
+        try {
+          canvas.releasePointerCapture(event.pointerId);
+        } catch (err) {
+          // ignore release errors
+        }
+      }
+
+      this.selectionDrawingActive = false;
+      this.selectionDragStart = null;
+      this.selectionDragEnd = null;
+      this.#setDrawingEnabled(false);
+    };
+
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    canvas.addEventListener('pointermove', handlePointerMove);
+    canvas.addEventListener('pointerup', finalizeDrawing);
+    canvas.addEventListener('pointerleave', finalizeDrawing);
+    canvas.addEventListener('pointercancel', cancelDrawing);
+
+    this._selectionListenersInstalled = true;
   }
 
   // Reusable checkbox row helper
@@ -683,6 +841,61 @@ export default class UIManager {
       renderSlider(lingerSlider, obstacleGrid);
     }
 
+    if (this.selectionManager) {
+      const zoneHeader = document.createElement('h4');
+
+      zoneHeader.textContent = 'Reproductive Zones';
+      zoneHeader.className = 'overlay-header';
+      body.appendChild(zoneHeader);
+
+      const zoneGrid = addGrid('control-grid--compact');
+      const patterns = this.selectionManager.getPatterns();
+
+      patterns.forEach((pattern) => {
+        const checkbox = this.#addCheckbox(
+          zoneGrid,
+          pattern.name,
+          pattern.description || '',
+          pattern.active,
+          (checked) => {
+            this.selectionManager.togglePattern(pattern.id, checked);
+            this.#updateZoneSummary();
+            this.#scheduleUpdate();
+          }
+        );
+
+        this.patternCheckboxes[pattern.id] = checkbox;
+      });
+
+      const zoneButtons = document.createElement('div');
+
+      zoneButtons.className = 'control-button-row';
+      this.drawZoneButton = document.createElement('button');
+      this.drawZoneButton.textContent = 'Draw Custom Zone';
+      this.drawZoneButton.addEventListener('click', () => {
+        this.#toggleRegionDrawing(!this.selectionDrawingEnabled);
+      });
+      zoneButtons.appendChild(this.drawZoneButton);
+
+      const clearButton = document.createElement('button');
+
+      clearButton.textContent = 'Clear Custom Zones';
+      clearButton.addEventListener('click', () => {
+        this.selectionManager.clearCustomZones();
+        this.#setDrawingEnabled(false);
+        this.#updateZoneSummary();
+        this.#scheduleUpdate();
+      });
+      zoneButtons.appendChild(clearButton);
+      body.appendChild(zoneButtons);
+
+      this.zoneSummaryEl = document.createElement('div');
+
+      this.zoneSummaryEl.className = 'control-hint';
+      body.appendChild(this.zoneSummaryEl);
+      this.#updateZoneSummary();
+    }
+
     const energyGroup = addGrid();
 
     energyConfigs.forEach((cfg) => renderSlider(cfg, energyGroup));
@@ -904,6 +1117,22 @@ export default class UIManager {
       value: s.diversity.toFixed(3),
       title: 'Estimated mean pairwise genetic distance',
     });
+
+    if (typeof s.blockedMatings === 'number') {
+      this.#appendControlRow(this.metricsBox, {
+        label: 'Blocked Matings',
+        value: String(s.blockedMatings),
+        title: 'Matings prevented by reproductive zones this tick',
+      });
+    }
+
+    if (s.lastBlockedReproduction?.reason) {
+      this.#appendControlRow(this.metricsBox, {
+        label: 'Last Blocked Reason',
+        value: s.lastBlockedReproduction.reason,
+        title: 'Most recent reason reproduction was denied',
+      });
+    }
 
     const traitPresence = stats?.traitPresence;
 
