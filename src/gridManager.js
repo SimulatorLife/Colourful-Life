@@ -971,13 +971,13 @@ export default class GridManager {
       const candidates = [];
       const candidateSet = new Set();
       const addCandidate = (r, c) => {
-        const wrappedRow = (r + this.rows) % this.rows;
-        const wrappedCol = (c + this.cols) % this.cols;
-        const key = `${wrappedRow},${wrappedCol}`;
+        if (r < 0 || r >= this.rows || c < 0 || c >= this.cols) return;
 
-        if (!candidateSet.has(key) && !this.isObstacle(wrappedRow, wrappedCol)) {
+        const key = `${r},${c}`;
+
+        if (!candidateSet.has(key) && !this.isObstacle(r, c)) {
           candidateSet.add(key);
-          candidates.push({ r: wrappedRow, c: wrappedCol });
+          candidates.push({ r, c });
         }
       };
       const addNeighbors = (baseRow, baseCol) => {
