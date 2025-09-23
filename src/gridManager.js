@@ -1022,7 +1022,9 @@ export default class GridManager {
             spawn: { row: spawn.r, col: spawn.c },
           };
         } else {
-          const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier);
+          const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
+            maxTileEnergy: this.maxTileEnergy,
+          });
 
           if (offspring) {
             offspring.row = spawn.r;
