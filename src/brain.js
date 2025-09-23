@@ -116,6 +116,10 @@ export default class Brain {
       if (!this.#isSensor(source)) this.neuronSet.add(source);
       if (!this.#isSensor(target)) this.neuronSet.add(target);
     }
+
+    if (this.connections.length > 0) {
+      this.#pruneUnreachableNeurons();
+    }
   }
 
   get neuronCount() {
@@ -233,5 +237,86 @@ export default class Brain {
 
   #isSensor(nodeId) {
     return Number.isFinite(nodeId) && nodeId >= 0 && nodeId < SENSOR_COUNT;
+  }
+
+  #pruneUnreachableNeurons() {
+    const outputs = [];
+
+    for (const group of Object.values(OUTPUT_GROUPS)) {
+      if (!Array.isArray(group)) continue;
+
+      for (let i = 0; i < group.length; i++) {
+        const id = group[i]?.id;
+
+        if (!Number.isFinite(id)) continue;
+        if (!this.incoming.has(id)) continue;
+
+        outputs.push(id);
+      }
+    }
+
+    if (outputs.length === 0) {
+      this.neuronSet = new Set();
+      this.incoming.clear();
+      this.connections = [];
+      this.activationMap.clear();
+
+      return;
+    }
+
+    const reachable = new Set();
+    const stack = outputs.slice();
+
+    while (stack.length > 0) {
+      const node = stack.pop();
+
+      if (!this.#isSensor(node)) {
+        if (reachable.has(node)) {
+          // continue traversing even if already marked to ensure upstream search
+        } else {
+          reachable.add(node);
+        }
+      }
+
+      const incoming = this.incoming.get(node);
+
+      if (!incoming) continue;
+
+      for (let i = 0; i < incoming.length; i++) {
+        const { source } = incoming[i];
+
+        if (!Number.isFinite(source) || this.#isSensor(source)) continue;
+        if (reachable.has(source)) continue;
+
+        stack.push(source);
+        reachable.add(source);
+      }
+    }
+
+    this.neuronSet = new Set(reachable);
+
+    const filteredIncoming = new Map();
+
+    for (const [target, sources] of this.incoming.entries()) {
+      if (!reachable.has(target)) continue;
+
+      const filteredSources = sources.filter(
+        ({ source }) => this.#isSensor(source) || reachable.has(source)
+      );
+
+      if (filteredSources.length > 0) {
+        filteredIncoming.set(target, filteredSources);
+      }
+    }
+
+    this.incoming = filteredIncoming;
+    this.connections = this.connections.filter(
+      ({ source, target }) =>
+        reachable.has(target) && (this.#isSensor(source) || reachable.has(source))
+    );
+
+    for (const key of Array.from(this.activationMap.keys())) {
+      if (!reachable.has(key)) this.activationMap.delete(key);
+    }
   }
 }

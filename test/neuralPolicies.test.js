@@ -176,4 +176,50 @@ test('neural evaluation contributes to cognitive maintenance cost', () => {
   assert.is(cell._neuralLoad, 0);
 });
 
+test('brains prune unreachable hidden neurons and cognitive cost matches pruned count', () => {
+  const dna = new DNA(90, 120, 60);
+  const acceptNode = OUTPUT_GROUPS.reproduction.find((entry) => entry.key === 'accept');
+
+  assert.ok(acceptNode, 'reproduction outputs should include accept');
+
+  setNeuralGene(dna, 0, { source: 220, target: acceptNode.id, weight: 0.8 });
+  setNeuralGene(dna, 1, { source: 0, target: 220, weight: 0.5 });
+  setNeuralGene(dna, 2, { source: 222, target: 221, weight: 0.4 });
+  setNeuralGene(dna, 3, { source: 221, target: 223, weight: 0.2 });
+
+  const brain = Brain.fromDNA(dna);
+
+  assert.ok(brain);
+  assert.is(brain.neuronCount, 2, 'only neurons leading to outputs should remain');
+  assert.is(brain.connectionCount, 2, 'irrelevant connections should be pruned');
+  assert.is(brain.activationMap.has(221), false);
+
+  const cell = new Cell(0, 0, dna, 5);
+
+  assert.is(cell.neurons, 2, 'cell neuron count should reflect pruned brain');
+
+  const context = { localDensity: 0.3, densityEffectMultiplier: 1.2, maxTileEnergy: 8 };
+  const effDensity = clamp(context.localDensity * context.densityEffectMultiplier, 0, 1);
+  const energyDensityMult = lerp(
+    cell.density.energyLoss.min,
+    cell.density.energyLoss.max,
+    effDensity
+  );
+  const ageFrac = cell.lifespan > 0 ? cell.age / cell.lifespan : 0;
+  const sen = typeof cell.dna.senescenceRate === 'function' ? cell.dna.senescenceRate() : 0;
+  const baseLoss = cell.dna.energyLossBase();
+  const lossScale =
+    cell.dna.baseEnergyLossScale() *
+    (1 + cell.metabolism) *
+    (1 + sen * ageFrac) *
+    energyDensityMult;
+  const energyLoss = baseLoss * lossScale;
+  const expectedCognitive = cell.dna.cognitiveCost(cell.neurons, cell.sight, effDensity);
+  const startingEnergy = cell.energy;
+
+  cell.manageEnergy(cell.row, cell.col, context);
+
+  approxEqual(cell.energy, startingEnergy - (energyLoss + expectedCognitive), 1e-9);
+});
+
 test.run();
