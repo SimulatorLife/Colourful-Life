@@ -176,4 +176,51 @@ test('neural evaluation contributes to cognitive maintenance cost', () => {
   assert.is(cell._neuralLoad, 0);
 });
 
+test('disabled neural connections fall back to legacy policies', () => {
+  const dna = new DNA(90, 45, 180);
+  const partnerDNA = new DNA(10, 60, 140);
+  const geneCount = dna.neuralGeneCount();
+
+  assert.ok(geneCount > 0, 'DNA should provide neural genes to disable');
+
+  for (let i = 0; i < geneCount; i++) {
+    setNeuralGene(dna, i, { source: 0, target: 0, weight: 0, enabled: false });
+  }
+
+  const cell = new Cell(0, 0, dna, 5);
+  const partner = new Cell(0, 1, partnerDNA, 4);
+
+  assert.ok(cell.brain, 'cell should still instantiate a brain object');
+
+  const reproSensors = {
+    energy: 0.4,
+    partnerEnergy: 0.5,
+    effectiveDensity: 0.2,
+    partnerSimilarity: 0.3,
+    baseReproductionProbability: 0.65,
+    ageFraction: 0.1,
+    partnerAgeFraction: 0.2,
+    selfSenescence: 0.05,
+    partnerSenescence: 0.02,
+    eventPressure: 0.15,
+  };
+
+  const evaluation = cell.brain.evaluateGroup('reproduction', reproSensors);
+
+  assert.ok(evaluation, 'evaluation result should exist');
+  assert.is(evaluation.activationCount, 0);
+  assert.is(evaluation.values, null, 'no neural outputs should be produced when inactive');
+
+  const baseProbability = 0.42;
+  const decision = cell.decideReproduction(partner, {
+    localDensity: 0.3,
+    densityEffectMultiplier: 1.1,
+    maxTileEnergy: 6,
+    baseProbability,
+  });
+
+  assert.is(decision.usedNetwork, false, 'disabled connections should trigger legacy fallback');
+  approxEqual(decision.probability, baseProbability, 1e-12);
+});
+
 test.run();
