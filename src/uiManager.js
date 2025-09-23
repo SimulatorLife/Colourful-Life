@@ -308,7 +308,12 @@ export default class UIManager {
     const valueEl = document.createElement('div');
 
     valueEl.className = 'control-value';
-    valueEl.textContent = value;
+
+    if (value instanceof Node) {
+      valueEl.appendChild(value);
+    } else if (value !== undefined && value !== null) {
+      valueEl.textContent = value;
+    }
 
     row.appendChild(nameEl);
     row.appendChild(valueEl);
@@ -1302,58 +1307,54 @@ export default class UIManager {
       this.leaderBody = body;
     }
     this.leaderBody.innerHTML = '';
-    top.forEach((e, i) => {
-      const label = `#${i + 1}`;
-      const smoothed = Number.isFinite(e.smoothedFitness) ? e.smoothedFitness : e.fitness;
-      const valueParts = [
-        `avg ${smoothed.toFixed(2)}`,
-        `inst ${e.fitness.toFixed(2)}`,
-        `off ${e.offspring}`,
-        `win ${e.fightsWon}`,
-        `age ${e.age}`,
+    top.forEach((entry, index) => {
+      const label = `#${index + 1}`;
+      const smoothedFitness = Number.isFinite(entry.smoothedFitness)
+        ? entry.smoothedFitness
+        : undefined;
+      const fitnessValue = Number.isFinite(smoothedFitness) ? smoothedFitness : entry.fitness;
+      const brain = entry.brain ?? {};
+
+      const statsContainer = document.createElement('div');
+
+      statsContainer.className = 'leaderboard-stats';
+
+      const formatFloat = (value) => (Number.isFinite(value) ? value.toFixed(2) : '—');
+      const formatCount = (value) => (Number.isFinite(value) ? value.toLocaleString() : '—');
+
+      const statRows = [
+        { label: 'Fitness', value: formatFloat(fitnessValue) },
+        { label: 'Neurons', value: formatCount(brain.neuronCount) },
+        { label: 'Brain', value: formatFloat(brain.fitness) },
+        { label: 'Connections', value: formatCount(brain.connectionCount) },
       ];
-      const baseValue = valueParts.join(' | ');
 
-      const brainStats = [];
-      const brain = e.brain;
+      statRows.forEach(({ label: statLabel, value }) => {
+        const statRow = document.createElement('div');
 
-      if (brain) {
-        if (Number.isFinite(brain.neuronCount)) {
-          brainStats.push(`neurons ${brain.neuronCount}`);
-        }
-        if (Number.isFinite(brain.connectionCount)) {
-          brainStats.push(`connections ${brain.connectionCount}`);
-        }
-        if (Number.isFinite(brain.fitness)) {
-          brainStats.push(`brain ${brain.fitness.toFixed(2)}`);
-        }
-      }
+        statRow.className = 'leaderboard-stat';
 
-      const titleParts = [...valueParts];
+        const statLabelEl = document.createElement('span');
 
-      if (brainStats.length > 0) {
-        titleParts.push(...brainStats);
-      }
+        statLabelEl.className = 'leaderboard-stat-label';
+        statLabelEl.textContent = statLabel;
 
-      const row = this.#appendControlRow(this.leaderBody, {
-        label,
-        value: baseValue,
-        title: titleParts.join(' | '),
-        color: e.color,
+        const statValueEl = document.createElement('span');
+
+        statValueEl.className = 'leaderboard-stat-value';
+        statValueEl.textContent = value;
+
+        statRow.appendChild(statLabelEl);
+        statRow.appendChild(statValueEl);
+        statsContainer.appendChild(statRow);
       });
 
-      if (brainStats.length > 0) {
-        const detail = document.createElement('div');
-
-        detail.className = 'leaderboard-brain-info';
-        detail.textContent = brainStats.join(' | ');
-
-        const valueEl = row?.querySelector('.control-value');
-
-        if (valueEl) {
-          valueEl.appendChild(detail);
-        }
-      }
+      this.#appendControlRow(this.leaderBody, {
+        label,
+        value: statsContainer,
+        title: `Fitness ${statRows[0].value} | Neurons ${statRows[1].value} | Brain ${statRows[2].value} | Connections ${statRows[3].value}`,
+        color: entry.color,
+      });
     });
   }
 }
