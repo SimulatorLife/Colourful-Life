@@ -138,31 +138,6 @@ function densityToRgba(normalizedValue, { opaque = false } = {}) {
   return `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
 }
 
-function drawMutationMultiplierBadge(ctx, multiplier) {
-  if (!ctx || typeof multiplier !== 'number') return;
-
-  const label = multiplier <= 0 ? 'Mutation ×0.00 (off)' : `Mutation ×${multiplier.toFixed(2)}`;
-  const padding = 6;
-  const cornerX = 10;
-  const cornerY = 10;
-
-  ctx.save();
-  ctx.font = '13px sans-serif';
-  ctx.textBaseline = 'top';
-  const metrics = ctx.measureText(label);
-  const textWidth = metrics.width;
-  const textHeight =
-    (metrics.actualBoundingBoxAscent || 10) + (metrics.actualBoundingBoxDescent || 4);
-  const boxWidth = textWidth + padding * 2;
-  const boxHeight = textHeight + padding * 2;
-
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-  ctx.fillRect(cornerX, cornerY, boxWidth, boxHeight);
-  ctx.fillStyle = '#fff';
-  ctx.fillText(label, cornerX + padding, cornerY + padding);
-  ctx.restore();
-}
-
 function drawDensityLegend(ctx, cellSize, cols, rows, minDensity, maxDensity) {
   const gradientWidth = Math.min(160, Math.max(120, cols * cellSize * 0.25));
   const gradientHeight = 14;
@@ -253,7 +228,6 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     activeEvents,
     getEventColor,
     snapshot: providedSnapshot,
-    mutationMultiplier,
     selectionManager: explicitSelection,
   } = opts;
   let snapshot = providedSnapshot;
@@ -276,7 +250,6 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     }
     drawFitnessHeatmap(snapshot, ctx, cellSize);
   }
-  drawMutationMultiplierBadge(ctx, mutationMultiplier);
 }
 
 export function drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy = MAX_TILE_ENERGY) {
