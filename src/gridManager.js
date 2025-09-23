@@ -84,6 +84,7 @@ export default class GridManager {
       lingerPenalty = 0,
       penalizeOnBounds = true,
       onBlocked = null,
+      onMove = null,
     } = options;
     const nr = sr + dr;
     const nc = sc + dc;
@@ -140,6 +141,9 @@ export default class GridManager {
       if (moving && typeof moving === 'object') {
         if ('row' in moving) moving.row = nr;
         if ('col' in moving) moving.col = nc;
+      }
+      if (typeof onMove === 'function') {
+        onMove({ cell: moving, fromRow: sr, fromCol: sc, toRow: nr, toCol: nc });
       }
       // Charge movement energy cost to the mover if available
       if (moving && typeof moving === 'object' && moving.energy != null && moving.dna) {
@@ -206,6 +210,9 @@ export default class GridManager {
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
     this.selectionManager = selectionManager || null;
+    this.densityRadius = GridManager.DENSITY_RADIUS;
+    this.densityCounts = Array.from({ length: rows }, () => Array(cols).fill(0));
+    this.densityTotals = this.#buildDensityTotals(this.densityRadius);
     this.densityGrid = null;
     this.lastSnapshot = null;
     this.lingerPenalty = 0;
@@ -213,6 +220,7 @@ export default class GridManager {
     this.currentObstaclePreset = 'none';
     this.currentScenarioId = 'manual';
     this.tickCount = 0;
+    this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
       GridManager.tryMove(gridArr, sr, sc, dr, dc, rows, cols, this.#movementOptions());
     this.boundMoveToTarget = (gridArr, row, col, targetRow, targetCol, rows, cols) =>
@@ -240,6 +248,7 @@ export default class GridManager {
     this.boundMoveRandomly = (gridArr, row, col, cell, rows, cols) =>
       GridManager.moveRandomly(gridArr, row, col, cell, rows, cols, this.#movementOptions());
     this.init();
+    this.recalculateDensityCounts();
   }
 
   #movementOptions() {
@@ -247,6 +256,7 @@ export default class GridManager {
       obstacles: this.obstacles,
       lingerPenalty: this.lingerPenalty,
       penalizeOnBounds: true,
+      onMove: this.onMoveCallback,
     };
   }
 
@@ -286,9 +296,8 @@ export default class GridManager {
     if (blocked) {
       this.obstacles[row][col] = true;
       if (!wasBlocked && this.grid[row][col]) {
-        const occupant = this.grid[row][col];
+        const occupant = this.removeCell(row, col);
 
-        this.grid[row][col] = null;
         if (evict && this.stats?.onDeath) this.stats.onDeath();
         if (occupant && occupant.energy != null) {
           this.energyGrid[row][col] = 0;
@@ -681,7 +690,129 @@ export default class GridManager {
   }
 
   setCell(row, col, cell) {
+    if (!cell) {
+      this.removeCell(row, col);
+
+      return null;
+    }
+
+    return this.placeCell(row, col, cell);
+  }
+
+  placeCell(row, col, cell) {
+    if (!cell) return null;
+    const current = this.grid[row][col];
+
+    if (current === cell) return cell;
+    if (current) this.removeCell(row, col);
+
     this.grid[row][col] = cell;
+    if (cell && typeof cell === 'object') {
+      if ('row' in cell) cell.row = row;
+      if ('col' in cell) cell.col = col;
+    }
+    this.#applyDensityDelta(row, col, 1);
+
+    return cell;
+  }
+
+  removeCell(row, col) {
+    const current = this.grid[row]?.[col];
+
+    if (!current) return null;
+
+    this.grid[row][col] = null;
+    this.#applyDensityDelta(row, col, -1);
+
+    return current;
+  }
+
+  relocateCell(fromRow, fromCol, toRow, toCol) {
+    if (fromRow === toRow && fromCol === toCol) return true;
+    const moving = this.grid[fromRow]?.[fromCol];
+
+    if (!moving) return false;
+    if (this.grid[toRow]?.[toCol]) return false;
+
+    this.grid[toRow][toCol] = moving;
+    this.grid[fromRow][fromCol] = null;
+    if (moving && typeof moving === 'object') {
+      if ('row' in moving) moving.row = toRow;
+      if ('col' in moving) moving.col = toCol;
+    }
+    this.#applyDensityDelta(fromRow, fromCol, -1);
+    this.#applyDensityDelta(toRow, toCol, 1);
+
+    return true;
+  }
+
+  #handleCellMoved({ fromRow, fromCol, toRow, toCol }) {
+    this.#applyDensityDelta(fromRow, fromCol, -1);
+    this.#applyDensityDelta(toRow, toCol, 1);
+  }
+
+  #applyDensityDelta(row, col, delta, radius = this.densityRadius) {
+    if (!this.densityCounts) return;
+
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const rr = row + dy;
+        const cc = col + dx;
+
+        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
+
+        this.densityCounts[rr][cc] = (this.densityCounts[rr][cc] || 0) + delta;
+      }
+    }
+  }
+
+  #computeNeighborTotal(row, col, radius = this.densityRadius) {
+    let total = 0;
+
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const rr = row + dy;
+        const cc = col + dx;
+
+        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
+
+        total += 1;
+      }
+    }
+
+    return total;
+  }
+
+  #buildDensityTotals(radius = this.densityRadius) {
+    return Array.from({ length: this.rows }, (_, r) =>
+      Array.from({ length: this.cols }, (_, c) => this.#computeNeighborTotal(r, c, radius))
+    );
+  }
+
+  recalculateDensityCounts(radius = this.densityRadius) {
+    const normalizedRadius = Math.max(0, Math.floor(radius));
+    const targetRadius = normalizedRadius > 0 ? normalizedRadius : this.densityRadius;
+
+    if (!this.densityCounts) {
+      this.densityCounts = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+    }
+
+    if (targetRadius !== this.densityRadius) {
+      this.densityRadius = targetRadius;
+      this.densityTotals = this.#buildDensityTotals(this.densityRadius);
+    }
+
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) this.densityCounts[r][c] = 0;
+    }
+
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (this.grid[r][c]) this.#applyDensityDelta(r, c, 1);
+      }
+    }
   }
 
   spawnCell(row, col, { dna = DNA.random(), spawnEnergy, recordBirth = false } = {}) {
@@ -698,9 +829,11 @@ export default class GridManager {
   }
 
   getDensityAt(row, col) {
-    return (
-      this.densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS)
-    );
+    if (this.densityGrid?.[row]?.[col] != null) {
+      return this.densityGrid[row][col];
+    }
+
+    return this.localDensity(row, col, this.densityRadius);
   }
 
   // Precompute density for all tiles (fraction of occupied neighbors)
@@ -725,13 +858,21 @@ export default class GridManager {
   }
 
   computeDensityGrid(radius = GridManager.DENSITY_RADIUS) {
+    const useCache = radius === this.densityRadius && this.densityCounts && this.densityTotals;
     const out = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
 
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
-        const { count, total } = this.#countNeighbors(row, col, radius);
+        if (useCache) {
+          const total = this.densityTotals[row]?.[col] ?? 0;
+          const count = this.densityCounts[row]?.[col] ?? 0;
 
-        out[row][col] = total > 0 ? count / total : 0;
+          out[row][col] = total > 0 ? Math.max(0, Math.min(1, count / total)) : 0;
+        } else {
+          const { count, total } = this.#countNeighbors(row, col, radius);
+
+          out[row][col] = total > 0 ? count / total : 0;
+        }
       }
     }
 
@@ -739,6 +880,16 @@ export default class GridManager {
   }
 
   localDensity(row, col, radius = 1) {
+    if (radius === this.densityRadius && this.densityCounts && this.densityTotals) {
+      const total = this.densityTotals[row]?.[col] ?? 0;
+
+      if (total <= 0) return 0;
+
+      const count = this.densityCounts[row]?.[col] ?? 0;
+
+      return Math.max(0, Math.min(1, count / total));
+    }
+
     const { count, total } = this.#countNeighbors(row, col, radius);
 
     return total > 0 ? count / total : 0;
@@ -814,7 +965,7 @@ export default class GridManager {
     processed.add(cell);
     cell.age++;
     if (cell.age >= cell.lifespan) {
-      this.grid[row][col] = null;
+      this.removeCell(row, col);
       stats.onDeath();
 
       return;
@@ -836,7 +987,7 @@ export default class GridManager {
     });
 
     if (starved || cell.energy <= 0) {
-      this.grid[row][col] = null;
+      this.removeCell(row, col);
       stats.onDeath();
 
       return;
@@ -865,7 +1016,13 @@ export default class GridManager {
       return;
     }
 
-    if (this.handleCombat(row, col, cell, targets, { stats, densityEffectMultiplier })) {
+    if (
+      this.handleCombat(row, col, cell, targets, {
+        stats,
+        densityEffectMultiplier,
+        densityGrid,
+      })
+    ) {
       return;
     }
 
@@ -1029,7 +1186,7 @@ export default class GridManager {
           if (offspring) {
             offspring.row = spawn.r;
             offspring.col = spawn.c;
-            this.grid[spawn.r][spawn.c] = offspring;
+            this.placeCell(spawn.r, spawn.c, offspring);
             stats.onBirth();
             reproduced = true;
           }
@@ -1059,11 +1216,17 @@ export default class GridManager {
     return reproduced || Boolean(blockedInfo);
   }
 
-  handleCombat(row, col, cell, { enemies, society = [] }, { stats, densityEffectMultiplier }) {
+  handleCombat(
+    row,
+    col,
+    cell,
+    { enemies, society = [] },
+    { stats, densityEffectMultiplier, densityGrid }
+  ) {
     if (!Array.isArray(enemies) || enemies.length === 0) return false;
 
     const targetEnemy = enemies[Math.floor(randomRange(0, enemies.length))];
-    const localDensity = this.localDensity(row, col, GridManager.DENSITY_RADIUS);
+    const localDensity = densityGrid?.[row]?.[col] ?? this.getDensityAt(row, col);
     const action = cell.chooseInteractionAction({
       localDensity,
       densityEffectMultiplier,
