@@ -244,6 +244,25 @@ canvas {
   color: var(--color-text);
 }
 
+.leaderboard-panel .control-line {
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.leaderboard-panel .control-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+  white-space: normal;
+}
+
+.leaderboard-brain-info {
+  font-size: 11px;
+  color: var(--color-text-subtle);
+}
+
 /* Metrics and leaderboard boxes */
 .metrics-box {
   width: 100%;
