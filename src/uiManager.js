@@ -38,6 +38,7 @@ export default class UIManager {
     this.energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT; // neighbor diffusion rate (0..0.5)
     this.leaderboardIntervalMs = UI_SLIDER_CONFIG.leaderboardIntervalMs.default;
     this._lastSlowUiRender = Number.NEGATIVE_INFINITY; // shared throttle for fast-updating UI bits
+    this._lastInteractionTotals = { fights: 0, cooperations: 0 };
     this.showDensity = false;
     this.showEnergy = false;
     this.showFitness = false;
@@ -1080,7 +1081,17 @@ export default class UIManager {
   renderMetrics(stats, snapshot) {
     if (!this.metricsBox) return;
     this.metricsBox.innerHTML = '';
-    const s = snapshot;
+    const s = snapshot || {};
+    const totals = (stats && stats.totals) || {};
+    const lastTotals = this._lastInteractionTotals || { fights: 0, cooperations: 0 };
+    const fightDelta = Math.max(0, (totals.fights ?? 0) - (lastTotals.fights ?? 0));
+    const coopDelta = Math.max(0, (totals.cooperations ?? 0) - (lastTotals.cooperations ?? 0));
+    const interactionTotal = fightDelta + coopDelta;
+
+    this._lastInteractionTotals = {
+      fights: totals.fights ?? lastTotals.fights ?? 0,
+      cooperations: totals.cooperations ?? lastTotals.cooperations ?? 0,
+    };
 
     this.#appendControlRow(this.metricsBox, {
       label: 'Population',
@@ -1114,20 +1125,19 @@ export default class UIManager {
     }
     this.#appendControlRow(this.metricsBox, {
       label: 'Skirmishes',
-      value: String(s.fights),
-      title: 'Skirmishes resolved last tick',
+      value: String(fightDelta),
+      title: 'Skirmishes resolved since the last dashboard update',
     });
     this.#appendControlRow(this.metricsBox, {
       label: 'Cooperations',
-      value: String(s.cooperations),
-      title: 'Mutual aid events completed last tick',
+      value: String(coopDelta),
+      title: 'Mutual aid events completed since the last dashboard update',
     });
-    const interactionTotal = s.fights + s.cooperations;
 
     this.#appendControlRow(this.metricsBox, {
       label: 'Cooperation Share',
-      value: interactionTotal ? `${((s.cooperations / interactionTotal) * 100).toFixed(0)}%` : '—',
-      title: 'Share of cooperative interactions vs total interactions this tick',
+      value: interactionTotal ? `${((coopDelta / interactionTotal) * 100).toFixed(0)}%` : '—',
+      title: 'Share of cooperative interactions vs total interactions recorded for this update',
     });
     this.#appendControlRow(this.metricsBox, {
       label: 'Mean Energy',

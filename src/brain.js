@@ -197,12 +197,25 @@ export default class Brain {
     };
 
     const values = {};
+    const pendingOutputs = [];
 
     for (let i = 0; i < group.length; i++) {
       const { id, key } = group[i];
       const value = computeNode(id);
 
       values[key] = value;
+      pendingOutputs.push([key, value]);
+    }
+
+    if (activationCount === 0) {
+      this.lastActivationCount = 0;
+
+      return { values: null, activationCount: 0 };
+    }
+
+    for (let i = 0; i < pendingOutputs.length; i++) {
+      const [key, value] = pendingOutputs[i];
+
       this.lastOutputs.set(key, value);
     }
 
