@@ -76,7 +76,7 @@ test('processCell forwards custom max tile energy to cell energy management', as
     },
   };
 
-  gm.grid[0][0] = managed;
+  gm.setCell(0, 0, managed);
 
   const stats = {
     onDeath() {},
@@ -122,7 +122,7 @@ test('GridManager passes custom max tile energy to combat and movement helpers',
     return true;
   };
 
-  gm.grid[0][0] = fighter;
+  gm.setCell(0, 0, fighter);
   gm.handleCombat(
     0,
     0,
@@ -142,7 +142,7 @@ test('GridManager passes custom max tile energy to combat and movement helpers',
     },
   };
 
-  gm.grid[0][0] = mover;
+  gm.setCell(0, 0, mover);
   gm.energyGrid = [
     [customMax, customMax],
     [customMax, customMax],
@@ -232,8 +232,8 @@ test('handleReproduction threads custom max tile energy through cell decisions',
     },
   };
 
-  gm.grid[1][1] = parent;
-  gm.grid[1][2] = mate;
+  gm.setCell(1, 1, parent);
+  gm.setCell(1, 2, mate);
   gm.boundMoveToTarget = () => false;
 
   const stats = {

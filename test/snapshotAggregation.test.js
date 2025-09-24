@@ -33,6 +33,7 @@ test('buildSnapshot aggregates living cells for downstream consumers', async () 
       [createStubCell({ energy: 4, age: 2, fightsWon: 1, offspring: 1, color: '#111' }), null],
       [null, createStubCell({ energy: 2, age: 5, fightsLost: 1, color: '#222' })],
     ];
+    gm.rebuildActiveCells();
 
     const snapshot = gm.buildSnapshot(10);
 

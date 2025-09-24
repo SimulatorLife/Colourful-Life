@@ -24,6 +24,8 @@ test('GridManager removes cells that report starvation', async () => {
   });
 
   const starvingCell = {
+    row: 0,
+    col: 0,
     age: 0,
     lifespan: 5,
     energy: 1,
@@ -33,12 +35,13 @@ test('GridManager removes cells that report starvation', async () => {
     },
   };
 
-  gm.grid[0][0] = starvingCell;
+  gm.setCell(0, 0, starvingCell);
 
   gm.update();
 
   assert.is(gm.grid[0][0], null, 'starved cell should be removed from the grid');
   assert.is(stats.deaths, 1, 'starvation should be reported to stats');
+  assert.is(gm.activeCells.size, 0, 'starved cell should be removed from active tracking');
 });
 
 test('GridManager respects dynamic max tile energy', async () => {

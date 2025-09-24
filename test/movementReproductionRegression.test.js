@@ -52,12 +52,22 @@ test('handleReproduction returns false when offspring cannot be placed', async (
   const { default: DNA } = await import('../src/genome.js');
   const { MAX_TILE_ENERGY } = await import('../src/config.js');
 
-  const gm = new GridManager(3, 3, {
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new TestGridManager(3, 3, {
     eventManager: { activeEvents: [] },
     stats: { onBirth() {}, onDeath() {}, recordMateChoice() {} },
   });
 
-  gm.grid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => ({ blocker: true })));
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      gm.setObstacle(r, c, true, { evict: false });
+    }
+  }
+  gm.setObstacle(1, 1, false);
+  gm.setObstacle(1, 2, false);
   gm.densityGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0));
 
   const parent = new Cell(1, 1, new DNA(0, 0, 0), MAX_TILE_ENERGY);
@@ -89,8 +99,8 @@ test('handleReproduction returns false when offspring cannot be placed', async (
   });
   parent.findBestMate = () => mateEntry;
 
-  gm.grid[1][1] = parent;
-  gm.grid[1][2] = mate;
+  gm.setCell(1, 1, parent);
+  gm.setCell(1, 2, mate);
 
   let births = 0;
   let recorded = null;
@@ -133,12 +143,16 @@ test('handleReproduction does not wrap offspring placement across map edges', as
   const { default: DNA } = await import('../src/genome.js');
   const { MAX_TILE_ENERGY } = await import('../src/config.js');
 
-  const gm = new GridManager(3, 3, {
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new TestGridManager(3, 3, {
     eventManager: { activeEvents: [] },
     stats: { onBirth() {}, onDeath() {}, recordMateChoice() {} },
   });
 
-  gm.grid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => null));
+  gm.rebuildActiveCells();
   const densityGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0));
 
   const parent = new Cell(0, 0, new DNA(0, 0, 0), MAX_TILE_ENERGY);
@@ -174,12 +188,12 @@ test('handleReproduction does not wrap offspring placement across map edges', as
   });
   parent.findBestMate = () => mateEntry;
 
-  gm.grid[0][0] = parent;
-  gm.grid[0][1] = mate;
+  gm.setCell(0, 0, parent);
+  gm.setCell(0, 1, mate);
 
-  gm.grid[1][1] = { blocker: true };
-  gm.grid[0][2] = { blocker: true };
-  gm.grid[1][2] = { blocker: true };
+  gm.setObstacle(1, 1, true, { evict: false });
+  gm.setObstacle(0, 2, true, { evict: false });
+  gm.setObstacle(1, 2, true, { evict: false });
 
   const stats = {
     births: 0,
@@ -217,12 +231,23 @@ test('processCell continues to combat when reproduction fails', async () => {
   const { default: DNA } = await import('../src/genome.js');
   const { MAX_TILE_ENERGY } = await import('../src/config.js');
 
-  const gm = new GridManager(3, 3, {
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new TestGridManager(3, 3, {
     eventManager: { activeEvents: [] },
     stats: { onBirth() {}, onDeath() {}, recordMateChoice() {} },
   });
 
-  gm.grid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => ({ blocker: true })));
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      gm.setObstacle(r, c, true, { evict: false });
+    }
+  }
+  gm.setObstacle(1, 1, false);
+  gm.setObstacle(1, 2, false);
+  gm.setObstacle(0, 1, false);
   gm.energyGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => MAX_TILE_ENERGY));
   const densityGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0));
 
@@ -261,9 +286,9 @@ test('processCell continues to combat when reproduction fails', async () => {
   });
   parent.findBestMate = () => mateEntry;
 
-  gm.grid[1][1] = parent;
-  gm.grid[1][2] = mate;
-  gm.grid[0][1] = enemy;
+  gm.setCell(1, 1, parent);
+  gm.setCell(1, 2, mate);
+  gm.setCell(0, 1, enemy);
 
   gm.findTargets = () => ({
     mates: [mateEntry],

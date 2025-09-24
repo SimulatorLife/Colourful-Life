@@ -85,6 +85,8 @@ export default class GridManager {
       penalizeOnBounds = true,
       onBlocked = null,
       onMove = null,
+      activeCells = null,
+      onCellMoved = null,
     } = options;
     const nr = sr + dr;
     const nc = sc + dc;
@@ -152,6 +154,13 @@ export default class GridManager {
         moving.energy = Math.max(0, moving.energy - cost);
       }
 
+      if (typeof onCellMoved === 'function') {
+        onCellMoved(moving, sr, sc, nr, nc);
+      }
+      if (activeCells && moving) {
+        activeCells.add(moving);
+      }
+
       clearWallPenalty();
 
       return true;
@@ -200,6 +209,7 @@ export default class GridManager {
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
     this.maxTileEnergy =
       typeof maxTileEnergy === 'number' ? maxTileEnergy : GridManager.maxTileEnergy;
+    this.activeCells = new Set();
     this.energyGrid = Array.from({ length: rows }, () =>
       Array.from({ length: cols }, () => this.maxTileEnergy / 2)
     );
@@ -249,6 +259,7 @@ export default class GridManager {
       GridManager.moveRandomly(gridArr, row, col, cell, rows, cols, this.#movementOptions());
     this.init();
     this.recalculateDensityCounts();
+    this.rebuildActiveCells();
   }
 
   #movementOptions() {
@@ -257,6 +268,12 @@ export default class GridManager {
       lingerPenalty: this.lingerPenalty,
       penalizeOnBounds: true,
       onMove: this.onMoveCallback,
+      activeCells: this.activeCells,
+      onCellMoved: (cell) => {
+        if (!cell) return;
+
+        this.activeCells.add(cell);
+      },
     };
   }
 
@@ -699,6 +716,10 @@ export default class GridManager {
     return this.placeCell(row, col, cell);
   }
 
+  clearCell(row, col) {
+    this.removeCell(row, col);
+  }
+
   placeCell(row, col, cell) {
     if (!cell) return null;
     const current = this.grid[row][col];
@@ -711,6 +732,7 @@ export default class GridManager {
       if ('row' in cell) cell.row = row;
       if ('col' in cell) cell.col = col;
     }
+    this.activeCells.add(cell);
     this.#applyDensityDelta(row, col, 1);
 
     return cell;
@@ -722,6 +744,7 @@ export default class GridManager {
     if (!current) return null;
 
     this.grid[row][col] = null;
+    this.activeCells.delete(current);
     this.#applyDensityDelta(row, col, -1);
 
     return current;
@@ -811,6 +834,17 @@ export default class GridManager {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         if (this.grid[r][c]) this.#applyDensityDelta(r, c, 1);
+      }
+    }
+  }
+
+  rebuildActiveCells() {
+    this.activeCells.clear();
+    for (let row = 0; row < this.rows; row++) {
+      for (let col = 0; col < this.cols; col++) {
+        const cell = this.grid[row][col];
+
+        if (cell) this.activeCells.add(cell);
       }
     }
   }
@@ -1186,7 +1220,7 @@ export default class GridManager {
           if (offspring) {
             offspring.row = spawn.r;
             offspring.col = spawn.c;
-            this.placeCell(spawn.r, spawn.c, offspring);
+            this.setCell(spawn.r, spawn.c, offspring);
             stats.onBirth();
             reproduced = true;
           }
@@ -1342,21 +1376,36 @@ export default class GridManager {
 
     this.densityGrid = densityGrid;
     const processed = new WeakSet();
+    const activeSnapshot = Array.from(this.activeCells);
 
-    for (let row = 0; row < this.rows; row++) {
-      for (let col = 0; col < this.cols; col++) {
-        this.processCell(row, col, {
-          stats,
-          eventManager,
-          densityGrid,
-          processed,
-          densityEffectMultiplier,
-          societySimilarity,
-          enemySimilarity,
-          eventStrengthMultiplier,
-          mutationMultiplier,
-        });
+    for (const cell of activeSnapshot) {
+      if (!cell) continue;
+      const row = cell.row;
+      const col = cell.col;
+
+      if (
+        row == null ||
+        col == null ||
+        row < 0 ||
+        row >= this.rows ||
+        col < 0 ||
+        col >= this.cols ||
+        this.grid[row][col] !== cell
+      ) {
+        continue;
       }
+
+      this.processCell(row, col, {
+        stats,
+        eventManager,
+        densityGrid,
+        processed,
+        densityEffectMultiplier,
+        societySimilarity,
+        enemySimilarity,
+        eventStrengthMultiplier,
+        mutationMultiplier,
+      });
     }
 
     this.lastSnapshot = this.buildSnapshot();
