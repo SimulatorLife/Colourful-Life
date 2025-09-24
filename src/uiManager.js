@@ -308,7 +308,12 @@ export default class UIManager {
     const valueEl = document.createElement('div');
 
     valueEl.className = 'control-value';
-    valueEl.textContent = value;
+
+    if (value instanceof Node) {
+      valueEl.appendChild(value);
+    } else if (value !== undefined && value !== null) {
+      valueEl.textContent = value;
+    }
 
     row.appendChild(nameEl);
     row.appendChild(valueEl);
@@ -345,8 +350,8 @@ export default class UIManager {
       toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
     };
 
-    header.addEventListener('click', (e) => {
-      if (e.target === toggle || e.target === heading) toggleCollapsed();
+    header.addEventListener('click', () => {
+      toggleCollapsed();
     });
     toggle.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -369,6 +374,16 @@ export default class UIManager {
       body.appendChild(grid);
 
       return grid;
+    };
+
+    const addSectionHeading = (text) => {
+      const heading = document.createElement('h4');
+
+      heading.className = 'control-section-title';
+      heading.textContent = text;
+      body.appendChild(heading);
+
+      return heading;
     };
 
     const buttonRow = body.appendChild(document.createElement('div'));
@@ -669,17 +684,22 @@ export default class UIManager {
       }),
     ];
 
+    addSectionHeading('Similarity Thresholds');
     const thresholdsGroup = addGrid();
 
     thresholdConfigs.forEach((cfg) => renderSlider(cfg, thresholdsGroup));
 
+    addSectionHeading('Environmental Events');
     const eventsGroup = addGrid();
 
     eventConfigs.forEach((cfg) => renderSlider(cfg, eventsGroup));
 
+    addSectionHeading('General Settings');
+    const generalGroup = addGrid();
+
     generalConfigs
       .filter((cfg) => cfg.position === 'beforeOverlays')
-      .forEach((cfg) => renderSlider(cfg));
+      .forEach((cfg) => renderSlider(cfg, generalGroup));
 
     // Overlay toggles
     const overlayHeader = document.createElement('h4');
@@ -896,13 +916,14 @@ export default class UIManager {
       this.#updateZoneSummary();
     }
 
+    addSectionHeading('Energy Dynamics');
     const energyGroup = addGrid();
 
     energyConfigs.forEach((cfg) => renderSlider(cfg, energyGroup));
 
     generalConfigs
       .filter((cfg) => cfg.position === 'afterEnergy')
-      .forEach((cfg) => renderSlider(cfg));
+      .forEach((cfg) => renderSlider(cfg, generalGroup));
 
     return panel;
   }
@@ -946,6 +967,12 @@ export default class UIManager {
       { label: 'Growth', property: 'sparkGrowth', color: '#dd8' },
       { label: 'Event Strength', property: 'sparkEvent', color: '#b85' },
       { label: 'Mutation Multiplier', property: 'sparkMutation', color: '#6c5ce7' },
+      { label: 'Diverse Pairing Rate', property: 'sparkDiversePairing', color: '#9b59b6' },
+      {
+        label: 'Mean Diversity Appetite',
+        property: 'sparkDiversityAppetite',
+        color: '#1abc9c',
+      },
       ...traitSparkDescriptors,
     ];
 
@@ -1118,6 +1145,23 @@ export default class UIManager {
       title: 'Estimated mean pairwise genetic distance',
     });
 
+    const mateChoicesValue = Number.isFinite(s.mateChoices) ? String(s.mateChoices) : '—';
+    const successfulMatingsValue = Number.isFinite(s.successfulMatings)
+      ? String(s.successfulMatings)
+      : '—';
+    const diverseChoiceRateValue = Number.isFinite(s.diverseChoiceRate)
+      ? `${(s.diverseChoiceRate * 100).toFixed(0)}%`
+      : '—';
+    const diverseMatingRateValue = Number.isFinite(s.diverseMatingRate)
+      ? `${(s.diverseMatingRate * 100).toFixed(0)}%`
+      : '—';
+    const meanDiversityAppetiteValue = Number.isFinite(s.meanDiversityAppetite)
+      ? s.meanDiversityAppetite.toFixed(2)
+      : '—';
+    const curiositySelectionsValue = Number.isFinite(s.curiositySelections)
+      ? String(s.curiositySelections)
+      : '—';
+
     if (typeof s.blockedMatings === 'number') {
       this.#appendControlRow(this.metricsBox, {
         label: 'Blocked Matings',
@@ -1133,6 +1177,37 @@ export default class UIManager {
         title: 'Most recent reason reproduction was denied',
       });
     }
+
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Mate Choices',
+      value: mateChoicesValue,
+      title: 'Potential mates evaluated by the population this tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Successful Matings',
+      value: successfulMatingsValue,
+      title: 'Pairs that successfully reproduced this tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Diverse Choice Rate',
+      value: diverseChoiceRateValue,
+      title: 'Share of mate choices favoring genetically diverse partners this tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Diverse Mating Rate',
+      value: diverseMatingRateValue,
+      title: 'Share of completed matings rated as genetically diverse this tick',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Mean Diversity Appetite',
+      value: meanDiversityAppetiteValue,
+      title: 'Average preferred genetic difference when selecting a mate',
+    });
+    this.#appendControlRow(this.metricsBox, {
+      label: 'Curiosity Selections',
+      value: curiositySelectionsValue,
+      title: 'Mate selections driven by curiosity-driven exploration this tick',
+    });
 
     const traitPresence = stats?.traitPresence;
 
@@ -1183,6 +1258,8 @@ export default class UIManager {
     this.drawSpark(this.sparkGrowth, stats.history.growth, '#dd8');
     this.drawSpark(this.sparkEvent, stats.history.eventStrength, '#b85');
     this.drawSpark(this.sparkMutation, stats.history.mutationMultiplier, '#6c5ce7');
+    this.drawSpark(this.sparkDiversePairing, stats.history.diversePairingRate, '#9b59b6');
+    this.drawSpark(this.sparkDiversityAppetite, stats.history.meanDiversityAppetite, '#1abc9c');
 
     if (Array.isArray(this.traitSparkDescriptors)) {
       this.traitSparkDescriptors.forEach(({ property, traitKey, traitType, color }) => {
@@ -1230,20 +1307,53 @@ export default class UIManager {
       this.leaderBody = body;
     }
     this.leaderBody.innerHTML = '';
-    top.forEach((e, i) => {
-      const label = `#${i + 1}`;
-      const smoothed = Number.isFinite(e.smoothedFitness) ? e.smoothedFitness : e.fitness;
-      const value =
-        `avg ${smoothed.toFixed(2)}` +
-        ` | inst ${e.fitness.toFixed(2)}` +
-        ` | off ${e.offspring}` +
-        ` | win ${e.fightsWon}` +
-        ` | age ${e.age}`;
+    top.forEach((entry, index) => {
+      const label = `#${index + 1}`;
+      const smoothedFitness = Number.isFinite(entry.smoothedFitness)
+        ? entry.smoothedFitness
+        : undefined;
+      const fitnessValue = Number.isFinite(smoothedFitness) ? smoothedFitness : entry.fitness;
+      const brain = entry.brain ?? {};
+
+      const statsContainer = document.createElement('div');
+
+      statsContainer.className = 'leaderboard-stats';
+
+      const formatFloat = (value) => (Number.isFinite(value) ? value.toFixed(2) : '—');
+      const formatCount = (value) => (Number.isFinite(value) ? value.toLocaleString() : '—');
+
+      const statRows = [
+        { label: 'Fitness', value: formatFloat(fitnessValue) },
+        { label: 'Neurons', value: formatCount(brain.neuronCount) },
+        { label: 'Brain', value: formatFloat(brain.fitness) },
+        { label: 'Connections', value: formatCount(brain.connectionCount) },
+      ];
+
+      statRows.forEach(({ label: statLabel, value }) => {
+        const statRow = document.createElement('div');
+
+        statRow.className = 'leaderboard-stat';
+
+        const statLabelEl = document.createElement('span');
+
+        statLabelEl.className = 'leaderboard-stat-label';
+        statLabelEl.textContent = statLabel;
+
+        const statValueEl = document.createElement('span');
+
+        statValueEl.className = 'leaderboard-stat-value';
+        statValueEl.textContent = value;
+
+        statRow.appendChild(statLabelEl);
+        statRow.appendChild(statValueEl);
+        statsContainer.appendChild(statRow);
+      });
 
       this.#appendControlRow(this.leaderBody, {
         label,
-        value,
-        color: e.color,
+        value: statsContainer,
+        title: `Fitness ${statRows[0].value} | Neurons ${statRows[1].value} | Brain ${statRows[2].value} | Connections ${statRows[3].value}`,
+        color: entry.color,
       });
     });
   }

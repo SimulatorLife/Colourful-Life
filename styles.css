@@ -154,7 +154,7 @@ canvas {
   font-size: 16px;
   color: var(--color-text);
 }
-.controls-panel button {
+.controls-panel button:not(.panel-toggle) {
   width: 100%;
   margin-bottom: var(--space-md);
   padding: var(--space-md) var(--space-md);
@@ -194,8 +194,14 @@ canvas {
   gap: var(--space-sm);
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
+.control-section-title,
 .overlay-header {
   margin: 12px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-subtle);
 }
 .control-name {
   font-size: 12px;
@@ -242,6 +248,46 @@ canvas {
   margin: 0 0 var(--space-md);
   font-size: 16px;
   color: var(--color-text);
+}
+
+.leaderboard-panel .control-line {
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.leaderboard-panel .control-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+  white-space: normal;
+}
+
+.leaderboard-stats {
+  display: grid;
+  gap: 4px;
+}
+
+.leaderboard-stat {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: var(--space-xs, 6px);
+  align-items: center;
+}
+
+.leaderboard-stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.leaderboard-stat-value {
+  min-width: 5ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Metrics and leaderboard boxes */

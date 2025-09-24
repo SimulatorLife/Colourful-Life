@@ -1,8 +1,12 @@
+import { MAX_TILE_ENERGY } from './config.js';
+
 export function computeFitness(cell, maxTileEnergy) {
   const gridManager = typeof globalThis !== 'undefined' ? globalThis.GridManager : undefined;
   const maxEnergy =
     maxTileEnergy ??
-    (gridManager && gridManager.maxTileEnergy != null ? gridManager.maxTileEnergy : 1);
+    (gridManager && gridManager.maxTileEnergy != null
+      ? gridManager.maxTileEnergy
+      : MAX_TILE_ENERGY);
 
   return (
     (cell.fightsWon - cell.fightsLost) * 0.5 +

@@ -72,7 +72,8 @@ export default class Cell {
     this.fightsLost = 0;
   }
 
-  static breed(parentA, parentB, mutationMultiplier = 1) {
+  static breed(parentA, parentB, mutationMultiplier = 1, options = {}) {
+    const { maxTileEnergy } = options || {};
     const row = parentA.row;
     const col = parentA.col;
     const avgChance = (parentA.dna.mutationChance() + parentB.dna.mutationChance()) / 2;
@@ -82,10 +83,12 @@ export default class Cell {
     const chance = Math.max(0, avgChance * effectiveMultiplier);
     const range = Math.max(0, Math.round(avgRange * effectiveMultiplier));
     const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range);
-    const maxTileEnergy =
-      typeof window !== 'undefined' && window.GridManager?.maxTileEnergy != null
-        ? window.GridManager.maxTileEnergy
-        : 5;
+    const resolvedMaxTileEnergy =
+      typeof maxTileEnergy === 'number'
+        ? maxTileEnergy
+        : typeof window !== 'undefined' && window.GridManager?.maxTileEnergy != null
+          ? window.GridManager.maxTileEnergy
+          : MAX_TILE_ENERGY;
     const calculateInvestment = (parent, starvation) => {
       const fracFn = parent.dna?.parentalInvestmentFrac;
       const investFrac = typeof fracFn === 'function' ? fracFn.call(parent.dna) : 0.4;
@@ -94,8 +97,8 @@ export default class Cell {
 
       return Math.min(desired, maxSpend);
     };
-    const starvationA = parentA.starvationThreshold(maxTileEnergy);
-    const starvationB = parentB.starvationThreshold(maxTileEnergy);
+    const starvationA = parentA.starvationThreshold(resolvedMaxTileEnergy);
+    const starvationB = parentB.starvationThreshold(resolvedMaxTileEnergy);
     const investA = calculateInvestment(parentA, starvationA);
     const investB = calculateInvestment(parentB, starvationB);
 
