@@ -67,6 +67,7 @@ export class DNA {
     }
 
     this.genes = new Uint8Array(geneCount);
+    this._brainMetrics = null;
 
     if (genesInput) {
       const limit = Math.min(genesInput.length ?? 0, geneCount);
@@ -219,6 +220,44 @@ export class DNA {
     }
 
     return genes;
+  }
+
+  updateBrainMetrics({ neuronCount, connectionCount } = {}) {
+    if (!this.hasNeuralGenes()) {
+      this._brainMetrics = null;
+
+      return;
+    }
+
+    const normalizedNeurons = Number.isFinite(neuronCount)
+      ? Math.max(0, Math.round(neuronCount))
+      : null;
+    const normalizedConnections = Number.isFinite(connectionCount)
+      ? Math.max(0, Math.round(connectionCount))
+      : null;
+
+    if (!this._brainMetrics) {
+      this._brainMetrics = {
+        neuronCount: normalizedNeurons ?? 0,
+        connectionCount: normalizedConnections ?? 0,
+      };
+
+      return;
+    }
+
+    if (normalizedNeurons !== null) {
+      this._brainMetrics.neuronCount = normalizedNeurons;
+    }
+
+    if (normalizedConnections !== null) {
+      this._brainMetrics.connectionCount = normalizedConnections;
+    }
+  }
+
+  getBrainMetrics() {
+    if (!this._brainMetrics) return null;
+
+    return { ...this._brainMetrics };
   }
 
   // Expand genome to a 6x5 weight matrix in [-1,1]
@@ -405,6 +444,12 @@ export class DNA {
 
   neurons() {
     if (this.hasNeuralGenes()) {
+      const tracked = this._brainMetrics;
+
+      if (tracked && Number.isFinite(tracked.neuronCount) && tracked.neuronCount > 0) {
+        return Math.max(1, tracked.neuronCount);
+      }
+
       const sensorLimit = Brain?.SENSOR_COUNT ?? 0;
       const nodes = new Set();
       const genes = this.neuralGenes();
@@ -504,12 +549,42 @@ export class DNA {
     return 0.01 + 0.03 * combat; // 0.01..0.04
   }
 
+  cognitiveCostComponents({
+    baselineNeurons = 0,
+    dynamicNeurons = 0,
+    sight = 0,
+    effDensity = 0,
+  } = {}) {
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const activity = this.geneFraction(GENE_LOCI.ACTIVITY);
+    const base = 0.0004 + 0.0008 * (1 - efficiency);
+    const densityFactor = 0.5 + 0.5 * Math.max(0, effDensity);
+    const normalizedSight = Math.max(0, sight);
+    const baseline = base * (Math.max(0, baselineNeurons) + 0.5 * normalizedSight) * densityFactor;
+    const usageScale = 0.6 + 0.8 * activity; // 0.6..1.4
+    const dynamic = base * Math.max(0, dynamicNeurons) * usageScale * densityFactor;
+    const total = baseline + dynamic;
+
+    return {
+      baseline,
+      dynamic,
+      total,
+      usageScale,
+      densityFactor,
+      base,
+    };
+  }
+
   // Cognitive/perception cost based on neurons and sight
   cognitiveCost(neurons, sight, effDensity = 0) {
-    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
-    const base = 0.0004 + 0.0008 * (1 - efficiency); // efficient genomes pay less
+    const { total } = this.cognitiveCostComponents({
+      baselineNeurons: neurons,
+      dynamicNeurons: 0,
+      sight,
+      effDensity,
+    });
 
-    return base * (neurons + 0.5 * sight) * (0.5 + 0.5 * effDensity);
+    return total;
   }
 
   // Reproduction energy threshold as a fraction of max tile energy

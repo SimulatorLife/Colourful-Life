@@ -69,6 +69,20 @@ const clampSensorValue = (value) => {
   return clamp(value, -1, 1);
 };
 
+const cloneTracePayload = (trace) => {
+  if (!trace) return null;
+
+  return {
+    sensors: Array.isArray(trace.sensors) ? trace.sensors.map((entry) => ({ ...entry })) : [],
+    nodes: Array.isArray(trace.nodes)
+      ? trace.nodes.map((entry) => ({
+          ...entry,
+          inputs: Array.isArray(entry.inputs) ? entry.inputs.map((input) => ({ ...input })) : [],
+        }))
+      : [],
+  };
+};
+
 export default class Brain {
   static SENSOR_COUNT = SENSOR_COUNT;
 
@@ -79,7 +93,16 @@ export default class Brain {
 
     if (!Array.isArray(genes) || genes.length === 0) return null;
 
-    return new Brain({ genes });
+    const brain = new Brain({ genes });
+
+    if (typeof dna.updateBrainMetrics === 'function') {
+      dna.updateBrainMetrics({
+        neuronCount: brain.neuronCount,
+        connectionCount: brain.connectionCount,
+      });
+    }
+
+    return brain;
   }
 
   constructor({ genes = [] } = {}) {
@@ -90,6 +113,7 @@ export default class Brain {
     this.lastSensors = null;
     this.lastOutputs = new Map();
     this.lastActivationCount = 0;
+    this.lastEvaluation = null;
 
     for (let i = 0; i < genes.length; i++) {
       const gene = genes[i];
@@ -130,11 +154,31 @@ export default class Brain {
     return this.connections.length;
   }
 
-  evaluateGroup(groupName, sensorObject = {}) {
+  evaluateGroup(groupName, sensorObject = {}, options = {}) {
+    const traceEnabled = Boolean(options?.trace);
     const group = OUTPUT_GROUPS[groupName];
 
     if (!group || group.length === 0) {
-      return { values: null, activationCount: 0 };
+      const emptyEvaluation = {
+        values: null,
+        activationCount: 0,
+        sensors: new Array(SENSOR_COUNT).fill(0),
+      };
+
+      if (traceEnabled) {
+        emptyEvaluation.trace = { sensors: [], nodes: [] };
+      }
+
+      this.lastEvaluation = {
+        group: groupName,
+        sensors: emptyEvaluation.sensors,
+        activationCount: 0,
+        outputs: null,
+        trace: traceEnabled ? emptyEvaluation.trace : null,
+      };
+      this.lastActivationCount = 0;
+
+      return emptyEvaluation;
     }
 
     const sensors = new Array(SENSOR_COUNT).fill(0);
@@ -150,16 +194,38 @@ export default class Brain {
       }
     }
 
-    this.lastSensors = sensors.slice();
+    const sensorVector = sensors.slice();
+
+    this.lastSensors = sensorVector;
     const cache = new Map();
     const visiting = new Set();
     let activationCount = 0;
+    const traceEntries = traceEnabled ? [] : null;
+    const traceCache = traceEnabled ? new Map() : null;
+    const sensorTrace = traceEnabled
+      ? SENSOR_KEYS.map((key, index) => ({
+          id: index,
+          key,
+          value: sensorVector[index] ?? 0,
+        }))
+      : null;
 
     const computeNode = (nodeId) => {
       if (this.#isSensor(nodeId)) {
         const index = nodeId < sensors.length ? nodeId : 0;
 
-        return sensors[index] ?? 0;
+        const sensorValue = sensors[index] ?? 0;
+
+        if (traceEnabled && !traceCache.has(nodeId)) {
+          traceCache.set(nodeId, {
+            id: nodeId,
+            type: 'sensor',
+            key: SENSOR_KEYS[nodeId] ?? `sensor_${nodeId}`,
+            value: sensorValue,
+          });
+        }
+
+        return sensorValue;
       }
 
       if (cache.has(nodeId)) return cache.get(nodeId);
@@ -181,21 +247,50 @@ export default class Brain {
       }
 
       let sum = 0;
+      let nodeInputs = null;
+
+      if (traceEnabled) {
+        nodeInputs = [];
+      }
 
       for (let i = 0; i < incoming.length; i++) {
         const { source, weight } = incoming[i];
         const sourceValue = computeNode(source);
 
         sum += weight * sourceValue;
+
+        if (traceEnabled) {
+          nodeInputs.push({
+            source,
+            weight,
+            value: sourceValue,
+          });
+        }
       }
 
       visiting.delete(nodeId);
       activationCount++;
       const activationType = this.activationMap.get(nodeId) ?? DEFAULT_ACTIVATION;
-      const { fn } = ACTIVATION_FUNCS[activationType] || ACTIVATION_FUNCS[DEFAULT_ACTIVATION];
-      const output = fn(sum);
+      const activationInfo =
+        ACTIVATION_FUNCS[activationType] || ACTIVATION_FUNCS[DEFAULT_ACTIVATION];
+      const output = activationInfo.fn(sum);
 
       cache.set(nodeId, output);
+
+      if (traceEnabled) {
+        const traceEntry = {
+          id: nodeId,
+          type: 'neuron',
+          activationType,
+          activationName: activationInfo.name,
+          sum,
+          output,
+          inputs: nodeInputs,
+        };
+
+        traceEntries.push(traceEntry);
+        traceCache.set(nodeId, traceEntry);
+      }
 
       return output;
     };
@@ -211,21 +306,48 @@ export default class Brain {
       pendingOutputs.push([key, value]);
     }
 
-    if (activationCount === 0) {
-      this.lastActivationCount = 0;
+    const result = {
+      values: activationCount > 0 ? values : null,
+      activationCount,
+      sensors: sensorVector,
+    };
 
-      return { values: null, activationCount: 0 };
+    let tracePayload = null;
+
+    if (traceEnabled) {
+      tracePayload = {
+        sensors: sensorTrace ? sensorTrace.map((entry) => ({ ...entry })) : [],
+        nodes: traceEntries
+          ? traceEntries.map((entry) => ({
+              ...entry,
+              inputs: Array.isArray(entry.inputs)
+                ? entry.inputs.map((input) => ({ ...input }))
+                : [],
+            }))
+          : [],
+      };
+
+      result.trace = tracePayload;
     }
 
-    for (let i = 0; i < pendingOutputs.length; i++) {
-      const [key, value] = pendingOutputs[i];
+    if (activationCount > 0) {
+      for (let i = 0; i < pendingOutputs.length; i++) {
+        const [key, value] = pendingOutputs[i];
 
-      this.lastOutputs.set(key, value);
+        this.lastOutputs.set(key, value);
+      }
     }
 
     this.lastActivationCount = activationCount;
+    this.lastEvaluation = {
+      group: groupName,
+      sensors: sensorVector.slice(),
+      activationCount,
+      outputs: activationCount > 0 ? { ...values } : null,
+      trace: traceEnabled && tracePayload ? cloneTracePayload(tracePayload) : null,
+    };
 
-    return { values, activationCount };
+    return result;
   }
 
   snapshot() {
@@ -245,6 +367,16 @@ export default class Brain {
       })),
       sensors: this.lastSensors ? [...this.lastSensors] : null,
       lastOutputs: Object.fromEntries(this.lastOutputs.entries()),
+      lastActivationCount: this.lastActivationCount,
+      lastEvaluation: this.lastEvaluation
+        ? {
+            group: this.lastEvaluation.group,
+            activationCount: this.lastEvaluation.activationCount,
+            sensors: this.lastEvaluation.sensors ? [...this.lastEvaluation.sensors] : null,
+            outputs: this.lastEvaluation.outputs ? { ...this.lastEvaluation.outputs } : null,
+            trace: cloneTracePayload(this.lastEvaluation.trace),
+          }
+        : null,
     };
   }
 

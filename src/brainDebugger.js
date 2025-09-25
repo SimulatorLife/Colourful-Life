@@ -37,6 +37,8 @@ const BrainDebugger = {
 
       if (!brain || typeof brain.snapshot !== 'function') continue;
       const detail = brain.snapshot();
+      const telemetry =
+        typeof cell?.getDecisionTelemetry === 'function' ? cell.getDecisionTelemetry(3) : [];
 
       next.push({
         row: entry.row,
@@ -46,6 +48,7 @@ const BrainDebugger = {
         neuronCount: brain.neuronCount,
         connectionCount: brain.connectionCount,
         brain: detail,
+        decisions: telemetry,
       });
     }
 
