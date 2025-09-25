@@ -166,6 +166,45 @@ test('GridManager passes custom max tile energy to combat and movement helpers',
   assert.is(receivedContext.getEnergyAt(0, 0), 1, 'energy accessor should normalize by the max');
 });
 
+test('density effect multiplier scales harvesting and regeneration penalties', async () => {
+  const { default: GridManager } = await import('../src/gridManager.js');
+
+  class DensityGrid extends GridManager {
+    init() {}
+  }
+
+  const gm = new DensityGrid(1, 1, baseOptions);
+  const harvester = {
+    dna: {
+      forageRate: () => 1,
+      harvestCapMin: () => 0,
+      harvestCapMax: () => 1,
+    },
+    energy: 0,
+  };
+
+  gm.energyGrid[0][0] = 1;
+  gm.consumeEnergy(harvester, 0, 0, [[0.5]], 1);
+  const gainNormal = harvester.energy;
+
+  gm.energyGrid[0][0] = 1;
+  harvester.energy = 0;
+  gm.consumeEnergy(harvester, 0, 0, [[0.5]], 2);
+  const gainHigh = harvester.energy;
+
+  assert.ok(gainHigh < gainNormal, 'higher density scaling should reduce harvesting gains');
+
+  gm.energyGrid[0][0] = 0;
+  gm.regenerateEnergyGrid([], 1, 1, 0, [[0.5]], 1);
+  const regenNormal = gm.energyGrid[0][0];
+
+  gm.energyGrid[0][0] = 0;
+  gm.regenerateEnergyGrid([], 1, 1, 0, [[0.5]], 2);
+  const regenHigh = gm.energyGrid[0][0];
+
+  assert.ok(regenHigh < regenNormal, 'higher density scaling should dampen regeneration');
+});
+
 test('handleReproduction threads custom max tile energy through cell decisions', async () => {
   const { default: GridManager } = await import('../src/gridManager.js');
   const { default: Cell } = await import('../src/cell.js');

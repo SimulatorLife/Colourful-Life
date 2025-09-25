@@ -926,7 +926,13 @@ export default class Cell {
         attacker.row = targetRow;
         attacker.col = targetCol;
       }
-      manager.consumeEnergy(attacker, targetRow, targetCol);
+      manager.consumeEnergy(
+        attacker,
+        targetRow,
+        targetCol,
+        manager.densityGrid,
+        manager.currentDensityEffectMultiplier
+      );
       stats?.onFight?.();
       stats?.onDeath?.();
       attacker.fightsWon = (attacker.fightsWon || 0) + 1;
