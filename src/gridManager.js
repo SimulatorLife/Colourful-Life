@@ -1247,7 +1247,7 @@ export default class GridManager {
       });
     }
 
-    return reproduced || Boolean(blockedInfo);
+    return reproduced;
   }
 
   handleCombat(
