@@ -80,6 +80,7 @@ test('brain evaluateGroup produces deterministic, DNA-specific outputs', () => {
   const { values: valuesA1 } = cellA.brain.evaluateGroup('movement', sensors);
   const { values: valuesA2 } = cellA.brain.evaluateGroup('movement', sensors);
   const { values: valuesB } = cellB.brain.evaluateGroup('movement', sensors);
+  const traced = cellA.brain.evaluateGroup('movement', sensors, { trace: true });
 
   assert.ok(valuesA1 && valuesA2 && valuesB, 'brain evaluations should produce value maps');
   approxEqual(valuesA1.pursue, valuesA2.pursue, 1e-9);
@@ -91,6 +92,19 @@ test('brain evaluateGroup produces deterministic, DNA-specific outputs', () => {
   assert.ok(
     pursueDelta > 1e-6 || avoidDelta > 1e-6,
     'different DNA should produce distinct movement outputs'
+  );
+  assert.ok(traced.trace, 'trace metadata should be present when requested');
+  assert.is(Array.isArray(traced.trace.nodes), true, 'trace nodes should be captured');
+  assert.ok(traced.trace.nodes.length > 0, 'trace should include at least one node entry');
+  assert.is(traced.sensors.length, Brain.SENSOR_COUNT, 'sensor vector should be returned');
+  const snapshot = cellA.brain.snapshot();
+
+  assert.ok(snapshot.lastEvaluation, 'brain snapshot should capture last evaluation summary');
+  assert.is(snapshot.lastEvaluation.group, 'movement');
+  assert.ok(
+    Array.isArray(snapshot.lastEvaluation.trace?.nodes) &&
+      snapshot.lastEvaluation.trace.nodes.length > 0,
+    'snapshot trace should be available'
   );
 });
 
@@ -141,7 +155,7 @@ test('neural evaluation contributes to cognitive maintenance cost', () => {
   const partner = new Cell(0, 1, partnerDNA, 5);
 
   cell.age = cell.lifespan / 4;
-  cell.decideReproduction(partner, {
+  const energyDecision = cell.decideReproduction(partner, {
     localDensity: 0.25,
     densityEffectMultiplier: 1,
     maxTileEnergy: 10,
@@ -166,14 +180,43 @@ test('neural evaluation contributes to cognitive maintenance cost', () => {
     (1 + metabolism) *
     (1 + sen * ageFrac) *
     energyDensityMult;
-  const totalNeurons = cell.neurons + dynamicLoad;
-  const expectedCognitive = dna.cognitiveCost(totalNeurons, cell.sight, effDensity);
+  const breakdown = dna.cognitiveCostComponents({
+    baselineNeurons: cell.neurons,
+    dynamicNeurons: dynamicLoad,
+    sight: cell.sight,
+    effDensity,
+  });
+  const expectedCognitive = breakdown.total;
   const initialEnergy = cell.energy;
 
   cell.manageEnergy(cell.row, cell.col, context);
 
   approxEqual(cell.energy, initialEnergy - (energyLoss + expectedCognitive), 1e-9);
   assert.is(cell._neuralLoad, 0);
+  const telemetry = cell.getDecisionTelemetry(1);
+
+  assert.ok(
+    Array.isArray(telemetry) && telemetry.length === 1,
+    'telemetry should contain last tick'
+  );
+  const lastTick = telemetry[0];
+
+  assert.ok(Array.isArray(lastTick.decisions) && lastTick.decisions.length > 0);
+  const reproductionLog = lastTick.decisions.find((entry) => entry.group === 'reproduction');
+
+  assert.ok(reproductionLog, 'reproduction decision should be logged');
+  approxEqual(lastTick.dynamicCost, breakdown.dynamic, 1e-9);
+  approxEqual(lastTick.baselineCost, breakdown.baseline, 1e-9);
+  approxEqual(lastTick.cognitiveLoss, breakdown.total, 1e-9);
+  approxEqual(lastTick.totalLoss, energyLoss + breakdown.total, 1e-9);
+  approxEqual(reproductionLog.energyImpact.dynamic, breakdown.dynamic, 1e-9);
+  approxEqual(reproductionLog.energyImpact.baseline, breakdown.baseline, 1e-9);
+  approxEqual(reproductionLog.energyImpact.cognitive, breakdown.total, 1e-9);
+  approxEqual(reproductionLog.outcome?.probability ?? 0, energyDecision.probability, 1e-9);
+  assert.ok(
+    Array.isArray(reproductionLog.trace?.nodes) && reproductionLog.trace.nodes.length > 0,
+    'reproduction trace should capture evaluated neurons'
+  );
 });
 
 test('disabled neural connections fall back to legacy policies', () => {
@@ -242,6 +285,11 @@ test('brains enforce minimum neuron floor while pruning unreachable connections'
   assert.is(brain.neuronCount, expectedFloor, 'neuron count should honor action floor');
   assert.is(brain.connectionCount, 2, 'irrelevant connections should be pruned');
   assert.is(brain.activationMap.has(221), false);
+  const metrics = dna.getBrainMetrics();
+
+  assert.ok(metrics, 'DNA should retain the pruned brain metrics');
+  assert.is(metrics.neuronCount, 2);
+  assert.is(metrics.connectionCount, 2);
 
   const cell = new Cell(0, 0, dna, 5);
 
@@ -263,7 +311,12 @@ test('brains enforce minimum neuron floor while pruning unreachable connections'
     (1 + sen * ageFrac) *
     energyDensityMult;
   const energyLoss = baseLoss * lossScale;
-  const expectedCognitive = cell.dna.cognitiveCost(cell.neurons, cell.sight, effDensity);
+  const expectedCognitive = cell.dna.cognitiveCostComponents({
+    baselineNeurons: cell.neurons,
+    dynamicNeurons: 0,
+    sight: cell.sight,
+    effDensity,
+  }).total;
   const startingEnergy = cell.energy;
 
   cell.manageEnergy(cell.row, cell.col, context);

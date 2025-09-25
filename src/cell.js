@@ -33,6 +33,20 @@ function sampleFromDistribution(probabilities = [], labels = []) {
   return labels[labels.length - 1] ?? probabilities.length - 1;
 }
 
+function cloneTrace(trace) {
+  if (!trace) return null;
+
+  return {
+    sensors: Array.isArray(trace.sensors) ? trace.sensors.map((entry) => ({ ...entry })) : [],
+    nodes: Array.isArray(trace.nodes)
+      ? trace.nodes.map((entry) => ({
+          ...entry,
+          inputs: Array.isArray(entry.inputs) ? entry.inputs.map((input) => ({ ...input })) : [],
+        }))
+      : [],
+  };
+}
+
 export default class Cell {
   static chanceToMutate = 0.15;
   static geneMutationRange = 0.2;
@@ -72,6 +86,9 @@ export default class Cell {
     this._neuralLoad = 0;
     this.lastEventPressure = 0;
     this._usedNeuralMovement = false;
+    this.decisionHistory = [];
+    this._pendingDecisionContexts = [];
+    this._decisionContextIndex = new Map();
     // Cache metabolism from gene row 5 to avoid per-tick recompute
     const geneRow = this.genes?.[5];
 
@@ -301,6 +318,128 @@ export default class Cell {
     return Boolean(this.brain && this.brain.connectionCount > 0);
   }
 
+  #registerDecisionContext(group, sensors, evaluation, activationLoad = 0) {
+    if (!evaluation) return null;
+
+    const safeSensors =
+      sensors && typeof sensors === 'object' && !Array.isArray(sensors)
+        ? Object.fromEntries(
+            Object.entries(sensors).map(([key, value]) => [key, Number(value) || 0])
+          )
+        : null;
+    const sensorVector = Array.isArray(evaluation.sensors)
+      ? evaluation.sensors.map((value) => (Number.isFinite(value) ? value : 0))
+      : null;
+    const activationCount = Math.max(0, activationLoad || evaluation.activationCount || 0);
+    const context = {
+      tick: this.age,
+      group,
+      sensors: safeSensors,
+      sensorVector,
+      outputs: evaluation.values ? { ...evaluation.values } : null,
+      activationCount,
+      trace: evaluation.trace ? cloneTrace(evaluation.trace) : null,
+      outcome: null,
+    };
+
+    this._pendingDecisionContexts.push(context);
+    this._decisionContextIndex.set(group, context);
+
+    return context;
+  }
+
+  #assignDecisionOutcome(group, outcome) {
+    if (!this._decisionContextIndex?.has(group)) return;
+
+    const context = this._decisionContextIndex.get(group);
+
+    if (!context) return;
+
+    if (outcome && typeof outcome === 'object' && !Array.isArray(outcome)) {
+      context.outcome = { ...outcome };
+    } else {
+      context.outcome = outcome ?? null;
+    }
+  }
+
+  #finalizeDecisionContexts({
+    energyBefore = this.energy,
+    energyAfter = this.energy,
+    energyLoss = 0,
+    cognitiveLoss = 0,
+    baselineCost = cognitiveLoss,
+    dynamicCost = 0,
+    dynamicLoad = 0,
+    totalLoss = energyLoss + cognitiveLoss,
+    baselineNeurons = Math.max(0, this.neurons || 0),
+  } = {}) {
+    const pending = Array.isArray(this._pendingDecisionContexts)
+      ? this._pendingDecisionContexts
+      : [];
+
+    if (pending.length === 0) {
+      this._pendingDecisionContexts = [];
+      this._decisionContextIndex.clear();
+
+      return;
+    }
+
+    const perActivationCost = dynamicLoad > 0 ? dynamicCost / dynamicLoad : 0;
+    const baselineShare = pending.length > 0 ? baselineCost / pending.length : 0;
+
+    const decisions = pending.map((context) => {
+      const activationCount = Math.max(0, context.activationCount || 0);
+      const dynamicShare = activationCount * perActivationCost;
+      const normalizedOutcome =
+        context.outcome && typeof context.outcome === 'object' && !Array.isArray(context.outcome)
+          ? { ...context.outcome }
+          : (context.outcome ?? null);
+
+      return {
+        tick: context.tick,
+        group: context.group,
+        sensors: context.sensors ? { ...context.sensors } : null,
+        sensorVector: Array.isArray(context.sensorVector) ? [...context.sensorVector] : null,
+        outputs: context.outputs ? { ...context.outputs } : null,
+        activationCount,
+        trace: cloneTrace(context.trace),
+        outcome: normalizedOutcome,
+        energyImpact: {
+          baseline: baselineShare,
+          dynamic: dynamicShare,
+          cognitive: baselineShare + dynamicShare,
+          totalLoss,
+        },
+      };
+    });
+
+    const record = {
+      tick: this.age,
+      energyBefore,
+      energyAfter,
+      totalLoss,
+      energyLoss,
+      cognitiveLoss,
+      baselineCost,
+      dynamicCost,
+      dynamicLoad,
+      baselineNeurons,
+      usageCostPerActivation: perActivationCost,
+      decisions,
+    };
+
+    this.decisionHistory.push(record);
+
+    const historyLimit = 20;
+
+    if (this.decisionHistory.length > historyLimit) {
+      this.decisionHistory.splice(0, this.decisionHistory.length - historyLimit);
+    }
+
+    this._pendingDecisionContexts = [];
+    this._decisionContextIndex.clear();
+  }
+
   #averageSimilarity(list = []) {
     if (!Array.isArray(list) || list.length === 0) return 0;
     let total = 0;
@@ -422,13 +561,19 @@ export default class Cell {
   #evaluateBrainGroup(group, sensors) {
     if (!this.#canUseNeuralPolicies()) return null;
 
-    const result = this.brain.evaluateGroup(group, sensors);
+    const result = this.brain.evaluateGroup(group, sensors, { trace: true });
 
-    if (!result || !result.values) return null;
+    if (!result || !result.values) {
+      this._decisionContextIndex.delete(group);
+
+      return null;
+    }
 
     const activationLoad = Math.max(0, result.activationCount || 0);
 
     this._neuralLoad += activationLoad;
+
+    this.#registerDecisionContext(group, sensors, result, activationLoad);
 
     return result.values;
   }
@@ -469,14 +614,36 @@ export default class Cell {
     const labels = entries.map(({ key }) => key);
     const probs = softmax(logits);
     const action = sampleFromDistribution(probs, labels);
+    const probabilitiesByKey = {};
+    const logitsByKey = {};
+
+    for (let i = 0; i < labels.length; i++) {
+      const key = labels[i];
+
+      probabilitiesByKey[key] = probs[i] ?? 0;
+      logitsByKey[key] = logits[i] ?? 0;
+    }
 
     if (!action) {
       this._usedNeuralMovement = false;
+      this.#assignDecisionOutcome('movement', {
+        action: null,
+        usedBrain: true,
+        probabilities: probabilitiesByKey,
+        logits: logitsByKey,
+      });
 
       return { action: null, usedBrain: false };
     }
 
     this._usedNeuralMovement = true;
+
+    this.#assignDecisionOutcome('movement', {
+      action,
+      usedBrain: true,
+      probabilities: probabilitiesByKey,
+      logits: logitsByKey,
+    });
 
     return { action, usedBrain: true };
   }
@@ -515,16 +682,84 @@ export default class Cell {
       this.dna.baseEnergyLossScale() * (1 + metabolism) * (1 + sen * ageFrac) * energyDensityMult;
     const energyLoss = baseLoss * lossScale;
     // cognitive/perception overhead derived from DNA and recent neural evaluations
+    const baselineNeurons = Math.max(0, this.neurons || 0);
     const dynamicLoad = Math.max(0, this._neuralLoad || 0);
+    const costBreakdown =
+      typeof this.dna.cognitiveCostComponents === 'function'
+        ? this.dna.cognitiveCostComponents({
+            baselineNeurons,
+            dynamicNeurons: dynamicLoad,
+            sight: this.sight,
+            effDensity: effD,
+          })
+        : null;
+    let baselineCost = 0;
+    let dynamicCost = 0;
+    let cognitiveLoss = 0;
 
-    this._neuralLoad = 0;
-    const totalNeuralLoad = Math.max(0, (this.neurons || 0) + dynamicLoad);
-    const cognitiveLoss = this.dna.cognitiveCost(totalNeuralLoad, this.sight, effD);
+    if (costBreakdown) {
+      baselineCost = costBreakdown.baseline;
+      dynamicCost = costBreakdown.dynamic;
+      cognitiveLoss = costBreakdown.total;
+    } else {
+      baselineCost = this.dna.cognitiveCost(baselineNeurons, this.sight, effD);
+      const combinedLoad = Math.max(0, baselineNeurons + dynamicLoad);
+      const totalCost = this.dna.cognitiveCost(combinedLoad, this.sight, effD);
+
+      dynamicCost = Math.max(0, totalCost - baselineCost);
+      cognitiveLoss = totalCost;
+    }
+
+    const energyBefore = this.energy;
 
     this.energy -= energyLoss + cognitiveLoss;
     this.lastEventPressure = Math.max(0, (this.lastEventPressure || 0) * 0.9);
 
+    this.#finalizeDecisionContexts({
+      energyBefore,
+      energyAfter: this.energy,
+      energyLoss,
+      cognitiveLoss,
+      baselineCost,
+      dynamicCost,
+      dynamicLoad,
+      baselineNeurons,
+      totalLoss: energyLoss + cognitiveLoss,
+    });
+
+    this._neuralLoad = 0;
+
     return this.energy <= this.starvationThreshold(maxTileEnergy);
+  }
+
+  getDecisionTelemetry(limit = 5) {
+    const history = Array.isArray(this.decisionHistory) ? this.decisionHistory : [];
+    const normalizedLimit = Number.isFinite(limit)
+      ? Math.max(0, Math.floor(limit))
+      : history.length;
+    const sliceStart = Math.max(0, history.length - (normalizedLimit || history.length));
+
+    return history.slice(sliceStart).map((entry) => {
+      const { decisions = [], ...rest } = entry || {};
+
+      return {
+        ...rest,
+        decisions: decisions.map((decision) => ({
+          ...decision,
+          sensors: decision.sensors ? { ...decision.sensors } : null,
+          sensorVector: Array.isArray(decision.sensorVector) ? [...decision.sensorVector] : null,
+          outputs: decision.outputs ? { ...decision.outputs } : null,
+          trace: cloneTrace(decision.trace),
+          outcome:
+            decision.outcome &&
+            typeof decision.outcome === 'object' &&
+            !Array.isArray(decision.outcome)
+              ? { ...decision.outcome }
+              : (decision.outcome ?? null),
+          energyImpact: decision.energyImpact ? { ...decision.energyImpact } : null,
+        })),
+      };
+    });
   }
 
   starvationThreshold(maxTileEnergy = 5) {
@@ -882,6 +1117,17 @@ export default class Cell {
     const yes = acceptIndex >= 0 ? clamp(probs[acceptIndex] ?? 0, 0, 1) : 0;
     const probability = clamp((baseProbability + yes) / 2, 0, 1);
 
+    this.#assignDecisionOutcome('reproduction', {
+      probability,
+      usedNetwork: true,
+      baseProbability,
+      logits: entries.reduce((acc, { key }, idx) => {
+        acc[key] = logits[idx] ?? 0;
+
+        return acc;
+      }, {}),
+    });
+
     return { probability, usedNetwork: true };
   }
 
@@ -940,11 +1186,47 @@ export default class Cell {
       this.lastFightIntent = fightProb;
       this.lastFightSignal = clamp((fightRaw + 1) / 2, 0, 1);
       const choice = sampleFromDistribution(probs, labels);
+      const probabilitiesByKey = {};
 
-      if (choice) return choice;
+      for (let i = 0; i < labels.length; i++) {
+        probabilitiesByKey[labels[i]] = probs[i] ?? 0;
+      }
+
+      if (choice) {
+        this.#assignDecisionOutcome('interaction', {
+          action: choice,
+          usedNetwork: true,
+          probabilities: probabilitiesByKey,
+          logits: entries.reduce((acc, { key }, idx) => {
+            acc[key] = logits[idx] ?? 0;
+
+            return acc;
+          }, {}),
+        });
+
+        return choice;
+      }
+
+      this.#assignDecisionOutcome('interaction', {
+        action: null,
+        usedNetwork: true,
+        probabilities: probabilitiesByKey,
+        logits: entries.reduce((acc, { key }, idx) => {
+          acc[key] = logits[idx] ?? 0;
+
+          return acc;
+        }, {}),
+      });
     }
 
-    return fallback();
+    const fallbackAction = fallback();
+
+    this.#assignDecisionOutcome('interaction', {
+      action: fallbackAction,
+      usedNetwork: false,
+    });
+
+    return fallbackAction;
   }
 
   currentFightDrive() {
