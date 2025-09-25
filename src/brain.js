@@ -213,6 +213,7 @@ export default class Brain {
 
     if (activationCount === 0) {
       this.lastActivationCount = 0;
+      this.lastOutputs.clear();
 
       return { values: null, activationCount: 0 };
     }
