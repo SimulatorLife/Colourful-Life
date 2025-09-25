@@ -47,6 +47,20 @@ export const OUTPUT_GROUPS = Object.freeze({
   ]),
 });
 
+const MOVEMENT_DIRECTION_KEYS = Object.freeze(['up', 'down', 'left', 'right']);
+
+export const ACTION_NEURON_REQUIREMENTS = Object.freeze({
+  movementDecision: OUTPUT_GROUPS.movement.length,
+  movementExecution: MOVEMENT_DIRECTION_KEYS.length,
+  interaction: OUTPUT_GROUPS.interaction.length,
+  reproduction: OUTPUT_GROUPS.reproduction.length,
+});
+
+export const MINIMUM_NEURON_FLOOR = Object.values(ACTION_NEURON_REQUIREMENTS).reduce(
+  (sum, count) => sum + count,
+  0
+);
+
 const ACTIVATION_FUNCS = {
   0: { name: 'identity', fn: (x) => x },
   1: {
@@ -71,6 +85,8 @@ const clampSensorValue = (value) => {
 
 export default class Brain {
   static SENSOR_COUNT = SENSOR_COUNT;
+  static ACTION_NEURON_REQUIREMENTS = ACTION_NEURON_REQUIREMENTS;
+  static MIN_NEURON_FLOOR = Math.max(1, MINIMUM_NEURON_FLOOR);
 
   static fromDNA(dna) {
     if (!dna || typeof dna.neuralGenes !== 'function') return null;
@@ -123,7 +139,7 @@ export default class Brain {
   }
 
   get neuronCount() {
-    return this.neuronSet.size;
+    return Math.max(this.neuronSet.size, Brain.MIN_NEURON_FLOOR);
   }
 
   get connectionCount() {

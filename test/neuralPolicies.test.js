@@ -223,7 +223,7 @@ test('disabled neural connections fall back to legacy policies', () => {
   approxEqual(decision.probability, baseProbability, 1e-12);
 });
 
-test('brains prune unreachable hidden neurons and cognitive cost matches pruned count', () => {
+test('brains enforce minimum neuron floor while pruning unreachable connections', () => {
   const dna = new DNA(90, 120, 60);
   const acceptNode = OUTPUT_GROUPS.reproduction.find((entry) => entry.key === 'accept');
 
@@ -237,13 +237,15 @@ test('brains prune unreachable hidden neurons and cognitive cost matches pruned 
   const brain = Brain.fromDNA(dna);
 
   assert.ok(brain);
-  assert.is(brain.neuronCount, 2, 'only neurons leading to outputs should remain');
+  const expectedFloor = Brain.MIN_NEURON_FLOOR;
+
+  assert.is(brain.neuronCount, expectedFloor, 'neuron count should honor action floor');
   assert.is(brain.connectionCount, 2, 'irrelevant connections should be pruned');
   assert.is(brain.activationMap.has(221), false);
 
   const cell = new Cell(0, 0, dna, 5);
 
-  assert.is(cell.neurons, 2, 'cell neuron count should reflect pruned brain');
+  assert.is(cell.neurons, expectedFloor, 'cell neuron count should reflect action floor');
 
   const context = { localDensity: 0.3, densityEffectMultiplier: 1.2, maxTileEnergy: 8 };
   const effDensity = clamp(context.localDensity * context.densityEffectMultiplier, 0, 1);
