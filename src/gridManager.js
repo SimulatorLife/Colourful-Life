@@ -223,8 +223,9 @@ export default class GridManager {
     this.densityRadius = GridManager.DENSITY_RADIUS;
     this.densityCounts = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
-    this.densityGrid = null;
-    this.currentDensityEffectMultiplier = 1;
+    this.densityLiveGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
+    this.densityGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
+    this.densityDirtyTiles = new Set();
     this.lastSnapshot = null;
     this.lingerPenalty = 0;
     this.obstacleSchedules = [];
@@ -591,21 +592,14 @@ export default class GridManager {
     }
   }
 
-  consumeEnergy(
-    cell,
-    row,
-    col,
-    densityGrid = this.densityGrid,
-    densityEffectMultiplier = this.currentDensityEffectMultiplier ?? 1
-  ) {
+  consumeEnergy(cell, row, col, densityGrid = this.densityGrid) {
     const available = this.energyGrid[row][col];
     // DNA-driven harvest with density penalty
     const baseRate = typeof cell.dna.forageRate === 'function' ? cell.dna.forageRate() : 0.4;
     const base = clamp(baseRate, 0.05, 1);
-    const rawDensity =
+    const density =
       densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
-    const effDensity = clamp(rawDensity * densityEffectMultiplier, 0, 1);
-    const crowdPenalty = Math.max(0, 1 - CONSUMPTION_DENSITY_PENALTY * effDensity);
+    const crowdPenalty = Math.max(0, 1 - CONSUMPTION_DENSITY_PENALTY * density);
     const minCap = typeof cell.dna.harvestCapMin === 'function' ? cell.dna.harvestCapMin() : 0.1;
     const maxCapRaw = typeof cell.dna.harvestCapMax === 'function' ? cell.dna.harvestCapMax() : 0.5;
     const maxCap = Math.max(minCap, clamp(maxCapRaw, minCap, 1));
@@ -621,12 +615,10 @@ export default class GridManager {
     eventStrengthMultiplier = 1,
     R = GridManager.energyRegenRate,
     D = GridManager.energyDiffusionRate,
-    densityGrid = null,
-    densityEffectMultiplier = this.currentDensityEffectMultiplier ?? 1
+    densityGrid = null
   ) {
     const maxE = this.maxTileEnergy;
     const next = this.energyNext;
-    const effectMultiplier = densityEffectMultiplier ?? this.currentDensityEffectMultiplier ?? 1;
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
@@ -636,12 +628,11 @@ export default class GridManager {
         let drain = 0;
 
         // Density reduces local regen (overgrazing effect)
-        const rawDensity = densityGrid
+        const density = densityGrid
           ? densityGrid[r][c]
           : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
-        const effDensity = clamp(rawDensity * effectMultiplier, 0, 1);
 
-        regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * effDensity);
+        regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * density);
 
         // Events modulate regen/drain (handle multiple)
         const evs = Array.isArray(events) ? events : events ? [events] : [];
@@ -788,6 +779,9 @@ export default class GridManager {
   #applyDensityDelta(row, col, delta, radius = this.densityRadius) {
     if (!this.densityCounts) return;
 
+    const totals = this.densityTotals;
+    const liveGrid = this.densityLiveGrid;
+
     for (let dx = -radius; dx <= radius; dx++) {
       for (let dy = -radius; dy <= radius; dy++) {
         if (dx === 0 && dy === 0) continue;
@@ -796,7 +790,20 @@ export default class GridManager {
 
         if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
 
-        this.densityCounts[rr][cc] = (this.densityCounts[rr][cc] || 0) + delta;
+        const countsRow = this.densityCounts[rr];
+        const nextCount = (countsRow[cc] || 0) + delta;
+
+        countsRow[cc] = nextCount;
+
+        if (!liveGrid || !totals) continue;
+
+        const total = totals[rr]?.[cc] ?? 0;
+        const nextDensity = total > 0 ? clamp(nextCount / total, 0, 1) : 0;
+
+        if (liveGrid[rr][cc] !== nextDensity) {
+          liveGrid[rr][cc] = nextDensity;
+          this.#markDensityDirty(rr, cc);
+        }
       }
     }
   }
@@ -825,12 +832,64 @@ export default class GridManager {
     );
   }
 
+  #markDensityDirty(row, col) {
+    if (!this.densityDirtyTiles) this.densityDirtyTiles = new Set();
+
+    this.densityDirtyTiles.add(row * this.cols + col);
+  }
+
+  #syncDensitySnapshot(force = false) {
+    const liveGrid = this.densityLiveGrid;
+
+    if (!liveGrid) return;
+
+    if (!this.densityGrid || this.densityGrid.length !== this.rows) {
+      this.densityGrid = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+    }
+
+    if (force) {
+      for (let r = 0; r < this.rows; r++) {
+        const destRow = this.densityGrid[r];
+        const srcRow = liveGrid[r];
+
+        for (let c = 0; c < this.cols; c++) destRow[c] = srcRow[c];
+      }
+
+      if (this.densityDirtyTiles) this.densityDirtyTiles.clear();
+
+      return;
+    }
+
+    if (!this.densityDirtyTiles || this.densityDirtyTiles.size === 0) return;
+
+    for (const key of this.densityDirtyTiles) {
+      const row = Math.floor(key / this.cols);
+      const col = key % this.cols;
+
+      this.densityGrid[row][col] = liveGrid[row][col];
+    }
+
+    this.densityDirtyTiles.clear();
+  }
+
   recalculateDensityCounts(radius = this.densityRadius) {
     const normalizedRadius = Math.max(0, Math.floor(radius));
     const targetRadius = normalizedRadius > 0 ? normalizedRadius : this.densityRadius;
 
     if (!this.densityCounts) {
       this.densityCounts = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+    }
+
+    if (!this.densityLiveGrid) {
+      this.densityLiveGrid = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+    }
+
+    if (!this.densityGrid) {
+      this.densityGrid = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+    }
+
+    if (!this.densityDirtyTiles) {
+      this.densityDirtyTiles = new Set();
     }
 
     if (targetRadius !== this.densityRadius) {
@@ -843,10 +902,18 @@ export default class GridManager {
     }
 
     for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) this.densityLiveGrid[r][c] = 0;
+    }
+
+    this.densityDirtyTiles.clear();
+
+    for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         if (this.grid[r][c]) this.#applyDensityDelta(r, c, 1);
       }
     }
+
+    this.#syncDensitySnapshot(true);
   }
 
   rebuildActiveCells() {
@@ -903,21 +970,25 @@ export default class GridManager {
   }
 
   computeDensityGrid(radius = GridManager.DENSITY_RADIUS) {
-    const useCache = radius === this.densityRadius && this.densityCounts && this.densityTotals;
+    const useCache =
+      radius === this.densityRadius &&
+      this.densityCounts &&
+      this.densityTotals &&
+      this.densityLiveGrid;
+
+    if (useCache) {
+      this.#syncDensitySnapshot();
+
+      return this.densityGrid.map((row) => row.slice());
+    }
+
     const out = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
 
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
-        if (useCache) {
-          const total = this.densityTotals[row]?.[col] ?? 0;
-          const count = this.densityCounts[row]?.[col] ?? 0;
+        const { count, total } = this.#countNeighbors(row, col, radius);
 
-          out[row][col] = total > 0 ? Math.max(0, Math.min(1, count / total)) : 0;
-        } else {
-          const { count, total } = this.#countNeighbors(row, col, radius);
-
-          out[row][col] = total > 0 ? count / total : 0;
-        }
+        out[row][col] = total > 0 ? count / total : 0;
       }
     }
 
@@ -940,13 +1011,13 @@ export default class GridManager {
     return total > 0 ? count / total : 0;
   }
 
-  draw({ showObstacles = true } = {}) {
+  draw() {
     const ctx = this.ctx;
     const cellSize = this.cellSize;
 
     // Clear full canvas once
     ctx.clearRect(0, 0, this.cols * cellSize, this.rows * cellSize);
-    if (showObstacles && this.obstacles) {
+    if (this.obstacles) {
       ctx.fillStyle = 'rgba(40,40,55,0.9)';
       for (let row = 0; row < this.rows; row++) {
         for (let col = 0; col < this.cols; col++) {
@@ -975,22 +1046,17 @@ export default class GridManager {
     }
   }
 
-  prepareTick({
-    eventManager,
-    eventStrengthMultiplier,
-    energyRegenRate,
-    energyDiffusionRate,
-    densityEffectMultiplier = this.currentDensityEffectMultiplier ?? 1,
-  }) {
-    const densityGrid = this.computeDensityGrid(GridManager.DENSITY_RADIUS);
+  prepareTick({ eventManager, eventStrengthMultiplier, energyRegenRate, energyDiffusionRate }) {
+    this.#syncDensitySnapshot();
+
+    const densityGrid = this.densityGrid;
 
     this.regenerateEnergyGrid(
       eventManager.activeEvents || [],
       eventStrengthMultiplier,
       energyRegenRate,
       energyDiffusionRate,
-      densityGrid,
-      densityEffectMultiplier
+      densityGrid
     );
 
     return { densityGrid };
@@ -1029,7 +1095,7 @@ export default class GridManager {
       cell.applyEventEffects(row, col, ev, eventStrengthMultiplier, this.maxTileEnergy);
     }
 
-    this.consumeEnergy(cell, row, col, densityGrid, densityEffectMultiplier);
+    this.consumeEnergy(cell, row, col, densityGrid);
     const localDensity = densityGrid[row][col];
 
     const starved = cell.manageEnergy(row, col, {
@@ -1385,14 +1451,11 @@ export default class GridManager {
     this.tickCount += 1;
     this.processScheduledObstacles();
 
-    this.currentDensityEffectMultiplier = densityEffectMultiplier ?? 1;
-
     const { densityGrid } = this.prepareTick({
       eventManager,
       eventStrengthMultiplier,
       energyRegenRate,
       energyDiffusionRate,
-      densityEffectMultiplier: this.currentDensityEffectMultiplier,
     });
 
     this.densityGrid = densityGrid;
