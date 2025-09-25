@@ -106,7 +106,7 @@
           lastMetrics = metrics;
           pendingSlowUiUpdate = true;
         }
-        grid.draw();
+        grid.draw({ showObstacles: uiManager.getShowObstacles() });
         // overlays
         drawOverlays(grid, ctx, cellSize, {
           showEnergy: uiManager.getShowEnergy(),
