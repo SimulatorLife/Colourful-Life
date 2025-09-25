@@ -53,6 +53,15 @@ export default class Cell {
     this.movementGenes = this.dna.movementGenes();
     this.interactionGenes = this.dna.interactionGenes();
     this.density = this.dna.densityResponses();
+    this.predation = {
+      affinity: typeof this.dna.carnivoreAffinity === 'function' ? this.dna.carnivoreAffinity() : 0,
+      efficiency:
+        typeof this.dna.carnivoreEfficiency === 'function' ? this.dna.carnivoreEfficiency() : 0,
+      capFrac:
+        typeof this.dna.predationEnergyCapFrac === 'function'
+          ? this.dna.predationEnergyCapFrac()
+          : 0,
+    };
     this.fitnessScore = null;
     this.matePreferenceBias =
       typeof this.dna.mateSimilarityBias === 'function' ? this.dna.mateSimilarityBias() : 0;
@@ -70,6 +79,8 @@ export default class Cell {
     this.offspring = 0;
     this.fightsWon = 0;
     this.fightsLost = 0;
+    this.lastFightIntent = 0;
+    this.lastFightSignal = 0;
   }
 
   static breed(parentA, parentB, mutationMultiplier = 1, options = {}) {
@@ -354,6 +365,7 @@ export default class Cell {
     const riskTolerance =
       typeof this.dna?.riskTolerance === 'function' ? this.dna.riskTolerance() : 0.5;
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
+    const predationAffinity = clamp(this.predation?.affinity ?? 0, 0, 1);
 
     return {
       energy: energyFrac,
@@ -365,6 +377,7 @@ export default class Cell {
       ageFraction: ageFrac,
       riskTolerance,
       eventPressure,
+      predationAffinity,
     };
   }
 
@@ -836,6 +849,10 @@ export default class Cell {
     const coopW = Math.max(0.0001, cooperate * coopMul);
     const avoidW = Math.max(0.0001, avoid);
     const total = avoidW + fightW + coopW;
+    const fightProb = total > 0 ? fightW / total : 0;
+
+    this.lastFightIntent = clamp(fightProb, 0, 1);
+    this.lastFightSignal = clamp(fightProb, 0, 1);
     const roll = randomRange(0, total);
 
     if (roll < avoidW) return 'avoid';
@@ -851,6 +868,8 @@ export default class Cell {
     allies = [],
     maxTileEnergy = MAX_TILE_ENERGY,
   } = {}) {
+    this.lastFightIntent = 0;
+    this.lastFightSignal = 0;
     const fallback = () =>
       this.#legacyChooseInteractionAction(localDensity, densityEffectMultiplier);
     const sensors = this.#interactionSensors({
@@ -867,12 +886,22 @@ export default class Cell {
       const logits = entries.map(({ key }) => values[key] ?? 0);
       const labels = entries.map(({ key }) => key);
       const probs = softmax(logits);
+      const fightIndex = entries.findIndex((entry) => entry.key === 'fight');
+      const fightProb = fightIndex >= 0 ? clamp(probs[fightIndex] ?? 0, 0, 1) : 0;
+      const fightRaw = values.fight ?? 0;
+
+      this.lastFightIntent = fightProb;
+      this.lastFightSignal = clamp((fightRaw + 1) / 2, 0, 1);
       const choice = sampleFromDistribution(probs, labels);
 
       if (choice) return choice;
     }
 
     return fallback();
+  }
+
+  currentFightDrive() {
+    return clamp(Math.max(this.lastFightIntent || 0, this.lastFightSignal || 0), 0, 1);
   }
 
   applyEventEffects(row, col, currentEvent, eventStrengthMultiplier = 1, maxTileEnergy = 5) {
@@ -908,8 +937,18 @@ export default class Cell {
 
     if (!defender) return;
     // Apply fight energy cost to both participants (DNA-driven)
-    attacker.energy = Math.max(0, attacker.energy - attacker.dna.fightCost());
-    defender.energy = Math.max(0, defender.energy - defender.dna.fightCost());
+    const maxTileEnergy = manager?.maxTileEnergy ?? MAX_TILE_ENERGY;
+    const attackerDrive =
+      typeof attacker.currentFightDrive === 'function' ? attacker.currentFightDrive() : 0;
+    const defenderDrive =
+      typeof defender.currentFightDrive === 'function' ? defender.currentFightDrive() : 0;
+    const attackerCostScale = clamp(0.7 + 0.6 * attackerDrive, 0.3, 1.6);
+    const defenderCostScale = clamp(0.6 + 0.5 * defenderDrive, 0.3, 1.5);
+    const attackerCost = (attacker.dna?.fightCost?.() ?? 0.02) * attackerCostScale;
+    const defenderCost = (defender.dna?.fightCost?.() ?? 0.02) * defenderCostScale;
+
+    attacker.energy = Math.max(0, attacker.energy - attackerCost);
+    defender.energy = Math.max(0, defender.energy - defenderCost);
     // Resolve by DNA-based combat power
     const atkPower = attacker.energy * (attacker.dna.combatPower?.() ?? 1);
     const defPower = defender.energy * (defender.dna.combatPower?.() ?? 1);
@@ -926,6 +965,8 @@ export default class Cell {
         attacker.row = targetRow;
         attacker.col = targetCol;
       }
+      this.#ingestPreyEnergy(defender, manager, targetRow, targetCol, maxTileEnergy);
+      defender.energy = 0;
       manager.consumeEnergy(
         attacker,
         targetRow,
@@ -944,6 +985,35 @@ export default class Cell {
       stats?.onDeath?.();
       defender.fightsWon = (defender.fightsWon || 0) + 1;
       attacker.fightsLost = (attacker.fightsLost || 0) + 1;
+    }
+  }
+
+  #ingestPreyEnergy(prey, manager, row, col, maxTileEnergy = MAX_TILE_ENERGY) {
+    if (!prey || !manager) return;
+    const affinity = clamp(this.predation?.affinity ?? 0, 0, 1);
+    const efficiency = clamp(this.predation?.efficiency ?? 0, 0, 1);
+    const capFrac = clamp(this.predation?.capFrac ?? 0, 0, 1);
+    const drive = this.currentFightDrive();
+    const hunger = maxTileEnergy > 0 ? clamp(1 - (this.energy || 0) / maxTileEnergy, 0, 1) : 0;
+    const readiness = clamp(0.25 * affinity + 0.45 * drive + 0.3 * hunger, 0, 1);
+
+    if (readiness <= 0 || efficiency <= 0) return;
+
+    const preyEnergy = Math.max(0, prey.energy || 0);
+    const tileEnergy = manager.energyGrid?.[row]?.[col] ?? 0;
+    const available = preyEnergy + tileEnergy * 0.25;
+
+    if (available <= 0) return;
+
+    const cap = (capFrac > 0 ? capFrac : 0.25) * maxTileEnergy;
+    const gain = Math.min(cap, available * efficiency * readiness);
+
+    if (gain <= 0) return;
+
+    this.energy = Math.min(maxTileEnergy, this.energy + gain);
+    if (prey) prey.energy = Math.max(0, prey.energy - gain);
+    if (manager.energyGrid?.[row]) {
+      manager.energyGrid[row][col] = Math.max(0, manager.energyGrid[row][col] - gain * 0.5);
     }
   }
 

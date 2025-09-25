@@ -36,6 +36,7 @@ export const GENE_LOCI = Object.freeze({
   RESIST_COLD: 26,
   DENSITY: 27,
   COOPERATION: 28,
+  CARNIVORY: 29,
 });
 
 const BASE_GENE_COUNT = Math.max(...Object.values(GENE_LOCI)) + 1;
@@ -244,8 +245,17 @@ export class DNA {
 
   interactionGenes() {
     const rnd = this.prngFor('interactionGenes');
+    const carnivore = this.carnivoreAffinity();
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const avoidNoise = (rnd() - 0.5) * 0.3;
+    const fightNoise = (rnd() - 0.5) * 0.4;
+    const coopNoise = (rnd() - 0.5) * 0.3;
+    const avoid = clamp(0.25 + 0.45 * (1 - risk) + 0.2 * (1 - carnivore) + avoidNoise, 0, 1);
+    const fight = clamp(0.15 + 0.6 * carnivore + 0.25 * risk + fightNoise, 0, 1);
+    const cooperate = clamp(0.2 + 0.5 * cooperation + 0.2 * (1 - carnivore) + coopNoise, 0, 1);
 
-    return { avoid: rnd(), fight: rnd(), cooperate: rnd() };
+    return { avoid, fight, cooperate };
   }
 
   // Willingness to take risks (0..1). Higher -> more likely to pick fights.
@@ -500,8 +510,47 @@ export class DNA {
   }
   fightCost() {
     const combat = this.geneFraction(GENE_LOCI.COMBAT);
+    const base = 0.01 + 0.03 * combat; // 0.01..0.04
 
-    return 0.01 + 0.03 * combat; // 0.01..0.04
+    return clamp(base * this.predationCostScale(), 0.005, 0.06);
+  }
+
+  carnivoreAffinity() {
+    const carnivore = this.geneFraction(GENE_LOCI.CARNIVORY);
+    const combat = this.geneFraction(GENE_LOCI.COMBAT);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const foraging = this.geneFraction(GENE_LOCI.FORAGING);
+    const raw =
+      0.15 + 0.55 * carnivore + 0.2 * combat + 0.15 * risk - 0.25 * cooperation - 0.15 * foraging;
+
+    return clamp(raw, 0, 1);
+  }
+
+  carnivoreEfficiency() {
+    const carnivore = this.geneFraction(GENE_LOCI.CARNIVORY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
+    const raw = 0.25 + 0.5 * carnivore + 0.2 * efficiency + 0.15 * capacity;
+
+    return clamp(raw, 0.15, 0.95);
+  }
+
+  predationCostScale() {
+    const carnivore = this.geneFraction(GENE_LOCI.CARNIVORY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const combat = this.geneFraction(GENE_LOCI.COMBAT);
+    const raw = 1.1 - 0.5 * carnivore - 0.2 * combat - 0.1 * efficiency;
+
+    return clamp(raw, 0.5, 1.3);
+  }
+
+  predationEnergyCapFrac() {
+    const carnivore = this.geneFraction(GENE_LOCI.CARNIVORY);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
+    const raw = 0.2 + 0.55 * carnivore + 0.25 * capacity;
+
+    return clamp(raw, 0.1, 0.95);
   }
 
   // Cognitive/perception cost based on neurons and sight
@@ -578,8 +627,9 @@ export class DNA {
 
     const reproMax = 1.0 + efficiency * 0.3;
     const reproMin = 0.3 + efficiency * 0.4;
-    const fightMin = 0.8 + risk * 0.3;
-    const fightMax = 1.3 + risk * 0.9;
+    const carnivore = this.carnivoreAffinity();
+    const fightMin = 0.8 + risk * 0.3 + carnivore * 0.3;
+    const fightMax = 1.3 + risk * 0.9 + carnivore * 0.6;
     const coopMax = 1.1 + cooperation * 0.2;
     const coopMin = 0.5 + cooperation * 0.4;
     const energyMin = 1.0 + density * 0.2;
