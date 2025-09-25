@@ -414,6 +414,8 @@ export class DNA {
   }
 
   neurons() {
+    const floor = Math.max(1, Brain?.MIN_NEURON_FLOOR ?? 1);
+
     if (this.hasNeuralGenes()) {
       const sensorLimit = Brain?.SENSOR_COUNT ?? 0;
       const nodes = new Set();
@@ -432,13 +434,14 @@ export class DNA {
         }
       }
 
-      return Math.max(1, nodes.size || 1);
+      return Math.max(floor, nodes.size || 0);
     }
 
     const rnd = this.prngFor('neurons');
     const neuro = this.geneFraction(GENE_LOCI.NEURAL);
+    const stochastic = Math.floor(neuro * 4 + rnd() * 2) + 1;
 
-    return Math.max(1, Math.floor(neuro * 4 + rnd() * 2) + 1);
+    return Math.max(floor, stochastic);
   }
 
   sight() {

@@ -48,7 +48,9 @@ export default class Cell {
     this.lifespan = this.dna.lifespanDNA();
     this.sight = this.dna.sight();
     this.energy = energy;
-    this.neurons = this.brain?.neuronCount || this.dna.neurons();
+    const baselineNeurons = Math.max(1, Brain?.MIN_NEURON_FLOOR ?? 1);
+
+    this.neurons = Math.max(baselineNeurons, this.brain?.neuronCount || 0, this.dna.neurons());
     this.strategy = this.dna.strategy();
     this.movementGenes = this.dna.movementGenes();
     this.interactionGenes = this.dna.interactionGenes();
@@ -431,6 +433,16 @@ export default class Cell {
     return result.values;
   }
 
+  #registerActionNeurons(stage) {
+    if (!Brain || !Brain.ACTION_NEURON_REQUIREMENTS) return;
+
+    const requirement = Brain.ACTION_NEURON_REQUIREMENTS[stage];
+
+    if (!Number.isFinite(requirement) || requirement <= 0) return;
+
+    this._neuralLoad += requirement;
+  }
+
   #mapLegacyStrategyToAction(strategy) {
     switch (strategy) {
       case 'pursuit':
@@ -552,6 +564,7 @@ export default class Cell {
     society = [],
     maxTileEnergy = MAX_TILE_ENERGY,
   } = {}) {
+    this.#registerActionNeurons('movementDecision');
     const decision = this.#decideMovementAction({
       localDensity,
       densityEffectMultiplier,
@@ -590,6 +603,7 @@ export default class Cell {
       isTileBlocked,
     } = {}
   ) {
+    const registerMovementExecution = () => this.#registerActionNeurons('movementExecution');
     const strategy = this.#legacyChooseMovementStrategy(localDensity, densityEffectMultiplier);
 
     if (strategy === 'pursuit') {
@@ -598,7 +612,13 @@ export default class Cell {
         this.#nearest(mates, row, col) ||
         this.#nearest(society, row, col);
 
-      if (target) return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
+      if (target) {
+        registerMovementExecution();
+
+        return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
+      }
+
+      registerMovementExecution();
 
       return moveRandomly(gridArr, row, col, this, rows, cols);
     }
@@ -608,7 +628,13 @@ export default class Cell {
         this.#nearest(mates, row, col) ||
         this.#nearest(society, row, col);
 
-      if (threat) return moveAwayFromTarget(gridArr, row, col, threat.row, threat.col, rows, cols);
+      if (threat) {
+        registerMovementExecution();
+
+        return moveAwayFromTarget(gridArr, row, col, threat.row, threat.col, rows, cols);
+      }
+
+      registerMovementExecution();
 
       return moveRandomly(gridArr, row, col, this, rows, cols);
     }
@@ -619,7 +645,11 @@ export default class Cell {
       if (Math.random() < coh) {
         const target = this.#nearest(society, row, col);
 
-        if (target) return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
+        if (target) {
+          registerMovementExecution();
+
+          return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
+        }
       }
     }
     // then bias toward best energy neighbor if provided
@@ -658,12 +688,19 @@ export default class Cell {
       );
 
       if (best && Math.random() < pExploit) {
-        if (typeof tryMove === 'function')
+        if (typeof tryMove === 'function') {
+          registerMovementExecution();
+
           return tryMove(gridArr, row, col, best.dr, best.dc, rows, cols);
+        }
+
+        registerMovementExecution();
 
         return moveRandomly(gridArr, row, col, this, rows, cols);
       }
     }
+
+    registerMovementExecution();
 
     return moveRandomly(gridArr, row, col, this, rows, cols);
   }
@@ -691,6 +728,7 @@ export default class Cell {
       maxTileEnergy,
     };
     const decision = this.#decideMovementAction(strategyContext);
+    const registerMovementExecution = () => this.#registerActionNeurons('movementExecution');
 
     if (!decision.usedBrain || !decision.action) {
       return this.#legacyExecuteMovementStrategy(
@@ -738,12 +776,14 @@ export default class Cell {
       if (!bestDir) return false;
 
       if (typeof tryMove === 'function') {
+        registerMovementExecution();
         const moved = tryMove(gridArr, row, col, bestDir.dr, bestDir.dc, rows, cols);
 
         if (moved) return true;
       }
 
       if (typeof moveRandomly === 'function') {
+        registerMovementExecution();
         moveRandomly(gridArr, row, col, this, rows, cols);
       }
 
@@ -757,6 +797,7 @@ export default class Cell {
         const target = nearestEnemy || nearestMate || nearestAlly;
 
         if (target && typeof moveToTarget === 'function') {
+          registerMovementExecution();
           moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
 
           return;
@@ -768,6 +809,7 @@ export default class Cell {
         const threat = nearestEnemy || nearestMate || nearestAlly;
 
         if (threat && typeof moveAwayFromTarget === 'function') {
+          registerMovementExecution();
           moveAwayFromTarget(gridArr, row, col, threat.row, threat.col, rows, cols);
 
           return;
@@ -779,6 +821,7 @@ export default class Cell {
         const target = nearestAlly || nearestMate;
 
         if (target && typeof moveToTarget === 'function') {
+          registerMovementExecution();
           moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
 
           return;
@@ -793,6 +836,7 @@ export default class Cell {
     if (chosen === 'explore' && attemptEnergyExploit()) return;
 
     if (typeof moveRandomly === 'function') {
+      registerMovementExecution();
       moveRandomly(gridArr, row, col, this, rows, cols);
     }
   }
@@ -818,6 +862,7 @@ export default class Cell {
       baseProbability = 0.5,
     } = context;
 
+    this.#registerActionNeurons('reproduction');
     const sensors = this.#reproductionSensors(partner, {
       localDensity,
       densityEffectMultiplier,
@@ -872,6 +917,8 @@ export default class Cell {
     this.lastFightSignal = 0;
     const fallback = () =>
       this.#legacyChooseInteractionAction(localDensity, densityEffectMultiplier);
+
+    this.#registerActionNeurons('interaction');
     const sensors = this.#interactionSensors({
       localDensity,
       densityEffectMultiplier,
