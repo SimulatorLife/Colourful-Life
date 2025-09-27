@@ -13,12 +13,11 @@ import {
 
 export default class UIManager {
   constructor(updateCallback, mountSelector = '#app', actions = {}, layoutOptions = {}) {
-    const { obstaclePresets = [], obstacleScenarios = [], ...actionFns } = actions || {};
+    const { obstaclePresets = [], ...actionFns } = actions || {};
 
     this.updateCallback = updateCallback;
     this.actions = actionFns;
     this.obstaclePresets = Array.isArray(obstaclePresets) ? obstaclePresets : [];
-    this.obstacleScenarios = Array.isArray(obstacleScenarios) ? obstacleScenarios : [];
     this.paused = false;
     this.selectionManager = actions.selectionManager || null;
     this.getCellSize =
@@ -51,7 +50,6 @@ export default class UIManager {
     this.showFitness = false;
     this.showObstacles = true;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? 'none';
-    this.obstacleScenario = this.obstacleScenarios[0]?.id ?? 'manual';
     this.lingerPenalty = 0;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
@@ -653,118 +651,78 @@ export default class UIManager {
       (v) => (this.showFitness = v)
     );
 
-    if (this.obstaclePresets.length > 0 || this.obstacleScenarios.length > 0) {
-      createSectionHeading(body, 'Obstacles & Scenarios', { className: 'overlay-header' });
+    createSectionHeading(body, 'Obstacles', { className: 'overlay-header' });
 
-      const obstacleGrid = createControlGrid(body, 'control-grid--compact');
+    const obstacleGrid = createControlGrid(body, 'control-grid--compact');
 
-      if (this.obstaclePresets.length > 0) {
-        const presetSelect = createSelectRow(obstacleGrid, {
-          label: 'Layout Preset',
-          title: 'Choose a static obstacle layout to apply immediately.',
-          value: this.obstaclePreset,
-          options: this.obstaclePresets.map((preset) => ({
-            value: preset.id,
-            label: preset.label,
-            description: preset.description,
-          })),
-          onChange: (value) => {
-            this.obstaclePreset = value;
-          },
-        });
-
-        if (presetSelect) {
-          Array.from(presetSelect.options).forEach((opt) => {
-            if (!opt.title && opt.textContent) opt.title = opt.textContent;
-          });
-        }
-
-        const presetButtons = document.createElement('div');
-
-        presetButtons.className = 'control-line';
-        const applyLayoutButton = document.createElement('button');
-
-        applyLayoutButton.textContent = 'Apply Layout';
-        applyLayoutButton.title = 'Replace the current obstacle mask with the selected preset.';
-        applyLayoutButton.addEventListener('click', () => {
-          const args = [this.obstaclePreset, { clearExisting: true }];
-
-          if (typeof this.actions.applyObstaclePreset === 'function')
-            this.actions.applyObstaclePreset(...args);
-          else if (window.grid?.applyObstaclePreset) window.grid.applyObstaclePreset(...args);
-        });
-        const clearButton = document.createElement('button');
-
-        clearButton.textContent = 'Clear Obstacles';
-        clearButton.title = 'Remove all obstacles from the grid.';
-        clearButton.addEventListener('click', () => {
-          const args = ['none', { clearExisting: true }];
-
-          if (typeof this.actions.applyObstaclePreset === 'function')
-            this.actions.applyObstaclePreset(...args);
-          else if (window.grid?.applyObstaclePreset) window.grid.applyObstaclePreset(...args);
-        });
-        presetButtons.appendChild(applyLayoutButton);
-        presetButtons.appendChild(clearButton);
-        obstacleGrid.appendChild(presetButtons);
-      }
-
-      if (this.obstacleScenarios.length > 0) {
-        const scenarioSelect = createSelectRow(obstacleGrid, {
-          label: 'Scenario Script',
-          title: 'Schedule obstacle changes to watch the population adapt.',
-          value: this.obstacleScenario,
-          options: this.obstacleScenarios.map((scenario) => ({
-            value: scenario.id,
-            label: scenario.label,
-            description: scenario.description,
-          })),
-          onChange: (value) => {
-            this.obstacleScenario = value;
-          },
-        });
-
-        if (scenarioSelect) {
-          Array.from(scenarioSelect.options).forEach((opt) => {
-            if (!opt.title && opt.textContent) opt.title = opt.textContent;
-          });
-        }
-
-        const scenarioButtons = document.createElement('div');
-
-        scenarioButtons.className = 'control-line';
-        const runButton = document.createElement('button');
-
-        runButton.textContent = 'Run Scenario';
-        runButton.title = 'Queue the selected scripted obstacle sequence.';
-        runButton.addEventListener('click', () => {
-          if (typeof this.actions.runObstacleScenario === 'function')
-            this.actions.runObstacleScenario(this.obstacleScenario);
-          else if (window.grid?.runObstacleScenario)
-            window.grid.runObstacleScenario(this.obstacleScenario);
-        });
-        scenarioButtons.appendChild(runButton);
-        obstacleGrid.appendChild(scenarioButtons);
-      }
-
-      const lingerSlider = withSliderConfig('lingerPenalty', {
-        label: 'Wall Linger Penalty',
-        min: 0,
-        max: 0.05,
-        step: 0.001,
-        title:
-          'Energy drained each tick a cell pushes against an obstacle (scales with repeated attempts).',
-        format: (v) => v.toFixed(3),
-        getValue: () => this.lingerPenalty,
-        setValue: (v) => {
-          this.lingerPenalty = v;
-          if (typeof this.actions.setLingerPenalty === 'function') this.actions.setLingerPenalty(v);
-          else if (window.grid?.setLingerPenalty) window.grid.setLingerPenalty(v);
+    if (this.obstaclePresets.length > 0) {
+      const presetSelect = createSelectRow(obstacleGrid, {
+        label: 'Layout Preset',
+        title: 'Choose a static obstacle layout to apply immediately.',
+        value: this.obstaclePreset,
+        options: this.obstaclePresets.map((preset) => ({
+          value: preset.id,
+          label: preset.label,
+          description: preset.description,
+        })),
+        onChange: (value) => {
+          this.obstaclePreset = value;
         },
       });
 
-      renderSlider(lingerSlider, obstacleGrid);
+      if (presetSelect) {
+        Array.from(presetSelect.options).forEach((opt) => {
+          if (!opt.title && opt.textContent) opt.title = opt.textContent;
+        });
+      }
+
+      const presetButtons = document.createElement('div');
+
+      presetButtons.className = 'control-line';
+      const applyLayoutButton = document.createElement('button');
+
+      applyLayoutButton.textContent = 'Apply Layout';
+      applyLayoutButton.title = 'Replace the current obstacle mask with the selected preset.';
+      applyLayoutButton.addEventListener('click', () => {
+        const args = [this.obstaclePreset, { clearExisting: true }];
+
+        if (typeof this.actions.applyObstaclePreset === 'function')
+          this.actions.applyObstaclePreset(...args);
+        else if (window.grid?.applyObstaclePreset) window.grid.applyObstaclePreset(...args);
+      });
+      const clearButton = document.createElement('button');
+
+      clearButton.textContent = 'Clear Obstacles';
+      clearButton.title = 'Remove all obstacles from the grid.';
+      clearButton.addEventListener('click', () => {
+        const args = ['none', { clearExisting: true }];
+
+        if (typeof this.actions.applyObstaclePreset === 'function')
+          this.actions.applyObstaclePreset(...args);
+        else if (window.grid?.applyObstaclePreset) window.grid.applyObstaclePreset(...args);
+      });
+      presetButtons.appendChild(applyLayoutButton);
+      presetButtons.appendChild(clearButton);
+      obstacleGrid.appendChild(presetButtons);
     }
+
+    const lingerSlider = withSliderConfig('lingerPenalty', {
+      label: 'Wall Linger Penalty',
+      min: 0,
+      max: 0.05,
+      step: 0.001,
+      title:
+        'Energy drained each tick a cell pushes against an obstacle (scales with repeated attempts).',
+      format: (v) => v.toFixed(3),
+      getValue: () => this.lingerPenalty,
+      setValue: (v) => {
+        this.lingerPenalty = v;
+        if (typeof this.actions.setLingerPenalty === 'function') this.actions.setLingerPenalty(v);
+        else if (window.grid?.setLingerPenalty) window.grid.setLingerPenalty(v);
+      },
+    });
+
+    renderSlider(lingerSlider, obstacleGrid);
 
     if (this.selectionManager) {
       createSectionHeading(body, 'Reproductive Zones', { className: 'overlay-header' });

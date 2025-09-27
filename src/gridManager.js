@@ -43,34 +43,6 @@ export const OBSTACLE_PRESETS = [
   },
 ];
 
-export const OBSTACLE_SCENARIOS = [
-  {
-    id: 'manual',
-    label: 'Manual Control',
-    description: 'No scheduled obstacle changes.',
-    schedule: [],
-  },
-  {
-    id: 'mid-run-wall',
-    label: 'Mid-run Wall Drop',
-    description: 'Start open, then add a midline wall with gates after 600 ticks.',
-    schedule: [
-      { delay: 0, preset: 'none', clearExisting: true },
-      { delay: 600, preset: 'midline', clearExisting: true, presetOptions: { gapEvery: 12 } },
-    ],
-  },
-  {
-    id: 'pressure-maze',
-    label: 'Closing Maze',
-    description: 'Perimeter walls first, then corridors, ending with checkerboard choke points.',
-    schedule: [
-      { delay: 0, preset: 'perimeter', clearExisting: true },
-      { delay: 400, preset: 'corridor', append: true },
-      { delay: 900, preset: 'checkerboard', clearExisting: true, presetOptions: { tileSize: 3 } },
-    ],
-  },
-];
-
 export default class GridManager {
   // Base per-tick regen before modifiers; logistic to max, density-aware
   static energyRegenRate = ENERGY_REGEN_RATE_DEFAULT;
@@ -236,7 +208,6 @@ export default class GridManager {
     this.lingerPenalty = 0;
     this.obstacleSchedules = [];
     this.currentObstaclePreset = 'none';
-    this.currentScenarioId = 'manual';
     this.tickCount = 0;
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
@@ -562,40 +533,6 @@ export default class GridManager {
         evict: next.evict,
       });
     }
-  }
-
-  runObstacleScenario(scenarioId, { resetSchedule = true } = {}) {
-    const scenario = OBSTACLE_SCENARIOS.find((s) => s.id === scenarioId);
-
-    if (!scenario) return false;
-    if (resetSchedule) this.clearScheduledObstacles();
-    this.currentScenarioId = scenario.id;
-
-    for (let i = 0; i < scenario.schedule.length; i++) {
-      const step = scenario.schedule[i];
-      const delay = Math.max(0, Math.floor(step.delay ?? 0));
-      const opts = {
-        clearExisting: step.clearExisting,
-        append: step.append,
-        presetOptions: step.presetOptions,
-        evict: step.evict ?? true,
-      };
-
-      if (delay === 0) this.applyObstaclePreset(step.preset, opts);
-      else
-        this.scheduleObstaclePreset({
-          delay,
-          preset: step.preset,
-          presetOptions: step.presetOptions,
-          clearExisting: step.clearExisting,
-          append: step.append,
-          evict: step.evict ?? true,
-        });
-    }
-
-    if (scenario.schedule.length === 0) this.currentObstaclePreset = 'none';
-
-    return true;
   }
 
   init() {
@@ -1692,4 +1629,3 @@ export default class GridManager {
 }
 
 GridManager.OBSTACLE_PRESETS = OBSTACLE_PRESETS;
-GridManager.OBSTACLE_SCENARIOS = OBSTACLE_SCENARIOS;

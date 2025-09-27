@@ -1,7 +1,7 @@
-# Obstacle Demo Scripts
+# Obstacle Presets
 
-This project now ships with built-in obstacle presets and scripted scenarios so
-you can reproduce terrain changes similar to the "walls mid-run" demo video.
+This project ships with built-in obstacle presets so you can quickly reproduce
+terrain changes similar to the "walls mid-run" demo video.
 
 ## Getting started
 
@@ -13,8 +13,8 @@ you can reproduce terrain changes similar to the "walls mid-run" demo video.
    ```
 
 2. Open the Parcel URL (typically `http://localhost:1234`) in your browser.
-3. Use the **Obstacles & Scenarios** panel in the right-hand sidebar to manage
-   layouts and schedules while the simulation is running.
+3. Use the **Obstacles** panel in the right-hand sidebar to manage layouts
+   while the simulation is running.
 
 ## Static obstacle layouts
 
@@ -37,18 +37,6 @@ Example console usage:
 window.grid.applyObstaclePreset('midline', { presetOptions: { gapEvery: 8 } });
 ```
 
-## Scenario scripts
-
-Scenario scripts schedule multiple layout changes so you can watch the
-population adapt. Pick a script and press **Run Scenario** (or call
-`window.grid.runObstacleScenario('<id>')`).
-
-- `manual` – Clears any pending schedules so you can control layouts manually.
-- `mid-run-wall` – Starts with an open field, then drops the midline wall after
-  ~600 ticks.
-- `pressure-maze` – Adds a perimeter, narrows the map into corridors, then ends
-  with a checkerboard choke to mimic a closing maze.
-
 ## Wall pressure penalty
 
 Use the **Wall Linger Penalty** slider to drain a small amount of energy each
@@ -60,6 +48,5 @@ move elsewhere. The current value is also accessible at runtime via
 ## Tips
 
 - Toggle **Show Obstacles** to blend the mask into the energy/density overlays.
-- The preset and scenario metadata are exported from `GridManager` as
-  `OBSTACLE_PRESETS` and `OBSTACLE_SCENARIOS` if you want to build custom UI or
-  automated tests.
+- The preset metadata is exported from `GridManager` as `OBSTACLE_PRESETS` if
+  you want to build custom UI or automated tests.

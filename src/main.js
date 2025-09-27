@@ -1,7 +1,7 @@
 import UIManager from './uiManager.js';
 import EventManager from './eventManager.js';
 import Stats from './stats.js';
-import GridManager, { OBSTACLE_PRESETS, OBSTACLE_SCENARIOS } from './gridManager.js';
+import GridManager, { OBSTACLE_PRESETS } from './gridManager.js';
 import SelectionManager from './selectionManager.js';
 import { drawOverlays } from './overlays.js';
 import { computeLeaderboard } from './leaderboard.js';
@@ -211,10 +211,8 @@ export function createSimulation({
         {
           burst: () => grid.burstRandomCells({ count: 200, radius: 6 }),
           applyObstaclePreset: (id, options) => grid.applyObstaclePreset(id, options),
-          runObstacleScenario: (id) => grid.runObstacleScenario(id),
           setLingerPenalty: (value) => grid.setLingerPenalty(value),
           obstaclePresets: OBSTACLE_PRESETS,
-          obstacleScenarios: OBSTACLE_SCENARIOS,
           selectionManager,
           getCellSize: () => cellSize,
           ...(uiOptions.actions || {}),
