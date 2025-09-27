@@ -40,12 +40,21 @@ const BrainDebugger = {
       const telemetry =
         typeof cell?.getDecisionTelemetry === 'function' ? cell.getDecisionTelemetry(3) : [];
 
+      const reportedNeuronCount = Number.isFinite(brain?.neuronCount) ? brain.neuronCount : 0;
+      const fallbackNeuronCount =
+        Number.isFinite(cell?.neurons) && cell.neurons > 0
+          ? cell.neurons
+          : typeof cell?.dna?.neurons === 'function'
+            ? Number(cell.dna.neurons())
+            : 0;
+      const neuronCount = reportedNeuronCount > 0 ? reportedNeuronCount : fallbackNeuronCount;
+
       next.push({
         row: entry.row,
         col: entry.col,
         fitness: entry.fitness,
         color: cell?.color,
-        neuronCount: brain.neuronCount,
+        neuronCount: Number.isFinite(neuronCount) && neuronCount > 0 ? neuronCount : 0,
         connectionCount: brain.connectionCount,
         brain: detail,
         decisions: telemetry,
