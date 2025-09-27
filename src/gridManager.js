@@ -5,6 +5,7 @@ import { computeFitness } from './fitness.js';
 import BrainDebugger from './brainDebugger.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
+import { forEachNeighbor } from './gridNeighbors.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -831,46 +832,30 @@ export default class GridManager {
     const totals = this.densityTotals;
     const liveGrid = this.densityLiveGrid;
 
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dy = -radius; dy <= radius; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const rr = row + dy;
-        const cc = col + dx;
+    forEachNeighbor(this.rows, this.cols, row, col, radius, (rr, cc) => {
+      const countsRow = this.densityCounts[rr];
+      const nextCount = (countsRow[cc] || 0) + delta;
 
-        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
+      countsRow[cc] = nextCount;
 
-        const countsRow = this.densityCounts[rr];
-        const nextCount = (countsRow[cc] || 0) + delta;
+      if (!liveGrid || !totals) return;
 
-        countsRow[cc] = nextCount;
+      const total = totals[rr]?.[cc] ?? 0;
+      const nextDensity = total > 0 ? clamp(nextCount / total, 0, 1) : 0;
 
-        if (!liveGrid || !totals) continue;
-
-        const total = totals[rr]?.[cc] ?? 0;
-        const nextDensity = total > 0 ? clamp(nextCount / total, 0, 1) : 0;
-
-        if (liveGrid[rr][cc] !== nextDensity) {
-          liveGrid[rr][cc] = nextDensity;
-          this.#markDensityDirty(rr, cc);
-        }
+      if (liveGrid[rr][cc] !== nextDensity) {
+        liveGrid[rr][cc] = nextDensity;
+        this.#markDensityDirty(rr, cc);
       }
-    }
+    });
   }
 
   #computeNeighborTotal(row, col, radius = this.densityRadius) {
     let total = 0;
 
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dy = -radius; dy <= radius; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const rr = row + dy;
-        const cc = col + dx;
-
-        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
-
-        total += 1;
-      }
-    }
+    forEachNeighbor(this.rows, this.cols, row, col, radius, () => {
+      total += 1;
+    });
 
     return total;
   }
@@ -1002,18 +987,10 @@ export default class GridManager {
     let count = 0;
     let total = 0;
 
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dy = -radius; dy <= radius; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const rr = row + dy;
-        const cc = col + dx;
-
-        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
-
-        total++;
-        if (this.grid[rr][cc]) count++;
-      }
-    }
+    forEachNeighbor(this.rows, this.cols, row, col, radius, (rr, cc) => {
+      total++;
+      if (this.grid[rr][cc]) count++;
+    });
 
     return { count, total };
   }
@@ -1318,13 +1295,9 @@ export default class GridManager {
         }
       };
       const addNeighbors = (baseRow, baseCol) => {
-        for (let dr = -1; dr <= 1; dr += 1) {
-          for (let dc = -1; dc <= 1; dc += 1) {
-            if (dr === 0 && dc === 0) continue;
-
-            addCandidate(baseRow + dr, baseCol + dc);
-          }
-        }
+        forEachNeighbor(this.rows, this.cols, baseRow, baseCol, 1, (r, c) => {
+          addCandidate(r, c);
+        });
       };
 
       addCandidate(originalParentRow, originalParentCol);
