@@ -15,7 +15,7 @@
       import UIManager from './src/uiManager.js';
       import EventManager from './src/eventManager.js';
       import Stats from './src/stats.js';
-      import GridManager, { OBSTACLE_PRESETS, OBSTACLE_SCENARIOS } from './src/gridManager.js';
+      import GridManager from './src/gridManager.js';
       import SelectionManager from './src/selectionManager.js';
       import { drawOverlays } from './src/overlays.js';
       import { computeLeaderboard } from './src/leaderboard.js';
@@ -52,11 +52,6 @@
         '#app',
         {
           burst: () => grid.burstRandomCells({ count: 200, radius: 6 }),
-          applyObstaclePreset: (id, options) => grid.applyObstaclePreset(id, options),
-          runObstacleScenario: (id) => grid.runObstacleScenario(id),
-          setLingerPenalty: (value) => grid.setLingerPenalty(value),
-          obstaclePresets: OBSTACLE_PRESETS,
-          obstacleScenarios: OBSTACLE_SCENARIOS,
           selectionManager,
           getCellSize: () => cellSize,
         },
@@ -65,7 +60,6 @@
         }
       );
 
-      grid.setLingerPenalty(uiManager.getLingerPenalty());
       window.grid = grid;
       window.uiManager = uiManager;
 
@@ -106,13 +100,12 @@
           lastMetrics = metrics;
           pendingSlowUiUpdate = true;
         }
-        grid.draw({ showObstacles: uiManager.getShowObstacles() });
+        grid.draw();
         // overlays
         drawOverlays(grid, ctx, cellSize, {
           showEnergy: uiManager.getShowEnergy(),
           showDensity: uiManager.getShowDensity(),
           showFitness: uiManager.getShowFitness(),
-          showObstacles: uiManager.getShowObstacles(),
           maxTileEnergy: GridManager.maxTileEnergy,
           snapshot: lastSnapshot,
           activeEvents: eventManager.activeEvents,

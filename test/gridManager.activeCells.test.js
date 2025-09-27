@@ -36,7 +36,7 @@ test('GridManager keeps activeCells aligned with grid mutations', async () => {
   assert.ok(gm.activeCells.has(spawned), 'moved cell should remain tracked');
   assert.is(gm.grid[spawned.row][spawned.col], spawned, 'grid should reflect moved cell');
 
-  gm.setObstacle(spawned.row, spawned.col, true, { evict: true });
+  gm.removeCell(spawned.row, spawned.col);
   assert.is(gm.activeCells.size, 0, 'evicted cell should be removed from tracking');
 
   const manualCell = { row: 0, col: 0 };

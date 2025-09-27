@@ -39,7 +39,6 @@ test('GridManager.tryMove ignores empty sources without mutating density data', 
   const onCellMovedCalls = [];
 
   const moved = GridManager.tryMove(gm.grid, 0, 0, 0, 1, gm.rows, gm.cols, {
-    obstacles: gm.obstacles,
     onMove: (payload) => onMoveCalls.push(payload),
     onCellMoved: (...args) => onCellMovedCalls.push(args),
     activeCells: gm.activeCells,
@@ -97,13 +96,16 @@ test('handleReproduction returns false when offspring cannot be placed', async (
     stats: { onBirth() {}, onDeath() {}, recordMateChoice() {} },
   });
 
+  const blockerDNA = new DNA(0, 0, 0);
+
   for (let r = 0; r < 3; r++) {
     for (let c = 0; c < 3; c++) {
-      gm.setObstacle(r, c, true, { evict: false });
+      if ((r === 1 && c === 1) || (r === 1 && c === 2)) continue;
+      const blocker = new Cell(r, c, blockerDNA, 1);
+
+      gm.setCell(r, c, blocker);
     }
   }
-  gm.setObstacle(1, 1, false);
-  gm.setObstacle(1, 2, false);
   gm.densityGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0));
 
   const parent = new Cell(1, 1, new DNA(0, 0, 0), MAX_TILE_ENERGY);
@@ -227,9 +229,11 @@ test('handleReproduction does not wrap offspring placement across map edges', as
   gm.setCell(0, 0, parent);
   gm.setCell(0, 1, mate);
 
-  gm.setObstacle(1, 1, true, { evict: false });
-  gm.setObstacle(0, 2, true, { evict: false });
-  gm.setObstacle(1, 2, true, { evict: false });
+  const cornerBlockerDNA = new DNA(0, 0, 0);
+
+  gm.setCell(1, 1, new Cell(1, 1, cornerBlockerDNA, 1));
+  gm.setCell(0, 2, new Cell(0, 2, cornerBlockerDNA, 1));
+  gm.setCell(1, 2, new Cell(1, 2, cornerBlockerDNA, 1));
 
   const stats = {
     births: 0,
@@ -276,14 +280,16 @@ test('processCell continues to combat when reproduction fails', async () => {
     stats: { onBirth() {}, onDeath() {}, recordMateChoice() {} },
   });
 
+  const arenaBlockerDNA = new DNA(0, 0, 0);
+
   for (let r = 0; r < 3; r++) {
     for (let c = 0; c < 3; c++) {
-      gm.setObstacle(r, c, true, { evict: false });
+      if ((r === 1 && c === 1) || (r === 1 && c === 2) || (r === 0 && c === 1)) continue;
+      const blocker = new Cell(r, c, arenaBlockerDNA, MAX_TILE_ENERGY);
+
+      gm.setCell(r, c, blocker);
     }
   }
-  gm.setObstacle(1, 1, false);
-  gm.setObstacle(1, 2, false);
-  gm.setObstacle(0, 1, false);
   gm.energyGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => MAX_TILE_ENERGY));
   const densityGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0));
 

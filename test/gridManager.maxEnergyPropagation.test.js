@@ -8,31 +8,6 @@ const baseOptions = {
   cellSize: 1,
 };
 
-test('obstacles block regeneration and diffusion', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-
-  class ObstacleGrid extends GridManager {
-    init() {}
-  }
-
-  const gm = new ObstacleGrid(1, 3, baseOptions);
-
-  gm.setObstacle(0, 0, true);
-
-  gm.energyGrid[0][0] = gm.maxTileEnergy;
-  gm.energyGrid[0][1] = 0;
-  gm.energyGrid[0][2] = 0;
-
-  gm.regenerateEnergyGrid([], 1, 0, 1, [[0, 0, 0]], 1);
-
-  assert.is(gm.energyGrid[0][0], 0, 'obstacle tile should remain at zero energy');
-  assert.is(
-    gm.energyGrid[0][1],
-    0,
-    'adjacent tiles should not receive energy from blocked neighbors'
-  );
-});
-
 test('GridManager supports custom max tile energy for harvesting and regen', async () => {
   const { default: GridManager } = await import('../src/gridManager.js');
 
