@@ -1,4 +1,5 @@
 import { MAX_TILE_ENERGY } from './config.js';
+import { lerp } from './utils.js';
 
 const FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
@@ -133,8 +134,6 @@ function densityToRgba(normalizedValue, { opaque = false } = {}) {
 
   const segmentSpan = end.t - start.t || 1;
   const localT = (t - start.t) / segmentSpan;
-  const lerp = (a, b, p) => a + (b - a) * p;
-
   const r = Math.round(lerp(start.color[0], end.color[0], localT));
   const g = Math.round(lerp(start.color[1], end.color[1], localT));
   const b = Math.round(lerp(start.color[2], end.color[2], localT));
