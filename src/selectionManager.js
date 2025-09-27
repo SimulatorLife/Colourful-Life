@@ -1,3 +1,5 @@
+import { collectSpawnCandidates } from './reproductionHelpers.js';
+
 const DEFAULT_COLORS = [
   'rgba(80, 160, 255, 0.22)',
   'rgba(120, 220, 120, 0.22)',
@@ -159,6 +161,70 @@ export default class SelectionManager {
     }
 
     return { allowed: true };
+  }
+
+  /**
+   * Determine potential spawn tiles around the given parents. The helper builds the
+   * surrounding tile list, removes duplicates, and applies active zone filtering.
+   *
+   * Expectations:
+   * - Callers should still verify tile availability (e.g., no obstacles or existing
+   *   occupants) before using the returned coordinates.
+   * - If zone filtering eliminates every candidate, the `allCandidates` array acts as a
+   *   fallback list so callers can decide how to proceed.
+   * - Parent eligibility is validated via {@link validateReproductionArea}; if they fall
+   *   outside active zones the method returns `{ allowed: false }`.
+   *
+   * @param {Object} options
+   * @param {{row:number,col:number}} options.parent Current parent position.
+   * @param {{row:number,col:number}} options.mate Mate position.
+   * @param {{row:number,col:number}|null} [options.origin] Starting parent position
+   *   before movement.
+   * @param {boolean} [options.parentMoved=false] Whether the parent moved during the
+   *   courting step (includes neighbors around the origin when true).
+   * @returns {{allowed:boolean,reason?:string,tiles:Array<{row:number,col:number}>,allCandidates:Array<{row:number,col:number}>}}
+   */
+  getEligibleSpawnTiles({ parent, mate, origin = null, parentMoved = false } = {}) {
+    if (!parent || !mate) {
+      return {
+        allowed: false,
+        reason: 'Missing parent or mate coordinates',
+        tiles: [],
+        allCandidates: [],
+      };
+    }
+
+    const parentCheck = this.validateReproductionArea({ parentA: parent, parentB: mate });
+
+    if (!parentCheck.allowed) {
+      return { allowed: false, reason: parentCheck.reason, tiles: [], allCandidates: [] };
+    }
+
+    const allCandidates = collectSpawnCandidates({
+      parent,
+      mate,
+      origin,
+      includeOriginNeighbors: parentMoved,
+      rows: this.rows,
+      cols: this.cols,
+    });
+
+    if (!this.hasActiveZones()) {
+      return { allowed: true, tiles: allCandidates, allCandidates };
+    }
+
+    const eligible = [];
+
+    for (let i = 0; i < allCandidates.length; i++) {
+      const candidate = allCandidates[i];
+      const spawnCheck = this.validateReproductionArea({ spawn: candidate });
+
+      if (spawnCheck.allowed) {
+        eligible.push(candidate);
+      }
+    }
+
+    return { allowed: true, tiles: eligible, allCandidates };
   }
 
   #validatePointList(zones, points) {

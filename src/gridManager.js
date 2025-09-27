@@ -5,6 +5,7 @@ import { computeFitness } from './fitness.js';
 import BrainDebugger from './brainDebugger.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
+import { collectSpawnCandidates } from './reproductionHelpers.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -1305,70 +1306,87 @@ export default class GridManager {
       cell.energy >= thrA &&
       bestMate.target.energy >= thrB
     ) {
-      const candidates = [];
-      const candidateSet = new Set();
-      const addCandidate = (r, c) => {
-        if (r < 0 || r >= this.rows || c < 0 || c >= this.cols) return;
-
-        const key = `${r},${c}`;
-
-        if (!candidateSet.has(key) && !this.isObstacle(r, c)) {
-          candidateSet.add(key);
-          candidates.push({ r, c });
-        }
-      };
-      const addNeighbors = (baseRow, baseCol) => {
-        for (let dr = -1; dr <= 1; dr += 1) {
-          for (let dc = -1; dc <= 1; dc += 1) {
-            if (dr === 0 && dc === 0) continue;
-
-            addCandidate(baseRow + dr, baseCol + dc);
-          }
-        }
+      const spawnContext = {
+        parent: { row: parentRow, col: parentCol },
+        mate: { row: mateRow, col: mateCol },
+        origin: { row: originalParentRow, col: originalParentCol },
+        parentMoved: moveSucceeded,
       };
 
-      addCandidate(originalParentRow, originalParentCol);
-      if (moveSucceeded) addNeighbors(originalParentRow, originalParentCol);
-      addCandidate(parentRow, parentCol);
-      addCandidate(mateRow, mateCol);
-      addNeighbors(parentRow, parentCol);
-      addNeighbors(mateRow, mateCol);
+      let spawnInfo = null;
 
-      const freeSlots = candidates.filter(({ r, c }) => !this.grid[r][c] && !this.isObstacle(r, c));
-      const eligibleSlots =
-        this.selectionManager && freeSlots.length > 0 && this.selectionManager.hasActiveZones()
-          ? freeSlots.filter(({ r, c }) => this.selectionManager.isInActiveZone(r, c))
-          : freeSlots;
-      const slotPool = eligibleSlots.length > 0 ? eligibleSlots : freeSlots;
+      if (this.selectionManager) {
+        spawnInfo = this.selectionManager.getEligibleSpawnTiles(spawnContext);
 
-      if (slotPool.length > 0) {
-        const spawn = slotPool[Math.floor(randomRange(0, slotPool.length))];
-        const zoneCheck = this.selectionManager
-          ? this.selectionManager.validateReproductionArea({
-              parentA: { row: parentRow, col: parentCol },
-              parentB: { row: mateRow, col: mateCol },
-              spawn: { row: spawn.r, col: spawn.c },
-            })
-          : { allowed: true };
-
-        if (!zoneCheck.allowed) {
+        if (!spawnInfo.allowed) {
           blockedInfo = {
-            reason: zoneCheck.reason,
+            reason: spawnInfo.reason,
             parentA: { row: parentRow, col: parentCol },
             parentB: { row: mateRow, col: mateCol },
-            spawn: { row: spawn.r, col: spawn.c },
           };
-        } else {
-          const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
-            maxTileEnergy: this.maxTileEnergy,
-          });
+        }
+      }
 
-          if (offspring) {
-            offspring.row = spawn.r;
-            offspring.col = spawn.c;
-            this.setCell(spawn.r, spawn.c, offspring);
-            stats.onBirth();
-            reproduced = true;
+      if (!blockedInfo) {
+        const allCandidates = spawnInfo
+          ? spawnInfo.allCandidates
+          : collectSpawnCandidates({
+              parent: spawnContext.parent,
+              mate: spawnContext.mate,
+              origin: spawnContext.origin,
+              includeOriginNeighbors: spawnContext.parentMoved,
+              rows: this.rows,
+              cols: this.cols,
+            });
+
+        const freeSlots = allCandidates.filter(
+          ({ row: r, col: c }) => !this.grid[r][c] && !this.isObstacle(r, c)
+        );
+
+        let slotPool = freeSlots;
+
+        if (freeSlots.length > 0 && this.selectionManager && spawnInfo) {
+          const zoneTiles = spawnInfo.tiles || [];
+
+          if (zoneTiles.length > 0) {
+            const zoneSet = new Set(zoneTiles.map(({ row, col }) => `${row},${col}`));
+            const zoneSlots = freeSlots.filter(({ row, col }) => zoneSet.has(`${row},${col}`));
+
+            if (zoneSlots.length > 0) {
+              slotPool = zoneSlots;
+            }
+          }
+        }
+
+        if (slotPool.length > 0) {
+          const spawn = slotPool[Math.floor(randomRange(0, slotPool.length))];
+          const zoneCheck = this.selectionManager
+            ? this.selectionManager.validateReproductionArea({
+                parentA: { row: parentRow, col: parentCol },
+                parentB: { row: mateRow, col: mateCol },
+                spawn,
+              })
+            : { allowed: true };
+
+          if (!zoneCheck.allowed) {
+            blockedInfo = {
+              reason: zoneCheck.reason,
+              parentA: { row: parentRow, col: parentCol },
+              parentB: { row: mateRow, col: mateCol },
+              spawn,
+            };
+          } else {
+            const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
+              maxTileEnergy: this.maxTileEnergy,
+            });
+
+            if (offspring) {
+              offspring.row = spawn.row;
+              offspring.col = spawn.col;
+              this.setCell(spawn.row, spawn.col, offspring);
+              stats.onBirth();
+              reproduced = true;
+            }
           }
         }
       }
