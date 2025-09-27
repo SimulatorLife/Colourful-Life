@@ -5,6 +5,7 @@ import { computeFitness } from './fitness.js';
 import BrainDebugger from './brainDebugger.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
+import { computeTileEnergyUpdate } from './energySystem.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -657,8 +658,8 @@ export default class GridManager {
     densityGrid = null,
     densityEffectMultiplier = 1
   ) {
-    const maxE = this.maxTileEnergy;
     const next = this.energyNext;
+    const evs = Array.isArray(events) ? events : events ? [events] : [];
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
@@ -670,77 +671,40 @@ export default class GridManager {
 
           continue;
         }
-        const e = this.energyGrid[r][c];
-        // Logistic toward max
-        let regen = R * (1 - e / maxE);
-        let drain = 0;
 
-        // Density reduces local regen (overgrazing effect)
         const density = densityGrid
           ? densityGrid[r][c]
           : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
-        const effDensity = clamp((density ?? 0) * densityEffectMultiplier, 0, 1);
 
-        regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * effDensity);
+        const neighborEnergies = [];
 
-        // Events modulate regen/drain (handle multiple)
-        const evs = Array.isArray(events) ? events : events ? [events] : [];
+        if (r > 0 && !this.isObstacle(r - 1, c)) neighborEnergies.push(this.energyGrid[r - 1][c]);
+        if (r < this.rows - 1 && !this.isObstacle(r + 1, c))
+          neighborEnergies.push(this.energyGrid[r + 1][c]);
+        if (c > 0 && !this.isObstacle(r, c - 1)) neighborEnergies.push(this.energyGrid[r][c - 1]);
+        if (c < this.cols - 1 && !this.isObstacle(r, c + 1))
+          neighborEnergies.push(this.energyGrid[r][c + 1]);
 
-        for (const ev of evs) {
-          if (!isEventAffecting(ev, r, c)) continue;
+        const { nextEnergy } = computeTileEnergyUpdate({
+          currentEnergy: this.energyGrid[r][c],
+          density,
+          neighborEnergies,
+          events: evs,
+          row: r,
+          col: c,
+          config: {
+            maxTileEnergy: this.maxTileEnergy,
+            regenRate: R,
+            diffusionRate: D,
+            densityEffectMultiplier,
+            regenDensityPenalty: REGEN_DENSITY_PENALTY,
+            eventStrengthMultiplier,
+            isEventAffecting,
+            getEventEffect,
+          },
+        });
 
-          const s = (ev.strength || 0) * (eventStrengthMultiplier || 1);
-          const effect = getEventEffect(ev.eventType);
-
-          if (!effect || s === 0) continue;
-
-          const { regenScale, regenAdd, drainAdd } = effect;
-
-          if (regenScale) {
-            const { base = 1, change = 0, min = 0 } = regenScale;
-            const scale = Math.max(min, base + change * s);
-
-            regen *= scale;
-          }
-
-          if (typeof regenAdd === 'number') {
-            regen += regenAdd * s;
-          }
-
-          if (typeof drainAdd === 'number') {
-            drain += drainAdd * s;
-          }
-        }
-
-        // Diffusion toward 4-neighbor mean
-        let neighSum = 0;
-        let neighCount = 0;
-
-        if (r > 0 && !this.isObstacle(r - 1, c)) {
-          neighSum += this.energyGrid[r - 1][c];
-          neighCount++;
-        }
-        if (r < this.rows - 1 && !this.isObstacle(r + 1, c)) {
-          neighSum += this.energyGrid[r + 1][c];
-          neighCount++;
-        }
-        if (c > 0 && !this.isObstacle(r, c - 1)) {
-          neighSum += this.energyGrid[r][c - 1];
-          neighCount++;
-        }
-        if (c < this.cols - 1 && !this.isObstacle(r, c + 1)) {
-          neighSum += this.energyGrid[r][c + 1];
-          neighCount++;
-        }
-
-        const neighAvg = neighCount > 0 ? neighSum / neighCount : e;
-        const diff = neighCount > 0 ? D * (neighAvg - e) : 0;
-
-        let val = e + regen - drain + diff;
-
-        if (val < 0) val = 0;
-        if (val > maxE) val = maxE;
-        next[r][c] = val;
+        next[r][c] = nextEnergy;
       }
     }
     // Swap buffers and clear the buffer for next tick writes
