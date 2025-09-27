@@ -592,14 +592,15 @@ export default class GridManager {
     }
   }
 
-  consumeEnergy(cell, row, col, densityGrid = this.densityGrid) {
+  consumeEnergy(cell, row, col, densityGrid = this.densityGrid, densityEffectMultiplier = 1) {
     const available = this.energyGrid[row][col];
     // DNA-driven harvest with density penalty
     const baseRate = typeof cell.dna.forageRate === 'function' ? cell.dna.forageRate() : 0.4;
     const base = clamp(baseRate, 0.05, 1);
     const density =
       densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
-    const crowdPenalty = Math.max(0, 1 - CONSUMPTION_DENSITY_PENALTY * density);
+    const effDensity = clamp((density ?? 0) * densityEffectMultiplier, 0, 1);
+    const crowdPenalty = Math.max(0, 1 - CONSUMPTION_DENSITY_PENALTY * effDensity);
     const minCap = typeof cell.dna.harvestCapMin === 'function' ? cell.dna.harvestCapMin() : 0.1;
     const maxCapRaw = typeof cell.dna.harvestCapMax === 'function' ? cell.dna.harvestCapMax() : 0.5;
     const maxCap = Math.max(minCap, clamp(maxCapRaw, minCap, 1));
@@ -615,7 +616,8 @@ export default class GridManager {
     eventStrengthMultiplier = 1,
     R = GridManager.energyRegenRate,
     D = GridManager.energyDiffusionRate,
-    densityGrid = null
+    densityGrid = null,
+    densityEffectMultiplier = 1
   ) {
     const maxE = this.maxTileEnergy;
     const next = this.energyNext;
@@ -631,8 +633,9 @@ export default class GridManager {
         const density = densityGrid
           ? densityGrid[r][c]
           : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
+        const effDensity = clamp((density ?? 0) * densityEffectMultiplier, 0, 1);
 
-        regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * density);
+        regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * effDensity);
 
         // Events modulate regen/drain (handle multiple)
         const evs = Array.isArray(events) ? events : events ? [events] : [];
@@ -1046,7 +1049,13 @@ export default class GridManager {
     }
   }
 
-  prepareTick({ eventManager, eventStrengthMultiplier, energyRegenRate, energyDiffusionRate }) {
+  prepareTick({
+    eventManager,
+    eventStrengthMultiplier,
+    energyRegenRate,
+    energyDiffusionRate,
+    densityEffectMultiplier = 1,
+  }) {
     this.#syncDensitySnapshot();
 
     const densityGrid = this.densityGrid;
@@ -1056,7 +1065,8 @@ export default class GridManager {
       eventStrengthMultiplier,
       energyRegenRate,
       energyDiffusionRate,
-      densityGrid
+      densityGrid,
+      densityEffectMultiplier
     );
 
     return { densityGrid };
@@ -1095,7 +1105,7 @@ export default class GridManager {
       cell.applyEventEffects(row, col, ev, eventStrengthMultiplier, this.maxTileEnergy);
     }
 
-    this.consumeEnergy(cell, row, col, densityGrid);
+    this.consumeEnergy(cell, row, col, densityGrid, densityEffectMultiplier);
     const localDensity = densityGrid[row][col];
 
     const starved = cell.manageEnergy(row, col, {
@@ -1456,6 +1466,7 @@ export default class GridManager {
       eventStrengthMultiplier,
       energyRegenRate,
       energyDiffusionRate,
+      densityEffectMultiplier,
     });
 
     this.densityGrid = densityGrid;

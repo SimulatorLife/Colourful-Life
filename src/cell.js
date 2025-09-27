@@ -62,22 +62,11 @@ export default class Cell {
     this.lifespan = this.dna.lifespanDNA();
     this.sight = this.dna.sight();
     this.energy = energy;
-    const baselineNeurons = Math.max(1, Brain?.MIN_NEURON_FLOOR ?? 1);
-
-    this.neurons = Math.max(baselineNeurons, this.brain?.neuronCount || 0, this.dna.neurons());
+    this.neurons = this.brain?.neuronCount || this.dna.neurons();
     this.strategy = this.dna.strategy();
     this.movementGenes = this.dna.movementGenes();
     this.interactionGenes = this.dna.interactionGenes();
     this.density = this.dna.densityResponses();
-    this.predation = {
-      affinity: typeof this.dna.carnivoreAffinity === 'function' ? this.dna.carnivoreAffinity() : 0,
-      efficiency:
-        typeof this.dna.carnivoreEfficiency === 'function' ? this.dna.carnivoreEfficiency() : 0,
-      capFrac:
-        typeof this.dna.predationEnergyCapFrac === 'function'
-          ? this.dna.predationEnergyCapFrac()
-          : 0,
-    };
     this.fitnessScore = null;
     this.matePreferenceBias =
       typeof this.dna.mateSimilarityBias === 'function' ? this.dna.mateSimilarityBias() : 0;
@@ -98,8 +87,6 @@ export default class Cell {
     this.offspring = 0;
     this.fightsWon = 0;
     this.fightsLost = 0;
-    this.lastFightIntent = 0;
-    this.lastFightSignal = 0;
   }
 
   static breed(parentA, parentB, mutationMultiplier = 1, options = {}) {
@@ -506,7 +493,6 @@ export default class Cell {
     const riskTolerance =
       typeof this.dna?.riskTolerance === 'function' ? this.dna.riskTolerance() : 0.5;
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
-    const predationAffinity = clamp(this.predation?.affinity ?? 0, 0, 1);
 
     return {
       energy: energyFrac,
@@ -518,7 +504,6 @@ export default class Cell {
       ageFraction: ageFrac,
       riskTolerance,
       eventPressure,
-      predationAffinity,
     };
   }
 
@@ -576,16 +561,6 @@ export default class Cell {
     this.#registerDecisionContext(group, sensors, result, activationLoad);
 
     return result.values;
-  }
-
-  #registerActionNeurons(stage) {
-    if (!Brain || !Brain.ACTION_NEURON_REQUIREMENTS) return;
-
-    const requirement = Brain.ACTION_NEURON_REQUIREMENTS[stage];
-
-    if (!Number.isFinite(requirement) || requirement <= 0) return;
-
-    this._neuralLoad += requirement;
   }
 
   #mapLegacyStrategyToAction(strategy) {
@@ -799,7 +774,6 @@ export default class Cell {
     society = [],
     maxTileEnergy = MAX_TILE_ENERGY,
   } = {}) {
-    this.#registerActionNeurons('movementDecision');
     const decision = this.#decideMovementAction({
       localDensity,
       densityEffectMultiplier,
@@ -838,7 +812,6 @@ export default class Cell {
       isTileBlocked,
     } = {}
   ) {
-    const registerMovementExecution = () => this.#registerActionNeurons('movementExecution');
     const strategy = this.#legacyChooseMovementStrategy(localDensity, densityEffectMultiplier);
 
     if (strategy === 'pursuit') {
@@ -847,13 +820,7 @@ export default class Cell {
         this.#nearest(mates, row, col) ||
         this.#nearest(society, row, col);
 
-      if (target) {
-        registerMovementExecution();
-
-        return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
-      }
-
-      registerMovementExecution();
+      if (target) return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
 
       return moveRandomly(gridArr, row, col, this, rows, cols);
     }
@@ -863,13 +830,7 @@ export default class Cell {
         this.#nearest(mates, row, col) ||
         this.#nearest(society, row, col);
 
-      if (threat) {
-        registerMovementExecution();
-
-        return moveAwayFromTarget(gridArr, row, col, threat.row, threat.col, rows, cols);
-      }
-
-      registerMovementExecution();
+      if (threat) return moveAwayFromTarget(gridArr, row, col, threat.row, threat.col, rows, cols);
 
       return moveRandomly(gridArr, row, col, this, rows, cols);
     }
@@ -880,11 +841,7 @@ export default class Cell {
       if (Math.random() < coh) {
         const target = this.#nearest(society, row, col);
 
-        if (target) {
-          registerMovementExecution();
-
-          return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
-        }
+        if (target) return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
       }
     }
     // then bias toward best energy neighbor if provided
@@ -923,19 +880,12 @@ export default class Cell {
       );
 
       if (best && Math.random() < pExploit) {
-        if (typeof tryMove === 'function') {
-          registerMovementExecution();
-
+        if (typeof tryMove === 'function')
           return tryMove(gridArr, row, col, best.dr, best.dc, rows, cols);
-        }
-
-        registerMovementExecution();
 
         return moveRandomly(gridArr, row, col, this, rows, cols);
       }
     }
-
-    registerMovementExecution();
 
     return moveRandomly(gridArr, row, col, this, rows, cols);
   }
@@ -963,7 +913,6 @@ export default class Cell {
       maxTileEnergy,
     };
     const decision = this.#decideMovementAction(strategyContext);
-    const registerMovementExecution = () => this.#registerActionNeurons('movementExecution');
 
     if (!decision.usedBrain || !decision.action) {
       return this.#legacyExecuteMovementStrategy(
@@ -1011,14 +960,12 @@ export default class Cell {
       if (!bestDir) return false;
 
       if (typeof tryMove === 'function') {
-        registerMovementExecution();
         const moved = tryMove(gridArr, row, col, bestDir.dr, bestDir.dc, rows, cols);
 
         if (moved) return true;
       }
 
       if (typeof moveRandomly === 'function') {
-        registerMovementExecution();
         moveRandomly(gridArr, row, col, this, rows, cols);
       }
 
@@ -1032,7 +979,6 @@ export default class Cell {
         const target = nearestEnemy || nearestMate || nearestAlly;
 
         if (target && typeof moveToTarget === 'function') {
-          registerMovementExecution();
           moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
 
           return;
@@ -1044,7 +990,6 @@ export default class Cell {
         const threat = nearestEnemy || nearestMate || nearestAlly;
 
         if (threat && typeof moveAwayFromTarget === 'function') {
-          registerMovementExecution();
           moveAwayFromTarget(gridArr, row, col, threat.row, threat.col, rows, cols);
 
           return;
@@ -1056,7 +1001,6 @@ export default class Cell {
         const target = nearestAlly || nearestMate;
 
         if (target && typeof moveToTarget === 'function') {
-          registerMovementExecution();
           moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
 
           return;
@@ -1071,7 +1015,6 @@ export default class Cell {
     if (chosen === 'explore' && attemptEnergyExploit()) return;
 
     if (typeof moveRandomly === 'function') {
-      registerMovementExecution();
       moveRandomly(gridArr, row, col, this, rows, cols);
     }
   }
@@ -1097,7 +1040,6 @@ export default class Cell {
       baseProbability = 0.5,
     } = context;
 
-    this.#registerActionNeurons('reproduction');
     const sensors = this.#reproductionSensors(partner, {
       localDensity,
       densityEffectMultiplier,
@@ -1140,10 +1082,6 @@ export default class Cell {
     const coopW = Math.max(0.0001, cooperate * coopMul);
     const avoidW = Math.max(0.0001, avoid);
     const total = avoidW + fightW + coopW;
-    const fightProb = total > 0 ? fightW / total : 0;
-
-    this.lastFightIntent = clamp(fightProb, 0, 1);
-    this.lastFightSignal = clamp(fightProb, 0, 1);
     const roll = randomRange(0, total);
 
     if (roll < avoidW) return 'avoid';
@@ -1159,12 +1097,8 @@ export default class Cell {
     allies = [],
     maxTileEnergy = MAX_TILE_ENERGY,
   } = {}) {
-    this.lastFightIntent = 0;
-    this.lastFightSignal = 0;
     const fallback = () =>
       this.#legacyChooseInteractionAction(localDensity, densityEffectMultiplier);
-
-    this.#registerActionNeurons('interaction');
     const sensors = this.#interactionSensors({
       localDensity,
       densityEffectMultiplier,
@@ -1179,12 +1113,6 @@ export default class Cell {
       const logits = entries.map(({ key }) => values[key] ?? 0);
       const labels = entries.map(({ key }) => key);
       const probs = softmax(logits);
-      const fightIndex = entries.findIndex((entry) => entry.key === 'fight');
-      const fightProb = fightIndex >= 0 ? clamp(probs[fightIndex] ?? 0, 0, 1) : 0;
-      const fightRaw = values.fight ?? 0;
-
-      this.lastFightIntent = fightProb;
-      this.lastFightSignal = clamp((fightRaw + 1) / 2, 0, 1);
       const choice = sampleFromDistribution(probs, labels);
       const probabilitiesByKey = {};
 
@@ -1229,10 +1157,6 @@ export default class Cell {
     return fallbackAction;
   }
 
-  currentFightDrive() {
-    return clamp(Math.max(this.lastFightIntent || 0, this.lastFightSignal || 0), 0, 1);
-  }
-
   applyEventEffects(row, col, currentEvent, eventStrengthMultiplier = 1, maxTileEnergy = 5) {
     if (isEventAffecting(currentEvent, row, col)) {
       const effect = getEventEffect(currentEvent?.eventType);
@@ -1266,18 +1190,8 @@ export default class Cell {
 
     if (!defender) return;
     // Apply fight energy cost to both participants (DNA-driven)
-    const maxTileEnergy = manager?.maxTileEnergy ?? MAX_TILE_ENERGY;
-    const attackerDrive =
-      typeof attacker.currentFightDrive === 'function' ? attacker.currentFightDrive() : 0;
-    const defenderDrive =
-      typeof defender.currentFightDrive === 'function' ? defender.currentFightDrive() : 0;
-    const attackerCostScale = clamp(0.7 + 0.6 * attackerDrive, 0.3, 1.6);
-    const defenderCostScale = clamp(0.6 + 0.5 * defenderDrive, 0.3, 1.5);
-    const attackerCost = (attacker.dna?.fightCost?.() ?? 0.02) * attackerCostScale;
-    const defenderCost = (defender.dna?.fightCost?.() ?? 0.02) * defenderCostScale;
-
-    attacker.energy = Math.max(0, attacker.energy - attackerCost);
-    defender.energy = Math.max(0, defender.energy - defenderCost);
+    attacker.energy = Math.max(0, attacker.energy - attacker.dna.fightCost());
+    defender.energy = Math.max(0, defender.energy - defender.dna.fightCost());
     // Resolve by DNA-based combat power
     const atkPower = attacker.energy * (attacker.dna.combatPower?.() ?? 1);
     const defPower = defender.energy * (defender.dna.combatPower?.() ?? 1);
@@ -1294,15 +1208,7 @@ export default class Cell {
         attacker.row = targetRow;
         attacker.col = targetCol;
       }
-      this.#ingestPreyEnergy(defender, manager, targetRow, targetCol, maxTileEnergy);
-      defender.energy = 0;
-      manager.consumeEnergy(
-        attacker,
-        targetRow,
-        targetCol,
-        manager.densityGrid,
-        manager.currentDensityEffectMultiplier
-      );
+      manager.consumeEnergy(attacker, targetRow, targetCol);
       stats?.onFight?.();
       stats?.onDeath?.();
       attacker.fightsWon = (attacker.fightsWon || 0) + 1;
@@ -1314,35 +1220,6 @@ export default class Cell {
       stats?.onDeath?.();
       defender.fightsWon = (defender.fightsWon || 0) + 1;
       attacker.fightsLost = (attacker.fightsLost || 0) + 1;
-    }
-  }
-
-  #ingestPreyEnergy(prey, manager, row, col, maxTileEnergy = MAX_TILE_ENERGY) {
-    if (!prey || !manager) return;
-    const affinity = clamp(this.predation?.affinity ?? 0, 0, 1);
-    const efficiency = clamp(this.predation?.efficiency ?? 0, 0, 1);
-    const capFrac = clamp(this.predation?.capFrac ?? 0, 0, 1);
-    const drive = this.currentFightDrive();
-    const hunger = maxTileEnergy > 0 ? clamp(1 - (this.energy || 0) / maxTileEnergy, 0, 1) : 0;
-    const readiness = clamp(0.25 * affinity + 0.45 * drive + 0.3 * hunger, 0, 1);
-
-    if (readiness <= 0 || efficiency <= 0) return;
-
-    const preyEnergy = Math.max(0, prey.energy || 0);
-    const tileEnergy = manager.energyGrid?.[row]?.[col] ?? 0;
-    const available = preyEnergy + tileEnergy * 0.25;
-
-    if (available <= 0) return;
-
-    const cap = (capFrac > 0 ? capFrac : 0.25) * maxTileEnergy;
-    const gain = Math.min(cap, available * efficiency * readiness);
-
-    if (gain <= 0) return;
-
-    this.energy = Math.min(maxTileEnergy, this.energy + gain);
-    if (prey) prey.energy = Math.max(0, prey.energy - gain);
-    if (manager.energyGrid?.[row]) {
-      manager.energyGrid[row][col] = Math.max(0, manager.energyGrid[row][col] - gain * 0.5);
     }
   }
 

@@ -280,9 +280,7 @@ test('brains enforce minimum neuron floor while pruning unreachable connections'
   const brain = Brain.fromDNA(dna);
 
   assert.ok(brain);
-  const expectedFloor = Brain.MIN_NEURON_FLOOR;
-
-  assert.is(brain.neuronCount, expectedFloor, 'neuron count should honor action floor');
+  assert.is(brain.neuronCount, 2, 'only neurons leading to outputs should remain');
   assert.is(brain.connectionCount, 2, 'irrelevant connections should be pruned');
   assert.is(brain.activationMap.has(221), false);
   const metrics = dna.getBrainMetrics();
@@ -293,7 +291,7 @@ test('brains enforce minimum neuron floor while pruning unreachable connections'
 
   const cell = new Cell(0, 0, dna, 5);
 
-  assert.is(cell.neurons, expectedFloor, 'cell neuron count should reflect action floor');
+  assert.is(cell.neurons, 2, 'cell neuron count should reflect pruned brain');
 
   const context = { localDensity: 0.3, densityEffectMultiplier: 1.2, maxTileEnergy: 8 };
   const effDensity = clamp(context.localDensity * context.densityEffectMultiplier, 0, 1);
