@@ -90,7 +90,12 @@ export default class GridManager {
     } = options;
     const nr = sr + dr;
     const nc = sc + dc;
-    const moving = gridArr[sr][sc];
+    const moving = gridArr[sr]?.[sc] ?? null;
+
+    if (!moving) {
+      return false;
+    }
+
     const applyWallPenalty = (reason) => {
       if (!moving || typeof moving !== 'object' || moving.energy == null) return;
       const base =
