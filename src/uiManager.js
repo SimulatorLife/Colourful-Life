@@ -12,10 +12,10 @@ import {
 } from './ui/controlBuilders.js';
 
 export default class UIManager {
-  constructor(updateCallback, mountSelector = '#app', actions = {}, layoutOptions = {}) {
+  constructor(simulationCallbacks = {}, mountSelector = '#app', actions = {}, layoutOptions = {}) {
     const { obstaclePresets = [], obstacleScenarios = [], ...actionFns } = actions || {};
 
-    this.updateCallback = updateCallback;
+    this.simulationCallbacks = simulationCallbacks || {};
     this.actions = actionFns;
     this.obstaclePresets = Array.isArray(obstaclePresets) ? obstaclePresets : [];
     this.obstacleScenarios = Array.isArray(obstacleScenarios) ? obstacleScenarios : [];
@@ -123,11 +123,26 @@ export default class UIManager {
   }
 
   #scheduleUpdate() {
-    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-      window.requestAnimationFrame(this.updateCallback);
-    } else if (typeof this.updateCallback === 'function') {
-      this.updateCallback();
+    if (typeof this.simulationCallbacks?.requestFrame === 'function') {
+      this.simulationCallbacks.requestFrame();
+
+      return;
     }
+
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => {});
+    }
+  }
+
+  #notifySettingChange(key, value) {
+    if (typeof this.simulationCallbacks?.onSettingChange === 'function') {
+      this.simulationCallbacks.onSettingChange(key, value);
+    }
+  }
+
+  #updateSetting(key, value) {
+    this[key] = value;
+    this.#notifySettingChange(key, value);
   }
 
   #setDrawingEnabled(enabled) {
@@ -475,9 +490,7 @@ export default class UIManager {
         title: 'Minimum genetic similarity to consider another cell an ally (0..1)',
         format: (v) => v.toFixed(2),
         getValue: () => this.societySimilarity,
-        setValue: (v) => {
-          this.societySimilarity = v;
-        },
+        setValue: (v) => this.#updateSetting('societySimilarity', v),
       }),
       withSliderConfig('enemySimilarity', {
         label: 'Enemy Similarity ≤',
@@ -487,9 +500,7 @@ export default class UIManager {
         title: 'Maximum genetic similarity to consider another cell an enemy (0..1)',
         format: (v) => v.toFixed(2),
         getValue: () => this.enemySimilarity,
-        setValue: (v) => {
-          this.enemySimilarity = v;
-        },
+        setValue: (v) => this.#updateSetting('enemySimilarity', v),
       }),
     ];
 
@@ -502,9 +513,7 @@ export default class UIManager {
         title: 'Scales the impact of environmental events (0..3)',
         format: (v) => v.toFixed(2),
         getValue: () => this.eventStrengthMultiplier,
-        setValue: (v) => {
-          this.eventStrengthMultiplier = v;
-        },
+        setValue: (v) => this.#updateSetting('eventStrengthMultiplier', v),
       }),
       withSliderConfig('eventFrequencyMultiplier', {
         label: 'Event Frequency ×',
@@ -514,9 +523,7 @@ export default class UIManager {
         title: 'How often events spawn (0 disables new events)',
         format: (v) => v.toFixed(1),
         getValue: () => this.eventFrequencyMultiplier,
-        setValue: (v) => {
-          this.eventFrequencyMultiplier = v;
-        },
+        setValue: (v) => this.#updateSetting('eventFrequencyMultiplier', v),
       }),
     ];
 
@@ -530,9 +537,7 @@ export default class UIManager {
           'Scales how strongly population density affects energy, aggression, and breeding (0..2)',
         format: (v) => v.toFixed(2),
         getValue: () => this.densityEffectMultiplier,
-        setValue: (v) => {
-          this.densityEffectMultiplier = v;
-        },
+        setValue: (v) => this.#updateSetting('densityEffectMultiplier', v),
       }),
       withSliderConfig('energyRegenRate', {
         label: 'Energy Regen Rate',
@@ -542,9 +547,7 @@ export default class UIManager {
         title: 'Base logistic regeneration rate toward max energy (0..0.2)',
         format: (v) => v.toFixed(3),
         getValue: () => this.energyRegenRate,
-        setValue: (v) => {
-          this.energyRegenRate = v;
-        },
+        setValue: (v) => this.#updateSetting('energyRegenRate', v),
       }),
       withSliderConfig('energyDiffusionRate', {
         label: 'Energy Diffusion Rate',
@@ -554,9 +557,7 @@ export default class UIManager {
         title: 'How quickly energy smooths between tiles (0..0.5)',
         format: (v) => v.toFixed(2),
         getValue: () => this.energyDiffusionRate,
-        setValue: (v) => {
-          this.energyDiffusionRate = v;
-        },
+        setValue: (v) => this.#updateSetting('energyDiffusionRate', v),
       }),
     ];
 
@@ -570,9 +571,7 @@ export default class UIManager {
           'Scales averaged parental mutation chance and range for offspring (0 disables mutation)',
         format: (v) => v.toFixed(2),
         getValue: () => this.mutationMultiplier,
-        setValue: (v) => {
-          this.mutationMultiplier = v;
-        },
+        setValue: (v) => this.#updateSetting('mutationMultiplier', v),
         position: 'beforeOverlays',
       }),
       withSliderConfig('speedMultiplier', {
@@ -583,9 +582,7 @@ export default class UIManager {
         title: 'Speed multiplier relative to 60 updates/sec (0.5x..100x)',
         format: (v) => `${v.toFixed(1)}x`,
         getValue: () => this.speedMultiplier,
-        setValue: (v) => {
-          this.speedMultiplier = v;
-        },
+        setValue: (v) => this.#updateSetting('speedMultiplier', v),
         position: 'beforeOverlays',
       }),
       withSliderConfig('leaderboardIntervalMs', {
@@ -596,9 +593,7 @@ export default class UIManager {
         title: 'Delay between leaderboard refreshes in milliseconds (100..3000)',
         format: (v) => `${Math.round(v)} ms`,
         getValue: () => this.leaderboardIntervalMs,
-        setValue: (v) => {
-          this.leaderboardIntervalMs = v;
-        },
+        setValue: (v) => this.#updateSetting('leaderboardIntervalMs', v),
         position: 'afterEnergy',
       }),
     ];
@@ -632,25 +627,22 @@ export default class UIManager {
       'Show Obstacles',
       'Highlight impassable tiles such as walls and barriers',
       this.showObstacles,
-      (v) => (this.showObstacles = v)
+      (v) => this.#updateSetting('showObstacles', v)
     );
     addToggle(
       'Show Density Heatmap',
       'Overlay local population density as a heatmap',
       this.showDensity,
-      (v) => (this.showDensity = v)
+      (v) => this.#updateSetting('showDensity', v)
     );
     addToggle(
       'Show Energy Heatmap',
       'Overlay tile energy levels as a heatmap',
       this.showEnergy,
-      (v) => (this.showEnergy = v)
+      (v) => this.#updateSetting('showEnergy', v)
     );
-    addToggle(
-      'Show Fitness Heatmap',
-      'Overlay cell fitness as a heatmap',
-      this.showFitness,
-      (v) => (this.showFitness = v)
+    addToggle('Show Fitness Heatmap', 'Overlay cell fitness as a heatmap', this.showFitness, (v) =>
+      this.#updateSetting('showFitness', v)
     );
 
     if (this.obstaclePresets.length > 0 || this.obstacleScenarios.length > 0) {
@@ -757,7 +749,7 @@ export default class UIManager {
         format: (v) => v.toFixed(3),
         getValue: () => this.lingerPenalty,
         setValue: (v) => {
-          this.lingerPenalty = v;
+          this.#updateSetting('lingerPenalty', v);
           if (typeof this.actions.setLingerPenalty === 'function') this.actions.setLingerPenalty(v);
           else if (window.grid?.setLingerPenalty) window.grid.setLingerPenalty(v);
         },
@@ -907,13 +899,22 @@ export default class UIManager {
   }
 
   togglePause() {
-    this.paused = !this.paused;
-    this.pauseButton.textContent = this.paused ? 'Resume' : 'Pause';
-    if (!this.paused) requestAnimationFrame(this.updateCallback);
+    const toggler = this.simulationCallbacks?.togglePause;
+    const nextPaused = typeof toggler === 'function' ? toggler() : !this.paused;
+
+    this.setPauseState(nextPaused);
+    if (!nextPaused) this.#scheduleUpdate();
   }
 
   isPaused() {
     return this.paused;
+  }
+
+  setPauseState(paused) {
+    this.paused = Boolean(paused);
+    if (this.pauseButton) {
+      this.pauseButton.textContent = this.paused ? 'Resume' : 'Pause';
+    }
   }
 
   // Getters for simulation

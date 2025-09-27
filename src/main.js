@@ -1,11 +1,7 @@
 import UIManager from './uiManager.js';
-import EventManager from './eventManager.js';
-import Stats from './stats.js';
-import GridManager, { OBSTACLE_PRESETS, OBSTACLE_SCENARIOS } from './gridManager.js';
-import SelectionManager from './selectionManager.js';
-import { drawOverlays } from './overlays.js';
-import { computeLeaderboard } from './leaderboard.js';
 import BrainDebugger from './brainDebugger.js';
+import SimulationEngine from './simulationEngine.js';
+import { OBSTACLE_PRESETS, OBSTACLE_SCENARIOS } from './gridManager.js';
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -13,17 +9,6 @@ import {
 } from './config.js';
 
 const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
-
-const defaultNow = () => {
-  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
-    return performance.now();
-  }
-
-  return Date.now();
-};
-
-const defaultRequestAnimationFrame = (cb) => setTimeout(() => cb(defaultNow()), 16);
-const defaultCancelAnimationFrame = (id) => clearTimeout(id);
 
 function createHeadlessUiManager(options = {}) {
   const settings = {
@@ -96,42 +81,6 @@ function createHeadlessUiManager(options = {}) {
   };
 }
 
-function resolveCanvas(canvas, documentRef) {
-  if (canvas) return canvas;
-
-  if (documentRef && typeof documentRef.getElementById === 'function') {
-    return documentRef.getElementById('gameCanvas');
-  }
-
-  return null;
-}
-
-function ensureCanvasDimensions(canvas, config) {
-  const candidates = [config?.width, config?.canvasWidth, config?.canvasSize?.width, canvas?.width];
-  const heightCandidates = [
-    config?.height,
-    config?.canvasHeight,
-    config?.canvasSize?.height,
-    canvas?.height,
-  ];
-
-  const width = candidates.find((value) => typeof value === 'number');
-  const height = heightCandidates.find((value) => typeof value === 'number');
-
-  if (canvas && typeof width === 'number') canvas.width = width;
-  if (canvas && typeof height === 'number') canvas.height = height;
-
-  if (typeof canvas?.width === 'number' && typeof canvas?.height === 'number') {
-    return { width: canvas.width, height: canvas.height };
-  }
-
-  if (typeof width === 'number' && typeof height === 'number') {
-    return { width, height };
-  }
-
-  throw new Error('createSimulation requires canvas dimensions to be specified.');
-}
-
 export function createSimulation({
   canvas,
   config = {},
@@ -145,210 +94,125 @@ export function createSimulation({
   document: injectedDocument,
 } = {}) {
   const win = injectedWindow ?? (typeof window !== 'undefined' ? window : undefined);
-  const doc = injectedDocument ?? (typeof document !== 'undefined' ? document : undefined);
-  const resolvedCanvas = resolveCanvas(canvas, doc);
-
-  if (!resolvedCanvas) {
-    throw new Error('createSimulation requires a canvas element.');
-  }
-
-  const ctx = resolvedCanvas.getContext('2d');
-
-  if (!ctx) {
-    throw new Error('createSimulation requires a 2D canvas context.');
-  }
-
-  const { width, height } = ensureCanvasDimensions(resolvedCanvas, config);
-  const cellSize = config.cellSize ?? 5;
-  const rows = config.rows ?? Math.floor(height / cellSize);
-  const cols = config.cols ?? Math.floor(width / cellSize);
-
-  const now = typeof injectedNow === 'function' ? injectedNow : defaultNow;
-  const raf =
-    typeof injectedRaf === 'function'
-      ? injectedRaf
-      : win && typeof win.requestAnimationFrame === 'function'
-        ? win.requestAnimationFrame.bind(win)
-        : defaultRequestAnimationFrame;
-  const caf =
-    typeof injectedCaf === 'function'
-      ? injectedCaf
-      : win && typeof win.cancelAnimationFrame === 'function'
-        ? win.cancelAnimationFrame.bind(win)
-        : defaultCancelAnimationFrame;
-
-  const eventManager = new EventManager(rows, cols, rng);
-  const stats = new Stats();
-  const selectionManager = new SelectionManager(rows, cols);
-  const grid = new GridManager(rows, cols, {
-    eventManager,
-    ctx,
-    cellSize,
-    stats,
-    selectionManager,
-  });
 
   if (win) {
     win.BrainDebugger = BrainDebugger;
-    win.grid = grid;
   } else {
     GLOBAL.BrainDebugger = BrainDebugger;
   }
 
-  let lastSnapshot = grid.getLastSnapshot();
-  let pendingSlowUiUpdate = false;
-  let lastMetrics = null;
-  let lastUpdateTime = 0;
-  let running = false;
-  let frameHandle = null;
+  const engine = new SimulationEngine({
+    canvas,
+    config,
+    rng,
+    requestAnimationFrame: injectedRaf,
+    cancelAnimationFrame: injectedCaf,
+    performanceNow: injectedNow,
+    window: injectedWindow,
+    document: injectedDocument,
+    autoStart: false,
+  });
 
   const uiOptions = config.ui ?? {};
-  const uiManager = headless
-    ? createHeadlessUiManager({ ...uiOptions, selectionManager })
-    : new UIManager(
-        () => update(),
-        uiOptions.mountSelector ?? '#app',
-        {
-          burst: () => grid.burstRandomCells({ count: 200, radius: 6 }),
-          applyObstaclePreset: (id, options) => grid.applyObstaclePreset(id, options),
-          runObstacleScenario: (id) => grid.runObstacleScenario(id),
-          setLingerPenalty: (value) => grid.setLingerPenalty(value),
-          obstaclePresets: OBSTACLE_PRESETS,
-          obstacleScenarios: OBSTACLE_SCENARIOS,
-          selectionManager,
-          getCellSize: () => cellSize,
-          ...(uiOptions.actions || {}),
-        },
-        {
-          canvasElement: resolvedCanvas,
-          ...(uiOptions.layout || {}),
-        }
-      );
+  const baseActions = {
+    burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
+    applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
+    runObstacleScenario: (id) => engine.runObstacleScenario(id),
+    setLingerPenalty: (value) => engine.setLingerPenalty(value),
+    obstaclePresets: OBSTACLE_PRESETS,
+    obstacleScenarios: OBSTACLE_SCENARIOS,
+    selectionManager: engine.selectionManager,
+    getCellSize: () => engine.cellSize,
+    ...(uiOptions.actions || {}),
+  };
 
-  grid.setLingerPenalty(uiManager.getLingerPenalty?.() ?? 0);
+  const simulationCallbacks = {
+    requestFrame: () => engine.requestFrame(),
+    togglePause: () => engine.togglePause(),
+    onSettingChange: (key, value) => engine.updateSetting(key, value),
+  };
+
+  const uiManager = headless
+    ? createHeadlessUiManager({ ...uiOptions, selectionManager: engine.selectionManager })
+    : new UIManager(simulationCallbacks, uiOptions.mountSelector ?? '#app', baseActions, {
+        canvasElement: engine.canvas,
+        ...(uiOptions.layout || {}),
+      });
+
+  if (!headless) {
+    uiManager.setPauseState?.(engine.isPaused());
+  }
 
   if (win) {
     win.uiManager = uiManager;
   }
 
-  function scheduleNextFrame() {
-    if (!running) return;
-    frameHandle = raf((timestamp) => update(typeof timestamp === 'number' ? timestamp : now()));
+  if (typeof uiManager?.getLingerPenalty === 'function') {
+    engine.setLingerPenalty(uiManager.getLingerPenalty());
   }
 
-  function update(timestamp = now()) {
-    if (!running) return;
+  const unsubscribers = [];
 
-    if (typeof uiManager.isPaused === 'function' && uiManager.isPaused()) {
-      scheduleNextFrame();
+  if (!headless && uiManager) {
+    unsubscribers.push(
+      engine.on('metrics', ({ stats, metrics }) => {
+        if (typeof uiManager.renderMetrics === 'function') {
+          uiManager.renderMetrics(stats, metrics);
+        }
+      })
+    );
 
-      return;
-    }
+    unsubscribers.push(
+      engine.on('leaderboard', ({ entries }) => {
+        if (typeof uiManager.renderLeaderboard === 'function') {
+          uiManager.renderLeaderboard(entries);
+        }
+      })
+    );
 
-    const interval = 1000 / Math.max(1, uiManager.getUpdatesPerSecond?.() ?? 60);
-    let tickOccurred = false;
-
-    if (timestamp - lastUpdateTime >= interval) {
-      lastUpdateTime = timestamp;
-      tickOccurred = true;
-      stats.resetTick();
-      eventManager.updateEvent?.(uiManager.getEventFrequencyMultiplier?.() ?? 1, 2);
-      const mutationMultiplier = uiManager.getMutationMultiplier?.() ?? 1;
-      const snapshot = grid.update({
-        densityEffectMultiplier: uiManager.getDensityEffectMultiplier?.() ?? 1,
-        societySimilarity:
-          uiManager.getSocietySimilarity?.() ?? UI_SLIDER_CONFIG.societySimilarity.default,
-        enemySimilarity:
-          uiManager.getEnemySimilarity?.() ?? UI_SLIDER_CONFIG.enemySimilarity.default,
-        eventStrengthMultiplier: uiManager.getEventStrengthMultiplier?.() ?? 1,
-        energyRegenRate: uiManager.getEnergyRegenRate?.() ?? ENERGY_REGEN_RATE_DEFAULT,
-        energyDiffusionRate: uiManager.getEnergyDiffusionRate?.() ?? ENERGY_DIFFUSION_RATE_DEFAULT,
-        mutationMultiplier,
-      });
-
-      lastSnapshot = snapshot;
-      stats.logEvent?.(eventManager.currentEvent, uiManager.getEventStrengthMultiplier?.() ?? 1);
-      stats.setMutationMultiplier?.(mutationMultiplier);
-      const metrics = stats.updateFromSnapshot?.(snapshot);
-
-      lastMetrics = metrics;
-      pendingSlowUiUpdate = true;
-    }
-
-    grid.draw({ showObstacles: uiManager.getShowObstacles?.() ?? true });
-    drawOverlays(grid, ctx, cellSize, {
-      showEnergy: uiManager.getShowEnergy?.() ?? false,
-      showDensity: uiManager.getShowDensity?.() ?? false,
-      showFitness: uiManager.getShowFitness?.() ?? false,
-      showObstacles: uiManager.getShowObstacles?.() ?? true,
-      maxTileEnergy: GridManager.maxTileEnergy,
-      snapshot: lastSnapshot,
-      activeEvents: eventManager.activeEvents,
-      getEventColor: eventManager.getColor?.bind(eventManager),
-      mutationMultiplier: uiManager.getMutationMultiplier?.() ?? 1,
-      selectionManager,
-    });
-
-    if (pendingSlowUiUpdate && uiManager.shouldRenderSlowUi?.(timestamp)) {
-      if (lastMetrics && typeof uiManager.renderMetrics === 'function') {
-        uiManager.renderMetrics(stats, lastMetrics);
-      }
-      if (typeof uiManager.renderLeaderboard === 'function') {
-        const top = computeLeaderboard(lastSnapshot, 5);
-
-        uiManager.renderLeaderboard(top);
-      }
-      pendingSlowUiUpdate = false;
-    }
-
-    scheduleNextFrame();
-
-    return tickOccurred;
+    unsubscribers.push(
+      engine.on('state', ({ changes }) => {
+        if (changes?.paused !== undefined && typeof uiManager.setPauseState === 'function') {
+          uiManager.setPauseState(changes.paused);
+        }
+      })
+    );
   }
 
-  function start() {
-    if (running) return;
-    running = true;
-    lastUpdateTime = 0;
-    scheduleNextFrame();
-  }
-
-  function stop() {
-    running = false;
-    if (frameHandle != null) {
-      caf(frameHandle);
-      frameHandle = null;
-    }
-  }
-
-  function step() {
-    if (!running) {
-      running = true;
-      const result = update(now());
-
-      running = false;
-
-      return result;
-    }
-
-    return update(now());
-  }
+  const startPaused = Boolean(config.paused ?? false);
 
   if (autoStart) {
-    start();
+    engine.start();
+    if (startPaused) engine.pause();
+  } else if (startPaused) {
+    engine.pause();
   }
 
   return {
-    grid,
+    engine,
+    grid: engine.grid,
     uiManager,
-    eventManager,
-    stats,
-    selectionManager,
-    start,
-    stop,
-    step,
-    update,
+    eventManager: engine.eventManager,
+    stats: engine.stats,
+    selectionManager: engine.selectionManager,
+    start: () => engine.start(),
+    stop: () => engine.stop(),
+    step: (timestamp) => engine.tick(timestamp),
+    tick: (timestamp) => engine.tick(timestamp),
+    pause: () => engine.pause(),
+    resume: () => engine.resume(),
+    update: (timestamp) => engine.tick(timestamp),
+    destroy: () => {
+      while (unsubscribers.length) {
+        const unsub = unsubscribers.pop();
+
+        if (typeof unsub === 'function') unsub();
+      }
+      engine.stop();
+    },
   };
 }
 
 export default createSimulation;
+
+export { SimulationEngine };
