@@ -338,6 +338,45 @@ export default class GridManager {
     return true;
   }
 
+  _paintWallLine(
+    axis,
+    index,
+    {
+      spanStart = 0,
+      spanEnd = axis === 'vertical' ? this.rows - 1 : this.cols - 1,
+      gapEvery = 0,
+      gapOffset = 0,
+      thickness = 1,
+      evict = true,
+    } = {}
+  ) {
+    const isVertical = axis === 'vertical';
+    const primaryLimit = isVertical ? this.rows : this.cols;
+    const secondaryLimit = isVertical ? this.cols : this.rows;
+    const normalizedStart = Math.max(0, Math.floor(spanStart));
+    const normalizedEnd = Math.min(primaryLimit - 1, Math.floor(spanEnd));
+    const thicknessValue = Math.max(1, Math.floor(thickness));
+
+    for (let offset = 0; offset < thicknessValue; offset++) {
+      const secondaryIndex = index + offset;
+
+      if (secondaryIndex < 0 || secondaryIndex >= secondaryLimit) continue;
+      for (let primary = normalizedStart; primary <= normalizedEnd; primary++) {
+        if (gapEvery > 0) {
+          const idx = primary - normalizedStart + gapOffset;
+
+          if (idx % gapEvery === 0) continue;
+        }
+
+        if (isVertical) {
+          this.setObstacle(primary, secondaryIndex, true, { evict });
+        } else {
+          this.setObstacle(secondaryIndex, primary, true, { evict });
+        }
+      }
+    }
+  }
+
   paintVerticalWall(
     col,
     {
@@ -349,23 +388,14 @@ export default class GridManager {
       evict = true,
     } = {}
   ) {
-    const normalizedStart = Math.max(0, startRow);
-    const normalizedEnd = Math.min(this.rows - 1, endRow);
-    const width = Math.max(1, Math.floor(thickness));
-
-    for (let offset = 0; offset < width; offset++) {
-      const cc = col + offset;
-
-      if (cc < 0 || cc >= this.cols) continue;
-      for (let r = normalizedStart; r <= normalizedEnd; r++) {
-        if (gapEvery > 0) {
-          const idx = r - normalizedStart + gapOffset;
-
-          if (idx % gapEvery === 0) continue;
-        }
-        this.setObstacle(r, cc, true, { evict });
-      }
-    }
+    this._paintWallLine('vertical', col, {
+      spanStart: startRow,
+      spanEnd: endRow,
+      gapEvery,
+      gapOffset,
+      thickness,
+      evict,
+    });
   }
 
   paintHorizontalWall(
@@ -379,23 +409,14 @@ export default class GridManager {
       evict = true,
     } = {}
   ) {
-    const normalizedStart = Math.max(0, startCol);
-    const normalizedEnd = Math.min(this.cols - 1, endCol);
-    const height = Math.max(1, Math.floor(thickness));
-
-    for (let offset = 0; offset < height; offset++) {
-      const rr = row + offset;
-
-      if (rr < 0 || rr >= this.rows) continue;
-      for (let c = normalizedStart; c <= normalizedEnd; c++) {
-        if (gapEvery > 0) {
-          const idx = c - normalizedStart + gapOffset;
-
-          if (idx % gapEvery === 0) continue;
-        }
-        this.setObstacle(rr, c, true, { evict });
-      }
-    }
+    this._paintWallLine('horizontal', row, {
+      spanStart: startCol,
+      spanEnd: endCol,
+      gapEvery,
+      gapOffset,
+      thickness,
+      evict,
+    });
   }
 
   paintCheckerboard({
