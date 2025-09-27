@@ -12,6 +12,20 @@ export function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+export function cloneTracePayload(trace) {
+  if (!trace) return null;
+
+  return {
+    sensors: Array.isArray(trace.sensors) ? trace.sensors.map((entry) => ({ ...entry })) : [],
+    nodes: Array.isArray(trace.nodes)
+      ? trace.nodes.map((entry) => ({
+          ...entry,
+          inputs: Array.isArray(entry.inputs) ? entry.inputs.map((input) => ({ ...input })) : [],
+        }))
+      : [],
+  };
+}
+
 /*
  * Deterministic PRNG factory (Mulberry32)
  */

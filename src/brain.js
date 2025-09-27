@@ -1,4 +1,4 @@
-import { clamp } from './utils.js';
+import { clamp, cloneTracePayload } from './utils.js';
 
 export const NEURAL_GENE_BYTES = 4;
 
@@ -67,20 +67,6 @@ const clampSensorValue = (value) => {
   if (!Number.isFinite(value)) return 0;
 
   return clamp(value, -1, 1);
-};
-
-const cloneTracePayload = (trace) => {
-  if (!trace) return null;
-
-  return {
-    sensors: Array.isArray(trace.sensors) ? trace.sensors.map((entry) => ({ ...entry })) : [],
-    nodes: Array.isArray(trace.nodes)
-      ? trace.nodes.map((entry) => ({
-          ...entry,
-          inputs: Array.isArray(entry.inputs) ? entry.inputs.map((input) => ({ ...input })) : [],
-        }))
-      : [],
-  };
 };
 
 export default class Brain {

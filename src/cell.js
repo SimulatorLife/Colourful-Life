@@ -1,6 +1,6 @@
 import DNA from './genome.js';
 import Brain, { OUTPUT_GROUPS } from './brain.js';
-import { randomRange, clamp, lerp } from './utils.js';
+import { randomRange, clamp, lerp, cloneTracePayload } from './utils.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
 import { MAX_TILE_ENERGY } from './config.js';
@@ -31,20 +31,6 @@ function sampleFromDistribution(probabilities = [], labels = []) {
   }
 
   return labels[labels.length - 1] ?? probabilities.length - 1;
-}
-
-function cloneTrace(trace) {
-  if (!trace) return null;
-
-  return {
-    sensors: Array.isArray(trace.sensors) ? trace.sensors.map((entry) => ({ ...entry })) : [],
-    nodes: Array.isArray(trace.nodes)
-      ? trace.nodes.map((entry) => ({
-          ...entry,
-          inputs: Array.isArray(entry.inputs) ? entry.inputs.map((input) => ({ ...input })) : [],
-        }))
-      : [],
-  };
 }
 
 export default class Cell {
@@ -325,7 +311,7 @@ export default class Cell {
       sensorVector,
       outputs: evaluation.values ? { ...evaluation.values } : null,
       activationCount,
-      trace: evaluation.trace ? cloneTrace(evaluation.trace) : null,
+      trace: evaluation.trace ? cloneTracePayload(evaluation.trace) : null,
       outcome: null,
     };
 
@@ -389,7 +375,7 @@ export default class Cell {
         sensorVector: Array.isArray(context.sensorVector) ? [...context.sensorVector] : null,
         outputs: context.outputs ? { ...context.outputs } : null,
         activationCount,
-        trace: cloneTrace(context.trace),
+        trace: cloneTracePayload(context.trace),
         outcome: normalizedOutcome,
         energyImpact: {
           baseline: baselineShare,
@@ -724,7 +710,7 @@ export default class Cell {
           sensors: decision.sensors ? { ...decision.sensors } : null,
           sensorVector: Array.isArray(decision.sensorVector) ? [...decision.sensorVector] : null,
           outputs: decision.outputs ? { ...decision.outputs } : null,
-          trace: cloneTrace(decision.trace),
+          trace: cloneTracePayload(decision.trace),
           outcome:
             decision.outcome &&
             typeof decision.outcome === 'object' &&
