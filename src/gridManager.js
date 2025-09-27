@@ -1215,10 +1215,13 @@ export default class GridManager {
     const mateRow = bestMate.target.row;
     const mateCol = bestMate.target.col;
 
-    const parentDensity = densityGrid?.[parentRow]?.[parentCol];
-    const originalDensity = densityGrid?.[row]?.[col];
-    const localDensity =
-      parentDensity !== undefined && parentDensity !== null ? parentDensity : originalDensity;
+    const densitySourceRow = moveSucceeded ? parentRow : originalParentRow;
+    const densitySourceCol = moveSucceeded ? parentCol : originalParentCol;
+    let localDensity = densityGrid?.[densitySourceRow]?.[densitySourceCol];
+
+    if (localDensity == null) {
+      localDensity = this.getDensityAt(densitySourceRow, densitySourceCol);
+    }
     const baseProb = cell.computeReproductionProbability(bestMate.target, {
       localDensity,
       densityEffectMultiplier,
