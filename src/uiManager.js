@@ -324,7 +324,8 @@ export default class UIManager {
   }
 
   // Utility to create a collapsible panel with a header
-  #createPanel(title) {
+  #createPanel(title, options = {}) {
+    const { collapsed = false } = options;
     const panel = document.createElement('div');
 
     panel.className = 'panel';
@@ -346,9 +347,13 @@ export default class UIManager {
     body.className = 'panel-body';
     panel.appendChild(body);
 
+    const setCollapsed = (shouldCollapse) => {
+      panel.classList.toggle('collapsed', shouldCollapse);
+      toggle.textContent = shouldCollapse ? '+' : '–';
+    };
+
     const toggleCollapsed = () => {
-      panel.classList.toggle('collapsed');
-      toggle.textContent = panel.classList.contains('collapsed') ? '+' : '–';
+      setCollapsed(!panel.classList.contains('collapsed'));
     };
 
     header.addEventListener('click', () => {
@@ -359,11 +364,13 @@ export default class UIManager {
       toggleCollapsed();
     });
 
+    setCollapsed(Boolean(collapsed));
+
     return { panel, header, heading, toggle, body };
   }
 
   #buildControlsPanel() {
-    const { panel, body } = this.#createPanel('Simulation Controls');
+    const { panel, body } = this.#createPanel('Simulation Controls', { collapsed: true });
 
     panel.id = 'controls';
     panel.classList.add('controls-panel');
@@ -930,7 +937,7 @@ export default class UIManager {
   }
 
   #buildInsightsPanel() {
-    const { panel, body } = this.#createPanel('Evolution Insights');
+    const { panel, body } = this.#createPanel('Evolution Insights', { collapsed: true });
 
     this.metricsBox = document.createElement('div');
     this.metricsBox.className = 'metrics-box';
@@ -1309,7 +1316,7 @@ export default class UIManager {
 
   renderLeaderboard(top) {
     if (!this.leaderPanel) {
-      const { panel, body } = this.#createPanel('Leaderboard');
+      const { panel, body } = this.#createPanel('Leaderboard', { collapsed: true });
 
       panel.classList.add('leaderboard-panel');
       this.dashboardGrid?.appendChild(panel);
