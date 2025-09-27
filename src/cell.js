@@ -1184,54 +1184,42 @@ export default class Cell {
     this.energy = Math.max(0, Math.min(maxTileEnergy, this.energy));
   }
 
-  fightEnemy(manager, attackerRow, attackerCol, targetRow, targetCol, stats) {
-    const attacker = this; // should be manager.grid[attackerRow][attackerCol]
-    const defender = manager.grid[targetRow][targetCol];
+  createFightIntent({ attackerRow = this.row, attackerCol = this.col, targetRow, targetCol } = {}) {
+    if (targetRow == null || targetCol == null) return null;
 
-    if (!defender) return;
-    // Apply fight energy cost to both participants (DNA-driven)
-    attacker.energy = Math.max(0, attacker.energy - attacker.dna.fightCost());
-    defender.energy = Math.max(0, defender.energy - defender.dna.fightCost());
-    // Resolve by DNA-based combat power
-    const atkPower = attacker.energy * (attacker.dna.combatPower?.() ?? 1);
-    const defPower = defender.energy * (defender.dna.combatPower?.() ?? 1);
-
-    if (atkPower >= defPower) {
-      if (typeof manager.removeCell === 'function') manager.removeCell(targetRow, targetCol);
-      else if (manager.grid?.[targetRow]) manager.grid[targetRow][targetCol] = null;
-
-      if (typeof manager.relocateCell === 'function') {
-        manager.relocateCell(attackerRow, attackerCol, targetRow, targetCol);
-      } else if (manager.grid) {
-        manager.grid[targetRow][targetCol] = attacker;
-        if (manager.grid[attackerRow]) manager.grid[attackerRow][attackerCol] = null;
-        attacker.row = targetRow;
-        attacker.col = targetCol;
-      }
-      manager.consumeEnergy(attacker, targetRow, targetCol);
-      stats?.onFight?.();
-      stats?.onDeath?.();
-      attacker.fightsWon = (attacker.fightsWon || 0) + 1;
-      defender.fightsLost = (defender.fightsLost || 0) + 1;
-    } else {
-      if (typeof manager.removeCell === 'function') manager.removeCell(attackerRow, attackerCol);
-      else if (manager.grid?.[attackerRow]) manager.grid[attackerRow][attackerCol] = null;
-      stats?.onFight?.();
-      stats?.onDeath?.();
-      defender.fightsWon = (defender.fightsWon || 0) + 1;
-      attacker.fightsLost = (attacker.fightsLost || 0) + 1;
-    }
+    return {
+      type: 'fight',
+      initiator: {
+        cell: this,
+        row: attackerRow,
+        col: attackerCol,
+      },
+      target: {
+        row: targetRow,
+        col: targetCol,
+      },
+    };
   }
 
-  cooperateWithEnemy(manager, row, col, targetRow, targetCol, maxTileEnergy = 5, stats) {
-    const cell = this; // same as manager.grid[row][col]
-    const partner = manager.grid[targetRow][targetCol];
+  createCooperationIntent({ row = this.row, col = this.col, targetRow, targetCol } = {}) {
+    if (targetRow == null || targetCol == null) return null;
+    const shareFraction =
+      typeof this.dna.cooperateShareFrac === 'function' ? this.dna.cooperateShareFrac() : 0;
 
-    if (!partner) return;
-    const share = Math.min(maxTileEnergy, cell.energy * cell.dna.cooperateShareFrac());
-
-    cell.energy -= share;
-    partner.energy = Math.min(maxTileEnergy, partner.energy + share);
-    stats?.onCooperate?.();
+    return {
+      type: 'cooperate',
+      initiator: {
+        cell: this,
+        row,
+        col,
+      },
+      target: {
+        row: targetRow,
+        col: targetCol,
+      },
+      metadata: {
+        shareFraction,
+      },
+    };
   }
 }
