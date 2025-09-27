@@ -2,6 +2,36 @@
 
 This repository is a JavaScript playground simulation, inspired by cellular automata.
 
+## Project Vision
+
+To guide ongoing development, the simulation is anchored around four interlocking pillars that describe the desired experience, learning takeaways, interaction model, and structural organization.
+
+### Desired Emotional Experience
+
+- **Curiosity and wonder**: Each run should entice viewers to linger, notice emergent patterns, and feel a sense of discovery as behaviours unfold organically.
+- **Empathy for digital life**: Subtle cues—colour shifts, energy trails, population booms and busts—should encourage players to care about the organisms' survival journeys.
+- **Agency without overwhelm**: Controls ought to feel empowering yet approachable, reinforcing that small nudges can spark dramatic ecological shifts without demanding expert-level micromanagement.
+
+### Learning Goals
+
+- **Emergent complexity**: Highlight how simple local rules produce unexpected ecosystem-level dynamics, echoing principles from cellular automata and evolutionary biology.
+- **Resource-feedback loops**: Demonstrate how energy flow, environmental events, and population density intertwine to create cascading consequences.
+- **Adaptive strategies**: Showcase genetic variation, mutation, and behaviour weights so users internalize how diversity supports resilience.
+
+### Interaction Principles
+
+- **Tactile experimentation**: Provide intuitive sliders, toggles, and stamping tools that invite quick iteration and playful tinkering.
+- **Transparent feedback**: Mirror every user action with visible responses (e.g., overlays updating in real time, organisms reacting promptly) to reinforce cause and effect.
+- **Meaningful influence**: Allow interventions at multiple scales—individual cells, regional terrain, global climate—so users can role-play as caretaker, disruptor, or scientist.
+
+### Structural & Organizational Tenets
+
+- **Modular architecture**: Keep simulation logic, rendering, UI layers, and data models decoupled to support headless runs, scripted scenarios, and future extensions.
+- **Scenario-driven content**: Organize presets, obstacle maps, and environmental scripts as reusable modules that can be mixed and scheduled over time.
+- **Progressive disclosure**: Structure panels and documentation so beginners see essential controls first, while advanced tools (genetic inspectors, debug overlays) remain close at hand for deeper dives.
+- **Simplicity as a feature**: Prefer lean modules with clear responsibilities over sprawling managers. Before adding a new system, seek opportunities to refactor, reuse existing behaviours, or generalize small utilities so the codebase stays approachable.
+- **Quality-first iteration**: Reserve time each cycle to tighten tests, remove duplication, and resolve edge-case bugs. Shiny additions wait until the current experience feels polished, stable, and well-documented.
+
 ## Key Concepts
 
 - **Grid-based cells**: simulations use a 2D array to track cells/particles and update them each frame.
