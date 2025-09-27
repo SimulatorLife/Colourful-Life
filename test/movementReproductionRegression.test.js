@@ -19,6 +19,42 @@ test("GridManager.tryMove updates a cell's stored coordinates", async () => {
   assert.is(cell.col, 1);
 });
 
+test('GridManager.tryMove ignores empty sources without mutating density data', async () => {
+  const { default: GridManager } = await import('../src/gridManager.js');
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new TestGridManager(2, 2, {
+    eventManager: { activeEvents: [] },
+    stats: { onBirth() {}, onDeath() {}, recordMateChoice() {} },
+  });
+
+  const initialCounts = gm.densityCounts.map((row) => row.slice());
+  const initialDirtySize = gm.densityDirtyTiles.size;
+  const initialActiveSize = gm.activeCells.size;
+
+  const onMoveCalls = [];
+  const onCellMovedCalls = [];
+
+  const moved = GridManager.tryMove(gm.grid, 0, 0, 0, 1, gm.rows, gm.cols, {
+    obstacles: gm.obstacles,
+    onMove: (payload) => onMoveCalls.push(payload),
+    onCellMoved: (...args) => onCellMovedCalls.push(args),
+    activeCells: gm.activeCells,
+  });
+
+  assert.is(moved, false);
+  assert.is(onMoveCalls.length, 0);
+  assert.is(onCellMovedCalls.length, 0);
+  assert.is(gm.grid[0][0], null);
+  assert.is(gm.grid[0][1], null);
+  assert.equal(gm.densityCounts, initialCounts);
+  assert.is(gm.densityDirtyTiles.size, initialDirtySize);
+  assert.is(gm.activeCells.size, initialActiveSize);
+});
+
 test("Breeding uses the mover's refreshed coordinates for offspring placement", async () => {
   const { default: GridManager } = await import('../src/gridManager.js');
   const { default: Cell } = await import('../src/cell.js');
