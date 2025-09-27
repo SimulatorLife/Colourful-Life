@@ -299,6 +299,97 @@ test('handleReproduction does not wrap offspring placement across map edges', as
   assert.is(gm.grid[2][2], null, 'offspring should not appear on the wrapped opposite corner');
 });
 
+test('handleReproduction bases reproduction decisions on the post-move density', async () => {
+  const { default: GridManager } = await import('../src/gridManager.js');
+  const { default: Cell } = await import('../src/cell.js');
+  const { default: DNA } = await import('../src/genome.js');
+  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new TestGridManager(1, 3, {
+    eventManager: { activeEvents: [] },
+    stats: { onBirth() {}, onDeath() {}, recordMateChoice() {} },
+  });
+
+  const densityGrid = [[0.1, 0.75, 0.2]];
+
+  const parent = new Cell(0, 0, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+  const mate = new Cell(0, 2, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+
+  parent.dna.reproductionThresholdFrac = () => 0;
+  mate.dna.reproductionThresholdFrac = () => 0;
+
+  gm.setCell(0, 0, parent);
+  gm.setCell(0, 2, mate);
+  gm.densityGrid = densityGrid;
+
+  const candidate = parent.evaluateMateCandidate({
+    row: mate.row,
+    col: mate.col,
+    target: mate,
+  }) || {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 1,
+    diversity: 0,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  parent.selectMateWeighted = () => ({
+    chosen: candidate,
+    evaluated: [candidate],
+    mode: 'preference',
+  });
+  parent.findBestMate = () => candidate;
+
+  const stats = {
+    onBirth() {},
+    onDeath() {},
+    recordMateChoice() {},
+  };
+
+  const computeContexts = [];
+  let decideContext = null;
+
+  parent.computeReproductionProbability = (target, context) => {
+    computeContexts.push(context);
+
+    return 0;
+  };
+  parent.decideReproduction = (target, context) => {
+    decideContext = context;
+
+    return { probability: context.baseProbability ?? 0 };
+  };
+
+  const reproduced = gm.handleReproduction(
+    0,
+    0,
+    parent,
+    { mates: [candidate], society: [] },
+    {
+      stats,
+      densityGrid,
+      densityEffectMultiplier: 1,
+      mutationMultiplier: 1,
+    }
+  );
+
+  assert.is(reproduced, false);
+  assert.is(parent.row, 0);
+  assert.is(parent.col, 1);
+  assert.is(gm.grid[0][1], parent);
+  assert.ok(computeContexts.length > 0, 'reproduction probability should be evaluated');
+  assert.is(computeContexts[0].localDensity, densityGrid[0][1]);
+  assert.ok(decideContext, 'reproduction decision should be evaluated');
+  assert.is(decideContext.localDensity, densityGrid[0][1]);
+});
+
 test('processCell continues to combat when reproduction fails', async () => {
   const { default: GridManager } = await import('../src/gridManager.js');
   const { default: Cell } = await import('../src/cell.js');
