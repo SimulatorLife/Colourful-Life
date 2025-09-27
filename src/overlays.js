@@ -90,7 +90,11 @@ function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = '0,0,0') {
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const a = alphaAt(r, c);
+      const rawAlpha = alphaAt(r, c);
+      let a = Number.isFinite(rawAlpha) ? rawAlpha : 0;
+
+      if (a > 1) a = 1;
+      else if (a < 0) a = 0;
 
       if (a <= 0) continue;
       ctx.fillStyle = `rgba(${color},${a.toFixed(3)})`;
@@ -108,7 +112,8 @@ function getDensityAt(grid, r, c) {
 }
 
 function densityToRgba(normalizedValue, { opaque = false } = {}) {
-  const t = Math.min(1, Math.max(0, normalizedValue));
+  const clampedValue = Number.isFinite(normalizedValue) ? normalizedValue : 0;
+  const t = Math.min(1, Math.max(0, clampedValue));
   const stops = [
     { t: 0, color: [59, 76, 192] },
     { t: 0.5, color: [221, 244, 255] },
@@ -274,7 +279,8 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
   for (let r = 0; r < rows; r++) {
     densities[r] = [];
     for (let c = 0; c < cols; c++) {
-      const density = getDensityAt(grid, r, c) ?? 0;
+      const rawDensity = getDensityAt(grid, r, c);
+      const density = Number.isFinite(rawDensity) ? rawDensity : 0;
 
       densities[r][c] = density;
       if (density < minDensity) minDensity = density;
