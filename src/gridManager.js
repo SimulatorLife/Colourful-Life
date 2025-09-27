@@ -6,6 +6,7 @@ import BrainDebugger from './brainDebugger.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
 import { computeTileEnergyUpdate } from './energySystem.js';
+import InteractionSystem from './interactionSystem.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -239,6 +240,7 @@ export default class GridManager {
     this.currentScenarioId = 'manual';
     this.tickCount = 0;
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
+    this.interactionSystem = new InteractionSystem({ gridManager: this });
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
       GridManager.tryMove(gridArr, sr, sc, dr, dc, rows, cols, this.#movementOptions());
     this.boundMoveToTarget = (gridArr, row, col, targetRow, targetCol, rows, cols) =>
@@ -1397,7 +1399,19 @@ export default class GridManager {
 
     if (action === 'fight') {
       if (dist <= 1) {
-        cell.fightEnemy(this, row, col, targetEnemy.row, targetEnemy.col, stats);
+        const intent = cell.createFightIntent({
+          attackerRow: row,
+          attackerCol: col,
+          targetRow: targetEnemy.row,
+          targetCol: targetEnemy.col,
+        });
+
+        if (intent)
+          this.interactionSystem.resolveIntent(intent, {
+            stats,
+            densityGrid,
+            densityEffectMultiplier,
+          });
       } else {
         this.boundMoveToTarget(
           this.grid,
@@ -1413,17 +1427,19 @@ export default class GridManager {
       return true;
     }
 
-    if (dist <= 1)
-      cell.cooperateWithEnemy(
-        this,
+    if (dist <= 1) {
+      const intent = cell.createCooperationIntent({
         row,
         col,
-        targetEnemy.row,
-        targetEnemy.col,
-        this.maxTileEnergy,
-        stats
-      );
-    else
+        targetRow: targetEnemy.row,
+        targetCol: targetEnemy.col,
+      });
+
+      if (intent)
+        this.interactionSystem.resolveIntent(intent, {
+          stats,
+        });
+    } else
       this.boundMoveToTarget(
         this.grid,
         row,

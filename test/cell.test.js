@@ -7,6 +7,7 @@ let clamp;
 let lerp;
 let randomRange;
 let createRNG;
+let InteractionSystem;
 
 function investmentFor(energy, investFrac, starvation) {
   const desired = Math.max(0, Math.min(energy, energy * investFrac));
@@ -42,6 +43,7 @@ test.before(async () => {
   ({ default: Cell } = await import('../src/cell.js'));
   ({ DNA } = await import('../src/genome.js'));
   ({ clamp, lerp, randomRange, createRNG } = await import('../src/utils.js'));
+  ({ default: InteractionSystem } = await import('../src/interactionSystem.js'));
   if (typeof global.window === 'undefined') global.window = globalThis;
   if (!window.GridManager) window.GridManager = {};
   if (typeof window.GridManager.maxTileEnergy !== 'number') {
@@ -245,7 +247,7 @@ test('breed applies deterministic crossover and honors forced mutation', () => {
   expectClose(child.strategy, avgStrategy, 1e-12, 'strategy averages when mutation delta is zero');
 });
 
-test('fightEnemy moves attacker into target tile and updates its coordinates after victory', () => {
+test('interaction intents resolve fights via interaction system', () => {
   const attackerDNA = new DNA(10, 20, 30);
   const defenderDNA = new DNA(15, 25, 35);
 
@@ -264,20 +266,34 @@ test('fightEnemy moves attacker into target tile and updates its coordinates aft
   const consumeCalls = [];
   const manager = {
     grid,
+    densityGrid: [
+      [0, 0],
+      [0, 0],
+    ],
+    maxTileEnergy: 12,
     consumeEnergy: (cell, row, col) => {
       consumeCalls.push({ cell, row, col });
     },
-    clearCell(row, col) {
-      if (this.grid[row] && this.grid[row][col]) {
-        this.grid[row][col] = null;
-      }
+    removeCell(row, col) {
+      const current = this.grid[row]?.[col] ?? null;
+
+      if (!current) return null;
+
+      this.grid[row][col] = null;
+
+      return current;
     },
-    setCell(row, col, cell) {
-      if (cell) {
-        cell.row = row;
-        cell.col = col;
-      }
-      this.grid[row][col] = cell;
+    relocateCell(fromRow, fromCol, toRow, toCol) {
+      const moving = this.grid[fromRow]?.[fromCol] ?? null;
+
+      if (!moving || this.grid[toRow]?.[toCol]) return false;
+
+      this.grid[toRow][toCol] = moving;
+      this.grid[fromRow][fromCol] = null;
+      moving.row = toRow;
+      moving.col = toCol;
+
+      return true;
     },
   };
   let fights = 0;
@@ -287,7 +303,10 @@ test('fightEnemy moves attacker into target tile and updates its coordinates aft
     onDeath: () => deaths++,
   };
 
-  attacker.fightEnemy(manager, 0, 0, 0, 1, stats);
+  const interactionSystem = new InteractionSystem({ gridManager: manager });
+  const intent = attacker.createFightIntent({ targetRow: 0, targetCol: 1 });
+
+  interactionSystem.resolveIntent(intent, { stats });
 
   assert.is(manager.grid[0][1], attacker, 'attacker occupies the target tile after winning');
   assert.is(manager.grid[0][0], null, 'original attacker tile is emptied');
