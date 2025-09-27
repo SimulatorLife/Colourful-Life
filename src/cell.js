@@ -3,6 +3,7 @@ import Brain, { OUTPUT_GROUPS } from './brain.js';
 import { randomRange, clamp, lerp, cloneTracePayload } from './utils.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
+import { accumulateEventModifiers } from './energySystem.js';
 import { MAX_TILE_ENERGY } from './config.js';
 
 const EPSILON = 1e-9;
@@ -1144,30 +1145,43 @@ export default class Cell {
   }
 
   applyEventEffects(row, col, currentEvent, eventStrengthMultiplier = 1, maxTileEnergy = 5) {
-    if (isEventAffecting(currentEvent, row, col)) {
-      const effect = getEventEffect(currentEvent?.eventType);
+    const events = Array.isArray(currentEvent) ? currentEvent : currentEvent ? [currentEvent] : [];
 
-      if (effect?.cell) {
-        const s =
-          (currentEvent.strength || 0) *
-          (eventStrengthMultiplier || 1) *
-          (1 - 0.5 * (this.dna.recoveryRate?.() ?? 0));
+    const { appliedEvents } = accumulateEventModifiers({
+      events,
+      row,
+      col,
+      eventStrengthMultiplier,
+      isEventAffecting,
+      getEventEffect,
+    });
 
-        this.lastEventPressure = Math.max(this.lastEventPressure || 0, clamp(s, 0, 1));
-        const { energyLoss = 0, resistanceGene } = effect.cell;
-        const resistance = clamp(
-          typeof resistanceGene === 'string' && typeof this.dna?.[resistanceGene] === 'function'
-            ? this.dna[resistanceGene]()
-            : 0,
-          0,
-          1
-        );
-
-        this.energy -= energyLoss * s * (1 - resistance);
-      }
-
-      this.energy = Math.max(0, Math.min(maxTileEnergy, this.energy));
+    if (appliedEvents.length === 0) {
+      return;
     }
+
+    const recoveryFactor = 1 - 0.5 * (this.dna.recoveryRate?.() ?? 0);
+
+    for (const { effect, strength } of appliedEvents) {
+      if (!effect?.cell) continue;
+
+      const cellStrength = strength * recoveryFactor;
+
+      this.lastEventPressure = Math.max(this.lastEventPressure || 0, clamp(cellStrength, 0, 1));
+
+      const { energyLoss = 0, resistanceGene } = effect.cell;
+      const resistance = clamp(
+        typeof resistanceGene === 'string' && typeof this.dna?.[resistanceGene] === 'function'
+          ? this.dna[resistanceGene]()
+          : 0,
+        0,
+        1
+      );
+
+      this.energy -= energyLoss * cellStrength * (1 - resistance);
+    }
+
+    this.energy = Math.max(0, Math.min(maxTileEnergy, this.energy));
   }
 
   fightEnemy(manager, attackerRow, attackerCol, targetRow, targetCol, stats) {
