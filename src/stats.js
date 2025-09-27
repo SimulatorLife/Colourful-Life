@@ -26,6 +26,18 @@ const createEmptyTraitSnapshot = () => {
   return { population: 0, averages, fractions, counts };
 };
 
+const _createMatingSnapshot = () => ({
+  choices: 0,
+  successes: 0,
+  diverseChoices: 0,
+  diverseSuccesses: 0,
+  appetiteSum: 0,
+  selectionModes: { curiosity: 0, preference: 0 },
+  poolSizeSum: 0,
+  blocks: 0,
+  lastBlockReason: null,
+});
+
 export default class Stats {
   constructor(historySize = 10000) {
     this.historySize = historySize;
@@ -62,17 +74,7 @@ export default class Stats {
     this.deaths = 0;
     this.fights = 0;
     this.cooperations = 0;
-    this.mating = {
-      choices: 0,
-      successes: 0,
-      diverseChoices: 0,
-      diverseSuccesses: 0,
-      appetiteSum: 0,
-      selectionModes: { curiosity: 0, preference: 0 },
-      poolSizeSum: 0,
-      blocks: 0,
-      lastBlockReason: null,
-    };
+    this.mating = _createMatingSnapshot();
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
   }
@@ -125,17 +127,7 @@ export default class Stats {
     const meanAge = pop ? snapshot.totalAge / pop : 0;
     const diversity = this.estimateDiversity(cells);
     const traitPresence = this.computeTraitPresence(cells);
-    const mateStats = this.mating || {
-      choices: 0,
-      successes: 0,
-      diverseChoices: 0,
-      diverseSuccesses: 0,
-      appetiteSum: 0,
-      selectionModes: { curiosity: 0, preference: 0 },
-      poolSizeSum: 0,
-      blocks: 0,
-      lastBlockReason: null,
-    };
+    const mateStats = this.mating || _createMatingSnapshot();
     const choiceCount = mateStats.choices || 0;
     const successCount = mateStats.successes || 0;
     const diverseChoiceRate = choiceCount ? mateStats.diverseChoices / choiceCount : 0;
@@ -194,17 +186,7 @@ export default class Stats {
     success = false,
   } = {}) {
     if (!this.mating) {
-      this.mating = {
-        choices: 0,
-        successes: 0,
-        diverseChoices: 0,
-        diverseSuccesses: 0,
-        appetiteSum: 0,
-        selectionModes: { curiosity: 0, preference: 0 },
-        poolSizeSum: 0,
-        blocks: 0,
-        lastBlockReason: null,
-      };
+      this.mating = _createMatingSnapshot();
     }
 
     const threshold = this.matingDiversityThreshold;
@@ -238,17 +220,7 @@ export default class Stats {
 
   recordReproductionBlocked({ reason, parentA = null, parentB = null, spawn = null } = {}) {
     if (!this.mating) {
-      this.mating = {
-        choices: 0,
-        successes: 0,
-        diverseChoices: 0,
-        diverseSuccesses: 0,
-        appetiteSum: 0,
-        selectionModes: { curiosity: 0, preference: 0 },
-        poolSizeSum: 0,
-        blocks: 0,
-        lastBlockReason: null,
-      };
+      this.mating = _createMatingSnapshot();
     }
 
     this.mating.blocks = (this.mating.blocks || 0) + 1;
