@@ -6,6 +6,7 @@ import SelectionManager from './selectionManager.js';
 import { drawOverlays } from './overlays.js';
 import { computeLeaderboard } from './leaderboard.js';
 import BrainDebugger from './brainDebugger.js';
+import { resolveRngController, createRngController } from './rng.js';
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -137,7 +138,8 @@ export function createSimulation({
   config = {},
   headless = false,
   autoStart = true,
-  rng = Math.random,
+  rng: rngInput,
+  seed,
   requestAnimationFrame: injectedRaf,
   cancelAnimationFrame: injectedCaf,
   performanceNow: injectedNow,
@@ -177,8 +179,9 @@ export function createSimulation({
         ? win.cancelAnimationFrame.bind(win)
         : defaultCancelAnimationFrame;
 
-  const eventManager = new EventManager(rows, cols, rng);
-  const stats = new Stats();
+  const rngController = seed != null ? createRngController(seed) : resolveRngController(rngInput);
+  const eventManager = new EventManager(rows, cols, () => rngController.next());
+  const stats = new Stats({ rng: rngController });
   const selectionManager = new SelectionManager(rows, cols);
   const grid = new GridManager(rows, cols, {
     eventManager,
@@ -186,6 +189,7 @@ export function createSimulation({
     cellSize,
     stats,
     selectionManager,
+    rng: rngController,
   });
 
   if (win) {

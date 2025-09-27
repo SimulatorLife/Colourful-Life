@@ -47,6 +47,44 @@ canvas {
   box-sizing: border-box;
 }
 
+.canvas-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.seed-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.seed-form label {
+  font-size: 14px;
+}
+
+.seed-form input {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.seed-form button {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-accent);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.seed-form button:hover {
+  background: var(--color-accent-hover);
+}
+
 .main-row {
   display: flex;
   gap: clamp(var(--space-md), 3vw, var(--space-lg));

@@ -1,4 +1,4 @@
-import { randomRange, randomPercent, clamp, lerp } from './utils.js';
+import { clamp, lerp } from './utils.js';
 import DNA from './genome.js';
 import Cell from './cell.js';
 import { computeFitness } from './fitness.js';
@@ -6,6 +6,7 @@ import BrainDebugger from './brainDebugger.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
 import { computeTileEnergyUpdate } from './energySystem.js';
+import { resolveRngController } from './rng.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -208,7 +209,7 @@ export default class GridManager {
   constructor(
     rows,
     cols,
-    { eventManager, ctx = null, cellSize = 8, stats, maxTileEnergy, selectionManager } = {}
+    { eventManager, ctx = null, cellSize = 8, stats, maxTileEnergy, selectionManager, rng } = {}
   ) {
     this.rows = rows;
     this.cols = cols;
@@ -226,6 +227,7 @@ export default class GridManager {
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
     this.selectionManager = selectionManager || null;
+    this.rng = resolveRngController(rng);
     this.densityRadius = GridManager.DENSITY_RADIUS;
     this.densityCounts = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
@@ -602,8 +604,8 @@ export default class GridManager {
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         if (this.isObstacle(row, col)) continue;
-        if (randomPercent(0.05)) {
-          const dna = DNA.random();
+        if (this.rng.percent(0.05)) {
+          const dna = DNA.random(() => this.rng.next());
 
           this.spawnCell(row, col, { dna });
         }
@@ -623,9 +625,9 @@ export default class GridManager {
     const toSeed = Math.min(minPopulation - currentPopulation, empty.length);
 
     for (let i = 0; i < toSeed; i++) {
-      const idx = Math.floor(randomRange(0, empty.length));
+      const idx = this.rng.int(0, empty.length);
       const { r, c } = empty.splice(idx, 1)[0];
-      const dna = DNA.random();
+      const dna = DNA.random(() => this.rng.next());
 
       this.spawnCell(r, c, { dna });
     }
@@ -940,10 +942,11 @@ export default class GridManager {
     }
   }
 
-  spawnCell(row, col, { dna = DNA.random(), spawnEnergy, recordBirth = false } = {}) {
+  spawnCell(row, col, { dna, spawnEnergy, recordBirth = false } = {}) {
     if (this.isObstacle(row, col)) return null;
+    const resolvedDna = dna || DNA.random(() => this.rng.next());
     const energy = Math.min(this.maxTileEnergy, spawnEnergy ?? this.energyGrid[row][col]);
-    const cell = new Cell(row, col, dna, energy);
+    const cell = new Cell(row, col, resolvedDna, energy, { rng: this.rng });
 
     this.setCell(row, col, cell);
     this.energyGrid[row][col] = 0;
@@ -1133,7 +1136,7 @@ export default class GridManager {
 
     const act = typeof cell.dna.activityRate === 'function' ? cell.dna.activityRate() : 1;
 
-    if (Math.random() > act) {
+    if (this.rng.next() > act) {
       return;
     }
 
@@ -1265,7 +1268,7 @@ export default class GridManager {
 
     if (
       !blockedInfo &&
-      randomPercent(reproProb) &&
+      this.rng.percent(reproProb) &&
       cell.energy >= thrA &&
       bestMate.target.energy >= thrB
     ) {
@@ -1306,7 +1309,7 @@ export default class GridManager {
       const slotPool = eligibleSlots.length > 0 ? eligibleSlots : freeSlots;
 
       if (slotPool.length > 0) {
-        const spawn = slotPool[Math.floor(randomRange(0, slotPool.length))];
+        const spawn = this.rng.pick(slotPool);
         const zoneCheck = this.selectionManager
           ? this.selectionManager.validateReproductionArea({
               parentA: { row: parentRow, col: parentCol },
@@ -1325,6 +1328,7 @@ export default class GridManager {
         } else {
           const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
             maxTileEnergy: this.maxTileEnergy,
+            rng: this.rng,
           });
 
           if (offspring) {
@@ -1369,7 +1373,7 @@ export default class GridManager {
   ) {
     if (!Array.isArray(enemies) || enemies.length === 0) return false;
 
-    const targetEnemy = enemies[Math.floor(randomRange(0, enemies.length))];
+    const targetEnemy = this.rng.pick(enemies);
     const localDensity = densityGrid?.[row]?.[col] ?? this.getDensityAt(row, col);
     const action = cell.chooseInteractionAction({
       localDensity,
@@ -1630,7 +1634,7 @@ export default class GridManager {
             });
 
             if (evaluated) society.push(evaluated);
-          } else if (similarity <= enemyT || randomPercent(enemyBias)) {
+          } else if (similarity <= enemyT || this.rng.percent(enemyBias)) {
             enemies.push({ row: newRow, col: newCol, target });
           } else {
             const evaluated = cell.evaluateMateCandidate({ ...candidate, classification: 'mate' });
@@ -1659,20 +1663,14 @@ export default class GridManager {
       }
     }
     // Shuffle for random fill
-    for (let i = coords.length - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0;
-      const t = coords[i];
-
-      coords[i] = coords[j];
-      coords[j] = t;
-    }
+    this.rng.shuffle(coords);
     let placed = 0;
 
     for (let i = 0; i < coords.length && placed < count; i++) {
       const { rr, cc } = coords[i];
 
       if (!this.grid[rr][cc] && !this.isObstacle(rr, cc)) {
-        const dna = DNA.random();
+        const dna = DNA.random(() => this.rng.next());
 
         this.spawnCell(rr, cc, { dna, recordBirth: true });
         placed++;
@@ -1684,8 +1682,8 @@ export default class GridManager {
 
   // Choose a random center and burst there
   burstRandomCells(opts = {}) {
-    const r = (Math.random() * this.rows) | 0;
-    const c = (Math.random() * this.cols) | 0;
+    const r = this.rng.int(0, this.rows);
+    const c = this.rng.int(0, this.cols);
 
     return this.burstAt(r, c, opts);
   }

@@ -9,19 +9,55 @@
 
   <body>
     <div id="app" class="app-layout">
-      <canvas id="gameCanvas" width="600" height="600"></canvas>
+      <div class="canvas-controls">
+        <form id="seedForm" class="seed-form" autocomplete="off">
+          <label for="seedInput">Seed</label>
+          <input id="seedInput" name="seed" type="text" placeholder="random" />
+          <button type="submit">Apply</button>
+        </form>
+        <canvas id="gameCanvas" width="600" height="600"></canvas>
+      </div>
     </div>
     <script type="module">
       import { createSimulation } from './src/main.js';
+      import { createRngController } from './src/rng.js';
 
       const canvas = document.getElementById('gameCanvas');
+      const seedInput = document.getElementById('seedInput');
+      const seedForm = document.getElementById('seedForm');
+      const params = new URLSearchParams(window.location.search);
+      const seedParam = params.get('seed');
+
+      if (seedParam && seedInput) {
+        seedInput.value = seedParam;
+      }
+
+      const rngController =
+        seedParam != null && seedParam !== '' ? createRngController(seedParam) : undefined;
 
       createSimulation({
         canvas,
         config: {
           cellSize: 5,
         },
+        rng: rngController,
       });
+
+      if (seedForm && seedInput) {
+        seedForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const nextSeed = seedInput.value.trim();
+          const nextUrl = new URL(window.location.href);
+
+          if (nextSeed) {
+            nextUrl.searchParams.set('seed', nextSeed);
+          } else {
+            nextUrl.searchParams.delete('seed');
+          }
+
+          window.location.href = nextUrl.toString();
+        });
+      }
     </script>
   </body>
 </html>

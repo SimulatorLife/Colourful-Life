@@ -1,6 +1,7 @@
 import DNA from './genome.js';
 import Brain, { OUTPUT_GROUPS } from './brain.js';
-import { randomRange, clamp, lerp, cloneTracePayload } from './utils.js';
+import { clamp, lerp, cloneTracePayload } from './utils.js';
+import { resolveRngController } from './rng.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
 import { accumulateEventModifiers } from './energySystem.js';
@@ -17,12 +18,18 @@ function softmax(logits = []) {
   return expValues.map((v) => v / sum);
 }
 
-function sampleFromDistribution(probabilities = [], labels = []) {
+function sampleFromDistribution(probabilities = [], labels = [], rng) {
   if (!Array.isArray(probabilities) || probabilities.length === 0) return null;
   const total = probabilities.reduce((acc, v) => acc + v, 0);
 
   if (!Number.isFinite(total) || total <= EPSILON) return null;
-  const r = Math.random() * total;
+  const generator =
+    rng && typeof rng.next === 'function'
+      ? () => rng.next()
+      : typeof rng === 'function'
+        ? rng
+        : Math.random;
+  const r = generator() * total;
   let acc = 0;
 
   for (let i = 0; i < probabilities.length; i++) {
@@ -38,10 +45,12 @@ export default class Cell {
   static chanceToMutate = 0.15;
   static geneMutationRange = 0.2;
 
-  constructor(row, col, dna, energy) {
+  constructor(row, col, dna, energy, options = {}) {
+    const rng = resolveRngController(options?.rng);
+
     this.row = row;
     this.col = col;
-    this.dna = dna || DNA.random();
+    this.dna = dna || DNA.random(() => rng.next());
     this.brain = Brain.fromDNA(this.dna);
     this.genes = this.dna.weights();
     this.color = this.dna.toColor();
@@ -65,6 +74,7 @@ export default class Cell {
     this.decisionHistory = [];
     this._pendingDecisionContexts = [];
     this._decisionContextIndex = new Map();
+    this.rng = rng;
     // Cache metabolism from gene row 5 to avoid per-tick recompute
     const geneRow = this.genes?.[5];
 
@@ -78,6 +88,7 @@ export default class Cell {
 
   static breed(parentA, parentB, mutationMultiplier = 1, options = {}) {
     const { maxTileEnergy } = options || {};
+    const rng = resolveRngController(options?.rng ?? parentA?.rng ?? parentB?.rng);
     const row = parentA.row;
     const col = parentA.col;
     const avgChance = (parentA.dna.mutationChance() + parentB.dna.mutationChance()) / 2;
@@ -86,7 +97,7 @@ export default class Cell {
     const effectiveMultiplier = Math.max(0, safeMultiplier);
     const chance = Math.max(0, avgChance * effectiveMultiplier);
     const range = Math.max(0, Math.round(avgRange * effectiveMultiplier));
-    const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range);
+    const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range, { rng });
     const resolvedMaxTileEnergy =
       typeof maxTileEnergy === 'number'
         ? maxTileEnergy
@@ -112,10 +123,10 @@ export default class Cell {
     parentB.energy = Math.max(0, parentB.energy - investB);
 
     const offspringEnergy = investA + investB;
-    const offspring = new Cell(row, col, childDNA, offspringEnergy);
+    const offspring = new Cell(row, col, childDNA, offspringEnergy, { rng });
     const strategy =
       (parentA.strategy + parentB.strategy) / 2 +
-      (Math.random() * Cell.geneMutationRange - Cell.geneMutationRange / 2);
+      (rng.next() * Cell.geneMutationRange - Cell.geneMutationRange / 2);
 
     offspring.strategy = Math.min(1, Math.max(0, strategy));
     parentA.offspring = (parentA.offspring || 0) + 1;
@@ -191,10 +202,10 @@ export default class Cell {
 
     const curiosityChance = Math.min(0.5, appetite * 0.25);
 
-    if (evaluated.length > 1 && Math.random() < curiosityChance) {
+    if (evaluated.length > 1 && this.rng.percent(curiosityChance)) {
       const sorted = [...evaluated].sort((a, b) => b.diversity - a.diversity);
       const tailSpan = Math.max(1, Math.ceil(sorted.length * (0.2 + appetite * 0.5)));
-      const idx = Math.min(sorted.length - 1, Math.floor(Math.random() * tailSpan));
+      const idx = Math.min(sorted.length - 1, this.rng.int(0, tailSpan));
 
       chosen = sorted[idx];
       mode = 'curiosity';
@@ -202,7 +213,7 @@ export default class Cell {
 
     if (!chosen) {
       const totalWeight = evaluated.reduce((sum, m) => sum + m.selectionWeight, 0);
-      let roll = Math.random() * (totalWeight || 1);
+      let roll = this.rng.next() * (totalWeight || 1);
 
       for (let i = 0; i < evaluated.length; i++) {
         const candidate = evaluated[i];
@@ -243,7 +254,7 @@ export default class Cell {
         let score = (1 - kinBias) * targetScore + kinBias * kinScore;
 
         if (dnaNoiseRng) score += (dnaNoiseRng() - 0.5) * 0.05;
-        score += (Math.random() - 0.5) * 0.05; // slight stochasticity keeps diversity
+        score += (this.rng.next() - 0.5) * 0.05; // slight stochasticity keeps diversity
 
         if (score > bestScore) {
           bestScore = score;
@@ -575,7 +586,7 @@ export default class Cell {
     const logits = entries.map(({ key }) => values[key] ?? 0);
     const labels = entries.map(({ key }) => key);
     const probs = softmax(logits);
-    const action = sampleFromDistribution(probs, labels);
+    const action = sampleFromDistribution(probs, labels, this.rng);
     const probabilitiesByKey = {};
     const logitsByKey = {};
 
@@ -619,9 +630,9 @@ export default class Cell {
     const total = w + p + c || 1;
     const pStay = Math.max(0, Math.min(0.9, 0.15 + 0.7 * (c / total)));
 
-    if (Math.random() < pStay) return { dr: 0, dc: 0 };
+    if (this.rng.percent(pStay)) return { dr: 0, dc: 0 };
     // Otherwise pick one of 4 directions uniformly
-    switch ((Math.random() * 4) | 0) {
+    switch (this.rng.int(0, 4)) {
       case 0:
         return { dr: -1, dc: 0 };
       case 1:
@@ -728,11 +739,13 @@ export default class Cell {
     return this.dna.starvationThresholdFrac() * maxTileEnergy;
   }
 
-  static randomMovementGenes() {
+  static randomMovementGenes(rng) {
+    const controller = resolveRngController(rng);
+
     return {
-      wandering: randomRange(0, 1),
-      pursuit: randomRange(0, 1),
-      cautious: randomRange(0, 1),
+      wandering: controller.range(0, 1),
+      pursuit: controller.range(0, 1),
+      cautious: controller.range(0, 1),
     };
   }
 
@@ -745,7 +758,7 @@ export default class Cell {
     const pursuitScaled = Math.max(0, pursuit * pursuitMul);
     const wanderingScaled = Math.max(0, wandering);
     const total = wanderingScaled + pursuitScaled + cautiousScaled || 1;
-    const r = randomRange(0, total);
+    const r = this.rng.range(0, total);
 
     if (r < wanderingScaled) return 'wandering';
     if (r < wanderingScaled + pursuitScaled) return 'pursuit';
@@ -825,7 +838,7 @@ export default class Cell {
     if (Array.isArray(society) && society.length > 0) {
       const coh = typeof this.dna.cohesion === 'function' ? this.dna.cohesion() : 0;
 
-      if (Math.random() < coh) {
+      if (this.rng.percent(coh)) {
         const target = this.#nearest(society, row, col);
 
         if (target) return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
@@ -866,7 +879,7 @@ export default class Cell {
         Math.min(0.95, 0.3 + 0.4 * (Math.max(0, g.wandering) / total) + 0.3 * dnaExploit)
       );
 
-      if (best && Math.random() < pExploit) {
+      if (best && this.rng.percent(pExploit)) {
         if (typeof tryMove === 'function')
           return tryMove(gridArr, row, col, best.dr, best.dc, rows, cols);
 
@@ -1069,7 +1082,7 @@ export default class Cell {
     const coopW = Math.max(0.0001, cooperate * coopMul);
     const avoidW = Math.max(0.0001, avoid);
     const total = avoidW + fightW + coopW;
-    const roll = randomRange(0, total);
+    const roll = this.rng.range(0, total);
 
     if (roll < avoidW) return 'avoid';
     if (roll < avoidW + fightW) return 'fight';
@@ -1100,7 +1113,7 @@ export default class Cell {
       const logits = entries.map(({ key }) => values[key] ?? 0);
       const labels = entries.map(({ key }) => key);
       const probs = softmax(logits);
-      const choice = sampleFromDistribution(probs, labels);
+      const choice = sampleFromDistribution(probs, labels, this.rng);
       const probabilitiesByKey = {};
 
       for (let i = 0; i < labels.length; i++) {
