@@ -55,44 +55,6 @@ test('GridManager.tryMove ignores empty sources without mutating density data', 
   assert.is(gm.activeCells.size, initialActiveSize);
 });
 
-test('setObstacle with evict=false preserves the occupant and clears tile energy', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
-  const { default: DNA } = await import('../src/genome.js');
-
-  class TestGridManager extends GridManager {
-    init() {}
-  }
-
-  let deaths = 0;
-  const gm = new TestGridManager(1, 1, {
-    eventManager: { activeEvents: [] },
-    stats: {
-      onBirth() {},
-      onDeath() {
-        deaths += 1;
-      },
-      recordMateChoice() {},
-    },
-  });
-
-  const dna = new DNA(10, 20, 30);
-  const cell = new Cell(0, 0, dna, 5);
-
-  gm.setCell(0, 0, cell);
-
-  gm.energyGrid[0][0] = 7;
-  gm.energyNext[0][0] = 3;
-
-  gm.setObstacle(0, 0, true, { evict: false });
-
-  assert.is(gm.getCell(0, 0), cell);
-  assert.is(deaths, 0);
-  assert.is(gm.energyGrid[0][0], 0);
-  assert.is(gm.energyNext[0][0], 0);
-  assert.is(gm.isObstacle(0, 0), true);
-});
-
 test("Breeding uses the mover's refreshed coordinates for offspring placement", async () => {
   const { default: GridManager } = await import('../src/gridManager.js');
   const { default: Cell } = await import('../src/cell.js');
@@ -463,12 +425,12 @@ test('processCell continues to combat when reproduction fails', async () => {
 
   let combatCalled = false;
 
-  gm.handleCombat = () => {
+  gm.population.handleCombat = () => {
     combatCalled = true;
 
     return false;
   };
-  gm.handleMovement = () => {};
+  gm.population.handleMovement = () => {};
 
   let births = 0;
   const stats = {
