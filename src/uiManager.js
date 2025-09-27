@@ -3,6 +3,13 @@ import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   UI_SLIDER_CONFIG,
 } from './config.js';
+import {
+  createControlButtonRow,
+  createControlGrid,
+  createSectionHeading,
+  createSelectRow,
+  createSliderRow,
+} from './ui/controlBuilders.js';
 
 export default class UIManager {
   constructor(updateCallback, mountSelector = '#app', actions = {}, layoutOptions = {}) {
@@ -375,28 +382,7 @@ export default class UIManager {
     panel.id = 'controls';
     panel.classList.add('controls-panel');
 
-    const addGrid = (className = '') => {
-      const grid = document.createElement('div');
-
-      grid.className = `control-grid${className ? ` ${className}` : ''}`;
-      body.appendChild(grid);
-
-      return grid;
-    };
-
-    const addSectionHeading = (text) => {
-      const heading = document.createElement('h4');
-
-      heading.className = 'control-section-title';
-      heading.textContent = text;
-      body.appendChild(heading);
-
-      return heading;
-    };
-
-    const buttonRow = body.appendChild(document.createElement('div'));
-
-    buttonRow.className = 'control-button-row';
+    const buttonRow = createControlButtonRow(body);
 
     const addControlButton = ({ id, label, title, onClick }) => {
       const button = document.createElement('button');
@@ -429,78 +415,6 @@ export default class UIManager {
     });
 
     // Helper to make slider rows
-    const addSlider = (opts, parent = body) => {
-      const { label, min, max, step, value, title, onInput, format = (v) => String(v) } = opts;
-      const row = document.createElement('label');
-
-      row.className = 'control-row';
-      row.title = title;
-      const name = document.createElement('div');
-
-      name.className = 'control-name';
-      name.textContent = label;
-      const valSpan = document.createElement('span');
-
-      valSpan.className = 'control-value';
-      valSpan.textContent = format(value);
-      const input = document.createElement('input');
-
-      input.type = 'range';
-      input.min = String(min);
-      input.max = String(max);
-      input.step = String(step);
-      input.value = String(value);
-      input.addEventListener('input', () => {
-        const v = parseFloat(input.value);
-
-        valSpan.textContent = format(v);
-        onInput(v);
-      });
-      const line = document.createElement('div');
-
-      line.className = 'control-line';
-      line.appendChild(input);
-      line.appendChild(valSpan);
-      row.appendChild(name);
-      row.appendChild(line);
-      parent.appendChild(row);
-
-      return input;
-    };
-
-    const addSelect = (opts, parent = body) => {
-      const { label, title, value, options = [], onChange } = opts;
-      const row = document.createElement('label');
-
-      row.className = 'control-row';
-      if (title) row.title = title;
-      const name = document.createElement('div');
-
-      name.className = 'control-name';
-      name.textContent = label;
-      const line = document.createElement('div');
-
-      line.className = 'control-line';
-      const select = document.createElement('select');
-
-      options.forEach((option) => {
-        const opt = document.createElement('option');
-
-        opt.value = option.value;
-        opt.textContent = option.label;
-        if (option.description) opt.title = option.description;
-        select.appendChild(opt);
-      });
-      select.value = value;
-      select.addEventListener('input', () => onChange?.(select.value));
-      line.appendChild(select);
-      row.appendChild(name);
-      row.appendChild(line);
-      parent.appendChild(row);
-
-      return select;
-    };
-
     const getSliderValue = (cfg) =>
       typeof cfg.getValue === 'function' ? cfg.getValue() : this[cfg.prop];
 
@@ -541,19 +455,16 @@ export default class UIManager {
     };
 
     const renderSlider = (cfg, parent = body) =>
-      addSlider(
-        {
-          label: cfg.label,
-          min: cfg.min,
-          max: cfg.max,
-          step: cfg.step,
-          value: getSliderValue(cfg),
-          title: cfg.title,
-          format: cfg.format,
-          onInput: getSliderSetter(cfg),
-        },
-        parent
-      );
+      createSliderRow(parent, {
+        label: cfg.label,
+        min: cfg.min,
+        max: cfg.max,
+        step: cfg.step,
+        value: getSliderValue(cfg),
+        title: cfg.title,
+        format: cfg.format,
+        onInput: getSliderSetter(cfg),
+      });
 
     const thresholdConfigs = [
       withSliderConfig('societySimilarity', {
@@ -692,31 +603,27 @@ export default class UIManager {
       }),
     ];
 
-    addSectionHeading('Similarity Thresholds');
-    const thresholdsGroup = addGrid();
+    createSectionHeading(body, 'Similarity Thresholds');
+    const thresholdsGroup = createControlGrid(body);
 
     thresholdConfigs.forEach((cfg) => renderSlider(cfg, thresholdsGroup));
 
-    addSectionHeading('Environmental Events');
-    const eventsGroup = addGrid();
+    createSectionHeading(body, 'Environmental Events');
+    const eventsGroup = createControlGrid(body);
 
     eventConfigs.forEach((cfg) => renderSlider(cfg, eventsGroup));
 
-    addSectionHeading('General Settings');
-    const generalGroup = addGrid();
+    createSectionHeading(body, 'General Settings');
+    const generalGroup = createControlGrid(body);
 
     generalConfigs
       .filter((cfg) => cfg.position === 'beforeOverlays')
       .forEach((cfg) => renderSlider(cfg, generalGroup));
 
     // Overlay toggles
-    const overlayHeader = document.createElement('h4');
+    createSectionHeading(body, 'Overlays', { className: 'overlay-header' });
 
-    overlayHeader.textContent = 'Overlays';
-    overlayHeader.className = 'overlay-header';
-    body.appendChild(overlayHeader);
-
-    const overlayGrid = addGrid('control-grid--compact');
+    const overlayGrid = createControlGrid(body, 'control-grid--compact');
 
     const addToggle = (label, title, initial, onChange) =>
       this.#addCheckbox(overlayGrid, label, title, initial, onChange);
@@ -747,31 +654,24 @@ export default class UIManager {
     );
 
     if (this.obstaclePresets.length > 0 || this.obstacleScenarios.length > 0) {
-      const obstacleHeader = document.createElement('h4');
+      createSectionHeading(body, 'Obstacles & Scenarios', { className: 'overlay-header' });
 
-      obstacleHeader.textContent = 'Obstacles & Scenarios';
-      obstacleHeader.className = 'overlay-header';
-      body.appendChild(obstacleHeader);
-
-      const obstacleGrid = addGrid('control-grid--compact');
+      const obstacleGrid = createControlGrid(body, 'control-grid--compact');
 
       if (this.obstaclePresets.length > 0) {
-        const presetSelect = addSelect(
-          {
-            label: 'Layout Preset',
-            title: 'Choose a static obstacle layout to apply immediately.',
-            value: this.obstaclePreset,
-            options: this.obstaclePresets.map((preset) => ({
-              value: preset.id,
-              label: preset.label,
-              description: preset.description,
-            })),
-            onChange: (value) => {
-              this.obstaclePreset = value;
-            },
+        const presetSelect = createSelectRow(obstacleGrid, {
+          label: 'Layout Preset',
+          title: 'Choose a static obstacle layout to apply immediately.',
+          value: this.obstaclePreset,
+          options: this.obstaclePresets.map((preset) => ({
+            value: preset.id,
+            label: preset.label,
+            description: preset.description,
+          })),
+          onChange: (value) => {
+            this.obstaclePreset = value;
           },
-          obstacleGrid
-        );
+        });
 
         if (presetSelect) {
           Array.from(presetSelect.options).forEach((opt) => {
@@ -810,22 +710,19 @@ export default class UIManager {
       }
 
       if (this.obstacleScenarios.length > 0) {
-        const scenarioSelect = addSelect(
-          {
-            label: 'Scenario Script',
-            title: 'Schedule obstacle changes to watch the population adapt.',
-            value: this.obstacleScenario,
-            options: this.obstacleScenarios.map((scenario) => ({
-              value: scenario.id,
-              label: scenario.label,
-              description: scenario.description,
-            })),
-            onChange: (value) => {
-              this.obstacleScenario = value;
-            },
+        const scenarioSelect = createSelectRow(obstacleGrid, {
+          label: 'Scenario Script',
+          title: 'Schedule obstacle changes to watch the population adapt.',
+          value: this.obstacleScenario,
+          options: this.obstacleScenarios.map((scenario) => ({
+            value: scenario.id,
+            label: scenario.label,
+            description: scenario.description,
+          })),
+          onChange: (value) => {
+            this.obstacleScenario = value;
           },
-          obstacleGrid
-        );
+        });
 
         if (scenarioSelect) {
           Array.from(scenarioSelect.options).forEach((opt) => {
@@ -870,13 +767,9 @@ export default class UIManager {
     }
 
     if (this.selectionManager) {
-      const zoneHeader = document.createElement('h4');
+      createSectionHeading(body, 'Reproductive Zones', { className: 'overlay-header' });
 
-      zoneHeader.textContent = 'Reproductive Zones';
-      zoneHeader.className = 'overlay-header';
-      body.appendChild(zoneHeader);
-
-      const zoneGrid = addGrid('control-grid--compact');
+      const zoneGrid = createControlGrid(body, 'control-grid--compact');
       const patterns = this.selectionManager.getPatterns();
 
       patterns.forEach((pattern) => {
@@ -895,9 +788,8 @@ export default class UIManager {
         this.patternCheckboxes[pattern.id] = checkbox;
       });
 
-      const zoneButtons = document.createElement('div');
+      const zoneButtons = createControlButtonRow(body);
 
-      zoneButtons.className = 'control-button-row';
       this.drawZoneButton = document.createElement('button');
       this.drawZoneButton.textContent = 'Draw Custom Zone';
       this.drawZoneButton.addEventListener('click', () => {
@@ -915,8 +807,6 @@ export default class UIManager {
         this.#scheduleUpdate();
       });
       zoneButtons.appendChild(clearButton);
-      body.appendChild(zoneButtons);
-
       this.zoneSummaryEl = document.createElement('div');
 
       this.zoneSummaryEl.className = 'control-hint';
@@ -924,8 +814,8 @@ export default class UIManager {
       this.#updateZoneSummary();
     }
 
-    addSectionHeading('Energy Dynamics');
-    const energyGroup = addGrid();
+    createSectionHeading(body, 'Energy Dynamics');
+    const energyGroup = createControlGrid(body);
 
     energyConfigs.forEach((cfg) => renderSlider(cfg, energyGroup));
 
