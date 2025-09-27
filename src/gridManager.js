@@ -319,11 +319,23 @@ export default class GridManager {
 
     if (blocked) {
       this.obstacles[row][col] = true;
-      if (!wasBlocked && this.grid[row][col]) {
-        const occupant = this.removeCell(row, col);
+      if (!wasBlocked) {
+        const occupant = this.grid[row][col];
 
-        if (evict && this.stats?.onDeath) this.stats.onDeath();
-        if (occupant && occupant.energy != null) {
+        if (occupant) {
+          if (evict) {
+            const removed = this.removeCell(row, col);
+
+            if (this.stats?.onDeath) this.stats.onDeath();
+            if (removed) {
+              this.energyGrid[row][col] = 0;
+              this.energyNext[row][col] = 0;
+            }
+          } else {
+            this.energyGrid[row][col] = 0;
+            this.energyNext[row][col] = 0;
+          }
+        } else {
           this.energyGrid[row][col] = 0;
           this.energyNext[row][col] = 0;
         }
