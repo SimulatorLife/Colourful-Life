@@ -12,125 +12,16 @@
       <canvas id="gameCanvas" width="600" height="600"></canvas>
     </div>
     <script type="module">
-      import UIManager from './src/uiManager.js';
-      import EventManager from './src/eventManager.js';
-      import Stats from './src/stats.js';
-      import GridManager, { OBSTACLE_PRESETS, OBSTACLE_SCENARIOS } from './src/gridManager.js';
-      import SelectionManager from './src/selectionManager.js';
-      import { drawOverlays } from './src/overlays.js';
-      import { computeLeaderboard } from './src/leaderboard.js';
-      import BrainDebugger from './src/brainDebugger.js';
+      import { createSimulation } from './src/main.js';
 
       const canvas = document.getElementById('gameCanvas');
-      const ctx = canvas.getContext('2d');
 
-      const cellSize = 5;
-      const rows = canvas.height / cellSize;
-      const cols = canvas.width / cellSize;
-      let lastUpdateTime = 0;
-
-      const eventManager = new EventManager(rows, cols);
-      const stats = new Stats();
-
-      const selectionManager = new SelectionManager(rows, cols);
-      const grid = new GridManager(rows, cols, {
-        eventManager,
-        ctx,
-        cellSize,
-        stats,
-        selectionManager,
-      });
-
-      if (typeof window !== 'undefined') {
-        window.BrainDebugger = BrainDebugger;
-      }
-      let lastSnapshot = grid.getLastSnapshot();
-      let pendingSlowUiUpdate = false;
-      let lastMetrics = null;
-      const uiManager = new UIManager(
-        update,
-        '#app',
-        {
-          burst: () => grid.burstRandomCells({ count: 200, radius: 6 }),
-          applyObstaclePreset: (id, options) => grid.applyObstaclePreset(id, options),
-          runObstacleScenario: (id) => grid.runObstacleScenario(id),
-          setLingerPenalty: (value) => grid.setLingerPenalty(value),
-          obstaclePresets: OBSTACLE_PRESETS,
-          obstacleScenarios: OBSTACLE_SCENARIOS,
-          selectionManager,
-          getCellSize: () => cellSize,
+      createSimulation({
+        canvas,
+        config: {
+          cellSize: 5,
         },
-        {
-          canvasElement: canvas,
-        }
-      );
-
-      grid.setLingerPenalty(uiManager.getLingerPenalty());
-      window.grid = grid;
-      window.uiManager = uiManager;
-
-      requestAnimationFrame(update);
-
-      function update() {
-        if (uiManager.isPaused()) {
-          return;
-        }
-
-        const now = performance.now();
-        const interval = 1000 / Math.max(1, uiManager.getUpdatesPerSecond());
-        let tickOccurred = false;
-
-        if (now - lastUpdateTime >= interval) {
-          lastUpdateTime = now;
-          tickOccurred = true;
-          stats.resetTick();
-          // update events with frequency and allow up to 2 concurrent
-          eventManager.updateEvent(uiManager.getEventFrequencyMultiplier(), 2);
-          const mutationMultiplier = uiManager.getMutationMultiplier();
-          const snapshot = grid.update({
-            densityEffectMultiplier: uiManager.getDensityEffectMultiplier(),
-            societySimilarity: uiManager.getSocietySimilarity(),
-            enemySimilarity: uiManager.getEnemySimilarity(),
-            eventStrengthMultiplier: uiManager.getEventStrengthMultiplier(),
-            energyRegenRate: uiManager.getEnergyRegenRate(),
-            energyDiffusionRate: uiManager.getEnergyDiffusionRate(),
-            mutationMultiplier,
-          });
-
-          lastSnapshot = snapshot;
-          // record current event strength for insight charts
-          stats.logEvent(eventManager.currentEvent, uiManager.getEventStrengthMultiplier());
-          stats.setMutationMultiplier(mutationMultiplier);
-          const metrics = stats.updateFromSnapshot(snapshot);
-
-          lastMetrics = metrics;
-          pendingSlowUiUpdate = true;
-        }
-        grid.draw({ showObstacles: uiManager.getShowObstacles() });
-        // overlays
-        drawOverlays(grid, ctx, cellSize, {
-          showEnergy: uiManager.getShowEnergy(),
-          showDensity: uiManager.getShowDensity(),
-          showFitness: uiManager.getShowFitness(),
-          showObstacles: uiManager.getShowObstacles(),
-          maxTileEnergy: GridManager.maxTileEnergy,
-          snapshot: lastSnapshot,
-          activeEvents: eventManager.activeEvents,
-          getEventColor: eventManager.getColor?.bind(eventManager),
-          mutationMultiplier: uiManager.getMutationMultiplier(),
-          selectionManager,
-        });
-        if (pendingSlowUiUpdate && uiManager.shouldRenderSlowUi(now)) {
-          if (lastMetrics) uiManager.renderMetrics(stats, lastMetrics);
-          const top = computeLeaderboard(lastSnapshot, 5);
-
-          uiManager.renderLeaderboard(top);
-          pendingSlowUiUpdate = false;
-        }
-        requestAnimationFrame(update);
-      }
-
-      // overlays and leaderboard moved to modules
+      });
     </script>
   </body>
 </html>
