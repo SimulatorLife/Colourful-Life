@@ -624,6 +624,14 @@ export default class GridManager {
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
+        if (this.isObstacle(r, c)) {
+          next[r][c] = 0;
+          if (this.energyGrid[r][c] !== 0) {
+            this.energyGrid[r][c] = 0;
+          }
+
+          continue;
+        }
         const e = this.energyGrid[r][c];
         // Logistic toward max
         let regen = R * (1 - e / maxE);
@@ -670,19 +678,19 @@ export default class GridManager {
         let neighSum = 0;
         let neighCount = 0;
 
-        if (r > 0) {
+        if (r > 0 && !this.isObstacle(r - 1, c)) {
           neighSum += this.energyGrid[r - 1][c];
           neighCount++;
         }
-        if (r < this.rows - 1) {
+        if (r < this.rows - 1 && !this.isObstacle(r + 1, c)) {
           neighSum += this.energyGrid[r + 1][c];
           neighCount++;
         }
-        if (c > 0) {
+        if (c > 0 && !this.isObstacle(r, c - 1)) {
           neighSum += this.energyGrid[r][c - 1];
           neighCount++;
         }
-        if (c < this.cols - 1) {
+        if (c < this.cols - 1 && !this.isObstacle(r, c + 1)) {
           neighSum += this.energyGrid[r][c + 1];
           neighCount++;
         }
