@@ -8,6 +8,7 @@ import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
   UI_SLIDER_CONFIG,
+  resolveSimulationDefaults,
 } from './config.js';
 
 const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
@@ -177,36 +178,28 @@ export default class SimulationEngine {
       GLOBAL.simulationEngine = this;
     }
 
+    const defaults = resolveSimulationDefaults(config);
+
     this.state = {
-      paused: Boolean(config.paused ?? false),
-      updatesPerSecond: Math.max(1, Math.round(config.updatesPerSecond ?? 60)),
-      eventFrequencyMultiplier:
-        config.eventFrequencyMultiplier ?? UI_SLIDER_CONFIG.eventFrequencyMultiplier.default,
-      mutationMultiplier: config.mutationMultiplier ?? UI_SLIDER_CONFIG.mutationMultiplier.default,
-      densityEffectMultiplier:
-        config.densityEffectMultiplier ?? UI_SLIDER_CONFIG.densityEffectMultiplier.default,
-      societySimilarity: config.societySimilarity ?? UI_SLIDER_CONFIG.societySimilarity.default,
-      enemySimilarity: config.enemySimilarity ?? UI_SLIDER_CONFIG.enemySimilarity.default,
-      eventStrengthMultiplier:
-        config.eventStrengthMultiplier ?? UI_SLIDER_CONFIG.eventStrengthMultiplier.default,
-      energyRegenRate: config.energyRegenRate ?? ENERGY_REGEN_RATE_DEFAULT,
-      energyDiffusionRate: config.energyDiffusionRate ?? ENERGY_DIFFUSION_RATE_DEFAULT,
-      showObstacles: config.showObstacles ?? true,
-      showEnergy: config.showEnergy ?? false,
-      showDensity: config.showDensity ?? false,
-      showFitness: config.showFitness ?? false,
-      leaderboardIntervalMs:
-        config.leaderboardIntervalMs ?? UI_SLIDER_CONFIG.leaderboardIntervalMs.default,
-      matingDiversityThreshold:
-        config.matingDiversityThreshold ??
-        UI_SLIDER_CONFIG.matingDiversityThreshold?.default ??
-        0.45,
-      lowDiversityReproMultiplier:
-        config.lowDiversityReproMultiplier ??
-        UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ??
-        0.1,
+      paused: Boolean(defaults.paused),
+      updatesPerSecond: Math.max(1, Math.round(defaults.updatesPerSecond)),
+      eventFrequencyMultiplier: defaults.eventFrequencyMultiplier,
+      mutationMultiplier: defaults.mutationMultiplier,
+      densityEffectMultiplier: defaults.densityEffectMultiplier,
+      societySimilarity: defaults.societySimilarity,
+      enemySimilarity: defaults.enemySimilarity,
+      eventStrengthMultiplier: defaults.eventStrengthMultiplier,
+      energyRegenRate: defaults.energyRegenRate,
+      energyDiffusionRate: defaults.energyDiffusionRate,
+      showObstacles: defaults.showObstacles,
+      showEnergy: defaults.showEnergy,
+      showDensity: defaults.showDensity,
+      showFitness: defaults.showFitness,
+      leaderboardIntervalMs: defaults.leaderboardIntervalMs,
+      matingDiversityThreshold: defaults.matingDiversityThreshold,
+      lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
     };
-    this.lingerPenalty = config.lingerPenalty ?? 0;
+    this.lingerPenalty = defaults.lingerPenalty;
 
     this.grid.setLingerPenalty(this.lingerPenalty);
 

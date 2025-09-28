@@ -2,11 +2,7 @@ import UIManager from './uiManager.js';
 import BrainDebugger from './brainDebugger.js';
 import SimulationEngine from './simulationEngine.js';
 import { OBSTACLE_PRESETS, OBSTACLE_SCENARIOS } from './gridManager.js';
-import {
-  ENERGY_DIFFUSION_RATE_DEFAULT,
-  ENERGY_REGEN_RATE_DEFAULT,
-  UI_SLIDER_CONFIG,
-} from './config.js';
+import { resolveSimulationDefaults } from './config.js';
 
 const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
 
@@ -84,32 +80,9 @@ const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
  * }} Headless UI facade that keeps simulation code agnostic to environment.
  */
 function createHeadlessUiManager(options = {}) {
-  const settings = {
-    paused: options.paused ?? false,
-    updatesPerSecond: options.updatesPerSecond ?? 60,
-    eventFrequencyMultiplier:
-      options.eventFrequencyMultiplier ?? UI_SLIDER_CONFIG.eventFrequencyMultiplier.default,
-    mutationMultiplier: options.mutationMultiplier ?? UI_SLIDER_CONFIG.mutationMultiplier.default,
-    densityEffectMultiplier:
-      options.densityEffectMultiplier ?? UI_SLIDER_CONFIG.densityEffectMultiplier.default,
-    societySimilarity: options.societySimilarity ?? UI_SLIDER_CONFIG.societySimilarity.default,
-    enemySimilarity: options.enemySimilarity ?? UI_SLIDER_CONFIG.enemySimilarity.default,
-    eventStrengthMultiplier:
-      options.eventStrengthMultiplier ?? UI_SLIDER_CONFIG.eventStrengthMultiplier.default,
-    energyRegenRate: options.energyRegenRate ?? ENERGY_REGEN_RATE_DEFAULT,
-    energyDiffusionRate: options.energyDiffusionRate ?? ENERGY_DIFFUSION_RATE_DEFAULT,
-    matingDiversityThreshold:
-      options.matingDiversityThreshold ?? UI_SLIDER_CONFIG.matingDiversityThreshold.default,
-    lowDiversityReproMultiplier:
-      options.lowDiversityReproMultiplier ?? UI_SLIDER_CONFIG.lowDiversityReproMultiplier.default,
-    showObstacles: options.showObstacles ?? true,
-    showEnergy: options.showEnergy ?? false,
-    showDensity: options.showDensity ?? false,
-    showFitness: options.showFitness ?? false,
-    lingerPenalty: options.lingerPenalty ?? 0,
-    leaderboardIntervalMs:
-      options.leaderboardIntervalMs ?? UI_SLIDER_CONFIG.leaderboardIntervalMs.default,
-  };
+  const { selectionManager, ...overrides } = options || {};
+  const defaults = resolveSimulationDefaults(overrides);
+  const settings = { ...defaults };
 
   let lastSlowUiRender = Number.NEGATIVE_INFINITY;
 
@@ -166,7 +139,7 @@ function createHeadlessUiManager(options = {}) {
         settings.lingerPenalty = value;
       }
     },
-    selectionManager: options.selectionManager ?? null,
+    selectionManager: selectionManager ?? null,
   };
 }
 
@@ -381,4 +354,4 @@ export function createSimulation({
 
 export default createSimulation;
 
-export { SimulationEngine };
+export { SimulationEngine, createHeadlessUiManager };

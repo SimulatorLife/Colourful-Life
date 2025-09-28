@@ -1,8 +1,4 @@
-import {
-  ENERGY_REGEN_RATE_DEFAULT,
-  ENERGY_DIFFUSION_RATE_DEFAULT,
-  UI_SLIDER_CONFIG,
-} from './config.js';
+import { UI_SLIDER_CONFIG, resolveSimulationDefaults } from './config.js';
 import {
   createControlButtonRow,
   createControlGrid,
@@ -15,11 +11,13 @@ export default class UIManager {
   constructor(simulationCallbacks = {}, mountSelector = '#app', actions = {}, layoutOptions = {}) {
     const { obstaclePresets = [], obstacleScenarios = [], ...actionFns } = actions || {};
 
+    const defaults = resolveSimulationDefaults();
+
     this.simulationCallbacks = simulationCallbacks || {};
     this.actions = actionFns;
     this.obstaclePresets = Array.isArray(obstaclePresets) ? obstaclePresets : [];
     this.obstacleScenarios = Array.isArray(obstacleScenarios) ? obstacleScenarios : [];
-    this.paused = false;
+    this.paused = Boolean(defaults.paused);
     this.selectionManager = actions.selectionManager || null;
     this.getCellSize =
       typeof actions.getCellSize === 'function' ? actions.getCellSize.bind(actions) : () => 1;
@@ -34,27 +32,27 @@ export default class UIManager {
     this._selectionListenersInstalled = false;
 
     // Settings with sensible defaults
-    this.societySimilarity = UI_SLIDER_CONFIG.societySimilarity.default;
-    this.enemySimilarity = UI_SLIDER_CONFIG.enemySimilarity.default;
-    this.eventStrengthMultiplier = UI_SLIDER_CONFIG.eventStrengthMultiplier.default;
-    this.eventFrequencyMultiplier = UI_SLIDER_CONFIG.eventFrequencyMultiplier.default;
-    this.speedMultiplier = UI_SLIDER_CONFIG.speedMultiplier.default;
-    this.densityEffectMultiplier = UI_SLIDER_CONFIG.densityEffectMultiplier.default;
-    this.mutationMultiplier = UI_SLIDER_CONFIG.mutationMultiplier.default;
-    this.matingDiversityThreshold = UI_SLIDER_CONFIG.matingDiversityThreshold?.default ?? 0.45;
-    this.lowDiversityReproMultiplier = UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ?? 0.1;
-    this.energyRegenRate = ENERGY_REGEN_RATE_DEFAULT; // base logistic regen rate (0..0.2)
-    this.energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT; // neighbor diffusion rate (0..0.5)
-    this.leaderboardIntervalMs = UI_SLIDER_CONFIG.leaderboardIntervalMs.default;
+    this.societySimilarity = defaults.societySimilarity;
+    this.enemySimilarity = defaults.enemySimilarity;
+    this.eventStrengthMultiplier = defaults.eventStrengthMultiplier;
+    this.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
+    this.speedMultiplier = defaults.speedMultiplier;
+    this.densityEffectMultiplier = defaults.densityEffectMultiplier;
+    this.mutationMultiplier = defaults.mutationMultiplier;
+    this.matingDiversityThreshold = defaults.matingDiversityThreshold;
+    this.lowDiversityReproMultiplier = defaults.lowDiversityReproMultiplier;
+    this.energyRegenRate = defaults.energyRegenRate; // base logistic regen rate (0..0.2)
+    this.energyDiffusionRate = defaults.energyDiffusionRate; // neighbor diffusion rate (0..0.5)
+    this.leaderboardIntervalMs = defaults.leaderboardIntervalMs;
     this._lastSlowUiRender = Number.NEGATIVE_INFINITY; // shared throttle for fast-updating UI bits
     this._lastInteractionTotals = { fights: 0, cooperations: 0 };
-    this.showDensity = false;
-    this.showEnergy = false;
-    this.showFitness = false;
-    this.showObstacles = true;
+    this.showDensity = defaults.showDensity;
+    this.showEnergy = defaults.showEnergy;
+    this.showFitness = defaults.showFitness;
+    this.showObstacles = defaults.showObstacles;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? 'none';
     this.obstacleScenario = this.obstacleScenarios[0]?.id ?? 'manual';
-    this.lingerPenalty = 0;
+    this.lingerPenalty = defaults.lingerPenalty;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
 
