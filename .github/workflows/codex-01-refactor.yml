@@ -4,6 +4,11 @@ on:
     - cron: "50 19 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
 jobs:
   run:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml

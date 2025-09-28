@@ -1,0 +1,19 @@
+name: Codex 02 – Improve Test Coverage & Quality
+on:
+  schedule:
+    - cron: "50 20 * * *" # daily at 20:50 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-once.yml
+    with:
+      branch_suffix: "02-tests"
+      pr_title: "Codex: Improve Test Coverage & Quality"
+      prompt: >
+        Audit the codebase for test coverage, reliability, and resilience. Identify critical paths, edge cases, and modules with insufficient or missing tests. Add or expand automated tests to ensure both expected and edge-case behavior are validated. Modernize existing tests for readability, speed, and maintainability, and eliminate redundant or flaky tests. Where logic is complex or risky, write focused unit tests; where integration is essential, add end-to-end coverage. The goal is to ensure the codebase is robust, with a strong safety net that prevents regressions and increases confidence in future changes.

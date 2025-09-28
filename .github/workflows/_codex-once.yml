@@ -1,0 +1,67 @@
+name: Codex Single Prompt to PR
+
+on:
+  workflow_call:
+    inputs:
+      prompt:
+        description: "The Codex prompt to run"
+        required: true
+        type: string
+      pr_title:
+        description: "Pull request title"
+        required: true
+        type: string
+      branch_suffix:
+        description: "Suffix to make the branch unique per prompt"
+        required: true
+        type: string
+      base_branch:
+        description: "Target base branch"
+        default: "master"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  codex-once:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Login Codex
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: codex login --api-key "$OPENAI_API_KEY"
+
+      - name: Run Codex (headless)
+        env:
+          RUST_LOG: codex_core=info
+        run: |
+          codex exec --full-auto "${{ inputs.prompt }}" || true
+
+      - name: Create PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: codex/${{ inputs.branch_suffix }}-${{ github.run_id }}
+          title: ${{ inputs.pr_title }}
+          commit-message: ${{ inputs.pr_title }}
+          body: |
+            Automated change produced by Codex CLI (headless).
+            Prompt:
+            ```
+            ${{ inputs.prompt }}
+            ```
+          base: ${{ inputs.base_branch }}
