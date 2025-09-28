@@ -152,10 +152,30 @@ export default class SimulationEngine {
       showFitness: config.showFitness ?? false,
       leaderboardIntervalMs:
         config.leaderboardIntervalMs ?? UI_SLIDER_CONFIG.leaderboardIntervalMs.default,
+      matingDiversityThreshold:
+        config.matingDiversityThreshold ??
+        UI_SLIDER_CONFIG.matingDiversityThreshold?.default ??
+        0.45,
+      lowDiversityReproMultiplier:
+        config.lowDiversityReproMultiplier ??
+        UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ??
+        0.1,
     };
     this.lingerPenalty = config.lingerPenalty ?? 0;
 
     this.grid.setLingerPenalty(this.lingerPenalty);
+
+    const initialThreshold = this.state.matingDiversityThreshold;
+
+    if (typeof this.stats?.setMatingDiversityThreshold === 'function') {
+      this.stats.setMatingDiversityThreshold(initialThreshold);
+    } else if (this.stats) {
+      this.stats.matingDiversityThreshold = initialThreshold;
+    }
+    this.grid.setMatingDiversityOptions?.({
+      threshold: this.stats?.matingDiversityThreshold,
+      lowDiversityMultiplier: this.state.lowDiversityReproMultiplier,
+    });
 
     this.pendingSlowUiUpdate = false;
     this.lastMetrics = null;
@@ -290,6 +310,12 @@ export default class SimulationEngine {
           energyRegenRate: this.state.energyRegenRate ?? ENERGY_REGEN_RATE_DEFAULT,
           energyDiffusionRate: this.state.energyDiffusionRate ?? ENERGY_DIFFUSION_RATE_DEFAULT,
           mutationMultiplier: this.state.mutationMultiplier ?? 1,
+          matingDiversityThreshold:
+            this.state.matingDiversityThreshold ??
+            UI_SLIDER_CONFIG.matingDiversityThreshold?.default,
+          lowDiversityReproMultiplier:
+            this.state.lowDiversityReproMultiplier ??
+            UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default,
         });
 
         this.lastSnapshot = snapshot;
@@ -564,6 +590,12 @@ export default class SimulationEngine {
       case 'mutationMultiplier':
         this.setMutationMultiplier(value);
         break;
+      case 'matingDiversityThreshold':
+        this.setMatingDiversityThreshold(value);
+        break;
+      case 'lowDiversityReproMultiplier':
+        this.setLowDiversityReproMultiplier(value);
+        break;
       case 'speedMultiplier': {
         const numeric = Number(value);
         const sanitized = Number.isFinite(numeric) ? Math.max(0.5, numeric) : 1;
@@ -586,6 +618,53 @@ export default class SimulationEngine {
       default:
         break;
     }
+  }
+
+  setMatingDiversityThreshold(value) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return;
+
+    const clamped = Math.min(Math.max(numeric, 0), 1);
+
+    if (this.state.matingDiversityThreshold === clamped) return;
+
+    if (typeof this.stats?.setMatingDiversityThreshold === 'function') {
+      this.stats.setMatingDiversityThreshold(clamped);
+    } else if (this.stats) {
+      this.stats.matingDiversityThreshold = clamped;
+    }
+
+    this.grid.setMatingDiversityOptions?.({
+      threshold: clamped,
+      lowDiversityMultiplier:
+        this.state.lowDiversityReproMultiplier ??
+        UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ??
+        0.1,
+    });
+
+    this.#updateState({ matingDiversityThreshold: clamped });
+  }
+
+  setLowDiversityReproMultiplier(value) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return;
+
+    const clamped = Math.min(Math.max(numeric, 0), 1);
+
+    if (this.state.lowDiversityReproMultiplier === clamped) return;
+
+    this.grid.setMatingDiversityOptions?.({
+      threshold:
+        this.state.matingDiversityThreshold ??
+        this.stats?.matingDiversityThreshold ??
+        UI_SLIDER_CONFIG.matingDiversityThreshold?.default ??
+        0.45,
+      lowDiversityMultiplier: clamped,
+    });
+
+    this.#updateState({ lowDiversityReproMultiplier: clamped });
   }
 
   burstRandomCells(options = {}) {

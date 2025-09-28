@@ -149,6 +149,10 @@ test('handleReproduction returns false when offspring cannot be placed', async (
 
   parent.dna.reproductionThresholdFrac = () => 0;
   mate.dna.reproductionThresholdFrac = () => 0;
+  parent.dna.parentalInvestmentFrac = () => 0.5;
+  mate.dna.parentalInvestmentFrac = () => 0.5;
+  parent.dna.starvationThresholdFrac = () => 0;
+  mate.dna.starvationThresholdFrac = () => 0;
   parent.computeReproductionProbability = () => 1;
   parent.decideReproduction = () => ({ probability: 1 });
 
@@ -388,6 +392,196 @@ test('handleReproduction bases reproduction decisions on the post-move density',
   assert.is(computeContexts[0].localDensity, densityGrid[0][1]);
   assert.ok(decideContext, 'reproduction decision should be evaluated');
   assert.is(decideContext.localDensity, densityGrid[0][1]);
+});
+
+test('handleReproduction throttles near-clone pairings below the diversity floor', async () => {
+  const { default: GridManager } = await import('../src/gridManager.js');
+  const { default: Cell } = await import('../src/cell.js');
+  const { default: DNA } = await import('../src/genome.js');
+  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  let births = 0;
+  let recorded = null;
+  const stats = {
+    onBirth() {
+      births += 1;
+    },
+    onDeath() {},
+    recordMateChoice(data) {
+      recorded = data;
+    },
+    matingDiversityThreshold: 0.3,
+  };
+
+  const gm = new TestGridManager(1, 3, {
+    eventManager: { activeEvents: [] },
+    stats,
+  });
+
+  gm.setMatingDiversityOptions({ threshold: 0.3, lowDiversityMultiplier: 0 });
+
+  const parent = new Cell(0, 0, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+  const mate = new Cell(0, 1, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+
+  parent.dna.reproductionThresholdFrac = () => 0;
+  mate.dna.reproductionThresholdFrac = () => 0;
+  parent.computeReproductionProbability = () => 1;
+  parent.decideReproduction = () => ({ probability: 1 });
+
+  const mateEntry = parent.evaluateMateCandidate({
+    row: mate.row,
+    col: mate.col,
+    target: mate,
+  }) || {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 1,
+    diversity: 0,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  mateEntry.diversity = 0.01;
+  mateEntry.similarity = 0.99;
+  mateEntry.selectionWeight = 1;
+  mateEntry.preferenceScore = 1;
+
+  parent.selectMateWeighted = () => ({
+    chosen: mateEntry,
+    evaluated: [mateEntry],
+    mode: 'preference',
+  });
+  parent.findBestMate = () => mateEntry;
+
+  gm.setCell(0, 0, parent);
+  gm.setCell(0, 1, mate);
+  gm.densityGrid = [[0, 0, 0]];
+
+  const originalRandom = Math.random;
+
+  Math.random = () => 0;
+
+  try {
+    const reproduced = gm.handleReproduction(
+      0,
+      0,
+      parent,
+      { mates: [mateEntry], society: [] },
+      { stats, densityGrid: gm.densityGrid, densityEffectMultiplier: 1, mutationMultiplier: 1 }
+    );
+
+    assert.is(reproduced, false);
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.is(births, 0);
+  assert.ok(recorded);
+  assert.is(recorded.success, false);
+  assert.is(recorded.penalized, true);
+  assert.is(recorded.penaltyMultiplier, 0);
+});
+
+test('handleReproduction leaves diverse pairs unaffected by low-diversity penalties', async () => {
+  const { default: GridManager } = await import('../src/gridManager.js');
+  const { default: Cell } = await import('../src/cell.js');
+  const { default: DNA } = await import('../src/genome.js');
+  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  let births = 0;
+  let recorded = null;
+  const stats = {
+    onBirth() {
+      births += 1;
+    },
+    onDeath() {},
+    recordMateChoice(data) {
+      recorded = data;
+    },
+    matingDiversityThreshold: 0.3,
+  };
+
+  const gm = new TestGridManager(1, 3, {
+    eventManager: { activeEvents: [] },
+    stats,
+  });
+
+  gm.setMatingDiversityOptions({ threshold: 0.3, lowDiversityMultiplier: 0 });
+
+  const parent = new Cell(0, 0, new DNA(10, 20, 30), MAX_TILE_ENERGY);
+  const mate = new Cell(0, 2, new DNA(90, 40, 70), MAX_TILE_ENERGY);
+
+  parent.dna.reproductionThresholdFrac = () => 0;
+  mate.dna.reproductionThresholdFrac = () => 0;
+  parent.dna.parentalInvestmentFrac = () => 0.5;
+  mate.dna.parentalInvestmentFrac = () => 0.5;
+  parent.dna.starvationThresholdFrac = () => 0;
+  mate.dna.starvationThresholdFrac = () => 0;
+  parent.computeReproductionProbability = () => 1;
+  parent.decideReproduction = () => ({ probability: 1 });
+
+  const mateEntry = parent.evaluateMateCandidate({
+    row: mate.row,
+    col: mate.col,
+    target: mate,
+  }) || {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 0,
+    diversity: 1,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  mateEntry.diversity = Math.max(0.8, mateEntry.diversity ?? 0);
+  mateEntry.similarity = Math.min(0.2, mateEntry.similarity ?? 1);
+  mateEntry.selectionWeight = 1;
+  mateEntry.preferenceScore = 1;
+
+  parent.selectMateWeighted = () => ({
+    chosen: mateEntry,
+    evaluated: [mateEntry],
+    mode: 'preference',
+  });
+  parent.findBestMate = () => mateEntry;
+
+  gm.setCell(0, 0, parent);
+  gm.setCell(0, 2, mate);
+  gm.densityGrid = [[0, 0, 0]];
+
+  const originalRandom = Math.random;
+
+  Math.random = () => 0;
+
+  try {
+    const reproduced = gm.handleReproduction(
+      0,
+      0,
+      parent,
+      { mates: [mateEntry], society: [] },
+      { stats, densityGrid: gm.densityGrid, densityEffectMultiplier: 1, mutationMultiplier: 1 }
+    );
+
+    assert.is(reproduced, true);
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.is(births, 1);
+  assert.ok(recorded);
+  assert.is(recorded.success, true);
+  assert.is(recorded.penalized, false);
+  assert.is(recorded.penaltyMultiplier, 1);
 });
 
 test('processCell continues to combat when reproduction fails', async () => {

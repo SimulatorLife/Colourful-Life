@@ -25,6 +25,10 @@ function createHeadlessUiManager(options = {}) {
       options.eventStrengthMultiplier ?? UI_SLIDER_CONFIG.eventStrengthMultiplier.default,
     energyRegenRate: options.energyRegenRate ?? ENERGY_REGEN_RATE_DEFAULT,
     energyDiffusionRate: options.energyDiffusionRate ?? ENERGY_DIFFUSION_RATE_DEFAULT,
+    matingDiversityThreshold:
+      options.matingDiversityThreshold ?? UI_SLIDER_CONFIG.matingDiversityThreshold.default,
+    lowDiversityReproMultiplier:
+      options.lowDiversityReproMultiplier ?? UI_SLIDER_CONFIG.lowDiversityReproMultiplier.default,
     showObstacles: options.showObstacles ?? true,
     showEnergy: options.showEnergy ?? false,
     showDensity: options.showDensity ?? false,
@@ -55,6 +59,18 @@ function createHeadlessUiManager(options = {}) {
     getEventStrengthMultiplier: () => settings.eventStrengthMultiplier,
     getEnergyRegenRate: () => settings.energyRegenRate,
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
+    getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
+    setMatingDiversityThreshold: (value) => {
+      if (typeof value === 'number' && !Number.isNaN(value)) {
+        settings.matingDiversityThreshold = value;
+      }
+    },
+    getLowDiversityReproMultiplier: () => settings.lowDiversityReproMultiplier,
+    setLowDiversityReproMultiplier: (value) => {
+      if (typeof value === 'number' && !Number.isNaN(value)) {
+        settings.lowDiversityReproMultiplier = value;
+      }
+    },
     getShowObstacles: () => settings.showObstacles,
     getShowEnergy: () => settings.showEnergy,
     getShowDensity: () => settings.showDensity,

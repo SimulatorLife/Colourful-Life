@@ -227,6 +227,13 @@ export default class GridManager {
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
     this.selectionManager = selectionManager || null;
+    const initialThreshold =
+      typeof stats?.matingDiversityThreshold === 'number'
+        ? clamp(stats.matingDiversityThreshold, 0, 1)
+        : 0.45;
+
+    this.matingDiversityThreshold = initialThreshold;
+    this.lowDiversityReproMultiplier = 0.1;
     this.densityRadius = GridManager.DENSITY_RADIUS;
     this.densityCounts = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
@@ -295,6 +302,26 @@ export default class GridManager {
     const numeric = Number(value);
 
     this.lingerPenalty = Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
+  }
+
+  setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {
+    if (threshold !== undefined) {
+      const numeric = Number(threshold);
+
+      if (Number.isFinite(numeric)) {
+        this.matingDiversityThreshold = clamp(numeric, 0, 1);
+      }
+    } else if (typeof this.stats?.matingDiversityThreshold === 'number') {
+      this.matingDiversityThreshold = clamp(this.stats.matingDiversityThreshold, 0, 1);
+    }
+
+    if (lowDiversityMultiplier !== undefined) {
+      const numeric = Number(lowDiversityMultiplier);
+
+      if (Number.isFinite(numeric)) {
+        this.lowDiversityReproMultiplier = clamp(numeric, 0, 1);
+      }
+    }
   }
 
   isObstacle(row, col) {
@@ -1198,6 +1225,20 @@ export default class GridManager {
       if (!bestMate) return false;
     }
 
+    const similarity =
+      typeof bestMate.similarity === 'number'
+        ? bestMate.similarity
+        : cell.similarityTo(bestMate.target);
+    const diversity = typeof bestMate.diversity === 'number' ? bestMate.diversity : 1 - similarity;
+    const diversityThreshold =
+      typeof this.matingDiversityThreshold === 'number' ? this.matingDiversityThreshold : 0;
+    const penaltyBase =
+      typeof this.lowDiversityReproMultiplier === 'number'
+        ? clamp(this.lowDiversityReproMultiplier, 0, 1)
+        : 0;
+    let penaltyMultiplier = 1;
+    let penalizedForSimilarity = false;
+
     const originalParentRow = cell.row;
     const originalParentCol = cell.col;
     const moveSucceeded = this.boundMoveToTarget(
@@ -1231,6 +1272,16 @@ export default class GridManager {
       maxTileEnergy: this.maxTileEnergy,
       baseProbability: baseProb,
     });
+
+    let effectiveReproProb = clamp(reproProb ?? 0, 0, 1);
+
+    if (diversity < diversityThreshold) {
+      penalizedForSimilarity = true;
+      penaltyMultiplier = penaltyBase;
+
+      if (penaltyMultiplier <= 0) effectiveReproProb = 0;
+      else effectiveReproProb = clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
+    }
 
     const thrFracA =
       typeof cell.dna.reproductionThresholdFrac === 'function'
@@ -1267,7 +1318,7 @@ export default class GridManager {
 
     if (
       !blockedInfo &&
-      randomPercent(reproProb) &&
+      randomPercent(effectiveReproProb) &&
       cell.energy >= thrA &&
       bestMate.target.energy >= thrB
     ) {
@@ -1345,9 +1396,6 @@ export default class GridManager {
     }
 
     if (stats?.recordMateChoice) {
-      const similarity = bestMate.similarity ?? cell.similarityTo(bestMate.target);
-      const diversity = bestMate.diversity ?? 1 - similarity;
-
       stats.recordMateChoice({
         similarity,
         diversity,
@@ -1356,6 +1404,8 @@ export default class GridManager {
         selectionMode: selectionKind,
         poolSize: selectionListSize,
         success: reproduced,
+        penalized: penalizedForSimilarity,
+        penaltyMultiplier,
       });
     }
 
@@ -1485,9 +1535,19 @@ export default class GridManager {
     energyRegenRate = GridManager.energyRegenRate,
     energyDiffusionRate = GridManager.energyDiffusionRate,
     mutationMultiplier = 1,
+    matingDiversityThreshold,
+    lowDiversityReproMultiplier,
   } = {}) {
     const stats = this.stats;
     const eventManager = this.eventManager;
+
+    this.setMatingDiversityOptions({
+      threshold:
+        matingDiversityThreshold !== undefined
+          ? matingDiversityThreshold
+          : stats?.matingDiversityThreshold,
+      lowDiversityMultiplier: lowDiversityReproMultiplier,
+    });
 
     this.lastSnapshot = null;
     this.tickCount += 1;
