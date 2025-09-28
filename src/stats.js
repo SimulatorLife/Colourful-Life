@@ -176,6 +176,14 @@ export default class Stats {
     };
   }
 
+  setMatingDiversityThreshold(value) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return;
+
+    this.matingDiversityThreshold = Math.min(Math.max(numeric, 0), 1);
+  }
+
   recordMateChoice({
     similarity = 1,
     diversity = 0,
@@ -184,13 +192,15 @@ export default class Stats {
     selectionMode = 'preference',
     poolSize = 0,
     success = false,
+    penalized = false,
+    penaltyMultiplier = 1,
   } = {}) {
     if (!this.mating) {
       this.mating = _createMatingSnapshot();
     }
 
     const threshold = this.matingDiversityThreshold;
-    const isDiverse = similarity < threshold;
+    const isDiverse = diversity >= threshold;
 
     this.mating.choices++;
     this.mating.appetiteSum += appetite || 0;
@@ -213,6 +223,8 @@ export default class Stats {
       poolSize,
       success,
       threshold,
+      penalized,
+      penaltyMultiplier,
       blockedReason: this.mating.lastBlockReason || undefined,
     };
     this.mating.lastBlockReason = null;

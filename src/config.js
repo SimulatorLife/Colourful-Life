@@ -13,6 +13,8 @@ export const UI_SLIDER_CONFIG = {
   speedMultiplier: { default: 1, min: 0.5, max: 100, step: 0.5, floor: 0.1 },
   densityEffectMultiplier: { default: 1, min: 0, max: 2, step: 0.05, floor: 0 },
   mutationMultiplier: { default: 1, min: 0, max: 3, step: 0.05, floor: 0 },
+  matingDiversityThreshold: { default: 0.45, min: 0, max: 1, step: 0.01, floor: 0 },
+  lowDiversityReproMultiplier: { default: 0.1, min: 0, max: 1, step: 0.05, floor: 0 },
   energyRegenRate: { min: 0, max: 0.2, step: 0.005, floor: 0 },
   energyDiffusionRate: { min: 0, max: 0.5, step: 0.01, floor: 0 },
   leaderboardIntervalMs: { default: 750, min: 100, max: 3000, step: 50, floor: 0 },

@@ -41,6 +41,8 @@ export default class UIManager {
     this.speedMultiplier = UI_SLIDER_CONFIG.speedMultiplier.default;
     this.densityEffectMultiplier = UI_SLIDER_CONFIG.densityEffectMultiplier.default;
     this.mutationMultiplier = UI_SLIDER_CONFIG.mutationMultiplier.default;
+    this.matingDiversityThreshold = UI_SLIDER_CONFIG.matingDiversityThreshold?.default ?? 0.45;
+    this.lowDiversityReproMultiplier = UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ?? 0.1;
     this.energyRegenRate = ENERGY_REGEN_RATE_DEFAULT; // base logistic regen rate (0..0.2)
     this.energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT; // neighbor diffusion rate (0..0.5)
     this.leaderboardIntervalMs = UI_SLIDER_CONFIG.leaderboardIntervalMs.default;
@@ -502,6 +504,16 @@ export default class UIManager {
         getValue: () => this.enemySimilarity,
         setValue: (v) => this.#updateSetting('enemySimilarity', v),
       }),
+      withSliderConfig('matingDiversityThreshold', {
+        label: 'Min Diversity ≥',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        title: 'Required genetic diversity before mating avoids penalties (0..1)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.matingDiversityThreshold,
+        setValue: (v) => this.#updateSetting('matingDiversityThreshold', v),
+      }),
     ];
 
     const eventConfigs = [
@@ -572,6 +584,18 @@ export default class UIManager {
         format: (v) => v.toFixed(2),
         getValue: () => this.mutationMultiplier,
         setValue: (v) => this.#updateSetting('mutationMultiplier', v),
+        position: 'beforeOverlays',
+      }),
+      withSliderConfig('lowDiversityReproMultiplier', {
+        label: 'Low Diversity Penalty ×',
+        min: 0,
+        max: 1,
+        step: 0.05,
+        title:
+          'Multiplier applied to reproduction chance when diversity is below the threshold (0 disables births)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.lowDiversityReproMultiplier,
+        setValue: (v) => this.#updateSetting('lowDiversityReproMultiplier', v),
         position: 'beforeOverlays',
       }),
       withSliderConfig('speedMultiplier', {
