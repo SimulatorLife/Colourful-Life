@@ -1,41 +1,39 @@
-/**
- * Iterates each neighbor within the provided radius while clamping coordinates to the grid.
- * The callback may return `false` to short-circuit remaining traversal.
- *
- * @param {number} rows
- * @param {number} cols
- * @param {number} row
- * @param {number} col
- * @param {number} radius
- * @param {(row: number, col: number) => (void | boolean)} callback
- * @param {{ includeOrigin?: boolean, reuse?: { row: number, col: number } }} [options]
- */
-export function forEachNeighbor(rows, cols, row, col, radius, callback, options = {}) {
-  if (!Number.isFinite(radius)) return;
+export function forEachNeighbor(
+  row,
+  col,
+  radius,
+  rows,
+  cols,
+  callback,
+  { includeOrigin = false } = {}
+) {
+  if (typeof callback !== 'function') return;
+  if (!Number.isFinite(rows) || !Number.isFinite(cols)) return;
 
-  const normalizedRadius = Math.floor(radius);
+  const normalizedRadius = Math.max(0, Math.floor(radius ?? 0));
 
-  if (normalizedRadius < 0) return;
+  if (normalizedRadius === 0) {
+    if (includeOrigin && row >= 0 && row < rows && col >= 0 && col < cols) {
+      callback(row, col);
+    }
 
-  const { includeOrigin = false, reuse } = options;
-  const minRow = Math.max(0, row - normalizedRadius);
-  const maxRow = Math.min(rows - 1, row + normalizedRadius);
-  const minCol = Math.max(0, col - normalizedRadius);
-  const maxCol = Math.min(cols - 1, col + normalizedRadius);
+    return true;
+  }
 
-  const shouldReuse = reuse && typeof reuse === 'object';
+  const minRow = Math.max(0, Math.floor(row - normalizedRadius));
+  const maxRow = Math.min(rows - 1, Math.floor(row + normalizedRadius));
+  const minCol = Math.max(0, Math.floor(col - normalizedRadius));
+  const maxCol = Math.min(cols - 1, Math.floor(col + normalizedRadius));
 
-  for (let r = minRow; r <= maxRow; r++) {
-    for (let c = minCol; c <= maxCol; c++) {
-      if (!includeOrigin && r === row && c === col) continue;
+  for (let rr = minRow; rr <= maxRow; rr += 1) {
+    for (let cc = minCol; cc <= maxCol; cc += 1) {
+      if (!includeOrigin && rr === row && cc === col) continue;
 
-      if (shouldReuse) {
-        reuse.row = r;
-        reuse.col = c;
-        if (callback(reuse) === false) return;
-      } else if (callback(r, c) === false) {
-        return;
+      if (callback(rr, cc) === false) {
+        return false;
       }
     }
   }
+
+  return true;
 }

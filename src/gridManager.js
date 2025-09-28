@@ -832,9 +832,9 @@ export default class GridManager {
     const totals = this.densityTotals;
     const liveGrid = this.densityLiveGrid;
 
-    forEachNeighbor(this.rows, this.cols, row, col, radius, (rr, cc) => {
+    forEachNeighbor(row, col, radius, this.rows, this.cols, (rr, cc) => {
       const countsRow = this.densityCounts[rr];
-      const nextCount = (countsRow[cc] || 0) + delta;
+      const nextCount = (countsRow[cc] ?? 0) + delta;
 
       countsRow[cc] = nextCount;
 
@@ -853,7 +853,7 @@ export default class GridManager {
   #computeNeighborTotal(row, col, radius = this.densityRadius) {
     let total = 0;
 
-    forEachNeighbor(this.rows, this.cols, row, col, radius, () => {
+    forEachNeighbor(row, col, radius, this.rows, this.cols, () => {
       total += 1;
     });
 
@@ -987,9 +987,9 @@ export default class GridManager {
     let count = 0;
     let total = 0;
 
-    forEachNeighbor(this.rows, this.cols, row, col, radius, (rr, cc) => {
-      total++;
-      if (this.grid[rr][cc]) count++;
+    forEachNeighbor(row, col, radius, this.rows, this.cols, (rr, cc) => {
+      total += 1;
+      if (this.grid[rr][cc]) count += 1;
     });
 
     return { count, total };
@@ -1032,7 +1032,13 @@ export default class GridManager {
       return Math.max(0, Math.min(1, count / total));
     }
 
-    const { count, total } = this.#countNeighbors(row, col, radius);
+    let count = 0;
+    let total = 0;
+
+    forEachNeighbor(row, col, radius, this.rows, this.cols, (rr, cc) => {
+      total += 1;
+      if (this.grid[rr][cc]) count += 1;
+    });
 
     return total > 0 ? count / total : 0;
   }
@@ -1295,8 +1301,8 @@ export default class GridManager {
         }
       };
       const addNeighbors = (baseRow, baseCol) => {
-        forEachNeighbor(this.rows, this.cols, baseRow, baseCol, 1, (r, c) => {
-          addCandidate(r, c);
+        forEachNeighbor(baseRow, baseCol, 1, this.rows, this.cols, (rr, cc) => {
+          addCandidate(rr, cc);
         });
       };
 

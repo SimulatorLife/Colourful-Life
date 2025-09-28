@@ -1,114 +1,85 @@
-const { test } = require('uvu');
-const assert = require('uvu/assert');
+import { suite } from 'uvu';
+import * as assert from 'uvu/assert';
+import { forEachNeighbor } from '../src/gridNeighbors.js';
 
-const collectNeighbors = async (rows, cols, row, col, radius, includeOrigin = false) => {
-  const { forEachNeighbor } = await import('../src/gridNeighbors.js');
-  const coords = [];
+const test = suite('forEachNeighbor');
+
+test('iterates only in-bounds neighbors', () => {
+  const collected = [];
+
+  forEachNeighbor(0, 0, 1, 3, 3, (row, col) => {
+    collected.push([row, col]);
+  });
+
+  assert.equal(collected, [
+    [0, 1],
+    [1, 0],
+    [1, 1],
+  ]);
+});
+
+test('optionally includes the origin tile', () => {
+  const collected = [];
+
+  forEachNeighbor(1, 1, 1, 3, 3, (row, col) => {
+    collected.push(`${row},${col}`);
+  });
+
+  assert.ok(!collected.includes('1,1'));
+
+  collected.length = 0;
+
+  forEachNeighbor(1, 1, 0, 3, 3, (row, col) => {
+    collected.push(`${row},${col}`);
+  });
+
+  assert.equal(collected, []);
 
   forEachNeighbor(
-    rows,
-    cols,
-    row,
-    col,
-    radius,
-    (r, c) => {
-      coords.push([r, c]);
+    1,
+    1,
+    0,
+    3,
+    3,
+    (row, col) => {
+      collected.push(`${row},${col}`);
     },
-    { includeOrigin }
+    { includeOrigin: true }
   );
 
-  return coords;
-};
-
-test('collects all in-bounds neighbors in radius 1', async () => {
-  const neighbors = await collectNeighbors(3, 3, 1, 1, 1);
-
-  assert.equal(neighbors, [
-    [0, 0],
-    [0, 1],
-    [0, 2],
-    [1, 0],
-    [1, 2],
-    [2, 0],
-    [2, 1],
-    [2, 2],
-  ]);
+  assert.equal(collected, ['1,1']);
 });
 
-test('trims neighbors that fall outside bounds', async () => {
-  const neighbors = await collectNeighbors(4, 4, 0, 0, 2);
-
-  assert.equal(neighbors, [
-    [0, 1],
-    [0, 2],
-    [1, 0],
-    [1, 1],
-    [1, 2],
-    [2, 0],
-    [2, 1],
-    [2, 2],
-  ]);
-});
-
-test('optionally includes the origin when requested', async () => {
-  const neighbors = await collectNeighbors(2, 2, 0, 1, 1, true);
-
-  assert.equal(neighbors, [
-    [0, 0],
-    [0, 1],
-    [1, 0],
-    [1, 1],
-  ]);
-});
-
-const callCounter = () => {
-  let calls = 0;
-
-  return {
-    increment() {
-      calls += 1;
-    },
-    get value() {
-      return calls;
-    },
-  };
-};
-
-test('does not invoke callback when radius is negative', async () => {
-  const { forEachNeighbor } = await import('../src/gridNeighbors.js');
-  const counter = callCounter();
-
-  forEachNeighbor(2, 2, 0, 0, -1, counter.increment.bind(counter));
-
-  assert.is(counter.value, 0);
-});
-
-test('supports callback short-circuiting and coordinate reuse', async () => {
-  const { forEachNeighbor } = await import('../src/gridNeighbors.js');
-  const reuse = { row: -1, col: -1 };
+test('supports early exit from the callback', () => {
   const seen = [];
 
-  forEachNeighbor(
-    3,
-    3,
-    1,
-    1,
-    1,
-    (coord) => {
-      seen.push([coord.row, coord.col]);
+  const result = forEachNeighbor(1, 1, 2, 4, 4, (row, col) => {
+    seen.push(row * 10 + col);
+    if (seen.length === 2) return false;
 
-      return seen.length < 3;
+    return true;
+  });
+
+  assert.is(result, false);
+  assert.is(seen.length, 2);
+});
+
+test('ignores negative or fractional radius by flooring to zero', () => {
+  const collected = [];
+
+  forEachNeighbor(
+    1,
+    1,
+    -2.7,
+    3,
+    3,
+    (row, col) => {
+      collected.push([row, col]);
     },
-    { reuse }
+    { includeOrigin: true }
   );
 
-  assert.equal(seen, [
-    [0, 0],
-    [0, 1],
-    [0, 2],
-  ]);
-  assert.is(reuse.row, 0);
-  assert.is(reuse.col, 2);
+  assert.equal(collected, [[1, 1]]);
 });
 
 test.run();
