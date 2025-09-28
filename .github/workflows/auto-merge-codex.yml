@@ -1,0 +1,61 @@
+name: Auto-merge Codex PRs
+
+on:
+  # Re-check when the PR changes or new commits arrive
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [master]
+
+  # Optional: when CI finishes on the PR, try again
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: write         # needed to merge and delete branches
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    # For pull_request events, github.head_ref is the source branch name
+    if: ${{ github.event_name != 'check_suite' || startsWith(github.event.pull_request.head.ref, 'codex') }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get PR (for check_suite trigger)
+        if: ${{ github.event_name == 'check_suite' }}
+        uses: actions/github-script@v7
+        id: find_pr
+        with:
+          script: |
+            // When triggered by check_suite, we need to discover the PRs for this HEAD SHA
+            const sha = context.payload.check_suite.head_sha;
+            const { data: prs } = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} type:pr is:open head:${sha}`
+            });
+            if (prs.items.length === 0) return { pr_number: null };
+            return { pr_number: prs.items[0].number };
+
+      - name: Load PR details
+        uses: actions/github-script@v7
+        id: pr
+        with:
+          script: |
+            const prNumber = context.eventName === 'pull_request'
+              ? context.payload.pull_request.number
+              : (core.getInput('pr_number') || '${{ steps.find_pr.outputs.pr_number }}');
+
+            if (!prNumber) {
+              core.setOutput('skip', 'true');
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: Number(prNumber),
+            });
+
+            core.setOutput('skip', 'false');
+            core.setOutput('number', pr.number.toString());
+            core.setOutput('head_ref', pr.head.ref);
+            core.setO
