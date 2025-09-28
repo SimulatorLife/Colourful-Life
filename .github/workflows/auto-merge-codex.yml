@@ -1,18 +1,16 @@
 name: Auto-merge Codex PRs
 
 on:
-  # Re-check when the PR changes or new commits arrive
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
     branches: [master]
-
-  # Optional: when CI finishes on the PR, try again
   check_suite:
     types: [completed]
 
 permissions:
-  contents: write         # needed to merge and delete branches
+  contents: write
   pull-requests: write
+  issues: write
 
 jobs:
   auto-merge:
@@ -27,10 +25,9 @@ jobs:
         id: find_pr
         with:
           script: |
-            // When triggered by check_suite, we need to discover the PRs for this HEAD SHA
             const sha = context.payload.check_suite.head_sha;
             const { data: prs } = await github.rest.search.issuesAndPullRequests({
-              q: `repo:${context.repo.owner}/${context.repo.repo} type:pr is:open head:${sha}`
+              q: `repo:${context.repo.owner}/${context.repo.repo} type:pr is:open ${sha}`
             });
             if (prs.items.length === 0) return { pr_number: null };
             return { pr_number: prs.items[0].number };
@@ -73,13 +70,13 @@ jobs:
           script: |
             if ('${{ steps.pr.outputs.draft }}' === 'true') {
               core.setOutput('ready', 'false');
+              core.setOutput('reason', 'draft');
               core.notice('PR is a draft; not merging.');
               return;
             }
 
             const prNumber = Number('${{ steps.pr.outputs.number }}');
 
-            // mergeable can be null immediately after events; poll briefly
             let last = null;
             for (let i = 0; i < 10; i++) {
               const { data } = await github.rest.pulls.get({
@@ -92,10 +89,17 @@ jobs:
               await new Promise(r => setTimeout(r, 2000));
             }
 
-            // mergeable == true and mergeable_state 'clean' → no conflicts & checks satisfied
-            const ok = !!last?.mergeable && last?.mergeable_state === 'clean' && !last?.draft;
+            const mergeable = !!last?.mergeable;
+            const state = last?.mergeable_state || 'unknown';
+            const draft = !!last?.draft;
 
-            core.setOutput('ready', ok ? 'true' : 'false');
+            // clean → mergeable without conflicts and required checks ok
+            const ready = mergeable && state === 'clean' && !draft;
+
+            core.notice(`mergeable=${mergeable}, mergeable_state=${state}, draft=${draft}`);
+            core.setOutput('ready', ready ? 'true' : 'false');
+            core.setOutput('mergeable', mergeable ? 'true' : 'false');
+            core.setOutput('state', state);
             core.setOutput('head_ref', last.head.ref);
 
       - name: Merge PR
@@ -113,6 +117,7 @@ jobs:
                 merge_method: 'squash',   // or 'merge' / 'rebase'
               });
               core.setOutput('merged', 'true');
+              core.notice('PR merged successfully.');
             } catch (e) {
               core.setOutput('merged', 'false');
               core.warning(`Merge attempt failed: ${e.message}`);
@@ -130,6 +135,68 @@ jobs:
                 repo: context.repo.repo,
                 ref,
               });
+              core.notice(`Deleted branch ${ref}.`);
             } catch (e) {
               core.warning(`Branch deletion failed: ${e.message}`);
             }
+
+      # Diagnostics when not merged + comment for the agent
+      - name: Diagnostics and codex comment (when merge blocked)
+        if: ${{ steps.pr.outputs.skip != 'true' && ( steps.readiness.outputs.ready != 'true' ) }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = Number('${{ steps.pr.outputs.number }}');
+
+            // Re-fetch fresh snapshot for better diagnostics
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner, repo: context.repo.repo, pull_number: prNumber
+            });
+
+            // Minimal diagnostics
+            const diag = [
+              `mergeable: ${pr.mergeable}`,
+              `mergeable_state: ${pr.mergeable_state}`,
+              `draft: ${pr.draft}`,
+              `rebaseable: ${pr.rebaseable}`,
+              `commits: ${pr.commits}`,
+              `changed_files: ${pr.changed_files}`
+            ].join('\n');
+
+            core.notice(`Diagnostics:\n${diag}`);
+
+            const condensed = [
+              "Resolve conflicts while preserving master’s architecture, tests, and style.",
+              "Keep the PR’s useful intent; avoid duplication and deprecated code.",
+              "Prefer master for configs/CI; re-apply only necessary changes.",
+              "For deps/locks: take master, then add needed deps and regenerate cleanly.",
+              "Refactor minimally; keep changes small and DRY; no loss of coverage.",
+              "Run formatters/linters/tests; fix failures at the source.",
+              "Commit in small, logical slices; update tests when behavior changes.",
+              "Goal: a clean, behavior-correct merge with green tests and no regressions."
+            ].join(' ');
+
+            const body = [
+              "@codex fix the merge conflicts and attempt an auto-resolution.",
+              "",
+              "**Context**",
+              "",
+              "- This PR could not be auto-merged because it isn’t in a `clean` state.",
+              "- Diagnostics:",
+              "```",
+              diag,
+              "```",
+              "",
+              "**Instructions (condensed)**",
+              "",
+              "```",
+              condensed,
+              "```"
+            ].join("\n");
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body
+            });
