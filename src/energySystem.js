@@ -71,6 +71,8 @@ export function accumulateEventModifiers({
  * @param {number} options.currentEnergy - Current tile energy value.
  * @param {number} [options.density=0] - Local density used for regeneration penalties.
  * @param {Array<number>} [options.neighborEnergies=[]] - Energies of neighbouring tiles.
+ * @param {number} [options.neighborSum] - Sum of neighbouring tile energies when precomputed.
+ * @param {number} [options.neighborCount] - Count of neighbours included in neighborSum.
  * @param {Array} [options.events=[]] - List of active events.
  * @param {number} options.row - Tile row coordinate.
  * @param {number} options.col - Tile column coordinate.
@@ -89,6 +91,8 @@ export function computeTileEnergyUpdate({
   currentEnergy,
   density = 0,
   neighborEnergies = [],
+  neighborSum,
+  neighborCount,
   events = [],
   row,
   col,
@@ -129,8 +133,14 @@ export function computeTileEnergyUpdate({
   const drain = modifiers.drainAdd;
 
   let diffusion = 0;
+  const hasScalarNeighbors =
+    Number.isFinite(neighborSum) && Number.isFinite(neighborCount) && neighborCount > 0;
 
-  if (Array.isArray(neighborEnergies) && neighborEnergies.length > 0) {
+  if (hasScalarNeighbors) {
+    const neighAvg = neighborSum / neighborCount;
+
+    diffusion = (diffusionRate || 0) * (neighAvg - (currentEnergy || 0));
+  } else if (Array.isArray(neighborEnergies) && neighborEnergies.length > 0) {
     const neighSum = neighborEnergies.reduce((sum, val) => sum + (val || 0), 0);
     const neighAvg = neighSum / neighborEnergies.length;
 

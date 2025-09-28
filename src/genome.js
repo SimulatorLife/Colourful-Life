@@ -143,10 +143,6 @@ export class DNA {
     return hash >>> 0;
   }
 
-  prng() {
-    return createRNG(this.seed());
-  }
-
   // Deterministic per-trait RNG stream derived from DNA seed
   prngFor(tag) {
     let h = (this.seed() ^ 2166136261) >>> 0; // FNV-1a like mix

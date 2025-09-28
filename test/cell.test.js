@@ -296,6 +296,47 @@ test('interaction intents resolve fights via interaction system', () => {
       return true;
     },
   };
+  const adapter = {
+    getCell: (row, col) => manager.grid[row]?.[col] ?? null,
+    setCell: (row, col, cell) => {
+      manager.grid[row][col] = cell;
+
+      if (cell) {
+        cell.row = row;
+        cell.col = col;
+      }
+
+      return cell;
+    },
+    removeCell: (row, col) => manager.removeCell(row, col),
+    relocateCell: (fromRow, fromCol, toRow, toCol) =>
+      manager.relocateCell(fromRow, fromCol, toRow, toCol),
+    consumeTileEnergy: ({ cell, row, col }) => manager.consumeEnergy(cell, row, col),
+    maxTileEnergy: () => manager.maxTileEnergy,
+    transferEnergy: ({ from, to, amount }) => {
+      const donor = from ?? null;
+      const recipient = to ?? null;
+      const requested = Math.max(0, amount ?? 0);
+
+      if (!donor || requested <= 0) return 0;
+
+      const available = Math.min(requested, donor.energy ?? 0);
+      const maxEnergy = manager.maxTileEnergy;
+      let accepted = available;
+
+      if (recipient) {
+        const current = recipient.energy ?? 0;
+        const capacity = Math.max(0, maxEnergy - current);
+
+        accepted = Math.max(0, Math.min(available, capacity));
+        recipient.energy = current + accepted;
+      }
+
+      donor.energy = Math.max(0, (donor.energy ?? 0) - accepted);
+
+      return accepted;
+    },
+  };
   let fights = 0;
   let deaths = 0;
   const stats = {
@@ -303,7 +344,7 @@ test('interaction intents resolve fights via interaction system', () => {
     onDeath: () => deaths++,
   };
 
-  const interactionSystem = new InteractionSystem({ gridManager: manager });
+  const interactionSystem = new InteractionSystem({ adapter });
   const intent = attacker.createFightIntent({ targetRow: 0, targetCol: 1 });
 
   interactionSystem.resolveIntent(intent, { stats });

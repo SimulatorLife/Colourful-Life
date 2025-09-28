@@ -63,6 +63,15 @@ npm run format:check  # Check formatting without writing
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., Parcel dev server or `npm run serve`).
 
+## Project Structure
+
+- `src/` — Core simulation logic, including the grid engine, configuration defaults, and headless utilities such as `createSimulation`.
+- `ui/` — Modular UI components and styles that wire controls, overlays, and inspector panels to the simulation state.
+- `demo/` — Terrain preset walkthroughs such as [`demo/obstacle-presets.md`](demo/obstacle-presets.md) for stress-testing behaviours.
+- `test/` — UVU-based unit and regression suites covering grid utilities, behaviour modules, and factory wiring.
+- `fallingSand/` — Legacy sandbox experiments that inspired the current ecosystem rules and rendering.
+- `styles.css`, `index.html` — Entry-point assets for Parcel, defining the base layout and bootstrapping the browser experience.
+
 ### Formatting
 
 This repo uses [Prettier](https://prettier.io/) for consistent formatting. Run `npm run format` before committing, or add it to your editor's "format on save" using the Prettier extension.
@@ -98,3 +107,17 @@ Energy-related defaults for the simulation are centralized in `src/config.js`. T
 - The **Obstacles** panel in the sidebar lets you stamp obstacle layouts and adjust the **Wall Linger Penalty** slider that drains energy from organisms repeatedly pushing against barriers.
 - Toggle **Show Obstacles** in the overlay section to blend the mask into the main canvas or pair it with the density/energy heatmaps.
 - Full walkthroughs—including console snippets for custom presets—live in [`demo/obstacle-presets.md`](demo/obstacle-presets.md).
+
+## Testing & Quality
+
+- `npm test` — Runs the [UVU](https://github.com/lukeed/uvu) suites in `test/` via the esbuild loader.
+- `npm run lint` / `npm run lint:fix` — Lints JavaScript and HTML sources with ESLint (optionally auto-fixing).
+- `npm run format:check` — Verifies Prettier formatting without writing changes; pair with `npm run format` before commits.
+- Husky + lint-staged — Automatically format and lint staged files on commit to keep diffs clean.
+
+## Onboarding Tips
+
+- **Recommended Node version**: Node.js 18 LTS (or newer) matches the tooling expectations in `package.json` and Parcel 2 support.
+- **Headless simulation**: Use `headless: true` with `createSimulation` (see example above) to run deterministic smoke tests or scripted experiments without the DOM.
+- **Obstacle exploration**: Start with [`demo/obstacle-presets.md`](demo/obstacle-presets.md) to learn how obstacle layouts and wall penalties shape emergent behaviour.
+- **Dev server shortcuts**: `npm run start` launches Parcel with hot module reloading; `npm run serve` spins up the lightweight Node server for static demos.

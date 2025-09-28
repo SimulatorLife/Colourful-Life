@@ -7,6 +7,7 @@ import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
 import { computeTileEnergyUpdate } from './energySystem.js';
 import InteractionSystem from './interactionSystem.js';
+import GridInteractionAdapter from './grid/gridAdapter.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -58,6 +59,49 @@ export const OBSTACLE_PRESETS = [
     description: 'Four isolated pockets carved out of a blocked landscape.',
   },
 ];
+const BRAIN_SNAPSHOT_LIMIT = 5;
+
+function createTopFitnessBuffer(limit) {
+  const maxSize = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
+  const buffer = [];
+
+  return {
+    add(entry) {
+      if (!entry || maxSize === 0) return;
+
+      const fitness = entry?.fitness;
+
+      if (!Number.isFinite(fitness)) return;
+
+      let low = 0;
+      let high = buffer.length;
+
+      while (low < high) {
+        const mid = (low + high) >> 1;
+        const midFitness = buffer[mid]?.fitness ?? -Infinity;
+
+        if (fitness > midFitness) {
+          high = mid;
+        } else {
+          low = mid + 1;
+        }
+      }
+
+      if (low >= maxSize && buffer.length >= maxSize) {
+        return;
+      }
+
+      buffer.splice(low, 0, entry);
+
+      if (buffer.length > maxSize) {
+        buffer.length = maxSize;
+      }
+    },
+    getItems() {
+      return buffer.slice();
+    },
+  };
+}
 
 export default class GridManager {
   // Base per-tick regen before modifiers; logistic to max, density-aware
@@ -251,7 +295,8 @@ export default class GridManager {
     this.tickCount = 0;
     this.rng = typeof rng === 'function' ? rng : Math.random;
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
-    this.interactionSystem = new InteractionSystem({ gridManager: this });
+    this.interactionAdapter = new GridInteractionAdapter({ gridManager: this });
+    this.interactionSystem = new InteractionSystem({ adapter: this.interactionAdapter });
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
       GridManager.tryMove(gridArr, sr, sc, dr, dc, rows, cols, this.#movementOptions());
     this.boundMoveToTarget = (gridArr, row, col, targetRow, targetCol, rows, cols) =>
@@ -813,19 +858,31 @@ export default class GridManager {
           ? densityGrid[r][c]
           : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
 
-        const neighborEnergies = [];
+        let neighborSum = 0;
+        let neighborCount = 0;
 
-        if (r > 0 && !this.isObstacle(r - 1, c)) neighborEnergies.push(this.energyGrid[r - 1][c]);
-        if (r < this.rows - 1 && !this.isObstacle(r + 1, c))
-          neighborEnergies.push(this.energyGrid[r + 1][c]);
-        if (c > 0 && !this.isObstacle(r, c - 1)) neighborEnergies.push(this.energyGrid[r][c - 1]);
-        if (c < this.cols - 1 && !this.isObstacle(r, c + 1))
-          neighborEnergies.push(this.energyGrid[r][c + 1]);
+        if (r > 0 && !this.isObstacle(r - 1, c)) {
+          neighborSum += this.energyGrid[r - 1][c];
+          neighborCount++;
+        }
+        if (r < this.rows - 1 && !this.isObstacle(r + 1, c)) {
+          neighborSum += this.energyGrid[r + 1][c];
+          neighborCount++;
+        }
+        if (c > 0 && !this.isObstacle(r, c - 1)) {
+          neighborSum += this.energyGrid[r][c - 1];
+          neighborCount++;
+        }
+        if (c < this.cols - 1 && !this.isObstacle(r, c + 1)) {
+          neighborSum += this.energyGrid[r][c + 1];
+          neighborCount++;
+        }
 
         const { nextEnergy } = computeTileEnergyUpdate({
           currentEnergy: this.energyGrid[r][c],
           density,
-          neighborEnergies,
+          neighborSum,
+          neighborCount,
           events: evs,
           row: r,
           col: c,
@@ -1719,6 +1776,7 @@ export default class GridManager {
       cells: [],
       entries: [],
     };
+    const topBrainEntries = createTopFitnessBuffer(BRAIN_SNAPSHOT_LIMIT);
 
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
@@ -1736,14 +1794,19 @@ export default class GridManager {
         snapshot.totalEnergy += cell.energy;
         snapshot.totalAge += cell.age;
         snapshot.cells.push(cell);
-        snapshot.entries.push({ row, col, cell, fitness, smoothedFitness: smoothed });
+        const entry = { row, col, cell, fitness, smoothedFitness: smoothed };
+
+        snapshot.entries.push(entry);
+        topBrainEntries.add(entry);
         if (fitness > snapshot.maxFitness) snapshot.maxFitness = fitness;
       }
     }
 
-    const ranked = [...snapshot.entries].sort((a, b) => (b?.fitness ?? 0) - (a?.fitness ?? 0));
+    const ranked = topBrainEntries.getItems();
 
-    snapshot.brainSnapshots = BrainDebugger.captureFromEntries(ranked, { limit: 5 });
+    snapshot.brainSnapshots = BrainDebugger.captureFromEntries(ranked, {
+      limit: BRAIN_SNAPSHOT_LIMIT,
+    });
 
     return snapshot;
   }
