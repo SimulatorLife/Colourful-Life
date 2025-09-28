@@ -206,11 +206,17 @@ export default class GridManager {
     return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
   }
 
-  constructor(
-    rows,
-    cols,
-    { eventManager, ctx = null, cellSize = 8, stats, maxTileEnergy, selectionManager, rng } = {}
-  ) {
+  constructor(rows, cols, options = {}) {
+    const {
+      eventManager,
+      ctx = null,
+      cellSize = 8,
+      stats,
+      maxTileEnergy,
+      selectionManager,
+    } = options;
+    const rngInput = options?.rng ?? options?.random;
+
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
@@ -227,7 +233,8 @@ export default class GridManager {
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
     this.selectionManager = selectionManager || null;
-    this.rng = resolveRngController(rng);
+    this.rng = resolveRngController(rngInput);
+    this.random = this.rng.next.bind(this.rng);
     this.densityRadius = GridManager.DENSITY_RADIUS;
     this.densityCounts = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
@@ -605,7 +612,7 @@ export default class GridManager {
       for (let col = 0; col < this.cols; col++) {
         if (this.isObstacle(row, col)) continue;
         if (this.rng.percent(0.05)) {
-          const dna = DNA.random(() => this.rng.next());
+          const dna = DNA.random(this.rng);
 
           this.spawnCell(row, col, { dna });
         }
@@ -627,7 +634,7 @@ export default class GridManager {
     for (let i = 0; i < toSeed; i++) {
       const idx = this.rng.int(0, empty.length);
       const { r, c } = empty.splice(idx, 1)[0];
-      const dna = DNA.random(() => this.rng.next());
+      const dna = DNA.random(this.rng);
 
       this.spawnCell(r, c, { dna });
     }
@@ -944,7 +951,7 @@ export default class GridManager {
 
   spawnCell(row, col, { dna, spawnEnergy, recordBirth = false } = {}) {
     if (this.isObstacle(row, col)) return null;
-    const resolvedDna = dna || DNA.random(() => this.rng.next());
+    const resolvedDna = dna || DNA.random(this.rng);
     const energy = Math.min(this.maxTileEnergy, spawnEnergy ?? this.energyGrid[row][col]);
     const cell = new Cell(row, col, resolvedDna, energy, { rng: this.rng });
 
@@ -1670,7 +1677,7 @@ export default class GridManager {
       const { rr, cc } = coords[i];
 
       if (!this.grid[rr][cc] && !this.isObstacle(rr, cc)) {
-        const dna = DNA.random(() => this.rng.next());
+        const dna = DNA.random(this.rng);
 
         this.spawnCell(rr, cc, { dna, recordBirth: true });
         placed++;

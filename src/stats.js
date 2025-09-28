@@ -51,7 +51,7 @@ export default class Stats {
       typeof historySize === 'number' && !Number.isNaN(historySize) ? historySize : 10000;
 
     this.historySize = resolvedHistorySize;
-    this.rng = resolveRngController(options?.rng);
+    this.rng = resolveRngController(options?.rng ?? options?.random);
     this.resetTick();
     this.history = {
       population: [],

@@ -50,7 +50,7 @@ export default class Cell {
 
     this.row = row;
     this.col = col;
-    this.dna = dna || DNA.random(() => rng.next());
+    this.dna = dna || DNA.random(rng);
     this.brain = Brain.fromDNA(this.dna);
     this.genes = this.dna.weights();
     this.color = this.dna.toColor();

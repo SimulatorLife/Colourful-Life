@@ -83,10 +83,16 @@ export class DNA {
   }
 
   static random(rng = Math.random, geneCount = DEFAULT_TOTAL_GENE_COUNT) {
+    const generator =
+      typeof rng === 'function'
+        ? rng
+        : rng && typeof rng.next === 'function'
+          ? () => rng.next()
+          : Math.random;
     const genes = new Uint8Array(geneCount);
 
     for (let i = 0; i < geneCount; i++) {
-      genes[i] = Math.floor(rng() * 256) & 0xff;
+      genes[i] = Math.floor(generator() * 256) & 0xff;
     }
 
     return new DNA({ genes, geneCount });
