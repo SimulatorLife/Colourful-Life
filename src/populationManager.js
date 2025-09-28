@@ -361,16 +361,45 @@ export default class PopulationManager {
     }
   }
 
-  recalculateDensityCounts() {
+  recalculateDensityCounts(radius = this.densityRadius) {
+    const normalizedRadius = Math.max(0, Math.floor(radius));
+    const targetRadius = normalizedRadius > 0 ? normalizedRadius : this.densityRadius;
+
+    if (!this.densityCounts) {
+      this.densityCounts = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+    }
+
+    if (!this.densityLiveGrid) {
+      this.densityLiveGrid = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+    }
+
+    if (!this.densityGrid) {
+      this.densityGrid = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+    }
+
+    if (!this.densityDirtyTiles) {
+      this.densityDirtyTiles = new Set();
+    } else {
+      this.densityDirtyTiles.clear();
+    }
+
+    if (targetRadius !== this.densityRadius) {
+      this.densityRadius = targetRadius;
+      this.densityTotals = this.#buildDensityTotals(this.densityRadius);
+    }
+
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         this.densityCounts[r][c] = 0;
+        this.densityLiveGrid[r][c] = 0;
       }
     }
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        if (this.grid[r][c]) this.#applyDensityDelta(r, c, 1);
+        const cell = this.grid[r][c];
+
+        if (cell) this.#applyDensityDelta(r, c, 1);
       }
     }
 

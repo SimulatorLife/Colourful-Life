@@ -226,8 +226,8 @@ export default class GridManager {
     this.population.rebuildActiveCells();
   }
 
-  recalculateDensityCounts() {
-    this.population.recalculateDensityCounts();
+  recalculateDensityCounts(radius = this.population.densityRadius) {
+    this.population.recalculateDensityCounts(radius);
   }
 
   getDensityAt(row, col) {
