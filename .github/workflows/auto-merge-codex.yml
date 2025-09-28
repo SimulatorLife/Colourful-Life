@@ -73,7 +73,7 @@ jobs:
           script: |
             const prNumber = Number('${{ steps.pr.outputs.number }}');
 
-            // Poll PR.mergeable until computed
+            // 1) Wait for GitHub to compute mergeability
             let pr;
             for (let i = 0; i < 10; i++) {
               const { data } = await github.rest.pulls.get({
@@ -86,48 +86,66 @@ jobs:
               await new Promise(r => setTimeout(r, 2000));
             }
 
-            const headSha = pr.head.sha;
-
-            // IMPORTANT: checks live under the HEAD repo coordinates
+            // 2) Count pending checks on the HEAD commit, EXCLUDING this workflow run
+            const headSha   = pr.head.sha;
             const headOwner = pr.head.repo.owner.login;
             const headRepo  = pr.head.repo.name;
 
-            // Poll checks until none are queued/in_progress; if Checks API is blocked, fall back to Statuses API
-            let pending = 0;
-            async function countPendingChecks() {
+            // Identify this workflow to filter it out
+            const thisWorkflowName = context.workflow;          // e.g. "Auto-merge Codex PRs"
+            const thisRunId        = context.runId;             // numeric run id
+
+            async function listPendingChecksExcludingSelf() {
+              // Prefer Checks API (needs checks:read). Fall back to statuses.
               try {
                 const { data } = await github.rest.checks.listForRef({
                   owner: headOwner, repo: headRepo, ref: headSha,
                 });
-                return (data.check_runs || []).filter(cr =>
-                  cr.status === 'queued' || cr.status === 'in_progress'
-                ).length;
+
+                // Exclude:
+                //  - checks from GitHub Actions where name === this workflow name
+                //  - any check whose external_id equals this run id (some runners set it)
+                const pending = (data.check_runs || [])
+                  .filter(cr =>
+                    (cr.status === 'queued' || cr.status === 'in_progress') &&
+                    !(
+                      cr.app?.slug === 'github-actions' &&
+                      (
+                        cr.name === thisWorkflowName ||
+                        String(cr.external_id || '') === String(thisRunId)
+                      )
+                    )
+                  );
+
+                return { pendingCount: pending.length, sample: pending.slice(0, 5).map(p => `${p.name}:${p.status}`) };
               } catch (e) {
-                // Fallback to commit statuses (less granular but widely accessible)
+                // Fallback to combined statuses (less granular)
                 const { data } = await github.rest.repos.getCombinedStatusForRef({
                   owner: headOwner, repo: headRepo, ref: headSha,
                 });
-                // statuses API doesn’t expose "in_progress"; treat "pending" as not finished
-                return (data.statuses || []).some(s => s.state === 'pending') ? 1 : 0;
+                const pending = (data.statuses || []).filter(s => s.state === 'pending');
+                return { pendingCount: pending.length, sample: pending.slice(0, 5).map(p => `${p.context}:${p.state}`) };
               }
             }
 
+            let pendingInfo = { pendingCount: 0, sample: [] };
             for (let i = 0; i < 10; i++) {
-              pending = await countPendingChecks();
-              if (pending === 0) break;
+              pendingInfo = await listPendingChecksExcludingSelf();
+              if (pendingInfo.pendingCount === 0) break;
               await new Promise(r => setTimeout(r, 3000));
             }
 
-            const state = (pr.mergeable_state || 'unknown').toLowerCase();
+            const state     = (pr.mergeable_state || 'unknown').toLowerCase();
             const mergeable = !!pr.mergeable;
-            const draft = !!pr.draft;
+            const draft     = !!pr.draft;
 
-            // Conflict-free once checks are finished
+            // Accept any conflict-free state; we've already waited for other checks to finish
             const conflictFree   = mergeable && state !== 'dirty' && !draft;
-            const checksFinished = pending === 0;
+            const checksFinished = pendingInfo.pendingCount === 0;
             const ready          = conflictFree && checksFinished;
 
-            core.notice(`mergeable=${mergeable}, state=${state}, draft=${draft}, checks_pending=${pending}, head=${headOwner}/${headRepo}`);
+            core.notice(`mergeable=${mergeable}, state=${state}, draft=${draft}, checks_pending_excl_self=${pendingInfo.pendingCount}`);
+            if (pendingInfo.sample.length) core.notice(`pending_samples: ${pendingInfo.sample.join(', ')}`);
             core.setOutput('ready', ready ? 'true' : 'false');
             core.setOutput('state', state);
             core.setOutput('head_ref', pr.head.ref);
