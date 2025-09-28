@@ -70,13 +70,14 @@ jobs:
           script: |
             if ('${{ steps.pr.outputs.draft }}' === 'true') {
               core.setOutput('ready', 'false');
-              core.setOutput('reason', 'draft');
+              core.setOutput('state', 'draft');
               core.notice('PR is a draft; not merging.');
               return;
             }
 
             const prNumber = Number('${{ steps.pr.outputs.number }}');
 
+            // Poll until mergeability is computed
             let last = null;
             for (let i = 0; i < 10; i++) {
               const { data } = await github.rest.pulls.get({
@@ -90,15 +91,18 @@ jobs:
             }
 
             const mergeable = !!last?.mergeable;
-            const state = last?.mergeable_state || 'unknown';
+            const state = (last?.mergeable_state || 'unknown').toLowerCase();
             const draft = !!last?.draft;
 
-            // clean → mergeable without conflicts and required checks ok
-            const ready = mergeable && state === 'clean' && !draft;
+            // Treat these as OK to attempt merge (no conflicts):
+            // clean = passing checks; unstable = non-required checks failing/pending; has_hooks = GHE pre-receive hooks
+            const allowedStates = ['clean','unstable','has_hooks'];
+            const blockedStates = ['dirty','blocked','behind','draft']; // conflicts, required checks, or out-of-date
+
+            const ready = mergeable && !draft && allowedStates.includes(state);
 
             core.notice(`mergeable=${mergeable}, mergeable_state=${state}, draft=${draft}`);
             core.setOutput('ready', ready ? 'true' : 'false');
-            core.setOutput('mergeable', mergeable ? 'true' : 'false');
             core.setOutput('state', state);
             core.setOutput('head_ref', last.head.ref);
 
