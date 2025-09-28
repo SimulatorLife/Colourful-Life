@@ -1202,8 +1202,10 @@ export default class GridManager {
     const mateRow = bestMate.target.row;
     const mateCol = bestMate.target.col;
 
-    const parentDensity = densityGrid?.[parentRow]?.[parentCol];
-    const fallbackDensity = densityGrid?.[row]?.[col];
+    const densitySource = densityGrid ?? this.densityGrid ?? null;
+    const parentDensity =
+      parentRow != null && parentCol != null ? densitySource?.[parentRow]?.[parentCol] : undefined;
+    const fallbackDensity = densitySource?.[row]?.[col];
     const localDensity = parentDensity ?? fallbackDensity;
     const baseProb = cell.computeReproductionProbability(bestMate.target, {
       localDensity,

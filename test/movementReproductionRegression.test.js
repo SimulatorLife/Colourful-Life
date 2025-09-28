@@ -133,6 +133,93 @@ test("handleReproduction uses the parent's moved tile density", async () => {
   assert.is(decisionDensity, densityGrid[0][1]);
 });
 
+test('handleReproduction falls back to the original tile density when needed', async () => {
+  const { default: GridManager } = await import('../src/gridManager.js');
+  const { default: Cell } = await import('../src/cell.js');
+  const { default: DNA } = await import('../src/genome.js');
+  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new TestGridManager(1, 3, {
+    eventManager: { activeEvents: [] },
+    stats: { onBirth() {}, onDeath() {}, recordMateChoice() {} },
+  });
+
+  const densityGrid = [[0.7]];
+
+  const parent = new Cell(0, 0, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+  const mate = new Cell(0, 2, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+
+  parent.dna.reproductionThresholdFrac = () => 0;
+  mate.dna.reproductionThresholdFrac = () => 0;
+
+  let probabilityDensity = null;
+  let decisionDensity = null;
+
+  parent.computeReproductionProbability = (target, context) => {
+    probabilityDensity = context.localDensity;
+
+    return 0;
+  };
+  parent.decideReproduction = (target, context) => {
+    decisionDensity = context.localDensity;
+
+    return { probability: 0 };
+  };
+
+  const mateEntry = parent.evaluateMateCandidate({
+    row: mate.row,
+    col: mate.col,
+    target: mate,
+  }) || {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 1,
+    diversity: 0,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  parent.selectMateWeighted = () => ({
+    chosen: mateEntry,
+    evaluated: [mateEntry],
+    mode: 'preference',
+  });
+  parent.findBestMate = () => mateEntry;
+
+  gm.setCell(0, 0, parent);
+  gm.setCell(0, 2, mate);
+
+  const stats = {
+    onBirth() {},
+    onDeath() {},
+    recordMateChoice() {},
+  };
+
+  const reproduced = gm.handleReproduction(
+    0,
+    0,
+    parent,
+    { mates: [mateEntry], society: [] },
+    {
+      stats,
+      densityGrid,
+      densityEffectMultiplier: 1,
+      mutationMultiplier: 1,
+    }
+  );
+
+  assert.is(reproduced, false);
+  assert.is(parent.row, 0);
+  assert.is(parent.col, 1);
+  assert.is(probabilityDensity, densityGrid[0][0]);
+  assert.is(decisionDensity, densityGrid[0][0]);
+});
+
 test('handleReproduction returns false when offspring cannot be placed', async () => {
   const { default: GridManager } = await import('../src/gridManager.js');
   const { default: Cell } = await import('../src/cell.js');
