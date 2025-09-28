@@ -122,7 +122,7 @@ jobs:
               "Run the following command to push your changes as the last step, even after running command 'make_pr' just to be absolutely certain the changes are pushed:",
               "",
               "```bash",
-              `git push origin ${process.env.BRANCH_NAME}`,
+              `git push https://github.com/${context.repo.owner}/${context.repo.repo}.git ${process.env.BRANCH_NAME}`,
               "```",
               "",
               "```yaml",
