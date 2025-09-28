@@ -1,0 +1,271 @@
+const { test } = require('uvu');
+const assert = require('uvu/assert');
+
+const statsModulePromise = import('../src/stats.js');
+
+const createCell = (overrides = {}) => ({
+  interactionGenes: { cooperate: 0, fight: 0, ...overrides.interactionGenes },
+  dna: {
+    reproductionProb: () => 0,
+    ...(overrides.dna || {}),
+  },
+  sight: 0,
+  ...overrides,
+});
+
+test('computeTraitPresence clamps trait values and tracks active fractions', async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(4);
+
+  const cells = [
+    createCell({
+      interactionGenes: { cooperate: 1.2, fight: -0.2 },
+      dna: { reproductionProb: () => 1.0 },
+      sight: 6,
+    }),
+    createCell({
+      interactionGenes: { cooperate: 0.5, fight: 0.6 },
+      dna: { reproductionProb: () => 0.4 },
+      sight: 2,
+    }),
+    createCell({
+      interactionGenes: { cooperate: 0.6, fight: 0.7 },
+      dna: { reproductionProb: () => -0.1 },
+      sight: 5,
+    }),
+  ];
+
+  const presence = stats.computeTraitPresence(cells);
+
+  assert.is(presence.population, 3);
+  assert.ok(Math.abs(presence.averages.cooperation - 0.7) < 1e-9);
+  assert.ok(Math.abs(presence.averages.fighting - 0.4333333333) < 1e-9);
+  assert.ok(Math.abs(presence.averages.breeding - 0.5) < 1e-9);
+  assert.ok(Math.abs(presence.averages.sight - 0.8) < 1e-9);
+  assert.ok(Math.abs(presence.fractions.cooperation - 2 / 3) < 1e-9);
+  assert.ok(Math.abs(presence.fractions.fighting - 2 / 3) < 1e-9);
+  assert.ok(Math.abs(presence.fractions.breeding - 1 / 3) < 1e-9);
+  assert.ok(Math.abs(presence.fractions.sight - 2 / 3) < 1e-9);
+  assert.is(presence.counts.cooperation, 2);
+  assert.is(presence.counts.fighting, 2);
+  assert.is(presence.counts.breeding, 1);
+  assert.is(presence.counts.sight, 2);
+});
+
+test('mating records track diversity-aware outcomes and block reasons', async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(3);
+
+  stats.setMatingDiversityThreshold(0.6);
+
+  stats.recordReproductionBlocked({
+    reason: 'Too similar',
+    parentA: { id: 'a' },
+    parentB: { id: 'b' },
+    spawn: { id: 'c' },
+  });
+
+  assert.is(stats.mating.blocks, 1);
+  assert.is(stats.mating.lastBlockReason, 'Too similar');
+  assert.equal(stats.lastBlockedReproduction.reason, 'Too similar');
+  assert.is(stats.lastBlockedReproduction.tick, 0);
+
+  stats.recordMateChoice({
+    similarity: 0.2,
+    diversity: 0.7,
+    appetite: 0.5,
+    bias: 0.1,
+    selectionMode: 'curiosity',
+    poolSize: 3,
+    success: true,
+    penalized: true,
+    penaltyMultiplier: 0.4,
+  });
+
+  assert.is(stats.mating.choices, 1);
+  assert.is(stats.mating.successes, 1);
+  assert.is(stats.mating.diverseChoices, 1);
+  assert.is(stats.mating.diverseSuccesses, 1);
+  assert.is(stats.mating.selectionModes.curiosity, 1);
+  assert.is(stats.mating.selectionModes.preference, 0);
+  assert.ok(Math.abs(stats.mating.appetiteSum - 0.5) < 1e-9);
+  assert.is(stats.mating.poolSizeSum, 3);
+  assert.equal(stats.lastMatingDebug.blockedReason, 'Too similar');
+  assert.is(stats.lastMatingDebug.threshold, 0.6);
+  assert.is(stats.mating.lastBlockReason, null);
+
+  stats.recordMateChoice({
+    similarity: 0.8,
+    diversity: 0.5,
+    selectionMode: 'preference',
+    poolSize: 2,
+    success: false,
+  });
+
+  assert.is(stats.mating.choices, 2);
+  assert.is(stats.mating.successes, 1);
+  assert.is(stats.mating.diverseChoices, 1);
+  assert.is(stats.mating.diverseSuccesses, 1);
+  assert.is(stats.mating.selectionModes.curiosity, 1);
+  assert.is(stats.mating.selectionModes.preference, 1);
+  assert.equal(stats.lastMatingDebug.success, false);
+  assert.is(stats.lastMatingDebug.threshold, 0.6);
+
+  stats.recordReproductionBlocked({ reason: 'Blocked by reproductive zone' });
+
+  assert.is(stats.mating.blocks, 2);
+  assert.is(stats.mating.lastBlockReason, 'Blocked by reproductive zone');
+  assert.equal(stats.lastBlockedReproduction.reason, 'Blocked by reproductive zone');
+});
+
+test('updateFromSnapshot aggregates metrics and caps histories', async () => {
+  const { default: Stats } = await statsModulePromise;
+
+  class DeterministicStats extends Stats {
+    constructor(size) {
+      super(size);
+      this.diversitySequence = [];
+    }
+
+    estimateDiversity() {
+      return this.diversitySequence.length ? this.diversitySequence.shift() : 0;
+    }
+  }
+
+  const stats = new DeterministicStats(3);
+
+  stats.mating = {
+    choices: 2,
+    successes: 1,
+    diverseChoices: 1,
+    diverseSuccesses: 1,
+    appetiteSum: 1.2,
+    selectionModes: { curiosity: 1, preference: 0 },
+    poolSizeSum: 5,
+    blocks: 1,
+    lastBlockReason: 'Still recent',
+  };
+  stats.lastMatingDebug = { mode: 'test' };
+  stats.lastBlockedReproduction = { reason: 'Still recent', tick: 0 };
+  stats.mutationMultiplier = 2;
+  stats.diversitySequence.push(0.42, 0.1, 0.2, 0.3);
+
+  stats.births = 2;
+  stats.deaths = 1;
+  stats.fights = 4;
+  stats.cooperations = 3;
+
+  const cells = [
+    createCell({
+      interactionGenes: { cooperate: 0.5, fight: 0.4 },
+      sight: 2,
+    }),
+    createCell({
+      interactionGenes: { cooperate: 0.8, fight: 0.9 },
+      sight: 3,
+    }),
+  ];
+
+  const result = stats.updateFromSnapshot({
+    population: 2,
+    totalEnergy: 6,
+    totalAge: 9,
+    cells,
+  });
+
+  assert.is(result.population, 2);
+  assert.is(result.births, 2);
+  assert.is(result.deaths, 1);
+  assert.is(result.growth, 1);
+  assert.is(result.fights, 4);
+  assert.is(result.cooperations, 3);
+  assert.is(result.meanEnergy, 3);
+  assert.is(result.meanAge, 4.5);
+  assert.is(result.diversity, 0.42);
+  assert.equal(result.traitPresence, stats.traitPresence);
+  assert.is(result.mateChoices, 2);
+  assert.is(result.successfulMatings, 1);
+  assert.is(result.diverseChoiceRate, 0.5);
+  assert.is(result.diverseMatingRate, 1);
+  assert.is(result.meanDiversityAppetite, 0.6);
+  assert.is(result.curiositySelections, 1);
+  assert.equal(result.lastMating, stats.lastMatingDebug);
+  assert.is(result.mutationMultiplier, 2);
+  assert.is(result.blockedMatings, 1);
+  assert.equal(result.lastBlockedReproduction.reason, 'Still recent');
+
+  assert.is(stats.history.population.length, 1);
+  assert.is(stats.history.diversity.length, 1);
+  assert.is(stats.history.energy.length, 1);
+  assert.is(stats.history.growth.length, 1);
+  assert.is(stats.history.diversePairingRate.length, 1);
+  assert.is(stats.history.meanDiversityAppetite.length, 1);
+  assert.is(stats.history.mutationMultiplier.length, 1);
+
+  assert.is(stats.traitHistory.presence.cooperation.length, 1);
+  assert.is(stats.traitHistory.average.cooperation.length, 1);
+
+  for (let i = 0; i < 3; i += 1) {
+    stats.resetTick();
+    stats.mating = {
+      choices: 0,
+      successes: 0,
+      diverseChoices: 0,
+      diverseSuccesses: 0,
+      appetiteSum: 0,
+      selectionModes: { curiosity: 0, preference: 0 },
+      poolSizeSum: 0,
+    };
+    stats.births = i;
+    stats.deaths = 0;
+    stats.diversitySequence.push(0.1 * (i + 1));
+
+    stats.updateFromSnapshot({
+      population: 1,
+      totalEnergy: i + 1,
+      totalAge: i + 2,
+      cells,
+    });
+  }
+
+  assert.is(stats.history.population.length, 3);
+  assert.is(stats.history.diversity.length, 3);
+  assert.is(stats.history.energy.length, 3);
+  assert.is(stats.history.growth.length, 3);
+  assert.is(stats.history.diversePairingRate.length, 3);
+  assert.is(stats.history.meanDiversityAppetite.length, 3);
+  assert.is(stats.history.mutationMultiplier.length, 3);
+  assert.is(stats.traitHistory.presence.cooperation.length, 3);
+  assert.is(stats.traitHistory.average.cooperation.length, 3);
+});
+
+test('setters sanitize non-finite mutation and diversity threshold inputs', async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(2);
+
+  stats.setMatingDiversityThreshold(1.5);
+  assert.is(stats.matingDiversityThreshold, 1);
+
+  stats.setMatingDiversityThreshold(-0.2);
+  assert.is(stats.matingDiversityThreshold, 0);
+
+  stats.setMatingDiversityThreshold('0.3');
+  assert.is(stats.matingDiversityThreshold, 0.3);
+
+  stats.setMatingDiversityThreshold('not-number');
+  assert.is(stats.matingDiversityThreshold, 0.3);
+
+  stats.setMutationMultiplier(3.2);
+  assert.is(stats.mutationMultiplier, 3.2);
+
+  stats.setMutationMultiplier(-1);
+  assert.is(stats.mutationMultiplier, 0);
+
+  stats.setMutationMultiplier('not-number');
+  assert.is(stats.mutationMultiplier, 1);
+
+  stats.setMutationMultiplier(Infinity);
+  assert.is(stats.mutationMultiplier, 1);
+});
+
+test.run();
