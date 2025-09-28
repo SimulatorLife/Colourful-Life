@@ -59,6 +59,36 @@ function ensureCanvasDimensions(canvas, config) {
   throw new Error('SimulationEngine requires canvas dimensions to be specified.');
 }
 
+/**
+ * Coordinates the main simulation loop, rendering pipeline, and UI-facing events.
+ *
+ * Responsibilities include constructing the grid, stats, and selection managers, wiring
+ * simulation state to rendering, and broadcasting lifecycle events such as `tick`, `metrics`,
+ * `leaderboard`, and `state`. Consumers can use the public properties `grid`, `stats`,
+ * `selectionManager`, `canvas`, and `ctx` to interact with the world, while methods such as
+ * `start`, `stop`, `pause`, and `tick` expose controls over the loop cadence.
+ *
+ * @fires SimulationEngine#tick
+ * @fires SimulationEngine#metrics
+ * @fires SimulationEngine#leaderboard
+ * @fires SimulationEngine#state
+ *
+ * @param {Object} [options]
+ * @param {HTMLCanvasElement} [options.canvas] - Canvas to render into; resolved via
+ *   `document.getElementById('gameCanvas')` when omitted.
+ * @param {Object} [options.config] - Initial configuration (cell size, UI slider defaults, etc.).
+ * @param {() => number} [options.rng=Math.random] - PRNG used by the grid and events.
+ * @param {(cb: FrameRequestCallback) => number} [options.requestAnimationFrame] - Injected
+ *   frame scheduler. Defaults to `window.requestAnimationFrame` or a setTimeout shim.
+ * @param {(handle: number) => void} [options.cancelAnimationFrame] - Injected cancellation hook,
+ *   mirroring the rAF source.
+ * @param {() => number} [options.performanceNow] - High-resolution timer hook, defaults to
+ *   `performance.now` with a Date fallback.
+ * @param {Function} [options.drawOverlays] - Optional overlay renderer invoked each frame.
+ * @param {Window} [options.window] - Optional window reference for SSR/test injection.
+ * @param {Document} [options.document] - Optional document reference for SSR/test injection.
+ * @param {boolean} [options.autoStart=true] - When true the engine immediately starts ticking.
+ */
 export default class SimulationEngine {
   constructor({
     canvas,
@@ -192,6 +222,7 @@ export default class SimulationEngine {
       lowDiversityMultiplier: this.state.lowDiversityReproMultiplier,
     });
 
+    // Flag signalling that leaderboard/metrics should be recalculated once the throttle allows it.
     this.pendingSlowUiUpdate = false;
     this.lastMetrics = null;
     this.lastSnapshot = this.grid.getLastSnapshot();
@@ -302,6 +333,31 @@ export default class SimulationEngine {
     this.#scheduleNextFrame();
   }
 
+  /**
+   * Internal scheduler entry-point used by both the animation frame loop and manual `tick`
+   * invocations. It enforces the configured updates-per-second cadence, skips state mutation when
+   * paused, and emits the public `tick`, `metrics`, and `leaderboard` events when appropriate.
+   *
+   * Timing semantics:
+   * - Timestamps come from the injected `performanceNow`/`requestAnimationFrame` hooks.
+   * - Update frequency is derived from `state.updatesPerSecond`; frames that arrive sooner simply
+   *   redraw without advancing simulation time.
+   * - Manual ticks pass `{ force: true }`, allowing the engine to advance even when the outer
+   *   `start` loop is stopped (useful for tests and inspectors).
+   *
+   * Pause and events:
+   * - When paused the grid still redraws, but no `tick` event is emitted and throttled UI updates
+   *   remain pending until the next unpaused frame.
+   * - `pendingSlowUiUpdate` is flipped to `true` whenever GridManager produces a new snapshot and
+   *   Stats ingest fresh metrics. The `leaderboardIntervalMs` throttle guards how often the
+   *   expensive leaderboard aggregation runs, ensuring UI work is batched even if simulation ticks
+   *   faster.
+   * - Grid mutations are delegated to `GridManager.update`, which consumes the current tuning
+   *   values. The returned snapshot feeds directly into `Stats.updateFromSnapshot`, tying together
+   *   world state, statistics, and UI surfaces.
+   *
+   * @private
+   */
   #frame(timestamp, { scheduleNext = false, force = false } = {}) {
     if (!this.running && !force) return false;
 
@@ -340,6 +396,7 @@ export default class SimulationEngine {
         );
         this.stats.setMutationMultiplier?.(this.state.mutationMultiplier ?? 1);
         this.lastMetrics = this.stats.updateFromSnapshot?.(snapshot);
+        // Defer leaderboard/metrics publication until the throttle window allows another emit.
         this.pendingSlowUiUpdate = true;
 
         this.emit('tick', {
@@ -443,6 +500,15 @@ export default class SimulationEngine {
     }
   }
 
+  /**
+   * Advances the simulation once using the supplied timestamp (defaulting to `performance.now`).
+   * Unlike the running loop, this does not schedule another frame, making it ideal for deterministic
+   * tests or single-step debugging. The call honours the paused state for world updates but still
+   * triggers redraws and pending slow UI work so instrumentation stays in sync.
+   *
+   * @param {number} [timestamp]
+   * @returns {boolean} Whether a simulation update (as opposed to a redraw) occurred.
+   */
   tick(timestamp = this.now()) {
     return this.#frame(timestamp, { scheduleNext: false, force: true });
   }
