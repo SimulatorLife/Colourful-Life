@@ -12,6 +12,7 @@ permissions:
 jobs:
   run:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
     with:
       pr_title: "Codex: Implement refactor on latest master"
       pr_body: "Seed PR for Codex to implement the intended refactor atop current master."
