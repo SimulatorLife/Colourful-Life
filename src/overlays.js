@@ -192,35 +192,47 @@ function drawDensityLegend(ctx, cellSize, cols, rows, minDensity, maxDensity) {
 function drawSelectionZones(selectionManager, ctx, cellSize) {
   if (!selectionManager?.hasActiveZones()) return;
 
-  const zones = selectionManager.getActiveZones();
-  const rows = selectionManager.rows;
-  const cols = selectionManager.cols;
+  const zoneEntries =
+    typeof selectionManager.getActiveZoneRenderData === 'function'
+      ? selectionManager.getActiveZoneRenderData()
+      : null;
 
-  if (!Array.isArray(zones) || zones.length === 0) return;
+  if (!Array.isArray(zoneEntries) || zoneEntries.length === 0) return;
 
   ctx.save();
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      let color = null;
+  for (const entry of zoneEntries) {
+    const zone = entry?.zone;
+    const geometry = entry?.geometry;
 
-      for (let i = 0; i < zones.length; i++) {
-        const zone = zones[i];
+    if (!zone) continue;
 
-        if (zone.contains(r, c)) {
-          color = zone.color || 'rgba(255,255,255,0.2)';
+    const color = zone.color || 'rgba(255,255,255,0.2)';
 
-          break;
-        }
-      }
+    if (!color) continue;
 
-      if (!color) continue;
+    const rects = geometry?.rects;
 
-      ctx.fillStyle = color;
-      ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+    if (!Array.isArray(rects) || rects.length === 0) {
+      continue;
+    }
+
+    ctx.fillStyle = color;
+    for (let i = 0; i < rects.length; i++) {
+      const rect = rects[i];
+
+      if (!rect) continue;
+
+      const { row, col, rowSpan = 1, colSpan = 1 } = rect;
+
+      if (rowSpan <= 0 || colSpan <= 0) continue;
+
+      ctx.fillRect(col * cellSize, row * cellSize, colSpan * cellSize, rowSpan * cellSize);
     }
   }
   ctx.restore();
 }
+
+export { drawSelectionZones };
 
 export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   const {

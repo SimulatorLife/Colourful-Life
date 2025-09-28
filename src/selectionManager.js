@@ -5,14 +5,15 @@ const DEFAULT_COLORS = [
   'rgba(220, 120, 220, 0.24)',
 ];
 
-let customZoneCounter = 0;
-
 export default class SelectionManager {
   constructor(rows, cols) {
     this.rows = rows;
     this.cols = cols;
     this.patterns = new Map();
     this.customZones = [];
+    this.zoneGeometryCache = new Map();
+    this.geometryRevision = 0;
+    this.customZoneCounter = 0;
     this.#definePredefinedPatterns();
   }
 
@@ -22,6 +23,8 @@ export default class SelectionManager {
     this.cols = cols;
     this.patterns.clear();
     this.customZones = [];
+    this.customZoneCounter = 0;
+    this.#invalidateAllZoneGeometry();
     this.#definePredefinedPatterns();
   }
 
@@ -88,11 +91,18 @@ export default class SelectionManager {
 
     pattern.active = next;
 
+    this.#invalidateZoneGeometry(pattern);
+
+    if (pattern.active) {
+      this.#storeZoneGeometry(pattern, this.#computeZoneGeometry(pattern));
+    }
+
     return pattern.active;
   }
 
   clearCustomZones() {
     this.customZones = [];
+    this.#invalidateAllZoneGeometry();
   }
 
   addCustomRectangle(startRow, startCol, endRow, endCol) {
@@ -103,8 +113,9 @@ export default class SelectionManager {
 
     if (Number.isNaN(sr) || Number.isNaN(er) || Number.isNaN(sc) || Number.isNaN(ec)) return null;
 
+    const zoneIndex = this.customZoneCounter++;
     const zone = {
-      id: `custom-${customZoneCounter++}`,
+      id: `custom-${zoneIndex}`,
       name: `Custom Zone ${this.customZones.length + 1}`,
       description: 'User-drawn reproductive zone',
       active: true,
@@ -114,6 +125,7 @@ export default class SelectionManager {
     };
 
     this.customZones.push(zone);
+    this.#storeZoneGeometry(zone, this.#computeGeometryFromBounds(zone.bounds));
 
     return zone;
   }
@@ -204,11 +216,167 @@ export default class SelectionManager {
     return names.join(', ');
   }
 
+  getActiveZoneRenderData() {
+    const zones = this.getActiveZones();
+
+    if (!zones.length) return [];
+
+    return zones.map((zone) => ({
+      zone,
+      geometry: this.#ensureZoneGeometry(zone),
+    }));
+  }
+
   #clampRow(row) {
     return Math.min(this.rows - 1, Math.max(0, Math.floor(row)));
   }
 
   #clampCol(col) {
     return Math.min(this.cols - 1, Math.max(0, Math.floor(col)));
+  }
+
+  #invalidateAllZoneGeometry() {
+    this.zoneGeometryCache.clear();
+    this.geometryRevision += 1;
+  }
+
+  #getZoneCacheKey(zone) {
+    if (!zone) return null;
+    if (typeof zone.id === 'string') return zone.id;
+    if (typeof zone.name === 'string') return `name:${zone.name}`;
+
+    return null;
+  }
+
+  #invalidateZoneGeometry(zoneOrId) {
+    const key = typeof zoneOrId === 'string' ? zoneOrId : this.#getZoneCacheKey(zoneOrId);
+
+    if (key) {
+      this.zoneGeometryCache.delete(key);
+    }
+  }
+
+  #storeZoneGeometry(zone, geometry) {
+    const key = this.#getZoneCacheKey(zone);
+
+    if (!key) return geometry;
+
+    this.zoneGeometryCache.set(key, {
+      geometry,
+      version: this.geometryRevision,
+    });
+
+    return geometry;
+  }
+
+  #ensureZoneGeometry(zone) {
+    if (!zone) return { rects: [], bounds: null };
+
+    const key = this.#getZoneCacheKey(zone);
+
+    if (key) {
+      const cached = this.zoneGeometryCache.get(key);
+
+      if (cached && cached.version === this.geometryRevision) {
+        return cached.geometry;
+      }
+    }
+
+    const geometry = this.#computeZoneGeometry(zone);
+
+    return this.#storeZoneGeometry(zone, geometry);
+  }
+
+  #computeZoneGeometry(zone) {
+    if (!zone) return { rects: [], bounds: null };
+
+    if (zone.bounds) {
+      return this.#computeGeometryFromBounds(zone.bounds);
+    }
+
+    return this.#computeGeometryFromContains(zone);
+  }
+
+  #computeGeometryFromBounds(bounds) {
+    if (!bounds) return { rects: [], bounds: null };
+
+    const { startRow, endRow, startCol, endCol } = bounds;
+    const rowSpan = endRow - startRow + 1;
+    const colSpan = endCol - startCol + 1;
+
+    if (rowSpan <= 0 || colSpan <= 0) {
+      return { rects: [], bounds: null };
+    }
+
+    return {
+      rects: [
+        {
+          row: startRow,
+          col: startCol,
+          rowSpan,
+          colSpan,
+        },
+      ],
+      bounds: { startRow, endRow, startCol, endCol },
+    };
+  }
+
+  #computeGeometryFromContains(zone) {
+    if (typeof zone.contains !== 'function') {
+      return { rects: [], bounds: null };
+    }
+
+    const rects = [];
+    let minRow = Infinity;
+    let minCol = Infinity;
+    let maxRow = -1;
+    let maxCol = -1;
+
+    for (let row = 0; row < this.rows; row++) {
+      let startCol = null;
+
+      for (let col = 0; col < this.cols; col++) {
+        const inside = zone.contains(row, col);
+
+        if (inside && startCol === null) {
+          startCol = col;
+        } else if (!inside && startCol !== null) {
+          const endCol = col - 1;
+          const colSpan = endCol - startCol + 1;
+
+          rects.push({ row, col: startCol, rowSpan: 1, colSpan });
+          minRow = Math.min(minRow, row);
+          maxRow = Math.max(maxRow, row);
+          minCol = Math.min(minCol, startCol);
+          maxCol = Math.max(maxCol, endCol);
+          startCol = null;
+        }
+      }
+
+      if (startCol !== null) {
+        const endCol = this.cols - 1;
+        const colSpan = endCol - startCol + 1;
+
+        rects.push({ row, col: startCol, rowSpan: 1, colSpan });
+        minRow = Math.min(minRow, row);
+        maxRow = Math.max(maxRow, row);
+        minCol = Math.min(minCol, startCol);
+        maxCol = Math.max(maxCol, endCol);
+      }
+    }
+
+    if (!rects.length) {
+      return { rects: [], bounds: null };
+    }
+
+    return {
+      rects,
+      bounds: {
+        startRow: minRow,
+        endRow: maxRow,
+        startCol: minCol,
+        endCol: maxCol,
+      },
+    };
   }
 }
