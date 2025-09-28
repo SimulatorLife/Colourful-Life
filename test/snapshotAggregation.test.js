@@ -3,6 +3,7 @@ const assert = require('uvu/assert');
 
 const gridManagerModulePromise = import('../src/gridManager.js');
 const leaderboardModulePromise = import('../src/leaderboard.js');
+const brainDebuggerModulePromise = import('../src/brainDebugger.js');
 
 function createStubCell(data) {
   return {
@@ -50,6 +51,76 @@ test('buildSnapshot aggregates living cells for downstream consumers', async () 
     assert.is(leaderboard.length, 2);
     assert.ok(leaderboard[0].fitness >= leaderboard[1].fitness);
   } finally {
+    GridManager.prototype.init = originalInit;
+  }
+});
+
+test('buildSnapshot feeds sorted top entries to BrainDebugger', async () => {
+  const { default: GridManager } = await gridManagerModulePromise;
+  const { default: BrainDebugger } = await brainDebuggerModulePromise;
+  const originalCapture = BrainDebugger.captureFromEntries;
+  const originalInit = GridManager.prototype.init;
+
+  try {
+    let capturedEntries = null;
+    let captureOptions = null;
+
+    BrainDebugger.captureFromEntries = (entries, options) => {
+      capturedEntries = Array.isArray(entries) ? entries.map((entry) => ({ ...entry })) : entries;
+      captureOptions = options;
+
+      return [];
+    };
+
+    GridManager.prototype.init = function initStub() {};
+    const gm = new GridManager(3, 2, {
+      eventManager: { activeEvents: [] },
+      ctx: { fillStyle: null, fillRect() {} },
+      cellSize: 1,
+      stats: { onBirth() {}, onDeath() {}, onFight() {}, onCooperate() {} },
+    });
+
+    const energies = [10, 60, 20, 40, 50, 30];
+    let index = 0;
+
+    for (let row = 0; row < gm.rows; row += 1) {
+      for (let col = 0; col < gm.cols; col += 1) {
+        const energy = energies[index] ?? 0;
+
+        gm.grid[row][col] = createStubCell({
+          energy,
+          age: 0,
+          lifespan: 0,
+          fightsWon: 0,
+          fightsLost: 0,
+          offspring: 0,
+          brain: {
+            snapshot() {
+              return {};
+            },
+            neuronCount: 1,
+            connectionCount: 1,
+          },
+        });
+        index += 1;
+      }
+    }
+
+    gm.rebuildActiveCells();
+
+    const snapshot = gm.buildSnapshot(100);
+
+    assert.ok(Array.isArray(capturedEntries));
+    assert.is(captureOptions?.limit, 5);
+    assert.is(capturedEntries.length, 5);
+    assert.ok(snapshot.entries.length > capturedEntries.length);
+    const fitnesses = capturedEntries.map((entry) => entry.fitness);
+    const sorted = [...fitnesses].sort((a, b) => b - a);
+
+    assert.equal(fitnesses, sorted);
+    assert.ok(fitnesses[0] >= fitnesses[fitnesses.length - 1]);
+  } finally {
+    BrainDebugger.captureFromEntries = originalCapture;
     GridManager.prototype.init = originalInit;
   }
 });

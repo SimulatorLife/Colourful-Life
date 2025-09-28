@@ -87,6 +87,50 @@ export const OBSTACLE_SCENARIOS = [
   },
 ];
 
+const BRAIN_SNAPSHOT_LIMIT = 5;
+
+function createTopFitnessBuffer(limit) {
+  const maxSize = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
+  const buffer = [];
+
+  return {
+    add(entry) {
+      if (!entry || maxSize === 0) return;
+
+      const fitness = entry?.fitness;
+
+      if (!Number.isFinite(fitness)) return;
+
+      let low = 0;
+      let high = buffer.length;
+
+      while (low < high) {
+        const mid = (low + high) >> 1;
+        const midFitness = buffer[mid]?.fitness ?? -Infinity;
+
+        if (fitness > midFitness) {
+          high = mid;
+        } else {
+          low = mid + 1;
+        }
+      }
+
+      if (low >= maxSize && buffer.length >= maxSize) {
+        return;
+      }
+
+      buffer.splice(low, 0, entry);
+
+      if (buffer.length > maxSize) {
+        buffer.length = maxSize;
+      }
+    },
+    getItems() {
+      return buffer.slice();
+    },
+  };
+}
+
 export default class GridManager {
   // Base per-tick regen before modifiers; logistic to max, density-aware
   static energyRegenRate = ENERGY_REGEN_RATE_DEFAULT;
@@ -1827,6 +1871,7 @@ export default class GridManager {
       cells: [],
       entries: [],
     };
+    const topBrainEntries = createTopFitnessBuffer(BRAIN_SNAPSHOT_LIMIT);
 
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
@@ -1844,14 +1889,19 @@ export default class GridManager {
         snapshot.totalEnergy += cell.energy;
         snapshot.totalAge += cell.age;
         snapshot.cells.push(cell);
-        snapshot.entries.push({ row, col, cell, fitness, smoothedFitness: smoothed });
+        const entry = { row, col, cell, fitness, smoothedFitness: smoothed };
+
+        snapshot.entries.push(entry);
+        topBrainEntries.add(entry);
         if (fitness > snapshot.maxFitness) snapshot.maxFitness = fitness;
       }
     }
 
-    const ranked = [...snapshot.entries].sort((a, b) => (b?.fitness ?? 0) - (a?.fitness ?? 0));
+    const ranked = topBrainEntries.getItems();
 
-    snapshot.brainSnapshots = BrainDebugger.captureFromEntries(ranked, { limit: 5 });
+    snapshot.brainSnapshots = BrainDebugger.captureFromEntries(ranked, {
+      limit: BRAIN_SNAPSHOT_LIMIT,
+    });
 
     return snapshot;
   }
