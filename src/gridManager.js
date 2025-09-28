@@ -964,19 +964,31 @@ export default class GridManager {
           ? densityGrid[r][c]
           : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
 
-        const neighborEnergies = [];
+        let neighborSum = 0;
+        let neighborCount = 0;
 
-        if (r > 0 && !this.isObstacle(r - 1, c)) neighborEnergies.push(this.energyGrid[r - 1][c]);
-        if (r < this.rows - 1 && !this.isObstacle(r + 1, c))
-          neighborEnergies.push(this.energyGrid[r + 1][c]);
-        if (c > 0 && !this.isObstacle(r, c - 1)) neighborEnergies.push(this.energyGrid[r][c - 1]);
-        if (c < this.cols - 1 && !this.isObstacle(r, c + 1))
-          neighborEnergies.push(this.energyGrid[r][c + 1]);
+        if (r > 0 && !this.isObstacle(r - 1, c)) {
+          neighborSum += this.energyGrid[r - 1][c];
+          neighborCount++;
+        }
+        if (r < this.rows - 1 && !this.isObstacle(r + 1, c)) {
+          neighborSum += this.energyGrid[r + 1][c];
+          neighborCount++;
+        }
+        if (c > 0 && !this.isObstacle(r, c - 1)) {
+          neighborSum += this.energyGrid[r][c - 1];
+          neighborCount++;
+        }
+        if (c < this.cols - 1 && !this.isObstacle(r, c + 1)) {
+          neighborSum += this.energyGrid[r][c + 1];
+          neighborCount++;
+        }
 
         const { nextEnergy } = computeTileEnergyUpdate({
           currentEnergy: this.energyGrid[r][c],
           density,
-          neighborEnergies,
+          neighborSum,
+          neighborCount,
           events: evs,
           row: r,
           col: c,
