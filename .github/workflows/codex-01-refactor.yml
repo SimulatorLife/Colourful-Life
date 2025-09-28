@@ -17,9 +17,13 @@ jobs:
       pr_title: "Codex: Implement refactor on latest master"
       pr_body: "Seed PR for Codex to implement the intended refactor atop current master."
       prompt: >
-        Review the entire codebase with the goal of raising overall quality and maintainability. Identify duplicate, near-duplicate, or overly verbose code that can be consolidated, and refactor it to improve clarity and consistency. 
-        Break down monolithic functions into smaller, more focused units and ensure the code is DRY, clean, and easy to understand. Avoid unnecessary abstraction—do not introduce classes or functions that add complexity without real 
-        benefit—but re-implement outdated or incompatible code in a modern, clean way aligned with the current architecture. The objective is to deliver a streamlined, high-quality, and consistent codebase that is maintainable, 
-        readable, and free of redundant logic.
+        Review the entire codebase with the long-term goal of raising overall quality and 
+        maintainability (DRY, clarity, consistency, modern APIs, minimal abstraction). 
+        For this task, select one high-impact area (a module, file, or pattern) that will 
+        materially improve readability or reduce duplication, and briefly justify your 
+        choice. Then implement a minimal, focused refactor that improves clarity and 
+        consistency while keeping behavior identical, avoiding unnecessary abstraction or 
+        repo-wide churn. Ensure changes are self-contained, tested, and documented as 
+        needed, with no reduction in test coverage and all CI checks passing.
       branch_prefix: "codex"
       base_branch: "master"

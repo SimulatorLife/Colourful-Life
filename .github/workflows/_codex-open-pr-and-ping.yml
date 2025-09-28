@@ -119,7 +119,7 @@ jobs:
               "",
               `Once done, ensure all changes are pushed to remote branch **${process.env.BRANCH_NAME}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}. Do not open new branches or PRs.`,
               "",
-              "Use the following command to push your changes:",
+              "Run the following command to push your changes as the last step, even after running command 'make_pr' just to be absolutely certain the changes are pushed:",
               "",
               "```bash",
               `git push origin ${process.env.BRANCH_NAME}`,
