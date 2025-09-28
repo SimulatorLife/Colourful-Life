@@ -561,6 +561,28 @@ export default class Cell {
     }
   }
 
+  getAgeFraction() {
+    if (!Number.isFinite(this.lifespan) || this.lifespan <= 0) return 0;
+
+    return clamp(this.age / this.lifespan, 0, 1);
+  }
+
+  ageEnergyMultiplier(load = 1) {
+    const ageFrac = this.getAgeFraction();
+
+    if (ageFrac <= 0) return 1;
+
+    const senescence =
+      typeof this.dna?.senescenceRate === 'function' ? this.dna.senescenceRate() : 0;
+    const basePull = 0.12 + Math.max(0, senescence);
+    const linear = 1 + ageFrac * basePull;
+    const curvature = 1 + ageFrac * ageFrac * (0.25 + Math.max(0, senescence) * 1.1);
+    const combined = linear * curvature;
+    const loadFactor = clamp(Number.isFinite(load) ? load : 1, 0, 3);
+
+    return 1 + (combined - 1) * loadFactor;
+  }
+
   #decideMovementAction(context = {}) {
     const sensors = this.#movementSensors(context);
     const values = this.#evaluateBrainGroup('movement', sensors);
@@ -637,12 +659,10 @@ export default class Cell {
     const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
     const metabolism = this.metabolism;
     const energyDensityMult = lerp(this.density.energyLoss.min, this.density.energyLoss.max, effD);
-    const ageFrac = this.lifespan > 0 ? this.age / this.lifespan : 0;
-    const sen = typeof this.dna.senescenceRate === 'function' ? this.dna.senescenceRate() : 0;
     const baseLoss = this.dna.energyLossBase();
-    const lossScale =
-      this.dna.baseEnergyLossScale() * (1 + metabolism) * (1 + sen * ageFrac) * energyDensityMult;
-    const energyLoss = baseLoss * lossScale;
+    const lossScale = this.dna.baseEnergyLossScale() * (1 + metabolism) * energyDensityMult;
+    const agingPenalty = this.ageEnergyMultiplier();
+    const energyLoss = baseLoss * lossScale * agingPenalty;
     // cognitive/perception overhead derived from DNA and recent neural evaluations
     const baselineNeurons = Math.max(0, this.neurons || 0);
     const dynamicLoad = Math.max(0, this._neuralLoad || 0);
@@ -658,18 +678,21 @@ export default class Cell {
     let baselineCost = 0;
     let dynamicCost = 0;
     let cognitiveLoss = 0;
+    const cognitiveAgeMultiplier = this.ageEnergyMultiplier(0.75);
 
     if (costBreakdown) {
-      baselineCost = costBreakdown.baseline;
-      dynamicCost = costBreakdown.dynamic;
-      cognitiveLoss = costBreakdown.total;
+      baselineCost = (costBreakdown.baseline || 0) * cognitiveAgeMultiplier;
+      dynamicCost = (costBreakdown.dynamic || 0) * cognitiveAgeMultiplier;
+      cognitiveLoss = baselineCost + dynamicCost;
     } else {
-      baselineCost = this.dna.cognitiveCost(baselineNeurons, this.sight, effD);
+      baselineCost =
+        this.dna.cognitiveCost(baselineNeurons, this.sight, effD) * cognitiveAgeMultiplier;
       const combinedLoad = Math.max(0, baselineNeurons + dynamicLoad);
-      const totalCost = this.dna.cognitiveCost(combinedLoad, this.sight, effD);
+      const totalCost =
+        this.dna.cognitiveCost(combinedLoad, this.sight, effD) * cognitiveAgeMultiplier;
 
       dynamicCost = Math.max(0, totalCost - baselineCost);
-      cognitiveLoss = totalCost;
+      cognitiveLoss = baselineCost + dynamicCost;
     }
 
     const energyBefore = this.energy;

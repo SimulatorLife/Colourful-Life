@@ -77,10 +77,16 @@ export default class InteractionSystem {
 
     if (!defender) return false;
 
+    const attackerAgeScale =
+      typeof attacker.ageEnergyMultiplier === 'function' ? attacker.ageEnergyMultiplier(1) : 1;
+    const defenderAgeScale =
+      typeof defender.ageEnergyMultiplier === 'function' ? defender.ageEnergyMultiplier(1) : 1;
     const attackerCost =
-      typeof attacker.dna?.fightCost === 'function' ? attacker.dna.fightCost() : 0;
+      (typeof attacker.dna?.fightCost === 'function' ? attacker.dna.fightCost() : 0) *
+      attackerAgeScale;
     const defenderCost =
-      typeof defender.dna?.fightCost === 'function' ? defender.dna.fightCost() : 0;
+      (typeof defender.dna?.fightCost === 'function' ? defender.dna.fightCost() : 0) *
+      defenderAgeScale;
 
     attacker.energy = Math.max(0, attacker.energy - attackerCost);
     defender.energy = Math.max(0, defender.energy - defenderCost);
