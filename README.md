@@ -58,6 +58,8 @@ npm run start    # Parcel dev server
 npm run build    # Production build
 npm run serve    # Simple static server (no bundling)
 npm run format   # Format code with Prettier
+
+This line tests the Codex auto-merge workflow.
 npm run format:check  # Check formatting without writing
 ```
 
