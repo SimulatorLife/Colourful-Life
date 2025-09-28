@@ -24,6 +24,28 @@ const defaultNow = () => {
 const defaultRequestAnimationFrame = (cb) => setTimeout(() => cb(defaultNow()), 16);
 const defaultCancelAnimationFrame = (id) => clearTimeout(id);
 
+function sanitizeNumeric(
+  value,
+  { fallback, min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY, round = false }
+) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) return fallback;
+
+  let sanitized = numeric;
+
+  if (round === true) {
+    sanitized = Math.round(sanitized);
+  } else if (typeof round === 'function') {
+    sanitized = round(sanitized);
+  }
+
+  if (Number.isFinite(min)) sanitized = Math.max(min, sanitized);
+  if (Number.isFinite(max)) sanitized = Math.min(max, sanitized);
+
+  return sanitized;
+}
+
 function resolveCanvas(canvas, documentRef) {
   if (canvas) return canvas;
 
@@ -306,6 +328,16 @@ export default class SimulationEngine {
     return changed;
   }
 
+  #updateStateAndFlag(partial) {
+    const changed = this.#updateState(partial);
+
+    if (changed) {
+      this.pendingSlowUiUpdate = true;
+    }
+
+    return changed;
+  }
+
   #scheduleNextFrame() {
     if (!this.running || this.frameHandle != null) return;
 
@@ -503,129 +535,123 @@ export default class SimulationEngine {
   }
 
   setUpdatesPerSecond(value) {
-    const numeric = Number(value);
-    const sanitized = Number.isFinite(numeric)
-      ? Math.max(1, Math.round(numeric))
-      : this.state.updatesPerSecond;
-    const changed = this.#updateState({ updatesPerSecond: sanitized });
+    const sanitized = sanitizeNumeric(value, {
+      fallback: this.state.updatesPerSecond,
+      min: 1,
+      round: true,
+    });
 
-    if (changed) this.pendingSlowUiUpdate = true;
+    this.#updateStateAndFlag({ updatesPerSecond: sanitized });
 
     return sanitized;
   }
 
   setEventFrequencyMultiplier(value) {
-    const numeric = Number(value);
-    const sanitized = Number.isFinite(numeric)
-      ? Math.max(0, numeric)
-      : this.state.eventFrequencyMultiplier;
+    const sanitized = sanitizeNumeric(value, {
+      fallback: this.state.eventFrequencyMultiplier,
+      min: 0,
+    });
 
-    if (this.#updateState({ eventFrequencyMultiplier: sanitized })) this.pendingSlowUiUpdate = true;
+    this.#updateStateAndFlag({ eventFrequencyMultiplier: sanitized });
   }
 
   setMutationMultiplier(value) {
-    const numeric = Number(value);
-    const sanitized = Number.isFinite(numeric)
-      ? Math.max(0, numeric)
-      : this.state.mutationMultiplier;
+    const sanitized = sanitizeNumeric(value, {
+      fallback: this.state.mutationMultiplier,
+      min: 0,
+    });
 
-    if (this.#updateState({ mutationMultiplier: sanitized })) this.pendingSlowUiUpdate = true;
+    this.#updateStateAndFlag({ mutationMultiplier: sanitized });
   }
 
   setDensityEffectMultiplier(value) {
-    const numeric = Number(value);
+    const sanitized = sanitizeNumeric(value, {
+      fallback: this.state.densityEffectMultiplier,
+      min: 0,
+    });
 
-    if (
-      this.#updateState({
-        densityEffectMultiplier: Number.isFinite(numeric)
-          ? Math.max(0, numeric)
-          : this.state.densityEffectMultiplier,
-      })
-    ) {
-      this.pendingSlowUiUpdate = true;
-    }
+    this.#updateStateAndFlag({ densityEffectMultiplier: sanitized });
   }
 
   setSimilarityThresholds({ societySimilarity, enemySimilarity }) {
     const changes = {};
 
     if (societySimilarity !== undefined) {
-      const numeric = Number(societySimilarity);
-
-      changes.societySimilarity = Number.isFinite(numeric)
-        ? Math.min(1, Math.max(0, numeric))
-        : this.state.societySimilarity;
+      changes.societySimilarity = sanitizeNumeric(societySimilarity, {
+        fallback: this.state.societySimilarity,
+        min: 0,
+        max: 1,
+      });
     }
 
     if (enemySimilarity !== undefined) {
-      const numeric = Number(enemySimilarity);
-
-      changes.enemySimilarity = Number.isFinite(numeric)
-        ? Math.min(1, Math.max(0, numeric))
-        : this.state.enemySimilarity;
+      changes.enemySimilarity = sanitizeNumeric(enemySimilarity, {
+        fallback: this.state.enemySimilarity,
+        min: 0,
+        max: 1,
+      });
     }
 
-    if (Object.keys(changes).length > 0 && this.#updateState(changes)) {
-      this.pendingSlowUiUpdate = true;
+    if (Object.keys(changes).length > 0) {
+      this.#updateStateAndFlag(changes);
     }
   }
 
   setEventStrengthMultiplier(value) {
-    const numeric = Number(value);
-    const sanitized = Number.isFinite(numeric)
-      ? Math.max(0, numeric)
-      : this.state.eventStrengthMultiplier;
+    const sanitized = sanitizeNumeric(value, {
+      fallback: this.state.eventStrengthMultiplier,
+      min: 0,
+    });
 
-    if (this.#updateState({ eventStrengthMultiplier: sanitized })) this.pendingSlowUiUpdate = true;
+    this.#updateStateAndFlag({ eventStrengthMultiplier: sanitized });
   }
 
   setEnergyRates({ regen, diffusion }) {
     const changes = {};
 
     if (regen !== undefined) {
-      const numeric = Number(regen);
-
-      changes.energyRegenRate = Number.isFinite(numeric)
-        ? Math.max(0, numeric)
-        : this.state.energyRegenRate;
+      changes.energyRegenRate = sanitizeNumeric(regen, {
+        fallback: this.state.energyRegenRate,
+        min: 0,
+      });
     }
 
     if (diffusion !== undefined) {
-      const numeric = Number(diffusion);
-
-      changes.energyDiffusionRate = Number.isFinite(numeric)
-        ? Math.max(0, numeric)
-        : this.state.energyDiffusionRate;
+      changes.energyDiffusionRate = sanitizeNumeric(diffusion, {
+        fallback: this.state.energyDiffusionRate,
+        min: 0,
+      });
     }
 
-    if (Object.keys(changes).length > 0 && this.#updateState(changes)) {
-      this.pendingSlowUiUpdate = true;
+    if (Object.keys(changes).length > 0) {
+      this.#updateStateAndFlag(changes);
     }
   }
 
   setLeaderboardInterval(value) {
-    const numeric = Number(value);
-    const sanitized = Number.isFinite(numeric)
-      ? Math.max(0, numeric)
-      : this.state.leaderboardIntervalMs;
+    const sanitized = sanitizeNumeric(value, {
+      fallback: this.state.leaderboardIntervalMs,
+      min: 0,
+    });
 
     this.#updateState({ leaderboardIntervalMs: sanitized });
   }
 
   setOverlayVisibility({ showObstacles, showEnergy, showDensity, showFitness }) {
-    const changes = {};
+    const entries = Object.entries({ showObstacles, showEnergy, showDensity, showFitness })
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => [key, Boolean(value)]);
 
-    if (showObstacles !== undefined) changes.showObstacles = Boolean(showObstacles);
-    if (showEnergy !== undefined) changes.showEnergy = Boolean(showEnergy);
-    if (showDensity !== undefined) changes.showDensity = Boolean(showDensity);
-    if (showFitness !== undefined) changes.showFitness = Boolean(showFitness);
+    if (entries.length === 0) return;
 
-    this.#updateState(changes);
+    this.#updateState(Object.fromEntries(entries));
   }
 
   setLingerPenalty(value) {
-    const numeric = Number(value);
-    const sanitized = Number.isFinite(numeric) ? Math.max(0, numeric) : this.lingerPenalty;
+    const sanitized = sanitizeNumeric(value, {
+      fallback: this.lingerPenalty,
+      min: 0,
+    });
 
     if (sanitized === this.lingerPenalty) return;
 
