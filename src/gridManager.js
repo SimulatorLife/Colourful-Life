@@ -68,6 +68,18 @@ export default class GridManager {
       return true;
     }
 
+    if (typeof onBlocked === 'function') {
+      onBlocked({
+        reason: 'occupied',
+        row: sr,
+        col: sc,
+        nextRow: nr,
+        nextCol: nc,
+        mover: moving,
+        occupant: dcell,
+      });
+    }
+
     return false;
   }
 

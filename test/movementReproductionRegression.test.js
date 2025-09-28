@@ -19,6 +19,28 @@ test("GridManager.tryMove updates a cell's stored coordinates", async () => {
   assert.is(cell.col, 1);
 });
 
+test('GridManager.tryMove reports occupied destinations via onBlocked', async () => {
+  const { default: GridManager } = await import('../src/gridManager.js');
+
+  const mover = { row: 0, col: 0, energy: 1, dna: {} };
+  const occupant = { row: 0, col: 1 };
+  const grid = [[mover, occupant]];
+  const blockedEvents = [];
+
+  const moved = GridManager.tryMove(grid, 0, 0, 0, 1, 1, 2, {
+    onBlocked: (payload) => blockedEvents.push(payload),
+  });
+
+  assert.is(moved, false);
+  assert.is(grid[0][0], mover);
+  assert.is(grid[0][1], occupant);
+  assert.is(blockedEvents.length, 1);
+  assert.is(blockedEvents[0].reason, 'occupied');
+  assert.is(blockedEvents[0].nextRow, 0);
+  assert.is(blockedEvents[0].nextCol, 1);
+  assert.is(blockedEvents[0].occupant, occupant);
+});
+
 test('GridManager.tryMove ignores empty sources without mutating density data', async () => {
   const { default: GridManager } = await import('../src/gridManager.js');
 
