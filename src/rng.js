@@ -122,12 +122,13 @@ export function createRngController(source) {
 }
 
 export function resolveRngController(source) {
-  if (source instanceof RNGController) return source;
-  if (source && typeof source.next === 'function') {
+  if (source instanceof RNGController) {
     return source;
   }
 
-  if (source == null) return defaultRng;
+  if (source == null) {
+    return defaultRng;
+  }
 
   return new RNGController(source);
 }
