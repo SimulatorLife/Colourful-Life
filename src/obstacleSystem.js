@@ -59,15 +59,22 @@ export default class ObstacleSystem {
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(false));
-    this.onTileBlocked = onTileBlocked || null;
-    this.onTileCleared = onTileCleared || null;
+    this.onTileBlocked = null;
+    this.onTileCleared = null;
     this.obstacleSchedules = [];
     this.currentPreset = 'none';
     this.currentScenarioId = 'manual';
+
+    this.setCallbacks({ onTileBlocked, onTileCleared });
   }
 
   getGrid() {
     return this.grid;
+  }
+
+  setCallbacks({ onTileBlocked, onTileCleared } = {}) {
+    this.onTileBlocked = typeof onTileBlocked === 'function' ? onTileBlocked : null;
+    this.onTileCleared = typeof onTileCleared === 'function' ? onTileCleared : null;
   }
 
   isObstacle(row, col) {

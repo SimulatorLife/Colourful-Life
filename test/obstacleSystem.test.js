@@ -34,4 +34,31 @@ test('ObstacleSystem scenarios schedule future presets', async () => {
   assert.is(system.currentPreset, 'midline', 'scheduled preset should apply at the trigger tick');
 });
 
+test('ObstacleSystem.setCallbacks swaps handlers dynamically', async () => {
+  const { default: ObstacleSystem } = await import('../src/obstacleSystem.js');
+
+  const blocked = [];
+  const cleared = [];
+  const system = new ObstacleSystem(3, 3);
+
+  system.setCallbacks({
+    onTileBlocked: (payload) => blocked.push(payload),
+    onTileCleared: (payload) => cleared.push(payload),
+  });
+
+  system.setObstacle(1, 1, true);
+  system.setObstacle(1, 1, false);
+
+  assert.is(blocked.length, 1, 'custom blocked handler should fire once');
+  assert.is(cleared.length, 1, 'custom cleared handler should fire once');
+
+  system.setCallbacks({});
+
+  system.setObstacle(2, 2, true);
+  system.setObstacle(2, 2, false);
+
+  assert.is(blocked.length, 1, 'handlers should be cleared when callbacks reset');
+  assert.is(cleared.length, 1, 'cleared handler should not fire after reset');
+});
+
 test.run();

@@ -149,7 +149,17 @@ export default class GridManager {
   constructor(
     rows,
     cols,
-    { eventManager, ctx = null, cellSize = 8, stats, maxTileEnergy, selectionManager } = {}
+    {
+      eventManager,
+      ctx = null,
+      cellSize = 8,
+      stats,
+      maxTileEnergy,
+      selectionManager,
+      environmentSystem,
+      obstacleSystem,
+      organismSystem,
+    } = {}
   ) {
     this.rows = rows;
     this.cols = cols;
@@ -166,13 +176,27 @@ export default class GridManager {
     this.tickCount = 0;
     this.lastSnapshot = null;
 
-    this.environment = new EnvironmentSystem(rows, cols, {
-      maxTileEnergy: this.maxTileEnergy,
-      densityRadius: GridManager.DENSITY_RADIUS,
-      isEventAffecting,
-      getEventEffect,
-    });
+    const environment =
+      environmentSystem ||
+      new EnvironmentSystem(rows, cols, {
+        maxTileEnergy: this.maxTileEnergy,
+        densityRadius: GridManager.DENSITY_RADIUS,
+        isEventAffecting,
+        getEventEffect,
+      });
+
+    if (
+      (typeof environment.rows === 'number' && environment.rows !== rows) ||
+      (typeof environment.cols === 'number' && environment.cols !== cols)
+    ) {
+      throw new Error('EnvironmentSystem dimensions must match the grid.');
+    }
+
+    this.environment = environment;
     this.environment.setCellGrid(this.grid);
+    if (typeof this.environment.setMaxTileEnergy === 'function') {
+      this.environment.setMaxTileEnergy(this.maxTileEnergy);
+    }
 
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rowsArg, colsArg) =>
       GridManager.tryMove(gridArr, sr, sc, dr, dc, rowsArg, colsArg, this.#movementOptions());
@@ -201,12 +225,38 @@ export default class GridManager {
     this.boundMoveRandomly = (gridArr, row, col, cell, rowsArg, colsArg) =>
       GridManager.moveRandomly(gridArr, row, col, cell, rowsArg, colsArg, this.#movementOptions());
 
-    this.obstacles = new ObstacleSystem(rows, cols, {
+    const obstacleHandlers = {
       onTileBlocked: ({ row, col, evict }) => this.#handleObstaclePlaced(row, col, evict),
       onTileCleared: ({ row, col }) => this.environment.clearEnergyAt(row, col),
-    });
+    };
 
-    this.organisms = new OrganismSystem({
+    const obstacles =
+      obstacleSystem ||
+      new ObstacleSystem(rows, cols, {
+        onTileBlocked: obstacleHandlers.onTileBlocked,
+        onTileCleared: obstacleHandlers.onTileCleared,
+      });
+
+    if (
+      (typeof obstacles.rows === 'number' && obstacles.rows !== rows) ||
+      (typeof obstacles.cols === 'number' && obstacles.cols !== cols)
+    ) {
+      throw new Error('ObstacleSystem dimensions must match the grid.');
+    }
+
+    if (typeof obstacles.setCallbacks === 'function') {
+      obstacles.setCallbacks(obstacleHandlers);
+    } else {
+      obstacles.onTileBlocked = obstacleHandlers.onTileBlocked;
+      obstacles.onTileCleared = obstacleHandlers.onTileCleared;
+    }
+
+    this.obstacles = obstacles;
+
+    const organisms = organismSystem || new OrganismSystem();
+
+    this.organisms = organisms;
+    this.organisms.configure({
       grid: this.grid,
       rows: this.rows,
       cols: this.cols,

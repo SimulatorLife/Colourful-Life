@@ -2,7 +2,32 @@ import { randomRange, randomPercent, clamp, lerp } from './utils.js';
 import Cell from './cell.js';
 
 export default class OrganismSystem {
-  constructor({
+  constructor(dependencies = {}) {
+    this.grid = null;
+    this.rows = 0;
+    this.cols = 0;
+    this.environment = null;
+    this.obstacles = null;
+    this.stats = null;
+    this.selectionManager = null;
+    this.movement = null;
+    this._setCell = () => null;
+    this._removeCell = () => null;
+    this._relocateCell = () => false;
+    this.maxTileEnergy = Infinity;
+    this.lastDensityGrid = null;
+    this.lastDensityEffectMultiplier = 1;
+    this._defaultGetTargets = (row, col, cell, options) =>
+      this.findTargets(row, col, cell, options);
+    this._defaultConsumeEnergy = (cell, row, col, densityGrid, multiplier) =>
+      this.environment?.consumeEnergy(cell, row, col, densityGrid, multiplier);
+    this.getTargets = this._defaultGetTargets;
+    this.consumeEnergyFn = this._defaultConsumeEnergy;
+
+    this.configure(dependencies);
+  }
+
+  configure({
     grid,
     rows,
     cols,
@@ -17,27 +42,33 @@ export default class OrganismSystem {
     maxTileEnergy,
     findTargets,
     consumeEnergy,
-  }) {
-    this.grid = grid;
-    this.rows = rows;
-    this.cols = cols;
-    this.environment = environment;
-    this.obstacles = obstacles;
-    this.stats = stats;
-    this.selectionManager = selectionManager || null;
-    this.movement = movement;
-    this._setCell = setCell;
-    this._removeCell = removeCell;
-    this._relocateCell = relocateCell;
-    this.maxTileEnergy = maxTileEnergy;
-    this.lastDensityGrid = environment?.densityGrid ?? null;
-    this.lastDensityEffectMultiplier = 1;
-    this.getTargets =
-      findTargets || ((row, col, cell, options) => this.findTargets(row, col, cell, options));
-    this.consumeEnergyFn =
-      consumeEnergy ||
-      ((cell, row, col, densityGrid, multiplier) =>
-        this.environment?.consumeEnergy(cell, row, col, densityGrid, multiplier));
+  } = {}) {
+    if (grid) this.grid = grid;
+    if (typeof rows === 'number' && Number.isFinite(rows)) this.rows = rows;
+    if (typeof cols === 'number' && Number.isFinite(cols)) this.cols = cols;
+    if (environment !== undefined) this.environment = environment || null;
+    if (obstacles !== undefined) this.obstacles = obstacles || null;
+    if (stats !== undefined) this.stats = stats;
+    if (selectionManager !== undefined) this.selectionManager = selectionManager || null;
+    if (movement) this.movement = movement;
+    if (typeof setCell === 'function') this._setCell = setCell;
+    if (typeof removeCell === 'function') this._removeCell = removeCell;
+    if (typeof relocateCell === 'function') this._relocateCell = relocateCell;
+    if (typeof maxTileEnergy === 'number' && Number.isFinite(maxTileEnergy)) {
+      this.maxTileEnergy = maxTileEnergy;
+    }
+
+    if (typeof findTargets === 'function') this.getTargets = findTargets;
+    else if (findTargets !== undefined) this.getTargets = this._defaultGetTargets;
+
+    if (typeof consumeEnergy === 'function') this.consumeEnergyFn = consumeEnergy;
+    else if (consumeEnergy !== undefined) this.consumeEnergyFn = this._defaultConsumeEnergy;
+
+    if (this.environment?.densityGrid) {
+      this.lastDensityGrid = this.environment.densityGrid;
+    }
+
+    return this;
   }
 
   setSelectionManager(selectionManager) {

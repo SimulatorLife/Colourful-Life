@@ -103,4 +103,77 @@ test('OrganismSystem.processCell spawns offspring when reproduction succeeds', a
   assert.ok(offspringCount >= 3, 'grid should contain a new offspring');
 });
 
+test('OrganismSystem.configure refreshes dependencies for reuse', async () => {
+  const { default: OrganismSystem } = await import('../src/organismSystem.js');
+  const { default: EnvironmentSystem } = await import('../src/environmentSystem.js');
+  const { default: ObstacleSystem } = await import('../src/obstacleSystem.js');
+
+  const system = new OrganismSystem();
+  const rows = 2;
+  const cols = 2;
+  const grid = makeGrid(rows, cols);
+  const environment = new EnvironmentSystem(rows, cols, { maxTileEnergy: 5 });
+  const obstacles = new ObstacleSystem(rows, cols);
+  const movement = { tryMove: () => true };
+  const stats = { seen: true };
+  const selectionManager = { select() {} };
+
+  environment.setCellGrid(grid);
+
+  system.configure({
+    grid,
+    rows,
+    cols,
+    environment,
+    obstacles,
+    stats,
+    selectionManager,
+    movement,
+    setCell: (row, col, cell) => {
+      grid[row][col] = cell;
+
+      return cell;
+    },
+    removeCell: (row, col) => {
+      const current = grid[row][col];
+
+      grid[row][col] = null;
+
+      return current;
+    },
+    relocateCell: () => true,
+    maxTileEnergy: 7,
+  });
+
+  assert.is(system.grid, grid, 'grid reference should be stored');
+  assert.is(system.rows, rows, 'row count should update');
+  assert.is(system.cols, cols, 'column count should update');
+  assert.is(system.environment, environment, 'environment should be assigned');
+  assert.is(system.obstacles, obstacles, 'obstacles should be assigned');
+  assert.is(system.stats, stats, 'stats reference should update');
+  assert.is(system.selectionManager, selectionManager, 'selection manager should update');
+  assert.is(system.movement, movement, 'movement helpers should update');
+  assert.is(system.maxTileEnergy, 7, 'max tile energy should update');
+
+  const forageCell = {
+    energy: 0,
+    dna: {
+      forageRate: () => 0.5,
+      harvestCapMin: () => 0.1,
+      harvestCapMax: () => 0.3,
+    },
+  };
+
+  environment.setEnergyAt(0, 0, 1);
+  system.consumeEnergyFn(forageCell, 0, 0);
+
+  assert.ok(forageCell.energy > 0, 'default consume energy should draw from environment');
+  assert.ok(environment.getEnergyAt(0, 0) < 1, 'environment energy should be reduced');
+
+  system.configure({ selectionManager: null, maxTileEnergy: 9 });
+
+  assert.is(system.selectionManager, null, 'configure should allow clearing selection manager');
+  assert.is(system.maxTileEnergy, 9, 'subsequent configure calls should update values');
+});
+
 test.run();
