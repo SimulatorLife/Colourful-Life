@@ -26,8 +26,8 @@ To guide ongoing development, the simulation is anchored around four interlockin
 
 ### Structural & Organizational Tenets
 
-- **Modular architecture**: Keep simulation logic, rendering, UI layers, and data models decoupled to support headless runs, scripted scenarios, and future extensions.
-- **Scenario-driven content**: Organize presets, obstacle maps, and environmental scripts as reusable modules that can be mixed and scheduled over time.
+- **Modular architecture**: Keep simulation logic, rendering, UI layers, and data models decoupled to support headless runs and future extensions.
+- **Curated terrain content**: Organize obstacle presets and maps as reusable modules that can be mixed and extended over time.
 - **Progressive disclosure**: Structure panels and documentation so beginners see essential controls first, while advanced tools (genetic inspectors, debug overlays) remain close at hand for deeper dives.
 - **Simplicity as a feature**: Prefer lean modules with clear responsibilities over sprawling managers. Before adding a new system, seek opportunities to refactor, reuse existing behaviours, or generalize small utilities so the codebase stays approachable.
 - **Quality-first iteration**: Reserve time each cycle to tighten tests, remove duplication, and resolve edge-case bugs. Shiny additions wait until the current experience feels polished, stable, and well-documented.
@@ -46,7 +46,7 @@ To guide ongoing development, the simulation is anchored around four interlockin
 - **Density-aware behavior**: local population density increases aggression, reduces reproduction probability, nudges movement toward caution, and slightly raises energy costs.
 - **Environmental events**: floods, droughts, heatwaves, and coldwaves affect regions and influence cell survival.
 - **Rendering loop**: `requestAnimationFrame` drives updates and drawing to an HTML `<canvas>`.
-- **Obstacles & terrain**: apply obstacle presets and timed scenarios to recreate wall drops or chokepoints while the movement AI respects blocked tiles and optional wall-pressure energy penalties.
+- **Obstacles & terrain**: apply obstacle presets to recreate wall drops or chokepoints while the movement AI respects blocked tiles and optional wall-pressure energy penalties.
 
 ## Development
 
@@ -93,8 +93,8 @@ simulation.step();
 
 Energy-related defaults for the simulation are centralized in `src/config.js`. The UI sliders read `ENERGY_REGEN_RATE_DEFAULT` and `ENERGY_DIFFUSION_RATE_DEFAULT` from this shared module so that the controls always reflect the same baseline values used by the grid manager.
 
-### Obstacles & scenarios
+### Obstacles
 
-- The **Obstacles & Scenarios** panel in the sidebar lets you stamp obstacle layouts, queue scripted terrain changes (e.g., drop a wall mid-run), and adjust the **Wall Linger Penalty** slider that drains energy from organisms repeatedly pushing against barriers.
+- The **Obstacles** panel in the sidebar lets you stamp obstacle layouts and adjust the **Wall Linger Penalty** slider that drains energy from organisms repeatedly pushing against barriers.
 - Toggle **Show Obstacles** in the overlay section to blend the mask into the main canvas or pair it with the density/energy heatmaps.
-- Full walkthroughs—including console snippets for custom presets—live in [`demo/obstacle-scenarios.md`](demo/obstacle-scenarios.md).
+- Full walkthroughs—including console snippets for custom presets—live in [`demo/obstacle-presets.md`](demo/obstacle-presets.md).

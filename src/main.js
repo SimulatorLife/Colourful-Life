@@ -1,7 +1,7 @@
 import UIManager from './uiManager.js';
 import BrainDebugger from './brainDebugger.js';
 import SimulationEngine from './simulationEngine.js';
-import { OBSTACLE_PRESETS, OBSTACLE_SCENARIOS } from './gridManager.js';
+import { OBSTACLE_PRESETS } from './gridManager.js';
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -133,10 +133,8 @@ export function createSimulation({
   const baseActions = {
     burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
-    runObstacleScenario: (id) => engine.runObstacleScenario(id),
     setLingerPenalty: (value) => engine.setLingerPenalty(value),
     obstaclePresets: OBSTACLE_PRESETS,
-    obstacleScenarios: OBSTACLE_SCENARIOS,
     selectionManager: engine.selectionManager,
     getCellSize: () => engine.cellSize,
     ...(uiOptions.actions || {}),

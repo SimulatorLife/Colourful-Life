@@ -15,7 +15,7 @@
       import SimulationEngine from './src/simulationEngine.js';
       import UIManager from './src/uiManager.js';
       import BrainDebugger from './src/brainDebugger.js';
-      import { OBSTACLE_PRESETS, OBSTACLE_SCENARIOS } from './src/gridManager.js';
+      import { OBSTACLE_PRESETS } from './src/gridManager.js';
 
       const canvas = document.getElementById('gameCanvas');
 
@@ -37,10 +37,8 @@
         {
           burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
           applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
-          runObstacleScenario: (id) => engine.runObstacleScenario(id),
           setLingerPenalty: (value) => engine.setLingerPenalty(value),
           obstaclePresets: OBSTACLE_PRESETS,
-          obstacleScenarios: OBSTACLE_SCENARIOS,
           selectionManager: engine.selectionManager,
           getCellSize: () => engine.cellSize,
         },

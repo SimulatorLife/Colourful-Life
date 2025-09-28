@@ -13,12 +13,11 @@ import {
 
 export default class UIManager {
   constructor(simulationCallbacks = {}, mountSelector = '#app', actions = {}, layoutOptions = {}) {
-    const { obstaclePresets = [], obstacleScenarios = [], ...actionFns } = actions || {};
+    const { obstaclePresets = [], ...actionFns } = actions || {};
 
     this.simulationCallbacks = simulationCallbacks || {};
     this.actions = actionFns;
     this.obstaclePresets = Array.isArray(obstaclePresets) ? obstaclePresets : [];
-    this.obstacleScenarios = Array.isArray(obstacleScenarios) ? obstacleScenarios : [];
     this.paused = false;
     this.selectionManager = actions.selectionManager || null;
     this.getCellSize =
@@ -53,7 +52,6 @@ export default class UIManager {
     this.showFitness = false;
     this.showObstacles = true;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? 'none';
-    this.obstacleScenario = this.obstacleScenarios[0]?.id ?? 'manual';
     this.lingerPenalty = 0;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
@@ -691,9 +689,9 @@ export default class UIManager {
   }
 
   #buildObstacleControls(body, sliderContext) {
-    if (this.obstaclePresets.length <= 0 && this.obstacleScenarios.length <= 0) return;
+    if (this.obstaclePresets.length <= 0) return;
 
-    createSectionHeading(body, 'Obstacles & Scenarios', { className: 'overlay-header' });
+    createSectionHeading(body, 'Obstacles', { className: 'overlay-header' });
 
     const obstacleGrid = createControlGrid(body, 'control-grid--compact');
 
@@ -746,44 +744,6 @@ export default class UIManager {
       presetButtons.appendChild(applyLayoutButton);
       presetButtons.appendChild(clearButton);
       obstacleGrid.appendChild(presetButtons);
-    }
-
-    if (this.obstacleScenarios.length > 0) {
-      const scenarioSelect = createSelectRow(obstacleGrid, {
-        label: 'Scenario Script',
-        title: 'Schedule obstacle changes to watch the population adapt.',
-        value: this.obstacleScenario,
-        options: this.obstacleScenarios.map((scenario) => ({
-          value: scenario.id,
-          label: scenario.label,
-          description: scenario.description,
-        })),
-        onChange: (value) => {
-          this.obstacleScenario = value;
-        },
-      });
-
-      if (scenarioSelect) {
-        Array.from(scenarioSelect.options).forEach((opt) => {
-          if (!opt.title && opt.textContent) opt.title = opt.textContent;
-        });
-      }
-
-      const scenarioButtons = document.createElement('div');
-
-      scenarioButtons.className = 'control-line';
-      const runButton = document.createElement('button');
-
-      runButton.textContent = 'Run Scenario';
-      runButton.title = 'Queue the selected scripted obstacle sequence.';
-      runButton.addEventListener('click', () => {
-        if (typeof this.actions.runObstacleScenario === 'function')
-          this.actions.runObstacleScenario(this.obstacleScenario);
-        else if (window.grid?.runObstacleScenario)
-          window.grid.runObstacleScenario(this.obstacleScenario);
-      });
-      scenarioButtons.appendChild(runButton);
-      obstacleGrid.appendChild(scenarioButtons);
     }
 
     const lingerSlider = sliderContext.withSliderConfig('lingerPenalty', {

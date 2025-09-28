@@ -1,5 +1,5 @@
 import EventManager from './eventManager.js';
-import GridManager, { OBSTACLE_PRESETS, OBSTACLE_SCENARIOS } from './gridManager.js';
+import GridManager, { OBSTACLE_PRESETS } from './gridManager.js';
 import SelectionManager from './selectionManager.js';
 import Stats from './stats.js';
 import { drawOverlays as defaultDrawOverlays } from './overlays.js';
@@ -209,10 +209,6 @@ export default class SimulationEngine {
 
   get obstaclePresets() {
     return OBSTACLE_PRESETS;
-  }
-
-  get obstacleScenarios() {
-    return OBSTACLE_SCENARIOS;
   }
 
   get isRunning() {
@@ -688,10 +684,6 @@ export default class SimulationEngine {
 
   applyObstaclePreset(id, options) {
     this.grid.applyObstaclePreset(id, options);
-  }
-
-  runObstacleScenario(id) {
-    this.grid.runObstacleScenario(id);
   }
 }
 
