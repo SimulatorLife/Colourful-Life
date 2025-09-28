@@ -683,7 +683,7 @@ export default class PopulationManager {
     cell.energy = Math.min(this.maxTileEnergy, cell.energy + take);
   }
 
-  collectBirthCandidateTiles({
+  #collectBirthCandidateTiles({
     parentRow,
     parentCol,
     mateRow,
@@ -829,7 +829,7 @@ export default class PopulationManager {
       cell.energy >= thrA &&
       bestMate.target.energy >= thrB
     ) {
-      const candidates = this.collectBirthCandidateTiles({
+      const candidates = this.#collectBirthCandidateTiles({
         parentRow,
         parentCol,
         mateRow,
