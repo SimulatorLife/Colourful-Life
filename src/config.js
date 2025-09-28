@@ -36,3 +36,47 @@ export function getDefaultMaxTileEnergy() {
   // TODO: Remove this function and use the constant directly
   return MAX_TILE_ENERGY;
 }
+
+const SLIDER_DEFAULTS = {
+  eventFrequencyMultiplier: UI_SLIDER_CONFIG.eventFrequencyMultiplier?.default ?? 1,
+  mutationMultiplier: UI_SLIDER_CONFIG.mutationMultiplier?.default ?? 1,
+  densityEffectMultiplier: UI_SLIDER_CONFIG.densityEffectMultiplier?.default ?? 1,
+  societySimilarity: UI_SLIDER_CONFIG.societySimilarity?.default ?? 0.7,
+  enemySimilarity: UI_SLIDER_CONFIG.enemySimilarity?.default ?? 0.4,
+  eventStrengthMultiplier: UI_SLIDER_CONFIG.eventStrengthMultiplier?.default ?? 1,
+  speedMultiplier: UI_SLIDER_CONFIG.speedMultiplier?.default ?? 1,
+  leaderboardIntervalMs: UI_SLIDER_CONFIG.leaderboardIntervalMs?.default ?? 750,
+  matingDiversityThreshold: UI_SLIDER_CONFIG.matingDiversityThreshold?.default ?? 0.45,
+  lowDiversityReproMultiplier: UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ?? 0.1,
+};
+
+const BASE_SIMULATION_DEFAULTS = {
+  paused: false,
+  updatesPerSecond: 60,
+  eventFrequencyMultiplier: SLIDER_DEFAULTS.eventFrequencyMultiplier,
+  mutationMultiplier: SLIDER_DEFAULTS.mutationMultiplier,
+  densityEffectMultiplier: SLIDER_DEFAULTS.densityEffectMultiplier,
+  societySimilarity: SLIDER_DEFAULTS.societySimilarity,
+  enemySimilarity: SLIDER_DEFAULTS.enemySimilarity,
+  eventStrengthMultiplier: SLIDER_DEFAULTS.eventStrengthMultiplier,
+  energyRegenRate: ENERGY_REGEN_RATE_DEFAULT,
+  energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
+  showObstacles: true,
+  showEnergy: false,
+  showDensity: false,
+  showFitness: false,
+  leaderboardIntervalMs: SLIDER_DEFAULTS.leaderboardIntervalMs,
+  matingDiversityThreshold: SLIDER_DEFAULTS.matingDiversityThreshold,
+  lowDiversityReproMultiplier: SLIDER_DEFAULTS.lowDiversityReproMultiplier,
+  speedMultiplier: SLIDER_DEFAULTS.speedMultiplier,
+  lingerPenalty: 0,
+};
+
+export function resolveSimulationDefaults(overrides = {}) {
+  const entries = Object.entries(BASE_SIMULATION_DEFAULTS).map(([key, value]) => [
+    key,
+    overrides[key] ?? value,
+  ]);
+
+  return Object.fromEntries(entries);
+}
