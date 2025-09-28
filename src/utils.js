@@ -12,6 +12,14 @@ export function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+export function clamp01(value) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) return 0;
+
+  return clamp(numeric, 0, 1);
+}
+
 export function cloneTracePayload(trace) {
   if (!trace) return null;
 

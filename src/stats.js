@@ -1,14 +1,9 @@
+import { clamp01 } from './utils.js';
+
 const TRAIT_KEYS = ['cooperation', 'fighting', 'breeding', 'sight'];
 const TRAIT_THRESHOLD = 0.6;
 const MAX_REPRODUCTION_PROB = 0.8;
 const MAX_SIGHT_RANGE = 5;
-
-const clamp01 = (value) => {
-  if (value <= 0) return 0;
-  if (value >= 1) return 1;
-
-  return value;
-};
 
 const createEmptyTraitSnapshot = () => {
   const averages = {};
