@@ -805,6 +805,10 @@ export default class PopulationManager {
       addNeighbors(parentRow, parentCol);
       addNeighbors(mateRow, mateCol);
 
+      if (moveSucceeded) {
+        addCandidate(originalParentRow, originalParentCol);
+      }
+
       for (let i = 0; i < candidates.length; i++) {
         const idx = Math.floor(Math.random() * candidates.length);
         const t = candidates[i];
