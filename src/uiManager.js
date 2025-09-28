@@ -936,6 +936,7 @@ export default class UIManager {
   getShowFitness() {
     return this.showFitness;
   }
+
   renderMetrics(stats, snapshot) {
     if (!this.metricsBox) return;
     this.metricsBox.innerHTML = '';

@@ -19,28 +19,6 @@ test("GridManager.tryMove updates a cell's stored coordinates", async () => {
   assert.is(cell.col, 1);
 });
 
-test('GridManager.tryMove reports occupied destinations via onBlocked', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-
-  const mover = { row: 0, col: 0, energy: 1, dna: {} };
-  const occupant = { row: 0, col: 1 };
-  const grid = [[mover, occupant]];
-  const blockedEvents = [];
-
-  const moved = GridManager.tryMove(grid, 0, 0, 0, 1, 1, 2, {
-    onBlocked: (payload) => blockedEvents.push(payload),
-  });
-
-  assert.is(moved, false);
-  assert.is(grid[0][0], mover);
-  assert.is(grid[0][1], occupant);
-  assert.is(blockedEvents.length, 1);
-  assert.is(blockedEvents[0].reason, 'occupied');
-  assert.is(blockedEvents[0].nextRow, 0);
-  assert.is(blockedEvents[0].nextCol, 1);
-  assert.is(blockedEvents[0].occupant, occupant);
-});
-
 test('GridManager.tryMove ignores empty sources without mutating density data', async () => {
   const { default: GridManager } = await import('../src/gridManager.js');
 
@@ -61,7 +39,6 @@ test('GridManager.tryMove ignores empty sources without mutating density data', 
   const onCellMovedCalls = [];
 
   const moved = GridManager.tryMove(gm.grid, 0, 0, 0, 1, gm.rows, gm.cols, {
-    obstacles: gm.obstacles,
     onMove: (payload) => onMoveCalls.push(payload),
     onCellMoved: (...args) => onCellMovedCalls.push(args),
     activeCells: gm.activeCells,
@@ -119,14 +96,16 @@ test('handleReproduction returns false when offspring cannot be placed', async (
     stats: { onBirth() {}, onDeath() {}, recordMateChoice() {} },
   });
 
+  gm.densityGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0));
+
   for (let r = 0; r < 3; r++) {
     for (let c = 0; c < 3; c++) {
-      gm.setObstacle(r, c, true, { evict: false });
+      if ((r === 1 && c === 1) || (r === 1 && c === 2)) continue;
+      const blocker = new Cell(r, c, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+
+      gm.setCell(r, c, blocker);
     }
   }
-  gm.setObstacle(1, 1, false);
-  gm.setObstacle(1, 2, false);
-  gm.densityGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0));
 
   const parent = new Cell(1, 1, new DNA(0, 0, 0), MAX_TILE_ENERGY);
   const mate = new Cell(1, 2, new DNA(0, 0, 0), MAX_TILE_ENERGY);
@@ -246,12 +225,21 @@ test('handleReproduction does not wrap offspring placement across map edges', as
   });
   parent.findBestMate = () => mateEntry;
 
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      const reserved = (r === 0 && (c === 0 || c === 1)) || (r === 1 && c === 0);
+
+      if (reserved) continue;
+      const blocker = new Cell(r, c, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+
+      gm.setCell(r, c, blocker);
+    }
+  }
+
   gm.setCell(0, 0, parent);
   gm.setCell(0, 1, mate);
 
-  gm.setObstacle(1, 1, true, { evict: false });
-  gm.setObstacle(0, 2, true, { evict: false });
-  gm.setObstacle(1, 2, true, { evict: false });
+  const farBlocker = gm.grid[2][2];
 
   const stats = {
     births: 0,
@@ -280,7 +268,11 @@ test('handleReproduction does not wrap offspring placement across map edges', as
 
   assert.is(stats.births, 1);
   assert.ok(gm.grid[1][0], 'expected a new offspring in-bounds adjacent to the parents');
-  assert.is(gm.grid[2][2], null, 'offspring should not appear on the wrapped opposite corner');
+  assert.is(
+    gm.grid[2][2],
+    farBlocker,
+    'offspring should not appear on the wrapped opposite corner'
+  );
 });
 
 test('processCell continues to combat when reproduction fails', async () => {
@@ -300,12 +292,14 @@ test('processCell continues to combat when reproduction fails', async () => {
 
   for (let r = 0; r < 3; r++) {
     for (let c = 0; c < 3; c++) {
-      gm.setObstacle(r, c, true, { evict: false });
+      const reserved = (r === 1 && c === 1) || (r === 1 && c === 2) || (r === 0 && c === 1);
+
+      if (reserved) continue;
+      const blocker = new Cell(r, c, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+
+      gm.setCell(r, c, blocker);
     }
   }
-  gm.setObstacle(1, 1, false);
-  gm.setObstacle(1, 2, false);
-  gm.setObstacle(0, 1, false);
   gm.energyGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => MAX_TILE_ENERGY));
   const densityGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0));
 

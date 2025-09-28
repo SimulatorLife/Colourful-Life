@@ -211,7 +211,6 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   if (selectionManager) {
     drawSelectionZones(selectionManager, ctx, cellSize);
   }
-
   if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);
   if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
   if (showFitness) {
