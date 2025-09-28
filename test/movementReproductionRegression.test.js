@@ -463,12 +463,12 @@ test('processCell continues to combat when reproduction fails', async () => {
 
   let combatCalled = false;
 
-  gm.handleCombat = () => {
+  gm.organisms.handleCombat = () => {
     combatCalled = true;
 
     return false;
   };
-  gm.handleMovement = () => {};
+  gm.organisms.handleMovement = () => {};
 
   let births = 0;
   const stats = {
