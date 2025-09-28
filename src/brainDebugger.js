@@ -48,6 +48,31 @@ const BrainDebugger = {
             ? Number(cell.dna.neurons())
             : 0;
       const neuronCount = reportedNeuronCount > 0 ? reportedNeuronCount : fallbackNeuronCount;
+      const reportedConnectionCount = Number.isFinite(brain?.connectionCount)
+        ? brain.connectionCount
+        : 0;
+      let fallbackConnectionCount = Array.isArray(detail?.connections)
+        ? detail.connections.length
+        : 0;
+
+      if (fallbackConnectionCount <= 0 && typeof cell?.dna?.neuralGenes === 'function') {
+        const genes = cell.dna.neuralGenes();
+
+        if (Array.isArray(genes) && genes.length > 0) {
+          let enabled = 0;
+
+          for (let j = 0; j < genes.length; j += 1) {
+            const gene = genes[j];
+
+            if (gene && gene.enabled !== false) enabled += 1;
+          }
+
+          fallbackConnectionCount = enabled;
+        }
+      }
+
+      const connectionCount =
+        reportedConnectionCount > 0 ? reportedConnectionCount : fallbackConnectionCount;
 
       next.push({
         row: entry.row,
@@ -55,7 +80,8 @@ const BrainDebugger = {
         fitness: entry.fitness,
         color: cell?.color,
         neuronCount: Number.isFinite(neuronCount) && neuronCount > 0 ? neuronCount : 0,
-        connectionCount: brain.connectionCount,
+        connectionCount:
+          Number.isFinite(connectionCount) && connectionCount > 0 ? connectionCount : 0,
         brain: detail,
         decisions: telemetry,
       });
