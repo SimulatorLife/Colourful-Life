@@ -237,6 +237,43 @@ test('updateFromSnapshot aggregates metrics and caps histories', async () => {
   assert.is(stats.history.mutationMultiplier.length, 3);
   assert.is(stats.traitHistory.presence.cooperation.length, 3);
   assert.is(stats.traitHistory.average.cooperation.length, 3);
+
+  assert.equal(stats.history.population, [1, 1, 1]);
+  assert.equal(stats.history.diversity, [0.1, 0.2, 0.3]);
+  assert.equal(stats.getHistorySeries('population'), [1, 1, 1]);
+  assert.equal(stats.getTraitHistorySeries('presence', 'cooperation'), [0.5, 0.5, 0.5]);
+});
+
+test('history buffers maintain order while capping size', async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(3);
+
+  stats.pushHistory('population', 1);
+  stats.pushHistory('population', 2);
+  stats.pushHistory('population', 3);
+
+  assert.equal(stats.history.population, [1, 2, 3]);
+
+  stats.pushHistory('population', 4);
+
+  assert.equal(stats.history.population, [2, 3, 4]);
+  assert.equal(stats.getHistorySeries('population'), [2, 3, 4]);
+
+  stats.pushTraitHistory('presence', 'cooperation', 0.1);
+  stats.pushTraitHistory('presence', 'cooperation', 0.2);
+  stats.pushTraitHistory('presence', 'cooperation', 0.3);
+
+  assert.equal(stats.traitHistory.presence.cooperation, [0.1, 0.2, 0.3]);
+
+  stats.pushTraitHistory('presence', 'cooperation', 0.4);
+
+  assert.equal(stats.traitHistory.presence.cooperation, [0.2, 0.3, 0.4]);
+  assert.equal(stats.getTraitHistorySeries('presence', 'cooperation'), [0.2, 0.3, 0.4]);
+
+  const chartSeries = stats.history.population;
+
+  assert.ok(Array.isArray(chartSeries));
+  assert.is(chartSeries.length, 3);
 });
 
 test('setters sanitize non-finite mutation and diversity threshold inputs', async () => {

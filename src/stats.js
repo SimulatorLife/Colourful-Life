@@ -5,6 +5,58 @@ const TRAIT_THRESHOLD = 0.6;
 const MAX_REPRODUCTION_PROB = 0.8;
 const MAX_SIGHT_RANGE = 5;
 
+const HISTORY_KEYS = [
+  'population',
+  'diversity',
+  'energy',
+  'growth',
+  'eventStrength',
+  'diversePairingRate',
+  'meanDiversityAppetite',
+  'mutationMultiplier',
+];
+
+const createRingBuffer = (size = 0) => {
+  const capacity = Math.max(0, Math.floor(size));
+
+  return {
+    buffer: new Array(capacity || 0),
+    capacity,
+    start: 0,
+    length: 0,
+  };
+};
+
+const pushToRing = (ring, value) => {
+  if (!ring || ring.capacity === 0) return;
+
+  if (ring.length < ring.capacity) {
+    const index = (ring.start + ring.length) % ring.capacity;
+
+    ring.buffer[index] = value;
+    ring.length += 1;
+
+    return;
+  }
+
+  ring.buffer[ring.start] = value;
+  ring.start = (ring.start + 1) % ring.capacity;
+};
+
+const unwrapRing = (ring) => {
+  if (!ring || ring.length === 0 || ring.capacity === 0) return [];
+
+  const values = new Array(ring.length);
+
+  for (let i = 0; i < ring.length; i++) {
+    const index = (ring.start + i) % ring.capacity;
+
+    values[i] = ring.buffer[index];
+  }
+
+  return values;
+};
+
 const createEmptyTraitSnapshot = () => {
   const averages = {};
   const fractions = {};
@@ -34,31 +86,51 @@ const _createMatingSnapshot = () => ({
 });
 
 export default class Stats {
+  #historyRings;
+  #traitHistoryRings;
   constructor(historySize = 10000) {
     this.historySize = historySize;
     this.resetTick();
-    this.history = {
-      population: [],
-      diversity: [],
-      energy: [],
-      growth: [],
-      eventStrength: [],
-      diversePairingRate: [],
-      meanDiversityAppetite: [],
-      mutationMultiplier: [],
-    };
+    this.history = {};
+    this.#historyRings = {};
     this.totals = { ticks: 0, births: 0, deaths: 0, fights: 0, cooperations: 0 };
     this.traitHistory = { presence: {}, average: {} };
+    this.#traitHistoryRings = { presence: {}, average: {} };
     this.matingDiversityThreshold = 0.45;
     this.lastMatingDebug = null;
     this.mutationMultiplier = 1;
     this.lastBlockedReproduction = null;
 
+    HISTORY_KEYS.forEach((key) => {
+      const ring = createRingBuffer(this.historySize);
+
+      this.#historyRings[key] = ring;
+      Object.defineProperty(this.history, key, {
+        enumerable: true,
+        configurable: false,
+        get: () => unwrapRing(ring),
+      });
+    });
+
     for (let i = 0; i < TRAIT_KEYS.length; i++) {
       const key = TRAIT_KEYS[i];
+      const presenceRing = createRingBuffer(this.historySize);
+      const averageRing = createRingBuffer(this.historySize);
 
-      this.traitHistory.presence[key] = [];
-      this.traitHistory.average[key] = [];
+      this.#traitHistoryRings.presence[key] = presenceRing;
+      this.#traitHistoryRings.average[key] = averageRing;
+
+      Object.defineProperty(this.traitHistory.presence, key, {
+        enumerable: true,
+        configurable: false,
+        get: () => unwrapRing(presenceRing),
+      });
+
+      Object.defineProperty(this.traitHistory.average, key, {
+        enumerable: true,
+        configurable: false,
+        get: () => unwrapRing(averageRing),
+      });
     }
 
     this.traitPresence = createEmptyTraitSnapshot();
@@ -331,18 +403,22 @@ export default class Stats {
   }
 
   pushHistory(key, value) {
-    const arr = this.history[key];
+    const ring = this.#historyRings?.[key];
 
-    arr.push(value);
-    if (arr.length > this.historySize) arr.shift();
+    pushToRing(ring, value);
   }
 
   pushTraitHistory(type, key, value) {
-    const bucket = this.traitHistory?.[type]?.[key];
+    const ring = this.#traitHistoryRings?.[type]?.[key];
 
-    if (!bucket) return;
+    pushToRing(ring, value);
+  }
 
-    bucket.push(value);
-    if (bucket.length > this.historySize) bucket.shift();
+  getHistorySeries(key) {
+    return unwrapRing(this.#historyRings?.[key]);
+  }
+
+  getTraitHistorySeries(type, key) {
+    return unwrapRing(this.#traitHistoryRings?.[type]?.[key]);
   }
 }
