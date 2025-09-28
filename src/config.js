@@ -19,20 +19,6 @@ export const UI_SLIDER_CONFIG = {
   energyDiffusionRate: { min: 0, max: 0.5, step: 0.01, floor: 0 },
   leaderboardIntervalMs: { default: 750, min: 100, max: 3000, step: 50, floor: 0 },
 };
-
 // Penalties (scale 0..1) used in energy model
 export const REGEN_DENSITY_PENALTY = 0.5; // 1 - penalty * density
 export const CONSUMPTION_DENSITY_PENALTY = 0.5; // 1 - penalty * density
-
-export function getDefaultMaxTileEnergy() {
-  if (typeof globalThis !== 'undefined') {
-    const gm = globalThis.GridManager;
-
-    if (gm && typeof gm.maxTileEnergy === 'number') {
-      return gm.maxTileEnergy;
-    }
-  }
-
-  // TODO: Remove this function and use the constant directly
-  return MAX_TILE_ENERGY;
-}
