@@ -1,6 +1,4 @@
-import { clamp } from './utils.js';
-
-const clamp01 = (value) => clamp(typeof value === 'number' ? value : 0, 0, 1);
+import { clamp, clamp01 } from './utils.js';
 
 export default class InteractionSystem {
   constructor({ gridManager } = {}) {
