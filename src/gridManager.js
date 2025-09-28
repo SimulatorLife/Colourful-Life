@@ -1364,110 +1364,220 @@ export default class GridManager {
     });
   }
 
-  handleReproduction(
-    row,
-    col,
-    cell,
-    { mates, society },
-    { stats, densityGrid, densityEffectMultiplier, mutationMultiplier }
-  ) {
-    // findTargets sorts potential partners into neutral mates and allies; fall back
-    // to the allied list so strongly kin-seeking genomes still have options.
-    const matePool = mates.length > 0 ? mates : society;
+  #selectMateCandidate(cell, mates, society) {
+    const matePool = Array.isArray(mates) && mates.length > 0 ? mates : society;
 
-    if (matePool.length === 0) return false;
+    if (!Array.isArray(matePool) || matePool.length === 0) return null;
 
-    const selection = cell.selectMateWeighted ? cell.selectMateWeighted(matePool) : null;
-    const selectedMate = selection?.chosen ?? null;
-    const evaluated = Array.isArray(selection?.evaluated) ? selection.evaluated : [];
-    const selectionMode = selection?.mode ?? 'preference';
+    const weightedSelection =
+      typeof cell.selectMateWeighted === 'function' ? cell.selectMateWeighted(matePool) : null;
+    const selectionMode = weightedSelection?.mode ?? null;
+    const evaluated = Array.isArray(weightedSelection?.evaluated) ? weightedSelection.evaluated : [];
+    const chosen = weightedSelection?.chosen ?? null;
 
-    let bestMate = selectedMate;
+    let bestMate = chosen && chosen.target ? chosen : null;
 
-    if (!bestMate || !bestMate.target) {
-      bestMate = cell.findBestMate(matePool);
-
-      if (!bestMate) return false;
+    if (!bestMate) {
+      bestMate = typeof cell.findBestMate === 'function' ? cell.findBestMate(matePool) : null;
     }
 
-    const similarity =
-      typeof bestMate.similarity === 'number'
-        ? bestMate.similarity
-        : cell.similarityTo(bestMate.target);
-    const diversity = typeof bestMate.diversity === 'number' ? bestMate.diversity : 1 - similarity;
-    const diversityThreshold =
-      typeof this.matingDiversityThreshold === 'number' ? this.matingDiversityThreshold : 0;
-    const penaltyBase =
-      typeof this.lowDiversityReproMultiplier === 'number'
-        ? clamp(this.lowDiversityReproMultiplier, 0, 1)
-        : 0;
-    let penaltyMultiplier = 1;
-    let penalizedForSimilarity = false;
+    if (!bestMate || !bestMate.target) return null;
 
+    const similarity =
+      typeof bestMate.similarity === 'number' ? bestMate.similarity : cell.similarityTo(bestMate.target);
+    const diversity =
+      typeof bestMate.diversity === 'number' ? bestMate.diversity : 1 - (similarity ?? 0);
+
+    return {
+      matePool,
+      bestMate,
+      evaluated,
+      selectionMode,
+      similarity,
+      diversity,
+    };
+  }
+
+  #resolveParentPositions(row, col, cell, mateDescriptor) {
     const originalParentRow = cell.row;
     const originalParentCol = cell.col;
     const moveSucceeded = this.boundMoveToTarget(
       this.grid,
       row,
       col,
-      bestMate.row,
-      bestMate.col,
+      mateDescriptor.row,
+      mateDescriptor.col,
       this.rows,
       this.cols
     );
+
     const parentRow = cell.row;
     const parentCol = cell.col;
-    const mateRow = bestMate.target.row;
-    const mateCol = bestMate.target.col;
-
+    const mateRow = mateDescriptor.target.row;
+    const mateCol = mateDescriptor.target.col;
     const densitySourceRow = moveSucceeded ? parentRow : originalParentRow;
     const densitySourceCol = moveSucceeded ? parentCol : originalParentCol;
-    let localDensity = densityGrid?.[densitySourceRow]?.[densitySourceCol];
+
+    return {
+      originalParentRow,
+      originalParentCol,
+      parentRow,
+      parentCol,
+      mateRow,
+      mateCol,
+      moveSucceeded,
+      densitySourceRow,
+      densitySourceCol,
+    };
+  }
+
+  #prepareReproductionContext(
+    row,
+    col,
+    cell,
+    mateContext,
+    { densityGrid, densityEffectMultiplier }
+  ) {
+    if (!mateContext?.bestMate?.target) return null;
+
+    const positions = this.#resolveParentPositions(row, col, cell, mateContext.bestMate);
+    let localDensity = densityGrid?.[positions.densitySourceRow]?.[positions.densitySourceCol];
 
     if (localDensity == null) {
-      localDensity = this.getDensityAt(densitySourceRow, densitySourceCol);
+      localDensity = this.getDensityAt(positions.densitySourceRow, positions.densitySourceCol);
     }
-    const baseProb = cell.computeReproductionProbability(bestMate.target, {
-      localDensity,
-      densityEffectMultiplier,
-    });
-    const { probability: reproProb } = cell.decideReproduction(bestMate.target, {
-      localDensity,
-      densityEffectMultiplier,
-      maxTileEnergy: this.maxTileEnergy,
-      baseProbability: baseProb,
-    });
 
-    let effectiveReproProb = clamp(reproProb ?? 0, 0, 1);
+    const baseProbability =
+      typeof cell.computeReproductionProbability === 'function'
+        ? cell.computeReproductionProbability(mateContext.bestMate.target, {
+            localDensity,
+            densityEffectMultiplier,
+          })
+        : 0;
+    const reproductionDecision =
+      typeof cell.decideReproduction === 'function'
+        ? cell.decideReproduction(mateContext.bestMate.target, {
+            localDensity,
+            densityEffectMultiplier,
+            maxTileEnergy: this.maxTileEnergy,
+            baseProbability,
+          })
+        : { probability: baseProbability };
+    const diversityThreshold =
+      typeof this.matingDiversityThreshold === 'number' ? this.matingDiversityThreshold : 0;
+    const penaltyBase =
+      typeof this.lowDiversityReproMultiplier === 'number'
+        ? clamp(this.lowDiversityReproMultiplier, 0, 1)
+        : 0;
 
-    if (diversity < diversityThreshold) {
+    let effectiveProbability = clamp(reproductionDecision?.probability ?? 0, 0, 1);
+    let penaltyMultiplier = 1;
+    let penalizedForSimilarity = false;
+
+    if (mateContext.diversity < diversityThreshold) {
       penalizedForSimilarity = true;
       penaltyMultiplier = penaltyBase;
-
-      if (penaltyMultiplier <= 0) effectiveReproProb = 0;
-      else effectiveReproProb = clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
+      effectiveProbability =
+        penaltyMultiplier <= 0 ? 0 : clamp(effectiveProbability * penaltyMultiplier, 0, 1);
     }
 
     const thrFracA =
-      typeof cell.dna.reproductionThresholdFrac === 'function'
+      typeof cell.dna?.reproductionThresholdFrac === 'function'
         ? cell.dna.reproductionThresholdFrac()
         : 0.4;
     const thrFracB =
-      typeof bestMate.target.dna.reproductionThresholdFrac === 'function'
-        ? bestMate.target.dna.reproductionThresholdFrac()
+      typeof mateContext.bestMate.target.dna?.reproductionThresholdFrac === 'function'
+        ? mateContext.bestMate.target.dna.reproductionThresholdFrac()
         : 0.4;
     const thrA = thrFracA * this.maxTileEnergy;
     const thrB = thrFracB * this.maxTileEnergy;
     const appetite = cell.diversityAppetite ?? 0;
     const bias = cell.matePreferenceBias ?? 0;
-    const selectionListSize = evaluated.length > 0 ? evaluated.length : matePool.length;
-    const selectionKind = selectedMate && selectedMate.target ? selectionMode : 'legacy';
+    const selectionListSize =
+      mateContext.evaluated.length > 0 ? mateContext.evaluated.length : mateContext.matePool.length;
 
-    let reproduced = false;
-    const zoneParents = this.selectionManager
-      ? this.selectionManager.validateReproductionArea({
-          parentA: { row: parentRow, col: parentCol },
-          parentB: { row: mateRow, col: mateCol },
+    return {
+      positions,
+      localDensity,
+      effectiveProbability,
+      penalizedForSimilarity,
+      penaltyMultiplier,
+      diversityThreshold,
+      thrA,
+      thrB,
+      appetite,
+      bias,
+      selectionListSize,
+    };
+  }
+
+  #isSpawnSlotAvailable(row, col) {
+    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return false;
+    if (this.isObstacle(row, col)) return false;
+
+    return !this.grid[row][col];
+  }
+
+  #collectSpawnCandidates(positions) {
+    const {
+      originalParentRow,
+      originalParentCol,
+      parentRow,
+      parentCol,
+      mateRow,
+      mateCol,
+      moveSucceeded,
+    } = positions;
+    const candidates = [];
+    const seen = new Set();
+    const push = (r, c) => {
+      if (r < 0 || c < 0 || r >= this.rows || c >= this.cols) return;
+      const key = `${r},${c}`;
+
+      if (seen.has(key)) return;
+      seen.add(key);
+      candidates.push({ r, c });
+    };
+    const pushNeighbors = (baseRow, baseCol) => {
+      for (let dr = -1; dr <= 1; dr += 1) {
+        for (let dc = -1; dc <= 1; dc += 1) {
+          if (dr === 0 && dc === 0) continue;
+          push(baseRow + dr, baseCol + dc);
+        }
+      }
+    };
+
+    push(originalParentRow, originalParentCol);
+    if (moveSucceeded) pushNeighbors(originalParentRow, originalParentCol);
+    push(parentRow, parentCol);
+    push(mateRow, mateCol);
+    pushNeighbors(parentRow, parentCol);
+    pushNeighbors(mateRow, mateCol);
+
+    const freeSlots = candidates.filter(({ r, c }) => this.#isSpawnSlotAvailable(r, c));
+
+    if (freeSlots.length === 0) return [];
+
+    const selection = this.selectionManager;
+
+    if (!selection?.hasActiveZones?.()) {
+      return freeSlots;
+    }
+
+    const eligible = freeSlots.filter(({ r, c }) => selection.isInActiveZone(r, c));
+
+    return eligible.length > 0 ? eligible : freeSlots;
+  }
+
+  #attemptReproduction(cell, mateContext, reproductionContext, { stats, mutationMultiplier }) {
+    const mateCell = mateContext.bestMate.target;
+    const { positions, effectiveProbability, thrA, thrB } = reproductionContext;
+    const selection = this.selectionManager;
+
+    const zoneParents = selection
+      ? selection.validateReproductionArea({
+          parentA: { row: positions.parentRow, col: positions.parentCol },
+          parentB: { row: positions.mateRow, col: positions.mateCol },
         })
       : { allowed: true };
 
@@ -1476,59 +1586,22 @@ export default class GridManager {
     if (!zoneParents.allowed) {
       blockedInfo = {
         reason: zoneParents.reason,
-        parentA: { row: parentRow, col: parentCol },
-        parentB: { row: mateRow, col: mateCol },
+        parentA: { row: positions.parentRow, col: positions.parentCol },
+        parentB: { row: positions.mateRow, col: positions.mateCol },
       };
     }
 
-    if (
-      !blockedInfo &&
-      randomPercent(effectiveReproProb) &&
-      cell.energy >= thrA &&
-      bestMate.target.energy >= thrB
-    ) {
-      const candidates = [];
-      const candidateSet = new Set();
-      const addCandidate = (r, c) => {
-        if (r < 0 || r >= this.rows || c < 0 || c >= this.cols) return;
+    let reproduced = false;
 
-        const key = `${r},${c}`;
-
-        if (!candidateSet.has(key) && !this.isObstacle(r, c)) {
-          candidateSet.add(key);
-          candidates.push({ r, c });
-        }
-      };
-      const addNeighbors = (baseRow, baseCol) => {
-        for (let dr = -1; dr <= 1; dr += 1) {
-          for (let dc = -1; dc <= 1; dc += 1) {
-            if (dr === 0 && dc === 0) continue;
-
-            addCandidate(baseRow + dr, baseCol + dc);
-          }
-        }
-      };
-
-      addCandidate(originalParentRow, originalParentCol);
-      if (moveSucceeded) addNeighbors(originalParentRow, originalParentCol);
-      addCandidate(parentRow, parentCol);
-      addCandidate(mateRow, mateCol);
-      addNeighbors(parentRow, parentCol);
-      addNeighbors(mateRow, mateCol);
-
-      const freeSlots = candidates.filter(({ r, c }) => !this.grid[r][c] && !this.isObstacle(r, c));
-      const eligibleSlots =
-        this.selectionManager && freeSlots.length > 0 && this.selectionManager.hasActiveZones()
-          ? freeSlots.filter(({ r, c }) => this.selectionManager.isInActiveZone(r, c))
-          : freeSlots;
-      const slotPool = eligibleSlots.length > 0 ? eligibleSlots : freeSlots;
+    if (!blockedInfo && randomPercent(effectiveProbability) && cell.energy >= thrA && mateCell.energy >= thrB) {
+      const slotPool = this.#collectSpawnCandidates(positions);
 
       if (slotPool.length > 0) {
         const spawn = slotPool[Math.floor(randomRange(0, slotPool.length))];
-        const zoneCheck = this.selectionManager
-          ? this.selectionManager.validateReproductionArea({
-              parentA: { row: parentRow, col: parentCol },
-              parentB: { row: mateRow, col: mateCol },
+        const zoneCheck = selection
+          ? selection.validateReproductionArea({
+              parentA: { row: positions.parentRow, col: positions.parentCol },
+              parentB: { row: positions.mateRow, col: positions.mateCol },
               spawn: { row: spawn.r, col: spawn.c },
             })
           : { allowed: true };
@@ -1536,12 +1609,12 @@ export default class GridManager {
         if (!zoneCheck.allowed) {
           blockedInfo = {
             reason: zoneCheck.reason,
-            parentA: { row: parentRow, col: parentCol },
-            parentB: { row: mateRow, col: mateCol },
+            parentA: { row: positions.parentRow, col: positions.parentCol },
+            parentB: { row: positions.mateRow, col: positions.mateCol },
             spawn: { row: spawn.r, col: spawn.c },
           };
         } else {
-          const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
+          const offspring = Cell.breed(cell, mateCell, mutationMultiplier, {
             maxTileEnergy: this.maxTileEnergy,
           });
 
@@ -1549,32 +1622,66 @@ export default class GridManager {
             offspring.row = spawn.r;
             offspring.col = spawn.c;
             this.setCell(spawn.r, spawn.c, offspring);
-            stats.onBirth();
+            stats?.onBirth?.();
             reproduced = true;
           }
         }
       }
     }
 
-    if (blockedInfo && stats?.recordReproductionBlocked) {
-      stats.recordReproductionBlocked(blockedInfo);
+    return { reproduced, blockedInfo };
+  }
+
+  #recordMateAttempt(stats, mateContext, reproductionContext, attemptResult) {
+    if (!stats) return;
+
+    if (attemptResult.blockedInfo && typeof stats.recordReproductionBlocked === 'function') {
+      stats.recordReproductionBlocked(attemptResult.blockedInfo);
     }
 
-    if (stats?.recordMateChoice) {
+    if (typeof stats.recordMateChoice === 'function') {
+      const selectionMode = mateContext.selectionMode ?? 'legacy';
+
       stats.recordMateChoice({
-        similarity,
-        diversity,
-        appetite,
-        bias,
-        selectionMode: selectionKind,
-        poolSize: selectionListSize,
-        success: reproduced,
-        penalized: penalizedForSimilarity,
-        penaltyMultiplier,
+        similarity: mateContext.similarity,
+        diversity: mateContext.diversity,
+        appetite: reproductionContext.appetite,
+        bias: reproductionContext.bias,
+        selectionMode,
+        poolSize: reproductionContext.selectionListSize,
+        success: attemptResult.reproduced,
+        penalized: reproductionContext.penalizedForSimilarity,
+        penaltyMultiplier: reproductionContext.penaltyMultiplier,
       });
     }
+  }
 
-    return reproduced;
+  handleReproduction(
+    row,
+    col,
+    cell,
+    { mates, society },
+    { stats, densityGrid, densityEffectMultiplier, mutationMultiplier }
+  ) {
+    const mateContext = this.#selectMateCandidate(cell, mates, society);
+
+    if (!mateContext) return false;
+
+    const reproductionContext = this.#prepareReproductionContext(row, col, cell, mateContext, {
+      densityGrid,
+      densityEffectMultiplier,
+    });
+
+    if (!reproductionContext) return false;
+
+    const attempt = this.#attemptReproduction(cell, mateContext, reproductionContext, {
+      stats,
+      mutationMultiplier,
+    });
+
+    this.#recordMateAttempt(stats, mateContext, reproductionContext, attempt);
+
+    return attempt.reproduced;
   }
 
   handleCombat(
