@@ -1,11 +1,25 @@
+function nextFrom(rng) {
+  if (typeof rng === 'function') {
+    return rng();
+  }
+
+  if (rng && typeof rng.next === 'function') {
+    return rng.next();
+  }
+
+  return Math.random();
+}
+
 export function randomRange(min, max, rng = Math.random) {
-  return rng() * (max - min) + min;
+  return nextFrom(rng) * (max - min) + min;
 }
 
 export const lerp = (a, b, t) => a + (b - a) * (t < 0 ? 0 : t > 1 ? 1 : t);
 
-export function randomPercent(chance) {
-  return Math.random() < chance;
+export function randomPercent(chance, rng = Math.random) {
+  if (!Number.isFinite(chance)) return false;
+
+  return nextFrom(rng) < chance;
 }
 
 export function clamp(value, min, max) {

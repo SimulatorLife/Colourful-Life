@@ -1,7 +1,7 @@
 import DNA from './genome.js';
 import Brain, { OUTPUT_GROUPS } from './brain.js';
-import { clamp, lerp, cloneTracePayload } from './utils.js';
-import { resolveRngController } from './rng.js';
+import { randomRange, clamp, lerp, cloneTracePayload } from './utils.js';
+import { resolveRng } from './rng.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
 import { accumulateEventModifiers } from './energySystem.js';
@@ -18,18 +18,24 @@ function softmax(logits = []) {
   return expValues.map((v) => v / sum);
 }
 
+function draw(rng) {
+  if (rng && typeof rng.next === 'function') {
+    return rng.next();
+  }
+
+  if (typeof rng === 'function') {
+    return rng();
+  }
+
+  return Math.random();
+}
+
 function sampleFromDistribution(probabilities = [], labels = [], rng) {
   if (!Array.isArray(probabilities) || probabilities.length === 0) return null;
   const total = probabilities.reduce((acc, v) => acc + v, 0);
 
   if (!Number.isFinite(total) || total <= EPSILON) return null;
-  const generator =
-    rng && typeof rng.next === 'function'
-      ? () => rng.next()
-      : typeof rng === 'function'
-        ? rng
-        : Math.random;
-  const r = generator() * total;
+  const r = draw(rng) * total;
   let acc = 0;
 
   for (let i = 0; i < probabilities.length; i++) {
@@ -46,11 +52,10 @@ export default class Cell {
   static geneMutationRange = 0.2;
 
   constructor(row, col, dna, energy, options = {}) {
-    const rng = resolveRngController(options?.rng);
-
     this.row = row;
     this.col = col;
-    this.dna = dna || DNA.random(rng);
+    this.rng = resolveRng(options.rng ?? (() => Math.random()));
+    this.dna = dna || DNA.random(this.rng);
     this.brain = Brain.fromDNA(this.dna);
     this.genes = this.dna.weights();
     this.color = this.dna.toColor();
@@ -74,7 +79,6 @@ export default class Cell {
     this.decisionHistory = [];
     this._pendingDecisionContexts = [];
     this._decisionContextIndex = new Map();
-    this.rng = rng;
     // Cache metabolism from gene row 5 to avoid per-tick recompute
     const geneRow = this.genes?.[5];
 
@@ -87,8 +91,8 @@ export default class Cell {
   }
 
   static breed(parentA, parentB, mutationMultiplier = 1, options = {}) {
-    const { maxTileEnergy } = options || {};
-    const rng = resolveRngController(options?.rng ?? parentA?.rng ?? parentB?.rng);
+    const { maxTileEnergy, rng } = options || {};
+    const controller = resolveRng(rng ?? parentA?.rng ?? parentB?.rng ?? (() => Math.random()));
     const row = parentA.row;
     const col = parentA.col;
     const avgChance = (parentA.dna.mutationChance() + parentB.dna.mutationChance()) / 2;
@@ -97,7 +101,7 @@ export default class Cell {
     const effectiveMultiplier = Math.max(0, safeMultiplier);
     const chance = Math.max(0, avgChance * effectiveMultiplier);
     const range = Math.max(0, Math.round(avgRange * effectiveMultiplier));
-    const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range, { rng });
+    const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range, { rng: controller });
     const resolvedMaxTileEnergy =
       typeof maxTileEnergy === 'number'
         ? maxTileEnergy
@@ -123,10 +127,10 @@ export default class Cell {
     parentB.energy = Math.max(0, parentB.energy - investB);
 
     const offspringEnergy = investA + investB;
-    const offspring = new Cell(row, col, childDNA, offspringEnergy, { rng });
+    const offspring = new Cell(row, col, childDNA, offspringEnergy, { rng: controller });
     const strategy =
       (parentA.strategy + parentB.strategy) / 2 +
-      (rng.next() * Cell.geneMutationRange - Cell.geneMutationRange / 2);
+      controller.range(-Cell.geneMutationRange / 2, Cell.geneMutationRange / 2);
 
     offspring.strategy = Math.min(1, Math.max(0, strategy));
     parentA.offspring = (parentA.offspring || 0) + 1;
@@ -202,10 +206,10 @@ export default class Cell {
 
     const curiosityChance = Math.min(0.5, appetite * 0.25);
 
-    if (evaluated.length > 1 && this.rng.percent(curiosityChance)) {
+    if (evaluated.length > 1 && this.rng.next() < curiosityChance) {
       const sorted = [...evaluated].sort((a, b) => b.diversity - a.diversity);
       const tailSpan = Math.max(1, Math.ceil(sorted.length * (0.2 + appetite * 0.5)));
-      const idx = Math.min(sorted.length - 1, this.rng.int(0, tailSpan));
+      const idx = Math.min(sorted.length - 1, Math.floor(this.rng.next() * tailSpan));
 
       chosen = sorted[idx];
       mode = 'curiosity';
@@ -630,9 +634,9 @@ export default class Cell {
     const total = w + p + c || 1;
     const pStay = Math.max(0, Math.min(0.9, 0.15 + 0.7 * (c / total)));
 
-    if (this.rng.percent(pStay)) return { dr: 0, dc: 0 };
+    if (this.rng.next() < pStay) return { dr: 0, dc: 0 };
     // Otherwise pick one of 4 directions uniformly
-    switch (this.rng.int(0, 4)) {
+    switch ((this.rng.next() * 4) | 0) {
       case 0:
         return { dr: -1, dc: 0 };
       case 1:
@@ -739,13 +743,11 @@ export default class Cell {
     return this.dna.starvationThresholdFrac() * maxTileEnergy;
   }
 
-  static randomMovementGenes(rng) {
-    const controller = resolveRngController(rng);
-
+  static randomMovementGenes(rng = Math.random) {
     return {
-      wandering: controller.range(0, 1),
-      pursuit: controller.range(0, 1),
-      cautious: controller.range(0, 1),
+      wandering: randomRange(0, 1, rng),
+      pursuit: randomRange(0, 1, rng),
+      cautious: randomRange(0, 1, rng),
     };
   }
 
@@ -758,7 +760,7 @@ export default class Cell {
     const pursuitScaled = Math.max(0, pursuit * pursuitMul);
     const wanderingScaled = Math.max(0, wandering);
     const total = wanderingScaled + pursuitScaled + cautiousScaled || 1;
-    const r = this.rng.range(0, total);
+    const r = randomRange(0, total, this.rng);
 
     if (r < wanderingScaled) return 'wandering';
     if (r < wanderingScaled + pursuitScaled) return 'pursuit';
@@ -838,7 +840,7 @@ export default class Cell {
     if (Array.isArray(society) && society.length > 0) {
       const coh = typeof this.dna.cohesion === 'function' ? this.dna.cohesion() : 0;
 
-      if (this.rng.percent(coh)) {
+      if (this.rng.next() < coh) {
         const target = this.#nearest(society, row, col);
 
         if (target) return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
@@ -879,7 +881,7 @@ export default class Cell {
         Math.min(0.95, 0.3 + 0.4 * (Math.max(0, g.wandering) / total) + 0.3 * dnaExploit)
       );
 
-      if (best && this.rng.percent(pExploit)) {
+      if (best && this.rng.next() < pExploit) {
         if (typeof tryMove === 'function')
           return tryMove(gridArr, row, col, best.dr, best.dc, rows, cols);
 
@@ -1082,7 +1084,7 @@ export default class Cell {
     const coopW = Math.max(0.0001, cooperate * coopMul);
     const avoidW = Math.max(0.0001, avoid);
     const total = avoidW + fightW + coopW;
-    const roll = this.rng.range(0, total);
+    const roll = randomRange(0, total, this.rng);
 
     if (roll < avoidW) return 'avoid';
     if (roll < avoidW + fightW) return 'fight';

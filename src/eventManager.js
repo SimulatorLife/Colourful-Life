@@ -1,5 +1,6 @@
 import { EVENT_TYPES } from './eventEffects.js';
 import { randomRange } from './utils.js';
+import { resolveRng } from './rng.js';
 
 export function isEventAffecting(event, row, col) {
   if (!event || !event.affectedArea) return false;
@@ -16,10 +17,10 @@ export default class EventManager {
     coldwave: 'rgba(135, 206, 235, 0.5)',
   };
 
-  constructor(rows, cols, rng = Math.random) {
+  constructor(rows, cols, rng) {
     this.rows = rows;
     this.cols = cols;
-    this.rng = rng;
+    this.rng = resolveRng(rng);
     this.cooldown = 0;
     this.activeEvents = [];
     this.currentEvent = null;

@@ -9,55 +9,93 @@
 
   <body>
     <div id="app" class="app-layout">
-      <div class="canvas-controls">
-        <form id="seedForm" class="seed-form" autocomplete="off">
+      <div class="seed-controls" id="seedControls">
+        <form id="seedForm" class="seed-form">
           <label for="seedInput">Seed</label>
-          <input id="seedInput" name="seed" type="text" placeholder="random" />
+          <input id="seedInput" name="seed" type="text" inputmode="numeric" />
           <button type="submit">Apply</button>
+          <button type="button" id="seedRandom">Randomize</button>
         </form>
-        <canvas id="gameCanvas" width="600" height="600"></canvas>
+        <p class="seed-hint">Normalized seed: <span id="seedDisplay">—</span></p>
       </div>
+      <canvas id="gameCanvas" width="600" height="600"></canvas>
     </div>
     <script type="module">
       import { createSimulation } from './src/main.js';
-      import { createRngController } from './src/rng.js';
+      import { createRngController, normalizeSeed } from './src/rng.js';
 
       const canvas = document.getElementById('gameCanvas');
       const seedInput = document.getElementById('seedInput');
+      const seedDisplay = document.getElementById('seedDisplay');
       const seedForm = document.getElementById('seedForm');
+      const seedRandomButton = document.getElementById('seedRandom');
       const params = new URLSearchParams(window.location.search);
-      const seedParam = params.get('seed');
+      const initialSeedParam = params.get('seed');
+      const defaultSeedValue =
+        initialSeedParam ?? Math.floor(Math.random() * 0xffffffff).toString(16);
 
-      if (seedParam && seedInput) {
-        seedInput.value = seedParam;
+      if (!initialSeedParam) {
+        params.set('seed', defaultSeedValue);
+        const next = `${window.location.pathname}?${params.toString()}`;
+
+        window.history.replaceState({}, '', next);
       }
 
-      const rngController =
-        seedParam != null && seedParam !== '' ? createRngController(seedParam) : undefined;
+      const rng = createRngController(initialSeedParam ?? defaultSeedValue);
+
+      if (seedInput) {
+        seedInput.value = initialSeedParam ?? defaultSeedValue;
+      }
+
+      const updateSeedDisplay = (value) => {
+        if (!seedDisplay) return;
+        const normalized = normalizeSeed(value);
+
+        seedDisplay.textContent = `0x${normalized.toString(16).padStart(8, '0')}`;
+      };
+
+      updateSeedDisplay(seedInput?.value ?? defaultSeedValue);
+
+      seedForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const nextSeed = (seedInput?.value ?? '').trim();
+        const nextParams = new URLSearchParams(window.location.search);
+
+        if (nextSeed) {
+          nextParams.set('seed', nextSeed);
+        } else {
+          nextParams.delete('seed');
+        }
+
+        const target = `${window.location.pathname}?${nextParams.toString()}`;
+
+        window.location.assign(target);
+      });
+
+      seedRandomButton?.addEventListener('click', () => {
+        const randomSeed = Math.floor(Math.random() * 0xffffffff)
+          .toString(16)
+          .padStart(8, '0');
+
+        if (seedInput) {
+          seedInput.value = randomSeed;
+          seedInput.focus();
+        }
+
+        updateSeedDisplay(randomSeed);
+      });
+
+      seedInput?.addEventListener('input', (event) => {
+        updateSeedDisplay(event.target.value || defaultSeedValue);
+      });
 
       createSimulation({
         canvas,
         config: {
           cellSize: 5,
         },
-        rng: rngController,
+        rng,
       });
-
-      if (seedForm && seedInput) {
-        seedForm.addEventListener('submit', (event) => {
-          event.preventDefault();
-          const nextSeed = seedInput.value.trim();
-          const nextUrl = new URL(window.location.href);
-
-          if (nextSeed) {
-            nextUrl.searchParams.set('seed', nextSeed);
-          } else {
-            nextUrl.searchParams.delete('seed');
-          }
-
-          window.location.href = nextUrl.toString();
-        });
-      }
     </script>
   </body>
 </html>

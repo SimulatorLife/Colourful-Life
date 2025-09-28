@@ -1,4 +1,4 @@
-import { resolveRngController } from './rng.js';
+import { resolveRng } from './rng.js';
 
 const TRAIT_KEYS = ['cooperation', 'fighting', 'breeding', 'sight'];
 const TRAIT_THRESHOLD = 0.6;
@@ -41,17 +41,9 @@ const _createMatingSnapshot = () => ({
 });
 
 export default class Stats {
-  constructor(historySize = 10000, options = {}) {
-    if (typeof historySize === 'object' && historySize !== null) {
-      options = historySize;
-      historySize = options?.historySize ?? 10000;
-    }
-
-    const resolvedHistorySize =
-      typeof historySize === 'number' && !Number.isNaN(historySize) ? historySize : 10000;
-
-    this.historySize = resolvedHistorySize;
-    this.rng = resolveRngController(options?.rng ?? options?.random);
+  constructor(historySize = 10000, rng = Math.random) {
+    this.historySize = historySize;
+    this.rng = resolveRng(rng);
     this.resetTick();
     this.history = {
       population: [],
@@ -116,8 +108,8 @@ export default class Stats {
     let sum = 0;
 
     for (let i = 0; i < samples; i++) {
-      const a = cells[this.rng.int(0, n)];
-      const b = cells[this.rng.int(0, n)];
+      const a = cells[(this.rng.next() * n) | 0];
+      const b = cells[(this.rng.next() * n) | 0];
 
       if (a === b) {
         i--;

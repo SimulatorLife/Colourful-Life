@@ -45,44 +45,7 @@ canvas {
   justify-content: center;
   padding: var(--space-md);
   box-sizing: border-box;
-}
-
-.canvas-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.seed-form {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.seed-form label {
-  font-size: 14px;
-}
-
-.seed-form input {
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.seed-form button {
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-accent);
-  color: var(--color-text);
-  cursor: pointer;
-}
-
-.seed-form button:hover {
-  background: var(--color-accent-hover);
+  position: relative;
 }
 
 .main-row {
@@ -102,6 +65,67 @@ canvas {
   flex: 0 0 auto;
   width: 600px;
   height: 600px;
+}
+
+.seed-controls {
+  position: absolute;
+  top: var(--space-md);
+  left: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: rgba(26, 26, 26, 0.9);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  max-width: min(320px, 30vw);
+}
+
+.seed-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.seed-form label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-subtle);
+}
+
+.seed-form input[type='text'] {
+  flex: 1 1 120px;
+  min-width: 140px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-accent);
+  color: var(--color-text);
+}
+
+.seed-form button {
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-accent);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.seed-form button:hover,
+.seed-form button:focus-visible {
+  background: var(--color-accent-hover);
+}
+
+.seed-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-subtle);
 }
 
 /* Sidebar stacks panels vertically */

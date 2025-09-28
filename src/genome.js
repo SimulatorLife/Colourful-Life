@@ -1,4 +1,5 @@
 import { clamp, createRNG, randomRange } from './utils.js';
+import { resolveRng } from './rng.js';
 import Brain, { NEURAL_GENE_BYTES } from './brain.js';
 
 /**
@@ -83,16 +84,11 @@ export class DNA {
   }
 
   static random(rng = Math.random, geneCount = DEFAULT_TOTAL_GENE_COUNT) {
-    const generator =
-      typeof rng === 'function'
-        ? rng
-        : rng && typeof rng.next === 'function'
-          ? () => rng.next()
-          : Math.random;
+    const controller = resolveRng(rng);
     const genes = new Uint8Array(geneCount);
 
     for (let i = 0; i < geneCount; i++) {
-      genes[i] = Math.floor(generator() * 256) & 0xff;
+      genes[i] = Math.floor(controller.next() * 256) & 0xff;
     }
 
     return new DNA({ genes, geneCount });
@@ -684,21 +680,9 @@ export class DNA {
   }
 
   reproduceWith(other, mutationChance = 0.15, mutationRange = 12, options = {}) {
+    const rngController = resolveRng(options.rng ?? (() => Math.random()));
     const parentSeed = (this.seed() ^ (other?.seed?.() ?? 0)) >>> 0;
-    const entropySource = options?.rng;
-    let entropyRoll;
-
-    if (entropySource && typeof entropySource.next === 'function') {
-      entropyRoll = entropySource.next();
-    } else if (typeof entropySource === 'function') {
-      entropyRoll = entropySource();
-    }
-
-    if (!Number.isFinite(entropyRoll)) {
-      entropyRoll = Math.random();
-    }
-
-    const entropy = Math.floor(Math.max(0, Math.min(1, entropyRoll)) * 0xffffffff) >>> 0;
+    const entropy = Math.floor(rngController.next() * 0xffffffff) >>> 0;
     const rng = createRNG((parentSeed ^ entropy) >>> 0);
     const blendA = typeof this.crossoverMix === 'function' ? this.crossoverMix() : 0.5;
     const blendB = typeof other?.crossoverMix === 'function' ? other.crossoverMix() : 0.5;

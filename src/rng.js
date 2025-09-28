@@ -1,172 +1,200 @@
 import { createRNG } from './utils.js';
 
-const FNV_OFFSET_BASIS = 0x811c9dc5;
-const FNV_PRIME = 0x01000193;
+const FNV_OFFSET_BASIS = 2166136261;
+const FNV_PRIME = 16777619;
 
-function hashSeed(input) {
-  if (input == null) return 0;
-  const str = String(input);
+function hashString(value) {
   let hash = FNV_OFFSET_BASIS;
 
-  for (let i = 0; i < str.length; i++) {
-    hash ^= str.charCodeAt(i) & 0xff;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i) & 0xff;
     hash = Math.imul(hash, FNV_PRIME);
   }
 
   return hash >>> 0;
 }
 
-function normalizeSeed(source) {
-  if (typeof source === 'number' && Number.isFinite(source)) {
-    return source >>> 0;
+export function normalizeSeed(seed) {
+  if (seed == null) {
+    return 0;
   }
 
-  if (typeof source === 'bigint') {
-    return Number(source & BigInt(0xffffffff));
+  if (typeof seed === 'number' && Number.isFinite(seed)) {
+    return (Math.floor(seed) >>> 0) >>> 0;
   }
 
-  if (typeof source === 'string') {
-    return hashSeed(source);
+  if (typeof seed === 'bigint') {
+    return Number(seed & BigInt(0xffffffff)) >>> 0;
   }
 
-  return undefined;
+  if (typeof seed === 'string') {
+    return hashString(seed);
+  }
+
+  if (typeof seed === 'boolean') {
+    return seed ? 1 : 0;
+  }
+
+  if (typeof seed === 'object') {
+    if (typeof seed.seed === 'number') {
+      return normalizeSeed(seed.seed);
+    }
+
+    if (typeof seed.value === 'number') {
+      return normalizeSeed(seed.value);
+    }
+  }
+
+  return 0;
 }
 
-function toNumber(value) {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'bigint') return Number(value);
-  if (typeof value === 'string') {
-    const parsed = Number.parseFloat(value);
+function sanitizeValue(value) {
+  const numeric = Number(value);
 
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
+  if (!Number.isFinite(numeric)) return 0;
+  if (numeric <= 0) return 0;
+  if (numeric >= 1) return numeric % 1;
 
-  return undefined;
+  return numeric;
 }
 
-function coerceNextResult(result) {
-  const direct = toNumber(result);
+function coerceGenerator(source) {
+  if (!source) {
+    const seed = Date.now() >>> 0;
 
-  if (Number.isFinite(direct)) return direct;
-
-  if (result && typeof result === 'object') {
-    const { value } = result;
-    const unwrapped = toNumber(value);
-
-    if (Number.isFinite(unwrapped)) return unwrapped;
+    return { seed, generator: createRNG(seed) };
   }
 
-  return Math.random();
-}
-
-function resolveGenerator(source) {
-  if (typeof source === 'function') {
-    return { generator: source, seed: undefined };
-  }
-
-  if (source && typeof source.next === 'function') {
+  if (source instanceof RNGController) {
     return {
-      generator: () => coerceNextResult(source.next()),
-      seed: typeof source.seed === 'function' ? source.seed() : (source.seed ?? undefined),
+      seed: source.seed,
+      generator: source.next.bind(source),
     };
   }
 
-  const seed = normalizeSeed(source);
-
-  if (typeof seed === 'number') {
-    return { generator: createRNG(seed), seed };
+  if (typeof source === 'function') {
+    return {
+      seed: null,
+      generator() {
+        return sanitizeValue(source());
+      },
+    };
   }
 
-  return { generator: () => Math.random(), seed: undefined };
+  if (typeof source === 'object') {
+    if (typeof source.next === 'function') {
+      return {
+        seed: typeof source.seed === 'number' ? normalizeSeed(source.seed) : null,
+        generator() {
+          return sanitizeValue(source.next());
+        },
+      };
+    }
+
+    if (typeof source.generator === 'function') {
+      return {
+        seed: typeof source.seed === 'number' ? normalizeSeed(source.seed) : null,
+        generator: () => sanitizeValue(source.generator()),
+      };
+    }
+
+    if (typeof source.seed !== 'undefined') {
+      const normalized = normalizeSeed(source.seed);
+
+      return {
+        seed: normalized,
+        generator: createRNG(normalized),
+      };
+    }
+  }
+
+  const normalized = normalizeSeed(source);
+
+  return { seed: normalized, generator: createRNG(normalized) };
 }
 
 export class RNGController {
   constructor(source) {
-    const { generator, seed } = resolveGenerator(source);
+    const { seed, generator } = coerceGenerator(source);
 
-    this._seed = seed;
-    this._generator = generator;
+    this.seed = seed;
+    this.#generator = generator;
   }
 
-  get seed() {
-    return this._seed;
-  }
+  #generator;
 
   next() {
-    return this._generator();
+    return sanitizeValue(this.#generator());
   }
 
   percent(chance) {
     if (!Number.isFinite(chance)) return false;
-    if (chance <= 0) return false;
-    if (chance >= 1) return true;
+    const clamped = Math.max(0, Math.min(1, chance));
 
-    return this.next() < chance;
+    return this.next() < clamped;
   }
 
-  range(min, max) {
+  range(min = 0, max = 1) {
     if (!Number.isFinite(min) || !Number.isFinite(max)) {
-      throw new TypeError('RNGController.range requires finite min and max values.');
+      return this.next();
     }
 
-    return this.next() * (max - min) + min;
+    if (max === min) return min;
+
+    const [lo, hi] = max > min ? [min, max] : [max, min];
+
+    return this.next() * (hi - lo) + lo;
   }
 
   int(min, max) {
     if (!Number.isFinite(min) || !Number.isFinite(max)) {
-      throw new TypeError('RNGController.int requires finite min and max values.');
+      return Math.floor(this.next() * 0x100000000);
     }
 
-    if (max <= min) {
-      throw new RangeError('RNGController.int requires max to be greater than min.');
+    const ceilMin = Math.ceil(min);
+    const floorMax = Math.floor(max);
+
+    if (floorMax <= ceilMin) return ceilMin;
+
+    return Math.floor(this.range(ceilMin, floorMax));
+  }
+
+  pick(list) {
+    if (!Array.isArray(list) || list.length === 0) return undefined;
+
+    const index = Math.floor(this.next() * list.length);
+
+    return list[index];
+  }
+
+  shuffle(list) {
+    if (!Array.isArray(list)) return [];
+
+    const copy = [...list];
+
+    for (let i = copy.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(this.next() * (i + 1));
+      const tmp = copy[i];
+
+      copy[i] = copy[j];
+      copy[j] = tmp;
     }
 
-    return Math.floor(this.range(min, max));
-  }
-
-  pick(array) {
-    if (!Array.isArray(array) || array.length === 0) return undefined;
-
-    return array[this.int(0, array.length)];
-  }
-
-  shuffle(array) {
-    if (!Array.isArray(array)) return array;
-
-    for (let i = array.length - 1; i > 0; i--) {
-      const j = this.int(0, i + 1);
-      const tmp = array[i];
-
-      array[i] = array[j];
-      array[j] = tmp;
-    }
-
-    return array;
+    return copy;
   }
 }
 
-const defaultRng = new RNGController();
+export function createRngController(input) {
+  if (input instanceof RNGController) return input;
 
-export function createRngController(source) {
-  return new RNGController(source);
+  return new RNGController(input);
 }
 
-export function resolveRngController(source) {
-  if (source instanceof RNGController) {
-    return source;
+export function resolveRng(input) {
+  if (input instanceof RNGController) return input;
+  if (input && typeof input.next === 'function' && typeof input.percent === 'function') {
+    return input;
   }
 
-  if (source == null) {
-    return defaultRng;
-  }
-
-  return new RNGController(source);
-}
-
-export function getDefaultRng() {
-  return defaultRng;
-}
-
-export function seedFromString(value) {
-  return normalizeSeed(value);
+  return new RNGController(input);
 }
