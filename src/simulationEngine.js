@@ -116,12 +116,27 @@ export default class SimulationEngine {
     this.eventManager = new EventManager(rows, cols, rng);
     this.stats = new Stats();
     this.selectionManager = new SelectionManager(rows, cols);
+    const hasInitialPreset = typeof config.initialObstaclePreset === 'string';
+    const randomizeInitialObstacles =
+      config.randomizeInitialObstacles ??
+      (!hasInitialPreset || config.initialObstaclePreset === 'random');
+    const initialObstaclePreset = hasInitialPreset
+      ? config.initialObstaclePreset
+      : randomizeInitialObstacles
+        ? 'random'
+        : 'none';
+
     this.grid = new GridManager(rows, cols, {
       eventManager: this.eventManager,
       ctx: this.ctx,
       cellSize: this.cellSize,
       stats: this.stats,
       selectionManager: this.selectionManager,
+      initialObstaclePreset,
+      initialObstaclePresetOptions: config.initialObstaclePresetOptions,
+      randomizeInitialObstacles,
+      randomObstaclePresetPool: config.randomObstaclePresetPool,
+      rng,
     });
 
     if (win) {
