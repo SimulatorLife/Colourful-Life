@@ -90,6 +90,12 @@ export default class SimulationEngine {
     const cellSize = config.cellSize ?? 5;
     const rows = config.rows ?? Math.floor(height / cellSize);
     const cols = config.cols ?? Math.floor(width / cellSize);
+    const systemOverrides = config?.systems ?? {};
+    const {
+      environmentSystem: injectedEnvironmentSystem,
+      obstacleSystem: injectedObstacleSystem,
+      organismSystem: injectedOrganismSystem,
+    } = systemOverrides;
 
     this.window = win;
     this.document = doc;
@@ -122,6 +128,9 @@ export default class SimulationEngine {
       cellSize: this.cellSize,
       stats: this.stats,
       selectionManager: this.selectionManager,
+      environmentSystem: injectedEnvironmentSystem,
+      obstacleSystem: injectedObstacleSystem,
+      organismSystem: injectedOrganismSystem,
     });
 
     if (win) {
