@@ -97,7 +97,7 @@ jobs:
             } catch (e) {
               core.info('Label add skipped: ' + e.message);
             }
-      - name: Comment to trigger Codex
+      - name: Comment to trigger Codex (instruction-first, with push reminder)
         uses: actions/github-script@v7
         env:
           BASE_BRANCH: ${{ inputs.base_branch }}
@@ -109,25 +109,30 @@ jobs:
           github-token: ${{ secrets.GH_USER_TOKEN }}
           script: |
             const prNumber = Number(process.env.PR_NUMBER);
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const branch = process.env.BRANCH_NAME;
 
-            // 1) Instruction comes right after @codex (single paragraph)
-            // 2) Short inline reminder to use the specified branch/PR
-            // 3) Machine-readable context block follows
+            // Keep ${GITHUB_TOKEN} LITERAL so Codex expands it in its own env
+            const tokenCheck = 'echo "${GITHUB_TOKEN}" | wc -c';
+            const pushCmd = 'git push "https://x-access-token:${GITHUB_TOKEN}@github.com/' +
+                            owner + '/' + repo + '.git" "HEAD:' + branch + '"';
+
             const body = [
               `@codex ${process.env.PROMPT}`,
               "",
-              `Once done, ensure all changes are pushed to remote branch **${process.env.BRANCH_NAME}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact command to guarantee your changes are pushed, replacing 'GITHUB_TOKEN' with the actual secret value from your environment:`,
+              `Once done, ensure all changes are pushed to remote branch **${branch}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact commands to guarantee your changes are pushed using the secret named GITHUB_TOKEN available in your environment:`,
               "",
               "```bash",
-              `echo \"${GITHUB_TOKEN}\" | wc -c`,
-              "git config user.name  \"codex-bot\"",
-              "git config user.email \"codex@example.com\"",
-              `git push \"https://x-access-token:${GITHUB_TOKEN}@github.com/${context.repo.owner}/${context.repo.repo}.git\" \"HEAD:${process.env.BRANCH_NAME}\"`,
+              tokenCheck,
+              'git config user.name  "codex-bot"',
+              'git config user.email "codex@example.com"',
+              pushCmd,
               "```",
               "Here is some additional context for your task:",
               "```yaml",
               "codex_task:",
-              `  branch: "${process.env.BRANCH_NAME}"`,
+              `  branch: "${branch}"`,
               `  pr_number: ${prNumber}`,
               `  base: "${process.env.BASE_BRANCH}"`,
               `  head_sha: "${process.env.HEAD_SHA}"`,
@@ -135,8 +140,5 @@ jobs:
             ].join("\n");
 
             await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo:  context.repo.repo,
-              issue_number: prNumber,
-              body,
+              owner, repo, issue_number: prNumber, body
             });
