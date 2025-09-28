@@ -7,6 +7,7 @@ import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
 import { computeTileEnergyUpdate } from './energySystem.js';
 import InteractionSystem from './interactionSystem.js';
+import GridInteractionAdapter from './grid/gridAdapter.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -281,7 +282,8 @@ export default class GridManager {
     this.tickCount = 0;
     this.rng = typeof rng === 'function' ? rng : Math.random;
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
-    this.interactionSystem = new InteractionSystem({ gridManager: this });
+    this.interactionAdapter = new GridInteractionAdapter({ gridManager: this });
+    this.interactionSystem = new InteractionSystem({ adapter: this.interactionAdapter });
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
       GridManager.tryMove(gridArr, sr, sc, dr, dc, rows, cols, this.#movementOptions());
     this.boundMoveToTarget = (gridArr, row, col, targetRow, targetCol, rows, cols) =>

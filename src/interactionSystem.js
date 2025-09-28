@@ -1,8 +1,15 @@
 import { clamp, clamp01 } from './utils.js';
+import GridInteractionAdapter from './grid/gridAdapter.js';
 
 export default class InteractionSystem {
-  constructor({ gridManager } = {}) {
-    this.gridManager = gridManager || null;
+  constructor({ adapter, gridManager } = {}) {
+    if (adapter) {
+      this.adapter = adapter;
+    } else if (gridManager) {
+      this.adapter = new GridInteractionAdapter({ gridManager });
+    } else {
+      this.adapter = null;
+    }
     this.pendingIntents = [];
   }
 
@@ -41,9 +48,9 @@ export default class InteractionSystem {
   }
 
   #resolveFight(intent, { stats, densityGrid, densityEffectMultiplier } = {}) {
-    const manager = this.gridManager;
+    const adapter = this.adapter;
 
-    if (!manager) return false;
+    if (!adapter) return false;
 
     const initiator = intent.initiator || intent.attacker || null;
     const target = intent.target || null;
@@ -71,7 +78,7 @@ export default class InteractionSystem {
 
     if (targetRow == null || targetCol == null) return false;
 
-    const defender = manager.grid?.[targetRow]?.[targetCol] ?? null;
+    const defender = adapter.getCell?.(targetRow, targetCol) ?? null;
 
     if (!defender) return false;
 
@@ -92,33 +99,43 @@ export default class InteractionSystem {
     const attackerPower = attacker.energy * (attacker.dna?.combatPower?.() ?? 1);
     const defenderPower = defender.energy * (defender.dna?.combatPower?.() ?? 1);
 
-    const attackerTile = manager.grid?.[attackerRow]?.[attackerCol] ?? null;
+    const attackerTile = adapter.getCell?.(attackerRow, attackerCol) ?? null;
 
     if (attackerPower >= defenderPower) {
-      if (typeof manager.removeCell === 'function') manager.removeCell(targetRow, targetCol);
-      else if (manager.grid?.[targetRow]) manager.grid[targetRow][targetCol] = null;
+      if (typeof adapter.removeCell === 'function') {
+        adapter.removeCell(targetRow, targetCol);
+      } else if (typeof adapter.setCell === 'function') {
+        adapter.setCell(targetRow, targetCol, null);
+      }
 
       let relocated = false;
 
-      if (typeof manager.relocateCell === 'function') {
-        relocated = manager.relocateCell(attackerRow, attackerCol, targetRow, targetCol);
+      if (typeof adapter.relocateCell === 'function') {
+        relocated = adapter.relocateCell(attackerRow, attackerCol, targetRow, targetCol);
       }
 
       if (!relocated) {
-        if (manager.grid?.[targetRow]) manager.grid[targetRow][targetCol] = attacker;
-        if (manager.grid?.[attackerRow]) manager.grid[attackerRow][attackerCol] = null;
-        attacker.row = targetRow;
-        attacker.col = targetCol;
+        if (attackerTile === attacker) {
+          if (typeof adapter.removeCell === 'function') {
+            adapter.removeCell(attackerRow, attackerCol);
+          } else {
+            adapter.setCell?.(attackerRow, attackerCol, null);
+          }
+        }
+
+        adapter.setCell?.(targetRow, targetCol, attacker);
+        if ('row' in attacker) attacker.row = targetRow;
+        if ('col' in attacker) attacker.col = targetCol;
       }
 
-      if (typeof manager.consumeEnergy === 'function') {
-        manager.consumeEnergy(
-          attacker,
-          targetRow,
-          targetCol,
-          densityGrid ?? manager.densityGrid,
-          densityEffectMultiplier
-        );
+      if (typeof adapter.consumeTileEnergy === 'function') {
+        adapter.consumeTileEnergy({
+          cell: attacker,
+          row: targetRow,
+          col: targetCol,
+          densityGrid,
+          densityEffectMultiplier,
+        });
       }
 
       stats?.onFight?.();
@@ -129,10 +146,12 @@ export default class InteractionSystem {
       return true;
     }
 
-    if (attackerTile === attacker && typeof manager.removeCell === 'function') {
-      manager.removeCell(attackerRow, attackerCol);
-    } else if (attackerTile === attacker && manager.grid?.[attackerRow]) {
-      manager.grid[attackerRow][attackerCol] = null;
+    if (attackerTile === attacker) {
+      if (typeof adapter.removeCell === 'function') {
+        adapter.removeCell(attackerRow, attackerCol);
+      } else if (typeof adapter.setCell === 'function') {
+        adapter.setCell(attackerRow, attackerCol, null);
+      }
     }
 
     stats?.onFight?.();
@@ -144,9 +163,9 @@ export default class InteractionSystem {
   }
 
   #resolveCooperation(intent, { stats } = {}) {
-    const manager = this.gridManager;
+    const adapter = this.adapter;
 
-    if (!manager) return false;
+    if (!adapter) return false;
 
     const initiator = intent.initiator || null;
     const target = intent.target || null;
@@ -159,19 +178,23 @@ export default class InteractionSystem {
 
     if (targetRow == null || targetCol == null) return false;
 
-    const partner = manager.grid?.[targetRow]?.[targetCol] ?? null;
+    const partner = adapter.getCell?.(targetRow, targetCol) ?? null;
 
     if (!partner) return false;
 
     const shareFraction = clamp01(intent.metadata?.shareFraction);
-    const maxTileEnergy = manager.maxTileEnergy ?? 0;
+    const maxTileEnergy = typeof adapter.maxTileEnergy === 'function' ? adapter.maxTileEnergy() : 0;
     const available = Math.max(0, actor.energy * shareFraction);
     const shareAmount = Math.min(maxTileEnergy, available);
 
     if (shareAmount <= 0) return false;
 
-    actor.energy = Math.max(0, actor.energy - shareAmount);
-    partner.energy = Math.min(maxTileEnergy, (partner.energy ?? 0) + shareAmount);
+    const transferred =
+      typeof adapter.transferEnergy === 'function'
+        ? adapter.transferEnergy({ from: actor, to: partner, amount: shareAmount })
+        : 0;
+
+    if (transferred <= 0) return false;
 
     stats?.onCooperate?.();
 
