@@ -220,47 +220,44 @@ export default class Cell {
     return { chosen, evaluated, mode };
   }
 
-  findBestMate(potentialMates) {
-    if (!Array.isArray(potentialMates) || potentialMates.length === 0) return null;
+  #fallbackMateSelection(potentialMates = []) {
+    const pref = this.dna?.mateSimilarityPreference?.() ?? {};
+    const target = clamp(pref.target ?? 0.75, 0, 1);
+    const tolerance = Math.max(0.05, pref.tolerance ?? 0.25);
+    const kinBias = clamp(pref.kinBias ?? 0.5, 0, 1);
+    const dnaNoiseRng = this.dna?.prngFor ? this.dna.prngFor('mateChoice') : null;
 
-    const scored = this.scorePotentialMates(potentialMates);
+    let fallbackMate = null;
+    let bestScore = -Infinity;
 
-    if (scored.length === 0) {
-      const pref = this.dna?.mateSimilarityPreference?.() ?? {};
-      const target = clamp(pref.target ?? 0.75, 0, 1);
-      const tolerance = Math.max(0.05, pref.tolerance ?? 0.25);
-      const kinBias = clamp(pref.kinBias ?? 0.5, 0, 1);
-      const dnaNoiseRng = this.dna?.prngFor ? this.dna.prngFor('mateChoice') : null;
+    for (const mate of potentialMates) {
+      if (!mate?.target) continue;
 
-      let fallbackMate = null;
-      let bestScore = -Infinity;
+      const similarity = this.similarityTo(mate.target);
+      const diff = Math.abs(similarity - target);
+      const targetScore = Math.max(0, 1 - diff / tolerance);
+      const kinScore = similarity;
+      let score = (1 - kinBias) * targetScore + kinBias * kinScore;
 
-      for (const mate of potentialMates) {
-        const similarity = this.similarityTo(mate.target);
-        const diff = Math.abs(similarity - target);
-        const targetScore = Math.max(0, 1 - diff / tolerance);
-        const kinScore = similarity;
-        let score = (1 - kinBias) * targetScore + kinBias * kinScore;
+      if (dnaNoiseRng) score += (dnaNoiseRng() - 0.5) * 0.05;
+      score += (Math.random() - 0.5) * 0.05;
 
-        if (dnaNoiseRng) score += (dnaNoiseRng() - 0.5) * 0.05;
-        score += (Math.random() - 0.5) * 0.05; // slight stochasticity keeps diversity
-
-        if (score > bestScore) {
-          bestScore = score;
-          fallbackMate = mate;
-        }
+      if (score > bestScore) {
+        bestScore = score;
+        fallbackMate = mate;
       }
-
-      return fallbackMate;
     }
 
+    return fallbackMate;
+  }
+
+  #selectHighestPreferenceMate(scored = []) {
     let bestMate = null;
     let highestPreference = -Infinity;
 
-    for (let i = 0; i < scored.length; i++) {
-      const mate = scored[i];
-
+    for (const mate of scored) {
       if (!mate) continue;
+
       if (mate.preferenceScore > highestPreference) {
         highestPreference = mate.preferenceScore;
         bestMate = mate;
@@ -268,6 +265,18 @@ export default class Cell {
     }
 
     return bestMate;
+  }
+
+  findBestMate(potentialMates) {
+    if (!Array.isArray(potentialMates) || potentialMates.length === 0) return null;
+
+    const scored = this.scorePotentialMates(potentialMates);
+
+    if (scored.length === 0) {
+      return this.#fallbackMateSelection(potentialMates);
+    }
+
+    return this.#selectHighestPreferenceMate(scored);
   }
 
   // Internal: nearest target utility
@@ -655,46 +664,71 @@ export default class Cell {
     }
   }
 
-  manageEnergy(row, col, { localDensity, densityEffectMultiplier, maxTileEnergy }) {
-    const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
-    const metabolism = this.metabolism;
-    const energyDensityMult = lerp(this.density.energyLoss.min, this.density.energyLoss.max, effD);
+  #calculateMetabolicEnergyLoss(effectiveDensity) {
+    const energyLossConfig = this.density?.energyLoss ?? { min: 1, max: 1 };
+    const minLoss = Number.isFinite(energyLossConfig.min) ? energyLossConfig.min : 1;
+    const maxLoss = Number.isFinite(energyLossConfig.max) ? energyLossConfig.max : minLoss;
+    const energyDensityMult = lerp(minLoss, maxLoss, effectiveDensity);
     const baseLoss = this.dna.energyLossBase();
-    const lossScale = this.dna.baseEnergyLossScale() * (1 + metabolism) * energyDensityMult;
+    const lossScale = this.dna.baseEnergyLossScale() * (1 + this.metabolism) * energyDensityMult;
     const agingPenalty = this.ageEnergyMultiplier();
-    const energyLoss = baseLoss * lossScale * agingPenalty;
-    // cognitive/perception overhead derived from DNA and recent neural evaluations
+
+    return baseLoss * lossScale * agingPenalty;
+  }
+
+  #calculateCognitiveCosts(effectiveDensity) {
     const baselineNeurons = Math.max(0, this.neurons || 0);
     const dynamicLoad = Math.max(0, this._neuralLoad || 0);
-    const costBreakdown =
+    const cognitiveAgeMultiplier = this.ageEnergyMultiplier(0.75);
+    const breakdown =
       typeof this.dna.cognitiveCostComponents === 'function'
         ? this.dna.cognitiveCostComponents({
             baselineNeurons,
             dynamicNeurons: dynamicLoad,
             sight: this.sight,
-            effDensity: effD,
+            effDensity: effectiveDensity,
           })
         : null;
-    let baselineCost = 0;
-    let dynamicCost = 0;
-    let cognitiveLoss = 0;
-    const cognitiveAgeMultiplier = this.ageEnergyMultiplier(0.75);
 
-    if (costBreakdown) {
-      baselineCost = (costBreakdown.baseline || 0) * cognitiveAgeMultiplier;
-      dynamicCost = (costBreakdown.dynamic || 0) * cognitiveAgeMultiplier;
-      cognitiveLoss = baselineCost + dynamicCost;
-    } else {
-      baselineCost =
-        this.dna.cognitiveCost(baselineNeurons, this.sight, effD) * cognitiveAgeMultiplier;
-      const combinedLoad = Math.max(0, baselineNeurons + dynamicLoad);
-      const totalCost =
-        this.dna.cognitiveCost(combinedLoad, this.sight, effD) * cognitiveAgeMultiplier;
+    if (breakdown) {
+      const baselineCost = (breakdown.baseline || 0) * cognitiveAgeMultiplier;
+      const dynamicCost = (breakdown.dynamic || 0) * cognitiveAgeMultiplier;
 
-      dynamicCost = Math.max(0, totalCost - baselineCost);
-      cognitiveLoss = baselineCost + dynamicCost;
+      return {
+        baselineCost,
+        dynamicCost,
+        cognitiveLoss: baselineCost + dynamicCost,
+        dynamicLoad,
+        baselineNeurons,
+      };
     }
 
+    const baselineCost =
+      this.dna.cognitiveCost(baselineNeurons, this.sight, effectiveDensity) * cognitiveAgeMultiplier;
+    const combinedLoad = Math.max(0, baselineNeurons + dynamicLoad);
+    const totalCost =
+      this.dna.cognitiveCost(combinedLoad, this.sight, effectiveDensity) * cognitiveAgeMultiplier;
+    const dynamicCost = Math.max(0, totalCost - baselineCost);
+
+    return {
+      baselineCost,
+      dynamicCost,
+      cognitiveLoss: baselineCost + dynamicCost,
+      dynamicLoad,
+      baselineNeurons,
+    };
+  }
+
+  manageEnergy(row, col, { localDensity, densityEffectMultiplier, maxTileEnergy }) {
+    const effectiveDensity = clamp(localDensity * densityEffectMultiplier, 0, 1);
+    const energyLoss = this.#calculateMetabolicEnergyLoss(effectiveDensity);
+    const {
+      baselineCost,
+      dynamicCost,
+      cognitiveLoss,
+      dynamicLoad,
+      baselineNeurons,
+    } = this.#calculateCognitiveCosts(effectiveDensity);
     const energyBefore = this.energy;
 
     this.energy -= energyLoss + cognitiveLoss;
