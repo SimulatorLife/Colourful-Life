@@ -78,13 +78,4 @@ export default class EventManager {
     // Maintain compatibility: expose the first active event as currentEvent
     this.currentEvent = this.activeEvents.length > 0 ? this.activeEvents[0] : null;
   }
-
-  applyEventEffects(cell, row, col) {
-    const event = this.currentEvent;
-
-    if (isEventAffecting(event, row, col)) {
-      // Event effects on individual cells are handled in Cell.applyEventEffects
-      // This hook is reserved for global side-effects if needed.
-    }
-  }
 }
