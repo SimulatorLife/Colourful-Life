@@ -14,7 +14,7 @@ const collectNeighbors = async (rows, cols, row, col, radius, includeOrigin = fa
     (r, c) => {
       coords.push([r, c]);
     },
-    includeOrigin
+    { includeOrigin }
   );
 
   return coords;
@@ -81,6 +81,34 @@ test('does not invoke callback when radius is negative', async () => {
   forEachNeighbor(2, 2, 0, 0, -1, counter.increment.bind(counter));
 
   assert.is(counter.value, 0);
+});
+
+test('supports callback short-circuiting and coordinate reuse', async () => {
+  const { forEachNeighbor } = await import('../src/gridNeighbors.js');
+  const reuse = { row: -1, col: -1 };
+  const seen = [];
+
+  forEachNeighbor(
+    3,
+    3,
+    1,
+    1,
+    1,
+    (coord) => {
+      seen.push([coord.row, coord.col]);
+
+      return seen.length < 3;
+    },
+    { reuse }
+  );
+
+  assert.equal(seen, [
+    [0, 0],
+    [0, 1],
+    [0, 2],
+  ]);
+  assert.is(reuse.row, 0);
+  assert.is(reuse.col, 2);
 });
 
 test.run();
