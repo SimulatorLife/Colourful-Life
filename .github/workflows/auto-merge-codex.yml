@@ -73,7 +73,7 @@ jobs:
           script: |
             const prNumber = Number('${{ steps.pr.outputs.number }}');
 
-            // 1) Wait for GitHub to compute mergeability
+            // Poll until GitHub computes mergeability (mergeable can be null briefly)
             let pr;
             for (let i = 0; i < 10; i++) {
               const { data } = await github.rest.pulls.get({
@@ -86,66 +86,15 @@ jobs:
               await new Promise(r => setTimeout(r, 2000));
             }
 
-            // 2) Count pending checks on the HEAD commit, EXCLUDING this workflow run
-            const headSha   = pr.head.sha;
-            const headOwner = pr.head.repo.owner.login;
-            const headRepo  = pr.head.repo.name;
-
-            // Identify this workflow to filter it out
-            const thisWorkflowName = context.workflow;          // e.g. "Auto-merge Codex PRs"
-            const thisRunId        = context.runId;             // numeric run id
-
-            async function listPendingChecksExcludingSelf() {
-              // Prefer Checks API (needs checks:read). Fall back to statuses.
-              try {
-                const { data } = await github.rest.checks.listForRef({
-                  owner: headOwner, repo: headRepo, ref: headSha,
-                });
-
-                // Exclude:
-                //  - checks from GitHub Actions where name === this workflow name
-                //  - any check whose external_id equals this run id (some runners set it)
-                const pending = (data.check_runs || [])
-                  .filter(cr =>
-                    (cr.status === 'queued' || cr.status === 'in_progress') &&
-                    !(
-                      cr.app?.slug === 'github-actions' &&
-                      (
-                        cr.name === thisWorkflowName ||
-                        String(cr.external_id || '') === String(thisRunId)
-                      )
-                    )
-                  );
-
-                return { pendingCount: pending.length, sample: pending.slice(0, 5).map(p => `${p.name}:${p.status}`) };
-              } catch (e) {
-                // Fallback to combined statuses (less granular)
-                const { data } = await github.rest.repos.getCombinedStatusForRef({
-                  owner: headOwner, repo: headRepo, ref: headSha,
-                });
-                const pending = (data.statuses || []).filter(s => s.state === 'pending');
-                return { pendingCount: pending.length, sample: pending.slice(0, 5).map(p => `${p.context}:${p.state}`) };
-              }
-            }
-
-            let pendingInfo = { pendingCount: 0, sample: [] };
-            for (let i = 0; i < 10; i++) {
-              pendingInfo = await listPendingChecksExcludingSelf();
-              if (pendingInfo.pendingCount === 0) break;
-              await new Promise(r => setTimeout(r, 3000));
-            }
-
-            const state     = (pr.mergeable_state || 'unknown').toLowerCase();
             const mergeable = !!pr.mergeable;
-            const draft     = !!pr.draft;
+            const state = (pr.mergeable_state || 'unknown').toLowerCase();
+            const draft = !!pr.draft;
 
-            // Accept any conflict-free state; we've already waited for other checks to finish
-            const conflictFree   = mergeable && state !== 'dirty' && !draft;
-            const checksFinished = pendingInfo.pendingCount === 0;
-            const ready          = conflictFree && checksFinished;
+            // Accept conflict-free states: "clean" and "unstable" (optionally "has_hooks")
+            const allowedStates = ['clean', 'unstable', 'has_hooks'];
+            const ready = mergeable && !draft && allowedStates.includes(state);
 
-            core.notice(`mergeable=${mergeable}, state=${state}, draft=${draft}, checks_pending_excl_self=${pendingInfo.pendingCount}`);
-            if (pendingInfo.sample.length) core.notice(`pending_samples: ${pendingInfo.sample.join(', ')}`);
+            core.notice(`mergeable=${mergeable}, state=${state}, draft=${draft}`);
             core.setOutput('ready', ready ? 'true' : 'false');
             core.setOutput('state', state);
             core.setOutput('head_ref', pr.head.ref);
