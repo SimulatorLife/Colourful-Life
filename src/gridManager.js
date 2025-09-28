@@ -87,6 +87,13 @@ export const OBSTACLE_SCENARIOS = [
   },
 ];
 
+/**
+ * Central coordinator for the simulation grid. The GridManager keeps track of cell
+ * placement, governs energy regeneration and diffusion, and applies configured
+ * obstacle presets or timed scenarios. It also routes cell-to-cell interactions
+ * through helper systems and exposes hooks that higher level systems can use to
+ * respond to movement, lifecycle changes, or environmental effects.
+ */
 export default class GridManager {
   // Base per-tick regen before modifiers; logistic to max, density-aware
   static energyRegenRate = ENERGY_REGEN_RATE_DEFAULT;
@@ -95,6 +102,49 @@ export default class GridManager {
   static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
   static maxTileEnergy = MAX_TILE_ENERGY;
 
+  /**
+   * Attempts to move the cell currently located at `gridArr[sr][sc]` by the delta
+   * `[dr, dc]` while respecting bounds, obstacles, and optional callbacks.
+   *
+   * @param {Array<Array<import('./cell.js').default|null>>} gridArr - Two dimensional
+   *   array storing the current cell occupancy of the grid.
+   * @param {number} sr - Source row of the moving cell.
+   * @param {number} sc - Source column of the moving cell.
+   * @param {number} dr - Row delta to apply to the source location.
+   * @param {number} dc - Column delta to apply to the source location.
+   * @param {number} rows - Total row count of the grid; used for bounds checks.
+   * @param {number} cols - Total column count of the grid; used for bounds checks.
+   * @param {Object} [options] - Behavior modifiers for the move attempt.
+   * @param {Array<Array<boolean>>} [options.obstacles] - Boolean map describing
+   *   impassable tiles. When provided, any `true` entry blocks movement.
+   * @param {number|function({cell: object, reason: string, attemptedRow: number, attemptedCol: number}):number} [options.lingerPenalty=0]
+   *   - Energy penalty applied when the move fails due to bounds or obstacles. If a
+   *   function is supplied it will be called with context about the failure.
+   * @param {boolean} [options.penalizeOnBounds=true] - Whether a bounds failure should
+   *   trigger the linger penalty.
+   * @param {function({reason: string, row: number, col: number, nextRow: number, nextCol: number, mover: object}):void} [options.onBlocked]
+   *   - Callback invoked whenever the move is blocked by bounds or an obstacle.
+   * @param {function({cell: object, fromRow: number, fromCol: number, toRow: number, toCol: number}):void} [options.onMove]
+   *   - Callback fired after a successful move before bookkeeping hooks run.
+   * @param {Set<object>} [options.activeCells]
+   *   - Optional set that receives the moved cell when the move succeeds, allowing
+   *   callers to track which cells performed actions this tick.
+   * @param {function(object, number, number, number, number):void} [options.onCellMoved]
+   *   - Hook that is called after the grid data structures and energy costs are
+   *   updated, giving external systems the finalised coordinates of the mover.
+   *
+   * @returns {boolean} `true` when the cell is moved to the destination tile; `false`
+   *   when the move is blocked or no cell exists at the source location.
+   *
+   * @remarks This method mutates the grid array and the moving cell's state. When the
+   *   move succeeds, the mover is charged its DNA configured energy cost, and the
+   *   linger penalty increments wall contact state on repeated failures. The trio of
+   *   `lingerPenalty`, `onCellMoved`, and `activeCells` are designed to layer together:
+   *   the linger penalty fires only on failed moves to sap energy from stuck cells,
+   *   `onCellMoved` runs on success with the final coordinates, and `activeCells` is
+   *   populated immediately afterwards so callers can track movers that still have
+   *   energy to act again.
+   */
   static tryMove(gridArr, sr, sc, dr, dc, rows, cols, options = {}) {
     const {
       obstacles = null,
