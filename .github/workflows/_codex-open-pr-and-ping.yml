@@ -116,7 +116,7 @@ jobs:
             const body = [
               `@codex ${process.env.PROMPT}`,
               "",
-              `Once done, ensure all changes are pushed to remote branch **${process.env.BRANCH_NAME}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact command to guarantee your changes are pushed, replacing 'GITHUB_TOKEN' with the actual secret value from your environment:`
+              `Once done, ensure all changes are pushed to remote branch **${process.env.BRANCH_NAME}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact command to guarantee your changes are pushed, replacing 'GITHUB_TOKEN' with the actual secret value from your environment:`,
               "",
               "```bash",
               `echo \"${GITHUB_TOKEN}\" | wc -c`,
