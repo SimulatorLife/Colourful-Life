@@ -42,6 +42,21 @@ export const OBSTACLE_PRESETS = [
     label: 'Perimeter Ring',
     description: 'Walls around the rim that keep populations in-bounds.',
   },
+  {
+    id: 'sealed-quadrants',
+    label: 'Sealed Quadrants',
+    description: 'Thick cross-shaped walls isolate four distinct quadrants.',
+  },
+  {
+    id: 'sealed-chambers',
+    label: 'Sealed Chambers',
+    description: 'Grid partitions create multiple closed rectangular chambers.',
+  },
+  {
+    id: 'corner-islands',
+    label: 'Corner Islands',
+    description: 'Four isolated pockets carved out of a blocked landscape.',
+  },
 ];
 
 export const OBSTACLE_SCENARIOS = [
@@ -209,7 +224,19 @@ export default class GridManager {
   constructor(
     rows,
     cols,
-    { eventManager, ctx = null, cellSize = 8, stats, maxTileEnergy, selectionManager } = {}
+    {
+      eventManager,
+      ctx = null,
+      cellSize = 8,
+      stats,
+      maxTileEnergy,
+      selectionManager,
+      initialObstaclePreset = 'none',
+      initialObstaclePresetOptions = {},
+      randomizeInitialObstacles = false,
+      randomObstaclePresetPool = null,
+      rng,
+    } = {}
   ) {
     this.rows = rows;
     this.cols = cols;
@@ -239,6 +266,7 @@ export default class GridManager {
     this.currentObstaclePreset = 'none';
     this.currentScenarioId = 'manual';
     this.tickCount = 0;
+    this.rng = typeof rng === 'function' ? rng : Math.random;
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
     this.interactionSystem = new InteractionSystem({ gridManager: this });
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
@@ -267,6 +295,25 @@ export default class GridManager {
       );
     this.boundMoveRandomly = (gridArr, row, col, cell, rows, cols) =>
       GridManager.moveRandomly(gridArr, row, col, cell, rows, cols, this.#movementOptions());
+    const resolvedPresetId = this.#resolveInitialObstaclePreset({
+      initialPreset: initialObstaclePreset,
+      randomize: randomizeInitialObstacles,
+      pool: randomObstaclePresetPool,
+    });
+
+    if (resolvedPresetId && resolvedPresetId !== 'none') {
+      const presetOptions = this.#resolvePresetOptions(
+        resolvedPresetId,
+        initialObstaclePresetOptions
+      );
+
+      this.applyObstaclePreset(resolvedPresetId, {
+        clearExisting: true,
+        append: false,
+        presetOptions,
+        evict: true,
+      });
+    }
     this.init();
     this.recalculateDensityCounts();
     this.rebuildActiveCells();
@@ -285,6 +332,70 @@ export default class GridManager {
         this.activeCells.add(cell);
       },
     };
+  }
+
+  #random() {
+    return typeof this.rng === 'function' ? this.rng() : Math.random();
+  }
+
+  #getPresetById(id) {
+    if (typeof id !== 'string') return null;
+
+    return OBSTACLE_PRESETS.find((preset) => preset.id === id) ?? null;
+  }
+
+  #pickRandomObstaclePresetId(poolIds = null) {
+    let candidates = OBSTACLE_PRESETS;
+
+    if (Array.isArray(poolIds) && poolIds.length > 0) {
+      const normalized = poolIds.map((id) => this.#getPresetById(id)).filter(Boolean);
+
+      if (normalized.length > 0) candidates = normalized;
+    }
+
+    if (!candidates || candidates.length === 0) return null;
+    const index = Math.floor(this.#random() * candidates.length);
+
+    return candidates[index]?.id ?? null;
+  }
+
+  #resolveInitialObstaclePreset({ initialPreset, randomize = false, pool = null } = {}) {
+    if (randomize || initialPreset === 'random') {
+      return this.#pickRandomObstaclePresetId(pool);
+    }
+
+    if (typeof initialPreset === 'string') {
+      const match = this.#getPresetById(initialPreset);
+
+      return match ? match.id : null;
+    }
+
+    return null;
+  }
+
+  #resolvePresetOptions(presetId, presetOptionsInput) {
+    if (!presetId) return {};
+    if (typeof presetOptionsInput === 'function') {
+      const result = presetOptionsInput(presetId);
+
+      return result && typeof result === 'object' ? result : {};
+    }
+
+    if (
+      presetOptionsInput &&
+      typeof presetOptionsInput === 'object' &&
+      !Array.isArray(presetOptionsInput)
+    ) {
+      if (Object.prototype.hasOwnProperty.call(presetOptionsInput, presetId)) {
+        const scoped = presetOptionsInput[presetId];
+
+        return scoped && typeof scoped === 'object' ? scoped : {};
+      }
+
+      return presetOptionsInput;
+    }
+
+    return {};
   }
 
   setSelectionManager(selectionManager) {
@@ -516,6 +627,104 @@ export default class GridManager {
         this.paintPerimeter({ thickness, evict });
         break;
       }
+      case 'sealed-quadrants': {
+        const thickness = Math.max(1, Math.floor(options.thickness ?? 2));
+        const halfThickness = Math.floor(thickness / 2);
+        const centerCol = Math.max(0, Math.floor(this.cols / 2) - halfThickness);
+        const centerRow = Math.max(0, Math.floor(this.rows / 2) - halfThickness);
+
+        this.paintVerticalWall(centerCol, {
+          gapEvery: 0,
+          thickness,
+          evict,
+        });
+        this.paintHorizontalWall(centerRow, {
+          gapEvery: 0,
+          thickness,
+          evict,
+        });
+        if (options.perimeter) {
+          const perimeterThickness = Math.max(1, Math.floor(options.perimeter));
+
+          this.paintPerimeter({ thickness: perimeterThickness, evict });
+        }
+        break;
+      }
+      case 'sealed-chambers': {
+        const rows = Math.max(2, Math.floor(options.rows ?? 3));
+        const cols = Math.max(2, Math.floor(options.cols ?? 3));
+        const thickness = Math.max(1, Math.floor(options.thickness ?? 1));
+        const rowStep = Math.max(1, Math.floor(this.rows / rows));
+        const colStep = Math.max(1, Math.floor(this.cols / cols));
+
+        for (let r = 1; r < rows; r++) {
+          const rowIndex = Math.min(this.rows - 1, r * rowStep);
+
+          this.paintHorizontalWall(rowIndex, { thickness, evict });
+        }
+
+        for (let c = 1; c < cols; c++) {
+          const colIndex = Math.min(this.cols - 1, c * colStep);
+
+          this.paintVerticalWall(colIndex, { thickness, evict });
+        }
+
+        if (options.perimeter !== false) {
+          const perimeterThickness = Math.max(1, Math.floor(options.perimeter ?? thickness));
+
+          this.paintPerimeter({ thickness: perimeterThickness, evict });
+        }
+        break;
+      }
+      case 'corner-islands': {
+        const moat = Math.max(1, Math.floor(options.moat ?? 3));
+        const gapRows = Math.max(moat, Math.floor(options.gapRows ?? moat));
+        const gapCols = Math.max(moat, Math.floor(options.gapCols ?? moat));
+        const maxIslandRows = Math.max(3, this.rows - 3 * gapRows);
+        const maxIslandCols = Math.max(3, this.cols - 3 * gapCols);
+        const islandRows = Math.max(
+          3,
+          Math.min(Math.floor(options.islandRows ?? maxIslandRows / 2), maxIslandRows)
+        );
+        const islandCols = Math.max(
+          3,
+          Math.min(Math.floor(options.islandCols ?? maxIslandCols / 2), maxIslandCols)
+        );
+        const carve = (startRow, startCol) => {
+          const endRow = Math.min(this.rows - 1, startRow + islandRows - 1);
+          const endCol = Math.min(this.cols - 1, startCol + islandCols - 1);
+
+          for (let r = startRow; r <= endRow; r++) {
+            for (let c = startCol; c <= endCol; c++) {
+              if (r < 0 || c < 0 || r >= this.rows || c >= this.cols) continue;
+              this.obstacles[r][c] = false;
+              this.energyGrid[r][c] = this.maxTileEnergy / 2;
+              this.energyNext[r][c] = 0;
+            }
+          }
+        };
+
+        for (let r = 0; r < this.rows; r++) {
+          for (let c = 0; c < this.cols; c++) {
+            this.setObstacle(r, c, true, { evict });
+          }
+        }
+
+        const topStart = Math.max(0, gapRows);
+        const leftStart = Math.max(0, gapCols);
+        const rightStart = Math.max(0, this.cols - gapCols - islandCols);
+        const bottomStart = Math.max(0, this.rows - gapRows - islandRows);
+        const safeTop = Math.min(topStart, this.rows - islandRows);
+        const safeBottom = Math.min(bottomStart, this.rows - islandRows);
+        const safeLeft = Math.min(leftStart, this.cols - islandCols);
+        const safeRight = Math.min(rightStart, this.cols - islandCols);
+
+        carve(safeTop, safeLeft);
+        carve(safeTop, safeRight);
+        carve(safeBottom, safeLeft);
+        carve(safeBottom, safeRight);
+        break;
+      }
       default:
         break;
     }
@@ -604,7 +813,7 @@ export default class GridManager {
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         if (this.isObstacle(row, col)) continue;
-        if (randomPercent(0.05)) {
+        if (this.#random() < 0.05) {
           const dna = DNA.random();
 
           this.spawnCell(row, col, { dna });
@@ -625,7 +834,7 @@ export default class GridManager {
     const toSeed = Math.min(minPopulation - currentPopulation, empty.length);
 
     for (let i = 0; i < toSeed; i++) {
-      const idx = Math.floor(randomRange(0, empty.length));
+      const idx = empty.length > 0 ? Math.floor(this.#random() * empty.length) : 0;
       const { r, c } = empty.splice(idx, 1)[0];
       const dna = DNA.random();
 
@@ -1135,7 +1344,7 @@ export default class GridManager {
 
     const act = typeof cell.dna.activityRate === 'function' ? cell.dna.activityRate() : 1;
 
-    if (Math.random() > act) {
+    if (this.#random() > act) {
       return;
     }
 
@@ -1676,7 +1885,7 @@ export default class GridManager {
     }
     // Shuffle for random fill
     for (let i = coords.length - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0;
+      const j = (this.#random() * (i + 1)) | 0;
       const t = coords[i];
 
       coords[i] = coords[j];
@@ -1700,8 +1909,8 @@ export default class GridManager {
 
   // Choose a random center and burst there
   burstRandomCells(opts = {}) {
-    const r = (Math.random() * this.rows) | 0;
-    const c = (Math.random() * this.cols) | 0;
+    const r = (this.#random() * this.rows) | 0;
+    const c = (this.#random() * this.cols) | 0;
 
     return this.burstAt(r, c, opts);
   }
