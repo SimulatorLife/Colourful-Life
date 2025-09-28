@@ -166,27 +166,29 @@ test('neural evaluation contributes to cognitive maintenance cost', () => {
   assert.ok(dynamicLoad > 0, 'neural evaluation should add activation load');
   const context = { localDensity: 0.35, densityEffectMultiplier: 1.4, maxTileEnergy: 12 };
   const effDensity = clamp(context.localDensity * context.densityEffectMultiplier, 0, 1);
-  const sen = typeof cell.dna.senescenceRate === 'function' ? cell.dna.senescenceRate() : 0;
-  const ageFrac = cell.lifespan > 0 ? cell.age / cell.lifespan : 0;
   const energyDensityMult = lerp(
     cell.density.energyLoss.min,
     cell.density.energyLoss.max,
     effDensity
   );
   const metabolism = cell.metabolism;
+  const passiveAgePenalty = cell.ageEnergyMultiplier();
   const energyLoss =
     dna.energyLossBase() *
     dna.baseEnergyLossScale() *
     (1 + metabolism) *
-    (1 + sen * ageFrac) *
-    energyDensityMult;
+    energyDensityMult *
+    passiveAgePenalty;
   const breakdown = dna.cognitiveCostComponents({
     baselineNeurons: cell.neurons,
     dynamicNeurons: dynamicLoad,
     sight: cell.sight,
     effDensity,
   });
-  const expectedCognitive = breakdown.total;
+  const cognitiveAgeScale = cell.ageEnergyMultiplier(0.75);
+  const expectedBaseline = breakdown.baseline * cognitiveAgeScale;
+  const expectedDynamic = breakdown.dynamic * cognitiveAgeScale;
+  const expectedCognitive = expectedBaseline + expectedDynamic;
   const initialEnergy = cell.energy;
 
   cell.manageEnergy(cell.row, cell.col, context);
@@ -205,13 +207,13 @@ test('neural evaluation contributes to cognitive maintenance cost', () => {
   const reproductionLog = lastTick.decisions.find((entry) => entry.group === 'reproduction');
 
   assert.ok(reproductionLog, 'reproduction decision should be logged');
-  approxEqual(lastTick.dynamicCost, breakdown.dynamic, 1e-9);
-  approxEqual(lastTick.baselineCost, breakdown.baseline, 1e-9);
-  approxEqual(lastTick.cognitiveLoss, breakdown.total, 1e-9);
-  approxEqual(lastTick.totalLoss, energyLoss + breakdown.total, 1e-9);
-  approxEqual(reproductionLog.energyImpact.dynamic, breakdown.dynamic, 1e-9);
-  approxEqual(reproductionLog.energyImpact.baseline, breakdown.baseline, 1e-9);
-  approxEqual(reproductionLog.energyImpact.cognitive, breakdown.total, 1e-9);
+  approxEqual(lastTick.dynamicCost, expectedDynamic, 1e-9);
+  approxEqual(lastTick.baselineCost, expectedBaseline, 1e-9);
+  approxEqual(lastTick.cognitiveLoss, expectedCognitive, 1e-9);
+  approxEqual(lastTick.totalLoss, energyLoss + expectedCognitive, 1e-9);
+  approxEqual(reproductionLog.energyImpact.dynamic, expectedDynamic, 1e-9);
+  approxEqual(reproductionLog.energyImpact.baseline, expectedBaseline, 1e-9);
+  approxEqual(reproductionLog.energyImpact.cognitive, expectedCognitive, 1e-9);
   approxEqual(reproductionLog.outcome?.probability ?? 0, energyDecision.probability, 1e-9);
   assert.ok(
     Array.isArray(reproductionLog.trace?.nodes) && reproductionLog.trace.nodes.length > 0,

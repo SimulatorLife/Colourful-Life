@@ -125,7 +125,10 @@ export default class GridManager {
       const prior = moving.wallContactTicks || 0;
       const scale = 1 + Math.min(prior, 6) * 0.25;
 
-      moving.energy = Math.max(0, moving.energy - amount * scale);
+      const ageScale =
+        typeof moving.ageEnergyMultiplier === 'function' ? moving.ageEnergyMultiplier(0.4) : 1;
+
+      moving.energy = Math.max(0, moving.energy - amount * scale * ageScale);
       moving.wallContactTicks = prior + 1;
     };
     const clearWallPenalty = () => {
@@ -171,7 +174,10 @@ export default class GridManager {
       }
       // Charge movement energy cost to the mover if available
       if (moving && typeof moving === 'object' && moving.energy != null && moving.dna) {
-        const cost = typeof moving.dna.moveCost === 'function' ? moving.dna.moveCost() : 0.005;
+        const baseCost = typeof moving.dna.moveCost === 'function' ? moving.dna.moveCost() : 0.005;
+        const ageScale =
+          typeof moving.ageEnergyMultiplier === 'function' ? moving.ageEnergyMultiplier(0.6) : 1;
+        const cost = baseCost * ageScale;
 
         moving.energy = Math.max(0, moving.energy - cost);
       }
