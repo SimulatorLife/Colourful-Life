@@ -64,6 +64,7 @@ jobs:
           BASE_BRANCH: ${{ inputs.base_branch }}
           BRANCH_NAME: ${{ env.BRANCH_NAME }}
         with:
+          github-token: ${{ secrets.GH_USER_TOKEN }}
           script: |
             const { data: pr } = await github.rest.pulls.create({
               owner: context.repo.owner,
@@ -101,6 +102,7 @@ jobs:
           PR_NUMBER:   ${{ steps.pr.outputs.number }}
           HEAD_SHA:    ${{ steps.pr.outputs.head_sha }}
         with:
+          github-token: ${{ secrets.GH_USER_TOKEN }}
           script: |
             const prNumber = Number(process.env.PR_NUMBER);
             const body = [
