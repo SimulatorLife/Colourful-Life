@@ -60,6 +60,7 @@ npm run serve    # Simple static server (no bundling)
 npm run format   # Format code with Prettier
 
 This line tests the Codex auto-merge workflow.
+This follow-up line checks a second Codex auto-merge run.
 npm run format:check  # Check formatting without writing
 ```
 
