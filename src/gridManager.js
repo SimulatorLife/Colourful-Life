@@ -206,7 +206,6 @@ export default class GridManager {
     this.densityDirtyTiles = new Set();
     this.lastSnapshot = null;
     this.lingerPenalty = 0;
-    this.obstacleSchedules = [];
     this.currentObstaclePreset = 'none';
     this.tickCount = 0;
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
@@ -490,49 +489,6 @@ export default class GridManager {
     }
 
     this.currentObstaclePreset = presetId;
-  }
-
-  clearScheduledObstacles() {
-    this.obstacleSchedules = [];
-  }
-
-  scheduleObstaclePreset({
-    delay = 0,
-    preset = 'none',
-    presetOptions = {},
-    clearExisting = true,
-    append = false,
-    evict = true,
-  } = {}) {
-    const triggerTick = this.tickCount + Math.max(0, Math.floor(delay));
-
-    this.obstacleSchedules.push({
-      triggerTick,
-      preset,
-      clearExisting,
-      append,
-      presetOptions,
-      evict,
-    });
-    this.obstacleSchedules.sort((a, b) => a.triggerTick - b.triggerTick);
-  }
-
-  processScheduledObstacles() {
-    if (!Array.isArray(this.obstacleSchedules) || this.obstacleSchedules.length === 0) return;
-
-    while (
-      this.obstacleSchedules.length > 0 &&
-      this.obstacleSchedules[0].triggerTick <= this.tickCount
-    ) {
-      const next = this.obstacleSchedules.shift();
-
-      this.applyObstaclePreset(next.preset, {
-        clearExisting: next.clearExisting,
-        append: next.append,
-        presetOptions: next.presetOptions,
-        evict: next.evict,
-      });
-    }
   }
 
   init() {
@@ -1412,7 +1368,6 @@ export default class GridManager {
 
     this.lastSnapshot = null;
     this.tickCount += 1;
-    this.processScheduledObstacles();
 
     const { densityGrid } = this.prepareTick({
       eventManager,
