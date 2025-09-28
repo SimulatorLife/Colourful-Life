@@ -287,8 +287,10 @@ export default class GridManager {
   setObstacle(row, col, blocked = true, { evict = true } = {}) {
     if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return false;
     const wasBlocked = this.obstacles[row][col];
+    const nextBlocked = Boolean(blocked);
+    const changed = wasBlocked !== nextBlocked;
 
-    if (blocked) {
+    if (nextBlocked) {
       this.obstacles[row][col] = true;
       if (!wasBlocked) {
         const occupant = this.grid[row][col];
@@ -318,7 +320,11 @@ export default class GridManager {
       this.obstacles[row][col] = false;
     }
 
-    return true;
+    if (changed && this.currentObstaclePreset !== 'custom') {
+      this.currentObstaclePreset = 'custom';
+    }
+
+    return changed;
   }
 
   _paintWallLine(
@@ -501,7 +507,9 @@ export default class GridManager {
         break;
     }
 
-    this.currentObstaclePreset = normalizedId;
+    const appendedPreset = append && normalizedId !== 'none';
+
+    this.currentObstaclePreset = appendedPreset ? 'custom' : normalizedId;
 
     return this.currentObstaclePreset;
   }
