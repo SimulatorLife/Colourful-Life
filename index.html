@@ -12,14 +12,11 @@
       <canvas id="gameCanvas" width="600" height="600"></canvas>
     </div>
     <script type="module">
-      import SimulationEngine from './src/simulationEngine.js';
-      import UIManager from './src/uiManager.js';
-      import BrainDebugger from './src/brainDebugger.js';
-      import { OBSTACLE_PRESETS, OBSTACLE_SCENARIOS } from './src/gridManager.js';
+      import { createSimulation } from './src/main.js';
 
       const canvas = document.getElementById('gameCanvas');
 
-      const engine = new SimulationEngine({
+      const simulation = createSimulation({
         canvas,
         config: {
           cellSize: 5,
@@ -27,56 +24,10 @@
         autoStart: false,
       });
 
-      const uiManager = new UIManager(
-        {
-          requestFrame: () => engine.requestFrame(),
-          togglePause: () => engine.togglePause(),
-          onSettingChange: (key, value) => engine.updateSetting(key, value),
-        },
-        '#app',
-        {
-          burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
-          applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
-          runObstacleScenario: (id) => engine.runObstacleScenario(id),
-          setLingerPenalty: (value) => engine.setLingerPenalty(value),
-          obstaclePresets: OBSTACLE_PRESETS,
-          obstacleScenarios: OBSTACLE_SCENARIOS,
-          selectionManager: engine.selectionManager,
-          getCellSize: () => engine.cellSize,
-        },
-        { canvasElement: canvas }
-      );
+      const startPaused = simulation.engine.isPaused();
 
-      engine.on('metrics', ({ stats, metrics }) => {
-        if (typeof uiManager.renderMetrics === 'function') {
-          uiManager.renderMetrics(stats, metrics);
-        }
-      });
-
-      engine.on('leaderboard', ({ entries }) => {
-        if (typeof uiManager.renderLeaderboard === 'function') {
-          uiManager.renderLeaderboard(entries);
-        }
-      });
-
-      engine.on('state', ({ changes }) => {
-        if (changes?.paused !== undefined) {
-          uiManager.setPauseState?.(changes.paused);
-        }
-      });
-
-      uiManager.setPauseState(engine.isPaused());
-      engine.setLingerPenalty(uiManager.getLingerPenalty?.() ?? 0);
-
-      if (typeof window !== 'undefined') {
-        window.uiManager = uiManager;
-        window.BrainDebugger = BrainDebugger;
-      }
-
-      const startPaused = engine.isPaused();
-
-      engine.start();
-      if (startPaused) engine.pause();
+      simulation.start();
+      if (startPaused) simulation.pause();
     </script>
   </body>
 </html>

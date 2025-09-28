@@ -1,6 +1,9 @@
 import UIManager from './uiManager.js';
 import BrainDebugger from './brainDebugger.js';
-import SimulationEngine from './simulationEngine.js';
+import SimulationRuntime from './simulation/runtime.js';
+import createRenderer from './simulation/renderer.js';
+import createUiAdapter from './simulation/uiAdapter.js';
+import { ensureCanvasDimensions, resolveCanvas } from './simulation/canvas.js';
 import { OBSTACLE_PRESETS, OBSTACLE_SCENARIOS } from './gridManager.js';
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
@@ -110,6 +113,7 @@ export function createSimulation({
   document: injectedDocument,
 } = {}) {
   const win = injectedWindow ?? (typeof window !== 'undefined' ? window : undefined);
+  const doc = injectedDocument ?? (typeof document !== 'undefined' ? document : undefined);
 
   if (win) {
     win.BrainDebugger = BrainDebugger;
@@ -117,118 +121,189 @@ export function createSimulation({
     GLOBAL.BrainDebugger = BrainDebugger;
   }
 
-  const engine = new SimulationEngine({
-    canvas,
-    config,
+  const resolvedCanvas = resolveCanvas(canvas, doc);
+  const hasVisuals = !headless && resolvedCanvas;
+
+  let ctx = null;
+  let width = config.canvasSize?.width;
+  let height = config.canvasSize?.height;
+
+  if (resolvedCanvas) {
+    const dims = ensureCanvasDimensions(resolvedCanvas, config);
+
+    width = dims.width;
+    height = dims.height;
+    ctx = resolvedCanvas.getContext?.('2d') ?? null;
+
+    if (!ctx && !headless) {
+      throw new Error('Visual simulation requires a 2D canvas context.');
+    }
+  } else if (typeof width !== 'number' || typeof height !== 'number') {
+    const dims = ensureCanvasDimensions(null, config);
+
+    width = dims.width;
+    height = dims.height;
+  }
+
+  const cellSize = config.cellSize ?? 5;
+  const rows = config.rows ?? Math.floor(height / cellSize);
+  const cols = config.cols ?? Math.floor(width / cellSize);
+
+  const hasInitialPreset = typeof config.initialObstaclePreset === 'string';
+  const randomizeInitialObstacles =
+    config.randomizeInitialObstacles ??
+    (!hasInitialPreset || config.initialObstaclePreset === 'random');
+  const initialObstaclePreset = hasInitialPreset
+    ? config.initialObstaclePreset
+    : randomizeInitialObstacles
+      ? 'random'
+      : 'none';
+
+  const initialState = {
+    paused: Boolean(config.paused ?? false),
+    updatesPerSecond: config.updatesPerSecond ?? 60,
+    eventFrequencyMultiplier: config.eventFrequencyMultiplier,
+    mutationMultiplier: config.mutationMultiplier,
+    densityEffectMultiplier: config.densityEffectMultiplier,
+    societySimilarity: config.societySimilarity,
+    enemySimilarity: config.enemySimilarity,
+    eventStrengthMultiplier: config.eventStrengthMultiplier,
+    energyRegenRate: config.energyRegenRate,
+    energyDiffusionRate: config.energyDiffusionRate,
+    showObstacles: config.showObstacles,
+    showEnergy: config.showEnergy,
+    showDensity: config.showDensity,
+    showFitness: config.showFitness,
+    leaderboardIntervalMs: config.leaderboardIntervalMs,
+    matingDiversityThreshold: config.matingDiversityThreshold,
+    lowDiversityReproMultiplier: config.lowDiversityReproMultiplier,
+    lingerPenalty: config.lingerPenalty,
+  };
+
+  const runtime = new SimulationRuntime({
     rng,
+    gridOptions: {
+      rows,
+      cols,
+      cellSize,
+      ctx,
+      initialObstaclePreset,
+      initialObstaclePresetOptions: config.initialObstaclePresetOptions,
+      randomizeInitialObstacles,
+      randomObstaclePresetPool: config.randomObstaclePresetPool,
+    },
+    performanceNow: injectedNow,
     requestAnimationFrame: injectedRaf,
     cancelAnimationFrame: injectedCaf,
-    performanceNow: injectedNow,
-    window: injectedWindow,
-    document: injectedDocument,
+    renderer: null,
+    initialState,
     autoStart: false,
   });
 
+  if (win) {
+    win.grid = runtime.grid;
+    win.simulationEngine = runtime;
+  } else {
+    GLOBAL.grid = runtime.grid;
+    GLOBAL.simulationEngine = runtime;
+  }
+
+  let rendererTeardown = () => {};
+
+  if (hasVisuals && ctx) {
+    const renderer = createRenderer({
+      gridRenderer: runtime.grid,
+      selectionManager: runtime.selectionManager,
+      eventManager: runtime.eventManager,
+      ctx,
+      cellSize,
+      drawOverlays: config.drawOverlays,
+    });
+
+    runtime.setRenderer(renderer);
+    rendererTeardown = () => runtime.setRenderer(null);
+  }
+
   const uiOptions = config.ui ?? {};
   const baseActions = {
-    burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
-    applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
-    runObstacleScenario: (id) => engine.runObstacleScenario(id),
-    setLingerPenalty: (value) => engine.setLingerPenalty(value),
+    burst: () => runtime.burstRandomCells({ count: 200, radius: 6 }),
+    applyObstaclePreset: (id, options) => runtime.applyObstaclePreset(id, options),
+    runObstacleScenario: (id) => runtime.runObstacleScenario(id),
+    setLingerPenalty: (value) => runtime.setLingerPenalty(value),
     obstaclePresets: OBSTACLE_PRESETS,
     obstacleScenarios: OBSTACLE_SCENARIOS,
-    selectionManager: engine.selectionManager,
-    getCellSize: () => engine.cellSize,
+    selectionManager: runtime.selectionManager,
+    getCellSize: () => runtime.grid?.cellSize,
     ...(uiOptions.actions || {}),
   };
 
   const simulationCallbacks = {
-    requestFrame: () => engine.requestFrame(),
-    togglePause: () => engine.togglePause(),
-    onSettingChange: (key, value) => engine.updateSetting(key, value),
+    requestFrame: () => runtime.requestFrame(),
+    togglePause: () => runtime.togglePause(),
+    onSettingChange: (key, value) => runtime.updateSetting(key, value),
   };
 
-  const uiManager = headless
-    ? createHeadlessUiManager({ ...uiOptions, selectionManager: engine.selectionManager })
-    : new UIManager(simulationCallbacks, uiOptions.mountSelector ?? '#app', baseActions, {
-        canvasElement: engine.canvas,
-        ...(uiOptions.layout || {}),
-      });
+  let uiManager;
 
-  if (!headless) {
-    uiManager.setPauseState?.(engine.isPaused());
+  if (headless) {
+    uiManager = createHeadlessUiManager({
+      ...uiOptions,
+      selectionManager: runtime.selectionManager,
+    });
+  } else if (typeof uiOptions.createManager === 'function') {
+    uiManager = uiOptions.createManager(simulationCallbacks, baseActions, {
+      canvas: resolvedCanvas,
+    });
+  } else if (uiOptions.manager) {
+    uiManager = uiOptions.manager;
+  } else {
+    uiManager = new UIManager(simulationCallbacks, uiOptions.mountSelector ?? '#app', baseActions, {
+      canvasElement: resolvedCanvas,
+      ...(uiOptions.layout || {}),
+    });
   }
 
   if (win) {
     win.uiManager = uiManager;
   }
 
-  if (typeof uiManager?.getLingerPenalty === 'function') {
-    engine.setLingerPenalty(uiManager.getLingerPenalty());
-  }
-
-  const unsubscribers = [];
+  let detachAdapter = () => {};
 
   if (!headless && uiManager) {
-    unsubscribers.push(
-      engine.on('metrics', ({ stats, metrics }) => {
-        if (typeof uiManager.renderMetrics === 'function') {
-          uiManager.renderMetrics(stats, metrics);
-        }
-      })
-    );
-
-    unsubscribers.push(
-      engine.on('leaderboard', ({ entries }) => {
-        if (typeof uiManager.renderLeaderboard === 'function') {
-          uiManager.renderLeaderboard(entries);
-        }
-      })
-    );
-
-    unsubscribers.push(
-      engine.on('state', ({ changes }) => {
-        if (changes?.paused !== undefined && typeof uiManager.setPauseState === 'function') {
-          uiManager.setPauseState(changes.paused);
-        }
-      })
-    );
+    detachAdapter = createUiAdapter({ runtime, uiManager });
   }
 
   const startPaused = Boolean(config.paused ?? false);
 
   if (autoStart) {
-    engine.start();
-    if (startPaused) engine.pause();
+    runtime.start();
+    if (startPaused) runtime.pause();
   } else if (startPaused) {
-    engine.pause();
+    runtime.pause();
   }
 
   return {
-    engine,
-    grid: engine.grid,
+    engine: runtime,
+    grid: runtime.grid,
     uiManager,
-    eventManager: engine.eventManager,
-    stats: engine.stats,
-    selectionManager: engine.selectionManager,
-    start: () => engine.start(),
-    stop: () => engine.stop(),
-    step: (timestamp) => engine.tick(timestamp),
-    tick: (timestamp) => engine.tick(timestamp),
-    pause: () => engine.pause(),
-    resume: () => engine.resume(),
-    update: (timestamp) => engine.tick(timestamp),
+    eventManager: runtime.eventManager,
+    stats: runtime.stats,
+    selectionManager: runtime.selectionManager,
+    start: () => runtime.start(),
+    stop: () => runtime.stop(),
+    step: (timestamp) => runtime.tick(timestamp),
+    tick: (timestamp) => runtime.tick(timestamp),
+    pause: () => runtime.pause(),
+    resume: () => runtime.resume(),
+    update: (timestamp) => runtime.tick(timestamp),
     destroy: () => {
-      while (unsubscribers.length) {
-        const unsub = unsubscribers.pop();
-
-        if (typeof unsub === 'function') unsub();
-      }
-      engine.stop();
+      detachAdapter();
+      rendererTeardown();
+      runtime.stop();
     },
   };
 }
 
 export default createSimulation;
 
-export { SimulationEngine };
+export { SimulationRuntime as SimulationEngine };
