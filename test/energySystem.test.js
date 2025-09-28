@@ -58,10 +58,9 @@ test('computeTileEnergyUpdate applies density penalties and diffusion', async ()
     { eventType: 'flood', strength: 0.6, affectedArea: baseArea },
   ];
 
-  const { nextEnergy, drain } = computeTileEnergyUpdate({
+  const baseOptions = {
     currentEnergy: 2,
     density: 0.4,
-    neighborEnergies: [3, 4],
     events,
     row: 1,
     col: 1,
@@ -75,10 +74,24 @@ test('computeTileEnergyUpdate applies density penalties and diffusion', async ()
       isEventAffecting,
       getEventEffect,
     },
+  };
+
+  const scalarResult = computeTileEnergyUpdate({
+    ...baseOptions,
+    neighborSum: 7,
+    neighborCount: 2,
   });
 
-  approxEqual(nextEnergy, 2.564, 1e-3);
-  approxEqual(drain, 0.075, 1e-6);
+  approxEqual(scalarResult.nextEnergy, 2.564, 1e-3);
+  approxEqual(scalarResult.drain, 0.075, 1e-6);
+
+  const arrayResult = computeTileEnergyUpdate({
+    ...baseOptions,
+    neighborEnergies: [3, 4],
+  });
+
+  approxEqual(arrayResult.nextEnergy, scalarResult.nextEnergy, 1e-6);
+  approxEqual(arrayResult.drain, scalarResult.drain, 1e-6);
 });
 
 test.run();
