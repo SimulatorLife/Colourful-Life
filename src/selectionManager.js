@@ -182,7 +182,12 @@ export default class SelectionManager {
    *   before movement.
    * @param {boolean} [options.parentMoved=false] Whether the parent moved during the
    *   courting step (includes neighbors around the origin when true).
-   * @returns {{allowed:boolean,reason?:string,tiles:Array<{row:number,col:number}>,allCandidates:Array<{row:number,col:number}>}}
+   * @returns {{
+   *   allowed: boolean,
+   *   reason?: string,
+   *   tiles: Array<{row:number,col:number}>,
+   *   allCandidates: Array<{row:number,col:number}>,
+   * }}
    */
   getEligibleSpawnTiles({ parent, mate, origin = null, parentMoved = false } = {}) {
     if (!parent || !mate) {

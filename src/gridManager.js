@@ -1306,77 +1306,66 @@ export default class GridManager {
       cell.energy >= thrA &&
       bestMate.target.energy >= thrB
     ) {
-      const spawnContext = {
-        parent: { row: parentRow, col: parentCol },
-        mate: { row: mateRow, col: mateCol },
-        origin: { row: originalParentRow, col: originalParentCol },
-        parentMoved: moveSucceeded,
-      };
-
-      let spawnInfo = null;
-      let candidates = [];
+      const originPoint = { row: originalParentRow, col: originalParentCol };
+      let spawnInfo;
 
       if (this.selectionManager) {
-        spawnInfo = this.selectionManager.getEligibleSpawnTiles(spawnContext);
-
-        if (!spawnInfo.allowed) {
-          blockedInfo = {
-            reason: spawnInfo.reason,
-            parentA: { row: parentRow, col: parentCol },
-            parentB: { row: mateRow, col: mateCol },
-          };
-        } else if (Array.isArray(spawnInfo.allCandidates)) {
-          candidates = spawnInfo.allCandidates.map(({ row, col }) => ({ r: row, c: col }));
-        }
-      }
-
-      if (!this.selectionManager || candidates.length === 0) {
-        candidates = collectSpawnCandidates({
-          parent: spawnContext.parent,
-          mate: spawnContext.mate,
-          origin: spawnContext.origin,
-          includeOriginNeighbors: spawnContext.parentMoved,
+        spawnInfo = this.selectionManager.getEligibleSpawnTiles({
+          parent: { row: parentRow, col: parentCol },
+          mate: { row: mateRow, col: mateCol },
+          origin: originPoint,
+          parentMoved: moveSucceeded,
+        });
+      } else {
+        const rawCandidates = collectSpawnCandidates({
+          parent: { row: parentRow, col: parentCol },
+          mate: { row: mateRow, col: mateCol },
+          origin: originPoint,
+          includeOriginNeighbors: moveSucceeded,
           rows: this.rows,
           cols: this.cols,
         });
+
+        const normalized = rawCandidates.map(({ r, c }) => ({ row: r, col: c }));
+
+        spawnInfo = {
+          allowed: true,
+          tiles: normalized,
+          allCandidates: normalized,
+        };
       }
 
-      if (!blockedInfo) {
-        const freeSlots = candidates.filter(
-          ({ r, c }) => !this.grid[r][c] && !this.isObstacle(r, c)
-        );
-        let slotPool = freeSlots;
+      if (!spawnInfo?.allowed) {
+        blockedInfo = {
+          reason: spawnInfo?.reason,
+          parentA: { row: parentRow, col: parentCol },
+          parentB: { row: mateRow, col: mateCol },
+        };
+      } else {
+        const filterAvailable = (list = []) =>
+          list.filter(({ row: r, col: c }) => !this.grid[r][c] && !this.isObstacle(r, c));
 
-        if (freeSlots.length > 0 && this.selectionManager && spawnInfo) {
-          const zoneTiles = spawnInfo.tiles || [];
+        let slotPool = filterAvailable(spawnInfo.tiles ?? []);
 
-          if (zoneTiles.length > 0) {
-            const zoneSet = new Set(zoneTiles.map(({ row, col }) => `${row},${col}`));
-            const zoneSlots = freeSlots.filter(({ r, c }) => zoneSet.has(`${r},${c}`));
-
-            if (zoneSlots.length > 0) {
-              slotPool = zoneSlots;
-            }
-          }
+        if (slotPool.length === 0) {
+          slotPool = filterAvailable(spawnInfo.allCandidates ?? []);
         }
 
         if (slotPool.length > 0) {
           const spawn = slotPool[Math.floor(randomRange(0, slotPool.length))];
-          const spawnPoint = { row: spawn.r, col: spawn.c };
           const zoneCheck = this.selectionManager
             ? this.selectionManager.validateReproductionArea({
                 parentA: { row: parentRow, col: parentCol },
                 parentB: { row: mateRow, col: mateCol },
-                spawn: spawnPoint,
+                spawn,
               })
             : { allowed: true };
-
           if (!zoneCheck.allowed) {
             blockedInfo = {
               reason: zoneCheck.reason,
               parentA: { row: parentRow, col: parentCol },
               parentB: { row: mateRow, col: mateCol },
-              spawn: spawnPoint,
+              spawn,
             };
           } else {
             const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
@@ -1384,9 +1373,9 @@ export default class GridManager {
             });
 
             if (offspring) {
-              offspring.row = spawn.r;
-              offspring.col = spawn.c;
-              this.setCell(spawn.r, spawn.c, offspring);
+              offspring.row = spawn.row;
+              offspring.col = spawn.col;
+              this.setCell(spawn.row, spawn.col, offspring);
               stats.onBirth();
               reproduced = true;
             }
