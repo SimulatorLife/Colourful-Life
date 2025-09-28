@@ -32,13 +32,43 @@ function normalizeSeed(source) {
   return undefined;
 }
 
+function toNumber(value) {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
+function coerceNextResult(result) {
+  const direct = toNumber(result);
+
+  if (Number.isFinite(direct)) return direct;
+
+  if (result && typeof result === 'object') {
+    const { value } = result;
+    const unwrapped = toNumber(value);
+
+    if (Number.isFinite(unwrapped)) return unwrapped;
+  }
+
+  return Math.random();
+}
+
 function resolveGenerator(source) {
   if (typeof source === 'function') {
     return { generator: source, seed: undefined };
   }
 
   if (source && typeof source.next === 'function') {
-    return { generator: () => source.next(), seed: source.seed ?? undefined };
+    return {
+      generator: () => coerceNextResult(source.next()),
+      seed: typeof source.seed === 'function' ? source.seed() : (source.seed ?? undefined),
+    };
   }
 
   const seed = normalizeSeed(source);
