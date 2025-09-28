@@ -1,3 +1,24 @@
+/**
+ * Produce a deduplicated list of tiles around the parents that can be used as
+ * reproduction spawn candidates. The helper only performs coordinate
+ * normalization and bounds checks—callers remain responsible for filtering out
+ * blocked tiles (obstacles, existing occupants, etc.).
+ *
+ * When `includeOriginNeighbors` is enabled the neighbors surrounding the
+ * original parent location are included so callers can fall back to the previous
+ * position if movement fails validation later in the pipeline.
+ *
+ * @param {Object} options
+ * @param {{row:number,col:number}} options.parent Current parent location.
+ * @param {{row:number,col:number}} options.mate Mate location.
+ * @param {{row:number,col:number}|null} [options.origin] Original parent
+ *   position before movement.
+ * @param {boolean} [options.includeOriginNeighbors=false] Whether to include
+ *   tiles neighboring the origin point.
+ * @param {number} options.rows Total number of grid rows.
+ * @param {number} options.cols Total number of grid columns.
+ * @returns {Array<{r:number,c:number}>}
+ */
 export function collectSpawnCandidates({
   parent,
   mate,
@@ -30,7 +51,7 @@ export function collectSpawnCandidates({
     if (seen.has(key)) return;
 
     seen.add(key);
-    candidates.push({ row: rr, col: cc });
+    candidates.push({ r: rr, c: cc });
   };
 
   const addNeighbors = (base) => {

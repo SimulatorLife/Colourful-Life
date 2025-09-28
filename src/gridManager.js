@@ -1314,6 +1314,7 @@ export default class GridManager {
       };
 
       let spawnInfo = null;
+      let candidates = [];
 
       if (this.selectionManager) {
         spawnInfo = this.selectionManager.getEligibleSpawnTiles(spawnContext);
@@ -1324,25 +1325,26 @@ export default class GridManager {
             parentA: { row: parentRow, col: parentCol },
             parentB: { row: mateRow, col: mateCol },
           };
+        } else if (Array.isArray(spawnInfo.allCandidates)) {
+          candidates = spawnInfo.allCandidates.map(({ row, col }) => ({ r: row, c: col }));
         }
       }
 
+      if (!this.selectionManager || candidates.length === 0) {
+        candidates = collectSpawnCandidates({
+          parent: spawnContext.parent,
+          mate: spawnContext.mate,
+          origin: spawnContext.origin,
+          includeOriginNeighbors: spawnContext.parentMoved,
+          rows: this.rows,
+          cols: this.cols,
+        });
+      }
+
       if (!blockedInfo) {
-        const allCandidates = spawnInfo
-          ? spawnInfo.allCandidates
-          : collectSpawnCandidates({
-              parent: spawnContext.parent,
-              mate: spawnContext.mate,
-              origin: spawnContext.origin,
-              includeOriginNeighbors: spawnContext.parentMoved,
-              rows: this.rows,
-              cols: this.cols,
-            });
-
-        const freeSlots = allCandidates.filter(
-          ({ row: r, col: c }) => !this.grid[r][c] && !this.isObstacle(r, c)
+        const freeSlots = candidates.filter(
+          ({ r, c }) => !this.grid[r][c] && !this.isObstacle(r, c)
         );
-
         let slotPool = freeSlots;
 
         if (freeSlots.length > 0 && this.selectionManager && spawnInfo) {
@@ -1350,7 +1352,7 @@ export default class GridManager {
 
           if (zoneTiles.length > 0) {
             const zoneSet = new Set(zoneTiles.map(({ row, col }) => `${row},${col}`));
-            const zoneSlots = freeSlots.filter(({ row, col }) => zoneSet.has(`${row},${col}`));
+            const zoneSlots = freeSlots.filter(({ r, c }) => zoneSet.has(`${r},${c}`));
 
             if (zoneSlots.length > 0) {
               slotPool = zoneSlots;
@@ -1360,11 +1362,12 @@ export default class GridManager {
 
         if (slotPool.length > 0) {
           const spawn = slotPool[Math.floor(randomRange(0, slotPool.length))];
+          const spawnPoint = { row: spawn.r, col: spawn.c };
           const zoneCheck = this.selectionManager
             ? this.selectionManager.validateReproductionArea({
                 parentA: { row: parentRow, col: parentCol },
                 parentB: { row: mateRow, col: mateCol },
-                spawn,
+                spawn: spawnPoint,
               })
             : { allowed: true };
 
@@ -1373,7 +1376,7 @@ export default class GridManager {
               reason: zoneCheck.reason,
               parentA: { row: parentRow, col: parentCol },
               parentB: { row: mateRow, col: mateCol },
-              spawn,
+              spawn: spawnPoint,
             };
           } else {
             const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
@@ -1381,9 +1384,9 @@ export default class GridManager {
             });
 
             if (offspring) {
-              offspring.row = spawn.row;
-              offspring.col = spawn.col;
-              this.setCell(spawn.row, spawn.col, offspring);
+              offspring.row = spawn.r;
+              offspring.col = spawn.c;
+              this.setCell(spawn.r, spawn.c, offspring);
               stats.onBirth();
               reproduced = true;
             }

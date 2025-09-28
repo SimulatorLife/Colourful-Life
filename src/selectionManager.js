@@ -200,7 +200,7 @@ export default class SelectionManager {
       return { allowed: false, reason: parentCheck.reason, tiles: [], allCandidates: [] };
     }
 
-    const allCandidates = collectSpawnCandidates({
+    const rawCandidates = collectSpawnCandidates({
       parent,
       mate,
       origin,
@@ -208,6 +208,8 @@ export default class SelectionManager {
       rows: this.rows,
       cols: this.cols,
     });
+
+    const allCandidates = rawCandidates.map(({ r, c }) => ({ row: r, col: c }));
 
     if (!this.hasActiveZones()) {
       return { allowed: true, tiles: allCandidates, allCandidates };
