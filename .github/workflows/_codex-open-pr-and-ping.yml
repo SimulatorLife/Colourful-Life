@@ -97,8 +97,7 @@ jobs:
             } catch (e) {
               core.info('Label add skipped: ' + e.message);
             }
-
-      - name: Comment to trigger Codex (includes branch & PR metadata)
+      - name: Comment to trigger Codex
         uses: actions/github-script@v7
         env:
           BASE_BRANCH: ${{ inputs.base_branch }}
@@ -110,26 +109,22 @@ jobs:
           github-token: ${{ secrets.GH_USER_TOKEN }}
           script: |
             const prNumber = Number(process.env.PR_NUMBER);
+
+            // 1) Instruction comes right after @codex (single paragraph)
+            // 2) Short inline reminder to use the specified branch/PR
+            // 3) Machine-readable context block follows
             const body = [
-              "@codex",
+              `@codex ${process.env.PROMPT}`,
               "",
-              "### Task Context",
+              `Use branch **${process.env.BRANCH_NAME}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}. Do not open new branches or PRs.`,
+              "",
               "```yaml",
               "codex_task:",
               `  branch: "${process.env.BRANCH_NAME}"`,
               `  pr_number: ${prNumber}`,
               `  base: "${process.env.BASE_BRANCH}"`,
               `  head_sha: "${process.env.HEAD_SHA}"`,
-              "```",
-              "",
-              "### Instructions",
-              "Use the branch and PR shown above for all changes. Commit code only to that branch,",
-              "and ensure updates remain tied to this PR. Do not open new PRs or branches unless",
-              "explicitly instructed.",
-              "",
-              "```",
-              process.env.PROMPT,
-              "```",
+              "```"
             ].join("\n");
 
             await github.rest.issues.createComment({
