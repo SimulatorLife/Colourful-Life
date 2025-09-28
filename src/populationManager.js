@@ -683,6 +683,55 @@ export default class PopulationManager {
     cell.energy = Math.min(this.maxTileEnergy, cell.energy + take);
   }
 
+  collectBirthCandidateTiles({
+    parentRow,
+    parentCol,
+    mateRow,
+    mateCol,
+    includeVacated,
+    vacatedRow,
+    vacatedCol,
+  }) {
+    const candidates = [];
+    const seen = new Set();
+    const addCandidate = (r, c) => {
+      if (r < 0 || r >= this.rows || c < 0 || c >= this.cols) return;
+
+      const key = `${r},${c}`;
+
+      if (!seen.has(key) && !this.isTileBlocked(r, c)) {
+        seen.add(key);
+        candidates.push({ r, c });
+      }
+    };
+    const addNeighbors = (baseRow, baseCol) => {
+      for (let dr = -1; dr <= 1; dr += 1) {
+        for (let dc = -1; dc <= 1; dc += 1) {
+          if (dr === 0 && dc === 0) continue;
+
+          addCandidate(baseRow + dr, baseCol + dc);
+        }
+      }
+    };
+
+    addNeighbors(parentRow, parentCol);
+    addNeighbors(mateRow, mateCol);
+
+    if (includeVacated) {
+      addCandidate(vacatedRow, vacatedCol);
+    }
+
+    for (let i = candidates.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const temp = candidates[i];
+
+      candidates[i] = candidates[j];
+      candidates[j] = temp;
+    }
+
+    return candidates;
+  }
+
   handleReproduction(
     row,
     col,
@@ -780,42 +829,15 @@ export default class PopulationManager {
       cell.energy >= thrA &&
       bestMate.target.energy >= thrB
     ) {
-      const candidates = [];
-      const candidateSet = new Set();
-      const addCandidate = (r, c) => {
-        if (r < 0 || r >= this.rows || c < 0 || c >= this.cols) return;
-
-        const key = `${r},${c}`;
-
-        if (!candidateSet.has(key) && !this.isTileBlocked(r, c)) {
-          candidateSet.add(key);
-          candidates.push({ r, c });
-        }
-      };
-      const addNeighbors = (baseRow, baseCol) => {
-        for (let dr = -1; dr <= 1; dr += 1) {
-          for (let dc = -1; dc <= 1; dc += 1) {
-            if (dr === 0 && dc === 0) continue;
-
-            addCandidate(baseRow + dr, baseCol + dc);
-          }
-        }
-      };
-
-      addNeighbors(parentRow, parentCol);
-      addNeighbors(mateRow, mateCol);
-
-      if (moveSucceeded) {
-        addCandidate(originalParentRow, originalParentCol);
-      }
-
-      for (let i = 0; i < candidates.length; i++) {
-        const idx = Math.floor(Math.random() * candidates.length);
-        const t = candidates[i];
-
-        candidates[i] = candidates[idx];
-        candidates[idx] = t;
-      }
+      const candidates = this.collectBirthCandidateTiles({
+        parentRow,
+        parentCol,
+        mateRow,
+        mateCol,
+        includeVacated: moveSucceeded,
+        vacatedRow: originalParentRow,
+        vacatedCol: originalParentCol,
+      });
 
       for (let i = 0; i < candidates.length; i++) {
         const { r, c } = candidates[i];
