@@ -116,7 +116,7 @@ jobs:
             const body = [
               `@codex ${process.env.PROMPT}`,
               "",
-              `Use branch **${process.env.BRANCH_NAME}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}. Do not open new branches or PRs.`,
+              `Once done, ensure all changes are pushed to remote branch **${process.env.BRANCH_NAME}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}. Do not open new branches or PRs.`,
               "",
               "```yaml",
               "codex_task:",
