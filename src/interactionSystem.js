@@ -1,8 +1,9 @@
 import { clamp, clamp01 } from './utils.js';
 
 export default class InteractionSystem {
-  constructor({ gridManager } = {}) {
+  constructor({ gridManager, gridState } = {}) {
     this.gridManager = gridManager || null;
+    this.gridState = gridState || null;
     this.pendingIntents = [];
   }
 
@@ -41,7 +42,7 @@ export default class InteractionSystem {
   }
 
   #resolveFight(intent, { stats, densityGrid, densityEffectMultiplier } = {}) {
-    const manager = this.gridManager;
+    const manager = this.gridState || this.gridManager;
 
     if (!manager) return false;
 
@@ -144,7 +145,7 @@ export default class InteractionSystem {
   }
 
   #resolveCooperation(intent, { stats } = {}) {
-    const manager = this.gridManager;
+    const manager = this.gridState || this.gridManager;
 
     if (!manager) return false;
 
