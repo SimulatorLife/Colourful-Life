@@ -111,7 +111,7 @@ export default class GridManager {
   static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
   static maxTileEnergy = MAX_TILE_ENERGY;
 
-  static tryMove(gridArr, sr, sc, dr, dc, rows, cols, options = {}) {
+  static #normalizeMoveOptions(options = {}) {
     const {
       obstacles = null,
       lingerPenalty = 0,
@@ -120,97 +120,179 @@ export default class GridManager {
       onMove = null,
       activeCells = null,
       onCellMoved = null,
-    } = options;
-    const nr = sr + dr;
-    const nc = sc + dc;
+    } = options || {};
+
+    return {
+      obstacles,
+      lingerPenalty,
+      penalizeOnBounds: penalizeOnBounds !== false,
+      onBlocked,
+      onMove,
+      activeCells,
+      onCellMoved,
+    };
+  }
+
+  static #isOutOfBounds(row, col, rows, cols) {
+    return row < 0 || row >= rows || col < 0 || col >= cols;
+  }
+
+  static #isObstacle(obstacles, row, col) {
+    return Boolean(obstacles?.[row]?.[col]);
+  }
+
+  static #resolvePenaltyAmount(penalty, context) {
+    if (typeof penalty === 'function') {
+      const value = penalty(context);
+
+      return Number.isFinite(value) ? Math.max(0, value) : 0;
+    }
+
+    return Number.isFinite(penalty) ? Math.max(0, penalty) : 0;
+  }
+
+  static #applyWallPenalty(cell, penalty, context) {
+    if (!cell || typeof cell !== 'object' || cell.energy == null) return;
+
+    const amount = GridManager.#resolvePenaltyAmount(penalty, context);
+
+    if (amount <= 0) return;
+
+    const prior = cell.wallContactTicks || 0;
+    const scale = 1 + Math.min(prior, 6) * 0.25;
+    const ageScale =
+      typeof cell.ageEnergyMultiplier === 'function' ? cell.ageEnergyMultiplier(0.4) : 1;
+
+    cell.energy = Math.max(0, cell.energy - amount * scale * ageScale);
+    cell.wallContactTicks = prior + 1;
+  }
+
+  static #resetWallPenalty(cell) {
+    if (cell && typeof cell === 'object' && cell.wallContactTicks) {
+      cell.wallContactTicks = 0;
+    }
+  }
+
+  static #notify(callback, ...args) {
+    if (typeof callback === 'function') callback(...args);
+  }
+
+  static #updateCellPosition(cell, row, col) {
+    if (!cell || typeof cell !== 'object') return;
+    if ('row' in cell) cell.row = row;
+    if ('col' in cell) cell.col = col;
+  }
+
+  static #applyMovementEnergyCost(cell) {
+    if (!cell || typeof cell !== 'object' || cell.energy == null || !cell.dna) return;
+
+    const baseCost = typeof cell.dna.moveCost === 'function' ? cell.dna.moveCost() : 0.005;
+    const ageScale =
+      typeof cell.ageEnergyMultiplier === 'function' ? cell.ageEnergyMultiplier(0.6) : 1;
+    const cost = baseCost * ageScale;
+
+    cell.energy = Math.max(0, cell.energy - cost);
+  }
+
+  static #completeMove({
+    gridArr,
+    moving,
+    attempt,
+    onMove,
+    onCellMoved,
+    activeCells,
+  }) {
+    const { fromRow, fromCol, toRow, toCol } = attempt;
+
+    gridArr[toRow][toCol] = moving;
+    gridArr[fromRow][fromCol] = null;
+
+    GridManager.#updateCellPosition(moving, toRow, toCol);
+    GridManager.#applyMovementEnergyCost(moving);
+
+    GridManager.#notify(onMove, {
+      cell: moving,
+      fromRow,
+      fromCol,
+      toRow,
+      toCol,
+    });
+    GridManager.#notify(onCellMoved, moving, fromRow, fromCol, toRow, toCol);
+
+    if (moving && activeCells && typeof activeCells.add === 'function') {
+      activeCells.add(moving);
+    }
+  }
+
+  static tryMove(gridArr, sr, sc, dr, dc, rows, cols, options = {}) {
+    const normalizedOptions = GridManager.#normalizeMoveOptions(options);
     const moving = gridArr[sr]?.[sc] ?? null;
 
-    if (!moving) {
-      return false;
-    }
+    if (!moving) return false;
 
-    const applyWallPenalty = (reason) => {
-      if (!moving || typeof moving !== 'object' || moving.energy == null) return;
-      const base =
-        typeof lingerPenalty === 'function'
-          ? lingerPenalty({ cell: moving, reason, attemptedRow: nr, attemptedCol: nc })
-          : lingerPenalty;
-      const amount = Number.isFinite(base) ? Math.max(0, base) : 0;
-
-      if (amount <= 0) return;
-      const prior = moving.wallContactTicks || 0;
-      const scale = 1 + Math.min(prior, 6) * 0.25;
-
-      const ageScale =
-        typeof moving.ageEnergyMultiplier === 'function' ? moving.ageEnergyMultiplier(0.4) : 1;
-
-      moving.energy = Math.max(0, moving.energy - amount * scale * ageScale);
-      moving.wallContactTicks = prior + 1;
-    };
-    const clearWallPenalty = () => {
-      if (moving && typeof moving === 'object' && moving.wallContactTicks) {
-        moving.wallContactTicks = 0;
-      }
+    const attempt = {
+      fromRow: sr,
+      fromCol: sc,
+      toRow: sr + dr,
+      toCol: sc + dc,
     };
 
-    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) {
-      if (penalizeOnBounds) applyWallPenalty('bounds');
-      if (typeof onBlocked === 'function')
-        onBlocked({ reason: 'bounds', row: sr, col: sc, nextRow: nr, nextCol: nc, mover: moving });
-
-      return false;
-    }
-
-    if (obstacles && obstacles[nr]?.[nc]) {
-      applyWallPenalty('obstacle');
-      if (typeof onBlocked === 'function')
-        onBlocked({
-          reason: 'obstacle',
-          row: sr,
-          col: sc,
-          nextRow: nr,
-          nextCol: nc,
-          mover: moving,
+    if (GridManager.#isOutOfBounds(attempt.toRow, attempt.toCol, rows, cols)) {
+      if (normalizedOptions.penalizeOnBounds) {
+        GridManager.#applyWallPenalty(moving, normalizedOptions.lingerPenalty, {
+          cell: moving,
+          reason: 'bounds',
+          attemptedRow: attempt.toRow,
+          attemptedCol: attempt.toCol,
         });
+      }
+
+      GridManager.#notify(normalizedOptions.onBlocked, {
+        reason: 'bounds',
+        row: sr,
+        col: sc,
+        nextRow: attempt.toRow,
+        nextCol: attempt.toCol,
+        mover: moving,
+      });
 
       return false;
     }
 
-    const dcell = gridArr[nr][nc];
+    if (GridManager.#isObstacle(normalizedOptions.obstacles, attempt.toRow, attempt.toCol)) {
+      GridManager.#applyWallPenalty(moving, normalizedOptions.lingerPenalty, {
+        cell: moving,
+        reason: 'obstacle',
+        attemptedRow: attempt.toRow,
+        attemptedCol: attempt.toCol,
+      });
 
-    if (!dcell) {
-      gridArr[nr][nc] = moving;
-      gridArr[sr][sc] = null;
-      if (moving && typeof moving === 'object') {
-        if ('row' in moving) moving.row = nr;
-        if ('col' in moving) moving.col = nc;
-      }
-      if (typeof onMove === 'function') {
-        onMove({ cell: moving, fromRow: sr, fromCol: sc, toRow: nr, toCol: nc });
-      }
-      // Charge movement energy cost to the mover if available
-      if (moving && typeof moving === 'object' && moving.energy != null && moving.dna) {
-        const baseCost = typeof moving.dna.moveCost === 'function' ? moving.dna.moveCost() : 0.005;
-        const ageScale =
-          typeof moving.ageEnergyMultiplier === 'function' ? moving.ageEnergyMultiplier(0.6) : 1;
-        const cost = baseCost * ageScale;
+      GridManager.#notify(normalizedOptions.onBlocked, {
+        reason: 'obstacle',
+        row: sr,
+        col: sc,
+        nextRow: attempt.toRow,
+        nextCol: attempt.toCol,
+        mover: moving,
+      });
 
-        moving.energy = Math.max(0, moving.energy - cost);
-      }
-
-      if (typeof onCellMoved === 'function') {
-        onCellMoved(moving, sr, sc, nr, nc);
-      }
-      if (activeCells && moving) {
-        activeCells.add(moving);
-      }
-
-      clearWallPenalty();
-
-      return true;
+      return false;
     }
 
-    return false;
+    if (gridArr[attempt.toRow][attempt.toCol]) return false;
+
+    GridManager.#completeMove({
+      gridArr,
+      moving,
+      attempt,
+      onMove: normalizedOptions.onMove,
+      onCellMoved: normalizedOptions.onCellMoved,
+      activeCells: normalizedOptions.activeCells,
+    });
+
+    GridManager.#resetWallPenalty(moving);
+
+    return true;
   }
 
   static moveToTarget(gridArr, row, col, targetRow, targetCol, rows, cols, options = {}) {
@@ -466,6 +548,16 @@ export default class GridManager {
     return this.isObstacle(row, col);
   }
 
+  #clearTileEnergy(row, col, { includeNext = true } = {}) {
+    if (this.energyGrid?.[row]) {
+      this.energyGrid[row][col] = 0;
+    }
+
+    if (includeNext && this.energyNext?.[row]) {
+      this.energyNext[row][col] = 0;
+    }
+  }
+
   clearObstacles() {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
@@ -479,35 +571,27 @@ export default class GridManager {
     if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return false;
     const wasBlocked = this.obstacles[row][col];
 
-    if (blocked) {
-      this.obstacles[row][col] = true;
-      if (!wasBlocked) {
-        const occupant = this.grid[row][col];
-
-        if (occupant) {
-          if (evict) {
-            const removed = this.removeCell(row, col);
-
-            if (this.stats?.onDeath) this.stats.onDeath();
-            if (removed) {
-              this.energyGrid[row][col] = 0;
-              this.energyNext[row][col] = 0;
-            }
-          } else {
-            this.energyGrid[row][col] = 0;
-            this.energyNext[row][col] = 0;
-          }
-        } else {
-          this.energyGrid[row][col] = 0;
-          this.energyNext[row][col] = 0;
-        }
-      } else {
-        this.energyGrid[row][col] = 0;
-        this.energyNext[row][col] = 0;
-      }
-    } else {
+    if (!blocked) {
       this.obstacles[row][col] = false;
+
+      return true;
     }
+
+    this.obstacles[row][col] = true;
+
+    if (!wasBlocked) {
+      const occupant = this.grid[row][col];
+
+      if (occupant && evict) {
+        const removed = this.removeCell(row, col);
+
+        if (removed && this.stats?.onDeath) {
+          this.stats.onDeath();
+        }
+      }
+    }
+
+    this.#clearTileEnergy(row, col);
 
     return true;
   }
