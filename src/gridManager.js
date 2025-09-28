@@ -43,6 +43,34 @@ export const OBSTACLE_PRESETS = [
   },
 ];
 
+export const OBSTACLE_SCENARIOS = [
+  {
+    id: 'manual',
+    label: 'Manual Control',
+    description: 'No scheduled obstacle changes.',
+    schedule: [],
+  },
+  {
+    id: 'mid-run-wall',
+    label: 'Mid-run Wall Drop',
+    description: 'Start open, then add a midline wall with gates after 600 ticks.',
+    schedule: [
+      { delay: 0, preset: 'none', clearExisting: true },
+      { delay: 600, preset: 'midline', clearExisting: true, presetOptions: { gapEvery: 12 } },
+    ],
+  },
+  {
+    id: 'pressure-maze',
+    label: 'Closing Maze',
+    description: 'Perimeter walls first, then corridors, ending with checkerboard choke points.',
+    schedule: [
+      { delay: 0, preset: 'perimeter', clearExisting: true },
+      { delay: 400, preset: 'corridor', append: true },
+      { delay: 900, preset: 'checkerboard', clearExisting: true, presetOptions: { tileSize: 3 } },
+    ],
+  },
+];
+
 export default class GridManager {
   // Base per-tick regen before modifiers; logistic to max, density-aware
   static energyRegenRate = ENERGY_REGEN_RATE_DEFAULT;
@@ -206,7 +234,10 @@ export default class GridManager {
     this.densityDirtyTiles = new Set();
     this.lastSnapshot = null;
     this.lingerPenalty = 0;
+    this.obstacleSchedules = [];
     this.currentObstaclePreset = 'none';
+    this.obstaclePresetListeners = new Set();
+    this.currentScenarioId = 'manual';
     this.tickCount = 0;
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
@@ -255,6 +286,43 @@ export default class GridManager {
     };
   }
 
+  onObstaclePresetChange(listener) {
+    if (typeof listener !== 'function') return () => {};
+
+    this.obstaclePresetListeners.add(listener);
+
+    return () => {
+      this.obstaclePresetListeners.delete(listener);
+    };
+  }
+
+  #assignCurrentObstaclePreset(nextPreset, { notify = true } = {}) {
+    const normalized = typeof nextPreset === 'string' ? nextPreset : 'none';
+
+    if (this.currentObstaclePreset === normalized) {
+      return normalized;
+    }
+
+    this.currentObstaclePreset = normalized;
+
+    if (notify) this.#emitObstaclePresetChange(normalized);
+
+    return normalized;
+  }
+
+  #emitObstaclePresetChange(nextPreset) {
+    if (!this.obstaclePresetListeners || this.obstaclePresetListeners.size === 0) return;
+
+    for (const listener of this.obstaclePresetListeners) {
+      try {
+        listener(nextPreset);
+      } catch (err) {
+        // Swallow listener errors to avoid breaking simulation loops
+        void err;
+      }
+    }
+  }
+
   setSelectionManager(selectionManager) {
     this.selectionManager = selectionManager || null;
   }
@@ -275,22 +343,23 @@ export default class GridManager {
     return this.isObstacle(row, col);
   }
 
-  clearObstacles() {
+  clearObstacles({ notify = true } = {}) {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         this.obstacles[r][c] = false;
       }
     }
-    this.currentObstaclePreset = 'none';
+    this.#assignCurrentObstaclePreset('none', { notify });
   }
 
-  setObstacle(row, col, blocked = true, { evict = true } = {}) {
+  setObstacle(row, col, blocked = true, { evict = true, trackPreset = true } = {}) {
     if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return false;
     const wasBlocked = this.obstacles[row][col];
-    const nextBlocked = Boolean(blocked);
-    const changed = wasBlocked !== nextBlocked;
+    const targetState = Boolean(blocked);
 
-    if (nextBlocked) {
+    let changed = wasBlocked !== targetState;
+
+    if (targetState) {
       this.obstacles[row][col] = true;
       if (!wasBlocked) {
         const occupant = this.grid[row][col];
@@ -316,13 +385,13 @@ export default class GridManager {
         this.energyGrid[row][col] = 0;
         this.energyNext[row][col] = 0;
       }
-    } else {
+    } else if (wasBlocked) {
       this.obstacles[row][col] = false;
+    } else {
+      return false;
     }
 
-    if (changed && this.currentObstaclePreset !== 'custom') {
-      this.currentObstaclePreset = 'custom';
-    }
+    if (changed && trackPreset) this.#assignCurrentObstaclePreset('custom');
 
     return changed;
   }
@@ -358,9 +427,9 @@ export default class GridManager {
         }
 
         if (isVertical) {
-          this.setObstacle(primary, secondaryIndex, true, { evict });
+          this.setObstacle(primary, secondaryIndex, true, { evict, trackPreset: false });
         } else {
-          this.setObstacle(secondaryIndex, primary, true, { evict });
+          this.setObstacle(secondaryIndex, primary, true, { evict, trackPreset: false });
         }
       }
     }
@@ -423,7 +492,7 @@ export default class GridManager {
         const tileC = Math.floor((c + offsetCol) / size);
         const parity = (tileR + tileC) % 2;
 
-        if (parity === blockParity) this.setObstacle(r, c, true, { evict });
+        if (parity === blockParity) this.setObstacle(r, c, true, { evict, trackPreset: false });
       }
     }
   }
@@ -435,7 +504,7 @@ export default class GridManager {
       for (let c = 0; c < this.cols; c++) {
         const onEdge = r < t || r >= this.rows - t || c < t || c >= this.cols - t;
 
-        if (onEdge) this.setObstacle(r, c, true, { evict });
+        if (onEdge) this.setObstacle(r, c, true, { evict, trackPreset: false });
       }
     }
   }
@@ -444,33 +513,39 @@ export default class GridManager {
     presetId,
     { clearExisting = true, append = false, presetOptions = {}, evict = true } = {}
   ) {
-    const normalizedId = typeof presetId === 'string' ? presetId : 'none';
-    const recognizedPreset = OBSTACLE_PRESETS.some((preset) => preset.id === normalizedId);
+    if (presetId === 'custom') {
+      return this.#assignCurrentObstaclePreset('custom');
+    }
 
-    if (!recognizedPreset) {
-      if (clearExisting && !append) this.clearObstacles();
-      this.currentObstaclePreset = 'custom';
+    if (!OBSTACLE_PRESETS.some((entry) => entry.id === presetId)) {
+      return null;
+    }
+
+    const isAppend = Boolean(append);
+    const shouldClear = Boolean(clearExisting) && !isAppend;
+    const options = presetOptions || {};
+    const eviction = evict ?? true;
+
+    if (presetId === 'none') {
+      if (clearExisting || !isAppend) {
+        this.clearObstacles();
+      }
 
       return this.currentObstaclePreset;
     }
 
-    if (clearExisting && !append && normalizedId !== 'none') {
-      this.clearObstacles();
+    if (shouldClear) {
+      this.clearObstacles({ notify: false });
     }
 
-    const options = presetOptions || {};
-
-    switch (normalizedId) {
-      case 'none':
-        if (clearExisting) this.clearObstacles();
-        break;
+    switch (presetId) {
       case 'midline': {
         const col = Math.floor(this.cols / 2);
         const gapEvery = Math.max(0, Math.floor(options.gapEvery ?? 10));
         const gapOffset = Math.floor(options.gapOffset ?? gapEvery / 2);
         const thickness = Math.max(1, Math.floor(options.thickness ?? 1));
 
-        this.paintVerticalWall(col, { gapEvery, gapOffset, thickness, evict });
+        this.paintVerticalWall(col, { gapEvery, gapOffset, thickness, evict: eviction });
         break;
       }
       case 'corridor': {
@@ -479,11 +554,11 @@ export default class GridManager {
         const first = Math.max(1, Math.floor(this.cols / 3));
         const second = Math.min(this.cols - 2, Math.floor((2 * this.cols) / 3));
 
-        this.paintVerticalWall(first, { gapEvery, thickness, evict });
+        this.paintVerticalWall(first, { gapEvery, thickness, evict: eviction });
         this.paintVerticalWall(second, {
           gapEvery,
           thickness,
-          evict,
+          evict: eviction,
           gapOffset: Math.floor(gapEvery / 2),
         });
         break;
@@ -494,24 +569,105 @@ export default class GridManager {
         const offsetCol = Math.floor(options.offsetCol ?? 0);
         const blockParity = Math.floor(options.blockParity ?? 0) % 2;
 
-        this.paintCheckerboard({ tileSize, offsetRow, offsetCol, blockParity, evict });
+        this.paintCheckerboard({
+          tileSize,
+          offsetRow,
+          offsetCol,
+          blockParity,
+          evict: eviction,
+        });
         break;
       }
       case 'perimeter': {
         const thickness = Math.max(1, Math.floor(options.thickness ?? 1));
 
-        this.paintPerimeter({ thickness, evict });
+        this.paintPerimeter({ thickness, evict: eviction });
         break;
       }
       default:
         break;
     }
 
-    const appendedPreset = append && normalizedId !== 'none';
+    const appliedPreset = shouldClear && !isAppend ? presetId : 'custom';
 
-    this.currentObstaclePreset = appendedPreset ? 'custom' : normalizedId;
+    return this.#assignCurrentObstaclePreset(appliedPreset);
+  }
 
-    return this.currentObstaclePreset;
+  clearScheduledObstacles() {
+    this.obstacleSchedules = [];
+  }
+
+  scheduleObstaclePreset({
+    delay = 0,
+    preset = 'none',
+    presetOptions = {},
+    clearExisting = true,
+    append = false,
+    evict = true,
+  } = {}) {
+    const triggerTick = this.tickCount + Math.max(0, Math.floor(delay));
+
+    this.obstacleSchedules.push({
+      triggerTick,
+      preset,
+      clearExisting,
+      append,
+      presetOptions,
+      evict,
+    });
+    this.obstacleSchedules.sort((a, b) => a.triggerTick - b.triggerTick);
+  }
+
+  processScheduledObstacles() {
+    if (!Array.isArray(this.obstacleSchedules) || this.obstacleSchedules.length === 0) return;
+
+    while (
+      this.obstacleSchedules.length > 0 &&
+      this.obstacleSchedules[0].triggerTick <= this.tickCount
+    ) {
+      const next = this.obstacleSchedules.shift();
+
+      this.applyObstaclePreset(next.preset, {
+        clearExisting: next.clearExisting,
+        append: next.append,
+        presetOptions: next.presetOptions,
+        evict: next.evict,
+      });
+    }
+  }
+
+  runObstacleScenario(scenarioId, { resetSchedule = true } = {}) {
+    const scenario = OBSTACLE_SCENARIOS.find((s) => s.id === scenarioId);
+
+    if (!scenario) return false;
+    if (resetSchedule) this.clearScheduledObstacles();
+    this.currentScenarioId = scenario.id;
+
+    for (let i = 0; i < scenario.schedule.length; i++) {
+      const step = scenario.schedule[i];
+      const delay = Math.max(0, Math.floor(step.delay ?? 0));
+      const opts = {
+        clearExisting: step.clearExisting,
+        append: step.append,
+        presetOptions: step.presetOptions,
+        evict: step.evict ?? true,
+      };
+
+      if (delay === 0) this.applyObstaclePreset(step.preset, opts);
+      else
+        this.scheduleObstaclePreset({
+          delay,
+          preset: step.preset,
+          presetOptions: step.presetOptions,
+          clearExisting: step.clearExisting,
+          append: step.append,
+          evict: step.evict ?? true,
+        });
+    }
+
+    if (scenario.schedule.length === 0) this.#assignCurrentObstaclePreset('none');
+
+    return true;
   }
 
   init() {
@@ -1391,6 +1547,7 @@ export default class GridManager {
 
     this.lastSnapshot = null;
     this.tickCount += 1;
+    this.processScheduledObstacles();
 
     const { densityGrid } = this.prepareTick({
       eventManager,
@@ -1607,3 +1764,4 @@ export default class GridManager {
 }
 
 GridManager.OBSTACLE_PRESETS = OBSTACLE_PRESETS;
+GridManager.OBSTACLE_SCENARIOS = OBSTACLE_SCENARIOS;
