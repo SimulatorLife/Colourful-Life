@@ -26,11 +26,12 @@ jobs:
         with:
           script: |
             const sha = context.payload.check_suite.head_sha;
-            const { data: prs } = await github.rest.search.issuesAndPullRequests({
-              q: `repo:${context.repo.owner}/${context.repo.repo} type:pr is:open ${sha}`
+            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: sha,
             });
-            if (prs.items.length === 0) return { pr_number: null };
-            return { pr_number: prs.items[0].number };
+            return { pr_number: prs.length ? prs[0].number : null };
 
       - name: Load PR details
         uses: actions/github-script@v7
@@ -68,43 +69,51 @@ jobs:
         id: readiness
         with:
           script: |
-            if ('${{ steps.pr.outputs.draft }}' === 'true') {
-              core.setOutput('ready', 'false');
-              core.setOutput('state', 'draft');
-              core.notice('PR is a draft; not merging.');
-              return;
-            }
-
             const prNumber = Number('${{ steps.pr.outputs.number }}');
 
-            // Poll until mergeability is computed
-            let last = null;
+            // Poll PR.mergeable until computed
+            let pr;
             for (let i = 0; i < 10; i++) {
               const { data } = await github.rest.pulls.get({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: prNumber,
               });
-              last = data;
-              if (data.mergeable !== null) break;
+              pr = data;
+              if (pr.mergeable !== null) break;
               await new Promise(r => setTimeout(r, 2000));
             }
 
-            const mergeable = !!last?.mergeable;
-            const state = (last?.mergeable_state || 'unknown').toLowerCase();
-            const draft = !!last?.draft;
+            // Check run gate: wait until no checks are queued/in_progress
+            const headSha = pr.head.sha;
+            let pending = 0;
+            for (let i = 0; i < 10; i++) {
+              const { data } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: headSha,
+              });
+              pending = (data.check_runs || []).filter(cr =>
+                cr.status === 'queued' || cr.status === 'in_progress'
+              ).length;
+              if (pending === 0) break;
+              await new Promise(r => setTimeout(r, 3000));
+            }
 
-            // Treat these as OK to attempt merge (no conflicts):
-            // clean = passing checks; unstable = non-required checks failing/pending; has_hooks = GHE pre-receive hooks
-            const allowedStates = ['clean','unstable','has_hooks'];
-            const blockedStates = ['dirty','blocked','behind','draft']; // conflicts, required checks, or out-of-date
+            const state = (pr.mergeable_state || 'unknown').toLowerCase();
+            const mergeable = !!pr.mergeable;
+            const draft = !!pr.draft;
 
-            const ready = mergeable && !draft && allowedStates.includes(state);
+            // Treat conflict-free states as OK once checks are finished
+            const conflictFree = mergeable && state !== 'dirty' && !draft;
+            const checksFinished = pending === 0;
 
-            core.notice(`mergeable=${mergeable}, mergeable_state=${state}, draft=${draft}`);
+            const ready = conflictFree && checksFinished;
+
+            core.notice(`mergeable=${mergeable}, state=${state}, draft=${draft}, checks_pending=${pending}`);
             core.setOutput('ready', ready ? 'true' : 'false');
             core.setOutput('state', state);
-            core.setOutput('head_ref', last.head.ref);
+            core.setOutput('head_ref', pr.head.ref);
 
       - name: Merge PR
         if: ${{ steps.readiness.outputs.ready == 'true' }}
@@ -146,18 +155,23 @@ jobs:
 
       # Diagnostics when not merged + comment for the agent
       - name: Diagnostics and codex comment (when merge blocked)
-        if: ${{ steps.pr.outputs.skip != 'true' && ( steps.readiness.outputs.ready != 'true' ) }}
+        if: ${{ steps.pr.outputs.skip != 'true' && steps.readiness.outputs.ready != 'true' }}
         uses: actions/github-script@v7
         with:
           script: |
             const prNumber = Number('${{ steps.pr.outputs.number }}');
-
-            // Re-fetch fresh snapshot for better diagnostics
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner, repo: context.repo.repo, pull_number: prNumber
             });
 
-            // Minimal diagnostics
+            const state = (pr.mergeable_state || 'unknown').toLowerCase();
+            const header =
+              state === 'dirty'   ? '@codex resolve the merge conflicts and preserve master architecture/tests.' :
+              state === 'behind'  ? '@codex update this branch with master, then re-run checks.' :
+              state === 'blocked' ? '@codex address required checks/reviews blocking merge.' :
+              state === 'unstable'? '@codex investigate failing/pending checks and stabilize.' :
+                                    '@codex verify merge readiness and stabilize pending checks.';
+
             const diag = [
               `mergeable: ${pr.mergeable}`,
               `mergeable_state: ${pr.mergeable_state}`,
@@ -166,8 +180,6 @@ jobs:
               `commits: ${pr.commits}`,
               `changed_files: ${pr.changed_files}`
             ].join('\n');
-
-            core.notice(`Diagnostics:\n${diag}`);
 
             const condensed = [
               "Resolve conflicts while preserving master’s architecture, tests, and style.",
@@ -181,11 +193,11 @@ jobs:
             ].join(' ');
 
             const body = [
-              "@codex fix the merge conflicts and attempt an auto-resolution.",
+              header,
               "",
               "**Context**",
               "",
-              "- This PR could not be auto-merged because it isn’t in a `clean` state.",
+              "- Auto-merge not performed.",
               "- Diagnostics:",
               "```",
               diag,
