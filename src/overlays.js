@@ -268,20 +268,41 @@ export function drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy = MAX_TILE_
   );
 }
 
+let densityScratchBuffer = null;
+let densityScratchSize = 0;
+
+function ensureDensityScratchSize(size) {
+  if (!densityScratchBuffer || densityScratchSize < size) {
+    densityScratchBuffer = new Float32Array(size);
+    densityScratchSize = size;
+  }
+
+  return densityScratchBuffer;
+}
+
 export function drawDensityHeatmap(grid, ctx, cellSize) {
   const rows = grid.rows;
   const cols = grid.cols;
-  const densities = [];
+
+  if (!rows || !cols) return;
+
+  const totalCells = rows * cols;
+  const scratch = ensureDensityScratchSize(totalCells);
+  let scratchIndex = 0;
   let minDensity = Infinity;
   let maxDensity = -Infinity;
+  const densityGrid = Array.isArray(grid.densityGrid) ? grid.densityGrid : null;
 
   for (let r = 0; r < rows; r++) {
-    densities[r] = [];
+    const densityRow = densityGrid ? densityGrid[r] : null;
+
     for (let c = 0; c < cols; c++) {
-      const rawDensity = getDensityAt(grid, r, c);
+      const rawDensity =
+        densityRow && Number.isFinite(densityRow[c]) ? densityRow[c] : getDensityAt(grid, r, c);
       const density = Number.isFinite(rawDensity) ? rawDensity : 0;
 
-      densities[r][c] = density;
+      scratch[scratchIndex++] = density;
+
       if (density < minDensity) minDensity = density;
       if (density > maxDensity) maxDensity = density;
     }
@@ -301,9 +322,11 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
     range = maxDensity - minDensity;
   }
 
+  scratchIndex = 0;
+
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const density = densities[r][c];
+      const density = scratch[scratchIndex++];
       const normalized = (density - minDensity) / range;
 
       ctx.fillStyle = densityToRgba(normalized);
