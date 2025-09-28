@@ -11,6 +11,8 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  checks: read
+  statuses: read
 
 jobs:
   auto-merge:
@@ -84,18 +86,34 @@ jobs:
               await new Promise(r => setTimeout(r, 2000));
             }
 
-            // Check run gate: wait until no checks are queued/in_progress
             const headSha = pr.head.sha;
+
+            // IMPORTANT: checks live under the HEAD repo coordinates
+            const headOwner = pr.head.repo.owner.login;
+            const headRepo  = pr.head.repo.name;
+
+            // Poll checks until none are queued/in_progress; if Checks API is blocked, fall back to Statuses API
             let pending = 0;
+            async function countPendingChecks() {
+              try {
+                const { data } = await github.rest.checks.listForRef({
+                  owner: headOwner, repo: headRepo, ref: headSha,
+                });
+                return (data.check_runs || []).filter(cr =>
+                  cr.status === 'queued' || cr.status === 'in_progress'
+                ).length;
+              } catch (e) {
+                // Fallback to commit statuses (less granular but widely accessible)
+                const { data } = await github.rest.repos.getCombinedStatusForRef({
+                  owner: headOwner, repo: headRepo, ref: headSha,
+                });
+                // statuses API doesn’t expose "in_progress"; treat "pending" as not finished
+                return (data.statuses || []).some(s => s.state === 'pending') ? 1 : 0;
+              }
+            }
+
             for (let i = 0; i < 10; i++) {
-              const { data } = await github.rest.checks.listForRef({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                ref: headSha,
-              });
-              pending = (data.check_runs || []).filter(cr =>
-                cr.status === 'queued' || cr.status === 'in_progress'
-              ).length;
+              pending = await countPendingChecks();
               if (pending === 0) break;
               await new Promise(r => setTimeout(r, 3000));
             }
@@ -104,13 +122,12 @@ jobs:
             const mergeable = !!pr.mergeable;
             const draft = !!pr.draft;
 
-            // Treat conflict-free states as OK once checks are finished
-            const conflictFree = mergeable && state !== 'dirty' && !draft;
+            // Conflict-free once checks are finished
+            const conflictFree   = mergeable && state !== 'dirty' && !draft;
             const checksFinished = pending === 0;
+            const ready          = conflictFree && checksFinished;
 
-            const ready = conflictFree && checksFinished;
-
-            core.notice(`mergeable=${mergeable}, state=${state}, draft=${draft}, checks_pending=${pending}`);
+            core.notice(`mergeable=${mergeable}, state=${state}, draft=${draft}, checks_pending=${pending}, head=${headOwner}/${headRepo}`);
             core.setOutput('ready', ready ? 'true' : 'false');
             core.setOutput('state', state);
             core.setOutput('head_ref', pr.head.ref);
