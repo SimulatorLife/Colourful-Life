@@ -689,17 +689,22 @@ export default class UIManager {
         if (typeof this.actions.applyObstaclePreset === 'function')
           this.actions.applyObstaclePreset(...args);
         else if (window.grid?.applyObstaclePreset) window.grid.applyObstaclePreset(...args);
+
+        if (presetSelect) presetSelect.value = this.obstaclePreset;
       });
       const clearButton = document.createElement('button');
 
       clearButton.textContent = 'Clear Obstacles';
       clearButton.title = 'Remove all obstacles from the grid.';
       clearButton.addEventListener('click', () => {
-        const args = ['none', { clearExisting: true }];
+        this.obstaclePreset = 'none';
+        const args = [this.obstaclePreset, { clearExisting: true }];
 
         if (typeof this.actions.applyObstaclePreset === 'function')
           this.actions.applyObstaclePreset(...args);
         else if (window.grid?.applyObstaclePreset) window.grid.applyObstaclePreset(...args);
+
+        if (presetSelect) presetSelect.value = this.obstaclePreset;
       });
       presetButtons.appendChild(applyLayoutButton);
       presetButtons.appendChild(clearButton);

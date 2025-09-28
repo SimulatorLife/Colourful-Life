@@ -438,10 +438,23 @@ export default class GridManager {
     presetId,
     { clearExisting = true, append = false, presetOptions = {}, evict = true } = {}
   ) {
-    if (clearExisting && !append) this.clearObstacles();
+    const normalizedId = typeof presetId === 'string' ? presetId : 'none';
+    const recognizedPreset = OBSTACLE_PRESETS.some((preset) => preset.id === normalizedId);
+
+    if (!recognizedPreset) {
+      if (clearExisting && !append) this.clearObstacles();
+      this.currentObstaclePreset = 'custom';
+
+      return this.currentObstaclePreset;
+    }
+
+    if (clearExisting && !append && normalizedId !== 'none') {
+      this.clearObstacles();
+    }
+
     const options = presetOptions || {};
 
-    switch (presetId) {
+    switch (normalizedId) {
       case 'none':
         if (clearExisting) this.clearObstacles();
         break;
@@ -488,7 +501,9 @@ export default class GridManager {
         break;
     }
 
-    this.currentObstaclePreset = presetId;
+    this.currentObstaclePreset = normalizedId;
+
+    return this.currentObstaclePreset;
   }
 
   init() {
