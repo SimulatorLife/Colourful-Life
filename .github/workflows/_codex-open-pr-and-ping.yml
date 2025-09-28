@@ -1,0 +1,120 @@
+name: Codex – Open PR and Ping
+
+on:
+  workflow_call:
+    inputs:
+      pr_title:
+        required: true
+        type: string
+      pr_body:
+        required: false
+        type: string
+        default: ""
+      prompt:
+        required: true
+        type: string
+      branch_prefix:
+        required: false
+        type: string
+        default: "codex"
+      base_branch:
+        required: false
+        type: string
+        default: "master"
+    outputs:
+      pr_number:
+        value: ${{ jobs.open-and-ping.outputs.pr_number }}
+      branch:
+        value: ${{ jobs.open-and-ping.outputs.branch }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  open-and-ping:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.pr.outputs.number }}
+      branch:     ${{ env.BRANCH_NAME }}
+    env:
+      BRANCH_NAME: ${{ inputs.branch_prefix }}/task-${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create empty commit on new branch
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH_NAME"
+          git commit --allow-empty -m "${{ inputs.pr_title }}"
+          git push -u origin "$BRANCH_NAME"
+
+      - name: Open PR
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: core.getInput('pr_title'),
+              head:  process.env.BRANCH_NAME,
+              base:  core.getInput('base_branch'),
+              body:  core.getInput('pr_body') || undefined,
+              maintainer_can_modify: true
+            });
+            core.setOutput('number', pr.number.toString());
+            core.setOutput('head_sha', pr.head.sha);
+
+      - name: (Optional) Label the PR
+        if: ${{ always() }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: Number('${{ steps.pr.outputs.number }}'),
+                labels: ['codex']
+              });
+            } catch (e) { core.info('Label add skipped: ' + e.message); }
+
+      - name: Comment to trigger Codex (includes branch & PR metadata)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = Number('${{ steps.pr.outputs.number }}');
+            const metadata = [
+              '```yaml',
+              'codex_task:',
+              `  branch: "${process.env.BRANCH_NAME}"`,
+              `  pr_number: ${prNumber}`,
+              `  base: "${core.getInput('base_branch')}"`,
+              `  head_sha: "${{ steps.pr.outputs.head_sha }}"`,
+              '```'
+            ].join('\n');
+
+            const body = [
+              '@codex',
+              '',
+              metadata,
+              '',
+              '### Instructions',
+              '```',
+              core.getInput('prompt'),
+              '```'
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body
+            });
