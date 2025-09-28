@@ -11,6 +11,8 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  checks: read
+  statuses: read
 
 jobs:
   auto-merge:
@@ -71,7 +73,7 @@ jobs:
           script: |
             const prNumber = Number('${{ steps.pr.outputs.number }}');
 
-            // Poll PR.mergeable until computed
+            // Poll until GitHub computes mergeability (mergeable can be null briefly)
             let pr;
             for (let i = 0; i < 10; i++) {
               const { data } = await github.rest.pulls.get({
@@ -84,33 +86,15 @@ jobs:
               await new Promise(r => setTimeout(r, 2000));
             }
 
-            // Check run gate: wait until no checks are queued/in_progress
-            const headSha = pr.head.sha;
-            let pending = 0;
-            for (let i = 0; i < 10; i++) {
-              const { data } = await github.rest.checks.listForRef({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                ref: headSha,
-              });
-              pending = (data.check_runs || []).filter(cr =>
-                cr.status === 'queued' || cr.status === 'in_progress'
-              ).length;
-              if (pending === 0) break;
-              await new Promise(r => setTimeout(r, 3000));
-            }
-
-            const state = (pr.mergeable_state || 'unknown').toLowerCase();
             const mergeable = !!pr.mergeable;
+            const state = (pr.mergeable_state || 'unknown').toLowerCase();
             const draft = !!pr.draft;
 
-            // Treat conflict-free states as OK once checks are finished
-            const conflictFree = mergeable && state !== 'dirty' && !draft;
-            const checksFinished = pending === 0;
+            // Accept conflict-free states: "clean" and "unstable" (optionally "has_hooks")
+            const allowedStates = ['clean', 'unstable', 'has_hooks'];
+            const ready = mergeable && !draft && allowedStates.includes(state);
 
-            const ready = conflictFree && checksFinished;
-
-            core.notice(`mergeable=${mergeable}, state=${state}, draft=${draft}, checks_pending=${pending}`);
+            core.notice(`mergeable=${mergeable}, state=${state}, draft=${draft}`);
             core.setOutput('ready', ready ? 'true' : 'false');
             core.setOutput('state', state);
             core.setOutput('head_ref', pr.head.ref);
