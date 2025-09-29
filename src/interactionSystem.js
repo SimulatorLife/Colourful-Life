@@ -35,6 +35,109 @@ function placeAdapterCell(adapter, row, col, cell) {
   adapter?.setCell?.(row, col, cell);
 }
 
+function computeAgeEnergyScale(cell) {
+  return typeof cell?.ageEnergyMultiplier === 'function' ? cell.ageEnergyMultiplier(1) : 1;
+}
+
+function computeFightCost(cell) {
+  const baseCost = typeof cell?.dna?.fightCost === 'function' ? cell.dna.fightCost() : 0;
+
+  return baseCost * computeAgeEnergyScale(cell);
+}
+
+function computeCombatPower(cell) {
+  const modifier = cell?.dna?.combatPower?.() ?? 1;
+
+  return cell?.energy * modifier;
+}
+
+function subtractEnergy(cell, amount) {
+  if (!cell) return;
+
+  const current = typeof cell.energy === 'number' ? cell.energy : Number.NaN;
+
+  cell.energy = Math.max(0, current - amount);
+}
+
+function applyFightCost(cell) {
+  if (!cell) return;
+
+  const cost = computeFightCost(cell);
+
+  subtractEnergy(cell, cost);
+}
+
+function recordFight(stats, winner, loser) {
+  stats?.onFight?.();
+  stats?.onDeath?.();
+
+  if (winner) {
+    winner.fightsWon = (winner.fightsWon || 0) + 1;
+  }
+
+  if (loser) {
+    loser.fightsLost = (loser.fightsLost || 0) + 1;
+  }
+}
+
+function moveVictoriousAttacker({
+  adapter,
+  attacker,
+  attackerRow,
+  attackerCol,
+  targetRow,
+  targetCol,
+  attackerTile,
+  densityGrid,
+  densityEffectMultiplier,
+}) {
+  let relocated = false;
+
+  if (typeof adapter?.relocateCell === 'function') {
+    relocated = adapter.relocateCell(attackerRow, attackerCol, targetRow, targetCol);
+  }
+
+  if (!relocated) {
+    if (attackerTile === attacker) {
+      clearAdapterCell(adapter, attackerRow, attackerCol);
+    }
+
+    placeAdapterCell(adapter, targetRow, targetCol, attacker);
+
+    if ('row' in attacker) attacker.row = targetRow;
+    if ('col' in attacker) attacker.col = targetCol;
+  }
+
+  if (typeof adapter?.consumeTileEnergy === 'function') {
+    adapter.consumeTileEnergy({
+      cell: attacker,
+      row: targetRow,
+      col: targetCol,
+      densityGrid,
+      densityEffectMultiplier,
+    });
+  }
+}
+
+function prepareFightParticipants({ adapter, initiator, target }) {
+  if (!adapter || !initiator?.cell || !target) return null;
+
+  const attacker = initiator.cell;
+  const { row: attackerRow, col: attackerCol } = resolveCoordinates(initiator, attacker);
+
+  if (attackerRow == null || attackerCol == null) return null;
+
+  const { row: targetRow, col: targetCol } = resolveCoordinates(target);
+
+  if (targetRow == null || targetCol == null) return null;
+
+  const defender = getAdapterCell(adapter, targetRow, targetCol);
+
+  if (!defender) return null;
+
+  return { attacker, defender, attackerRow, attackerCol, targetRow, targetCol };
+}
+
 export default class InteractionSystem {
   constructor({ adapter, gridManager } = {}) {
     if (adapter) {
@@ -89,73 +192,35 @@ export default class InteractionSystem {
     const initiator = intent.initiator || intent.attacker || null;
     const target = intent.target || null;
 
-    if (!initiator?.cell || !target) return false;
+    const participants = prepareFightParticipants({ adapter, initiator, target });
 
-    const attacker = initiator.cell;
-    const { row: attackerRow, col: attackerCol } = resolveCoordinates(initiator, attacker);
+    if (!participants) return false;
 
-    if (attackerRow == null || attackerCol == null) return false;
+    const { attacker, defender, attackerRow, attackerCol, targetRow, targetCol } = participants;
 
-    const { row: targetRow, col: targetCol } = resolveCoordinates(target);
+    applyFightCost(attacker);
+    applyFightCost(defender);
 
-    if (targetRow == null || targetCol == null) return false;
-
-    const defender = getAdapterCell(adapter, targetRow, targetCol);
-
-    if (!defender) return false;
-
-    const attackerAgeScale =
-      typeof attacker.ageEnergyMultiplier === 'function' ? attacker.ageEnergyMultiplier(1) : 1;
-    const defenderAgeScale =
-      typeof defender.ageEnergyMultiplier === 'function' ? defender.ageEnergyMultiplier(1) : 1;
-    const attackerCost =
-      (typeof attacker.dna?.fightCost === 'function' ? attacker.dna.fightCost() : 0) *
-      attackerAgeScale;
-    const defenderCost =
-      (typeof defender.dna?.fightCost === 'function' ? defender.dna.fightCost() : 0) *
-      defenderAgeScale;
-
-    attacker.energy = Math.max(0, attacker.energy - attackerCost);
-    defender.energy = Math.max(0, defender.energy - defenderCost);
-
-    const attackerPower = attacker.energy * (attacker.dna?.combatPower?.() ?? 1);
-    const defenderPower = defender.energy * (defender.dna?.combatPower?.() ?? 1);
+    const attackerPower = computeCombatPower(attacker);
+    const defenderPower = computeCombatPower(defender);
 
     const attackerTile = getAdapterCell(adapter, attackerRow, attackerCol);
 
     if (attackerPower >= defenderPower) {
       clearAdapterCell(adapter, targetRow, targetCol);
+      moveVictoriousAttacker({
+        adapter,
+        attacker,
+        attackerRow,
+        attackerCol,
+        targetRow,
+        targetCol,
+        attackerTile,
+        densityGrid,
+        densityEffectMultiplier,
+      });
 
-      let relocated = false;
-
-      if (typeof adapter.relocateCell === 'function') {
-        relocated = adapter.relocateCell(attackerRow, attackerCol, targetRow, targetCol);
-      }
-
-      if (!relocated) {
-        if (attackerTile === attacker) {
-          clearAdapterCell(adapter, attackerRow, attackerCol);
-        }
-
-        placeAdapterCell(adapter, targetRow, targetCol, attacker);
-        if ('row' in attacker) attacker.row = targetRow;
-        if ('col' in attacker) attacker.col = targetCol;
-      }
-
-      if (typeof adapter.consumeTileEnergy === 'function') {
-        adapter.consumeTileEnergy({
-          cell: attacker,
-          row: targetRow,
-          col: targetCol,
-          densityGrid,
-          densityEffectMultiplier,
-        });
-      }
-
-      stats?.onFight?.();
-      stats?.onDeath?.();
-      attacker.fightsWon = (attacker.fightsWon || 0) + 1;
-      defender.fightsLost = (defender.fightsLost || 0) + 1;
+      recordFight(stats, attacker, defender);
 
       return true;
     }
@@ -164,10 +229,7 @@ export default class InteractionSystem {
       clearAdapterCell(adapter, attackerRow, attackerCol);
     }
 
-    stats?.onFight?.();
-    stats?.onDeath?.();
-    defender.fightsWon = (defender.fightsWon || 0) + 1;
-    attacker.fightsLost = (attacker.fightsLost || 0) + 1;
+    recordFight(stats, defender, attacker);
 
     return true;
   }

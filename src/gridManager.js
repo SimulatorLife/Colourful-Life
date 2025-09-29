@@ -1,4 +1,4 @@
-import { randomRange, randomPercent, clamp, lerp } from './utils.js';
+import { randomRange, randomPercent, clamp, lerp, createRankedBuffer } from './utils.js';
 import DNA from './genome.js';
 import Cell from './cell.js';
 import { computeFitness } from './fitness.js';
@@ -60,48 +60,6 @@ export const OBSTACLE_PRESETS = [
   },
 ];
 const BRAIN_SNAPSHOT_LIMIT = 5;
-
-function createTopFitnessBuffer(limit) {
-  const maxSize = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
-  const buffer = [];
-
-  return {
-    add(entry) {
-      if (!entry || maxSize === 0) return;
-
-      const fitness = entry?.fitness;
-
-      if (!Number.isFinite(fitness)) return;
-
-      let low = 0;
-      let high = buffer.length;
-
-      while (low < high) {
-        const mid = (low + high) >> 1;
-        const midFitness = buffer[mid]?.fitness ?? -Infinity;
-
-        if (fitness > midFitness) {
-          high = mid;
-        } else {
-          low = mid + 1;
-        }
-      }
-
-      if (low >= maxSize && buffer.length >= maxSize) {
-        return;
-      }
-
-      buffer.splice(low, 0, entry);
-
-      if (buffer.length > maxSize) {
-        buffer.length = maxSize;
-      }
-    },
-    getItems() {
-      return buffer.slice();
-    },
-  };
-}
 
 export default class GridManager {
   // Base per-tick regen before modifiers; logistic to max, density-aware
@@ -194,14 +152,7 @@ export default class GridManager {
     cell.energy = Math.max(0, cell.energy - cost);
   }
 
-  static #completeMove({
-    gridArr,
-    moving,
-    attempt,
-    onMove,
-    onCellMoved,
-    activeCells,
-  }) {
+  static #completeMove({ gridArr, moving, attempt, onMove, onCellMoved, activeCells }) {
     const { fromRow, fromCol, toRow, toCol } = attempt;
 
     gridArr[toRow][toCol] = moving;
@@ -916,6 +867,28 @@ export default class GridManager {
     cell.energy = Math.min(this.maxTileEnergy, cell.energy + take);
   }
 
+  /**
+   * Aggregates immediate non-obstacle neighbor energy for regeneration math.
+   */
+  #collectEnergyNeighborStats(row, col) {
+    let sum = 0;
+    let count = 0;
+
+    const addNeighbor = (r, c) => {
+      if (this.isObstacle(r, c)) return;
+
+      sum += this.energyGrid?.[r]?.[c] ?? 0;
+      count += 1;
+    };
+
+    if (row > 0) addNeighbor(row - 1, col);
+    if (row < this.rows - 1) addNeighbor(row + 1, col);
+    if (col > 0) addNeighbor(row, col - 1);
+    if (col < this.cols - 1) addNeighbor(row, col + 1);
+
+    return { sum, count };
+  }
+
   regenerateEnergyGrid(
     events = null,
     eventStrengthMultiplier = 1,
@@ -942,25 +915,7 @@ export default class GridManager {
           ? densityGrid[r][c]
           : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
 
-        let neighborSum = 0;
-        let neighborCount = 0;
-
-        if (r > 0 && !this.isObstacle(r - 1, c)) {
-          neighborSum += this.energyGrid[r - 1][c];
-          neighborCount++;
-        }
-        if (r < this.rows - 1 && !this.isObstacle(r + 1, c)) {
-          neighborSum += this.energyGrid[r + 1][c];
-          neighborCount++;
-        }
-        if (c > 0 && !this.isObstacle(r, c - 1)) {
-          neighborSum += this.energyGrid[r][c - 1];
-          neighborCount++;
-        }
-        if (c < this.cols - 1 && !this.isObstacle(r, c + 1)) {
-          neighborSum += this.energyGrid[r][c + 1];
-          neighborCount++;
-        }
+        const { sum: neighborSum, count: neighborCount } = this.#collectEnergyNeighborStats(r, c);
 
         const { nextEnergy } = computeTileEnergyUpdate({
           currentEnergy: this.energyGrid[r][c],
@@ -1860,7 +1815,10 @@ export default class GridManager {
       cells: [],
       entries: [],
     };
-    const topBrainEntries = createTopFitnessBuffer(BRAIN_SNAPSHOT_LIMIT);
+    const topBrainEntries = createRankedBuffer(
+      BRAIN_SNAPSHOT_LIMIT,
+      (a, b) => (b?.fitness ?? -Infinity) - (a?.fitness ?? -Infinity)
+    );
 
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
@@ -1881,7 +1839,9 @@ export default class GridManager {
         const entry = { row, col, cell, fitness, smoothedFitness: smoothed };
 
         snapshot.entries.push(entry);
-        topBrainEntries.add(entry);
+        if (Number.isFinite(entry.fitness)) {
+          topBrainEntries.add(entry);
+        }
         if (fitness > snapshot.maxFitness) snapshot.maxFitness = fitness;
       }
     }
