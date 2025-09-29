@@ -60,23 +60,41 @@ function subtractEnergy(cell, amount) {
 }
 
 function applyFightCost(cell) {
-  if (!cell) return;
+  if (!cell) return 0;
 
   const cost = computeFightCost(cell);
 
   subtractEnergy(cell, cost);
+
+  return cost;
 }
 
-function recordFight(stats, winner, loser) {
+function recordFight(stats, winner, loser, context = {}) {
   stats?.onFight?.();
   stats?.onDeath?.();
 
   if (winner) {
     winner.fightsWon = (winner.fightsWon || 0) + 1;
+    winner.experienceInteraction?.({
+      type: 'fight',
+      outcome: 'win',
+      partner: loser,
+      kinship: clamp(context.kinship ?? 0, 0, 1),
+      energyDelta: Number.isFinite(context.winnerCost) ? -context.winnerCost : 0,
+      intensity: clamp(context.intensity ?? 1, 0, 2),
+    });
   }
 
   if (loser) {
     loser.fightsLost = (loser.fightsLost || 0) + 1;
+    loser.experienceInteraction?.({
+      type: 'fight',
+      outcome: 'loss',
+      partner: winner,
+      kinship: clamp(context.kinship ?? 0, 0, 1),
+      energyDelta: Number.isFinite(context.loserCost) ? -context.loserCost : 0,
+      intensity: clamp(context.intensity ?? 1, 0, 2),
+    });
   }
 }
 
@@ -198,11 +216,18 @@ export default class InteractionSystem {
 
     const { attacker, defender, attackerRow, attackerCol, targetRow, targetCol } = participants;
 
-    applyFightCost(attacker);
-    applyFightCost(defender);
+    const attackerCost = applyFightCost(attacker);
+    const defenderCost = applyFightCost(defender);
 
     const attackerPower = computeCombatPower(attacker);
     const defenderPower = computeCombatPower(defender);
+    const kinship =
+      typeof attacker?.similarityTo === 'function' && defender
+        ? clamp(attacker.similarityTo(defender), 0, 1)
+        : 0;
+    const totalPower = Math.abs(attackerPower) + Math.abs(defenderPower);
+    const powerDiff = totalPower > 0 ? Math.abs(attackerPower - defenderPower) / totalPower : 0;
+    const intensity = clamp(0.4 + powerDiff, 0, 1.6);
 
     const attackerTile = getAdapterCell(adapter, attackerRow, attackerCol);
 
@@ -220,7 +245,12 @@ export default class InteractionSystem {
         densityEffectMultiplier,
       });
 
-      recordFight(stats, attacker, defender);
+      recordFight(stats, attacker, defender, {
+        kinship,
+        winnerCost: attackerCost,
+        loserCost: defenderCost,
+        intensity,
+      });
 
       return true;
     }
@@ -229,7 +259,12 @@ export default class InteractionSystem {
       clearAdapterCell(adapter, attackerRow, attackerCol);
     }
 
-    recordFight(stats, defender, attacker);
+    recordFight(stats, defender, attacker, {
+      kinship,
+      winnerCost: defenderCost,
+      loserCost: attackerCost,
+      intensity,
+    });
 
     return true;
   }
@@ -269,6 +304,29 @@ export default class InteractionSystem {
     if (transferred <= 0) return false;
 
     stats?.onCooperate?.();
+
+    const kinship =
+      typeof actor?.similarityTo === 'function' && partner
+        ? clamp(actor.similarityTo(partner), 0, 1)
+        : 0;
+
+    actor.experienceInteraction?.({
+      type: 'cooperate',
+      outcome: 'give',
+      partner,
+      kinship,
+      energyDelta: -transferred,
+      intensity: 0.6 + kinship * 0.4,
+    });
+
+    partner.experienceInteraction?.({
+      type: 'cooperate',
+      outcome: 'receive',
+      partner: actor,
+      kinship,
+      energyDelta: transferred,
+      intensity: 0.6 + kinship * 0.4,
+    });
 
     return true;
   }

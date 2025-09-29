@@ -13,6 +13,7 @@ export const SENSOR_KEYS = Object.freeze([
   'enemySimilarity',
   'mateSimilarity',
   'ageFraction',
+  'interactionMomentum',
   'eventPressure',
   'partnerEnergy',
   'partnerAgeFraction',
