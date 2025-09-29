@@ -285,19 +285,21 @@ export default class UIManager {
     const row = document.createElement('label');
 
     row.className = 'control-row';
-    row.title = title;
+    if (title) row.title = title;
     const line = document.createElement('div');
 
     line.className = 'control-line control-line--checkbox';
     const input = document.createElement('input');
 
     input.type = 'checkbox';
-    input.checked = initial;
-    input.addEventListener('input', () => onChange(input.checked));
+    input.checked = Boolean(initial);
+    if (typeof onChange === 'function') {
+      input.addEventListener('input', () => onChange(input.checked));
+    }
     const name = document.createElement('div');
 
     name.className = 'control-name';
-    name.textContent = label;
+    name.textContent = label ?? '';
     line.appendChild(input);
     line.appendChild(name);
     row.appendChild(line);
@@ -672,30 +674,38 @@ export default class UIManager {
 
     const overlayGrid = createControlGrid(body, 'control-grid--compact');
 
-    const addToggle = (label, title, initial, onChange) =>
-      this.#addCheckbox(overlayGrid, label, title, initial, onChange);
+    const overlayConfigs = [
+      {
+        key: 'showObstacles',
+        label: 'Show Obstacles',
+        title: 'Highlight impassable tiles such as walls and barriers',
+        initial: this.showObstacles,
+      },
+      {
+        key: 'showDensity',
+        label: 'Show Density Heatmap',
+        title: 'Overlay local population density as a heatmap',
+        initial: this.showDensity,
+      },
+      {
+        key: 'showEnergy',
+        label: 'Show Energy Heatmap',
+        title: 'Overlay tile energy levels as a heatmap',
+        initial: this.showEnergy,
+      },
+      {
+        key: 'showFitness',
+        label: 'Show Fitness Heatmap',
+        title: 'Overlay cell fitness as a heatmap',
+        initial: this.showFitness,
+      },
+    ];
 
-    addToggle(
-      'Show Obstacles',
-      'Highlight impassable tiles such as walls and barriers',
-      this.showObstacles,
-      (v) => this.#updateSetting('showObstacles', v)
-    );
-    addToggle(
-      'Show Density Heatmap',
-      'Overlay local population density as a heatmap',
-      this.showDensity,
-      (v) => this.#updateSetting('showDensity', v)
-    );
-    addToggle(
-      'Show Energy Heatmap',
-      'Overlay tile energy levels as a heatmap',
-      this.showEnergy,
-      (v) => this.#updateSetting('showEnergy', v)
-    );
-    addToggle('Show Fitness Heatmap', 'Overlay cell fitness as a heatmap', this.showFitness, (v) =>
-      this.#updateSetting('showFitness', v)
-    );
+    overlayConfigs.forEach(({ key, label, title, initial }) => {
+      this.#addCheckbox(overlayGrid, label, title, initial, (checked) => {
+        this.#updateSetting(key, checked);
+      });
+    });
   }
 
   #buildObstacleControls(body, sliderContext) {
