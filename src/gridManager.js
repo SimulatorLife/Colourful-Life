@@ -2,7 +2,6 @@ import { randomRange, randomPercent, clamp, lerp, createRankedBuffer } from './u
 import DNA from './genome.js';
 import Cell from './cell.js';
 import { computeFitness } from './fitness.js';
-import BrainDebugger from './brainDebugger.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
 import { computeTileEnergyUpdate } from './energySystem.js';
@@ -60,6 +59,19 @@ export const OBSTACLE_PRESETS = [
   },
 ];
 const BRAIN_SNAPSHOT_LIMIT = 5;
+const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
+
+function toBrainSnapshotCollector(candidate) {
+  if (typeof candidate === 'function') {
+    return candidate;
+  }
+
+  if (candidate && typeof candidate.captureFromEntries === 'function') {
+    return (entries, options) => candidate.captureFromEntries(entries, options);
+  }
+
+  return null;
+}
 
 export default class GridManager {
   // Base per-tick regen before modifiers; logistic to max, density-aware
@@ -291,6 +303,7 @@ export default class GridManager {
       randomizeInitialObstacles = false,
       randomObstaclePresetPool = null,
       rng,
+      brainSnapshotCollector,
     } = {}
   ) {
     this.rows = rows;
@@ -330,6 +343,7 @@ export default class GridManager {
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
     this.interactionAdapter = new GridInteractionAdapter({ gridManager: this });
     this.interactionSystem = new InteractionSystem({ adapter: this.interactionAdapter });
+    this.brainSnapshotCollector = toBrainSnapshotCollector(brainSnapshotCollector);
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
       GridManager.tryMove(gridArr, sr, sc, dr, dc, rows, cols, this.#movementOptions());
     this.boundMoveToTarget = (gridArr, row, col, targetRow, targetCol, rows, cols) =>
@@ -461,6 +475,10 @@ export default class GridManager {
 
   setSelectionManager(selectionManager) {
     this.selectionManager = selectionManager || null;
+  }
+
+  setBrainSnapshotCollector(collector) {
+    this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
   }
 
   setLingerPenalty(value = 0) {
@@ -867,28 +885,6 @@ export default class GridManager {
     cell.energy = Math.min(this.maxTileEnergy, cell.energy + take);
   }
 
-  /**
-   * Aggregates immediate non-obstacle neighbor energy for regeneration math.
-   */
-  #collectEnergyNeighborStats(row, col) {
-    let sum = 0;
-    let count = 0;
-
-    const addNeighbor = (r, c) => {
-      if (this.isObstacle(r, c)) return;
-
-      sum += this.energyGrid?.[r]?.[c] ?? 0;
-      count += 1;
-    };
-
-    if (row > 0) addNeighbor(row - 1, col);
-    if (row < this.rows - 1) addNeighbor(row + 1, col);
-    if (col > 0) addNeighbor(row, col - 1);
-    if (col < this.cols - 1) addNeighbor(row, col + 1);
-
-    return { sum, count };
-  }
-
   regenerateEnergyGrid(
     events = null,
     eventStrengthMultiplier = 1,
@@ -897,56 +893,100 @@ export default class GridManager {
     densityGrid = null,
     densityEffectMultiplier = 1
   ) {
-    const next = this.energyNext;
+    const rows = this.rows;
+    const cols = this.cols;
     const evs = Array.isArray(events) ? events : events ? [events] : [];
+    const hasDensityGrid = Array.isArray(densityGrid);
+    const energyGrid = this.energyGrid;
+    const next = this.energyNext;
+    const obstacles = this.obstacles;
+    const sharedConfig = {
+      maxTileEnergy: this.maxTileEnergy,
+      regenRate: R,
+      diffusionRate: D,
+      densityEffectMultiplier,
+      regenDensityPenalty: REGEN_DENSITY_PENALTY,
+      eventStrengthMultiplier,
+      isEventAffecting,
+      getEventEffect,
+    };
+    const computeOptions = {
+      currentEnergy: 0,
+      density: 0,
+      neighborSum: 0,
+      neighborCount: 0,
+      events: evs,
+      row: 0,
+      col: 0,
+      config: sharedConfig,
+    };
 
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) {
-        if (this.isObstacle(r, c)) {
-          next[r][c] = 0;
-          if (this.energyGrid[r][c] !== 0) {
-            this.energyGrid[r][c] = 0;
-          }
+    for (let r = 0; r < rows; r++) {
+      const energyRow = energyGrid[r];
+      const nextRow = next[r];
+      const densityRow = hasDensityGrid ? densityGrid[r] : null;
+      const obstacleRow = obstacles?.[r];
+      const upEnergyRow = r > 0 ? energyGrid[r - 1] : null;
+      const downEnergyRow = r < rows - 1 ? energyGrid[r + 1] : null;
+      const upObstacleRow = r > 0 ? obstacles?.[r - 1] : null;
+      const downObstacleRow = r < rows - 1 ? obstacles?.[r + 1] : null;
+
+      for (let c = 0; c < cols; c++) {
+        if (obstacleRow?.[c]) {
+          nextRow[c] = 0;
+          if (energyRow[c] !== 0) energyRow[c] = 0;
 
           continue;
         }
 
-        const density = densityGrid
-          ? densityGrid[r][c]
+        const density = hasDensityGrid
+          ? densityRow?.[c]
           : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
 
-        const { sum: neighborSum, count: neighborCount } = this.#collectEnergyNeighborStats(r, c);
+        let neighborSum = 0;
+        let neighborCount = 0;
 
-        const { nextEnergy } = computeTileEnergyUpdate({
-          currentEnergy: this.energyGrid[r][c],
-          density,
-          neighborSum,
-          neighborCount,
-          events: evs,
-          row: r,
-          col: c,
-          config: {
-            maxTileEnergy: this.maxTileEnergy,
-            regenRate: R,
-            diffusionRate: D,
-            densityEffectMultiplier,
-            regenDensityPenalty: REGEN_DENSITY_PENALTY,
-            eventStrengthMultiplier,
-            isEventAffecting,
-            getEventEffect,
-          },
-        });
+        if (upEnergyRow && !upObstacleRow?.[c]) {
+          neighborSum += upEnergyRow[c];
+          neighborCount += 1;
+        }
 
-        next[r][c] = nextEnergy;
+        if (downEnergyRow && !downObstacleRow?.[c]) {
+          neighborSum += downEnergyRow[c];
+          neighborCount += 1;
+        }
+
+        if (c > 0 && !obstacleRow?.[c - 1]) {
+          neighborSum += energyRow[c - 1];
+          neighborCount += 1;
+        }
+
+        if (c < cols - 1 && !obstacleRow?.[c + 1]) {
+          neighborSum += energyRow[c + 1];
+          neighborCount += 1;
+        }
+
+        computeOptions.currentEnergy = energyRow[c];
+        computeOptions.density = density;
+        computeOptions.neighborSum = neighborSum;
+        computeOptions.neighborCount = neighborCount;
+        computeOptions.row = r;
+        computeOptions.col = c;
+
+        const { nextEnergy } = computeTileEnergyUpdate(computeOptions);
+
+        nextRow[c] = nextEnergy;
       }
     }
+
     // Swap buffers and clear the buffer for next tick writes
-    const cur = this.energyGrid;
+    const previous = this.energyGrid;
 
     this.energyGrid = next;
-    this.energyNext = cur;
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) this.energyNext[r][c] = 0;
+    this.energyNext = previous;
+
+    for (let r = 0; r < rows; r++) {
+      this.energyNext[r].fill(0);
     }
   }
 
@@ -1847,10 +1887,10 @@ export default class GridManager {
     }
 
     const ranked = topBrainEntries.getItems();
+    const collector = this.brainSnapshotCollector ?? toBrainSnapshotCollector(GLOBAL.BrainDebugger);
+    const collected = collector ? collector(ranked, { limit: BRAIN_SNAPSHOT_LIMIT }) : [];
 
-    snapshot.brainSnapshots = BrainDebugger.captureFromEntries(ranked, {
-      limit: BRAIN_SNAPSHOT_LIMIT,
-    });
+    snapshot.brainSnapshots = Array.isArray(collected) ? collected : [];
 
     return snapshot;
   }
