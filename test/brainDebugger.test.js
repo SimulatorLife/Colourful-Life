@@ -1,5 +1,5 @@
-const { test } = require('uvu');
-const assert = require('uvu/assert');
+import { test } from 'uvu';
+import * as assert from 'uvu/assert';
 
 test('captureFromEntries falls back to cell neuron count when brain reports zero', async () => {
   const { default: BrainDebugger } = await import('../src/brainDebugger.js');
