@@ -3,7 +3,6 @@ const assert = require('uvu/assert');
 
 const gridManagerModulePromise = import('../src/gridManager.js');
 const leaderboardModulePromise = import('../src/leaderboard.js');
-const brainDebuggerModulePromise = import('../src/brainDebugger.js');
 
 function createStubCell(data) {
   return {
@@ -55,17 +54,15 @@ test('buildSnapshot aggregates living cells for downstream consumers', async () 
   }
 });
 
-test('buildSnapshot feeds sorted top entries to BrainDebugger', async () => {
+test('buildSnapshot feeds sorted top entries to the brain snapshot collector', async () => {
   const { default: GridManager } = await gridManagerModulePromise;
-  const { default: BrainDebugger } = await brainDebuggerModulePromise;
-  const originalCapture = BrainDebugger.captureFromEntries;
   const originalInit = GridManager.prototype.init;
 
   try {
     let capturedEntries = null;
     let captureOptions = null;
 
-    BrainDebugger.captureFromEntries = (entries, options) => {
+    const collector = (entries, options) => {
       capturedEntries = Array.isArray(entries) ? entries.map((entry) => ({ ...entry })) : entries;
       captureOptions = options;
 
@@ -78,6 +75,7 @@ test('buildSnapshot feeds sorted top entries to BrainDebugger', async () => {
       ctx: { fillStyle: null, fillRect() {} },
       cellSize: 1,
       stats: { onBirth() {}, onDeath() {}, onFight() {}, onCooperate() {} },
+      brainSnapshotCollector: collector,
     });
 
     const energies = [10, 60, 20, 40, 50, 30];
@@ -120,7 +118,6 @@ test('buildSnapshot feeds sorted top entries to BrainDebugger', async () => {
     assert.equal(fitnesses, sorted);
     assert.ok(fitnesses[0] >= fitnesses[fitnesses.length - 1]);
   } finally {
-    BrainDebugger.captureFromEntries = originalCapture;
     GridManager.prototype.init = originalInit;
   }
 });

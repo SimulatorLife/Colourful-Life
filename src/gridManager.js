@@ -2,7 +2,6 @@ import { randomRange, randomPercent, clamp, lerp, createRankedBuffer } from './u
 import DNA from './genome.js';
 import Cell from './cell.js';
 import { computeFitness } from './fitness.js';
-import BrainDebugger from './brainDebugger.js';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
 import { computeTileEnergyUpdate } from './energySystem.js';
@@ -60,6 +59,19 @@ export const OBSTACLE_PRESETS = [
   },
 ];
 const BRAIN_SNAPSHOT_LIMIT = 5;
+const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
+
+function toBrainSnapshotCollector(candidate) {
+  if (typeof candidate === 'function') {
+    return candidate;
+  }
+
+  if (candidate && typeof candidate.captureFromEntries === 'function') {
+    return (entries, options) => candidate.captureFromEntries(entries, options);
+  }
+
+  return null;
+}
 
 export default class GridManager {
   // Base per-tick regen before modifiers; logistic to max, density-aware
@@ -291,6 +303,7 @@ export default class GridManager {
       randomizeInitialObstacles = false,
       randomObstaclePresetPool = null,
       rng,
+      brainSnapshotCollector,
     } = {}
   ) {
     this.rows = rows;
@@ -330,6 +343,7 @@ export default class GridManager {
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
     this.interactionAdapter = new GridInteractionAdapter({ gridManager: this });
     this.interactionSystem = new InteractionSystem({ adapter: this.interactionAdapter });
+    this.brainSnapshotCollector = toBrainSnapshotCollector(brainSnapshotCollector);
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
       GridManager.tryMove(gridArr, sr, sc, dr, dc, rows, cols, this.#movementOptions());
     this.boundMoveToTarget = (gridArr, row, col, targetRow, targetCol, rows, cols) =>
@@ -461,6 +475,10 @@ export default class GridManager {
 
   setSelectionManager(selectionManager) {
     this.selectionManager = selectionManager || null;
+  }
+
+  setBrainSnapshotCollector(collector) {
+    this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
   }
 
   setLingerPenalty(value = 0) {
@@ -1847,10 +1865,10 @@ export default class GridManager {
     }
 
     const ranked = topBrainEntries.getItems();
+    const collector = this.brainSnapshotCollector ?? toBrainSnapshotCollector(GLOBAL.BrainDebugger);
+    const collected = collector ? collector(ranked, { limit: BRAIN_SNAPSHOT_LIMIT }) : [];
 
-    snapshot.brainSnapshots = BrainDebugger.captureFromEntries(ranked, {
-      limit: BRAIN_SNAPSHOT_LIMIT,
-    });
+    snapshot.brainSnapshots = Array.isArray(collected) ? collected : [];
 
     return snapshot;
   }

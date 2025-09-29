@@ -111,6 +111,8 @@ function ensureCanvasDimensions(canvas, config) {
  * @param {Window} [options.window] - Optional window reference for SSR/test injection.
  * @param {Document} [options.document] - Optional document reference for SSR/test injection.
  * @param {boolean} [options.autoStart=true] - When true the engine immediately starts ticking.
+ * @param {Function|{captureFromEntries: Function}} [options.brainSnapshotCollector]
+ *   Hook used by {@link GridManager} to build brain snapshots for the leaderboard.
  */
 export default class SimulationEngine {
   constructor({
@@ -124,6 +126,7 @@ export default class SimulationEngine {
     window: injectedWindow,
     document: injectedDocument,
     autoStart = true,
+    brainSnapshotCollector,
   } = {}) {
     const win = injectedWindow ?? (typeof window !== 'undefined' ? window : undefined);
     const doc = injectedDocument ?? (typeof document !== 'undefined' ? document : undefined);
@@ -179,6 +182,7 @@ export default class SimulationEngine {
         ? 'random'
         : 'none';
 
+    this.brainSnapshotCollector = brainSnapshotCollector ?? null;
     this.grid = new GridManager(rows, cols, {
       eventManager: this.eventManager,
       ctx: this.ctx,
@@ -190,6 +194,7 @@ export default class SimulationEngine {
       randomizeInitialObstacles,
       randomObstaclePresetPool: config.randomObstaclePresetPool,
       rng,
+      brainSnapshotCollector,
     });
 
     if (win) {
@@ -645,6 +650,11 @@ export default class SimulationEngine {
     if (entries.length === 0) return;
 
     this.#updateState(Object.fromEntries(entries));
+  }
+
+  setBrainSnapshotCollector(collector) {
+    this.brainSnapshotCollector = collector ?? null;
+    this.grid?.setBrainSnapshotCollector(collector);
   }
 
   setLingerPenalty(value) {

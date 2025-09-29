@@ -241,6 +241,7 @@ export function createSimulation({
     window: injectedWindow,
     document: injectedDocument,
     autoStart: false,
+    brainSnapshotCollector: BrainDebugger,
   });
 
   const uiOptions = config.ui ?? {};
