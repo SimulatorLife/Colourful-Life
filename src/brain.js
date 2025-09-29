@@ -21,6 +21,7 @@ export const SENSOR_KEYS = Object.freeze([
   'riskTolerance',
   'selfSenescence',
   'partnerSenescence',
+  'resourceTrend',
 ]);
 
 const SENSOR_LOOKUP = new Map(SENSOR_KEYS.map((key, index) => [key, index]));

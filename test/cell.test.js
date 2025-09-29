@@ -3,6 +3,7 @@ import * as assert from 'uvu/assert';
 
 let Cell;
 let DNA;
+let GENE_LOCI;
 let clamp;
 let lerp;
 let randomRange;
@@ -41,7 +42,7 @@ function expectClose(actual, expected, tolerance = 1e-12, message = 'values diff
 
 test.before(async () => {
   ({ default: Cell } = await import('../src/cell.js'));
-  ({ DNA } = await import('../src/genome.js'));
+  ({ DNA, GENE_LOCI } = await import('../src/genome.js'));
   ({ clamp, lerp, randomRange, createRNG } = await import('../src/utils.js'));
   ({ default: InteractionSystem } = await import('../src/interactionSystem.js'));
   if (typeof global.window === 'undefined') global.window = globalThis;
@@ -113,6 +114,41 @@ test('manageEnergy applies DNA-driven metabolism and starvation rules', () => {
   expectClose(cell.energy, expectedEnergy, 1e-12, 'energy after management');
   assert.ok(cell.energy < initialEnergy, 'energy should decrease');
   assert.is(starving, expectedEnergy <= starvationThreshold);
+});
+
+test('movement sensors update DNA-tuned resource trend signal', () => {
+  const dna = new DNA(120, 160, 200);
+
+  dna.genes[GENE_LOCI.SENSE] = 200;
+  dna.genes[GENE_LOCI.EXPLORATION] = 0;
+  dna.genes[GENE_LOCI.RECOVERY] = 25;
+  const initialEnergy = 2;
+  const cell = new Cell(1, 1, dna, initialEnergy);
+  const adaptation = dna.resourceTrendAdaptation();
+  const baselineRate = clamp(adaptation * 0.25, 0.01, 0.6);
+  const tileEnergy = 0.1;
+  const tileEnergyDelta = -0.3;
+  const priorBaseline = cell._resourceBaseline;
+  const priorDelta = cell._resourceDelta;
+  const expectedDelta = lerp(priorDelta, tileEnergyDelta, adaptation);
+  const expectedBaseline = lerp(priorBaseline, tileEnergy, baselineRate);
+  const expectedDivergence = clamp(tileEnergy - expectedBaseline, -1, 1);
+  const expectedSignal = clamp(expectedDelta * 0.7 + expectedDivergence * 0.6, -1, 1);
+
+  cell.chooseMovementStrategy({
+    localDensity: 0.2,
+    densityEffectMultiplier: 1,
+    mates: [],
+    enemies: [],
+    society: [],
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+    tileEnergy,
+    tileEnergyDelta,
+  });
+
+  expectClose(cell._resourceDelta, expectedDelta, 1e-12, 'resource delta smoothing');
+  expectClose(cell._resourceBaseline, expectedBaseline, 1e-12, 'resource baseline smoothing');
+  expectClose(cell._resourceSignal, expectedSignal, 1e-12, 'resource trend signal');
 });
 
 test('breed spends parental investment energy without creating extra energy', () => {
