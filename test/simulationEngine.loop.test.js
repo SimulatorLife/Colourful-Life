@@ -1,166 +1,16 @@
 import { test } from 'uvu';
 import * as assert from 'uvu/assert';
 
-class MockGradient {
-  addColorStop() {}
-}
-
-class MockContext {
-  constructor(width, height) {
-    this.canvas = { width, height };
-  }
-
-  clearRect() {}
-  fillRect() {}
-  strokeRect() {}
-  save() {}
-  restore() {}
-  createLinearGradient() {
-    return new MockGradient();
-  }
-  fillText() {}
-  strokeText() {}
-}
-
-class MockCanvas {
-  constructor(width, height) {
-    this.width = width;
-    this.height = height;
-    this._context = new MockContext(width, height);
-  }
-
-  getContext(type) {
-    if (type !== '2d') return null;
-
-    return this._context;
-  }
-}
-
-async function loadModules() {
-  const [simulationModule, gridModule, statsModule, eventModule] = await Promise.all([
-    import('../src/simulationEngine.js'),
-    import('../src/gridManager.js'),
-    import('../src/stats.js'),
-    import('../src/eventManager.js'),
-  ]);
-
-  return {
-    SimulationEngine: simulationModule.default,
-    GridManager: gridModule.default,
-    Stats: statsModule.default,
-    EventManager: eventModule.default,
-  };
-}
-
-function patchPrototypes({ GridManager, Stats, EventManager }) {
-  const snapshot = {
-    entries: [
-      {
-        row: 0,
-        col: 0,
-        fitness: 1,
-        smoothedFitness: 2,
-        cell: {
-          fitnessScore: 1,
-          offspring: 3,
-          fightsWon: 4,
-          age: 5,
-          color: '#123456',
-        },
-      },
-    ],
-    brainSnapshots: [],
-  };
-  const metrics = { averageEnergy: 0.5 };
-  const fixedEventTemplate = {
-    eventType: 'flood',
-    duration: 10,
-    remaining: 10,
-    strength: 0.75,
-    affectedArea: { x: 1, y: 2, width: 3, height: 4 },
-  };
-
-  const gridMethods = [
-    'init',
-    'recalculateDensityCounts',
-    'rebuildActiveCells',
-    'update',
-    'draw',
-    'getLastSnapshot',
-    'setLingerPenalty',
-    'setMatingDiversityOptions',
-  ];
-  const statsMethods = ['resetTick', 'logEvent', 'updateFromSnapshot', 'setMutationMultiplier'];
-
-  const originals = {
-    grid: {},
-    stats: {},
-    event: EventManager.prototype.generateRandomEvent,
-  };
-  const calls = {
-    grid: Object.fromEntries(gridMethods.map((name) => [name, []])),
-    stats: Object.fromEntries(statsMethods.map((name) => [name, []])),
-    events: { generateRandomEvent: [] },
-  };
-
-  gridMethods.forEach((name) => {
-    originals.grid[name] = GridManager.prototype[name];
-    GridManager.prototype[name] = function stubbedGridMethod(...args) {
-      calls.grid[name].push(args);
-
-      if (name === 'update') {
-        return snapshot;
-      }
-
-      if (name === 'getLastSnapshot') {
-        return snapshot;
-      }
-    };
-  });
-
-  statsMethods.forEach((name) => {
-    originals.stats[name] = Stats.prototype[name];
-    Stats.prototype[name] = function stubbedStatsMethod(...args) {
-      calls.stats[name].push(args);
-
-      if (name === 'updateFromSnapshot') {
-        return metrics;
-      }
-
-      return undefined;
-    };
-  });
-
-  EventManager.prototype.generateRandomEvent = function stubbedGenerateRandomEvent(...args) {
-    calls.events.generateRandomEvent.push(args);
-
-    return {
-      ...fixedEventTemplate,
-      affectedArea: { ...fixedEventTemplate.affectedArea },
-    };
-  };
-
-  return {
-    calls,
-    snapshot,
-    metrics,
-    fixedEventTemplate,
-    restore() {
-      gridMethods.forEach((name) => {
-        GridManager.prototype[name] = originals.grid[name];
-      });
-      statsMethods.forEach((name) => {
-        Stats.prototype[name] = originals.stats[name];
-      });
-      EventManager.prototype.generateRandomEvent = originals.event;
-    },
-  };
-}
+import {
+  MockCanvas,
+  loadSimulationModules,
+  patchSimulationPrototypes,
+} from './helpers/simulationEngine.js';
 
 test('start schedules a frame and ticking through RAF uses sanitized defaults', async () => {
-  const modules = await loadModules();
+  const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
-  const { restore, calls, snapshot } = patchPrototypes(modules);
+  const { restore, calls, snapshot } = patchSimulationPrototypes(modules);
 
   try {
     let rafCallback = null;
@@ -221,9 +71,9 @@ test('start schedules a frame and ticking through RAF uses sanitized defaults', 
 });
 
 test('tick emits events and clears pending slow UI updates after throttle interval', async () => {
-  const modules = await loadModules();
+  const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
-  const { restore, snapshot, metrics } = patchPrototypes(modules);
+  const { restore, snapshot, metrics } = patchSimulationPrototypes(modules);
 
   try {
     let now = 0;
@@ -275,9 +125,9 @@ test('tick emits events and clears pending slow UI updates after throttle interv
 });
 
 test('updateSetting speedMultiplier and setLingerPenalty propagate changes', async () => {
-  const modules = await loadModules();
+  const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
-  const { restore, calls } = patchPrototypes(modules);
+  const { restore, calls } = patchSimulationPrototypes(modules);
 
   try {
     const engine = new SimulationEngine({
