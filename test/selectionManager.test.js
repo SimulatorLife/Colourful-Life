@@ -1,12 +1,8 @@
-const { test } = require('uvu');
-const assert = require('uvu/assert');
-
-const selectionManagerPath = require.resolve('../src/selectionManager.js');
+import { test } from 'uvu';
+import * as assert from 'uvu/assert';
+import SelectionManager from '../src/selectionManager.js';
 
 function createManager(rows = 6, cols = 6) {
-  delete require.cache[selectionManagerPath];
-  const { default: SelectionManager } = require(selectionManagerPath);
-
   return new SelectionManager(rows, cols);
 }
 

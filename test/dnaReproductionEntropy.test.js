@@ -1,5 +1,5 @@
-const { test } = require('uvu');
-const assert = require('uvu/assert');
+import { test } from 'uvu';
+import * as assert from 'uvu/assert';
 
 test('reproduceWith uses runtime entropy for crossover RNG', async () => {
   const { default: DNA } = await import('../src/genome.js');

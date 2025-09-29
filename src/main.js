@@ -76,6 +76,13 @@ function createHeadlessUiManager(options = {}) {
   const settings = { ...defaults };
 
   let lastSlowUiRender = Number.NEGATIVE_INFINITY;
+  const updateIfFinite = (key, value) => {
+    if (!Number.isFinite(value)) return false;
+
+    settings[key] = value;
+
+    return true;
+  };
 
   return {
     isPaused: () => settings.paused,
@@ -84,9 +91,7 @@ function createHeadlessUiManager(options = {}) {
     },
     getUpdatesPerSecond: () => settings.updatesPerSecond,
     setUpdatesPerSecond: (value) => {
-      if (typeof value === 'number' && !Number.isNaN(value)) {
-        settings.updatesPerSecond = value;
-      }
+      updateIfFinite('updatesPerSecond', value);
     },
     getEventFrequencyMultiplier: () => settings.eventFrequencyMultiplier,
     getMutationMultiplier: () => settings.mutationMultiplier,
@@ -98,22 +103,18 @@ function createHeadlessUiManager(options = {}) {
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
     getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
     setMatingDiversityThreshold: (value) => {
-      if (typeof value === 'number' && !Number.isNaN(value)) {
-        settings.matingDiversityThreshold = value;
-      }
+      updateIfFinite('matingDiversityThreshold', value);
     },
     getLowDiversityReproMultiplier: () => settings.lowDiversityReproMultiplier,
     setLowDiversityReproMultiplier: (value) => {
-      if (typeof value === 'number' && !Number.isNaN(value)) {
-        settings.lowDiversityReproMultiplier = value;
-      }
+      updateIfFinite('lowDiversityReproMultiplier', value);
     },
     getShowObstacles: () => settings.showObstacles,
     getShowEnergy: () => settings.showEnergy,
     getShowDensity: () => settings.showDensity,
     getShowFitness: () => settings.showFitness,
     shouldRenderSlowUi: (timestamp) => {
-      if (typeof timestamp !== 'number') return false;
+      if (!Number.isFinite(timestamp)) return false;
       if (timestamp - lastSlowUiRender >= settings.leaderboardIntervalMs) {
         lastSlowUiRender = timestamp;
 
@@ -126,9 +127,7 @@ function createHeadlessUiManager(options = {}) {
     renderLeaderboard: () => {},
     getLingerPenalty: () => settings.lingerPenalty,
     setLingerPenalty: (value) => {
-      if (typeof value === 'number' && !Number.isNaN(value)) {
-        settings.lingerPenalty = value;
-      }
+      updateIfFinite('lingerPenalty', value);
     },
     selectionManager: selectionManager ?? null,
   };
