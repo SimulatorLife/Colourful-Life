@@ -2,7 +2,9 @@ export function randomRange(min, max, rng = Math.random) {
   return rng() * (max - min) + min;
 }
 
-export const lerp = (a, b, t) => a + (b - a) * (t < 0 ? 0 : t > 1 ? 1 : t);
+export function lerp(a, b, t) {
+  return a + (b - a) * clamp(t, 0, 1);
+}
 
 export function randomPercent(chance) {
   return Math.random() < chance;
