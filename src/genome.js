@@ -533,6 +533,16 @@ export class DNA {
     return clamp(raw, 0.2, 0.9);
   }
 
+  // DNA-tuned smoothing factor for the resource trend sensor (0.1..0.85)
+  resourceTrendAdaptation() {
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const base = 0.2 + 0.5 * sense + 0.2 * exploration - 0.2 * recovery;
+
+    return clamp(base, 0.1, 0.85);
+  }
+
   // Energy cost characteristics for actions
   moveCost() {
     const movement = this.geneFraction(GENE_LOCI.MOVEMENT);

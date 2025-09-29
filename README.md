@@ -38,7 +38,7 @@ To guide ongoing development, the simulation is anchored around four interlockin
 - **Genes and mutation**: advanced versions assign each cell genetic traits that deterministically recombine, blend, and mutate
   during reproduction.
   - Each genome also encodes a similarity preference band (kin-loving to novelty-seeking) and tolerance width, so populations can drift toward inbreeding or outbreeding strategies as conditions change.
-- **Neuron-inspired movement**: gene weights influence direction choices, giving each organism a rudimentary nervous system.
+- **Neuron-inspired movement**: gene weights influence direction choices, giving each organism a rudimentary nervous system. A DNA-tuned resource trend sensor now feeds each brain short-term signals about local tile regeneration versus drain so policies can adapt to boom-and-bust cycles.
 - **Energy and evolution**: organisms gather energy from tiles, spend it to move and reproduce, and perish when depleted.
   - Death leaves residue: when a cell dies (age, starvation, or combat), a fraction of its remaining energy is deposited back into the tile as nutrients. Environmental events modulate how much residue persists.
   - Events shape resources: floods boost tile regeneration; droughts and heatwaves suppress it and add per-tile drain; coldwaves slow cycling and preserve residues. Reproduction probability scales with local tile energy and current event pressure.

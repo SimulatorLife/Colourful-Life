@@ -65,6 +65,16 @@ export default class Cell {
     this.decisionHistory = [];
     this._pendingDecisionContexts = [];
     this._decisionContextIndex = new Map();
+    this.resourceTrendAdaptation =
+      typeof this.dna.resourceTrendAdaptation === 'function'
+        ? this.dna.resourceTrendAdaptation()
+        : 0.35;
+    const initialResourceLevel = clamp((energy ?? 0) / (MAX_TILE_ENERGY || 1), 0, 1);
+
+    this._resourceBaseline = initialResourceLevel;
+    this._resourceDelta = 0;
+    this._resourceSignal = 0;
+    this._resourceSignalLastInput = { energy: initialResourceLevel, delta: 0 };
     // Cache metabolism from gene row 5 to avoid per-tick recompute
     const geneRow = this.genes?.[5];
 
@@ -437,6 +447,38 @@ export default class Cell {
     return count > 0 ? total / count : 0;
   }
 
+  #updateResourceSignal({ tileEnergy = 0, tileEnergyDelta = 0 } = {}) {
+    const normalizedEnergy = clamp(Number.isFinite(tileEnergy) ? tileEnergy : 0, 0, 1);
+    const normalizedDelta = clamp(Number.isFinite(tileEnergyDelta) ? tileEnergyDelta : 0, -1, 1);
+
+    if (
+      this._resourceSignalLastInput &&
+      Math.abs(this._resourceSignalLastInput.energy - normalizedEnergy) <= EPSILON &&
+      Math.abs(this._resourceSignalLastInput.delta - normalizedDelta) <= EPSILON
+    ) {
+      return this._resourceSignal ?? 0;
+    }
+
+    const adaptation = clamp(this.resourceTrendAdaptation ?? 0.35, 0.05, 0.95);
+    const baselineRate = clamp(adaptation * 0.25, 0.01, 0.6);
+    const currentBaseline =
+      Number.isFinite(this._resourceBaseline) && this._resourceBaseline >= 0
+        ? this._resourceBaseline
+        : normalizedEnergy;
+    const currentDelta = Number.isFinite(this._resourceDelta) ? this._resourceDelta : 0;
+    const nextDelta = lerp(currentDelta, normalizedDelta, adaptation);
+    const nextBaseline = lerp(currentBaseline, normalizedEnergy, baselineRate);
+    const divergence = clamp(normalizedEnergy - nextBaseline, -1, 1);
+    const signal = clamp(nextDelta * 0.7 + divergence * 0.6, -1, 1);
+
+    this._resourceDelta = nextDelta;
+    this._resourceBaseline = nextBaseline;
+    this._resourceSignal = signal;
+    this._resourceSignalLastInput = { energy: normalizedEnergy, delta: normalizedDelta };
+
+    return signal;
+  }
+
   #movementSensors({
     localDensity = 0,
     densityEffectMultiplier = 1,
@@ -444,6 +486,8 @@ export default class Cell {
     enemies = [],
     society = [],
     maxTileEnergy = MAX_TILE_ENERGY,
+    tileEnergy = null,
+    tileEnergyDelta = 0,
   } = {}) {
     const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
     const totalNeighbors = Math.max(1, mates.length + enemies.length + society.length);
@@ -451,6 +495,12 @@ export default class Cell {
     const enemyFrac = enemies.length / totalNeighbors;
     const mateFrac = mates.length / totalNeighbors;
     const energyFrac = clamp((this.energy || 0) / (maxTileEnergy || MAX_TILE_ENERGY), 0, 1);
+    const tileLevel =
+      tileEnergy != null && Number.isFinite(tileEnergy) ? clamp(tileEnergy, 0, 1) : energyFrac;
+    const resourceTrend = this.#updateResourceSignal({
+      tileEnergy: tileLevel,
+      tileEnergyDelta,
+    });
     const ageFrac = this.lifespan > 0 ? clamp(this.age / this.lifespan, 0, 1) : 0;
     const allySimilarity = this.#averageSimilarity(society);
     const enemySimilarity = this.#averageSimilarity(enemies);
@@ -468,6 +518,7 @@ export default class Cell {
       mateSimilarity,
       ageFraction: ageFrac,
       eventPressure,
+      resourceTrend,
     };
   }
 
@@ -477,12 +528,20 @@ export default class Cell {
     enemies = [],
     allies = [],
     maxTileEnergy = MAX_TILE_ENERGY,
+    tileEnergy = null,
+    tileEnergyDelta = 0,
   } = {}) {
     const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
     const totalNeighbors = Math.max(1, enemies.length + allies.length);
     const enemyFrac = enemies.length / totalNeighbors;
     const allyFrac = allies.length / totalNeighbors;
     const energyFrac = clamp((this.energy || 0) / (maxTileEnergy || MAX_TILE_ENERGY), 0, 1);
+    const tileLevel =
+      tileEnergy != null && Number.isFinite(tileEnergy) ? clamp(tileEnergy, 0, 1) : energyFrac;
+    const resourceTrend = this.#updateResourceSignal({
+      tileEnergy: tileLevel,
+      tileEnergyDelta,
+    });
     const ageFrac = this.lifespan > 0 ? clamp(this.age / this.lifespan, 0, 1) : 0;
     const enemySimilarity = this.#averageSimilarity(enemies);
     const allySimilarity = this.#averageSimilarity(allies);
@@ -500,6 +559,7 @@ export default class Cell {
       ageFraction: ageFrac,
       riskTolerance,
       eventPressure,
+      resourceTrend,
     };
   }
 
@@ -510,10 +570,18 @@ export default class Cell {
       densityEffectMultiplier = 1,
       maxTileEnergy = MAX_TILE_ENERGY,
       baseProbability = 0.5,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
     } = {}
   ) {
     const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
     const energyFrac = clamp((this.energy || 0) / (maxTileEnergy || MAX_TILE_ENERGY), 0, 1);
+    const tileLevel =
+      tileEnergy != null && Number.isFinite(tileEnergy) ? clamp(tileEnergy, 0, 1) : energyFrac;
+    const resourceTrend = this.#updateResourceSignal({
+      tileEnergy: tileLevel,
+      tileEnergyDelta,
+    });
     const partnerEnergy = clamp((partner?.energy || 0) / (maxTileEnergy || MAX_TILE_ENERGY), 0, 1);
     const similarity = partner ? this.similarityTo(partner) : 0;
     const ageFrac = this.lifespan > 0 ? clamp(this.age / this.lifespan, 0, 1) : 0;
@@ -536,6 +604,7 @@ export default class Cell {
       selfSenescence: senSelf,
       partnerSenescence: senPartner,
       eventPressure,
+      resourceTrend,
     };
   }
 
@@ -704,7 +773,8 @@ export default class Cell {
     }
 
     const baselineCost =
-      this.dna.cognitiveCost(baselineNeurons, this.sight, effectiveDensity) * cognitiveAgeMultiplier;
+      this.dna.cognitiveCost(baselineNeurons, this.sight, effectiveDensity) *
+      cognitiveAgeMultiplier;
     const combinedLoad = Math.max(0, baselineNeurons + dynamicLoad);
     const totalCost =
       this.dna.cognitiveCost(combinedLoad, this.sight, effectiveDensity) * cognitiveAgeMultiplier;
@@ -722,13 +792,8 @@ export default class Cell {
   manageEnergy(row, col, { localDensity, densityEffectMultiplier, maxTileEnergy }) {
     const effectiveDensity = clamp(localDensity * densityEffectMultiplier, 0, 1);
     const energyLoss = this.#calculateMetabolicEnergyLoss(effectiveDensity);
-    const {
-      baselineCost,
-      dynamicCost,
-      cognitiveLoss,
-      dynamicLoad,
-      baselineNeurons,
-    } = this.#calculateCognitiveCosts(effectiveDensity);
+    const { baselineCost, dynamicCost, cognitiveLoss, dynamicLoad, baselineNeurons } =
+      this.#calculateCognitiveCosts(effectiveDensity);
     const energyBefore = this.energy;
 
     this.energy -= energyLoss + cognitiveLoss;
@@ -817,6 +882,8 @@ export default class Cell {
     enemies = [],
     society = [],
     maxTileEnergy = MAX_TILE_ENERGY,
+    tileEnergy = null,
+    tileEnergyDelta = 0,
   } = {}) {
     const decision = this.#decideMovementAction({
       localDensity,
@@ -825,6 +892,8 @@ export default class Cell {
       enemies,
       society,
       maxTileEnergy,
+      tileEnergy,
+      tileEnergyDelta,
     });
 
     if (decision.usedBrain && decision.action) return decision.action;
@@ -947,6 +1016,8 @@ export default class Cell {
       tryMove,
       isTileBlocked,
       maxTileEnergy = MAX_TILE_ENERGY,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
     } = context;
     const strategyContext = {
       localDensity,
@@ -955,6 +1026,8 @@ export default class Cell {
       enemies,
       society,
       maxTileEnergy,
+      tileEnergy,
+      tileEnergyDelta,
     };
     const decision = this.#decideMovementAction(strategyContext);
 
@@ -1082,6 +1155,8 @@ export default class Cell {
       densityEffectMultiplier = 1,
       maxTileEnergy = MAX_TILE_ENERGY,
       baseProbability = 0.5,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
     } = context;
 
     const sensors = this.#reproductionSensors(partner, {
@@ -1089,6 +1164,8 @@ export default class Cell {
       densityEffectMultiplier,
       maxTileEnergy,
       baseProbability,
+      tileEnergy,
+      tileEnergyDelta,
     });
     const values = this.#evaluateBrainGroup('reproduction', sensors);
 
@@ -1140,6 +1217,8 @@ export default class Cell {
     enemies = [],
     allies = [],
     maxTileEnergy = MAX_TILE_ENERGY,
+    tileEnergy = null,
+    tileEnergyDelta = 0,
   } = {}) {
     const fallback = () =>
       this.#legacyChooseInteractionAction(localDensity, densityEffectMultiplier);
@@ -1149,6 +1228,8 @@ export default class Cell {
       enemies,
       allies,
       maxTileEnergy,
+      tileEnergy,
+      tileEnergyDelta,
     });
     const values = this.#evaluateBrainGroup('interaction', sensors);
 
