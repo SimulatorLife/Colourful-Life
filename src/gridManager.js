@@ -194,14 +194,7 @@ export default class GridManager {
     cell.energy = Math.max(0, cell.energy - cost);
   }
 
-  static #completeMove({
-    gridArr,
-    moving,
-    attempt,
-    onMove,
-    onCellMoved,
-    activeCells,
-  }) {
+  static #completeMove({ gridArr, moving, attempt, onMove, onCellMoved, activeCells }) {
     const { fromRow, fromCol, toRow, toCol } = attempt;
 
     gridArr[toRow][toCol] = moving;
@@ -916,6 +909,28 @@ export default class GridManager {
     cell.energy = Math.min(this.maxTileEnergy, cell.energy + take);
   }
 
+  /**
+   * Aggregates immediate non-obstacle neighbor energy for regeneration math.
+   */
+  #collectEnergyNeighborStats(row, col) {
+    let sum = 0;
+    let count = 0;
+
+    const addNeighbor = (r, c) => {
+      if (this.isObstacle(r, c)) return;
+
+      sum += this.energyGrid?.[r]?.[c] ?? 0;
+      count += 1;
+    };
+
+    if (row > 0) addNeighbor(row - 1, col);
+    if (row < this.rows - 1) addNeighbor(row + 1, col);
+    if (col > 0) addNeighbor(row, col - 1);
+    if (col < this.cols - 1) addNeighbor(row, col + 1);
+
+    return { sum, count };
+  }
+
   regenerateEnergyGrid(
     events = null,
     eventStrengthMultiplier = 1,
@@ -942,25 +957,7 @@ export default class GridManager {
           ? densityGrid[r][c]
           : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
 
-        let neighborSum = 0;
-        let neighborCount = 0;
-
-        if (r > 0 && !this.isObstacle(r - 1, c)) {
-          neighborSum += this.energyGrid[r - 1][c];
-          neighborCount++;
-        }
-        if (r < this.rows - 1 && !this.isObstacle(r + 1, c)) {
-          neighborSum += this.energyGrid[r + 1][c];
-          neighborCount++;
-        }
-        if (c > 0 && !this.isObstacle(r, c - 1)) {
-          neighborSum += this.energyGrid[r][c - 1];
-          neighborCount++;
-        }
-        if (c < this.cols - 1 && !this.isObstacle(r, c + 1)) {
-          neighborSum += this.energyGrid[r][c + 1];
-          neighborCount++;
-        }
+        const { sum: neighborSum, count: neighborCount } = this.#collectEnergyNeighborStats(r, c);
 
         const { nextEnergy } = computeTileEnergyUpdate({
           currentEnergy: this.energyGrid[r][c],
