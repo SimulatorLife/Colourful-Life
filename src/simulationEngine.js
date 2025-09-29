@@ -225,8 +225,12 @@ export default class SimulationEngine {
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
+      autoRespawnEnabled: defaults.autoRespawnEnabled,
+      autoRespawnFloor: defaults.autoRespawnFloor,
     };
     this.lingerPenalty = defaults.lingerPenalty;
+    this.autoRespawnStats = { count: 0, seededLast: 0, lastTick: null };
+    this.autoRespawnCooldownRemaining = 0;
 
     this.grid.setLingerPenalty(this.lingerPenalty);
 
@@ -343,6 +347,55 @@ export default class SimulationEngine {
     return changed;
   }
 
+  #autoRespawnCooldownFrames(multiplier = 2) {
+    const ups = Math.max(1, Math.round(this.state.updatesPerSecond ?? 60));
+
+    return Math.max(30, Math.round(ups * multiplier));
+  }
+
+  #maybeTriggerAutoRespawn(snapshot) {
+    if (!this.grid?.seed) return null;
+
+    if (!this.autoRespawnStats) {
+      this.autoRespawnStats = { count: 0, seededLast: 0, lastTick: null };
+    }
+
+    if (this.autoRespawnCooldownRemaining > 0) {
+      this.autoRespawnCooldownRemaining = Math.max(0, this.autoRespawnCooldownRemaining - 1);
+    }
+
+    if (!this.state.autoRespawnEnabled) return null;
+
+    const floorRaw = this.state.autoRespawnFloor;
+    const floor = Number.isFinite(floorRaw) ? Math.max(0, Math.round(floorRaw)) : 0;
+
+    if (floor <= 0) return null;
+
+    const population = snapshot?.population ?? 0;
+
+    if (population >= floor) return null;
+    if (this.autoRespawnCooldownRemaining > 0) return null;
+
+    const seeded = this.grid.seed(population, floor) || 0;
+
+    if (seeded <= 0) {
+      this.autoRespawnCooldownRemaining = Math.max(
+        this.autoRespawnCooldownRemaining,
+        Math.round(Math.max(1, this.state.updatesPerSecond ?? 60) * 0.5)
+      );
+
+      return null;
+    }
+
+    this.autoRespawnStats.count += 1;
+    this.autoRespawnStats.seededLast = seeded;
+    this.autoRespawnStats.lastTick = this.stats?.totals?.ticks ?? null;
+    this.autoRespawnCooldownRemaining = this.#autoRespawnCooldownFrames();
+    this.pendingSlowUiUpdate = true;
+
+    return { seeded };
+  }
+
   #scheduleNextFrame() {
     if (!this.running || this.frameHandle != null) return;
 
@@ -423,6 +476,22 @@ export default class SimulationEngine {
       );
       this.stats.setMutationMultiplier?.(this.state.mutationMultiplier ?? 1);
       this.lastMetrics = this.stats.updateFromSnapshot?.(snapshot);
+      const autoRespawnResult = this.#maybeTriggerAutoRespawn(snapshot);
+      const autoRespawnFloor = Number.isFinite(this.state.autoRespawnFloor)
+        ? Math.max(0, Math.round(this.state.autoRespawnFloor))
+        : 0;
+      const autoRespawnInfo = {
+        enabled: Boolean(this.state.autoRespawnEnabled),
+        floor: autoRespawnFloor,
+        count: this.autoRespawnStats?.count ?? 0,
+        seededLast: this.autoRespawnStats?.seededLast ?? 0,
+        lastTick: this.autoRespawnStats?.lastTick ?? null,
+        triggered: Boolean(autoRespawnResult?.seeded),
+        cooldownRemaining: this.autoRespawnCooldownRemaining,
+      };
+      if (this.lastMetrics) {
+        this.lastMetrics.autoRespawn = autoRespawnInfo;
+      }
       // Defer leaderboard/metrics publication until the throttle window allows another emit.
       this.pendingSlowUiUpdate = true;
 
@@ -682,6 +751,22 @@ export default class SimulationEngine {
     this.emit('state', { state: this.getStateSnapshot(), changes: { lingerPenalty: sanitized } });
   }
 
+  setAutoRespawnEnabled(value) {
+    const enabled = Boolean(value);
+
+    this.#updateState({ autoRespawnEnabled: enabled });
+  }
+
+  setAutoRespawnFloor(value) {
+    const sanitized = sanitizeNumeric(value, {
+      fallback: this.state.autoRespawnFloor,
+      min: 0,
+      round: true,
+    });
+
+    this.#updateState({ autoRespawnFloor: sanitized });
+  }
+
   updateSetting(key, value) {
     switch (key) {
       case 'societySimilarity':
@@ -732,6 +817,12 @@ export default class SimulationEngine {
         break;
       case 'lingerPenalty':
         this.setLingerPenalty(value);
+        break;
+      case 'autoRespawnEnabled':
+        this.setAutoRespawnEnabled(value);
+        break;
+      case 'autoRespawnFloor':
+        this.setAutoRespawnFloor(value);
         break;
       default:
         break;

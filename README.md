@@ -127,6 +127,7 @@ Energy-related defaults for the simulation are centralized in `src/config.js`. T
 - **Obstacle exploration**: Start with [`demo/obstacle-presets.md`](demo/obstacle-presets.md) to learn how obstacle layouts and wall penalties shape emergent behaviour.
 - **Dev server shortcuts**: `npm run start` launches Parcel with hot module reloading; `npm run serve` spins up the lightweight Node server for static demos.
 - **Frame-by-frame inspection**: Pause the simulation and click the **Step** control to advance a single tick when you want to study how interventions ripple through the ecosystem.
+- **Auto-respawn safety net**: The **General Settings** panel now includes an _Auto-Respawn Collapse_ toggle and floor slider. Keep it on to automatically reseed the world when populations crash, or dial the floor to zero to disable the safety net for ironman runs.
 
 ## Agentic Prompts
 

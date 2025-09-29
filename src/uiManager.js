@@ -52,6 +52,8 @@ export default class UIManager {
     this.showObstacles = defaults.showObstacles;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? 'none';
     this.lingerPenalty = defaults.lingerPenalty;
+    this.autoRespawnEnabled = defaults.autoRespawnEnabled;
+    this.autoRespawnFloor = defaults.autoRespawnFloor;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
 
@@ -634,6 +636,18 @@ export default class UIManager {
         setValue: (v) => this.#updateSetting('speedMultiplier', v),
         position: 'beforeOverlays',
       }),
+      withSliderConfig('autoRespawnFloor', {
+        label: 'Auto-Respawn Floor',
+        min: 0,
+        max: 600,
+        step: 10,
+        title:
+          'Target minimum population maintained when auto-respawn is enabled. Set to 0 to disable the floor.',
+        format: (v) => `${Math.round(v)} cells`,
+        getValue: () => this.autoRespawnFloor,
+        setValue: (v) => this.#updateSetting('autoRespawnFloor', v),
+        position: 'beforeOverlays',
+      }),
       withSliderConfig('leaderboardIntervalMs', {
         label: 'Leaderboard Interval',
         min: 100,
@@ -664,7 +678,27 @@ export default class UIManager {
       .filter((cfg) => cfg.position === 'beforeOverlays')
       .forEach((cfg) => renderSlider(cfg, generalGroup));
 
-    return { renderSlider, withSliderConfig, energyConfigs, generalConfigs, generalGroup };
+    const generalToggleGroup = createControlGrid(body, 'control-grid--compact');
+
+    this.autoRespawnToggle = this.#addCheckbox(
+      generalToggleGroup,
+      'Auto-Respawn Collapse',
+      'Automatically seed new organisms when the population falls below the configured floor.',
+      this.autoRespawnEnabled,
+      (checked) => {
+        this.#updateSetting('autoRespawnEnabled', checked);
+        this.#scheduleUpdate();
+      }
+    );
+
+    return {
+      renderSlider,
+      withSliderConfig,
+      energyConfigs,
+      generalConfigs,
+      generalGroup,
+      generalToggleGroup,
+    };
   }
 
   #buildOverlayToggles(body) {
@@ -1035,6 +1069,36 @@ export default class UIManager {
       value: String(s.growth),
       title: 'Births - Deaths',
     });
+    const autoRespawn = s.autoRespawn || null;
+    const showAutoRespawn = Boolean(autoRespawn?.enabled) || (autoRespawn?.count ?? 0) > 0;
+    if (showAutoRespawn) {
+      const floor = Number.isFinite(autoRespawn?.floor)
+        ? Math.max(0, Math.round(autoRespawn.floor))
+        : null;
+      const countValue = Number.isFinite(autoRespawn?.count)
+        ? String(Math.max(0, Math.round(autoRespawn.count)))
+        : '0';
+      const seededLast = Number.isFinite(autoRespawn?.seededLast)
+        ? Math.max(0, Math.round(autoRespawn.seededLast))
+        : 0;
+
+      this.#appendControlRow(this.metricsBox, {
+        label: 'Auto Respawns',
+        value: floor != null ? `${countValue} (floor ${floor})` : countValue,
+        title:
+          floor != null
+            ? `Times the world auto-reseeded after collapse (floor ${floor} cells).`
+            : 'Times the world auto-reseeded after collapse.',
+      });
+      this.#appendControlRow(this.metricsBox, {
+        label: 'Last Auto Respawn',
+        value: seededLast > 0 ? `${seededLast} cells` : '—',
+        title:
+          seededLast > 0
+            ? `Most recent auto-respawn injected ${seededLast} fresh cells to revive the ecosystem.`
+            : 'Auto-respawn has not had to inject new cells yet.',
+      });
+    }
     if (typeof s.mutationMultiplier === 'number') {
       const formatted = s.mutationMultiplier.toFixed(2);
       const suffix = s.mutationMultiplier <= 0 ? '× (off)' : '×';

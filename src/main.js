@@ -113,6 +113,14 @@ function createHeadlessUiManager(options = {}) {
     getShowEnergy: () => settings.showEnergy,
     getShowDensity: () => settings.showDensity,
     getShowFitness: () => settings.showFitness,
+    getAutoRespawnEnabled: () => settings.autoRespawnEnabled,
+    setAutoRespawnEnabled: (value) => {
+      settings.autoRespawnEnabled = Boolean(value);
+    },
+    getAutoRespawnFloor: () => settings.autoRespawnFloor,
+    setAutoRespawnFloor: (value) => {
+      if (Number.isFinite(value)) updateIfFinite('autoRespawnFloor', Math.max(0, value));
+    },
     shouldRenderSlowUi: (timestamp) => {
       if (!Number.isFinite(timestamp)) return false;
       if (timestamp - lastSlowUiRender >= settings.leaderboardIntervalMs) {

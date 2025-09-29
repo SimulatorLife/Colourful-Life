@@ -18,6 +18,7 @@ export const UI_SLIDER_CONFIG = {
   energyRegenRate: { min: 0, max: 0.2, step: 0.005, floor: 0 },
   energyDiffusionRate: { min: 0, max: 0.5, step: 0.01, floor: 0 },
   leaderboardIntervalMs: { default: 750, min: 100, max: 3000, step: 50, floor: 0 },
+  autoRespawnFloor: { default: 150, min: 0, max: 600, step: 10, floor: 0 },
 };
 
 // Penalties (scale 0..1) used in energy model
@@ -35,6 +36,7 @@ const SLIDER_DEFAULTS = {
   leaderboardIntervalMs: UI_SLIDER_CONFIG.leaderboardIntervalMs?.default ?? 750,
   matingDiversityThreshold: UI_SLIDER_CONFIG.matingDiversityThreshold?.default ?? 0.45,
   lowDiversityReproMultiplier: UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ?? 0.1,
+  autoRespawnFloor: UI_SLIDER_CONFIG.autoRespawnFloor?.default ?? 150,
 };
 
 const BASE_SIMULATION_DEFAULTS = {
@@ -57,6 +59,8 @@ const BASE_SIMULATION_DEFAULTS = {
   lowDiversityReproMultiplier: SLIDER_DEFAULTS.lowDiversityReproMultiplier,
   speedMultiplier: SLIDER_DEFAULTS.speedMultiplier,
   lingerPenalty: 0,
+  autoRespawnEnabled: true,
+  autoRespawnFloor: SLIDER_DEFAULTS.autoRespawnFloor,
 };
 
 export function resolveSimulationDefaults(overrides = {}) {

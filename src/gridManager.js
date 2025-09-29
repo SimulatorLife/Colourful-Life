@@ -848,7 +848,7 @@ export default class GridManager {
   }
 
   seed(currentPopulation, minPopulation) {
-    if (currentPopulation >= minPopulation) return;
+    if (currentPopulation >= minPopulation) return 0;
     const empty = [];
 
     for (let r = 0; r < this.rows; r++) {
@@ -857,14 +857,19 @@ export default class GridManager {
       }
     }
     const toSeed = Math.min(minPopulation - currentPopulation, empty.length);
+    let seeded = 0;
 
     for (let i = 0; i < toSeed; i++) {
       const idx = empty.length > 0 ? Math.floor(this.#random() * empty.length) : 0;
       const { r, c } = empty.splice(idx, 1)[0];
       const dna = DNA.random();
 
-      this.spawnCell(r, c, { dna });
+      if (this.spawnCell(r, c, { dna })) {
+        seeded += 1;
+      }
     }
+
+    return seeded;
   }
 
   consumeEnergy(cell, row, col, densityGrid = this.densityGrid, densityEffectMultiplier = 1) {
