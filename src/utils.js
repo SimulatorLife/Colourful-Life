@@ -36,6 +36,43 @@ export function cloneTracePayload(trace) {
   };
 }
 
+export function createRankedBuffer(limit, compare) {
+  const maxSize = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
+  const comparator = typeof compare === 'function' ? compare : () => 0;
+  const buffer = [];
+
+  return {
+    add(entry) {
+      if (entry == null || maxSize === 0) return;
+
+      let low = 0;
+      let high = buffer.length;
+
+      while (low < high) {
+        const mid = (low + high) >> 1;
+        const comparison = comparator(entry, buffer[mid]);
+
+        if (comparison < 0) {
+          high = mid;
+        } else {
+          low = mid + 1;
+        }
+      }
+
+      if (low >= maxSize && buffer.length >= maxSize) return;
+
+      buffer.splice(low, 0, entry);
+
+      if (buffer.length > maxSize) {
+        buffer.length = maxSize;
+      }
+    },
+    getItems() {
+      return buffer.slice();
+    },
+  };
+}
+
 /*
  * Deterministic PRNG factory (Mulberry32)
  */
