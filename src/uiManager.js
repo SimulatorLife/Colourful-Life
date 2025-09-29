@@ -1010,136 +1010,109 @@ export default class UIManager {
     const coopDelta = Math.max(0, (totals.cooperations ?? 0) - (lastTotals.cooperations ?? 0));
     const interactionTotal = fightDelta + coopDelta;
 
+    const appendMetricRow = (label, value, title) => {
+      this.#appendControlRow(this.metricsBox, { label, value, title });
+    };
+
+    const finiteOrDash = (value, formatter = String) =>
+      Number.isFinite(value) ? formatter(value) : '—';
+    const percentOrDash = (value) => finiteOrDash(value, (v) => `${(v * 100).toFixed(0)}%`);
+    const countOrDash = (value) => finiteOrDash(value);
+    const fixedOrDash = (value, digits) => finiteOrDash(value, (v) => v.toFixed(digits));
+
     this._lastInteractionTotals = {
       fights: totals.fights ?? lastTotals.fights ?? 0,
       cooperations: totals.cooperations ?? lastTotals.cooperations ?? 0,
     };
 
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Population',
-      value: String(s.population),
-      title: 'Total living cells',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Births',
-      value: String(s.births),
-      title: 'Births in the last tick',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Deaths',
-      value: String(s.deaths),
-      title: 'Deaths in the last tick',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Growth',
-      value: String(s.growth),
-      title: 'Births - Deaths',
-    });
+    appendMetricRow('Population', String(s.population), 'Total living cells');
+    appendMetricRow('Births', String(s.births), 'Births in the last tick');
+    appendMetricRow('Deaths', String(s.deaths), 'Deaths in the last tick');
+    appendMetricRow('Growth', String(s.growth), 'Births - Deaths');
     if (typeof s.mutationMultiplier === 'number') {
       const formatted = s.mutationMultiplier.toFixed(2);
       const suffix = s.mutationMultiplier <= 0 ? '× (off)' : '×';
 
-      this.#appendControlRow(this.metricsBox, {
-        label: 'Mutation Multiplier',
-        value: `${formatted}${suffix}`,
-        title: 'Global multiplier applied to mutation chance and range for offspring',
-      });
+      appendMetricRow(
+        'Mutation Multiplier',
+        `${formatted}${suffix}`,
+        'Global multiplier applied to mutation chance and range for offspring'
+      );
     }
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Skirmishes',
-      value: String(fightDelta),
-      title: 'Skirmishes resolved since the last dashboard update',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Cooperations',
-      value: String(coopDelta),
-      title: 'Mutual aid events completed since the last dashboard update',
-    });
+    appendMetricRow(
+      'Skirmishes',
+      String(fightDelta),
+      'Skirmishes resolved since the last dashboard update'
+    );
+    appendMetricRow(
+      'Cooperations',
+      String(coopDelta),
+      'Mutual aid events completed since the last dashboard update'
+    );
 
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Cooperation Share',
-      value: interactionTotal ? `${((coopDelta / interactionTotal) * 100).toFixed(0)}%` : '—',
-      title: 'Share of cooperative interactions vs total interactions recorded for this update',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Mean Energy',
-      value: s.meanEnergy.toFixed(2),
-      title: 'Average energy per cell',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Mean Age',
-      value: s.meanAge.toFixed(1),
-      title: 'Average age of living cells',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Diversity',
-      value: s.diversity.toFixed(3),
-      title: 'Estimated mean pairwise genetic distance',
-    });
-
-    const mateChoicesValue = Number.isFinite(s.mateChoices) ? String(s.mateChoices) : '—';
-    const successfulMatingsValue = Number.isFinite(s.successfulMatings)
-      ? String(s.successfulMatings)
-      : '—';
-    const diverseChoiceRateValue = Number.isFinite(s.diverseChoiceRate)
-      ? `${(s.diverseChoiceRate * 100).toFixed(0)}%`
-      : '—';
-    const diverseMatingRateValue = Number.isFinite(s.diverseMatingRate)
-      ? `${(s.diverseMatingRate * 100).toFixed(0)}%`
-      : '—';
-    const meanDiversityAppetiteValue = Number.isFinite(s.meanDiversityAppetite)
-      ? s.meanDiversityAppetite.toFixed(2)
-      : '—';
-    const curiositySelectionsValue = Number.isFinite(s.curiositySelections)
-      ? String(s.curiositySelections)
-      : '—';
+    appendMetricRow(
+      'Cooperation Share',
+      interactionTotal ? percentOrDash(coopDelta / interactionTotal) : '—',
+      'Share of cooperative interactions vs total interactions recorded for this update'
+    );
+    appendMetricRow('Mean Energy', s.meanEnergy.toFixed(2), 'Average energy per cell');
+    appendMetricRow('Mean Age', s.meanAge.toFixed(1), 'Average age of living cells');
+    appendMetricRow(
+      'Diversity',
+      s.diversity.toFixed(3),
+      'Estimated mean pairwise genetic distance'
+    );
 
     if (typeof s.blockedMatings === 'number') {
-      this.#appendControlRow(this.metricsBox, {
-        label: 'Blocked Matings',
-        value: String(s.blockedMatings),
-        title: 'Matings prevented by reproductive zones this tick',
-      });
+      appendMetricRow(
+        'Blocked Matings',
+        String(s.blockedMatings),
+        'Matings prevented by reproductive zones this tick'
+      );
     }
 
     if (s.lastBlockedReproduction?.reason) {
-      this.#appendControlRow(this.metricsBox, {
-        label: 'Last Blocked Reason',
-        value: s.lastBlockedReproduction.reason,
-        title: 'Most recent reason reproduction was denied',
-      });
+      appendMetricRow(
+        'Last Blocked Reason',
+        s.lastBlockedReproduction.reason,
+        'Most recent reason reproduction was denied'
+      );
     }
 
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Mate Choices',
-      value: mateChoicesValue,
-      title: 'Potential mates evaluated by the population this tick',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Successful Matings',
-      value: successfulMatingsValue,
-      title: 'Pairs that successfully reproduced this tick',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Diverse Choice Rate',
-      value: diverseChoiceRateValue,
-      title: 'Share of mate choices favoring genetically diverse partners this tick',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Diverse Mating Rate',
-      value: diverseMatingRateValue,
-      title: 'Share of completed matings rated as genetically diverse this tick',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Mean Diversity Appetite',
-      value: meanDiversityAppetiteValue,
-      title: 'Average preferred genetic difference when selecting a mate',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Curiosity Selections',
-      value: curiositySelectionsValue,
-      title: 'Mate selections driven by curiosity-driven exploration this tick',
-    });
+    const reproductionMetrics = [
+      {
+        label: 'Mate Choices',
+        value: countOrDash(s.mateChoices),
+        title: 'Potential mates evaluated by the population this tick',
+      },
+      {
+        label: 'Successful Matings',
+        value: countOrDash(s.successfulMatings),
+        title: 'Pairs that successfully reproduced this tick',
+      },
+      {
+        label: 'Diverse Choice Rate',
+        value: percentOrDash(s.diverseChoiceRate),
+        title: 'Share of mate choices favoring genetically diverse partners this tick',
+      },
+      {
+        label: 'Diverse Mating Rate',
+        value: percentOrDash(s.diverseMatingRate),
+        title: 'Share of completed matings rated as genetically diverse this tick',
+      },
+      {
+        label: 'Mean Diversity Appetite',
+        value: fixedOrDash(s.meanDiversityAppetite, 2),
+        title: 'Average preferred genetic difference when selecting a mate',
+      },
+      {
+        label: 'Curiosity Selections',
+        value: countOrDash(s.curiositySelections),
+        title: 'Mate selections driven by curiosity-driven exploration this tick',
+      },
+    ];
+
+    reproductionMetrics.forEach(({ label, value, title }) => appendMetricRow(label, value, title));
 
     const traitPresence = stats?.traitPresence;
 
