@@ -117,7 +117,7 @@ jobs:
             const body = [
               `@codex ${process.env.PROMPT}`,
               "",
-              `Once done, ensure all changes are pushed to remote branch **${branch}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact command to guarantee your changes are pushed:`,
+              `Once done, ensure all changes are pushed to remote branch **${branch}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact command(s) to guarantee your changes are pushed (if the push fails, refer to the troubleshooting steps in AGENTS.md):`,
               "",
               "```bash",
               `git config user.name  "codex-bot"`,
