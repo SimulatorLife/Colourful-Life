@@ -1,0 +1,30 @@
+name: Codex 04 – Improve Code Style
+on:
+  schedule:
+    - cron: "50 */8 * * *" # every 8 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Improve Code Style"
+      pr_body: >
+        Targeted style cleanup task. Codex should focus on a single, high-impact area and keep the diff small.
+        Commit only to the branch created by this workflow; keep all changes tied to this PR.
+      branch_prefix: "codex"
+      base_branch: "master"
+      prompt: >
+        Review the codebase and focus on one area where coding style and standards are inconsistent
+        (such as formatting, naming, file structure, or repeated ad-hoc patterns). Normalize that area to match
+        project-wide conventions, applying consistent formatting, naming, and organization. Where applicable, align
+        error handling, logging, or configuration loading with established patterns. Ensure linter and formatter rules
+        are enforced, removing style drift while keeping the code uniform, predictable, and easy for contributors to read.
+        Avoid large-scale rewrites; focus on a single, high-impact area that improves overall consistency without
+        altering functionality.

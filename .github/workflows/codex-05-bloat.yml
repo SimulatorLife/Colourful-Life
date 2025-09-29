@@ -1,0 +1,25 @@
+name: Codex 05 – Reduce Bloat
+on:
+  schedule:
+    - cron: "55 */11 * * *" # every 11 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Reduce Bloat"
+      branch_prefix: "codex"
+      base_branch: "master"
+      prompt: >
+        Review the codebase and focus on one area where unused or redundant code exists. 
+        Identify functions, variables, files, assets, or configuration entries that are no longer referenced. 
+        Remove or archive them safely, and consolidate partial duplicates where possible. 
+        The goal is to reduce bloat, simplify the repository, and ensure every line of code serves a purpose. 
+        Limit the scope to a single, high-impact area in this run rather than attempting to clean the entire codebase at once.
