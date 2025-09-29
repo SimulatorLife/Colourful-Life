@@ -58,6 +58,38 @@ test('EventManager respects injected RNG for deterministic events', async () => 
   assert.is(rng.getCalls(), sequence.length);
 });
 
+test('EventManager allows overriding event colors via options', async () => {
+  const { default: EventManager } = await import('../src/eventManager.js');
+  const rows = 10;
+  const cols = 10;
+  const customColors = {
+    flood: '#0011ff',
+    drought: '#ccaa77',
+    custom: '#123123',
+  };
+  const managerWithMap = new EventManager(rows, cols, Math.random, {
+    eventColors: customColors,
+  });
+
+  assert.is(managerWithMap.getColor({ eventType: 'flood' }), customColors.flood);
+  assert.is(managerWithMap.getColor({ eventType: 'heatwave' }), EventManager.EVENT_COLORS.heatwave);
+  assert.is(managerWithMap.getColor({ eventType: 'unknown' }), EventManager.DEFAULT_EVENT_COLOR);
+
+  const managerWithResolver = new EventManager(rows, cols, Math.random, {
+    resolveEventColor(eventType) {
+      if (eventType === 'heatwave') return '#ff6600';
+
+      return undefined;
+    },
+  });
+
+  assert.is(managerWithResolver.getColor({ eventType: 'heatwave' }), '#ff6600');
+  assert.is(
+    managerWithResolver.getColor({ eventType: 'drought' }),
+    EventManager.EVENT_COLORS.drought
+  );
+});
+
 test('isEventAffecting checks if coordinates fall within event area', async () => {
   const { isEventAffecting } = await import('../src/eventManager.js');
   const event = {
