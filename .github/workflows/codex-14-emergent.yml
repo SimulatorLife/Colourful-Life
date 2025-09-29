@@ -1,0 +1,25 @@
+name: Codex 14 – Emergent Systems Pass
+on:
+  schedule:
+    - cron: "27 */7 * * *" # every 7 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Emergent Systems Pass"
+      pr_body: "Seed PR for Codex to replace a hardcoded rule with an emergent system atop current master."
+      branch_prefix: "codex"
+      base_branch: "master"
+      prompt: >
+        Identify a hardcoded, rule-based behavior in the simulation and reframe it into an emergent
+        system that arises naturally from organism traits, DNA, or environmental interactions.
+        Implement the shift in a focused way that preserves readability while reducing rigid control
+        logic, moving the simulation toward more realistic, dynamic behavior.

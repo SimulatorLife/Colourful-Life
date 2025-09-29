@@ -1,0 +1,25 @@
+name: Codex 11 – Evolutionary Pressure Tuning
+on:
+  schedule:
+    - cron: "03 */21 * * *" # every 21 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Evolutionary Pressure Tuning"
+      pr_body: "Seed PR for Codex to refine evolutionary pressures atop current master."
+      branch_prefix: "codex"
+      base_branch: "master"
+      prompt: >
+        Assess fitness, selection, or survival logic and identify an opportunity to refine how
+        evolutionary pressures shape organisms. Adjust the system to better encourage diverse,
+        adaptive strategies without breaking existing features. Keep the change focused, measurable,
+        and well-integrated so natural selection dynamics are strengthened without a full overhaul.

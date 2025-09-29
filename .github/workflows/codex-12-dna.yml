@@ -1,0 +1,25 @@
+name: Codex 12 – DNA Encoding Improvements
+on:
+  schedule:
+    - cron: "06 */6 * * *" # every 6 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: DNA Encoding Improvements"
+      pr_body: "Seed PR for Codex to enrich DNA encoding capabilities atop current master."
+      branch_prefix: "codex"
+      base_branch: "master"
+      prompt: >
+        Examine how DNA is represented and used throughout the simulation. Expand its ability to
+        encode meaningful organism traits and behaviors, replacing ad-hoc or hardcoded logic with
+        DNA-driven values where appropriate. Keep the system extensible, realistic, and evolvable
+        without introducing unnecessary complexity, so the encoding fosters richer emergent outcomes.

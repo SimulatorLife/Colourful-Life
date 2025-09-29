@@ -1,0 +1,25 @@
+name: Codex 13 – Neural System Expansion
+on:
+  schedule:
+    - cron: "42 */5 * * *" # every 5 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Neural System Expansion"
+      pr_body: "Seed PR for Codex to expand neural system control atop current master."
+      branch_prefix: "codex"
+      base_branch: "master"
+      prompt: >
+        Review the neural or brain system and find one behavior currently controlled by rigid
+        conditions that should instead be neuron-driven. Refactor that case so neural activation
+        governs the behavior in a clean, maintainable way. Keep the change scoped but impactful to
+        strengthen the role of the neural system in driving flexible, emergent organism behavior.
