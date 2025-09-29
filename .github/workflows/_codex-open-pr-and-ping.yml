@@ -113,21 +113,13 @@ jobs:
             const repo  = context.repo.repo;
             const branch = process.env.BRANCH_NAME;
 
-            // Keep ${GITHUB_TOKEN} LITERAL so Codex expands it in its own env
-            const tokenCheck = 'echo "${GITHUB_TOKEN}" | wc -c';
-            const pushCmd = 'git push "https://x-access-token:${GITHUB_TOKEN}@github.com/' +
-                            owner + '/' + repo + '.git" "HEAD:' + branch + '"';
-
             const body = [
               `@codex ${process.env.PROMPT}`,
               "",
-              `Once done, ensure all changes are pushed to remote branch **${branch}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact commands to guarantee your changes are pushed using the secret named GITHUB_TOKEN available in your environment:`,
+              `Once done, ensure all changes are pushed to remote branch **${branch}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact command to guarantee your changes are pushed:`,
               "",
               "```bash",
-              tokenCheck,
-              'git config user.name  "codex-bot"',
-              'git config user.email "codex@example.com"',
-              pushCmd,
+              `git push origin "HEAD:${branch}"`,
               "```",
               "Here is some additional context for your task:",
               "```yaml",
