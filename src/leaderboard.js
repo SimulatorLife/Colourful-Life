@@ -1,3 +1,5 @@
+import { createRankedBuffer } from './utils.js';
+
 export function computeLeaderboard(snapshot, topN = 5) {
   const numericTopN = Number(topN);
   const sanitizedTopN = Number.isFinite(numericTopN) ? Math.max(0, Math.floor(numericTopN)) : 0;
@@ -8,19 +10,6 @@ export function computeLeaderboard(snapshot, topN = 5) {
 
   const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
   const brainSnapshots = Array.isArray(snapshot?.brainSnapshots) ? snapshot.brainSnapshots : [];
-  const brainLookup = new Map();
-
-  for (let i = 0; i < brainSnapshots.length; i++) {
-    const entry = brainSnapshots[i];
-
-    if (!entry) continue;
-
-    const key = `${entry.row},${entry.col}`;
-
-    if (!brainLookup.has(key)) brainLookup.set(key, entry);
-  }
-  const topItems = [];
-
   const compareItems = (a, b) => {
     const smoothedDiff = (b?.smoothedFitness ?? Number.NaN) - (a?.smoothedFitness ?? Number.NaN);
 
@@ -32,6 +21,20 @@ export function computeLeaderboard(snapshot, topN = 5) {
 
     return Number.isNaN(fitnessDiff) ? 0 : fitnessDiff;
   };
+
+  const brainLookup = new Map();
+
+  for (let i = 0; i < brainSnapshots.length; i++) {
+    const entry = brainSnapshots[i];
+
+    if (!entry) continue;
+
+    const key = `${entry.row},${entry.col}`;
+
+    if (!brainLookup.has(key)) brainLookup.set(key, entry);
+  }
+
+  const topItems = createRankedBuffer(sanitizedTopN, compareItems);
 
   for (const entry of entries) {
     const { cell, fitness, smoothedFitness } = entry || {};
@@ -59,24 +62,8 @@ export function computeLeaderboard(snapshot, topN = 5) {
     if (brain) {
       item.brain = brain;
     }
-    let inserted = false;
-
-    for (let index = 0; index < topItems.length; index += 1) {
-      if (compareItems(item, topItems[index]) < 0) {
-        topItems.splice(index, 0, item);
-        inserted = true;
-        break;
-      }
-    }
-
-    if (!inserted) {
-      topItems.push(item);
-    }
-
-    if (topItems.length > sanitizedTopN) {
-      topItems.length = sanitizedTopN;
-    }
+    topItems.add(item);
   }
 
-  return topItems;
+  return topItems.getItems();
 }
