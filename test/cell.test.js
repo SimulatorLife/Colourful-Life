@@ -189,6 +189,61 @@ test('breed spends parental investment energy without creating extra energy', ()
   assert.ok(parentB.energy >= starvationB, 'parent B respects starvation floor');
 });
 
+test('interaction momentum responds to conflicts and cooperation history', () => {
+  const dna = new DNA(180, 200, 80);
+
+  dna.genes[GENE_LOCI.COOPERATION] = 230;
+  dna.genes[GENE_LOCI.COMBAT] = 20;
+  dna.genes[GENE_LOCI.PARENTAL] = 200;
+  dna.genes[GENE_LOCI.SENSE] = 220;
+  dna.genes[GENE_LOCI.DENSITY] = 120;
+  dna.genes[GENE_LOCI.ACTIVITY] = 80;
+
+  const cell = new Cell(2, 2, dna, 6);
+  const baseline = cell.getInteractionMomentum();
+
+  assert.ok(baseline > -0.2 && baseline <= 1, 'baseline mood should be cooperative leaning');
+
+  const rival = { dna: new DNA(40, 60, 210) };
+  const afterLoss = cell.experienceInteraction({
+    type: 'fight',
+    outcome: 'loss',
+    partner: rival,
+    energyDelta: -1.5,
+  });
+
+  assert.ok(afterLoss < baseline, 'losing a fight should depress social momentum');
+  expectClose(
+    cell.getInteractionMomentum(),
+    afterLoss,
+    1e-12,
+    'momentum snapshot matches recorded value'
+  );
+
+  const partner = { dna: new DNA(210, 170, 90) };
+  const afterCoop = cell.experienceInteraction({
+    type: 'cooperate',
+    outcome: 'receive',
+    partner,
+    energyDelta: 2.2,
+  });
+
+  assert.ok(afterCoop > afterLoss, 'receiving cooperation should raise momentum');
+
+  cell.age += 1;
+  cell.chooseInteractionAction({
+    localDensity: 0.25,
+    densityEffectMultiplier: 1,
+    enemies: [],
+    allies: [],
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+  });
+
+  const decayed = cell.getInteractionMomentum();
+
+  assert.ok(decayed > afterLoss, 'decay pulls momentum back toward baseline');
+});
+
 test('breed returns null when either parent lacks investable energy', () => {
   const dnaA = new DNA(240, 10, 10);
   const dnaB = new DNA(240, 10, 10);

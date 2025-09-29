@@ -75,6 +75,17 @@ export default class Cell {
     this._resourceDelta = 0;
     this._resourceSignal = 0;
     this._resourceSignalLastInput = { energy: initialResourceLevel, delta: 0 };
+    const interactionProfile =
+      typeof this.dna.interactionPlasticity === 'function'
+        ? this.dna.interactionPlasticity()
+        : null;
+    this._interactionBaseline = clamp(interactionProfile?.baseline ?? 0, -1, 1);
+    this._interactionMomentum = this._interactionBaseline;
+    this._interactionLearning = clamp(interactionProfile?.learningRate ?? 0.35, 0.05, 0.95);
+    this._interactionVolatility = clamp(interactionProfile?.volatility ?? 0.5, 0.05, 2);
+    this._interactionDecay = clamp(interactionProfile?.decay ?? 0.08, 0.001, 0.6);
+    this._lastInteractionDecayAge = this.age;
+    this._lastInteractionSummary = null;
     // Cache metabolism from gene row 5 to avoid per-tick recompute
     const geneRow = this.genes?.[5];
 
@@ -479,6 +490,127 @@ export default class Cell {
     return signal;
   }
 
+  #resolveInteractionMomentum({ applyDecay = true } = {}) {
+    const baseline = Number.isFinite(this._interactionBaseline) ? this._interactionBaseline : 0;
+
+    if (!Number.isFinite(this._interactionMomentum)) {
+      this._interactionMomentum = baseline;
+    }
+
+    if (!applyDecay) {
+      return clamp(this._interactionMomentum, -1, 1);
+    }
+
+    if (this._interactionDecay <= 0) {
+      return clamp(this._interactionMomentum, -1, 1);
+    }
+
+    const lastAge = Number.isFinite(this._lastInteractionDecayAge)
+      ? this._lastInteractionDecayAge
+      : this.age;
+
+    if (this.age !== lastAge) {
+      const iterations = Math.max(0, Math.min(6, Math.floor(this.age - lastAge)));
+
+      for (let i = 0; i < iterations; i++) {
+        this._interactionMomentum = clamp(
+          lerp(this._interactionMomentum, baseline, this._interactionDecay),
+          -1,
+          1
+        );
+      }
+
+      this._lastInteractionDecayAge = this.age;
+    }
+
+    return clamp(this._interactionMomentum, -1, 1);
+  }
+
+  getInteractionMomentum({ decay = false } = {}) {
+    return this.#resolveInteractionMomentum({ applyDecay: Boolean(decay) });
+  }
+
+  experienceInteraction(event = {}) {
+    if (!event || typeof event !== 'object') {
+      return this.#resolveInteractionMomentum({ applyDecay: false });
+    }
+
+    const baseline = Number.isFinite(this._interactionBaseline) ? this._interactionBaseline : 0;
+    const learning = clamp(this._interactionLearning ?? 0, 0, 1);
+    const volatility = Math.max(0, this._interactionVolatility ?? 0);
+
+    if (learning <= 0 || volatility <= 0) {
+      return this.#resolveInteractionMomentum({ applyDecay: false });
+    }
+
+    let kinship = Number.isFinite(event.kinship) ? clamp(event.kinship, 0, 1) : Number.NaN;
+    const partner = event.partner ?? null;
+
+    if (!Number.isFinite(kinship) && partner) {
+      try {
+        kinship = clamp(this.similarityTo(partner), 0, 1);
+      } catch (error) {
+        kinship = 0;
+      }
+    }
+
+    if (!Number.isFinite(kinship)) kinship = 0;
+
+    let signal = 0;
+    const type = event.type;
+    const outcome = event.outcome ?? null;
+
+    switch (type) {
+      case 'fight': {
+        signal = outcome === 'win' ? -0.45 : -0.75;
+        signal -= kinship * 0.35;
+        break;
+      }
+      case 'cooperate': {
+        signal = outcome === 'receive' ? 0.6 : 0.4;
+        signal += kinship * 0.3;
+        break;
+      }
+      case 'reproduce': {
+        signal = 0.3 + kinship * 0.2;
+        break;
+      }
+      default: {
+        if (outcome === 'positive') signal += 0.2;
+        if (outcome === 'negative') signal -= 0.2;
+        break;
+      }
+    }
+
+    const energyDelta = clamp(
+      Number.isFinite(event.energyDelta) ? event.energyDelta / (MAX_TILE_ENERGY || 1) : 0,
+      -1,
+      1
+    );
+    const intensity = clamp(Number.isFinite(event.intensity) ? event.intensity : 1, 0, 2);
+
+    signal += energyDelta * 0.35;
+
+    const target = clamp(baseline + signal * volatility * intensity, -1, 1);
+    const current = Number.isFinite(this._interactionMomentum)
+      ? this._interactionMomentum
+      : baseline;
+    const next = clamp(current + (target - current) * learning, -1, 1);
+
+    this._interactionMomentum = next;
+    this._lastInteractionDecayAge = this.age;
+    this._lastInteractionSummary = {
+      type,
+      outcome,
+      kinship,
+      energyDelta,
+      intensity,
+      resultingMomentum: next,
+    };
+
+    return next;
+  }
+
   #movementSensors({
     localDensity = 0,
     densityEffectMultiplier = 1,
@@ -506,6 +638,7 @@ export default class Cell {
     const enemySimilarity = this.#averageSimilarity(enemies);
     const mateSimilarity = this.#averageSimilarity(mates);
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
+    const interactionMomentum = this.#resolveInteractionMomentum();
 
     return {
       energy: energyFrac,
@@ -517,6 +650,7 @@ export default class Cell {
       enemySimilarity,
       mateSimilarity,
       ageFraction: ageFrac,
+      interactionMomentum,
       eventPressure,
       resourceTrend,
     };
@@ -548,6 +682,7 @@ export default class Cell {
     const riskTolerance =
       typeof this.dna?.riskTolerance === 'function' ? this.dna.riskTolerance() : 0.5;
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
+    const interactionMomentum = this.#resolveInteractionMomentum();
 
     return {
       energy: energyFrac,
@@ -558,6 +693,7 @@ export default class Cell {
       allySimilarity,
       ageFraction: ageFrac,
       riskTolerance,
+      interactionMomentum,
       eventPressure,
       resourceTrend,
     };
@@ -592,6 +728,7 @@ export default class Cell {
         ? partner.dna.senescenceRate()
         : 0;
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
+    const interactionMomentum = this.#resolveInteractionMomentum();
 
     return {
       energy: energyFrac,
@@ -603,6 +740,7 @@ export default class Cell {
       partnerAgeFraction: partnerAgeFrac,
       selfSenescence: senSelf,
       partnerSenescence: senPartner,
+      interactionMomentum,
       eventPressure,
       resourceTrend,
     };

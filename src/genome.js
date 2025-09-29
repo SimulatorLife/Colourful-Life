@@ -600,6 +600,28 @@ export class DNA {
     return clamp(base, 0.1, 0.85);
   }
 
+  interactionPlasticity() {
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const combat = this.geneFraction(GENE_LOCI.COMBAT);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
+    const activity = this.geneFraction(GENE_LOCI.ACTIVITY);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+
+    const baseline = clamp(
+      (cooperation - combat) * 1.1 + (parental - risk) * 0.6 + (exploration - 0.5) * 0.3,
+      -1,
+      1
+    );
+    const learningRate = clamp(0.18 + 0.45 * sense + 0.25 * cooperation, 0.08, 0.85);
+    const volatility = clamp(0.35 + 0.4 * risk + 0.3 * combat - 0.25 * cooperation, 0.1, 1.2);
+    const decay = clamp(0.05 + 0.4 * density + 0.25 * (1 - activity), 0.02, 0.55);
+
+    return { baseline, learningRate, volatility, decay };
+  }
+
   neuralSensorModulation() {
     const sensorCount = Brain?.SENSOR_COUNT ?? 0;
 
@@ -749,6 +771,11 @@ export class DNA {
       gain: 0.65 + 0.45 * risk,
       target: toSigned(0.35 + 0.45 * risk - 0.15 * cooperation, 0.5, 1),
       jitter: 0.08,
+    });
+    updateModulation('interactionMomentum', {
+      gain: 0.7 + 0.35 * cooperation + 0.25 * sense,
+      target: toSigned(0.4 + 0.45 * cooperation - 0.35 * combat, 0.5, 1),
+      jitter: 0.1,
     });
 
     updateModulation('selfSenescence', {
