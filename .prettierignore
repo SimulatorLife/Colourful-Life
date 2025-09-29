@@ -6,4 +6,13 @@ build/
 tmp/
 *.min.js
 *.min.css
-
+.github/
+AGENTS.md
+.husky
+.vscode/
+.idea/
+*.log
+.DS_Store
+.env
+.cache/
+.parcel-cache/

@@ -8,6 +8,9 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  discussions: read
+  actions: write
+  repository-projects: read
 
 jobs:
   run:
