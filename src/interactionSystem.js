@@ -51,6 +51,74 @@ function computeCombatPower(cell) {
   return cell?.energy * modifier;
 }
 
+function resolveTrait01(cell, traitName, fallback = 0.5) {
+  const trait = cell?.dna?.[traitName];
+
+  if (typeof trait !== 'function') return fallback;
+
+  const value = Number(trait.call(cell.dna));
+
+  if (!Number.isFinite(value)) return fallback;
+
+  return clamp01(value);
+}
+
+function computeDensityAdvantage({
+  adapter,
+  attackerRow,
+  attackerCol,
+  targetRow,
+  targetCol,
+  densityGrid,
+  densityEffectMultiplier,
+}) {
+  if (!adapter) return 0;
+
+  const attackerDensity = clamp01(
+    adapter.densityAt?.(attackerRow, attackerCol, { densityGrid }) ?? 0
+  );
+  const defenderDensity = clamp01(adapter.densityAt?.(targetRow, targetCol, { densityGrid }) ?? 0);
+  const densityDelta = clamp(attackerDensity - defenderDensity, -1, 1);
+  const effect = Number.isFinite(densityEffectMultiplier) ? densityEffectMultiplier : 1;
+
+  return densityDelta * clamp(effect, 0, 2) * 0.25;
+}
+
+function computeCombatOdds({
+  attacker,
+  defender,
+  attackerPower,
+  defenderPower,
+  adapter,
+  attackerRow,
+  attackerCol,
+  targetRow,
+  targetCol,
+  densityGrid,
+  densityEffectMultiplier,
+}) {
+  const totalPower = Math.abs(attackerPower) + Math.abs(defenderPower);
+  const baseEdge = totalPower > 0 ? clamp((attackerPower - defenderPower) / totalPower, -1, 1) : 0;
+  const riskEdge =
+    (resolveTrait01(attacker, 'riskTolerance') - resolveTrait01(defender, 'riskTolerance')) * 0.2;
+  const resilienceEdge =
+    (resolveTrait01(attacker, 'recoveryRate') - resolveTrait01(defender, 'recoveryRate')) * 0.15;
+  const territoryEdge = computeDensityAdvantage({
+    adapter,
+    attackerRow,
+    attackerCol,
+    targetRow,
+    targetCol,
+    densityGrid,
+    densityEffectMultiplier,
+  });
+  const combinedEdge = clamp(baseEdge + riskEdge + resilienceEdge + territoryEdge, -0.95, 0.95);
+  const logisticInput = combinedEdge * 3.2;
+  const attackerWinChance = clamp01(1 / (1 + Math.exp(-logisticInput)));
+
+  return { attackerWinChance, edge: combinedEdge };
+}
+
 function subtractEnergy(cell, amount) {
   if (!cell) return;
 
@@ -225,13 +293,29 @@ export default class InteractionSystem {
       typeof attacker?.similarityTo === 'function' && defender
         ? clamp(attacker.similarityTo(defender), 0, 1)
         : 0;
-    const totalPower = Math.abs(attackerPower) + Math.abs(defenderPower);
-    const powerDiff = totalPower > 0 ? Math.abs(attackerPower - defenderPower) / totalPower : 0;
-    const intensity = clamp(0.4 + powerDiff, 0, 1.6);
+    const odds = computeCombatOdds({
+      attacker,
+      defender,
+      attackerPower,
+      defenderPower,
+      adapter,
+      attackerRow,
+      attackerCol,
+      targetRow,
+      targetCol,
+      densityGrid,
+      densityEffectMultiplier,
+    });
+    const attackerWins = Math.random() < odds.attackerWinChance;
+    const intensity = clamp(
+      0.5 + Math.abs(odds.edge) * 0.9 + Math.abs(odds.attackerWinChance - 0.5),
+      0,
+      1.6
+    );
 
     const attackerTile = getAdapterCell(adapter, attackerRow, attackerCol);
 
-    if (attackerPower >= defenderPower) {
+    if (attackerWins) {
       clearAdapterCell(adapter, targetRow, targetCol);
       moveVictoriousAttacker({
         adapter,
@@ -250,6 +334,7 @@ export default class InteractionSystem {
         winnerCost: attackerCost,
         loserCost: defenderCost,
         intensity,
+        winChance: odds.attackerWinChance,
       });
 
       return true;
@@ -264,6 +349,7 @@ export default class InteractionSystem {
       winnerCost: defenderCost,
       loserCost: attackerCost,
       intensity,
+      winChance: 1 - odds.attackerWinChance,
     });
 
     return true;

@@ -438,7 +438,7 @@ test('interaction intents resolve fights via interaction system', () => {
   const interactionSystem = new InteractionSystem({ adapter });
   const intent = attacker.createFightIntent({ targetRow: 0, targetCol: 1 });
 
-  interactionSystem.resolveIntent(intent, { stats });
+  withMockedRandom([0], () => interactionSystem.resolveIntent(intent, { stats }));
 
   assert.is(manager.grid[0][1], attacker, 'attacker occupies the target tile after winning');
   assert.is(manager.grid[0][0], null, 'original attacker tile is emptied');
