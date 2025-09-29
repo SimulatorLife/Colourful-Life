@@ -1,5 +1,5 @@
-const { test } = require('uvu');
-const assert = require('uvu/assert');
+import { test } from 'uvu';
+import * as assert from 'uvu/assert';
 
 const baseArea = { x: 0, y: 0, width: 5, height: 5 };
 

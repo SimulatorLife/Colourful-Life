@@ -1,18 +1,7 @@
-const { test } = require('uvu');
-const assert = require('uvu/assert');
-
-const overlaysPath = require.resolve('../src/overlays.js');
-const selectionManagerPath = require.resolve('../src/selectionManager.js');
-
-function loadModules() {
-  delete require.cache[overlaysPath];
-  delete require.cache[selectionManagerPath];
-  const overlays = require(overlaysPath);
-  const { drawSelectionZones } = overlays;
-  const { default: SelectionManager } = require(selectionManagerPath);
-
-  return { drawSelectionZones, SelectionManager };
-}
+import { test } from 'uvu';
+import * as assert from 'uvu/assert';
+import { drawSelectionZones } from '../src/overlays.js';
+import SelectionManager from '../src/selectionManager.js';
 
 function createMockContext() {
   const operations = [];
@@ -85,7 +74,6 @@ function sortedSetValues(set) {
 }
 
 test('drawSelectionZones matches tile coverage for predefined patterns', () => {
-  const { drawSelectionZones, SelectionManager } = loadModules();
   const manager = new SelectionManager(10, 10);
 
   manager.togglePattern('eastHalf', true);
@@ -102,7 +90,6 @@ test('drawSelectionZones matches tile coverage for predefined patterns', () => {
 });
 
 test('drawSelectionZones matches tile coverage for custom rectangles', () => {
-  const { drawSelectionZones, SelectionManager } = loadModules();
   const manager = new SelectionManager(12, 12);
 
   manager.addCustomRectangle(2, 3, 6, 7);
@@ -119,7 +106,6 @@ test('drawSelectionZones matches tile coverage for custom rectangles', () => {
 });
 
 test('pattern geometry is cached after activation', () => {
-  const { SelectionManager } = loadModules();
   const manager = new SelectionManager(10, 10);
   const pattern = manager.patterns.get('alternatingBands');
 

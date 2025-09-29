@@ -1,5 +1,5 @@
-const { test } = require('uvu');
-const assert = require('uvu/assert');
+import { test } from 'uvu';
+import * as assert from 'uvu/assert';
 
 test('GridManager removes cells that report starvation', async () => {
   const { default: GridManager } = await import('../src/gridManager.js');

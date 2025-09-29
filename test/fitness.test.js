@@ -1,5 +1,5 @@
-const { test } = require('uvu');
-const assert = require('uvu/assert');
+import { test } from 'uvu';
+import * as assert from 'uvu/assert';
 
 const computeFitnessModulePromise = import('../src/fitness.mjs');
 const configModulePromise = import('../src/config.js');
