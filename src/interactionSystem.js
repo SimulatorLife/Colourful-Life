@@ -1,6 +1,40 @@
 import { clamp, clamp01 } from './utils.js';
 import GridInteractionAdapter from './grid/gridAdapter.js';
 
+function asFiniteCoordinate(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function resolveCoordinates(preferred, fallback = null) {
+  const primaryRow = asFiniteCoordinate(preferred?.row);
+  const primaryCol = asFiniteCoordinate(preferred?.col);
+  const fallbackRow = asFiniteCoordinate(fallback?.row);
+  const fallbackCol = asFiniteCoordinate(fallback?.col);
+
+  return {
+    row: primaryRow ?? fallbackRow,
+    col: primaryCol ?? fallbackCol,
+  };
+}
+
+function getAdapterCell(adapter, row, col) {
+  return adapter?.getCell?.(row, col) ?? null;
+}
+
+function clearAdapterCell(adapter, row, col) {
+  if (!adapter) return;
+
+  if (typeof adapter.removeCell === 'function') {
+    adapter.removeCell(row, col);
+  } else if (typeof adapter.setCell === 'function') {
+    adapter.setCell(row, col, null);
+  }
+}
+
+function placeAdapterCell(adapter, row, col, cell) {
+  adapter?.setCell?.(row, col, cell);
+}
+
 export default class InteractionSystem {
   constructor({ adapter, gridManager } = {}) {
     if (adapter) {
@@ -58,27 +92,15 @@ export default class InteractionSystem {
     if (!initiator?.cell || !target) return false;
 
     const attacker = initiator.cell;
-    const attackerRow =
-      typeof initiator.row === 'number'
-        ? initiator.row
-        : typeof attacker.row === 'number'
-          ? attacker.row
-          : null;
-    const attackerCol =
-      typeof initiator.col === 'number'
-        ? initiator.col
-        : typeof attacker.col === 'number'
-          ? attacker.col
-          : null;
+    const { row: attackerRow, col: attackerCol } = resolveCoordinates(initiator, attacker);
 
     if (attackerRow == null || attackerCol == null) return false;
 
-    const targetRow = target.row;
-    const targetCol = target.col;
+    const { row: targetRow, col: targetCol } = resolveCoordinates(target);
 
     if (targetRow == null || targetCol == null) return false;
 
-    const defender = adapter.getCell?.(targetRow, targetCol) ?? null;
+    const defender = getAdapterCell(adapter, targetRow, targetCol);
 
     if (!defender) return false;
 
@@ -99,14 +121,10 @@ export default class InteractionSystem {
     const attackerPower = attacker.energy * (attacker.dna?.combatPower?.() ?? 1);
     const defenderPower = defender.energy * (defender.dna?.combatPower?.() ?? 1);
 
-    const attackerTile = adapter.getCell?.(attackerRow, attackerCol) ?? null;
+    const attackerTile = getAdapterCell(adapter, attackerRow, attackerCol);
 
     if (attackerPower >= defenderPower) {
-      if (typeof adapter.removeCell === 'function') {
-        adapter.removeCell(targetRow, targetCol);
-      } else if (typeof adapter.setCell === 'function') {
-        adapter.setCell(targetRow, targetCol, null);
-      }
+      clearAdapterCell(adapter, targetRow, targetCol);
 
       let relocated = false;
 
@@ -116,14 +134,10 @@ export default class InteractionSystem {
 
       if (!relocated) {
         if (attackerTile === attacker) {
-          if (typeof adapter.removeCell === 'function') {
-            adapter.removeCell(attackerRow, attackerCol);
-          } else {
-            adapter.setCell?.(attackerRow, attackerCol, null);
-          }
+          clearAdapterCell(adapter, attackerRow, attackerCol);
         }
 
-        adapter.setCell?.(targetRow, targetCol, attacker);
+        placeAdapterCell(adapter, targetRow, targetCol, attacker);
         if ('row' in attacker) attacker.row = targetRow;
         if ('col' in attacker) attacker.col = targetCol;
       }
@@ -147,11 +161,7 @@ export default class InteractionSystem {
     }
 
     if (attackerTile === attacker) {
-      if (typeof adapter.removeCell === 'function') {
-        adapter.removeCell(attackerRow, attackerCol);
-      } else if (typeof adapter.setCell === 'function') {
-        adapter.setCell(attackerRow, attackerCol, null);
-      }
+      clearAdapterCell(adapter, attackerRow, attackerCol);
     }
 
     stats?.onFight?.();
