@@ -867,28 +867,6 @@ export default class GridManager {
     cell.energy = Math.min(this.maxTileEnergy, cell.energy + take);
   }
 
-  /**
-   * Aggregates immediate non-obstacle neighbor energy for regeneration math.
-   */
-  #collectEnergyNeighborStats(row, col) {
-    let sum = 0;
-    let count = 0;
-
-    const addNeighbor = (r, c) => {
-      if (this.isObstacle(r, c)) return;
-
-      sum += this.energyGrid?.[r]?.[c] ?? 0;
-      count += 1;
-    };
-
-    if (row > 0) addNeighbor(row - 1, col);
-    if (row < this.rows - 1) addNeighbor(row + 1, col);
-    if (col > 0) addNeighbor(row, col - 1);
-    if (col < this.cols - 1) addNeighbor(row, col + 1);
-
-    return { sum, count };
-  }
-
   regenerateEnergyGrid(
     events = null,
     eventStrengthMultiplier = 1,
@@ -897,56 +875,100 @@ export default class GridManager {
     densityGrid = null,
     densityEffectMultiplier = 1
   ) {
-    const next = this.energyNext;
+    const rows = this.rows;
+    const cols = this.cols;
     const evs = Array.isArray(events) ? events : events ? [events] : [];
+    const hasDensityGrid = Array.isArray(densityGrid);
+    const energyGrid = this.energyGrid;
+    const next = this.energyNext;
+    const obstacles = this.obstacles;
+    const sharedConfig = {
+      maxTileEnergy: this.maxTileEnergy,
+      regenRate: R,
+      diffusionRate: D,
+      densityEffectMultiplier,
+      regenDensityPenalty: REGEN_DENSITY_PENALTY,
+      eventStrengthMultiplier,
+      isEventAffecting,
+      getEventEffect,
+    };
+    const computeOptions = {
+      currentEnergy: 0,
+      density: 0,
+      neighborSum: 0,
+      neighborCount: 0,
+      events: evs,
+      row: 0,
+      col: 0,
+      config: sharedConfig,
+    };
 
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) {
-        if (this.isObstacle(r, c)) {
-          next[r][c] = 0;
-          if (this.energyGrid[r][c] !== 0) {
-            this.energyGrid[r][c] = 0;
-          }
+    for (let r = 0; r < rows; r++) {
+      const energyRow = energyGrid[r];
+      const nextRow = next[r];
+      const densityRow = hasDensityGrid ? densityGrid[r] : null;
+      const obstacleRow = obstacles?.[r];
+      const upEnergyRow = r > 0 ? energyGrid[r - 1] : null;
+      const downEnergyRow = r < rows - 1 ? energyGrid[r + 1] : null;
+      const upObstacleRow = r > 0 ? obstacles?.[r - 1] : null;
+      const downObstacleRow = r < rows - 1 ? obstacles?.[r + 1] : null;
+
+      for (let c = 0; c < cols; c++) {
+        if (obstacleRow?.[c]) {
+          nextRow[c] = 0;
+          if (energyRow[c] !== 0) energyRow[c] = 0;
 
           continue;
         }
 
-        const density = densityGrid
-          ? densityGrid[r][c]
+        const density = hasDensityGrid
+          ? densityRow?.[c]
           : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
 
-        const { sum: neighborSum, count: neighborCount } = this.#collectEnergyNeighborStats(r, c);
+        let neighborSum = 0;
+        let neighborCount = 0;
 
-        const { nextEnergy } = computeTileEnergyUpdate({
-          currentEnergy: this.energyGrid[r][c],
-          density,
-          neighborSum,
-          neighborCount,
-          events: evs,
-          row: r,
-          col: c,
-          config: {
-            maxTileEnergy: this.maxTileEnergy,
-            regenRate: R,
-            diffusionRate: D,
-            densityEffectMultiplier,
-            regenDensityPenalty: REGEN_DENSITY_PENALTY,
-            eventStrengthMultiplier,
-            isEventAffecting,
-            getEventEffect,
-          },
-        });
+        if (upEnergyRow && !upObstacleRow?.[c]) {
+          neighborSum += upEnergyRow[c];
+          neighborCount += 1;
+        }
 
-        next[r][c] = nextEnergy;
+        if (downEnergyRow && !downObstacleRow?.[c]) {
+          neighborSum += downEnergyRow[c];
+          neighborCount += 1;
+        }
+
+        if (c > 0 && !obstacleRow?.[c - 1]) {
+          neighborSum += energyRow[c - 1];
+          neighborCount += 1;
+        }
+
+        if (c < cols - 1 && !obstacleRow?.[c + 1]) {
+          neighborSum += energyRow[c + 1];
+          neighborCount += 1;
+        }
+
+        computeOptions.currentEnergy = energyRow[c];
+        computeOptions.density = density;
+        computeOptions.neighborSum = neighborSum;
+        computeOptions.neighborCount = neighborCount;
+        computeOptions.row = r;
+        computeOptions.col = c;
+
+        const { nextEnergy } = computeTileEnergyUpdate(computeOptions);
+
+        nextRow[c] = nextEnergy;
       }
     }
+
     // Swap buffers and clear the buffer for next tick writes
-    const cur = this.energyGrid;
+    const previous = this.energyGrid;
 
     this.energyGrid = next;
-    this.energyNext = cur;
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) this.energyNext[r][c] = 0;
+    this.energyNext = previous;
+
+    for (let r = 0; r < rows; r++) {
+      this.energyNext[r].fill(0);
     }
   }
 
