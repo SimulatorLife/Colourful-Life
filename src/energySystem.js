@@ -1,5 +1,7 @@
 import { clamp } from './utils.js';
 
+const EMPTY_APPLIED_EVENTS = Object.freeze([]);
+
 function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }) {
   if (Number.isFinite(neighborSum) && Number.isFinite(neighborCount) && neighborCount > 0) {
     return neighborSum / neighborCount;
@@ -38,15 +40,18 @@ export function accumulateEventModifiers({
   isEventAffecting,
   getEventEffect,
 }) {
-  const result = {
-    regenMultiplier: 1,
-    regenAdd: 0,
-    drainAdd: 0,
-    appliedEvents: [],
-  };
+  let regenMultiplier = 1;
+  let regenAdd = 0;
+  let drainAdd = 0;
+  let appliedEvents = null;
 
   if (!Array.isArray(events) || events.length === 0) {
-    return result;
+    return {
+      regenMultiplier,
+      regenAdd,
+      drainAdd,
+      appliedEvents: EMPTY_APPLIED_EVENTS,
+    };
   }
 
   for (const ev of events) {
@@ -65,21 +70,27 @@ export function accumulateEventModifiers({
       const { base = 1, change = 0, min = 0 } = effect.regenScale;
       const scale = Math.max(min, base + change * strength);
 
-      result.regenMultiplier *= scale;
+      regenMultiplier *= scale;
     }
 
     if (typeof effect.regenAdd === 'number') {
-      result.regenAdd += effect.regenAdd * strength;
+      regenAdd += effect.regenAdd * strength;
     }
 
     if (typeof effect.drainAdd === 'number') {
-      result.drainAdd += effect.drainAdd * strength;
+      drainAdd += effect.drainAdd * strength;
     }
 
-    result.appliedEvents.push({ event: ev, effect, strength });
+    if (!appliedEvents) appliedEvents = [];
+    appliedEvents.push({ event: ev, effect, strength });
   }
 
-  return result;
+  return {
+    regenMultiplier,
+    regenAdd,
+    drainAdd,
+    appliedEvents: appliedEvents ?? EMPTY_APPLIED_EVENTS,
+  };
 }
 
 /**
