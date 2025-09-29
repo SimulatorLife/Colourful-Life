@@ -1,0 +1,21 @@
+name: Codex 03 – Improve Performance
+on:
+  schedule:
+    - cron: "50 21 * * *" # daily at 21:50 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Improve Performance"
+      branch_prefix: "codex"
+      base_branch: "master"
+      prompt: >
+        Profile and analyze the codebase to identify performance bottlenecks. Select one high-impact area (such as a module, file, or method) that, if optimized, will materially improve speed or scalability. Refactor that area by eliminating unnecessary computations, reducing memory overhead, or consolidating redundant database/API calls. Where appropriate, cache repeated work, simplify data structures, or replace heavy operations with lighter alternatives. Ensure the optimization preserves readability and maintainability, and validate the changes with profiling or benchmarks to confirm measurable gains without regressions.
