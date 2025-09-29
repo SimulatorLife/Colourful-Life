@@ -1,7 +1,7 @@
 name: Codex 05 – Reduce Bloat
 on:
   schedule:
-    - cron: "55 */11 * * *" # every 11 hours
+    - cron: "55 */15 * * *" # every 15 hours
   workflow_dispatch:
 
 permissions:
