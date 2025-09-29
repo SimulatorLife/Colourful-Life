@@ -19,7 +19,7 @@ jobs:
       branch_prefix: "codex"
       base_branch: "master"
       prompt: >
-        Start a new task: deliver one focused, user-visible feature improvement (not style/organization/tests-only).
+        Deliver one focused, user-visible feature improvement (not style/organization/tests-only).
         Choose a small but high-impact enhancement that improves the experience of running or interacting with the
         simulation (UI or core behavior), and implement it end-to-end in a minimal, maintainable way.
         First, review the project to identify ONE concrete feature enhancement to implement that materially improves

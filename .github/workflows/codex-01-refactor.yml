@@ -22,7 +22,7 @@ jobs:
       prompt: >
         Review the entire codebase with the long-term goal of raising overall quality and 
         maintainability (DRY, clarity, consistency, modern APIs, minimal abstraction). 
-        For now, start a new task; select one high-impact area (a module, file, or pattern) that will 
+        Identify one high-impact area (a module, file, or pattern) that will 
         materially improve readability or reduce duplication, and briefly justify your 
         choice. Then implement a minimal, focused refactor that improves clarity and 
         consistency while keeping behavior identical, avoiding unnecessary abstraction or 

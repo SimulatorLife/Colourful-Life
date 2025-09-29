@@ -19,7 +19,7 @@ jobs:
       branch_prefix: "codex"
       base_branch: "master"
       prompt: >
-        Start a new task: deliver one targeted enhancement that makes organism behavior more interesting, emergent, 
+        Deliver one targeted enhancement that makes organism behavior more interesting, emergent, 
         flexible, and/or less hard-coded, implemented end-to-end in a maintainable way. Focus on improvements that
         strengthen the integration of DNA, neural/brain systems, and simulation mechanics so that behavior emerges
         dynamically from these underlying systems rather than being dictated by static or artificial rules. Keep
