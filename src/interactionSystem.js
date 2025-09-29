@@ -51,6 +51,74 @@ function computeCombatPower(cell) {
   return cell?.energy * modifier;
 }
 
+function subtractEnergy(cell, amount) {
+  if (!cell) return;
+
+  const current = typeof cell.energy === 'number' ? cell.energy : Number.NaN;
+
+  cell.energy = Math.max(0, current - amount);
+}
+
+function applyFightCost(cell) {
+  if (!cell) return;
+
+  const cost = computeFightCost(cell);
+
+  subtractEnergy(cell, cost);
+}
+
+function recordFight(stats, winner, loser) {
+  stats?.onFight?.();
+  stats?.onDeath?.();
+
+  if (winner) {
+    winner.fightsWon = (winner.fightsWon || 0) + 1;
+  }
+
+  if (loser) {
+    loser.fightsLost = (loser.fightsLost || 0) + 1;
+  }
+}
+
+function moveVictoriousAttacker({
+  adapter,
+  attacker,
+  attackerRow,
+  attackerCol,
+  targetRow,
+  targetCol,
+  attackerTile,
+  densityGrid,
+  densityEffectMultiplier,
+}) {
+  let relocated = false;
+
+  if (typeof adapter?.relocateCell === 'function') {
+    relocated = adapter.relocateCell(attackerRow, attackerCol, targetRow, targetCol);
+  }
+
+  if (!relocated) {
+    if (attackerTile === attacker) {
+      clearAdapterCell(adapter, attackerRow, attackerCol);
+    }
+
+    placeAdapterCell(adapter, targetRow, targetCol, attacker);
+
+    if ('row' in attacker) attacker.row = targetRow;
+    if ('col' in attacker) attacker.col = targetCol;
+  }
+
+  if (typeof adapter?.consumeTileEnergy === 'function') {
+    adapter.consumeTileEnergy({
+      cell: attacker,
+      row: targetRow,
+      col: targetCol,
+      densityGrid,
+      densityEffectMultiplier,
+    });
+  }
+}
+
 function prepareFightParticipants({ adapter, initiator, target }) {
   if (!adapter || !initiator?.cell || !target) return null;
 
@@ -130,11 +198,8 @@ export default class InteractionSystem {
 
     const { attacker, defender, attackerRow, attackerCol, targetRow, targetCol } = participants;
 
-    const attackerCost = computeFightCost(attacker);
-    const defenderCost = computeFightCost(defender);
-
-    attacker.energy = Math.max(0, attacker.energy - attackerCost);
-    defender.energy = Math.max(0, defender.energy - defenderCost);
+    applyFightCost(attacker);
+    applyFightCost(defender);
 
     const attackerPower = computeCombatPower(attacker);
     const defenderPower = computeCombatPower(defender);
@@ -143,37 +208,19 @@ export default class InteractionSystem {
 
     if (attackerPower >= defenderPower) {
       clearAdapterCell(adapter, targetRow, targetCol);
+      moveVictoriousAttacker({
+        adapter,
+        attacker,
+        attackerRow,
+        attackerCol,
+        targetRow,
+        targetCol,
+        attackerTile,
+        densityGrid,
+        densityEffectMultiplier,
+      });
 
-      let relocated = false;
-
-      if (typeof adapter.relocateCell === 'function') {
-        relocated = adapter.relocateCell(attackerRow, attackerCol, targetRow, targetCol);
-      }
-
-      if (!relocated) {
-        if (attackerTile === attacker) {
-          clearAdapterCell(adapter, attackerRow, attackerCol);
-        }
-
-        placeAdapterCell(adapter, targetRow, targetCol, attacker);
-        if ('row' in attacker) attacker.row = targetRow;
-        if ('col' in attacker) attacker.col = targetCol;
-      }
-
-      if (typeof adapter.consumeTileEnergy === 'function') {
-        adapter.consumeTileEnergy({
-          cell: attacker,
-          row: targetRow,
-          col: targetCol,
-          densityGrid,
-          densityEffectMultiplier,
-        });
-      }
-
-      stats?.onFight?.();
-      stats?.onDeath?.();
-      attacker.fightsWon = (attacker.fightsWon || 0) + 1;
-      defender.fightsLost = (defender.fightsLost || 0) + 1;
+      recordFight(stats, attacker, defender);
 
       return true;
     }
@@ -182,10 +229,7 @@ export default class InteractionSystem {
       clearAdapterCell(adapter, attackerRow, attackerCol);
     }
 
-    stats?.onFight?.();
-    stats?.onDeath?.();
-    defender.fightsWon = (defender.fightsWon || 0) + 1;
-    attacker.fightsLost = (attacker.fightsLost || 0) + 1;
+    recordFight(stats, defender, attacker);
 
     return true;
   }
