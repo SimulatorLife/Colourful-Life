@@ -1678,7 +1678,10 @@ export default class GridManager {
   ) {
     if (!Array.isArray(enemies) || enemies.length === 0) return false;
 
-    const targetEnemy = enemies[Math.floor(randomRange(0, enemies.length))];
+    const targetEnemy =
+      typeof cell.chooseEnemyTarget === 'function'
+        ? cell.chooseEnemyTarget(enemies, { maxTileEnergy: this.maxTileEnergy })
+        : enemies[Math.floor(randomRange(0, enemies.length))];
     const localDensity = densityGrid?.[row]?.[col] ?? this.getDensityAt(row, col);
     const energyDenominator = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
     const tileEnergy = this.energyGrid[row][col] / energyDenominator;
@@ -1745,6 +1748,8 @@ export default class GridManager {
         col,
         targetRow: targetEnemy.row,
         targetCol: targetEnemy.col,
+        targetCell: targetEnemy.target,
+        maxTileEnergy: this.maxTileEnergy,
       });
 
       if (intent)
