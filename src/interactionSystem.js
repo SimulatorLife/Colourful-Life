@@ -35,6 +35,41 @@ function placeAdapterCell(adapter, row, col, cell) {
   adapter?.setCell?.(row, col, cell);
 }
 
+function computeAgeEnergyScale(cell) {
+  return typeof cell?.ageEnergyMultiplier === 'function' ? cell.ageEnergyMultiplier(1) : 1;
+}
+
+function computeFightCost(cell) {
+  const baseCost = typeof cell?.dna?.fightCost === 'function' ? cell.dna.fightCost() : 0;
+
+  return baseCost * computeAgeEnergyScale(cell);
+}
+
+function computeCombatPower(cell) {
+  const modifier = cell?.dna?.combatPower?.() ?? 1;
+
+  return cell?.energy * modifier;
+}
+
+function prepareFightParticipants({ adapter, initiator, target }) {
+  if (!adapter || !initiator?.cell || !target) return null;
+
+  const attacker = initiator.cell;
+  const { row: attackerRow, col: attackerCol } = resolveCoordinates(initiator, attacker);
+
+  if (attackerRow == null || attackerCol == null) return null;
+
+  const { row: targetRow, col: targetCol } = resolveCoordinates(target);
+
+  if (targetRow == null || targetCol == null) return null;
+
+  const defender = getAdapterCell(adapter, targetRow, targetCol);
+
+  if (!defender) return null;
+
+  return { attacker, defender, attackerRow, attackerCol, targetRow, targetCol };
+}
+
 export default class InteractionSystem {
   constructor({ adapter, gridManager } = {}) {
     if (adapter) {
@@ -89,37 +124,20 @@ export default class InteractionSystem {
     const initiator = intent.initiator || intent.attacker || null;
     const target = intent.target || null;
 
-    if (!initiator?.cell || !target) return false;
+    const participants = prepareFightParticipants({ adapter, initiator, target });
 
-    const attacker = initiator.cell;
-    const { row: attackerRow, col: attackerCol } = resolveCoordinates(initiator, attacker);
+    if (!participants) return false;
 
-    if (attackerRow == null || attackerCol == null) return false;
+    const { attacker, defender, attackerRow, attackerCol, targetRow, targetCol } = participants;
 
-    const { row: targetRow, col: targetCol } = resolveCoordinates(target);
-
-    if (targetRow == null || targetCol == null) return false;
-
-    const defender = getAdapterCell(adapter, targetRow, targetCol);
-
-    if (!defender) return false;
-
-    const attackerAgeScale =
-      typeof attacker.ageEnergyMultiplier === 'function' ? attacker.ageEnergyMultiplier(1) : 1;
-    const defenderAgeScale =
-      typeof defender.ageEnergyMultiplier === 'function' ? defender.ageEnergyMultiplier(1) : 1;
-    const attackerCost =
-      (typeof attacker.dna?.fightCost === 'function' ? attacker.dna.fightCost() : 0) *
-      attackerAgeScale;
-    const defenderCost =
-      (typeof defender.dna?.fightCost === 'function' ? defender.dna.fightCost() : 0) *
-      defenderAgeScale;
+    const attackerCost = computeFightCost(attacker);
+    const defenderCost = computeFightCost(defender);
 
     attacker.energy = Math.max(0, attacker.energy - attackerCost);
     defender.energy = Math.max(0, defender.energy - defenderCost);
 
-    const attackerPower = attacker.energy * (attacker.dna?.combatPower?.() ?? 1);
-    const defenderPower = defender.energy * (defender.dna?.combatPower?.() ?? 1);
+    const attackerPower = computeCombatPower(attacker);
+    const defenderPower = computeCombatPower(defender);
 
     const attackerTile = getAdapterCell(adapter, attackerRow, attackerCol);
 
