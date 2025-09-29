@@ -16,8 +16,6 @@ jobs:
     with:
       pr_title: "Codex: Targeted Feature Improvement"
       pr_body: "Seed PR for Codex to implement the intended feature improvement atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Deliver one focused, user-visible feature improvement (not style/organization/tests-only).
         Choose a small but high-impact enhancement that improves the experience of running or interacting with the

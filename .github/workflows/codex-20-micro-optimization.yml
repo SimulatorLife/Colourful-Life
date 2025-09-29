@@ -16,8 +16,6 @@ jobs:
     with:
       pr_title: "Codex: Targeted Micro-Optimization"
       pr_body: "Seed PR for Codex to implement a localized, measurable micro-optimization atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Identify a single, frequently executed micro-hot path (tight loop, inner render/update step, small utility on hot code paths)
         and implement a minimal, behavior-preserving micro-optimization that yields a measurable improvement. Keep the blast radius tiny:

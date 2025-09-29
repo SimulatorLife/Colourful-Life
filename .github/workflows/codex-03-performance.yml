@@ -16,7 +16,5 @@ jobs:
     with:
       pr_title: "Codex: Improve Performance"
       pr_body: "Seed PR for Codex to implement the intended performance-improvement atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Profile and analyze the codebase to identify performance bottlenecks. Select one high-impact area (such as a module, file, or method) that, if optimized, will materially improve speed or scalability. Refactor that area by eliminating unnecessary computations, reducing memory overhead, or consolidating redundant database/API calls. Where appropriate, cache repeated work, simplify data structures, or replace heavy operations with lighter alternatives. Ensure the optimization preserves readability and maintainability, and validate the changes with profiling or benchmarks to confirm measurable gains without regressions.

@@ -16,8 +16,6 @@ jobs:
     with:
       pr_title: "Codex: Reduce Bloat"
       pr_body: "Seed PR for Codex to implement the intended bloat reduction refactor atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Review the codebase and focus on one area where unused or redundant code exists. 
         Identify functions, variables, files, assets, or configuration entries that are no longer referenced. 

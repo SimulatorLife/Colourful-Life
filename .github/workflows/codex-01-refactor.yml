@@ -28,5 +28,3 @@ jobs:
         consistency while keeping behavior identical, avoiding unnecessary abstraction or 
         repo-wide churn. Ensure changes are self-contained, tested, and documented as 
         needed, with no reduction in test coverage and all CI checks passing.
-      branch_prefix: "codex"
-      base_branch: "master"

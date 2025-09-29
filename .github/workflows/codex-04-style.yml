@@ -16,8 +16,6 @@ jobs:
     with:
       pr_title: "Codex: Improve Code Style"
       pr_body: "Seed PR for Codex to implement the intended code-style improvement atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Review the codebase and focus on one area where coding style and standards are inconsistent
         (such as formatting, naming, file structure, or repeated ad-hoc patterns). Normalize that area to match
