@@ -316,6 +316,7 @@ export default class GridManager {
       Array.from({ length: cols }, () => this.maxTileEnergy / 2)
     );
     this.energyNext = Array.from({ length: rows }, () => Array(cols).fill(0));
+    this.energyDeltaGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
     this.eventManager = eventManager || window.eventManager;
     this.ctx = ctx || window.ctx;
@@ -924,6 +925,7 @@ export default class GridManager {
     for (let r = 0; r < rows; r++) {
       const energyRow = energyGrid[r];
       const nextRow = next[r];
+      const deltaRow = this.energyDeltaGrid[r];
       const densityRow = hasDensityGrid ? densityGrid[r] : null;
       const obstacleRow = obstacles?.[r];
       const upEnergyRow = r > 0 ? energyGrid[r - 1] : null;
@@ -935,6 +937,7 @@ export default class GridManager {
         if (obstacleRow?.[c]) {
           nextRow[c] = 0;
           if (energyRow[c] !== 0) energyRow[c] = 0;
+          if (deltaRow) deltaRow[c] = 0;
 
           continue;
         }
@@ -976,6 +979,11 @@ export default class GridManager {
         const { nextEnergy } = computeTileEnergyUpdate(computeOptions);
 
         nextRow[c] = nextEnergy;
+        if (deltaRow) {
+          const denom = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
+
+          deltaRow[c] = clamp((nextEnergy - energyRow[c]) / denom, -1, 1);
+        }
       }
     }
 
@@ -1510,11 +1518,16 @@ export default class GridManager {
       localDensity,
       densityEffectMultiplier,
     });
+    const energyDenominator = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
+    const tileEnergy = this.energyGrid[parentRow][parentCol] / energyDenominator;
+    const tileEnergyDelta = this.energyDeltaGrid?.[parentRow]?.[parentCol] ?? 0;
     const { probability: reproProb } = cell.decideReproduction(bestMate.target, {
       localDensity,
       densityEffectMultiplier,
       maxTileEnergy: this.maxTileEnergy,
       baseProbability: baseProb,
+      tileEnergy,
+      tileEnergyDelta,
     });
 
     let effectiveReproProb = clamp(reproProb ?? 0, 0, 1);
@@ -1667,12 +1680,17 @@ export default class GridManager {
 
     const targetEnemy = enemies[Math.floor(randomRange(0, enemies.length))];
     const localDensity = densityGrid?.[row]?.[col] ?? this.getDensityAt(row, col);
+    const energyDenominator = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
+    const tileEnergy = this.energyGrid[row][col] / energyDenominator;
+    const tileEnergyDelta = this.energyDeltaGrid?.[row]?.[col] ?? 0;
     const action = cell.chooseInteractionAction({
       localDensity,
       densityEffectMultiplier,
       enemies,
       allies: society,
       maxTileEnergy: this.maxTileEnergy,
+      tileEnergy,
+      tileEnergyDelta,
     });
 
     if (action === 'avoid') {
@@ -1755,6 +1773,7 @@ export default class GridManager {
     { densityGrid, densityEffectMultiplier }
   ) {
     const localDensity = densityGrid[row][col];
+    const energyDenominator = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
 
     cell.executeMovementStrategy(this.grid, row, col, mates, enemies, society || [], {
       localDensity,
@@ -1765,7 +1784,10 @@ export default class GridManager {
       moveAwayFromTarget: this.boundMoveAwayFromTarget,
       moveRandomly: this.boundMoveRandomly,
       tryMove: this.boundTryMove,
-      getEnergyAt: (rr, cc) => this.energyGrid[rr][cc] / this.maxTileEnergy,
+      getEnergyAt: (rr, cc) => this.energyGrid[rr][cc] / energyDenominator,
+      getEnergyDeltaAt: (rr, cc) => this.energyDeltaGrid?.[rr]?.[cc] ?? 0,
+      tileEnergy: this.energyGrid[row][col] / energyDenominator,
+      tileEnergyDelta: this.energyDeltaGrid?.[row]?.[col] ?? 0,
       maxTileEnergy: this.maxTileEnergy,
       isTileBlocked: (rr, cc) => this.isTileBlocked(rr, cc),
     });
