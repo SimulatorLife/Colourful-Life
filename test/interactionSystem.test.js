@@ -101,6 +101,19 @@ class FakeAdapter {
   }
 }
 
+function withFixedRandom(value, fn) {
+  const original = Math.random;
+  const generator = typeof value === 'function' ? value : () => value;
+
+  Math.random = generator;
+
+  try {
+    return fn();
+  } finally {
+    Math.random = original;
+  }
+}
+
 test.before(async () => {
   ({ default: InteractionSystem } = await import('../src/interactionSystem.js'));
 });
@@ -141,11 +154,13 @@ test('fight victory removes defender, relocates attacker, and consumes tile ener
     target: { row: 0, col: 1 },
   };
 
-  const resolved = interaction.resolveIntent(intent, {
-    stats,
-    densityGrid,
-    densityEffectMultiplier: 1,
-  });
+  const resolved = withFixedRandom(0, () =>
+    interaction.resolveIntent(intent, {
+      stats,
+      densityGrid,
+      densityEffectMultiplier: 1,
+    })
+  );
 
   assert.ok(resolved, 'fight intent resolves');
   assert.is(adapter.getCell(0, 1), attacker, 'attacker moves to defender tile');
@@ -201,7 +216,7 @@ test('fight defeat removes attacker but leaves defender intact', () => {
     target: { row: 0, col: 1 },
   };
 
-  const resolved = interaction.resolveIntent(intent, { stats });
+  const resolved = withFixedRandom(0.999, () => interaction.resolveIntent(intent, { stats }));
 
   assert.ok(resolved, 'fight defeat still resolves');
   assert.is(adapter.getCell(0, 1), defender, 'defender remains on tile');
