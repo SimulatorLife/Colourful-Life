@@ -1,7 +1,7 @@
 name: Codex 06 – Decouple Architecture
 on:
   schedule:
-    - cron: "10 */8 * * *"   # every 8 hours
+    - cron: "10 */10 * * *"   # every 10 hours
   workflow_dispatch:
 
 permissions:

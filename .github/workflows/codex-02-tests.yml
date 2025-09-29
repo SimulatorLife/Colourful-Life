@@ -1,7 +1,7 @@
 name: Codex 02 – Improve Test Coverage & Quality
 on:
   schedule:
-    - cron: "20 */10 * * *" # every 10 hours
+    - cron: "20 */7 * * *" # every 7 hours
   workflow_dispatch:
 
 permissions:

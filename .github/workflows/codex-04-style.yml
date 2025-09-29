@@ -1,7 +1,7 @@
 name: Codex 04 – Improve Code Style
 on:
   schedule:
-    - cron: "50 */8 * * *" # every 8 hours
+    - cron: "50 */7 * * *" # every 7 hours
   workflow_dispatch:
 
 permissions:

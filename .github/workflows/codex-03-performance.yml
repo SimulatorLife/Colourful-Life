@@ -1,7 +1,7 @@
 name: Codex 03 – Improve Performance
 on:
   schedule:
-    - cron: "35 */8 * * *" # every 8 hours
+    - cron: "35 */11 * * *" # every 11 hours
   workflow_dispatch:
 
 permissions:
