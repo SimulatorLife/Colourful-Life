@@ -9,6 +9,8 @@ let lerp;
 let randomRange;
 let createRNG;
 let InteractionSystem;
+let Brain;
+let OUTPUT_GROUPS;
 
 function investmentFor(energy, investFrac, starvation) {
   const desired = Math.max(0, Math.min(energy, energy * investFrac));
@@ -45,6 +47,7 @@ test.before(async () => {
   ({ DNA, GENE_LOCI } = await import('../src/genome.js'));
   ({ clamp, lerp, randomRange, createRNG } = await import('../src/utils.js'));
   ({ default: InteractionSystem } = await import('../src/interactionSystem.js'));
+  ({ default: Brain, OUTPUT_GROUPS } = await import('../src/brain.js'));
   if (typeof global.window === 'undefined') global.window = globalThis;
   if (!window.GridManager) window.GridManager = {};
   if (typeof window.GridManager.maxTileEnergy !== 'number') {
@@ -528,6 +531,65 @@ test('chooseEnemyTarget uses conflict focus derived from DNA', () => {
 
   assert.is(cautiousTarget.target, weakEnemy, 'cautious genome prefers weaker enemy');
   assert.is(boldTarget.target, strongEnemy, 'bold genome prefers strong enemy');
+});
+
+test('neural targeting can override conflict focus weighting', () => {
+  const strategicDNA = new DNA(160, 140, 180);
+  strategicDNA.conflictFocus = () => ({
+    weak: 0.2,
+    strong: 1.6,
+    proximity: 1.6,
+    attrition: 0.2,
+  });
+
+  const neuralCell = new Cell(5, 5, strategicDNA, 6);
+  neuralCell.age = 10;
+  neuralCell.lifespan = 100;
+
+  const attritionOutput = OUTPUT_GROUPS.targeting.find((entry) => entry.key === 'focusAttrition');
+  assert.ok(attritionOutput, 'targeting output for attrition exists');
+  const attritionGene = {
+    sourceId: Brain.sensorIndex('bias'),
+    targetId: attritionOutput?.id ?? 0,
+    weight: 6,
+    activationType: 0,
+    enabled: true,
+  };
+
+  neuralCell.brain = new Brain({ genes: [attritionGene] });
+  neuralCell.neurons = neuralCell.brain.neuronCount;
+
+  const strongDNA = new DNA(200, 80, 80);
+  const strongEnemy = new Cell(4, 5, strongDNA, 8);
+  strongEnemy.age = 5;
+  strongEnemy.lifespan = 100;
+
+  const weakDNA = new DNA(80, 200, 120);
+  const weakEnemy = new Cell(8, 8, weakDNA, 3);
+  weakEnemy.age = 70;
+  weakEnemy.lifespan = 80;
+
+  const enemies = [
+    { row: strongEnemy.row, col: strongEnemy.col, target: strongEnemy },
+    { row: weakEnemy.row, col: weakEnemy.col, target: weakEnemy },
+  ];
+
+  const fallbackCell = new Cell(5, 5, strategicDNA, 6);
+  fallbackCell.brain = null;
+
+  const fallbackChoice = fallbackCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
+  assert.is(
+    fallbackChoice.target,
+    strongEnemy,
+    'DNA-focused cell challenges the stronger opponent'
+  );
+
+  const neuralChoice = neuralCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
+  assert.is(
+    neuralChoice.target,
+    weakEnemy,
+    'Neural targeting pivots toward attrition despite DNA bias'
+  );
 });
 
 test('cooperateShareFrac adapts to ally deficits and kinship', () => {

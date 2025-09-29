@@ -23,6 +23,10 @@ export const SENSOR_KEYS = Object.freeze([
   'selfSenescence',
   'partnerSenescence',
   'resourceTrend',
+  'targetWeakness',
+  'targetThreat',
+  'targetProximity',
+  'targetAttrition',
 ]);
 
 const SENSOR_LOOKUP = new Map(SENSOR_KEYS.map((key, index) => [key, index]));
@@ -46,6 +50,12 @@ export const OUTPUT_GROUPS = Object.freeze({
   reproduction: createOutputGroup([
     [208, 'decline', 'Decline mating'],
     [209, 'accept', 'Accept mating'],
+  ]),
+  targeting: createOutputGroup([
+    [216, 'focusWeak', 'Focus on weaker enemies'],
+    [217, 'focusStrong', 'Challenge strong enemies'],
+    [218, 'focusProximity', 'Prioritize nearby enemies'],
+    [219, 'focusAttrition', 'Exploit attrition'],
   ]),
 });
 

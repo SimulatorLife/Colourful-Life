@@ -796,6 +796,30 @@ export class DNA {
       jitter: 0.12,
     });
 
+    updateModulation('targetWeakness', {
+      gain: 0.78 + 0.35 * (1 - combat) + 0.25 * strategy,
+      target: toSigned(strategy, 0.5, 0.8),
+      jitter: 0.1,
+    });
+
+    updateModulation('targetThreat', {
+      gain: 0.72 + 0.4 * combat + 0.3 * risk,
+      target: toSigned(risk, 0.5, 0.9),
+      jitter: 0.12,
+    });
+
+    updateModulation('targetProximity', {
+      gain: 0.7 + 0.35 * movement + 0.2 * exploration,
+      target: toSigned(1 - movement, 0.5, 0.9),
+      jitter: 0.12,
+    });
+
+    updateModulation('targetAttrition', {
+      gain: 0.68 + 0.3 * movement + 0.25 * (1 - cooperation),
+      target: toSigned(strategy, 0.5, 0.85),
+      jitter: 0.1,
+    });
+
     return {
       baselineGains: baseline,
       targets,
