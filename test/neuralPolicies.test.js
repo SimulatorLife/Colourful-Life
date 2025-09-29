@@ -3,6 +3,7 @@ import * as assert from 'uvu/assert';
 
 let Cell;
 let DNA;
+let GENE_LOCI;
 let clamp;
 let lerp;
 let Brain;
@@ -43,7 +44,7 @@ function setNeuralGene(
 
 test.before(async () => {
   ({ default: Cell } = await import('../src/cell.js'));
-  ({ DNA } = await import('../src/genome.js'));
+  ({ DNA, GENE_LOCI } = await import('../src/genome.js'));
   ({ clamp, lerp } = await import('../src/utils.js'));
   ({ default: Brain, OUTPUT_GROUPS, NEURAL_GENE_BYTES } = await import('../src/brain.js'));
 });
@@ -219,6 +220,53 @@ test('neural evaluation contributes to cognitive maintenance cost', () => {
     Array.isArray(reproductionLog.trace?.nodes) && reproductionLog.trace.nodes.length > 0,
     'reproduction trace should capture evaluated neurons'
   );
+});
+
+test('brain sensor modulation adapts gains toward DNA-driven targets', () => {
+  const dna = new DNA(140, 90, 30);
+
+  dna.genes[GENE_LOCI.SENSE] = 240;
+  dna.genes[GENE_LOCI.NEURAL] = 220;
+  dna.genes[GENE_LOCI.RECOVERY] = 60;
+  dna.genes[GENE_LOCI.MOVEMENT] = 210;
+  dna.genes[GENE_LOCI.ENERGY_EFFICIENCY] = 230;
+  dna.genes[GENE_LOCI.ENERGY_CAPACITY] = 250;
+  dna.genes[GENE_LOCI.STRATEGY] = 255;
+  dna.genes[GENE_LOCI.ACTIVITY] = 255;
+
+  const pursueNode = OUTPUT_GROUPS.movement.find((entry) => entry.key === 'pursue');
+  const energySensor = Brain.sensorIndex('energy');
+
+  assert.ok(Number.isFinite(energySensor), 'energy sensor index should resolve');
+  assert.ok(pursueNode, 'movement outputs should provide a pursue node');
+
+  setNeuralGene(dna, 0, { source: energySensor, target: pursueNode.id, weight: 0.5 });
+
+  const brain = Brain.fromDNA(dna);
+
+  assert.ok(brain instanceof Brain, 'DNA with neural genes should instantiate a brain');
+
+  const snapshotBefore = brain.snapshot();
+  const baselineGain = snapshotBefore.sensorGains?.[energySensor];
+
+  assert.ok(Number.isFinite(baselineGain), 'baseline gain should be measurable');
+
+  const evaluation = brain.evaluateGroup('movement', { energy: 0.2 });
+
+  assert.ok(evaluation?.sensors, 'evaluation should expose sensor readings');
+
+  const snapshotAfter = brain.snapshot();
+  const adaptedGain = snapshotAfter.sensorGains?.[energySensor];
+
+  assert.ok(Number.isFinite(adaptedGain), 'adapted gain should be measurable');
+  assert.ok(
+    adaptedGain < baselineGain,
+    'gain should reduce when readings fall below the DNA target'
+  );
+
+  const expectedScaled = Math.max(-1, Math.min(1, 0.2 * adaptedGain));
+
+  approxEqual(evaluation.sensors[energySensor], expectedScaled, 1e-6);
 });
 
 test('disabled neural connections fall back to legacy policies', () => {

@@ -543,6 +543,184 @@ export class DNA {
     return clamp(base, 0.1, 0.85);
   }
 
+  neuralSensorModulation() {
+    const sensorCount = Brain?.SENSOR_COUNT ?? 0;
+
+    if (sensorCount === 0) return null;
+
+    const rng = this.prngFor('neuralSensorModulation');
+    const baseline = new Float32Array(sensorCount);
+    const targets = new Float32Array(sensorCount);
+
+    for (let i = 0; i < sensorCount; i++) {
+      baseline[i] = 1;
+      targets[i] = Number.NaN;
+    }
+
+    baseline[0] = 1;
+    targets[0] = 1;
+
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const combat = this.geneFraction(GENE_LOCI.COMBAT);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const activity = this.geneFraction(GENE_LOCI.ACTIVITY);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const senescence = this.geneFraction(GENE_LOCI.SENESCENCE);
+    const foraging = this.geneFraction(GENE_LOCI.FORAGING);
+
+    const minGain = 0.45 + 0.25 * recovery; // 0.45..0.7
+    const maxGain = Math.max(minGain + 0.05, 1.45 + 0.45 * movement); // 1.45..1.95
+    const adaptationRate = clamp(0.02 + 0.15 * sense + 0.05 * neural, 0.015, 0.22);
+    const reversionRate = clamp(0.04 + 0.1 * (1 - strategy) + 0.08 * (1 - activity), 0.01, 0.35);
+
+    const toSigned = (fraction, midpoint = 0.5, amplitude = 1) => {
+      const centered = fraction - midpoint;
+
+      return clamp(centered * 2 * amplitude, -1, 1);
+    };
+
+    const updateModulation = (key, { gain, target = Number.NaN, jitter = 0.1 } = {}) => {
+      const index = Brain?.sensorIndex?.(key);
+
+      if (!Number.isFinite(index) || index < 0 || index >= sensorCount) return;
+
+      const offset = (rng() - 0.5) * jitter;
+      const proposedGain = Number.isFinite(gain) ? gain : 1;
+
+      baseline[index] = clamp(proposedGain + offset, minGain, maxGain);
+
+      if (Number.isFinite(target)) {
+        targets[index] = clamp(target, -1, 1);
+      }
+    };
+
+    updateModulation('energy', {
+      gain: 0.8 + 0.6 * efficiency,
+      target: toSigned(capacity, 0.45, 0.9),
+      jitter: 0.12,
+    });
+
+    updateModulation('effectiveDensity', {
+      gain: 0.85 + 0.4 * density + 0.2 * cooperation,
+      target: toSigned(density, 0.45, 0.9),
+      jitter: 0.1,
+    });
+
+    updateModulation('allyFraction', {
+      gain: 0.75 + 0.5 * cooperation,
+      target: toSigned(0.25 + 0.55 * cooperation, 0.5, 1),
+      jitter: 0.1,
+    });
+
+    updateModulation('enemyFraction', {
+      gain: 0.7 + 0.4 * ((risk + combat) / 2),
+      target: toSigned(0.12 + 0.25 * (1 - risk), 0.5, 1),
+      jitter: 0.08,
+    });
+
+    updateModulation('mateFraction', {
+      gain: 0.65 + 0.45 * fertility,
+      target: toSigned(0.25 + 0.45 * fertility + 0.1 * cooperation, 0.5, 1),
+      jitter: 0.1,
+    });
+
+    updateModulation('allySimilarity', {
+      gain: 0.7 + 0.35 * cooperation,
+      target: toSigned(0.5 + 0.25 * cooperation - 0.2 * exploration, 0.5, 1),
+      jitter: 0.08,
+    });
+
+    updateModulation('enemySimilarity', {
+      gain: 0.75 + 0.35 * risk,
+      target: toSigned(0.3 + 0.25 * risk - 0.15 * cooperation, 0.5, 1),
+      jitter: 0.07,
+    });
+
+    updateModulation('mateSimilarity', {
+      gain: 0.65 + 0.4 * fertility,
+      target: toSigned(0.45 + 0.25 * fertility - 0.3 * exploration, 0.5, 1),
+      jitter: 0.09,
+    });
+
+    updateModulation('ageFraction', {
+      gain: 0.65 + 0.35 * senescence,
+      target: toSigned(0.4 + 0.4 * senescence, 0.5, 1),
+      jitter: 0.07,
+    });
+
+    updateModulation('eventPressure', {
+      gain: 0.7 + 0.3 * recovery + 0.2 * (1 - exploration),
+      target: toSigned(0.1 + 0.35 * (1 - recovery), 0.5, 1),
+      jitter: 0.08,
+    });
+
+    updateModulation('partnerEnergy', {
+      gain: 0.65 + 0.35 * parental,
+      target: toSigned(0.35 + 0.45 * parental, 0.5, 1),
+      jitter: 0.09,
+    });
+
+    updateModulation('partnerAgeFraction', {
+      gain: 0.6 + 0.3 * parental,
+      target: toSigned(0.35 + 0.3 * parental - 0.2 * risk, 0.5, 1),
+      jitter: 0.08,
+    });
+
+    updateModulation('partnerSimilarity', {
+      gain: 0.6 + 0.35 * parental,
+      target: toSigned(0.45 + 0.25 * parental - 0.25 * exploration, 0.5, 1),
+      jitter: 0.08,
+    });
+
+    updateModulation('baseReproductionProbability', {
+      gain: 0.65 + 0.35 * fertility + 0.2 * cooperation,
+      target: toSigned(0.35 + 0.45 * fertility + 0.15 * cooperation, 0.5, 1),
+      jitter: 0.1,
+    });
+
+    updateModulation('riskTolerance', {
+      gain: 0.65 + 0.45 * risk,
+      target: toSigned(0.35 + 0.45 * risk - 0.15 * cooperation, 0.5, 1),
+      jitter: 0.08,
+    });
+
+    updateModulation('selfSenescence', {
+      gain: 0.6 + 0.35 * senescence,
+      target: toSigned(0.45 + 0.35 * senescence - 0.2 * activity, 0.5, 1),
+      jitter: 0.08,
+    });
+
+    updateModulation('partnerSenescence', {
+      gain: 0.6 + 0.3 * parental,
+      target: toSigned(0.4 + 0.3 * parental - 0.15 * activity, 0.5, 1),
+      jitter: 0.08,
+    });
+
+    updateModulation('resourceTrend', {
+      gain: 0.7 + 0.3 * sense + 0.3 * exploration + 0.2 * foraging,
+      target: toSigned(0.45 + 0.35 * exploration - 0.25 * recovery, 0.5, 1),
+      jitter: 0.12,
+    });
+
+    return {
+      baselineGains: baseline,
+      targets,
+      adaptationRate,
+      reversionRate,
+      gainLimits: { min: minGain, max: maxGain },
+    };
+  }
+
   // Energy cost characteristics for actions
   moveCost() {
     const movement = this.geneFraction(GENE_LOCI.MOVEMENT);

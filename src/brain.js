@@ -64,6 +64,8 @@ const ACTIVATION_FUNCS = {
 
 const DEFAULT_ACTIVATION = 2; // tanh
 
+const mix = (a, b, t) => a + (b - a) * clamp(Number.isFinite(t) ? t : 0, 0, 1);
+
 const clampSensorValue = (value) => {
   if (!Number.isFinite(value)) return 0;
 
@@ -73,6 +75,12 @@ const clampSensorValue = (value) => {
 export default class Brain {
   static SENSOR_COUNT = SENSOR_COUNT;
 
+  static sensorIndex(key) {
+    if (typeof key !== 'string') return undefined;
+
+    return SENSOR_LOOKUP.get(key);
+  }
+
   static fromDNA(dna) {
     if (!dna || typeof dna.neuralGenes !== 'function') return null;
 
@@ -80,7 +88,10 @@ export default class Brain {
 
     if (!Array.isArray(genes) || genes.length === 0) return null;
 
-    const brain = new Brain({ genes });
+    const sensorModulation =
+      typeof dna.neuralSensorModulation === 'function' ? dna.neuralSensorModulation() : null;
+
+    const brain = new Brain({ genes, sensorModulation });
 
     if (typeof dna.updateBrainMetrics === 'function') {
       dna.updateBrainMetrics({
@@ -92,7 +103,7 @@ export default class Brain {
     return brain;
   }
 
-  constructor({ genes = [] } = {}) {
+  constructor({ genes = [], sensorModulation = null } = {}) {
     this.connections = [];
     this.activationMap = new Map();
     this.incoming = new Map();
@@ -101,6 +112,16 @@ export default class Brain {
     this.lastOutputs = new Map();
     this.lastActivationCount = 0;
     this.lastEvaluation = null;
+    this.sensorBaselines = null;
+    this.sensorGains = null;
+    this.sensorTargets = null;
+    this.sensorGainLimits = { min: 0.5, max: 1.8 };
+    this.sensorAdaptationRate = 0;
+    this.sensorReversionRate = 0;
+
+    if (sensorModulation) {
+      this.#initializeSensorModulation(sensorModulation);
+    }
 
     for (let i = 0; i < genes.length; i++) {
       const gene = genes[i];
@@ -180,6 +201,8 @@ export default class Brain {
         sensors[idx] = clampSensorValue(value);
       }
     }
+
+    this.#applySensorModulation(sensors);
 
     const sensorVector = sensors.slice();
 
@@ -364,11 +387,152 @@ export default class Brain {
             trace: cloneTracePayload(this.lastEvaluation.trace),
           }
         : null,
+      sensorGains: this.sensorGains ? Array.from(this.sensorGains) : null,
+      sensorTargets: this.sensorTargets ? Array.from(this.sensorTargets) : null,
+      sensorGainLimits: this.sensorGainLimits
+        ? { ...this.sensorGainLimits }
+        : { min: 0.5, max: 1.8 },
+      sensorAdaptationRate: this.sensorAdaptationRate,
+      sensorReversionRate: this.sensorReversionRate,
     };
   }
 
   #isSensor(nodeId) {
     return Number.isFinite(nodeId) && nodeId >= 0 && nodeId < SENSOR_COUNT;
+  }
+
+  #initializeSensorModulation({
+    baselineGains,
+    targets,
+    adaptationRate,
+    reversionRate,
+    gainLimits,
+  } = {}) {
+    const minLimit = Number.isFinite(gainLimits?.min) ? Math.max(0.05, gainLimits.min) : 0.5;
+    const maxLimit = Number.isFinite(gainLimits?.max)
+      ? Math.max(minLimit + 0.05, gainLimits.max)
+      : 1.8;
+
+    this.sensorGainLimits = { min: minLimit, max: Math.max(minLimit + 0.05, maxLimit) };
+    this.sensorBaselines = this.#initSensorArray(baselineGains, 1, this.sensorGainLimits);
+    this.sensorGains = new Float32Array(this.sensorBaselines);
+    this.sensorTargets = this.#initSensorArray(targets, Number.NaN);
+    this.sensorAdaptationRate = clamp(Number.isFinite(adaptationRate) ? adaptationRate : 0, 0, 0.6);
+
+    const suggestedReversion = Number.isFinite(reversionRate)
+      ? reversionRate
+      : this.sensorAdaptationRate * 0.5;
+
+    this.sensorReversionRate = clamp(suggestedReversion, 0, 1);
+
+    this.#enforceGainBounds();
+  }
+
+  #initSensorArray(source, defaultValue, bounds = null) {
+    const array = new Float32Array(SENSOR_COUNT);
+
+    for (let i = 0; i < SENSOR_COUNT; i++) {
+      let value = defaultValue;
+
+      if (source && i < source.length) {
+        const candidate = source[i];
+
+        if (Number.isFinite(candidate) || Number.isNaN(candidate)) {
+          value = candidate;
+        }
+      }
+
+      if (bounds && Number.isFinite(value)) {
+        const min = Number.isFinite(bounds.min) ? bounds.min : undefined;
+        const max = Number.isFinite(bounds.max) ? bounds.max : undefined;
+
+        if (min !== undefined) value = Math.max(value, min);
+        if (max !== undefined) value = Math.min(value, max);
+      }
+
+      array[i] = value;
+    }
+
+    if (array.length > 0 && Number.isFinite(defaultValue)) {
+      array[0] = defaultValue;
+    }
+
+    return array;
+  }
+
+  #enforceGainBounds() {
+    if (!this.sensorGains || !this.sensorBaselines) return;
+
+    const min = this.sensorGainLimits.min;
+    const max = this.sensorGainLimits.max;
+
+    for (let i = 0; i < this.sensorGains.length; i++) {
+      const baseline = Number.isFinite(this.sensorBaselines[i])
+        ? clamp(this.sensorBaselines[i], min, max)
+        : clamp(1, min, max);
+
+      this.sensorBaselines[i] = baseline;
+      this.sensorGains[i] = clamp(
+        Number.isFinite(this.sensorGains[i]) ? this.sensorGains[i] : baseline,
+        min,
+        max
+      );
+    }
+
+    if (this.sensorGains.length > 0) {
+      this.sensorGains[0] = 1;
+      this.sensorBaselines[0] = 1;
+    }
+
+    if (
+      this.sensorTargets &&
+      this.sensorTargets.length > 0 &&
+      !Number.isFinite(this.sensorTargets[0])
+    ) {
+      this.sensorTargets[0] = 1;
+    }
+  }
+
+  #applySensorModulation(sensors) {
+    if (!Array.isArray(sensors) && !(sensors instanceof Float32Array)) return;
+    if (!this.sensorGains || !this.sensorBaselines) return;
+
+    const min = this.sensorGainLimits.min;
+    const max = this.sensorGainLimits.max;
+
+    for (let i = 1; i < sensors.length && i < this.sensorGains.length; i++) {
+      const rawValue = clampSensorValue(sensors[i]);
+      let gain = this.sensorGains[i];
+
+      if (!Number.isFinite(gain)) gain = this.sensorBaselines[i];
+
+      const target =
+        this.sensorTargets && i < this.sensorTargets.length ? this.sensorTargets[i] : Number.NaN;
+
+      if (
+        Number.isFinite(this.sensorAdaptationRate) &&
+        this.sensorAdaptationRate > 0 &&
+        Number.isFinite(target)
+      ) {
+        const diff = clamp(rawValue - target, -1, 1);
+
+        gain += diff * this.sensorAdaptationRate;
+      }
+
+      if (this.sensorReversionRate > 0) {
+        const base = this.sensorBaselines[i];
+
+        if (Number.isFinite(base)) {
+          gain = mix(gain, base, this.sensorReversionRate);
+        }
+      }
+
+      gain = clamp(Number.isFinite(gain) ? gain : this.sensorBaselines[i], min, max);
+      this.sensorGains[i] = gain;
+      sensors[i] = clampSensorValue(rawValue * gain);
+    }
+
+    if (sensors.length > 0) sensors[0] = 1;
   }
 
   #pruneUnreachableNeurons() {
