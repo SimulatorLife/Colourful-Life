@@ -15,9 +15,7 @@ jobs:
     secrets: inherit
     with:
       pr_title: "Codex: Decouple Architecture"
-      pr_body: >
-        Start a new task: a targeted architecture improvement. You should pick a single, high-impact coupling hotspot
-        and produce a small, focused refactor that reduces coupling without over-engineering.
+      pr_body: "Seed PR for Codex to implement the intended architecture-decoupling refactor atop current master."
       branch_prefix: "codex"
       base_branch: "master"
       prompt: >

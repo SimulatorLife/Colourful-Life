@@ -15,9 +15,7 @@ jobs:
     secrets: inherit
     with:
       pr_title: "Codex: Improve Code Style"
-      pr_body: >
-        Targeted style cleanup task. Codex should focus on a single, high-impact area and keep the diff small.
-        Commit only to the branch created by this workflow; keep all changes tied to this PR.
+      pr_body: "Seed PR for Codex to implement the intended code-style improvement atop current master."
       branch_prefix: "codex"
       base_branch: "master"
       prompt: >

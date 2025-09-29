@@ -15,6 +15,7 @@ jobs:
     secrets: inherit
     with:
       pr_title: "Codex: Reduce Bloat"
+      pr_body: "Seed PR for Codex to implement the intended bloat reduction refactor atop current master."
       branch_prefix: "codex"
       base_branch: "master"
       prompt: >

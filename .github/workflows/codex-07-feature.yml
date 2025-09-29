@@ -1,0 +1,31 @@
+name: Codex 07 – Targeted Feature Improvement
+on:
+  schedule:
+    - cron: "20 */8 * * *"   # every 8 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Targeted Feature Improvement"
+      pr_body: "Seed PR for Codex to implement the intended feature improvement atop current master."
+      branch_prefix: "codex"
+      base_branch: "master"
+      prompt: >
+        Start a new task: deliver one focused, user-visible feature improvement (not style/organization/tests-only).
+        Choose a small but high-impact enhancement that improves the experience of running or interacting with the
+        simulation (UI or core behavior), and implement it end-to-end in a minimal, maintainable way.
+        First, review the project to identify ONE concrete feature enhancement to implement that materially improves
+        usability or capability without large rewrites. Try to add no new heavy dependencies; prefer zero deps.
+        Avoid broad refactors or tangential changes. Avoid over-engineering; complete one feature well.
+        As/if applicable, update README or inline help so the feature is discoverable (brief and practical).
+        Add or adjust tests only where logic changes warrant it (no blanket rewrites).
+        Deliver a tight, well-reasoned improvement; the goal is tangible value without bloat.
+

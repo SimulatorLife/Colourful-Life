@@ -15,6 +15,7 @@ jobs:
     secrets: inherit
     with:
       pr_title: "Codex: Improve Performance"
+      pr_body: "Seed PR for Codex to implement the intended performance-improvement atop current master."
       branch_prefix: "codex"
       base_branch: "master"
       prompt: >
