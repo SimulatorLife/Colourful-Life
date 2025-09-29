@@ -125,6 +125,7 @@ Energy-related defaults for the simulation are centralized in `src/config.js`. T
 - **Headless simulation**: Use `headless: true` with `createSimulation` (see example above) to run deterministic smoke tests or scripted experiments without the DOM.
 - **Obstacle exploration**: Start with [`demo/obstacle-presets.md`](demo/obstacle-presets.md) to learn how obstacle layouts and wall penalties shape emergent behaviour.
 - **Dev server shortcuts**: `npm run start` launches Parcel with hot module reloading; `npm run serve` spins up the lightweight Node server for static demos.
+- **Frame-by-frame inspection**: Pause the simulation and click the **Step** control to advance a single tick when you want to study how interventions ripple through the ecosystem.
 
 ## Agentic Prompts
 
