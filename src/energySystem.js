@@ -1,5 +1,23 @@
 import { clamp } from './utils.js';
 
+function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }) {
+  if (Number.isFinite(neighborSum) && Number.isFinite(neighborCount) && neighborCount > 0) {
+    return neighborSum / neighborCount;
+  }
+
+  if (!Array.isArray(neighborEnergies) || neighborEnergies.length === 0) {
+    return null;
+  }
+
+  let sum = 0;
+
+  for (let i = 0; i < neighborEnergies.length; i++) {
+    sum += neighborEnergies[i] || 0;
+  }
+
+  return sum / neighborEnergies.length;
+}
+
 /**
  * Aggregates all event-driven modifiers for a given tile.
  *
@@ -113,10 +131,11 @@ export function computeTileEnergyUpdate({
     throw new Error('maxTileEnergy must be provided to computeTileEnergyUpdate');
   }
 
+  const energy = Number.isFinite(currentEnergy) ? currentEnergy : 0;
   const effectiveDensity = clamp((density ?? 0) * densityEffectMultiplier, 0, 1);
-  let regen = (regenRate || 0) * (1 - (currentEnergy || 0) / maxTileEnergy);
+  let regen = (regenRate ?? 0) * (1 - energy / maxTileEnergy);
 
-  regen *= Math.max(0, 1 - regenDensityPenalty * effectiveDensity);
+  regen *= Math.max(0, 1 - (regenDensityPenalty ?? 0) * effectiveDensity);
 
   const modifiers = accumulateEventModifiers({
     events,
@@ -132,22 +151,19 @@ export function computeTileEnergyUpdate({
 
   const drain = modifiers.drainAdd;
 
+  const neighborAverage = resolveNeighborAverage({
+    neighborSum,
+    neighborCount,
+    neighborEnergies,
+  });
+
   let diffusion = 0;
-  const hasScalarNeighbors =
-    Number.isFinite(neighborSum) && Number.isFinite(neighborCount) && neighborCount > 0;
 
-  if (hasScalarNeighbors) {
-    const neighAvg = neighborSum / neighborCount;
-
-    diffusion = (diffusionRate || 0) * (neighAvg - (currentEnergy || 0));
-  } else if (Array.isArray(neighborEnergies) && neighborEnergies.length > 0) {
-    const neighSum = neighborEnergies.reduce((sum, val) => sum + (val || 0), 0);
-    const neighAvg = neighSum / neighborEnergies.length;
-
-    diffusion = (diffusionRate || 0) * (neighAvg - (currentEnergy || 0));
+  if (neighborAverage != null) {
+    diffusion = (diffusionRate ?? 0) * (neighborAverage - energy);
   }
 
-  let nextEnergy = (currentEnergy || 0) + regen - drain + diffusion;
+  let nextEnergy = energy + regen - drain + diffusion;
 
   nextEnergy = clamp(nextEnergy, 0, maxTileEnergy);
 
