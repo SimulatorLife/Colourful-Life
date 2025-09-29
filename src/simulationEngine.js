@@ -384,53 +384,53 @@ export default class SimulationEngine {
    *
    * @private
    */
-  #frame(timestamp, { scheduleNext = false, force = false } = {}) {
+  #frame(timestamp, { scheduleNext = false, force = false, allowPausedTick = false } = {}) {
     if (!this.running && !force) return false;
 
     const effectiveTimestamp = typeof timestamp === 'number' ? timestamp : this.now();
     let tickOccurred = false;
 
-    if (!this.state.paused) {
-      const interval = 1000 / Math.max(1, this.state.updatesPerSecond);
+    const paused = Boolean(this.state.paused);
+    const interval = 1000 / Math.max(1, this.state.updatesPerSecond);
+    const elapsed = effectiveTimestamp - this.lastUpdateTime;
+    const shouldAdvance = (!paused && elapsed >= interval) || (allowPausedTick && paused);
 
-      if (effectiveTimestamp - this.lastUpdateTime >= interval) {
-        this.lastUpdateTime = effectiveTimestamp;
-        tickOccurred = true;
-        this.stats.resetTick();
-        this.eventManager.updateEvent?.(this.state.eventFrequencyMultiplier ?? 1, 2);
-        const snapshot = this.grid.update({
-          densityEffectMultiplier: this.state.densityEffectMultiplier ?? 1,
-          societySimilarity:
-            this.state.societySimilarity ?? UI_SLIDER_CONFIG.societySimilarity.default,
-          enemySimilarity: this.state.enemySimilarity ?? UI_SLIDER_CONFIG.enemySimilarity.default,
-          eventStrengthMultiplier: this.state.eventStrengthMultiplier ?? 1,
-          energyRegenRate: this.state.energyRegenRate ?? ENERGY_REGEN_RATE_DEFAULT,
-          energyDiffusionRate: this.state.energyDiffusionRate ?? ENERGY_DIFFUSION_RATE_DEFAULT,
-          mutationMultiplier: this.state.mutationMultiplier ?? 1,
-          matingDiversityThreshold:
-            this.state.matingDiversityThreshold ??
-            UI_SLIDER_CONFIG.matingDiversityThreshold?.default,
-          lowDiversityReproMultiplier:
-            this.state.lowDiversityReproMultiplier ??
-            UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default,
-        });
+    if (shouldAdvance) {
+      this.lastUpdateTime = effectiveTimestamp;
+      tickOccurred = true;
+      this.stats.resetTick();
+      this.eventManager.updateEvent?.(this.state.eventFrequencyMultiplier ?? 1, 2);
+      const snapshot = this.grid.update({
+        densityEffectMultiplier: this.state.densityEffectMultiplier ?? 1,
+        societySimilarity:
+          this.state.societySimilarity ?? UI_SLIDER_CONFIG.societySimilarity.default,
+        enemySimilarity: this.state.enemySimilarity ?? UI_SLIDER_CONFIG.enemySimilarity.default,
+        eventStrengthMultiplier: this.state.eventStrengthMultiplier ?? 1,
+        energyRegenRate: this.state.energyRegenRate ?? ENERGY_REGEN_RATE_DEFAULT,
+        energyDiffusionRate: this.state.energyDiffusionRate ?? ENERGY_DIFFUSION_RATE_DEFAULT,
+        mutationMultiplier: this.state.mutationMultiplier ?? 1,
+        matingDiversityThreshold:
+          this.state.matingDiversityThreshold ?? UI_SLIDER_CONFIG.matingDiversityThreshold?.default,
+        lowDiversityReproMultiplier:
+          this.state.lowDiversityReproMultiplier ??
+          UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default,
+      });
 
-        this.lastSnapshot = snapshot;
-        this.stats.logEvent?.(
-          this.eventManager.currentEvent,
-          this.state.eventStrengthMultiplier ?? 1
-        );
-        this.stats.setMutationMultiplier?.(this.state.mutationMultiplier ?? 1);
-        this.lastMetrics = this.stats.updateFromSnapshot?.(snapshot);
-        // Defer leaderboard/metrics publication until the throttle window allows another emit.
-        this.pendingSlowUiUpdate = true;
+      this.lastSnapshot = snapshot;
+      this.stats.logEvent?.(
+        this.eventManager.currentEvent,
+        this.state.eventStrengthMultiplier ?? 1
+      );
+      this.stats.setMutationMultiplier?.(this.state.mutationMultiplier ?? 1);
+      this.lastMetrics = this.stats.updateFromSnapshot?.(snapshot);
+      // Defer leaderboard/metrics publication until the throttle window allows another emit.
+      this.pendingSlowUiUpdate = true;
 
-        this.emit('tick', {
-          snapshot,
-          metrics: this.lastMetrics,
-          timestamp: effectiveTimestamp,
-        });
-      }
+      this.emit('tick', {
+        snapshot,
+        metrics: this.lastMetrics,
+        timestamp: effectiveTimestamp,
+      });
     }
 
     this.grid.draw({ showObstacles: this.state.showObstacles ?? true });
@@ -537,6 +537,18 @@ export default class SimulationEngine {
    */
   tick(timestamp = this.now()) {
     return this.#frame(timestamp, { scheduleNext: false, force: true });
+  }
+
+  /**
+   * Advances the simulation by exactly one update even while paused, keeping the
+   * paused state intact so users can inspect the world frame-by-frame.
+   *
+   * @returns {boolean} Whether a simulation update occurred.
+   */
+  step() {
+    if (!this.state.paused) return false;
+
+    return this.#frame(this.now(), { scheduleNext: false, force: true, allowPausedTick: true });
   }
 
   setUpdatesPerSecond(value) {

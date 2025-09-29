@@ -29,6 +29,7 @@ export default class UIManager {
     this.zoneSummaryEl = null;
     this.patternCheckboxes = {};
     this._selectionListenersInstalled = false;
+    this.stepButton = null;
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -430,6 +431,17 @@ export default class UIManager {
       label: 'Pause',
       title: 'Pause/resume the simulation (shortcut: P)',
       onClick: () => this.togglePause(),
+    });
+
+    this.stepButton = addControlButton({
+      id: 'stepButton',
+      label: 'Step',
+      title: 'Advance one tick while paused to inspect changes frame-by-frame.',
+      onClick: () => {
+        if (typeof this.simulationCallbacks?.step === 'function') {
+          this.simulationCallbacks.step();
+        }
+      },
     });
 
     addControlButton({
@@ -920,6 +932,12 @@ export default class UIManager {
     this.paused = Boolean(paused);
     if (this.pauseButton) {
       this.pauseButton.textContent = this.paused ? 'Resume' : 'Pause';
+    }
+    if (this.stepButton) {
+      this.stepButton.disabled = !this.paused;
+      this.stepButton.title = this.paused
+        ? 'Advance one tick while paused to inspect changes frame-by-frame.'
+        : 'Pause the simulation to enable single-step playback.';
     }
   }
 
