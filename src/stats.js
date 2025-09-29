@@ -16,6 +16,18 @@ const HISTORY_KEYS = [
   'mutationMultiplier',
 ];
 
+const createTraitMap = (initializer) => {
+  const map = {};
+
+  for (let i = 0; i < TRAIT_KEYS.length; i++) {
+    const key = TRAIT_KEYS[i];
+
+    map[key] = typeof initializer === 'function' ? initializer(key) : initializer;
+  }
+
+  return map;
+};
+
 const createRingBuffer = (size = 0) => {
   const capacity = Math.max(0, Math.floor(size));
 
@@ -57,20 +69,35 @@ const unwrapRing = (ring) => {
   return values;
 };
 
-const createEmptyTraitSnapshot = () => {
-  const averages = {};
-  const fractions = {};
-  const counts = {};
+const createEmptyTraitSnapshot = () => ({
+  population: 0,
+  averages: createTraitMap(0),
+  fractions: createTraitMap(0),
+  counts: createTraitMap(0),
+});
 
-  for (let i = 0; i < TRAIT_KEYS.length; i++) {
-    const key = TRAIT_KEYS[i];
+const clampInteractionTrait = (genes, key) => {
+  const value = genes && typeof genes[key] === 'number' ? genes[key] : 0;
 
-    averages[key] = 0;
-    fractions[key] = 0;
-    counts[key] = 0;
-  }
+  return clamp01(value);
+};
 
-  return { population: 0, averages, fractions, counts };
+const TRAIT_CALCULATORS = {
+  cooperation: (cell) => clampInteractionTrait(cell?.interactionGenes, 'cooperate'),
+  fighting: (cell) => clampInteractionTrait(cell?.interactionGenes, 'fight'),
+  breeding: (cell) => {
+    const probability =
+      typeof cell?.dna?.reproductionProb === 'function' ? cell.dna.reproductionProb() : 0;
+    const normalized = probability > 0 ? probability / MAX_REPRODUCTION_PROB : 0;
+
+    return clamp01(normalized);
+  },
+  sight: (cell) => {
+    const sight = cell?.sight || 0;
+    const normalized = sight > 0 ? sight / MAX_SIGHT_RANGE : 0;
+
+    return clamp01(normalized);
+  },
 };
 
 const _createMatingSnapshot = () => ({
@@ -330,75 +357,32 @@ export default class Stats {
 
     if (!population) return createEmptyTraitSnapshot();
 
-    let coopSum = 0;
-    let fightSum = 0;
-    let breedSum = 0;
-    let sightSum = 0;
-    let coopActive = 0;
-    let fightActive = 0;
-    let breedActive = 0;
-    let sightActive = 0;
+    const sums = createTraitMap(0);
+    const activeCounts = createTraitMap(0);
 
     for (let i = 0; i < population; i++) {
       const cell = cells[i];
 
       if (!cell) continue;
 
-      const interaction = cell.interactionGenes;
-      const dna = cell.dna;
+      for (let t = 0; t < TRAIT_KEYS.length; t++) {
+        const key = TRAIT_KEYS[t];
+        const value = TRAIT_CALCULATORS[key](cell);
 
-      let value =
-        interaction && typeof interaction.cooperate === 'number' ? interaction.cooperate : 0;
-
-      value = clamp01(value);
-      coopSum += value;
-      if (value >= TRAIT_THRESHOLD) coopActive++;
-
-      value = interaction && typeof interaction.fight === 'number' ? interaction.fight : 0;
-      value = clamp01(value);
-      fightSum += value;
-      if (value >= TRAIT_THRESHOLD) fightActive++;
-
-      value = 0;
-      if (dna && typeof dna.reproductionProb === 'function') {
-        const prob = dna.reproductionProb();
-
-        if (prob > 0) value = prob / MAX_REPRODUCTION_PROB;
+        sums[key] += value;
+        if (value >= TRAIT_THRESHOLD) {
+          activeCounts[key] += 1;
+        }
       }
-      value = clamp01(value);
-      breedSum += value;
-      if (value >= TRAIT_THRESHOLD) breedActive++;
-
-      const sight = cell.sight || 0;
-
-      value = sight > 0 ? sight / MAX_SIGHT_RANGE : 0;
-      value = clamp01(value);
-      sightSum += value;
-      if (value >= TRAIT_THRESHOLD) sightActive++;
     }
 
     const invPop = 1 / population;
 
     return {
       population,
-      averages: {
-        cooperation: coopSum * invPop,
-        fighting: fightSum * invPop,
-        breeding: breedSum * invPop,
-        sight: sightSum * invPop,
-      },
-      fractions: {
-        cooperation: coopActive * invPop,
-        fighting: fightActive * invPop,
-        breeding: breedActive * invPop,
-        sight: sightActive * invPop,
-      },
-      counts: {
-        cooperation: coopActive,
-        fighting: fightActive,
-        breeding: breedActive,
-        sight: sightActive,
-      },
+      averages: createTraitMap((key) => sums[key] * invPop),
+      fractions: createTraitMap((key) => activeCounts[key] * invPop),
+      counts: createTraitMap((key) => activeCounts[key]),
     };
   }
 
