@@ -24,19 +24,6 @@ export const UI_SLIDER_CONFIG = {
 export const REGEN_DENSITY_PENALTY = 0.5; // 1 - penalty * density
 export const CONSUMPTION_DENSITY_PENALTY = 0.5; // 1 - penalty * density
 
-export function getDefaultMaxTileEnergy() {
-  if (typeof globalThis !== 'undefined') {
-    const gm = globalThis.GridManager;
-
-    if (gm && typeof gm.maxTileEnergy === 'number') {
-      return gm.maxTileEnergy;
-    }
-  }
-
-  // TODO: Remove this function and use the constant directly
-  return MAX_TILE_ENERGY;
-}
-
 const SLIDER_DEFAULTS = {
   eventFrequencyMultiplier: UI_SLIDER_CONFIG.eventFrequencyMultiplier?.default ?? 1,
   mutationMultiplier: UI_SLIDER_CONFIG.mutationMultiplier?.default ?? 1,
