@@ -397,4 +397,98 @@ test('interaction intents resolve fights via interaction system', () => {
   assert.is(deaths, 1, 'death stat increments once');
 });
 
+test('movement and interaction genes reflect DNA-coded tendencies', () => {
+  const fastDNA = new DNA(120, 80, 40);
+  fastDNA.genes[GENE_LOCI.MOVEMENT] = 240;
+  fastDNA.genes[GENE_LOCI.EXPLORATION] = 40;
+  fastDNA.genes[GENE_LOCI.RISK] = 210;
+  fastDNA.genes[GENE_LOCI.COHESION] = 40;
+  fastDNA.genes[GENE_LOCI.STRATEGY] = 200;
+
+  const cautiousDNA = new DNA(60, 200, 180);
+  cautiousDNA.genes[GENE_LOCI.MOVEMENT] = 30;
+  cautiousDNA.genes[GENE_LOCI.EXPLORATION] = 220;
+  cautiousDNA.genes[GENE_LOCI.RISK] = 20;
+  cautiousDNA.genes[GENE_LOCI.COHESION] = 210;
+  cautiousDNA.genes[GENE_LOCI.STRATEGY] = 40;
+
+  const fastMovement = fastDNA.movementGenes();
+  const cautiousMovement = cautiousDNA.movementGenes();
+
+  assert.ok(fastMovement.pursuit > cautiousMovement.pursuit, 'fast genome pursues more');
+  assert.ok(cautiousMovement.cautious > fastMovement.cautious, 'cautious genome rests more');
+  assert.ok(cautiousMovement.wandering > fastMovement.wandering, 'explorers wander more');
+
+  const aggressiveDNA = new DNA(220, 40, 40);
+  aggressiveDNA.genes[GENE_LOCI.RISK] = 240;
+  aggressiveDNA.genes[GENE_LOCI.COMBAT] = 240;
+  aggressiveDNA.genes[GENE_LOCI.COOPERATION] = 10;
+  aggressiveDNA.genes[GENE_LOCI.RECOVERY] = 20;
+
+  const altruistDNA = new DNA(40, 220, 120);
+  altruistDNA.genes[GENE_LOCI.RISK] = 20;
+  altruistDNA.genes[GENE_LOCI.COMBAT] = 20;
+  altruistDNA.genes[GENE_LOCI.COOPERATION] = 230;
+  altruistDNA.genes[GENE_LOCI.PARENTAL] = 220;
+  altruistDNA.genes[GENE_LOCI.RECOVERY] = 200;
+
+  const aggressiveInteraction = aggressiveDNA.interactionGenes();
+  const altruistInteraction = altruistDNA.interactionGenes();
+
+  assert.ok(aggressiveInteraction.fight > altruistInteraction.fight, 'aggressive genome fights');
+  assert.ok(altruistInteraction.cooperate > aggressiveInteraction.cooperate, 'helpers cooperate');
+  assert.ok(altruistInteraction.avoid > aggressiveInteraction.avoid, 'cautious genomes avoid');
+});
+
+test('chooseEnemyTarget uses conflict focus derived from DNA', () => {
+  const cautiousDNA = new DNA(80, 180, 200);
+  cautiousDNA.genes[GENE_LOCI.RISK] = 20;
+  cautiousDNA.genes[GENE_LOCI.COMBAT] = 30;
+  cautiousDNA.genes[GENE_LOCI.STRATEGY] = 220;
+  cautiousDNA.genes[GENE_LOCI.MOVEMENT] = 80;
+
+  const boldDNA = new DNA(220, 60, 60);
+  boldDNA.genes[GENE_LOCI.RISK] = 230;
+  boldDNA.genes[GENE_LOCI.COMBAT] = 220;
+  boldDNA.genes[GENE_LOCI.STRATEGY] = 30;
+  boldDNA.genes[GENE_LOCI.MOVEMENT] = 200;
+
+  const cautiousCell = new Cell(5, 5, cautiousDNA, 6);
+  const boldCell = new Cell(5, 5, boldDNA, 6);
+
+  const weakEnemy = new Cell(6, 5, new DNA(120, 120, 120), 2);
+  weakEnemy.age = 5;
+  weakEnemy.lifespan = 100;
+  const strongEnemy = new Cell(1, 5, new DNA(120, 120, 120), 8);
+  strongEnemy.age = 20;
+  strongEnemy.lifespan = 100;
+
+  const enemies = [
+    { row: weakEnemy.row, col: weakEnemy.col, target: weakEnemy },
+    { row: strongEnemy.row, col: strongEnemy.col, target: strongEnemy },
+  ];
+
+  const cautiousTarget = cautiousCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
+  const boldTarget = boldCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
+
+  assert.is(cautiousTarget.target, weakEnemy, 'cautious genome prefers weaker enemy');
+  assert.is(boldTarget.target, strongEnemy, 'bold genome prefers strong enemy');
+});
+
+test('cooperateShareFrac adapts to ally deficits and kinship', () => {
+  const dna = new DNA(80, 200, 140);
+  dna.genes[GENE_LOCI.COOPERATION] = 230;
+  dna.genes[GENE_LOCI.PARENTAL] = 210;
+  dna.genes[GENE_LOCI.ENERGY_EFFICIENCY] = 60;
+  dna.genes[GENE_LOCI.COHESION] = 220;
+
+  const baseline = dna.cooperateShareFrac();
+  const assistWeakKin = dna.cooperateShareFrac({ energyDelta: -0.6, kinship: 0.9 });
+  const holdBack = dna.cooperateShareFrac({ energyDelta: 0.6, kinship: 0.1 });
+
+  assert.ok(assistWeakKin > baseline, 'shares more with weaker kin');
+  assert.ok(holdBack < baseline, 'shares less with stronger partners');
+  assert.ok(assistWeakKin > holdBack, 'overall preference favors helping the weak');
+});
+
 test.run();

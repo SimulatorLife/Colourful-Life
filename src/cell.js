@@ -1282,6 +1282,49 @@ export default class Cell {
     return fallbackAction;
   }
 
+  chooseEnemyTarget(enemies = [], { maxTileEnergy = MAX_TILE_ENERGY } = {}) {
+    if (!Array.isArray(enemies) || enemies.length === 0) return null;
+
+    const focus = typeof this.dna.conflictFocus === 'function' ? this.dna.conflictFocus() : null;
+    const weights = {
+      weak: focus?.weak ?? 1,
+      strong: focus?.strong ?? 1,
+      proximity: focus?.proximity ?? 1,
+      attrition: focus?.attrition ?? 1,
+    };
+    const energyCap = maxTileEnergy > 0 ? maxTileEnergy : MAX_TILE_ENERGY || 1;
+    let best = null;
+    let bestScore = -Infinity;
+
+    for (const enemy of enemies) {
+      if (!enemy || !enemy.target) continue;
+
+      const dist = Math.max(Math.abs(enemy.row - this.row), Math.abs(enemy.col - this.col));
+      const enemyEnergy = Number.isFinite(enemy.target.energy) ? enemy.target.energy : 0;
+      const diff = clamp(((this.energy ?? 0) - enemyEnergy) / energyCap, -1, 1);
+      const weakSignal = clamp(1 + diff, 0.05, 1.95);
+      const strongSignal = clamp(1 - diff, 0.05, 1.95);
+      const proximitySignal = 1 / (1 + dist);
+      const attritionSignal = enemy.target.lifespan
+        ? clamp((enemy.target.age ?? 0) / enemy.target.lifespan, 0, 1)
+        : 0;
+      const score =
+        weights.weak * weakSignal +
+        weights.strong * strongSignal +
+        weights.proximity * proximitySignal +
+        weights.attrition * attritionSignal;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = enemy;
+      }
+    }
+
+    if (best) return best;
+
+    return enemies[Math.floor(Math.random() * enemies.length)];
+  }
+
   applyEventEffects(row, col, currentEvent, eventStrengthMultiplier = 1, maxTileEnergy = 5) {
     const events = Array.isArray(currentEvent) ? currentEvent : currentEvent ? [currentEvent] : [];
 
@@ -1339,10 +1382,31 @@ export default class Cell {
     };
   }
 
-  createCooperationIntent({ row = this.row, col = this.col, targetRow, targetCol } = {}) {
+  createCooperationIntent({
+    row = this.row,
+    col = this.col,
+    targetRow,
+    targetCol,
+    targetCell = null,
+    maxTileEnergy = MAX_TILE_ENERGY,
+  } = {}) {
     if (targetRow == null || targetCol == null) return null;
+    const partner = targetCell ?? null;
+    const capacity = maxTileEnergy > 0 ? maxTileEnergy : MAX_TILE_ENERGY;
+    const selfEnergyNorm = capacity > 0 ? clamp((this.energy ?? 0) / capacity, 0, 1) : 0;
+    const partnerEnergy = Number.isFinite(partner?.energy) ? partner.energy : null;
+    const partnerNorm =
+      partnerEnergy != null && Number.isFinite(partnerEnergy)
+        ? clamp(partnerEnergy / capacity, 0, 1)
+        : selfEnergyNorm;
+    const kinship = partner?.dna ? this.similarityTo(partner) : 0;
     const shareFraction =
-      typeof this.dna.cooperateShareFrac === 'function' ? this.dna.cooperateShareFrac() : 0;
+      typeof this.dna.cooperateShareFrac === 'function'
+        ? this.dna.cooperateShareFrac({
+            energyDelta: partnerNorm - selfEnergyNorm,
+            kinship,
+          })
+        : 0;
 
     return {
       type: 'cooperate',
