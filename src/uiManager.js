@@ -308,7 +308,7 @@ export default class UIManager {
     return input;
   }
 
-  #appendControlRow(container, { label, value, title, color }) {
+  #appendControlRow(container, { label, value, title, color, valueClass }) {
     const row = document.createElement('div');
 
     row.className = 'control-line';
@@ -331,7 +331,7 @@ export default class UIManager {
 
     const valueEl = document.createElement('div');
 
-    valueEl.className = 'control-value';
+    valueEl.className = valueClass ? `control-value ${valueClass}` : 'control-value';
 
     if (value instanceof Node) {
       valueEl.appendChild(value);
@@ -904,17 +904,25 @@ export default class UIManager {
     sparkDescriptors.forEach(({ label, property, color }) => {
       const card = document.createElement('div');
       const caption = document.createElement('div');
+      const colorDot = document.createElement('span');
+      const captionText = document.createElement('span');
 
       card.className = 'sparkline-card';
-      caption.className = 'control-name';
-      caption.textContent = label;
-      if (color) caption.style.color = color;
+      caption.className = 'sparkline-caption';
+      colorDot.className = 'sparkline-color-dot';
+      if (color) colorDot.style.background = color;
+      captionText.className = 'sparkline-caption-text';
+      captionText.textContent = label;
+      caption.appendChild(colorDot);
+      caption.appendChild(captionText);
 
       const canvas = document.createElement('canvas');
 
       canvas.className = 'sparkline';
       canvas.width = 220;
       canvas.height = 40;
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-label', `${label} trend over time`);
 
       card.appendChild(caption);
       card.appendChild(canvas);
@@ -1020,8 +1028,28 @@ export default class UIManager {
     const coopDelta = Math.max(0, (totals.cooperations ?? 0) - (lastTotals.cooperations ?? 0));
     const interactionTotal = fightDelta + coopDelta;
 
-    const appendMetricRow = (label, value, title) => {
-      this.#appendControlRow(this.metricsBox, { label, value, title });
+    const appendMetricRow = (container, { label, value, title, valueClass }) => {
+      this.#appendControlRow(container, { label, value, title, valueClass });
+    };
+
+    const createSection = (title, options = {}) => {
+      const { wide = false } = options;
+      const section = document.createElement('section');
+
+      section.className = 'metrics-section';
+      if (wide) section.classList.add('metrics-section--wide');
+      const heading = document.createElement('h4');
+
+      heading.className = 'metrics-section-title';
+      heading.textContent = title;
+      section.appendChild(heading);
+      const body = document.createElement('div');
+
+      body.className = 'metrics-section-body';
+      section.appendChild(body);
+      this.metricsBox.appendChild(section);
+
+      return body;
     };
 
     const finiteOrDash = (value, formatter = String) =>
@@ -1035,58 +1063,91 @@ export default class UIManager {
       cooperations: totals.cooperations ?? lastTotals.cooperations ?? 0,
     };
 
-    appendMetricRow('Population', String(s.population), 'Total living cells');
-    appendMetricRow('Births', String(s.births), 'Births in the last tick');
-    appendMetricRow('Deaths', String(s.deaths), 'Deaths in the last tick');
-    appendMetricRow('Growth', String(s.growth), 'Births - Deaths');
+    const populationSection = createSection('Population Snapshot');
+
+    appendMetricRow(populationSection, {
+      label: 'Population',
+      value: countOrDash(s.population),
+      title: 'Total living cells',
+    });
+    appendMetricRow(populationSection, {
+      label: 'Births',
+      value: countOrDash(s.births),
+      title: 'Births in the last tick',
+    });
+    appendMetricRow(populationSection, {
+      label: 'Deaths',
+      value: countOrDash(s.deaths),
+      title: 'Deaths in the last tick',
+    });
+    appendMetricRow(populationSection, {
+      label: 'Growth',
+      value: countOrDash(s.growth),
+      title: 'Births - Deaths',
+    });
     if (typeof s.mutationMultiplier === 'number') {
       const formatted = s.mutationMultiplier.toFixed(2);
       const suffix = s.mutationMultiplier <= 0 ? '× (off)' : '×';
 
-      appendMetricRow(
-        'Mutation Multiplier',
-        `${formatted}${suffix}`,
-        'Global multiplier applied to mutation chance and range for offspring'
-      );
+      appendMetricRow(populationSection, {
+        label: 'Mutation Multiplier',
+        value: `${formatted}${suffix}`,
+        title: 'Global multiplier applied to mutation chance and range for offspring',
+      });
     }
-    appendMetricRow(
-      'Skirmishes',
-      String(fightDelta),
-      'Skirmishes resolved since the last dashboard update'
-    );
-    appendMetricRow(
-      'Cooperations',
-      String(coopDelta),
-      'Mutual aid events completed since the last dashboard update'
-    );
+    const interactionSection = createSection('Interaction Pulse');
 
-    appendMetricRow(
-      'Cooperation Share',
-      interactionTotal ? percentOrDash(coopDelta / interactionTotal) : '—',
-      'Share of cooperative interactions vs total interactions recorded for this update'
-    );
-    appendMetricRow('Mean Energy', s.meanEnergy.toFixed(2), 'Average energy per cell');
-    appendMetricRow('Mean Age', s.meanAge.toFixed(1), 'Average age of living cells');
-    appendMetricRow(
-      'Diversity',
-      s.diversity.toFixed(3),
-      'Estimated mean pairwise genetic distance'
-    );
+    appendMetricRow(interactionSection, {
+      label: 'Skirmishes',
+      value: countOrDash(fightDelta),
+      title: 'Skirmishes resolved since the last dashboard update',
+    });
+    appendMetricRow(interactionSection, {
+      label: 'Cooperations',
+      value: countOrDash(coopDelta),
+      title: 'Mutual aid events completed since the last dashboard update',
+    });
+    appendMetricRow(interactionSection, {
+      label: 'Cooperation Share',
+      value: interactionTotal ? percentOrDash(coopDelta / interactionTotal) : '—',
+      title: 'Share of cooperative interactions vs total interactions recorded for this update',
+    });
+
+    const vitalitySection = createSection('Vitality Signals');
+
+    appendMetricRow(vitalitySection, {
+      label: 'Mean Energy',
+      value: fixedOrDash(s.meanEnergy, 2),
+      title: 'Average energy per cell',
+    });
+    appendMetricRow(vitalitySection, {
+      label: 'Mean Age',
+      value: fixedOrDash(s.meanAge, 1),
+      title: 'Average age of living cells',
+    });
+    appendMetricRow(vitalitySection, {
+      label: 'Diversity',
+      value: fixedOrDash(s.diversity, 3),
+      title: 'Estimated mean pairwise genetic distance',
+    });
+
+    const reproductionSection = createSection('Reproduction Trends');
 
     if (typeof s.blockedMatings === 'number') {
-      appendMetricRow(
-        'Blocked Matings',
-        String(s.blockedMatings),
-        'Matings prevented by reproductive zones this tick'
-      );
+      appendMetricRow(reproductionSection, {
+        label: 'Blocked Matings',
+        value: countOrDash(s.blockedMatings),
+        title: 'Matings prevented by reproductive zones this tick',
+      });
     }
 
     if (s.lastBlockedReproduction?.reason) {
-      appendMetricRow(
-        'Last Blocked Reason',
-        s.lastBlockedReproduction.reason,
-        'Most recent reason reproduction was denied'
-      );
+      appendMetricRow(reproductionSection, {
+        label: 'Last Blocked Reason',
+        value: s.lastBlockedReproduction.reason,
+        title: 'Most recent reason reproduction was denied',
+        valueClass: 'control-value--left',
+      });
     }
 
     const reproductionMetrics = [
@@ -1122,11 +1183,14 @@ export default class UIManager {
       },
     ];
 
-    reproductionMetrics.forEach(({ label, value, title }) => appendMetricRow(label, value, title));
+    reproductionMetrics.forEach(({ label, value, title }) =>
+      appendMetricRow(reproductionSection, { label, value, title })
+    );
 
     const traitPresence = stats?.traitPresence;
 
     if (traitPresence) {
+      const traitSection = createSection('Trait Presence', { wide: true });
       const traitGroup = document.createElement('div');
 
       traitGroup.className = 'metrics-group';
@@ -1164,7 +1228,7 @@ export default class UIManager {
         });
       }
 
-      this.metricsBox.appendChild(traitGroup);
+      traitSection.appendChild(traitGroup);
     }
 
     this.drawSpark(this.sparkPop, stats.history.population, '#88d');
