@@ -1,11 +1,14 @@
 import { clamp01 } from './utils.js';
 
-const TRAIT_KEYS = ['cooperation', 'fighting', 'breeding', 'sight'];
+// Traits tracked for population presence/averages; keep aligned with UI labels.
+const TRAIT_NAMES = ['cooperation', 'fighting', 'breeding', 'sight'];
+// Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = 0.6;
 const MAX_REPRODUCTION_PROB = 0.8;
 const MAX_SIGHT_RANGE = 5;
 
-const HISTORY_KEYS = [
+// History series that the Stats class exposes to UI charts.
+const HISTORY_SERIES_KEYS = [
   'population',
   'diversity',
   'energy',
@@ -16,11 +19,11 @@ const HISTORY_KEYS = [
   'mutationMultiplier',
 ];
 
-const createTraitMap = (initializer) => {
+const createTraitValueMap = (initializer) => {
   const map = {};
 
-  for (let i = 0; i < TRAIT_KEYS.length; i++) {
-    const key = TRAIT_KEYS[i];
+  for (let i = 0; i < TRAIT_NAMES.length; i++) {
+    const key = TRAIT_NAMES[i];
 
     map[key] = typeof initializer === 'function' ? initializer(key) : initializer;
   }
@@ -28,7 +31,11 @@ const createTraitMap = (initializer) => {
   return map;
 };
 
-class RingBuffer {
+/**
+ * Minimal fixed-capacity ring buffer used by chart history accessors.
+ * Keeps insertion O(n) for deterministic order while bounding memory.
+ */
+class FixedSizeRingBuffer {
   constructor(size = 0) {
     this.capacity = Math.max(0, Math.floor(size));
     this.buffer = new Array(this.capacity || 0);
@@ -67,13 +74,14 @@ class RingBuffer {
   }
 }
 
-const createRingBuffer = (size = 0) => new RingBuffer(size);
+// Helper ensures ring construction is consistently clamped to integers.
+const createHistoryRing = (size = 0) => new FixedSizeRingBuffer(size);
 
-const createEmptyTraitSnapshot = () => ({
+const createEmptyTraitPresence = () => ({
   population: 0,
-  averages: createTraitMap(0),
-  fractions: createTraitMap(0),
-  counts: createTraitMap(0),
+  averages: createTraitValueMap(0),
+  fractions: createTraitValueMap(0),
+  counts: createTraitValueMap(0),
 });
 
 const clampInteractionTrait = (genes, key) => {
@@ -100,7 +108,8 @@ const TRAIT_CALCULATORS = {
   },
 };
 
-const _createMatingSnapshot = () => ({
+// Captures counters for the mating subsystem; reused to avoid churn.
+const createEmptyMatingSnapshot = () => ({
   choices: 0,
   successes: 0,
   diverseChoices: 0,
@@ -112,6 +121,11 @@ const _createMatingSnapshot = () => ({
   lastBlockReason: null,
 });
 
+/**
+ * Aggregates per-tick simulation metrics and exposes rolling history series
+ * for UI components. This class is intentionally stateful so the simulation
+ * engine can reuse a single instance across ticks without reallocating rings.
+ */
 export default class Stats {
   #historyRings;
   #traitHistoryRings;
@@ -128,8 +142,8 @@ export default class Stats {
     this.mutationMultiplier = 1;
     this.lastBlockedReproduction = null;
 
-    HISTORY_KEYS.forEach((key) => {
-      const ring = createRingBuffer(this.historySize);
+    HISTORY_SERIES_KEYS.forEach((key) => {
+      const ring = createHistoryRing(this.historySize);
 
       this.#historyRings[key] = ring;
       Object.defineProperty(this.history, key, {
@@ -139,10 +153,10 @@ export default class Stats {
       });
     });
 
-    for (let i = 0; i < TRAIT_KEYS.length; i++) {
-      const key = TRAIT_KEYS[i];
-      const presenceRing = createRingBuffer(this.historySize);
-      const averageRing = createRingBuffer(this.historySize);
+    for (let i = 0; i < TRAIT_NAMES.length; i++) {
+      const key = TRAIT_NAMES[i];
+      const presenceRing = createHistoryRing(this.historySize);
+      const averageRing = createHistoryRing(this.historySize);
 
       this.#traitHistoryRings.presence[key] = presenceRing;
       this.#traitHistoryRings.average[key] = averageRing;
@@ -160,7 +174,7 @@ export default class Stats {
       });
     }
 
-    this.traitPresence = createEmptyTraitSnapshot();
+    this.traitPresence = createEmptyTraitPresence();
   }
 
   resetTick() {
@@ -168,7 +182,7 @@ export default class Stats {
     this.deaths = 0;
     this.fights = 0;
     this.cooperations = 0;
-    this.mating = _createMatingSnapshot();
+    this.mating = createEmptyMatingSnapshot();
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
   }
@@ -190,17 +204,18 @@ export default class Stats {
     this.totals.cooperations++;
   }
 
-  // Sample mean pairwise distance between up to S pairs
-  estimateDiversity(cells, S = 200) {
-    const n = cells.length;
+  // Sample mean pairwise distance between up to maxPairSamples random pairs.
+  estimateDiversity(cells, maxPairSamples = 200) {
+    const populationSize = cells.length;
 
-    if (n < 2) return 0;
-    let samples = Math.min(S, (n * (n - 1)) / 2);
+    if (populationSize < 2) return 0;
+    const possiblePairs = (populationSize * (populationSize - 1)) / 2;
+    let sampleCount = Math.min(maxPairSamples, possiblePairs);
     let sum = 0;
 
-    for (let i = 0; i < samples; i++) {
-      const a = cells[(Math.random() * n) | 0];
-      const b = cells[(Math.random() * n) | 0];
+    for (let i = 0; i < sampleCount; i++) {
+      const a = cells[(Math.random() * populationSize) | 0];
+      const b = cells[(Math.random() * populationSize) | 0];
 
       if (a === b) {
         i--;
@@ -209,10 +224,13 @@ export default class Stats {
       sum += 1 - a.dna.similarity(b.dna); // distance in [0,1]
     }
 
-    return sum / samples;
+    return sum / sampleCount;
   }
 
-  // Compute per-tick aggregates and push to history
+  /**
+   * Compute per-tick aggregates from the simulation snapshot and push the
+   * derived values into rolling history buffers for charting.
+   */
   updateFromSnapshot(snapshot) {
     this.totals.ticks++;
     const pop = snapshot?.population || 0;
@@ -221,7 +239,7 @@ export default class Stats {
     const meanAge = pop ? snapshot.totalAge / pop : 0;
     const diversity = this.estimateDiversity(cells);
     const traitPresence = this.computeTraitPresence(cells);
-    const mateStats = this.mating || _createMatingSnapshot();
+    const mateStats = this.mating || createEmptyMatingSnapshot();
     const choiceCount = mateStats.choices || 0;
     const successCount = mateStats.successes || 0;
     const diverseChoiceRate = choiceCount ? mateStats.diverseChoices / choiceCount : 0;
@@ -239,8 +257,8 @@ export default class Stats {
     }
 
     this.traitPresence = traitPresence;
-    for (let i = 0; i < TRAIT_KEYS.length; i++) {
-      const key = TRAIT_KEYS[i];
+    for (let i = 0; i < TRAIT_NAMES.length; i++) {
+      const key = TRAIT_NAMES[i];
 
       this.pushTraitHistory('presence', key, traitPresence.fractions[key]);
       this.pushTraitHistory('average', key, traitPresence.averages[key]);
@@ -278,6 +296,10 @@ export default class Stats {
     this.matingDiversityThreshold = Math.min(Math.max(numeric, 0), 1);
   }
 
+  /**
+   * Capture the outcome of a single mate choice, tracking diversity exposure
+   * and success rates used in diversity overlays.
+   */
   recordMateChoice({
     similarity = 1,
     diversity = 0,
@@ -290,7 +312,7 @@ export default class Stats {
     penaltyMultiplier = 1,
   } = {}) {
     if (!this.mating) {
-      this.mating = _createMatingSnapshot();
+      this.mating = createEmptyMatingSnapshot();
     }
 
     const threshold = this.matingDiversityThreshold;
@@ -321,12 +343,13 @@ export default class Stats {
       penaltyMultiplier,
       blockedReason: this.mating.lastBlockReason || undefined,
     };
+    // Consume the one-time reason so the next mating record does not reuse it.
     this.mating.lastBlockReason = null;
   }
 
   recordReproductionBlocked({ reason, parentA = null, parentB = null, spawn = null } = {}) {
     if (!this.mating) {
-      this.mating = _createMatingSnapshot();
+      this.mating = createEmptyMatingSnapshot();
     }
 
     this.mating.blocks = (this.mating.blocks || 0) + 1;
@@ -352,21 +375,25 @@ export default class Stats {
     this.mutationMultiplier = value;
   }
 
+  /**
+   * Summarise per-trait participation across the provided cell population.
+   * Returns population counts as well as normalised fractions for UI charts.
+   */
   computeTraitPresence(cells = []) {
     const population = Array.isArray(cells) ? cells.length : 0;
 
-    if (!population) return createEmptyTraitSnapshot();
+    if (!population) return createEmptyTraitPresence();
 
-    const sums = createTraitMap(0);
-    const activeCounts = createTraitMap(0);
+    const sums = createTraitValueMap(0);
+    const activeCounts = createTraitValueMap(0);
 
     for (let i = 0; i < population; i++) {
       const cell = cells[i];
 
       if (!cell) continue;
 
-      for (let t = 0; t < TRAIT_KEYS.length; t++) {
-        const key = TRAIT_KEYS[t];
+      for (let t = 0; t < TRAIT_NAMES.length; t++) {
+        const key = TRAIT_NAMES[t];
         const value = TRAIT_CALCULATORS[key](cell);
 
         sums[key] += value;
@@ -380,9 +407,9 @@ export default class Stats {
 
     return {
       population,
-      averages: createTraitMap((key) => sums[key] * invPop),
-      fractions: createTraitMap((key) => activeCounts[key] * invPop),
-      counts: createTraitMap((key) => activeCounts[key]),
+      averages: createTraitValueMap((key) => sums[key] * invPop),
+      fractions: createTraitValueMap((key) => activeCounts[key] * invPop),
+      counts: createTraitValueMap((key) => activeCounts[key]),
     };
   }
 

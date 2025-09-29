@@ -60,6 +60,7 @@ export const OBSTACLE_PRESETS = [
 ];
 const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
+const EMPTY_EVENT_LIST = Object.freeze([]);
 
 function toBrainSnapshotCollector(candidate) {
   if (typeof candidate === 'function') {
@@ -896,7 +897,8 @@ export default class GridManager {
   ) {
     const rows = this.rows;
     const cols = this.cols;
-    const evs = Array.isArray(events) ? events : events ? [events] : [];
+    const evs = Array.isArray(events) ? events : events ? [events] : EMPTY_EVENT_LIST;
+    const hasEvents = evs.length > 0;
     const hasDensityGrid = Array.isArray(densityGrid);
     const energyGrid = this.energyGrid;
     const next = this.energyNext;
@@ -922,6 +924,27 @@ export default class GridManager {
       config: sharedConfig,
     };
 
+    let eventsByRow = null;
+
+    if (hasEvents) {
+      eventsByRow = new Array(rows);
+
+      for (let i = 0; i < evs.length; i++) {
+        const ev = evs[i];
+        const area = ev?.affectedArea;
+
+        if (!area) continue;
+
+        const startRow = Math.max(0, Math.floor(area.y));
+        const endRow = Math.min(rows, Math.ceil(area.y + area.height));
+
+        for (let rr = startRow; rr < endRow; rr++) {
+          if (!eventsByRow[rr]) eventsByRow[rr] = [];
+          eventsByRow[rr].push(ev);
+        }
+      }
+    }
+
     for (let r = 0; r < rows; r++) {
       const energyRow = energyGrid[r];
       const nextRow = next[r];
@@ -932,6 +955,9 @@ export default class GridManager {
       const downEnergyRow = r < rows - 1 ? energyGrid[r + 1] : null;
       const upObstacleRow = r > 0 ? obstacles?.[r - 1] : null;
       const downObstacleRow = r < rows - 1 ? obstacles?.[r + 1] : null;
+      const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
+
+      computeOptions.events = rowEvents;
 
       for (let c = 0; c < cols; c++) {
         if (obstacleRow?.[c]) {
