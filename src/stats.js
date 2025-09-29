@@ -28,46 +28,46 @@ const createTraitMap = (initializer) => {
   return map;
 };
 
-const createRingBuffer = (size = 0) => {
-  const capacity = Math.max(0, Math.floor(size));
-
-  return {
-    buffer: new Array(capacity || 0),
-    capacity,
-    start: 0,
-    length: 0,
-  };
-};
-
-const pushToRing = (ring, value) => {
-  if (!ring || ring.capacity === 0) return;
-
-  if (ring.length < ring.capacity) {
-    const index = (ring.start + ring.length) % ring.capacity;
-
-    ring.buffer[index] = value;
-    ring.length += 1;
-
-    return;
+class RingBuffer {
+  constructor(size = 0) {
+    this.capacity = Math.max(0, Math.floor(size));
+    this.buffer = new Array(this.capacity || 0);
+    this.start = 0;
+    this.length = 0;
   }
 
-  ring.buffer[ring.start] = value;
-  ring.start = (ring.start + 1) % ring.capacity;
-};
+  push(value) {
+    if (this.capacity === 0) return;
 
-const unwrapRing = (ring) => {
-  if (!ring || ring.length === 0 || ring.capacity === 0) return [];
+    if (this.length < this.capacity) {
+      const index = (this.start + this.length) % this.capacity;
 
-  const values = new Array(ring.length);
+      this.buffer[index] = value;
+      this.length += 1;
 
-  for (let i = 0; i < ring.length; i++) {
-    const index = (ring.start + i) % ring.capacity;
+      return;
+    }
 
-    values[i] = ring.buffer[index];
+    this.buffer[this.start] = value;
+    this.start = (this.start + 1) % this.capacity;
   }
 
-  return values;
-};
+  values() {
+    if (this.length === 0 || this.capacity === 0) return [];
+
+    const values = new Array(this.length);
+
+    for (let i = 0; i < this.length; i++) {
+      const index = (this.start + i) % this.capacity;
+
+      values[i] = this.buffer[index];
+    }
+
+    return values;
+  }
+}
+
+const createRingBuffer = (size = 0) => new RingBuffer(size);
 
 const createEmptyTraitSnapshot = () => ({
   population: 0,
@@ -135,7 +135,7 @@ export default class Stats {
       Object.defineProperty(this.history, key, {
         enumerable: true,
         configurable: false,
-        get: () => unwrapRing(ring),
+        get: () => ring.values(),
       });
     });
 
@@ -150,13 +150,13 @@ export default class Stats {
       Object.defineProperty(this.traitHistory.presence, key, {
         enumerable: true,
         configurable: false,
-        get: () => unwrapRing(presenceRing),
+        get: () => presenceRing.values(),
       });
 
       Object.defineProperty(this.traitHistory.average, key, {
         enumerable: true,
         configurable: false,
-        get: () => unwrapRing(averageRing),
+        get: () => averageRing.values(),
       });
     }
 
@@ -389,20 +389,20 @@ export default class Stats {
   pushHistory(key, value) {
     const ring = this.#historyRings?.[key];
 
-    pushToRing(ring, value);
+    ring?.push(value);
   }
 
   pushTraitHistory(type, key, value) {
     const ring = this.#traitHistoryRings?.[type]?.[key];
 
-    pushToRing(ring, value);
+    ring?.push(value);
   }
 
   getHistorySeries(key) {
-    return unwrapRing(this.#historyRings?.[key]);
+    return this.#historyRings?.[key]?.values() ?? [];
   }
 
   getTraitHistorySeries(type, key) {
-    return unwrapRing(this.#traitHistoryRings?.[type]?.[key]);
+    return this.#traitHistoryRings?.[type]?.[key]?.values() ?? [];
   }
 }
