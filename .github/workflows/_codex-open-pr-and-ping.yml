@@ -125,7 +125,7 @@ jobs:
               `git config user.email "codex@example.com"`,
               `git -c credential.helper= \\`,
               `    -c 'credential.helper=store --file .git/codex-cred' \\`,
-              `    push "https://github.com/${owner}/${repo}.git" "HEAD:${branch}"`,
+              `    push "https://henrylkirk@github.com/${owner}/${repo}.git" "HEAD:${branch}"`,
               "```",
               "Here is some additional context for your task:",
               "```yaml",
