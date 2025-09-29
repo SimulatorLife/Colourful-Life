@@ -1,4 +1,4 @@
-name: Codex 20 – UI Polish
+name: Codex 19 – UI Polish
 on:
   schedule:
     - cron: "21 */23 * * *" # every 23 hours
