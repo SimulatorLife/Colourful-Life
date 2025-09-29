@@ -1,0 +1,111 @@
+import { test } from 'uvu';
+import * as assert from 'uvu/assert';
+
+import {
+  MockCanvas,
+  loadSimulationModules,
+  patchSimulationPrototypes,
+} from './helpers/simulationEngine.js';
+
+function createEngine(modules) {
+  const { SimulationEngine } = modules;
+
+  return new SimulationEngine({
+    canvas: new MockCanvas(20, 20),
+    autoStart: false,
+    performanceNow: () => 0,
+    requestAnimationFrame: () => {},
+    cancelAnimationFrame: () => {},
+  });
+}
+
+test('numeric setters sanitize input, clamp values, and flag slow UI updates', async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.pendingSlowUiUpdate = false;
+    const rounded = engine.setUpdatesPerSecond('120.7');
+
+    assert.is(rounded, 121, 'updatesPerSecond is rounded to nearest integer');
+    assert.is(engine.state.updatesPerSecond, 121);
+    assert.ok(engine.pendingSlowUiUpdate, 'changing updatesPerSecond flags slow UI updates');
+
+    engine.pendingSlowUiUpdate = false;
+    const previousEventFrequency = engine.state.eventFrequencyMultiplier;
+    engine.setEventFrequencyMultiplier('not-a-number');
+
+    assert.is(engine.state.eventFrequencyMultiplier, previousEventFrequency);
+    assert.is(engine.pendingSlowUiUpdate, false, 'fallback path does not mark slow UI updates');
+
+    engine.pendingSlowUiUpdate = false;
+    engine.setEnergyRates({ regen: -5, diffusion: 0.9 });
+
+    assert.is(engine.state.energyRegenRate, 0, 'regen rate is clamped at zero');
+    assert.is(engine.state.energyDiffusionRate, 0.9, 'diffusion rate accepts valid values');
+    assert.ok(engine.pendingSlowUiUpdate, 'energy tuning triggers leaderboard refresh');
+
+    engine.pendingSlowUiUpdate = false;
+    engine.setSimilarityThresholds({ societySimilarity: 2, enemySimilarity: -1 });
+
+    assert.is(engine.state.societySimilarity, 1, 'society similarity clamps to upper bound');
+    assert.is(engine.state.enemySimilarity, 0, 'enemy similarity clamps to lower bound');
+    assert.ok(engine.pendingSlowUiUpdate, 'similarity adjustments mark slow UI updates');
+  } finally {
+    restore();
+  }
+});
+
+test('overlay visibility toggles mutate only requested flags', async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.pendingSlowUiUpdate = false;
+    engine.setOverlayVisibility({
+      showObstacles: false,
+      showDensity: undefined,
+      showFitness: true,
+    });
+
+    assert.is(engine.state.showObstacles, false);
+    assert.is(engine.state.showFitness, true);
+    assert.is(engine.state.showDensity, false, 'unset overlay flags retain their existing values');
+    assert.is(
+      engine.pendingSlowUiUpdate,
+      false,
+      'overlay toggles do not schedule leaderboard work'
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('setBrainSnapshotCollector stores collector and forwards to grid', async () => {
+  const modules = await loadSimulationModules();
+  const { restore, calls } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    const collector = { captureFromEntries: () => {} };
+
+    engine.setBrainSnapshotCollector(collector);
+
+    assert.is(engine.brainSnapshotCollector, collector);
+    assert.equal(calls.grid.setBrainSnapshotCollector.at(-1), [collector]);
+
+    engine.setBrainSnapshotCollector();
+
+    assert.is(engine.brainSnapshotCollector, null, 'collector defaults to null when omitted');
+    assert.equal(calls.grid.setBrainSnapshotCollector.at(-1), [undefined]);
+  } finally {
+    restore();
+  }
+});
+
+test.run();
