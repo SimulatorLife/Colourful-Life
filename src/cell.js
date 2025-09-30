@@ -72,6 +72,14 @@ export default class Cell {
       typeof this.dna.diversityAppetite === "function"
         ? this.dna.diversityAppetite()
         : 0;
+    this.mateSamplingProfile =
+      typeof this.dna.mateSamplingProfile === "function"
+        ? this.dna.mateSamplingProfile()
+        : null;
+    this._mateSelectionNoiseRng =
+      typeof this.dna.prngFor === "function"
+        ? this.dna.prngFor("mateSelectionNoise")
+        : null;
     this._neuralLoad = 0;
     this.lastEventPressure = 0;
     this._usedNeuralMovement = false;
@@ -164,11 +172,26 @@ export default class Cell {
 
     const offspringEnergy = investA + investB;
     const offspring = new Cell(row, col, childDNA, offspringEnergy);
-    const strategy =
-      (parentA.strategy + parentB.strategy) / 2 +
-      (Math.random() * Cell.geneMutationRange - Cell.geneMutationRange / 2);
+    const parentStrategies = [];
 
-    offspring.strategy = Math.min(1, Math.max(0, strategy));
+    if (Number.isFinite(parentA.strategy)) parentStrategies.push(parentA.strategy);
+    if (Number.isFinite(parentB.strategy)) parentStrategies.push(parentB.strategy);
+
+    if (typeof childDNA?.inheritStrategy === "function") {
+      const inherited = childDNA.inheritStrategy(parentStrategies, {
+        fallback: offspring.strategy,
+      });
+
+      if (Number.isFinite(inherited)) {
+        offspring.strategy = clamp(inherited, 0, 1);
+      }
+    } else if (parentStrategies.length > 0) {
+      const avg =
+        parentStrategies.reduce((sum, value) => sum + value, 0) /
+        parentStrategies.length;
+
+      offspring.strategy = clamp(avg, 0, 1);
+    }
     parentA.offspring = (parentA.offspring || 0) + 1;
     parentB.offspring = (parentB.offspring || 0) + 1;
 
@@ -198,7 +221,35 @@ export default class Cell {
     const curiosityBonus = diversity * appetite * 0.5;
     const preferenceScore = similarPull + diversePull + curiosityBonus;
 
-    const selectionWeight = Math.max(0.0001, preferenceScore);
+    const samplingProfile = this.mateSamplingProfile || {};
+    const weightScale = clamp(
+      Number.isFinite(samplingProfile?.preferenceSoftening)
+        ? samplingProfile.preferenceSoftening
+        : 1,
+      0.05,
+      4,
+    );
+    const noveltyWeight = clamp(
+      Number.isFinite(samplingProfile?.noveltyWeight)
+        ? samplingProfile.noveltyWeight
+        : 0,
+      -1,
+      1,
+    );
+    const jitterAmplitude = clamp(
+      Number.isFinite(samplingProfile?.selectionJitter)
+        ? samplingProfile.selectionJitter
+        : 0,
+      0,
+      1,
+    );
+    const randomSource =
+      typeof this._mateSelectionNoiseRng === "function"
+        ? this._mateSelectionNoiseRng
+        : Math.random;
+    const jitter = jitterAmplitude > 0 ? (randomSource() - 0.5) * jitterAmplitude : 0;
+    const weighted = preferenceScore * weightScale + diversity * noveltyWeight + jitter;
+    const selectionWeight = Math.max(0.0001, weighted);
 
     mate.similarity = similarity;
     mate.diversity = diversity;
@@ -242,29 +293,49 @@ export default class Cell {
 
     if (evaluated.length === 0) return { chosen: null, evaluated: [], mode: "none" };
 
-    const appetite = this.diversityAppetite ?? 0;
+    const appetite = clamp(this.diversityAppetite ?? 0, 0, 1);
+    const samplingProfile = this.mateSamplingProfile || {};
+    const randomSample =
+      typeof this._mateSelectionNoiseRng === "function"
+        ? this._mateSelectionNoiseRng
+        : Math.random;
     let mode = "preference";
     let chosen = null;
 
-    const curiosityChance = Math.min(0.5, appetite * 0.25);
+    const curiosityBase = Math.min(0.5, appetite * 0.25);
+    const profileCuriosity = samplingProfile?.curiosityChance;
+    const curiosityChance = clamp(
+      (profileCuriosity ?? curiosityBase) * (0.7 + appetite * 0.6),
+      0,
+      0.95,
+    );
 
-    if (evaluated.length > 1 && Math.random() < curiosityChance) {
+    if (evaluated.length > 1 && randomSample() < curiosityChance) {
       const sorted = [...evaluated].sort((a, b) => b.diversity - a.diversity);
-      const tailSpan = Math.max(1, Math.ceil(sorted.length * (0.2 + appetite * 0.5)));
-      const idx = Math.min(sorted.length - 1, Math.floor(Math.random() * tailSpan));
+      const tailBase = clamp(0.2 + appetite * 0.5, 0.05, 1);
+      const tailFraction = clamp(samplingProfile?.tailFraction ?? tailBase, 0.05, 1);
+      const tailSpan = Math.max(1, Math.ceil(sorted.length * tailFraction));
+      const idx = Math.min(sorted.length - 1, Math.floor(randomSample() * tailSpan));
 
       chosen = sorted[idx];
       mode = "curiosity";
     }
 
     if (!chosen) {
-      const totalWeight = evaluated.reduce((sum, m) => sum + m.selectionWeight, 0);
-      let roll = Math.random() * (totalWeight || 1);
+      const totalWeight = evaluated.reduce(
+        (sum, m) =>
+          sum +
+          (Number.isFinite(m.selectionWeight) ? Math.max(0, m.selectionWeight) : 0),
+        0,
+      );
+      const safeTotal = totalWeight > 0 ? totalWeight : 1;
+      let roll = randomSample() * safeTotal;
 
       for (let i = 0; i < evaluated.length; i++) {
         const candidate = evaluated[i];
+        const weight = Math.max(0, candidate.selectionWeight);
 
-        roll -= candidate.selectionWeight;
+        roll -= weight;
         if (roll <= 0) {
           chosen = candidate;
           break;
@@ -282,7 +353,36 @@ export default class Cell {
     const target = clamp(pref.target ?? 0.75, 0, 1);
     const tolerance = Math.max(0.05, pref.tolerance ?? 0.25);
     const kinBias = clamp(pref.kinBias ?? 0.5, 0, 1);
-    const dnaNoiseRng = this.dna?.prngFor ? this.dna.prngFor("mateChoice") : null;
+    const samplingProfile = this.mateSamplingProfile || {};
+    const noveltyBias = clamp(
+      Number.isFinite(samplingProfile?.fallbackNoveltyBias)
+        ? samplingProfile.fallbackNoveltyBias
+        : 0,
+      -1,
+      1,
+    );
+    const stabilityWeight = clamp(
+      Number.isFinite(samplingProfile?.fallbackStabilityWeight)
+        ? samplingProfile.fallbackStabilityWeight
+        : 0.5,
+      0,
+      1,
+    );
+    const noiseAmplitude = clamp(
+      Number.isFinite(samplingProfile?.fallbackNoise)
+        ? samplingProfile.fallbackNoise
+        : Number.isFinite(samplingProfile?.selectionJitter)
+          ? samplingProfile.selectionJitter
+          : 0.05,
+      0,
+      0.6,
+    );
+    const noiseSource =
+      typeof this._mateSelectionNoiseRng === "function"
+        ? this._mateSelectionNoiseRng
+        : typeof this.dna?.prngFor === "function"
+          ? this.dna.prngFor("mateChoice")
+          : null;
 
     let fallbackMate = null;
     let bestScore = -Infinity;
@@ -296,8 +396,14 @@ export default class Cell {
       const kinScore = similarity;
       let score = (1 - kinBias) * targetScore + kinBias * kinScore;
 
-      if (dnaNoiseRng) score += (dnaNoiseRng() - 0.5) * 0.05;
-      score += (Math.random() - 0.5) * 0.05;
+      score = score * (1 - stabilityWeight) + kinScore * stabilityWeight;
+      score += (1 - similarity) * noveltyBias;
+
+      if (noiseAmplitude > 0) {
+        const noiseFn = typeof noiseSource === "function" ? noiseSource : Math.random;
+
+        score += (noiseFn() - 0.5) * noiseAmplitude;
+      }
 
       if (score > bestScore) {
         bestScore = score;

@@ -431,7 +431,6 @@ test("breed applies deterministic crossover and honors forced mutation", () => {
   const dnaB = new DNA(140, 160, 210);
   const parentA = new Cell(7, 8, dnaA, 6);
   const parentB = new Cell(7, 8, dnaB, 6);
-  const avgStrategy = (parentA.strategy + parentB.strategy) / 2;
 
   // Force mutation to trigger and make expectations deterministic
   dnaA.mutationChance = () => 1;
@@ -457,11 +456,19 @@ test("breed applies deterministic crossover and honors forced mutation", () => {
   for (let i = 0; i < expectedGenes.length; i++) {
     assert.is(child.dna.geneAt(i), expectedGenes[i]);
   }
+  const expectedStrategy = clamp(
+    child.dna.inheritStrategy([parentA.strategy, parentB.strategy], {
+      fallback: child.dna.strategy(),
+    }),
+    0,
+    1,
+  );
+
   expectClose(
     child.strategy,
-    avgStrategy,
+    expectedStrategy,
     1e-12,
-    "strategy averages when mutation delta is zero",
+    "strategy inheritance should match DNA guidance",
   );
 });
 
@@ -771,6 +778,166 @@ test("cooperateShareFrac adapts to ally deficits and kinship", () => {
   assert.ok(assistWeakKin > baseline, "shares more with weaker kin");
   assert.ok(holdBack < baseline, "shares less with stronger partners");
   assert.ok(assistWeakKin > holdBack, "overall preference favors helping the weak");
+});
+
+test("evaluateMateCandidate scales selection weight using mate sampling profile", () => {
+  const dna = new DNA(10, 20, 30);
+  const cell = new Cell(0, 0, dna, 5);
+  const mateDNA = new DNA(40, 80, 120);
+  const mateCell = new Cell(0, 1, mateDNA, 5);
+
+  cell.matePreferenceBias = 0;
+  cell.diversityAppetite = 0;
+  cell.mateSamplingProfile = {
+    preferenceSoftening: 2,
+    noveltyWeight: 0.5,
+    selectionJitter: 0,
+  };
+  cell._mateSelectionNoiseRng = () => 0.5;
+
+  const evaluated = cell.evaluateMateCandidate({ target: mateCell });
+
+  assert.ok(evaluated, "mate evaluation should produce a result");
+
+  const expectedBase =
+    evaluated.preferenceScore * cell.mateSamplingProfile.preferenceSoftening +
+    evaluated.diversity * cell.mateSamplingProfile.noveltyWeight;
+  const expectedWeight = Math.max(0.0001, expectedBase);
+
+  expectClose(
+    evaluated.selectionWeight,
+    expectedWeight,
+    1e-9,
+    "selection weight should reflect DNA-driven weighting",
+  );
+});
+
+test("selectMateWeighted honors mate sampling curiosity bias", () => {
+  const dna = new DNA(10, 20, 30);
+  const cell = new Cell(0, 0, dna, 5);
+  const similarTarget = new Cell(0, 1, new DNA(20, 30, 40), 5);
+  const diverseTarget = new Cell(0, 2, new DNA(200, 10, 10), 5);
+
+  cell.matePreferenceBias = 0;
+  cell.diversityAppetite = 0;
+  cell.mateSamplingProfile = {
+    curiosityChance: 0.9,
+    tailFraction: 0.5,
+    preferenceSoftening: 1,
+    selectionJitter: 0,
+    noveltyWeight: 0,
+  };
+  const sequence = [0.01, 0.2, 0.8];
+  let index = 0;
+
+  cell._mateSelectionNoiseRng = () => {
+    const value = sequence[index] ?? sequence[sequence.length - 1];
+
+    index += 1;
+
+    return value;
+  };
+
+  const similar = { target: similarTarget, precomputedSimilarity: 0.9 };
+  const diverse = { target: diverseTarget, precomputedSimilarity: 0.1 };
+  const { chosen, mode } = cell.selectMateWeighted([similar, diverse]);
+
+  assert.is(mode, "curiosity", "high curiosity genomes sample tail candidates");
+  assert.is(chosen, diverse, "curiosity pick should favor diverse mates");
+});
+
+test("breed uses DNA inheritStrategy to compute offspring strategy", () => {
+  const dnaA = new DNA(10, 20, 30);
+  const dnaB = new DNA(40, 50, 60);
+  const parentA = new Cell(0, 0, dnaA, 10);
+  const parentB = new Cell(0, 1, dnaB, 10);
+
+  parentA.dna.parentalInvestmentFrac = () => 0.5;
+  parentB.dna.parentalInvestmentFrac = () => 0.5;
+  parentA.dna.starvationThresholdFrac = () => 0.1;
+  parentB.dna.starvationThresholdFrac = () => 0.1;
+  parentA.dna.mutationChance = () => 0.1;
+  parentB.dna.mutationChance = () => 0.1;
+  parentA.dna.mutationRange = () => 4;
+  parentB.dna.mutationRange = () => 4;
+
+  const childDNA = new DNA(0, 0, 0);
+  let inheritArgs = null;
+
+  childDNA.inheritStrategy = (strategies, { fallback } = {}) => {
+    inheritArgs = { strategies: [...strategies], fallback };
+
+    return 0.77;
+  };
+  childDNA.strategy = () => 0.2;
+  childDNA.strategyDriftRange = () => 0.1;
+
+  parentA.dna.reproduceWith = () => childDNA;
+
+  const offspring = Cell.breed(parentA, parentB, 1, { maxTileEnergy: 10 });
+
+  assert.ok(offspring, "breed should produce an offspring when energy is invested");
+  assert.ok(inheritArgs, "inheritStrategy should be invoked on offspring DNA");
+  assert.ok(
+    inheritArgs.strategies.includes(parentA.strategy),
+    "parent A strategy should influence inheritance",
+  );
+  assert.ok(
+    inheritArgs.strategies.includes(parentB.strategy),
+    "parent B strategy should influence inheritance",
+  );
+  assert.is(
+    offspring.strategy,
+    0.77,
+    "offspring strategy should follow DNA inheritance",
+  );
+});
+
+test("mateSamplingProfile responds to courtship gene expression", () => {
+  const template = new DNA(0, 0, 0);
+  const geneCount = template.length;
+  const lowGenes = new Uint8Array(geneCount);
+  const highGenes = new Uint8Array(geneCount);
+
+  lowGenes[GENE_LOCI.COURTSHIP] = 10;
+  highGenes[GENE_LOCI.COURTSHIP] = 240;
+
+  const lowCourtship = new DNA({ genes: lowGenes, geneCount });
+  const highCourtship = new DNA({ genes: highGenes, geneCount });
+  const lowProfile = lowCourtship.mateSamplingProfile();
+  const highProfile = highCourtship.mateSamplingProfile();
+
+  assert.ok(
+    highProfile.curiosityChance > lowProfile.curiosityChance,
+    "higher courtship genes should raise curiosity",
+  );
+  assert.ok(
+    highProfile.tailFraction >= lowProfile.tailFraction,
+    "higher courtship genes should widen sampling tail",
+  );
+});
+
+test("strategyDriftRange expands for exploratory genomes", () => {
+  const template = new DNA(0, 0, 0);
+  const geneCount = template.length;
+  const conservativeGenes = new Uint8Array(geneCount);
+  const exploratoryGenes = new Uint8Array(geneCount);
+
+  conservativeGenes[GENE_LOCI.MUTATION_RANGE] = 10;
+  conservativeGenes[GENE_LOCI.COURTSHIP] = 20;
+  conservativeGenes[GENE_LOCI.STRATEGY] = 240;
+
+  exploratoryGenes[GENE_LOCI.MUTATION_RANGE] = 240;
+  exploratoryGenes[GENE_LOCI.COURTSHIP] = 240;
+  exploratoryGenes[GENE_LOCI.STRATEGY] = 20;
+
+  const conservative = new DNA({ genes: conservativeGenes, geneCount });
+  const exploratory = new DNA({ genes: exploratoryGenes, geneCount });
+
+  assert.ok(
+    exploratory.strategyDriftRange() > conservative.strategyDriftRange(),
+    "mutationally flexible genomes should allow broader strategy drift",
+  );
 });
 
 test.run();
