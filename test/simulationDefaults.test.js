@@ -58,6 +58,7 @@ class MockElement {
       add: () => {},
       remove: () => {},
     };
+    this.attributes = Object.create(null);
   }
 
   appendChild(child) {
@@ -100,6 +101,14 @@ class MockElement {
 
   getBoundingClientRect() {
     return { left: 0, top: 0, width: this.width ?? 0, height: this.height ?? 0 };
+  }
+
+  setAttribute(name, value) {
+    this.attributes[name] = String(value);
+  }
+
+  getAttribute(name) {
+    return this.attributes[name] ?? null;
   }
 }
 
