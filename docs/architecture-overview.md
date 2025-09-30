@@ -9,7 +9,7 @@ This document captures how the Colourful Life simulation composes its core syste
    - Prepares the grid for the upcoming tick via `grid.prepareTick`.
    - Advances the grid one step, which updates organism state, tile energy, events, and overlays.
    - Emits lifecycle events (`tick`, `metrics`, `leaderboard`, `state`) consumed by UI panels and analytics.
-2. **UIManager** (`src/uiManager.js`) renders controls, metrics, and overlays. It dispatches user actions (pause, stamping obstacles, slider changes) back to the engine by calling `engine` helpers exposed through `createSimulation`.
+2. **UIManager** (`src/uiManager.js`) renders controls, metrics, and overlays. It dispatches user actions (pause, stamping obstacles, slider changes) back to the engine by calling `engine` helpers exposed through `createSimulation`. When the browser UI is unavailable, `createHeadlessUiManager` in `src/main.js` mirrors the same surface area so headless runs share settings and cadence management.
 3. **BrainDebugger** (`src/brainDebugger.js`) receives neuron snapshots from the grid and exposes them to the browser console for inspection. The debugger is optional in headless environments.
 
 ## Core subsystems
@@ -21,6 +21,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - Delegates complex social interactions to **InteractionSystem** and neural decision making to **Brain** instances.
 - Collects leaderboard entries by combining `computeFitness` with Brain snapshots.
 - Applies obstacle presets (`OBSTACLE_PRESETS`) and exposes helpers such as `burstRandomCells`, `applyObstaclePreset`, and `setLingerPenalty` that the UI surfaces.
+- Integrates with `SelectionManager` and `ReproductionZonePolicy` to respect curated reproduction areas, and with wall-contact penalties configured per DNA profile.
 
 ### EnergySystem
 
@@ -30,7 +31,7 @@ This document captures how the Colourful Life simulation composes its core syste
 
 ### Events
 
-- **EventManager** spawns periodic floods, droughts, heatwaves, and coldwaves. Events carry strength, duration, and a rectangular affected area.
+- **EventManager** spawns periodic floods, droughts, heatwaves, and coldwaves. Events carry strength, duration, and a rectangular affected area. The manager exposes a colour resolver consumed by overlays and can be configured with custom event pools.
 - **eventEffects** maps event types to regeneration/drain modifiers and per-cell effects (energy loss, resistance genes).
 - **eventContext** (`src/events/eventContext.js`) exposes helpers used by the grid and energy systems to determine whether an event affects a tile. Headless consumers can reuse it to keep behaviour consistent without depending on DOM state.
 - Overlay rendering uses `EventManager.getColor` to shade the canvas and exposes `activeEvents` for analytics.
@@ -38,7 +39,7 @@ This document captures how the Colourful Life simulation composes its core syste
 ### Genetics and Brains
 
 - **Genome** (`src/genome.js`) encodes organism traits and generates neural wiring instructions.
-- **Brain** interprets those instructions, constructing sensor/activation maps that output intents for movement, interaction, reproduction, and targeting.
+- **Brain** interprets those instructions, constructing sensor/activation maps that output intents for movement, interaction, reproduction, and targeting. Neural fatigue and reinforcement profiles derived from DNA bias decisions over time, letting organisms adapt strategy without deterministic scripts.
 - Brains adapt sensor gains and baselines over time using DNA-provided modulation ranges, and apply neural plasticity profiles to fold energy/fatigue outcomes back into sensor targets so experience gradually refines instincts instead of leaving them static.
 - DNA derives a `neuralReinforcementProfile` alongside plasticity data; cells convert it into per-decision reward signals that bias learning toward genome-preferred actions, energy states, and targeting focus instead of relying on hard-coded heuristics.
 - DNA also provides a `neuralFatigueProfile` that cells use to accumulate neural fatigue from energy budgets and activation loads; the resulting fatigue dynamically shapes risk tolerance sensors so behaviour cools off when cognition is overtaxed and sharpens again when rested. Neural policies can now intentionally choose the `rest` movement to cash in DNA-tuned recovery efficiency, letting well-fed organisms clear fatigue faster in low-pressure environments.
@@ -54,7 +55,7 @@ This document captures how the Colourful Life simulation composes its core syste
 
 - **Stats** (`src/stats.js`) accumulates per-tick metrics, maintains rolling history for charts, and reports aggregate counters (births, deaths, fights, cooperations).
 - **Leaderboard** (`src/leaderboard.js`) combines `computeFitness` output with brain snapshots to surface top-performing organisms.
-- **BrainDebugger** (`src/brainDebugger.js`) mirrors neuron traces into the browser console for inspection. `SimulationEngine` forwards snapshots each tick when the debugger is available.
+- **BrainDebugger** (`src/brainDebugger.js`) mirrors neuron traces into the browser console for inspection. `SimulationEngine` forwards snapshots each tick when the debugger is available. The debugger doubles as the default brain snapshot collector for headless runs.
 
 ### UI and overlays
 
@@ -62,6 +63,8 @@ This document captures how the Colourful Life simulation composes its core syste
 - Overlays (`src/overlays.js`) render density, energy, fitness, and obstacle layers on top of the main canvas.
 - Selection tooling (`src/selectionManager.js`) exposes reusable mating zones and user-drawn rectangles that gate reproduction.
 - `ReproductionZonePolicy` (`src/grid/reproductionZonePolicy.js`) keeps `GridManager`'s reproduction flow decoupled from the selection implementation by translating zone checks into simple allow/deny results.
+- `config.js` consolidates slider bounds, simulation defaults, and runtime-tunable constants such as diffusion and regeneration rates so UI and headless contexts remain in sync.
+- `utils.js` houses deterministic helpers (`createRNG`, `createRankedBuffer`, `cloneTracePayload`, etc.) reused across the simulation, UI, and tests.
 
 ## Headless and scripted usage
 
@@ -87,6 +90,7 @@ When running outside the browser:
 ## Related scripts
 
 - `scripts/profile-energy.mjs` benchmarks the grid preparation loop. Tune dimensions via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, and `PERF_ITERATIONS`.
+- `scripts/clean-parcel.js` clears `dist/` and `.parcel-cache/` and underpins the `npm run clean:parcel` command for recovering from stubborn Parcel state.
 - Additional helpers in `scripts/` showcase headless usage patterns. Each script is documented inline with configuration tips.
 
 For further guidance, browse the inline JSDoc across `src/` and the tests under `test/` to see concrete usage patterns.
