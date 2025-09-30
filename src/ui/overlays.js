@@ -1,5 +1,5 @@
 import { MAX_TILE_ENERGY } from "../config.js";
-import { lerp } from "../utils.js";
+import { lerp, warnOnce } from "../utils.js";
 
 const FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
@@ -35,10 +35,19 @@ export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
     if (!event || !event.affectedArea) continue;
 
     const { affectedArea } = event;
-    const color =
-      (typeof getColor === "function" && getColor(event)) ||
-      event.color ||
-      "rgba(255,255,255,0.15)";
+    let color = event.color || "rgba(255,255,255,0.15)";
+
+    if (typeof getColor === "function") {
+      try {
+        const resolved = getColor(event);
+
+        if (typeof resolved === "string" && resolved.length > 0) {
+          color = resolved;
+        }
+      } catch (error) {
+        warnOnce("Failed to resolve event overlay color; using fallback.", error);
+      }
+    }
 
     if (!color) continue;
 
@@ -193,15 +202,45 @@ function drawDensityLegend(ctx, cellSize, cols, rows, minDensity, maxDensity) {
   ctx.restore();
 }
 
+function hasActiveSelectionZones(selectionManager) {
+  if (!selectionManager || typeof selectionManager.hasActiveZones !== "function") {
+    return false;
+  }
+
+  try {
+    return Boolean(selectionManager.hasActiveZones());
+  } catch (error) {
+    warnOnce("Selection manager failed during active zone check.", error);
+
+    return false;
+  }
+}
+
+function getSelectionZoneEntries(selectionManager) {
+  if (
+    !selectionManager ||
+    typeof selectionManager.getActiveZoneRenderData !== "function"
+  ) {
+    return [];
+  }
+
+  try {
+    const entries = selectionManager.getActiveZoneRenderData();
+
+    return Array.isArray(entries) ? entries : [];
+  } catch (error) {
+    warnOnce("Selection manager failed while resolving zone geometry.", error);
+
+    return [];
+  }
+}
+
 function drawSelectionZones(selectionManager, ctx, cellSize) {
-  if (!selectionManager?.hasActiveZones()) return;
+  if (!hasActiveSelectionZones(selectionManager)) return;
 
-  const zoneEntries =
-    typeof selectionManager.getActiveZoneRenderData === "function"
-      ? selectionManager.getActiveZoneRenderData()
-      : null;
+  const zoneEntries = getSelectionZoneEntries(selectionManager);
 
-  if (!Array.isArray(zoneEntries) || zoneEntries.length === 0) return;
+  if (zoneEntries.length === 0) return;
 
   ctx.save();
   for (const entry of zoneEntries) {
@@ -214,9 +253,9 @@ function drawSelectionZones(selectionManager, ctx, cellSize) {
 
     if (!color) continue;
 
-    const rects = geometry?.rects;
+    const rects = Array.isArray(geometry?.rects) ? geometry.rects : null;
 
-    if (!Array.isArray(rects) || rects.length === 0) {
+    if (!rects || rects.length === 0) {
       continue;
     }
 
