@@ -1,45 +1,11 @@
 import { test } from "uvu";
 import * as assert from "uvu/assert";
+import { MockCanvas } from "./helpers/simulationEngine.js";
 
 const configModulePromise = import("../src/config.js");
 const uiManagerModulePromise = import("../src/ui/uiManager.js");
 const simulationEngineModulePromise = import("../src/simulationEngine.js");
 const mainModulePromise = import("../src/main.js");
-
-class MockGradient {
-  addColorStop() {}
-}
-
-class MockContext {
-  constructor(width, height) {
-    this.canvas = { width, height };
-  }
-
-  clearRect() {}
-  fillRect() {}
-  strokeRect() {}
-  save() {}
-  restore() {}
-  createLinearGradient() {
-    return new MockGradient();
-  }
-  fillText() {}
-  strokeText() {}
-}
-
-class MockCanvas {
-  constructor(width, height) {
-    this.width = width;
-    this.height = height;
-    this._context = new MockContext(width, height);
-  }
-
-  getContext(type) {
-    if (type !== "2d") return null;
-
-    return this._context;
-  }
-}
 
 class MockElement {
   constructor(tagName = "div") {
