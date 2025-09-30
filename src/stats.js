@@ -23,17 +23,13 @@ const HISTORY_SERIES_KEYS = [
 const DIVERSITY_TARGET_DEFAULT = 0.35;
 const DIVERSITY_PRESSURE_SMOOTHING = 0.85;
 
-const createTraitValueMap = (initializer) => {
-  const map = {};
-
-  for (let i = 0; i < TRAIT_NAMES.length; i++) {
-    const key = TRAIT_NAMES[i];
-
-    map[key] = typeof initializer === 'function' ? initializer(key) : initializer;
-  }
-
-  return map;
-};
+const createTraitValueMap = (initializer) =>
+  Object.fromEntries(
+    TRAIT_NAMES.map((key) => [
+      key,
+      typeof initializer === 'function' ? initializer(key) : initializer,
+    ])
+  );
 
 /**
  * Minimal fixed-capacity ring buffer used by chart history accessors.
