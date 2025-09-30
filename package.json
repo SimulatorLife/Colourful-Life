@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "parcel ./index.html",
+    "clean:parcel": "node ./scripts/clean-parcel.js",
     "build": "parcel build ./index.html",
     "test": "uvu ./test",
     "format": "prettier --write .",

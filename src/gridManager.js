@@ -2394,3 +2394,4 @@ export default class GridManager {
 }
 
 GridManager.OBSTACLE_PRESETS = OBSTACLE_PRESETS;
+export { OBSTACLE_PRESETS };
