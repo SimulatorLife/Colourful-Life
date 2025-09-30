@@ -164,6 +164,36 @@ export default class GridManager {
     }
   }
 
+  static #resolveDiversityDrive(
+    cell,
+    { localDensity = 0, tileEnergy = 0.5, tileEnergyDelta = 0 } = {}
+  ) {
+    if (!cell || typeof cell !== 'object') return 0;
+
+    const appetite = clamp(cell.diversityAppetite ?? 0, 0, 1);
+    const bias = clamp(cell.matePreferenceBias ?? 0, -1, 1);
+    const fertilityFrac = clamp(
+      typeof cell.dna?.reproductionThresholdFrac === 'function'
+        ? cell.dna.reproductionThresholdFrac()
+        : 0.4,
+      0,
+      1
+    );
+    const densitySignal = clamp(localDensity ?? 0, 0, 1);
+    const scarcitySignal = clamp(1 - (tileEnergy ?? 0), 0, 1);
+    const declineSignal = clamp(-(tileEnergyDelta ?? 0), 0, 1);
+    const curiosity = clamp(appetite + Math.max(0, -bias) * 0.5 - Math.max(0, bias) * 0.4, 0, 1);
+    const caution = clamp(1 - fertilityFrac, 0, 1);
+    const environment = clamp(
+      0.5 * densitySignal + 0.3 * scarcitySignal + 0.2 * declineSignal,
+      0,
+      1
+    );
+    const drive = curiosity * (0.55 + 0.45 * caution);
+
+    return clamp(drive * 0.7 + environment * 0.3, 0, 1);
+  }
+
   static #notify(callback, ...args) {
     if (typeof callback === 'function') callback(...args);
   }
@@ -1508,6 +1538,63 @@ export default class GridManager {
     });
   }
 
+  #computeLowDiversityPenaltyMultiplier({
+    parentA,
+    parentB,
+    diversity,
+    diversityThreshold,
+    localDensity = 0,
+    tileEnergy = 0.5,
+    tileEnergyDelta = 0,
+    baseProbability = 1,
+    floor = 0,
+  } = {}) {
+    const sliderFloor = clamp(Number.isFinite(floor) ? floor : 0, 0, 1);
+
+    if (!(diversityThreshold > 0)) {
+      return clamp(1, sliderFloor, 1);
+    }
+
+    const diversityShortfall = clamp(1 - diversity / diversityThreshold, 0, 1);
+    const closeness = diversityShortfall > 0 ? Math.pow(diversityShortfall, 0.35) : 0;
+    const driveA = GridManager.#resolveDiversityDrive(parentA, {
+      localDensity,
+      tileEnergy,
+      tileEnergyDelta,
+    });
+    const driveB = GridManager.#resolveDiversityDrive(parentB, {
+      localDensity,
+      tileEnergy,
+      tileEnergyDelta,
+    });
+    const combinedDrive = clamp((driveA + driveB) / 2, 0, 1);
+    const environmentDriver = clamp(
+      0.5 * clamp(localDensity ?? 0, 0, 1) +
+        0.3 * clamp(1 - (tileEnergy ?? 0), 0, 1) +
+        0.2 * clamp(-(tileEnergyDelta ?? 0), 0, 1),
+      0,
+      1
+    );
+    const probabilitySlack = clamp(1 - (baseProbability ?? 0), 0, 1);
+    const kinPreference = clamp(
+      ((parentA?.matePreferenceBias ?? 0) + (parentB?.matePreferenceBias ?? 0)) / 2,
+      -1,
+      1
+    );
+    const kinComfort = clamp(0.5 + 0.5 * kinPreference, 0, 1);
+
+    let severity =
+      closeness * 0.35 +
+      closeness * combinedDrive * (0.4 + 0.2 * probabilitySlack) +
+      closeness * environmentDriver * (0.25 + 0.25 * probabilitySlack) +
+      closeness * probabilitySlack * 0.1;
+
+    severity *= clamp(1 - kinComfort * 0.45, 0.3, 1);
+    severity = clamp(severity, 0, 1);
+
+    return clamp(1 - severity, sliderFloor, 1);
+  }
+
   handleReproduction(
     row,
     col,
@@ -1541,7 +1628,7 @@ export default class GridManager {
     const diversity = typeof bestMate.diversity === 'number' ? bestMate.diversity : 1 - similarity;
     const diversityThreshold =
       typeof this.matingDiversityThreshold === 'number' ? this.matingDiversityThreshold : 0;
-    const penaltyBase =
+    const penaltyFloor =
       typeof this.lowDiversityReproMultiplier === 'number'
         ? clamp(this.lowDiversityReproMultiplier, 0, 1)
         : 0;
@@ -1591,7 +1678,17 @@ export default class GridManager {
 
     if (diversity < diversityThreshold) {
       penalizedForSimilarity = true;
-      penaltyMultiplier = penaltyBase;
+      penaltyMultiplier = this.#computeLowDiversityPenaltyMultiplier({
+        parentA: cell,
+        parentB: bestMate.target,
+        diversity,
+        diversityThreshold,
+        localDensity,
+        tileEnergy,
+        tileEnergyDelta,
+        baseProbability: effectiveReproProb,
+        floor: penaltyFloor,
+      });
 
       if (penaltyMultiplier <= 0) effectiveReproProb = 0;
       else effectiveReproProb = clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
