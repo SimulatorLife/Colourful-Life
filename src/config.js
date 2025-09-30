@@ -1,5 +1,6 @@
 // Centralized simulation config defaults
 const DEFAULT_MAX_TILE_ENERGY = 5;
+const DEFAULT_REGEN_DENSITY_PENALTY = 0.5;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
@@ -55,8 +56,28 @@ export const UI_SLIDER_CONFIG = {
   leaderboardIntervalMs: { default: 750, min: 100, max: 3000, step: 50, floor: 0 },
 };
 
+/**
+ * Resolves the density penalty applied during tile regeneration. Allows
+ * environments to fine-tune how strongly crowding suppresses energy recovery.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Sanitized density penalty coefficient in the 0..1 range.
+ */
+export function resolveRegenDensityPenalty(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_REGEN_DENSITY_PENALTY;
+  const parsed = Number.parseFloat(raw);
+
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+    return DEFAULT_REGEN_DENSITY_PENALTY;
+  }
+
+  return parsed;
+}
+
 // Penalties (scale 0..1) used in energy model
-export const REGEN_DENSITY_PENALTY = 0.5; // 1 - penalty * density
+export const REGEN_DENSITY_PENALTY = resolveRegenDensityPenalty(); // 1 - penalty * density
 export const CONSUMPTION_DENSITY_PENALTY = 0.5; // 1 - penalty * density
 
 const SLIDER_DEFAULTS = {
