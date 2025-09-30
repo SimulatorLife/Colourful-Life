@@ -1,7 +1,7 @@
 const { test } = require('uvu');
 const assert = require('uvu/assert');
 
-const computeFitnessModulePromise = import('../src/fitness.mjs');
+const computeFitnessModulePromise = import('../src/fitness.js');
 const configModulePromise = import('../src/config.js');
 
 test('computeFitness defaults to GridManager maxTileEnergy', async () => {
