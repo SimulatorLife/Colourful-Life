@@ -1,17 +1,22 @@
-import { createRankedBuffer } from './utils.js';
+import { createRankedBuffer } from "./utils.js";
 
 export function computeLeaderboard(snapshot, topN = 5) {
   const numericTopN = Number(topN);
-  const sanitizedTopN = Number.isFinite(numericTopN) ? Math.max(0, Math.floor(numericTopN)) : 0;
+  const sanitizedTopN = Number.isFinite(numericTopN)
+    ? Math.max(0, Math.floor(numericTopN))
+    : 0;
 
   if (sanitizedTopN === 0) {
     return [];
   }
 
   const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
-  const brainSnapshots = Array.isArray(snapshot?.brainSnapshots) ? snapshot.brainSnapshots : [];
+  const brainSnapshots = Array.isArray(snapshot?.brainSnapshots)
+    ? snapshot.brainSnapshots
+    : [];
   const compareItems = (a, b) => {
-    const smoothedDiff = (b?.smoothedFitness ?? Number.NaN) - (a?.smoothedFitness ?? Number.NaN);
+    const smoothedDiff =
+      (b?.smoothedFitness ?? Number.NaN) - (a?.smoothedFitness ?? Number.NaN);
 
     if (!Number.isNaN(smoothedDiff) && smoothedDiff !== 0) {
       return smoothedDiff;

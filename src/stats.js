@@ -1,7 +1,7 @@
-import { clamp01 } from './utils.js';
+import { clamp01 } from "./utils.js";
 
 // Traits tracked for population presence/averages; keep aligned with UI labels.
-const TRAIT_NAMES = ['cooperation', 'fighting', 'breeding', 'sight'];
+const TRAIT_NAMES = ["cooperation", "fighting", "breeding", "sight"];
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = 0.6;
 const MAX_REPRODUCTION_PROB = 0.8;
@@ -9,15 +9,15 @@ const MAX_SIGHT_RANGE = 5;
 
 // History series that the Stats class exposes to UI charts.
 const HISTORY_SERIES_KEYS = [
-  'population',
-  'diversity',
-  'diversityPressure',
-  'energy',
-  'growth',
-  'eventStrength',
-  'diversePairingRate',
-  'meanDiversityAppetite',
-  'mutationMultiplier',
+  "population",
+  "diversity",
+  "diversityPressure",
+  "energy",
+  "growth",
+  "eventStrength",
+  "diversePairingRate",
+  "meanDiversityAppetite",
+  "mutationMultiplier",
 ];
 
 const DIVERSITY_TARGET_DEFAULT = 0.35;
@@ -27,8 +27,8 @@ const createTraitValueMap = (initializer) =>
   Object.fromEntries(
     TRAIT_NAMES.map((key) => [
       key,
-      typeof initializer === 'function' ? initializer(key) : initializer,
-    ])
+      typeof initializer === "function" ? initializer(key) : initializer,
+    ]),
   );
 
 /**
@@ -85,17 +85,19 @@ const createEmptyTraitPresence = () => ({
 });
 
 const clampInteractionTrait = (genes, key) => {
-  const value = genes && typeof genes[key] === 'number' ? genes[key] : 0;
+  const value = genes && typeof genes[key] === "number" ? genes[key] : 0;
 
   return clamp01(value);
 };
 
 const TRAIT_CALCULATORS = {
-  cooperation: (cell) => clampInteractionTrait(cell?.interactionGenes, 'cooperate'),
-  fighting: (cell) => clampInteractionTrait(cell?.interactionGenes, 'fight'),
+  cooperation: (cell) => clampInteractionTrait(cell?.interactionGenes, "cooperate"),
+  fighting: (cell) => clampInteractionTrait(cell?.interactionGenes, "fight"),
   breeding: (cell) => {
     const probability =
-      typeof cell?.dna?.reproductionProb === 'function' ? cell.dna.reproductionProb() : 0;
+      typeof cell?.dna?.reproductionProb === "function"
+        ? cell.dna.reproductionProb()
+        : 0;
     const normalized = probability > 0 ? probability / MAX_REPRODUCTION_PROB : 0;
 
     return clamp01(normalized);
@@ -281,26 +283,28 @@ export default class Stats {
     const choiceCount = mateStats.choices || 0;
     const successCount = mateStats.successes || 0;
     const diverseChoiceRate = choiceCount ? mateStats.diverseChoices / choiceCount : 0;
-    const diverseSuccessRate = successCount ? mateStats.diverseSuccesses / successCount : 0;
+    const diverseSuccessRate = successCount
+      ? mateStats.diverseSuccesses / successCount
+      : 0;
     const meanAppetite = choiceCount ? mateStats.appetiteSum / choiceCount : 0;
 
-    this.pushHistory('population', pop);
-    this.pushHistory('diversity', diversity);
-    this.pushHistory('diversityPressure', this.diversityPressure);
-    this.pushHistory('energy', meanEnergy);
-    this.pushHistory('growth', this.births - this.deaths);
-    this.pushHistory('diversePairingRate', diverseSuccessRate);
-    this.pushHistory('meanDiversityAppetite', meanAppetite);
-    if (typeof this.mutationMultiplier === 'number') {
-      this.pushHistory('mutationMultiplier', this.mutationMultiplier);
+    this.pushHistory("population", pop);
+    this.pushHistory("diversity", diversity);
+    this.pushHistory("diversityPressure", this.diversityPressure);
+    this.pushHistory("energy", meanEnergy);
+    this.pushHistory("growth", this.births - this.deaths);
+    this.pushHistory("diversePairingRate", diverseSuccessRate);
+    this.pushHistory("meanDiversityAppetite", meanAppetite);
+    if (typeof this.mutationMultiplier === "number") {
+      this.pushHistory("mutationMultiplier", this.mutationMultiplier);
     }
 
     this.traitPresence = traitPresence;
     for (let i = 0; i < TRAIT_NAMES.length; i++) {
       const key = TRAIT_NAMES[i];
 
-      this.pushTraitHistory('presence', key, traitPresence.fractions[key]);
-      this.pushTraitHistory('average', key, traitPresence.averages[key]);
+      this.pushTraitHistory("presence", key, traitPresence.fractions[key]);
+      this.pushTraitHistory("average", key, traitPresence.averages[key]);
     }
 
     return {
@@ -346,7 +350,7 @@ export default class Stats {
     diversity = 0,
     appetite = 0,
     bias = 0,
-    selectionMode = 'preference',
+    selectionMode = "preference",
     poolSize = 0,
     success = false,
     penalized = false,
@@ -363,7 +367,7 @@ export default class Stats {
     this.mating.appetiteSum += appetite || 0;
     this.mating.poolSizeSum += poolSize || 0;
     if (isDiverse) this.mating.diverseChoices++;
-    if (selectionMode === 'curiosity') this.mating.selectionModes.curiosity++;
+    if (selectionMode === "curiosity") this.mating.selectionModes.curiosity++;
     else this.mating.selectionModes.preference++;
 
     if (success) {
@@ -388,13 +392,18 @@ export default class Stats {
     this.mating.lastBlockReason = null;
   }
 
-  recordReproductionBlocked({ reason, parentA = null, parentB = null, spawn = null } = {}) {
+  recordReproductionBlocked({
+    reason,
+    parentA = null,
+    parentB = null,
+    spawn = null,
+  } = {}) {
     if (!this.mating) {
       this.mating = createEmptyMatingSnapshot();
     }
 
     this.mating.blocks = (this.mating.blocks || 0) + 1;
-    this.mating.lastBlockReason = reason || 'Blocked by reproductive zone';
+    this.mating.lastBlockReason = reason || "Blocked by reproductive zone";
     this.lastBlockedReproduction = {
       reason: this.mating.lastBlockReason,
       parentA,
@@ -407,7 +416,7 @@ export default class Stats {
   logEvent(event, multiplier = 1) {
     const s = event ? (event.strength || 0) * multiplier : 0;
 
-    this.pushHistory('eventStrength', s);
+    this.pushHistory("eventStrength", s);
   }
 
   setMutationMultiplier(multiplier = 1) {
