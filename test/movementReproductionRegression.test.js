@@ -1,10 +1,10 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
 test("GridManager.tryMove updates a cell's stored coordinates", async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
-  const { default: DNA } = await import('../src/genome.js');
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
 
   const dna = new DNA(10, 20, 30);
   const cell = new Cell(0, 0, dna, 5);
@@ -19,8 +19,8 @@ test("GridManager.tryMove updates a cell's stored coordinates", async () => {
   assert.is(cell.col, 1);
 });
 
-test('GridManager.tryMove ignores empty sources without mutating density data', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
+test("GridManager.tryMove ignores empty sources without mutating density data", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -55,10 +55,10 @@ test('GridManager.tryMove ignores empty sources without mutating density data', 
   assert.is(gm.activeCells.size, initialActiveSize);
 });
 
-test('setObstacle with evict=false preserves the occupant and clears tile energy', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
-  const { default: DNA } = await import('../src/genome.js');
+test("setObstacle with evict=false preserves the occupant and clears tile energy", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -94,9 +94,9 @@ test('setObstacle with evict=false preserves the occupant and clears tile energy
 });
 
 test("Breeding uses the mover's refreshed coordinates for offspring placement", async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
-  const { default: DNA } = await import('../src/genome.js');
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
 
   const dnaA = new DNA(40, 80, 120);
   const dnaB = new DNA(60, 90, 150);
@@ -120,11 +120,11 @@ test("Breeding uses the mover's refreshed coordinates for offspring placement", 
   assert.is(grid[0][1], offspring);
 });
 
-test('handleReproduction returns false when offspring cannot be placed', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
-  const { default: DNA } = await import('../src/genome.js');
-  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+test("handleReproduction returns false when offspring cannot be placed", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -173,7 +173,7 @@ test('handleReproduction returns false when offspring cannot be placed', async (
   parent.selectMateWeighted = () => ({
     chosen: mateEntry,
     evaluated: [mateEntry],
-    mode: 'preference',
+    mode: "preference",
   });
   parent.findBestMate = () => mateEntry;
 
@@ -202,7 +202,7 @@ test('handleReproduction returns false when offspring cannot be placed', async (
       1,
       parent,
       { mates: [mateEntry], society: [] },
-      { stats, densityGrid: gm.densityGrid, densityEffectMultiplier: 1 }
+      { stats, densityGrid: gm.densityGrid, densityEffectMultiplier: 1 },
     );
 
     assert.is(reproduced, false);
@@ -215,11 +215,11 @@ test('handleReproduction returns false when offspring cannot be placed', async (
   assert.is(recorded.success, false);
 });
 
-test('handleReproduction does not wrap offspring placement across map edges', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
-  const { default: DNA } = await import('../src/genome.js');
-  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+test("handleReproduction does not wrap offspring placement across map edges", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -231,7 +231,9 @@ test('handleReproduction does not wrap offspring placement across map edges', as
   });
 
   gm.rebuildActiveCells();
-  const densityGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0));
+  const densityGrid = Array.from({ length: 3 }, () =>
+    Array.from({ length: 3 }, () => 0),
+  );
 
   const parent = new Cell(0, 0, new DNA(0, 0, 0), MAX_TILE_ENERGY);
   const mate = new Cell(0, 1, new DNA(0, 0, 0), MAX_TILE_ENERGY);
@@ -262,7 +264,7 @@ test('handleReproduction does not wrap offspring placement across map edges', as
   parent.selectMateWeighted = () => ({
     chosen: mateEntry,
     evaluated: [mateEntry],
-    mode: 'preference',
+    mode: "preference",
   });
   parent.findBestMate = () => mateEntry;
 
@@ -292,22 +294,29 @@ test('handleReproduction does not wrap offspring placement across map edges', as
       0,
       parent,
       { mates: [mateEntry], society: [] },
-      { stats, densityGrid, densityEffectMultiplier: 1, mutationMultiplier: 1 }
+      { stats, densityGrid, densityEffectMultiplier: 1, mutationMultiplier: 1 },
     );
   } finally {
     Math.random = originalRandom;
   }
 
   assert.is(stats.births, 1);
-  assert.ok(gm.grid[1][0], 'expected a new offspring in-bounds adjacent to the parents');
-  assert.is(gm.grid[2][2], null, 'offspring should not appear on the wrapped opposite corner');
+  assert.ok(
+    gm.grid[1][0],
+    "expected a new offspring in-bounds adjacent to the parents",
+  );
+  assert.is(
+    gm.grid[2][2],
+    null,
+    "offspring should not appear on the wrapped opposite corner",
+  );
 });
 
-test('handleReproduction bases reproduction decisions on the post-move density', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
-  const { default: DNA } = await import('../src/genome.js');
-  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+test("handleReproduction bases reproduction decisions on the post-move density", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -347,7 +356,7 @@ test('handleReproduction bases reproduction decisions on the post-move density',
   parent.selectMateWeighted = () => ({
     chosen: candidate,
     evaluated: [candidate],
-    mode: 'preference',
+    mode: "preference",
   });
   parent.findBestMate = () => candidate;
 
@@ -381,24 +390,24 @@ test('handleReproduction bases reproduction decisions on the post-move density',
       densityGrid,
       densityEffectMultiplier: 1,
       mutationMultiplier: 1,
-    }
+    },
   );
 
   assert.is(reproduced, false);
   assert.is(parent.row, 0);
   assert.is(parent.col, 1);
   assert.is(gm.grid[0][1], parent);
-  assert.ok(computeContexts.length > 0, 'reproduction probability should be evaluated');
+  assert.ok(computeContexts.length > 0, "reproduction probability should be evaluated");
   assert.is(computeContexts[0].localDensity, densityGrid[0][1]);
-  assert.ok(decideContext, 'reproduction decision should be evaluated');
+  assert.ok(decideContext, "reproduction decision should be evaluated");
   assert.is(decideContext.localDensity, densityGrid[0][1]);
 });
 
-test('handleReproduction throttles near-clone pairings below the diversity floor', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
-  const { default: DNA } = await import('../src/genome.js');
-  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+test("handleReproduction throttles near-clone pairings below the diversity floor", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -454,7 +463,7 @@ test('handleReproduction throttles near-clone pairings below the diversity floor
   parent.selectMateWeighted = () => ({
     chosen: mateEntry,
     evaluated: [mateEntry],
-    mode: 'preference',
+    mode: "preference",
   });
   parent.findBestMate = () => mateEntry;
 
@@ -472,7 +481,12 @@ test('handleReproduction throttles near-clone pairings below the diversity floor
       0,
       parent,
       { mates: [mateEntry], society: [] },
-      { stats, densityGrid: gm.densityGrid, densityEffectMultiplier: 1, mutationMultiplier: 1 }
+      {
+        stats,
+        densityGrid: gm.densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 1,
+      },
     );
   } finally {
     Math.random = originalRandom;
@@ -484,15 +498,116 @@ test('handleReproduction throttles near-clone pairings below the diversity floor
   assert.ok(recorded.penaltyMultiplier >= 0);
   assert.ok(
     recorded.penaltyMultiplier < 0.85,
-    `expected some penalty pressure, got ${recorded.penaltyMultiplier}`
+    `expected some penalty pressure, got ${recorded.penaltyMultiplier}`,
   );
 });
 
-test('low-diversity penalties respond to mate preferences and environment', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
-  const { default: DNA } = await import('../src/genome.js');
-  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+test("handleReproduction strengthens low-diversity penalties when global pressure spikes", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const runScenario = async (pressure) => {
+    const records = [];
+    const stats = {
+      onBirth() {},
+      onDeath() {},
+      recordMateChoice(data) {
+        records.push(data);
+      },
+      matingDiversityThreshold: 0.4,
+      getDiversityPressure: () => pressure,
+    };
+
+    const gm = new TestGridManager(1, 3, {
+      eventManager: { activeEvents: [] },
+      stats,
+    });
+
+    gm.setMatingDiversityOptions({ threshold: 0.4, lowDiversityMultiplier: 0.5 });
+
+    const parent = new Cell(0, 0, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+    const mate = new Cell(0, 1, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+
+    parent.dna.reproductionThresholdFrac = () => 0;
+    mate.dna.reproductionThresholdFrac = () => 0;
+    parent.computeReproductionProbability = () => 1;
+    parent.decideReproduction = () => ({ probability: 1 });
+
+    const mateEntry = parent.evaluateMateCandidate({
+      row: mate.row,
+      col: mate.col,
+      target: mate,
+    }) || {
+      target: mate,
+      row: mate.row,
+      col: mate.col,
+      similarity: 1,
+      diversity: 0,
+      selectionWeight: 1,
+      preferenceScore: 1,
+    };
+
+    mateEntry.diversity = 0.05;
+    mateEntry.similarity = 0.95;
+
+    parent.selectMateWeighted = () => ({
+      chosen: mateEntry,
+      evaluated: [mateEntry],
+      mode: "preference",
+    });
+    parent.findBestMate = () => mateEntry;
+
+    gm.setCell(0, 0, parent);
+    gm.setCell(0, 1, mate);
+    gm.densityGrid = [[0, 0, 0]];
+
+    const originalRandom = Math.random;
+
+    Math.random = () => 0.99;
+
+    try {
+      gm.handleReproduction(
+        0,
+        0,
+        parent,
+        { mates: [mateEntry], society: [] },
+        {
+          stats,
+          densityGrid: gm.densityGrid,
+          densityEffectMultiplier: 1,
+          mutationMultiplier: 1,
+        },
+      );
+    } finally {
+      Math.random = originalRandom;
+    }
+
+    assert.is(records.length, 1);
+
+    return records[0]?.penaltyMultiplier ?? 1;
+  };
+
+  const lowPressure = await runScenario(0);
+  const highPressure = await runScenario(0.9);
+
+  assert.ok(
+    highPressure < lowPressure,
+    "penalty multiplier should shrink under high pressure",
+  );
+  assert.ok(highPressure < 1, "penalty multiplier should remain a dampening factor");
+});
+
+test("low-diversity penalties respond to mate preferences and environment", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -563,7 +678,7 @@ test('low-diversity penalties respond to mate preferences and environment', asyn
     seeker.selectMateWeighted = () => ({
       chosen: seekerEntry,
       evaluated: [seekerEntry],
-      mode: 'preference',
+      mode: "preference",
     });
     seeker.findBestMate = () => seekerEntry;
 
@@ -580,7 +695,7 @@ test('low-diversity penalties respond to mate preferences and environment', asyn
         densityGrid: diversitySeeking.densityGrid,
         densityEffectMultiplier: 1,
         mutationMultiplier: 1,
-      }
+      },
     );
 
     const kinComfort = makeManager();
@@ -625,7 +740,7 @@ test('low-diversity penalties respond to mate preferences and environment', asyn
     kinLover.selectMateWeighted = () => ({
       chosen: kinEntry,
       evaluated: [kinEntry],
-      mode: 'preference',
+      mode: "preference",
     });
     kinLover.findBestMate = () => kinEntry;
 
@@ -642,7 +757,7 @@ test('low-diversity penalties respond to mate preferences and environment', asyn
         densityGrid: kinComfort.densityGrid,
         densityEffectMultiplier: 1,
         mutationMultiplier: 1,
-      }
+      },
     );
   } finally {
     Math.random = originalRandom;
@@ -656,23 +771,23 @@ test('low-diversity penalties respond to mate preferences and environment', asyn
   assert.ok(kinRecord.penalized);
   assert.ok(
     diversityRecord.penaltyMultiplier < kinRecord.penaltyMultiplier,
-    'diversity-seeking pair should impose a stronger penalty than kin-preferring pair'
+    "diversity-seeking pair should impose a stronger penalty than kin-preferring pair",
   );
   assert.ok(
     diversityRecord.penaltyMultiplier <= 0.25,
-    `expected diversity seekers to push multiplier near floor, got ${diversityRecord.penaltyMultiplier}`
+    `expected diversity seekers to push multiplier near floor, got ${diversityRecord.penaltyMultiplier}`,
   );
   assert.ok(
     kinRecord.penaltyMultiplier >= 0.7,
-    `expected kin-friendly pair to retain high multiplier, got ${kinRecord.penaltyMultiplier}`
+    `expected kin-friendly pair to retain high multiplier, got ${kinRecord.penaltyMultiplier}`,
   );
 });
 
-test('handleReproduction leaves diverse pairs unaffected by low-diversity penalties', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
-  const { default: DNA } = await import('../src/genome.js');
-  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+test("handleReproduction leaves diverse pairs unaffected by low-diversity penalties", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -732,7 +847,7 @@ test('handleReproduction leaves diverse pairs unaffected by low-diversity penalt
   parent.selectMateWeighted = () => ({
     chosen: mateEntry,
     evaluated: [mateEntry],
-    mode: 'preference',
+    mode: "preference",
   });
   parent.findBestMate = () => mateEntry;
 
@@ -750,7 +865,12 @@ test('handleReproduction leaves diverse pairs unaffected by low-diversity penalt
       0,
       parent,
       { mates: [mateEntry], society: [] },
-      { stats, densityGrid: gm.densityGrid, densityEffectMultiplier: 1, mutationMultiplier: 1 }
+      {
+        stats,
+        densityGrid: gm.densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 1,
+      },
     );
 
     assert.is(reproduced, true);
@@ -765,11 +885,11 @@ test('handleReproduction leaves diverse pairs unaffected by low-diversity penalt
   assert.is(recorded.penaltyMultiplier, 1);
 });
 
-test('processCell continues to combat when reproduction fails', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
-  const { default: DNA } = await import('../src/genome.js');
-  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+test("processCell continues to combat when reproduction fails", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -788,8 +908,12 @@ test('processCell continues to combat when reproduction fails', async () => {
   gm.setObstacle(1, 1, false);
   gm.setObstacle(1, 2, false);
   gm.setObstacle(0, 1, false);
-  gm.energyGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => MAX_TILE_ENERGY));
-  const densityGrid = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => 0));
+  gm.energyGrid = Array.from({ length: 3 }, () =>
+    Array.from({ length: 3 }, () => MAX_TILE_ENERGY),
+  );
+  const densityGrid = Array.from({ length: 3 }, () =>
+    Array.from({ length: 3 }, () => 0),
+  );
 
   const parent = new Cell(1, 1, new DNA(0, 0, 0), MAX_TILE_ENERGY);
   const mate = new Cell(1, 2, new DNA(0, 0, 0), MAX_TILE_ENERGY);
@@ -822,7 +946,7 @@ test('processCell continues to combat when reproduction fails', async () => {
   parent.selectMateWeighted = () => ({
     chosen: mateEntry,
     evaluated: [mateEntry],
-    mode: 'preference',
+    mode: "preference",
   });
   parent.findBestMate = () => mateEntry;
 
@@ -874,13 +998,13 @@ test('processCell continues to combat when reproduction fails', async () => {
     Math.random = originalRandom;
   }
 
-  assert.ok(combatCalled, 'combat should still be evaluated when reproduction fails');
+  assert.ok(combatCalled, "combat should still be evaluated when reproduction fails");
   assert.is(births, 0);
 });
 
-test('density counts stay consistent through spawn, movement, and removal', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: DNA } = await import('../src/genome.js');
+test("density counts stay consistent through spawn, movement, and removal", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: DNA } = await import("../src/genome.js");
 
   const originalInit = GridManager.prototype.init;
 
