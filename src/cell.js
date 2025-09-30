@@ -153,9 +153,14 @@ export default class Cell {
   // Lifespan is fully DNA-dictated via genome.lifespanDNA()
 
   evaluateMateCandidate(mate = {}) {
-    if (!mate?.target) return null;
+    const target = mate?.target;
 
-    const similarity = this.similarityTo(mate.target);
+    if (!target) return null;
+
+    const similarityCandidate = mate?.precomputedSimilarity;
+    const similarity = Number.isFinite(similarityCandidate)
+      ? similarityCandidate
+      : this.similarityTo(target);
     const diversity = 1 - similarity;
     const bias = this.matePreferenceBias ?? 0;
     const appetite = this.diversityAppetite ?? 0;
@@ -164,16 +169,17 @@ export default class Cell {
     const curiosityBonus = diversity * appetite * 0.5;
     const preferenceScore = similarPull + diversePull + curiosityBonus;
 
-    return {
-      ...mate,
-      similarity,
-      diversity,
-      appetite,
-      mateBias: bias,
-      curiosityBonus,
-      preferenceScore,
-      selectionWeight: Math.max(0.0001, preferenceScore),
-    };
+    const selectionWeight = Math.max(0.0001, preferenceScore);
+
+    mate.similarity = similarity;
+    mate.diversity = diversity;
+    mate.appetite = appetite;
+    mate.mateBias = bias;
+    mate.curiosityBonus = curiosityBonus;
+    mate.preferenceScore = preferenceScore;
+    mate.selectionWeight = selectionWeight;
+
+    return mate;
   }
 
   scorePotentialMates(potentialMates = []) {
