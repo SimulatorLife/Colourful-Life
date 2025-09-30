@@ -1,7 +1,7 @@
 name: Codex 08 – Evolutionary Feature Enhancement
 on:
   schedule:
-    - cron: "10 4,16 * * *" # twice daily at 04:10, 16:10 UTC
+    - cron: '10 4,16 * * *' # twice daily at 04:10, 16:10 UTC
   workflow_dispatch:
 
 permissions:
@@ -14,8 +14,8 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: "Codex: Evolutionary Feature Enhancement"
-      pr_body: "Seed PR for Codex to implement one focused evolution/simulation improvement atop current master."
+      pr_title: 'Codex: Evolutionary Feature Enhancement'
+      pr_body: 'Seed PR for Codex to implement one focused evolution/simulation improvement atop current master.'
       prompt: >
         Deliver one targeted enhancement that makes organism behavior more interesting, emergent, 
         flexible, and/or less hard-coded, implemented end-to-end in a maintainable way. Focus on improvements that

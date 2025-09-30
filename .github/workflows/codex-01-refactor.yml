@@ -1,7 +1,7 @@
 name: Codex 01 – Refactor & DRY
 on:
   schedule:
-    - cron: "0 0,12 * * *" # twice daily at 00:00, 12:00 UTC
+    - cron: '0 0,12 * * *' # twice daily at 00:00, 12:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -14,8 +14,8 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: "Codex: Implement refactor on latest master"
-      pr_body: "Seed PR for Codex to implement the intended refactor atop current master."
+      pr_title: 'Codex: Implement refactor on latest master'
+      pr_body: 'Seed PR for Codex to implement the intended refactor atop current master.'
       prompt: >
         The long-term goal is to raise the overall quality and 
         maintainability of the codebase (DRY, clarity, consistency, modern APIs, minimal abstraction). 

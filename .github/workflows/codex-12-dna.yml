@@ -1,7 +1,7 @@
 name: Codex 12 – DNA Encoding Improvements
 on:
   schedule:
-    - cron: "40 6,18 * * *" # twice daily at 06:40, 18:40 UTC
+    - cron: '40 6,18 * * *' # twice daily at 06:40, 18:40 UTC
   workflow_dispatch:
 
 permissions:
@@ -14,8 +14,8 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: "Codex: DNA Encoding Improvements"
-      pr_body: "Seed PR for Codex to enrich DNA encoding capabilities atop current master."
+      pr_title: 'Codex: DNA Encoding Improvements'
+      pr_body: 'Seed PR for Codex to enrich DNA encoding capabilities atop current master.'
       prompt: >
         Examine how DNA is represented and used throughout the simulation. Expand its ability to
         encode meaningful organism traits and behaviors, replacing ad-hoc or hardcoded logic with

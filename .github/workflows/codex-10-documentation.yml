@@ -1,7 +1,7 @@
 name: Codex 10 – Documentation Audit
 on:
   schedule:
-    - cron: "50 5,17 * * *" # twice daily at 05:50, 17:50 UTC
+    - cron: '50 5,17 * * *' # twice daily at 05:50, 17:50 UTC
   workflow_dispatch:
 
 permissions:
@@ -14,7 +14,7 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: "Codex: Documentation Audit"
-      pr_body: "Seed PR for Codex to audit and improve documentation atop current master."
+      pr_title: 'Codex: Documentation Audit'
+      pr_body: 'Seed PR for Codex to audit and improve documentation atop current master.'
       prompt: >
         Review and update all project documentation for accuracy, clarity, and completeness. Ensure README, architecture notes, changelogs, and developer guides reflect the current codebase, features, modules, and usage so contributors can onboard quickly and understand structure and conventions. Audit inline comments and docstrings so every public function, module, and complex piece of logic has concise, accurate explanations aligned with project style. Expand or add documentation where it is missing, remove outdated details, and keep edits practical and concise—avoiding speculative rewrites. The goal is a self-explanatory, accessible, and accurate codebase.

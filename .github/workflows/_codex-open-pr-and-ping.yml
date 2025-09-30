@@ -9,18 +9,18 @@ on:
       pr_body:
         required: false
         type: string
-        default: ""
+        default: ''
       prompt:
         required: true
         type: string
       branch_prefix:
         required: false
         type: string
-        default: "codex"
+        default: 'codex'
       base_branch:
         required: false
         type: string
-        default: "master"
+        default: 'master'
     outputs:
       pr_number:
         value: ${{ jobs.open_and_ping.outputs.pr_number }}
@@ -65,8 +65,8 @@ jobs:
         id: pr
         uses: actions/github-script@v7
         env:
-          PR_TITLE:    ${{ inputs.pr_title }}
-          PR_BODY:     ${{ inputs.pr_body }}
+          PR_TITLE: ${{ inputs.pr_title }}
+          PR_BODY: ${{ inputs.pr_body }}
           BASE_BRANCH: ${{ inputs.base_branch }}
           BRANCH_NAME: ${{ env.BRANCH_NAME }}
         with:
@@ -103,10 +103,10 @@ jobs:
         uses: actions/github-script@v7
         env:
           BASE_BRANCH: ${{ inputs.base_branch }}
-          PROMPT:      ${{ inputs.prompt }}
+          PROMPT: ${{ inputs.prompt }}
           BRANCH_NAME: ${{ env.BRANCH_NAME }}
-          PR_NUMBER:   ${{ steps.pr.outputs.number }}
-          HEAD_SHA:    ${{ steps.pr.outputs.head_sha }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
         with:
           github-token: ${{ secrets.GH_USER_TOKEN }}
           script: |

@@ -1,9 +1,9 @@
 name: Codex 16 – Dead Code & Asset Audit
 on:
   schedule:
-    - cron: "10 9 * * *" # 09:10 UTC
-    - cron: "30 16 * * *" # 16:30 UTC
-    - cron: "10 21 * * *" # 21:10 UTC
+    - cron: '10 9 * * *' # 09:10 UTC
+    - cron: '30 16 * * *' # 16:30 UTC
+    - cron: '10 21 * * *' # 21:10 UTC
   workflow_dispatch:
 
 permissions:
@@ -16,8 +16,8 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: "Codex: Dead Code & Asset Audit"
-      pr_body: "Seed PR for Codex to prune unused code or assets atop current master."
+      pr_title: 'Codex: Dead Code & Asset Audit'
+      pr_body: 'Seed PR for Codex to prune unused code or assets atop current master.'
       prompt: >
         Scan the repository for unused functions, variables, files, assets, or configuration entries.
         Remove or archive one meaningful set of unused items, consolidating duplicates if needed.

@@ -6,7 +6,7 @@ build/
 tmp/
 *.min.js
 *.min.css
-.github/
+.github/workflows/
 AGENTS.md
 .husky
 .vscode/
