@@ -1,7 +1,7 @@
 import UIManager from "./uiManager.js";
 import BrainDebugger from "./brainDebugger.js";
 import SimulationEngine from "./simulationEngine.js";
-import { OBSTACLE_PRESETS } from "./gridManager.js";
+import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
 import { resolveSimulationDefaults } from "./config.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};

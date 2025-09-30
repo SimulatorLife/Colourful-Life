@@ -1,5 +1,5 @@
 import EventManager from "./eventManager.js";
-import GridManager, { OBSTACLE_PRESETS } from "./gridManager.js";
+import GridManager from "./gridManager.js";
 import SelectionManager from "./selectionManager.js";
 import Stats from "./stats.js";
 import { drawOverlays as defaultDrawOverlays } from "./overlays.js";
@@ -11,6 +11,7 @@ import {
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   resolveSimulationDefaults,
 } from "./config.js";
+import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
