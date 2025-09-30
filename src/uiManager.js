@@ -36,6 +36,7 @@ export default class UIManager {
     this.patternCheckboxes = {};
     this._selectionListenersInstalled = false;
     this.stepButton = null;
+    this.clearZonesButton = null;
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -152,15 +153,18 @@ export default class UIManager {
 
   #setDrawingEnabled(enabled) {
     this.selectionDrawingEnabled = Boolean(enabled);
+    const isActive = this.selectionDrawingEnabled;
 
     if (this.drawZoneButton) {
-      this.drawZoneButton.classList.toggle('active', this.selectionDrawingEnabled);
-      this.drawZoneButton.textContent = this.selectionDrawingEnabled
-        ? 'Cancel Drawing'
-        : 'Draw Custom Zone';
+      this.drawZoneButton.classList.toggle('active', isActive);
+      this.drawZoneButton.textContent = isActive ? 'Cancel Drawing' : 'Draw Custom Zone';
+      this.drawZoneButton.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      this.drawZoneButton.title = isActive
+        ? 'Cancel drawing mode and keep the current reproductive zones.'
+        : 'Enable drawing mode to sketch a custom reproductive zone on the canvas.';
     }
 
-    if (!this.selectionDrawingEnabled) {
+    if (!isActive) {
       this.selectionDragStart = null;
       this.selectionDragEnd = null;
       this.selectionDrawingActive = false;
@@ -179,7 +183,23 @@ export default class UIManager {
       ? this.selectionManager.describeActiveZones()
       : 'All tiles eligible';
 
-    this.zoneSummaryEl.textContent = `Active zones: ${summary}`;
+    this.zoneSummaryEl.textContent = summary;
+    this.#updateCustomZoneButtons();
+  }
+
+  #updateCustomZoneButtons() {
+    if (!this.clearZonesButton) return;
+
+    const hasZones = Boolean(
+      this.selectionManager &&
+        typeof this.selectionManager.hasCustomZones === 'function' &&
+        this.selectionManager.hasCustomZones()
+    );
+
+    this.clearZonesButton.disabled = !hasZones;
+    this.clearZonesButton.title = hasZones
+      ? 'Remove all custom reproductive zones.'
+      : 'No custom reproductive zones to clear.';
   }
 
   #canvasToGrid(event) {
@@ -817,8 +837,15 @@ export default class UIManager {
 
     const zoneButtons = createControlButtonRow(body);
 
+    zoneButtons.setAttribute('role', 'group');
+    zoneButtons.setAttribute('aria-label', 'Custom reproductive zone controls');
+
     this.drawZoneButton = document.createElement('button');
     this.drawZoneButton.textContent = 'Draw Custom Zone';
+    this.drawZoneButton.type = 'button';
+    this.drawZoneButton.title =
+      'Enable drawing mode to sketch a custom reproductive zone on the canvas.';
+    this.drawZoneButton.setAttribute('aria-pressed', 'false');
     this.drawZoneButton.addEventListener('click', () => {
       this.#toggleRegionDrawing(!this.selectionDrawingEnabled);
     });
@@ -827,17 +854,38 @@ export default class UIManager {
     const clearButton = document.createElement('button');
 
     clearButton.textContent = 'Clear Custom Zones';
+    clearButton.type = 'button';
+    clearButton.title = 'No custom reproductive zones to clear.';
     clearButton.addEventListener('click', () => {
       this.selectionManager.clearCustomZones();
       this.#setDrawingEnabled(false);
       this.#updateZoneSummary();
       this.#scheduleUpdate();
+      this.#updateCustomZoneButtons();
     });
     zoneButtons.appendChild(clearButton);
-    this.zoneSummaryEl = document.createElement('div');
+    this.clearZonesButton = clearButton;
 
-    this.zoneSummaryEl.className = 'control-hint';
-    body.appendChild(this.zoneSummaryEl);
+    const summaryRow = this.#appendControlRow(body, {
+      label: 'Active Zones',
+      value: this.selectionManager.describeActiveZones(),
+      valueClass: 'control-value--left control-hint',
+    });
+
+    this.zoneSummaryEl = summaryRow.querySelector('.control-value');
+    if (this.zoneSummaryEl) {
+      this.zoneSummaryEl.id = 'zone-summary';
+      this.zoneSummaryEl.setAttribute('role', 'status');
+      this.zoneSummaryEl.setAttribute('aria-live', 'polite');
+    }
+    if (this.zoneSummaryEl) {
+      zoneButtons.setAttribute('aria-describedby', 'zone-summary');
+      if (this.drawZoneButton) {
+        this.drawZoneButton.setAttribute('aria-controls', 'zone-summary');
+      }
+      clearButton.setAttribute('aria-controls', 'zone-summary');
+    }
+
     this.#updateZoneSummary();
   }
 

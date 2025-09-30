@@ -167,6 +167,22 @@ canvas {
 .controls-panel button:hover {
   background: var(--color-accent-hover);
 }
+.controls-panel button:not(.panel-toggle).active {
+  background: var(--color-accent-hover);
+  border-color: var(--color-text-subtle);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+.controls-panel button:not(.panel-toggle):focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 2px;
+}
+.controls-panel button:not(.panel-toggle):disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.controls-panel button:not(.panel-toggle):disabled:hover {
+  background: var(--color-accent);
+}
 .control-button-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
@@ -261,6 +277,13 @@ canvas {
   text-align: right;
   color: var(--color-text-subtle);
   font-variant-numeric: tabular-nums;
+}
+
+.control-value.control-hint,
+.control-hint {
+  color: var(--color-text-subtle);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .insights-panel h3 {

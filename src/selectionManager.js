@@ -141,6 +141,10 @@ export default class SelectionManager {
     return [...patterns, ...this.customZones.filter((zone) => zone.active !== false)];
   }
 
+  hasCustomZones() {
+    return this.customZones.length > 0;
+  }
+
   hasActiveZones() {
     return this.getActiveZones().length > 0;
   }
