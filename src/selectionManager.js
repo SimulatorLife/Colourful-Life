@@ -1,9 +1,16 @@
+import { clamp } from "./utils.js";
+
 const DEFAULT_COLORS = [
-  'rgba(80, 160, 255, 0.22)',
-  'rgba(120, 220, 120, 0.22)',
-  'rgba(255, 180, 70, 0.24)',
-  'rgba(220, 120, 220, 0.24)',
+  "rgba(80, 160, 255, 0.22)",
+  "rgba(120, 220, 120, 0.22)",
+  "rgba(255, 180, 70, 0.24)",
+  "rgba(220, 120, 220, 0.24)",
 ];
+
+const EMPTY_GEOMETRY = Object.freeze({
+  rects: Object.freeze([]),
+  bounds: null,
+});
 
 /**
  * Tracks reproductive zone definitions. SelectionManager provides built-in
@@ -39,16 +46,16 @@ export default class SelectionManager {
     const cornerHeight = () => Math.max(2, Math.floor(this.rows * 0.18));
     const bandWidth = () => Math.max(2, Math.floor(this.cols * 0.08));
 
-    this.#addPattern('eastHalf', {
-      name: 'Eastern Hemisphere',
-      description: 'Allow mating only on the right-hand half of the map.',
+    this.#addPattern("eastHalf", {
+      name: "Eastern Hemisphere",
+      description: "Allow mating only on the right-hand half of the map.",
       color: DEFAULT_COLORS[0],
       contains: (row, col) => col >= halfCols(),
     });
 
-    this.#addPattern('cornerPatches', {
-      name: 'Corner Refuges',
-      description: 'Restrict mating to small patches in each corner.',
+    this.#addPattern("cornerPatches", {
+      name: "Corner Refuges",
+      description: "Restrict mating to small patches in each corner.",
       color: DEFAULT_COLORS[1],
       contains: (row, col) => {
         const w = cornerWidth();
@@ -60,9 +67,9 @@ export default class SelectionManager {
       },
     });
 
-    this.#addPattern('alternatingBands', {
-      name: 'Alternating Bands',
-      description: 'Enable stripes of eligibility across the map.',
+    this.#addPattern("alternatingBands", {
+      name: "Alternating Bands",
+      description: "Enable stripes of eligibility across the map.",
       color: DEFAULT_COLORS[2],
       contains: (row, col) => {
         const width = bandWidth();
@@ -92,7 +99,7 @@ export default class SelectionManager {
     const pattern = this.patterns.get(id);
 
     if (!pattern) return false;
-    const next = typeof active === 'boolean' ? active : !pattern.active;
+    const next = typeof active === "boolean" ? active : !pattern.active;
 
     pattern.active = next;
 
@@ -116,13 +123,14 @@ export default class SelectionManager {
     const sc = this.#clampCol(Math.min(startCol, endCol));
     const ec = this.#clampCol(Math.max(startCol, endCol));
 
-    if (Number.isNaN(sr) || Number.isNaN(er) || Number.isNaN(sc) || Number.isNaN(ec)) return null;
+    if (Number.isNaN(sr) || Number.isNaN(er) || Number.isNaN(sc) || Number.isNaN(ec))
+      return null;
 
     const zoneIndex = this.customZoneCounter++;
     const zone = {
       id: `custom-${zoneIndex}`,
       name: `Custom Zone ${this.customZones.length + 1}`,
-      description: 'User-drawn reproductive zone',
+      description: "User-drawn reproductive zone",
       active: true,
       color: DEFAULT_COLORS[(this.customZones.length + 2) % DEFAULT_COLORS.length],
       contains: (row, col) => row >= sr && row <= er && col >= sc && col <= ec,
@@ -136,7 +144,9 @@ export default class SelectionManager {
   }
 
   getActiveZones() {
-    const patterns = Array.from(this.patterns.values()).filter((pattern) => pattern.active);
+    const patterns = Array.from(this.patterns.values()).filter(
+      (pattern) => pattern.active,
+    );
 
     return [...patterns, ...this.customZones.filter((zone) => zone.active !== false)];
   }
@@ -169,14 +179,14 @@ export default class SelectionManager {
     }
 
     const result = this.#validatePointList(zones, [
-      parentA ? { ...parentA, role: 'parentA' } : null,
-      parentB ? { ...parentB, role: 'parentB' } : null,
+      parentA ? { ...parentA, role: "parentA" } : null,
+      parentB ? { ...parentB, role: "parentB" } : null,
     ]);
 
     if (!result.allowed) return result;
 
     if (spawn) {
-      return this.#validatePointList(zones, [{ ...spawn, role: 'spawn' }]);
+      return this.#validatePointList(zones, [{ ...spawn, role: "spawn" }]);
     }
 
     return { allowed: true };
@@ -203,11 +213,11 @@ export default class SelectionManager {
           allowed: false,
           role,
           reason:
-            role === 'spawn'
-              ? 'Spawn tile is outside the reproductive zone'
-              : role === 'parentB'
-                ? 'Mate is outside the reproductive zone'
-                : 'Parent is outside the reproductive zone',
+            role === "spawn"
+              ? "Spawn tile is outside the reproductive zone"
+              : role === "parentB"
+                ? "Mate is outside the reproductive zone"
+                : "Parent is outside the reproductive zone",
         };
       }
     }
@@ -218,11 +228,11 @@ export default class SelectionManager {
   describeActiveZones() {
     const zones = this.getActiveZones();
 
-    if (zones.length === 0) return 'All tiles eligible';
+    if (zones.length === 0) return "All tiles eligible";
 
     const names = zones.map((zone) => zone.name || zone.id);
 
-    return names.join(', ');
+    return names.join(", ");
   }
 
   getActiveZoneRenderData() {
@@ -237,11 +247,11 @@ export default class SelectionManager {
   }
 
   #clampRow(row) {
-    return Math.min(this.rows - 1, Math.max(0, Math.floor(row)));
+    return clamp(Math.floor(row), 0, this.rows - 1);
   }
 
   #clampCol(col) {
-    return Math.min(this.cols - 1, Math.max(0, Math.floor(col)));
+    return clamp(Math.floor(col), 0, this.cols - 1);
   }
 
   #invalidateAllZoneGeometry() {
@@ -251,14 +261,15 @@ export default class SelectionManager {
 
   #getZoneCacheKey(zone) {
     if (!zone) return null;
-    if (typeof zone.id === 'string') return zone.id;
-    if (typeof zone.name === 'string') return `name:${zone.name}`;
+    if (typeof zone.id === "string") return zone.id;
+    if (typeof zone.name === "string") return `name:${zone.name}`;
 
     return null;
   }
 
   #invalidateZoneGeometry(zoneOrId) {
-    const key = typeof zoneOrId === 'string' ? zoneOrId : this.#getZoneCacheKey(zoneOrId);
+    const key =
+      typeof zoneOrId === "string" ? zoneOrId : this.#getZoneCacheKey(zoneOrId);
 
     if (key) {
       this.zoneGeometryCache.delete(key);
@@ -279,7 +290,7 @@ export default class SelectionManager {
   }
 
   #ensureZoneGeometry(zone) {
-    if (!zone) return { rects: [], bounds: null };
+    if (!zone) return EMPTY_GEOMETRY;
 
     const key = this.#getZoneCacheKey(zone);
 
@@ -297,7 +308,7 @@ export default class SelectionManager {
   }
 
   #computeZoneGeometry(zone) {
-    if (!zone) return { rects: [], bounds: null };
+    if (!zone) return EMPTY_GEOMETRY;
 
     if (zone.bounds) {
       return this.#computeGeometryFromBounds(zone.bounds);
@@ -307,14 +318,14 @@ export default class SelectionManager {
   }
 
   #computeGeometryFromBounds(bounds) {
-    if (!bounds) return { rects: [], bounds: null };
+    if (!bounds) return EMPTY_GEOMETRY;
 
     const { startRow, endRow, startCol, endCol } = bounds;
     const rowSpan = endRow - startRow + 1;
     const colSpan = endCol - startCol + 1;
 
     if (rowSpan <= 0 || colSpan <= 0) {
-      return { rects: [], bounds: null };
+      return EMPTY_GEOMETRY;
     }
 
     return {
@@ -331,8 +342,8 @@ export default class SelectionManager {
   }
 
   #computeGeometryFromContains(zone) {
-    if (typeof zone.contains !== 'function') {
-      return { rects: [], bounds: null };
+    if (typeof zone.contains !== "function") {
+      return EMPTY_GEOMETRY;
     }
 
     const rects = [];
@@ -375,7 +386,7 @@ export default class SelectionManager {
     }
 
     if (!rects.length) {
-      return { rects: [], bounds: null };
+      return EMPTY_GEOMETRY;
     }
 
     return {
