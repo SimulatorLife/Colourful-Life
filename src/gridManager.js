@@ -2,8 +2,7 @@ import { randomRange, randomPercent, clamp, lerp, createRankedBuffer } from './u
 import DNA from './genome.js';
 import Cell from './cell.js';
 import { computeFitness } from './fitness.mjs';
-import { isEventAffecting } from './eventManager.js';
-import { getEventEffect } from './eventEffects.js';
+import { createEventContext, defaultEventContext } from './events/eventContext.js';
 import { computeTileEnergyUpdate } from './energySystem.js';
 import InteractionSystem from './interactionSystem.js';
 import GridInteractionAdapter from './grid/gridAdapter.js';
@@ -315,6 +314,7 @@ export default class GridManager {
     cols,
     {
       eventManager,
+      eventContext,
       ctx = null,
       cellSize = 8,
       stats,
@@ -341,6 +341,7 @@ export default class GridManager {
     this.energyDeltaGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
     this.eventManager = eventManager || window.eventManager;
+    this.eventContext = createEventContext(eventContext);
     this.ctx = ctx || window.ctx;
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
@@ -502,6 +503,14 @@ export default class GridManager {
 
   setBrainSnapshotCollector(collector) {
     this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
+  }
+
+  setEventContext(eventContext) {
+    this.eventContext = createEventContext(eventContext);
+  }
+
+  getEventContext() {
+    return this.eventContext;
   }
 
   setLingerPenalty(value = 0) {
@@ -924,6 +933,7 @@ export default class GridManager {
     const energyGrid = this.energyGrid;
     const next = this.energyNext;
     const obstacles = this.obstacles;
+    const { isEventAffecting, getEventEffect } = this.eventContext ?? defaultEventContext;
     const sharedConfig = {
       maxTileEnergy: this.maxTileEnergy,
       regenRate: R,

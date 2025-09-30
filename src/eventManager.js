@@ -1,22 +1,10 @@
 import { EVENT_TYPES } from './eventEffects.js';
 import { randomRange } from './utils.js';
+import { defaultIsEventAffecting } from './events/eventContext.js';
 
-/**
- * Determines whether the supplied event overlaps the provided grid
- * coordinates. Events operate on rectangular regions described by their
- * `affectedArea` bounds.
- *
- * @param {Object} event - Event definition.
- * @param {number} row - Tile row to test.
- * @param {number} col - Tile column to test.
- * @returns {boolean} Whether the tile is affected by the event.
- */
-export function isEventAffecting(event, row, col) {
-  if (!event || !event.affectedArea) return false;
-  const { x, y, width, height } = event.affectedArea;
+export { defaultIsEventAffecting as isEventAffecting };
 
-  return row >= y && row < y + height && col >= x && col < x + width;
-}
+const isEventAffecting = defaultIsEventAffecting;
 
 /**
  * Generates and tracks environmental events that influence energy regeneration
