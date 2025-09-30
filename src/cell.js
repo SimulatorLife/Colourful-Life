@@ -10,11 +10,52 @@ const EPSILON = 1e-9;
 
 function softmax(logits = []) {
   if (!Array.isArray(logits) || logits.length === 0) return [];
-  const maxLogit = Math.max(...logits);
-  const expValues = logits.map((l) => Math.exp(l - maxLogit));
-  const sum = expValues.reduce((acc, v) => acc + v, 0) || 1;
 
-  return expValues.map((v) => v / sum);
+  const { length } = logits;
+  // Manual loops avoid multiple temporary arrays that the previous implementation
+  // created via spread/map/reduce inside per-tick decision hot paths.
+  let maxLogit = Number.NEGATIVE_INFINITY;
+
+  for (let i = 0; i < length; i++) {
+    const value = Number(logits[i]);
+
+    if (Number.isNaN(value)) {
+      maxLogit = NaN;
+      break;
+    }
+
+    if (value > maxLogit) {
+      maxLogit = value;
+    }
+  }
+
+  const expValues = new Array(length);
+  let sum = 0;
+
+  if (Number.isNaN(maxLogit)) {
+    for (let i = 0; i < length; i++) {
+      expValues[i] = NaN;
+    }
+  } else {
+    for (let i = 0; i < length; i++) {
+      const expValue = Math.exp(Number(logits[i]) - maxLogit);
+
+      expValues[i] = expValue;
+      sum += expValue;
+    }
+  }
+
+  if (!Number.isFinite(sum) || sum <= 0) {
+    sum = 1;
+  }
+
+  const invSum = 1 / sum;
+
+  for (let i = 0; i < length; i++) {
+    expValues[i] *= invSum;
+  }
+
+  return expValues;
 }
 
 function sampleFromDistribution(probabilities = [], labels = []) {
