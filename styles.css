@@ -342,6 +342,23 @@ canvas {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+.metrics-intro {
+  margin: 0 0 var(--space-md);
+  color: var(--color-text-subtle);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.metrics-empty-state {
+  padding: var(--space-md);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: var(--color-text-subtle);
+  font-size: 13px;
+  text-align: center;
+}
+
 .metrics-section {
   display: grid;
   gap: var(--space-sm);
@@ -414,12 +431,19 @@ canvas {
   gap: var(--space-md);
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   align-items: start;
+  margin-top: var(--space-md);
+  grid-auto-rows: 1fr;
 }
 
 .sparkline-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  min-height: 0;
 }
 
 .sparkline-caption {
@@ -438,6 +462,7 @@ canvas {
   border-radius: 999px;
   background: var(--color-text-subtle);
   flex: 0 0 auto;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
 .sparkline-caption-text {
@@ -453,4 +478,5 @@ canvas {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
+  flex: 1 1 auto;
 }
