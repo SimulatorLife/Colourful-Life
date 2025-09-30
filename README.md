@@ -56,9 +56,8 @@ The project uses [Parcel](https://parceljs.org/) for local development:
 
 ```bash
 npm ci
-npm run start    # Parcel dev server
-npm run build    # Production build
-npm run serve    # Simple static server (no bundling)
+npm run start    # Parcel dev server with hot reloading
+npm run build    # Production build output in dist/
 npm run format   # Format code with Prettier
 
 This line tests the Codex auto-merge workflow.
@@ -67,7 +66,7 @@ This third line verifies the Codex auto-merge path again.
 npm run format:check  # Check formatting without writing
 ```
 
-Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., Parcel dev server or `npm run serve`).
+Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
 ## Project Structure
 
@@ -126,7 +125,7 @@ Energy-related defaults for the simulation are centralized in `src/config.js`. T
 - **Recommended Node version**: Node.js 18 LTS (or newer) matches the tooling expectations in `package.json` and Parcel 2 support.
 - **Headless simulation**: Use `headless: true` with `createSimulation` (see example above) to run deterministic smoke tests or scripted experiments without the DOM.
 - **Obstacle exploration**: Start with [`demo/obstacle-presets.md`](demo/obstacle-presets.md) to learn how obstacle layouts and wall penalties shape emergent behaviour.
-- **Dev server shortcuts**: `npm run start` launches Parcel with hot module reloading; `npm run serve` spins up the lightweight Node server for static demos.
+- **Dev server shortcuts**: `npm run start` launches Parcel with hot module reloading; run `npm run build` and serve the resulting `dist/` directory with your preferred static server for production-style checks.
 - **Frame-by-frame inspection**: Pause the simulation and click the **Step** control to advance a single tick when you want to study how interventions ripple through the ecosystem.
 
 ## Agentic Prompts
