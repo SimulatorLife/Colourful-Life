@@ -104,7 +104,7 @@ function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = "0,0,0") {
   }
 }
 
-function getDensityAt(grid, r, c) {
+export function getDensityAt(grid, r, c) {
   if (typeof grid.getDensityAt === "function") return grid.getDensityAt(r, c);
   if (Array.isArray(grid.densityGrid)) return grid.densityGrid[r]?.[c] ?? 0;
   if (typeof grid.localDensity === "function") return grid.localDensity(r, c, 1);
@@ -112,7 +112,7 @@ function getDensityAt(grid, r, c) {
   return 0;
 }
 
-function densityToRgba(normalizedValue, { opaque = false } = {}) {
+export function densityToRgba(normalizedValue, { opaque = false } = {}) {
   const clampedValue = Number.isFinite(normalizedValue) ? normalizedValue : 0;
   const t = Math.min(1, Math.max(0, clampedValue));
   const stops = [
