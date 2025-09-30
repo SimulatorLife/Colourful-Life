@@ -45,6 +45,7 @@ export default class UIManager {
     this._selectionListenersInstalled = false;
     this.stepButton = null;
     this.clearZonesButton = null;
+    this.metricsPlaceholder = null;
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -1013,8 +1014,18 @@ export default class UIManager {
       collapsed: true,
     });
 
+    const intro = document.createElement("p");
+
+    intro.className = "metrics-intro";
+    intro.textContent =
+      "Track population health, energy, and behavioral trends as the simulation unfolds.";
+    body.appendChild(intro);
+
     this.metricsBox = document.createElement("div");
     this.metricsBox.className = "metrics-box";
+    this.metricsBox.setAttribute("role", "status");
+    this.metricsBox.setAttribute("aria-live", "polite");
+    this.#showMetricsPlaceholder("Run the simulation to populate these metrics.");
     body.appendChild(this.metricsBox);
 
     // Sparklines canvases
@@ -1067,6 +1078,8 @@ export default class UIManager {
     const sparkGrid = document.createElement("div");
 
     sparkGrid.className = "sparkline-grid";
+    sparkGrid.setAttribute("role", "group");
+    sparkGrid.setAttribute("aria-label", "Historical trend sparklines");
     body.appendChild(sparkGrid);
 
     sparkDescriptors.forEach(({ label, property, color }) => {
@@ -1193,8 +1206,40 @@ export default class UIManager {
     return this.lingerPenalty;
   }
 
+  #showMetricsPlaceholder(message) {
+    if (!this.metricsBox) return;
+    if (!this.metricsPlaceholder) {
+      this.metricsPlaceholder = document.createElement("div");
+      this.metricsPlaceholder.className = "metrics-empty-state";
+    }
+    if (typeof message === "string" && message.length > 0) {
+      this.metricsPlaceholder.textContent = message;
+    }
+
+    this.metricsBox.innerHTML = "";
+    this.metricsBox.appendChild(this.metricsPlaceholder);
+  }
+
+  #hideMetricsPlaceholder() {
+    if (this.metricsPlaceholder?.parentElement === this.metricsBox) {
+      this.metricsPlaceholder.remove();
+    }
+  }
+
   renderMetrics(stats, snapshot) {
     if (!this.metricsBox) return;
+    const hasSnapshotData =
+      snapshot &&
+      typeof snapshot === "object" &&
+      Object.keys(snapshot).some((key) => snapshot[key] !== undefined);
+
+    if (!hasSnapshotData) {
+      this.#showMetricsPlaceholder("Run the simulation to populate these metrics.");
+
+      return;
+    }
+
+    this.#hideMetricsPlaceholder();
     this.metricsBox.innerHTML = "";
     const s = snapshot || {};
     const totals = (stats && stats.totals) || {};
