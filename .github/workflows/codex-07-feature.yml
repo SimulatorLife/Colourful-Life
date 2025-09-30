@@ -1,7 +1,7 @@
 name: Codex 07 – Targeted Feature Improvement
 on:
   schedule:
-    - cron: '20 3,15 * * *' # twice daily at 03:20, 15:20 UTC
+    - cron: "20 3,15 * * *" # twice daily at 03:20, 15:20 UTC
   workflow_dispatch:
 
 permissions:
@@ -14,7 +14,20 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: 'Codex: Targeted Feature Improvement'
-      pr_body: 'Seed PR for Codex to implement the intended feature improvement atop current master.'
+      pr_title: "Codex: Targeted Feature Improvement"
+      pr_body: "Seed PR for Codex to implement the intended feature improvement atop current master."
       prompt: >
-        Deliver one focused, user-visible feature improvement (not style/organization/tests-only). Select ONE small but high-impact enhancement that materially improves the experience of running or interacting with the simulation (UI or core behavior) and implement it end-to-end with minimal, maintainable code. You MUST produce at least one meaningful code change—no “no-op” or “nothing to do” responses. Prefer zero new dependencies; do not introduce heavy ones. Avoid broad refactors or tangential changes; complete one feature well. If the initial idea proves infeasible within scope, pick the next best small feature and ship that instead. Update README or inline help if discoverability benefits from it (brief and practical), and add or adjust tests only where logic changes warrant it. Definition of done: (1) at least one non-trivial code change that a user can see/benefit from; (2) behavior preserved elsewhere; (3) minimal diff with clear rationale in the PR body; (4) lint/tests pass; (5) no bloat or needless complexity.
+        Deliver one focused, user-visible feature improvement (not
+        style/organization/tests-only). Select ONE small but high-impact enhancement
+        that materially improves the experience of running or interacting with the
+        simulation (UI or core behavior) and implement it end-to-end with minimal,
+        maintainable code. You MUST produce at least one meaningful code change—no
+        “no-op” or “nothing to do” responses. Prefer zero new dependencies; do not
+        introduce heavy ones. Avoid broad refactors or tangential changes; complete one
+        feature well. If the initial idea proves infeasible within scope, pick the next
+        best small feature and ship that instead. Update README or inline help if
+        discoverability benefits from it (brief and practical), and add or adjust tests
+        only where logic changes warrant it. Definition of done: (1) at least one
+        non-trivial code change that a user can see/benefit from; (2) behavior preserved
+        elsewhere; (3) minimal diff with clear rationale in the PR body; (4) lint/tests
+        pass; (5) no bloat or needless complexity.

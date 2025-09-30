@@ -1,9 +1,9 @@
 name: Codex 05 – Reduce Bloat
 on:
   schedule:
-    - cron: '5 2 * * *' # 02:05 UTC
-    - cron: '5 14 * * *' # 14:05 UTC
-    - cron: '0 19 * * *' # 19:00 UTC
+    - cron: "5 2 * * *" # 02:05 UTC
+    - cron: "5 14 * * *" # 14:05 UTC
+    - cron: "0 19 * * *" # 19:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -16,11 +16,13 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: 'Codex: Reduce Bloat'
-      pr_body: 'Seed PR for Codex to implement the intended bloat reduction refactor atop current master.'
+      pr_title: "Codex: Reduce Bloat"
+      pr_body: "Seed PR for Codex to implement the intended bloat reduction refactor atop current master."
       prompt: >
-        Review the codebase and focus on one area where unused or redundant code exists. 
-        Identify functions, variables, files, assets, or configuration entries that are no longer referenced. 
-        Remove or archive them safely, and consolidate partial duplicates where possible. 
-        The goal is to reduce bloat, simplify the repository, and ensure every line of code serves a purpose. 
-        Limit the scope to a single, high-impact area in this run rather than attempting to clean the entire codebase at once.
+        Review the codebase and focus on one area where unused or redundant code exists.
+        Identify functions, variables, files, assets, or configuration entries that are
+        no longer referenced. Remove or archive them safely, and consolidate partial
+        duplicates where possible. The goal is to reduce bloat, simplify the repository,
+        and ensure every line of code serves a purpose. Limit the scope to a single,
+        high-impact area in this run rather than attempting to clean the entire codebase
+        at once.

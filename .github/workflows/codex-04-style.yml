@@ -1,9 +1,9 @@
 name: Codex 04 – Improve Code Style
 on:
   schedule:
-    - cron: '40 1 * * *' # 01:40 UTC
-    - cron: '20 5 * * *' # 05:20 UTC
-    - cron: '40 13 * * *' # 13:40 UTC
+    - cron: "40 1 * * *" # 01:40 UTC
+    - cron: "20 5 * * *" # 05:20 UTC
+    - cron: "40 13 * * *" # 13:40 UTC
   workflow_dispatch:
 
 permissions:
@@ -16,7 +16,19 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: 'Codex: Improve Code Style'
-      pr_body: 'Seed PR for Codex to implement the intended code-style improvement atop current master.'
+      pr_title: "Codex: Improve Code Style"
+      pr_body: "Seed PR for Codex to implement the intended code-style improvement atop current master."
       prompt: >
-        Select one area (e.g. a module, subsystem, function, or file cluster) where coding style, standards, or conventions are inconsistent, and normalize it. Improvements may include enforcing consistent formatting and indentation, unifying naming of functions, variables, files, or directories to match project-wide conventions, aligning error handling and logging with established patterns, consolidating repeated ad-hoc code into a shared utility, or standardizing configuration loading and usage. If style drift is found (e.g., inconsistent spacing, casing, or ordering), bring it in line with the linter/formatter rules. Always make at least one meaningful correction—do not return “no issues found.” Keep the blast radius tight, avoid speculative rewrites or behavior changes, and ensure all linters and tests pass after the edit. The goal is to deliver one high-impact, targeted consistency fix that makes the codebase more uniform, predictable, and easier to maintain.
+        Select one area (e.g. a module, subsystem, function, or file cluster) where
+        coding style, standards, or conventions are inconsistent, and normalize it.
+        Improvements may include enforcing consistent formatting and indentation,
+        unifying naming of functions, variables, files, or directories to match
+        project-wide conventions, aligning error handling and logging with established
+        patterns, consolidating repeated ad-hoc code into a shared utility, or
+        standardizing configuration loading and usage. If style drift is found (e.g.,
+        inconsistent spacing, casing, or ordering), bring it in line with the
+        linter/formatter rules. Always make at least one meaningful correction—do not
+        return “no issues found.” Keep the blast radius tight, avoid speculative
+        rewrites or behavior changes, and ensure all linters and tests pass after the
+        edit. The goal is to deliver one high-impact, targeted consistency fix that
+        makes the codebase more uniform, predictable, and easier to maintain.

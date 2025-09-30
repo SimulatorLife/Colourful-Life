@@ -1,7 +1,7 @@
 name: Codex 02 – Improve Test Coverage & Quality
 on:
   schedule:
-    - cron: '50 0,12 * * *' # twice daily at 00:50, 12:50 UTC
+    - cron: "50 0,12 * * *" # twice daily at 00:50, 12:50 UTC
   workflow_dispatch:
 
 permissions:
@@ -14,7 +14,18 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: 'Codex: Improve Test Coverage & Quality'
-      pr_body: 'Seed PR for Codex to implement the intended test improvements atop current master.'
+      pr_title: "Codex: Improve Test Coverage & Quality"
+      pr_body: "Seed PR for Codex to implement the intended test improvements atop current master."
       prompt: >
-        Select one coherent area (e.g. a module, subsystem, critical path) where test coverage or test reliability is insufficient, and improve it. In that area, add or expand automated tests to cover both expected and edge-case behavior; modernize existing tests for readability, speed, or maintainability; and remove or refactor flaky or redundant tests that reduce confidence. Where logic is complex or risky, write focused unit tests; where integration matters, add minimal end-to-end coverage. Always deliver at least one meaningful improvement—do not return “no issues found.” Keep the scope tight, avoid rewriting the entire test suite, and ensure all tests run quickly, pass consistently, and provide a stronger safety net against regressions. The goal is to ensure the codebase is robust, with a strong safety net that prevents regressions and increases confidence in future changes.
+        Select one coherent area (e.g. a module, subsystem, critical path) where test
+        coverage or test reliability is insufficient, and improve it. In that area, add
+        or expand automated tests to cover both expected and edge-case behavior;
+        modernize existing tests for readability, speed, or maintainability; and remove
+        or refactor flaky or redundant tests that reduce confidence. Where logic is
+        complex or risky, write focused unit tests; where integration matters, add
+        minimal end-to-end coverage. Always deliver at least one meaningful
+        improvement—do not return “no issues found.” Keep the scope tight, avoid
+        rewriting the entire test suite, and ensure all tests run quickly, pass
+        consistently, and provide a stronger safety net against regressions. The goal is
+        to ensure the codebase is robust, with a strong safety net that prevents
+        regressions and increases confidence in future changes.

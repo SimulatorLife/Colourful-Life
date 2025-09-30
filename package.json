@@ -8,7 +8,7 @@
     "test": "node --loader=@esbuild-kit/cjs-loader ./node_modules/uvu/bin.js ./test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "format:workflows": "prettier --write --no-ignore \".github/workflows/**/*.yml\"",
+    "format:workflows": "prettier --ignore-path .gitignore --write \".github/workflows/**/*.yml\"",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prepare": "husky"
@@ -33,7 +33,7 @@
       "prettier --write"
     ],
     ".github/workflows/**/*.yml": [
-      "prettier --write --no-ignore"
+      "prettier --ignore-path .gitignore --write"
     ]
   },
   "devDependencies": {

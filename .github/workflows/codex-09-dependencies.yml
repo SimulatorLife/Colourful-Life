@@ -1,7 +1,7 @@
 name: Codex 09 – Dependency Hygiene
 on:
   schedule:
-    - cron: '0 5,17 * * *' # twice daily at 05:00, 17:00 UTC
+    - cron: "0 5,17 * * *" # twice daily at 05:00, 17:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -14,10 +14,11 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: 'Codex: Dependency Hygiene'
-      pr_body: 'Seed PR for Codex to streamline dependencies and build tooling atop current master.'
+      pr_title: "Codex: Dependency Hygiene"
+      pr_body: "Seed PR for Codex to streamline dependencies and build tooling atop current master."
       prompt: >
-        Review dependencies, build scripts, and configurations. Remove unused or outdated libraries,
-        upgrade to stable versions, and replace deprecated APIs with supported alternatives. Simplify
-        build steps and eliminate fragile scripts to keep the dependency graph lean and the build
-        process robust. If there are no dependencies to update, skip this step.
+        Review dependencies, build scripts, and configurations. Remove unused or
+        outdated libraries, upgrade to stable versions, and replace deprecated APIs with
+        supported alternatives. Simplify build steps and eliminate fragile scripts to
+        keep the dependency graph lean and the build process robust. If there are no
+        dependencies to update, skip this step.

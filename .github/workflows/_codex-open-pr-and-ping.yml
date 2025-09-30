@@ -9,18 +9,18 @@ on:
       pr_body:
         required: false
         type: string
-        default: ''
+        default: ""
       prompt:
         required: true
         type: string
       branch_prefix:
         required: false
         type: string
-        default: 'codex'
+        default: "codex"
       base_branch:
         required: false
         type: string
-        default: 'master'
+        default: "master"
     outputs:
       pr_number:
         value: ${{ jobs.open_and_ping.outputs.pr_number }}

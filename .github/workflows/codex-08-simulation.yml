@@ -1,7 +1,7 @@
 name: Codex 08 – Evolutionary Feature Enhancement
 on:
   schedule:
-    - cron: '10 4,16 * * *' # twice daily at 04:10, 16:10 UTC
+    - cron: "10 4,16 * * *" # twice daily at 04:10, 16:10 UTC
   workflow_dispatch:
 
 permissions:
@@ -14,17 +14,20 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: 'Codex: Evolutionary Feature Enhancement'
-      pr_body: 'Seed PR for Codex to implement one focused evolution/simulation improvement atop current master.'
+      pr_title: "Codex: Evolutionary Feature Enhancement"
+      pr_body: "Seed PR for Codex to implement one focused evolution/simulation improvement atop current master."
       prompt: >
-        Deliver one targeted enhancement that makes organism behavior more interesting, emergent, 
-        flexible, and/or less hard-coded, implemented end-to-end in a maintainable way. Focus on improvements that
-        strengthen the integration of DNA, neural/brain systems, and simulation mechanics so that behavior emerges
-        dynamically from these underlying systems rather than being dictated by static or artificial rules. Keep
-        the scope small but impactful, choosing a single area that materially improves emergent behavior or 
-        evolutionary flexibility. Ensure the implementation is performance-conscious, avoids unnecessary 
-        dependencies, and preserves backward compatibility by default. Avoid over-engineering or bloat—make the 
-        change realistic, tightly scoped, and justifiable. Document the enhancement briefly so it is discoverable, 
-        add or update tests only where logic changes require it, and confirm the project remains stable and 
-        maintainable. The goal is to evolve toward a simulation where organism behavior feels natural, emergent, 
-        and DNA/brain-driven rather than rigidly scripted.
+        Deliver one targeted enhancement that makes organism behavior more interesting,
+        emergent, flexible, and/or less hard-coded, implemented end-to-end in a
+        maintainable way. Focus on improvements that strengthen the integration of DNA,
+        neural/brain systems, and simulation mechanics so that behavior emerges
+        dynamically from these underlying systems rather than being dictated by static
+        or artificial rules. Keep the scope small but impactful, choosing a single area
+        that materially improves emergent behavior or evolutionary flexibility. Ensure
+        the implementation is performance-conscious, avoids unnecessary dependencies,
+        and preserves backward compatibility by default. Avoid over-engineering or
+        bloat—make the change realistic, tightly scoped, and justifiable. Document the
+        enhancement briefly so it is discoverable, add or update tests only where logic
+        changes require it, and confirm the project remains stable and maintainable. The
+        goal is to evolve toward a simulation where organism behavior feels natural,
+        emergent, and DNA/brain-driven rather than rigidly scripted.
