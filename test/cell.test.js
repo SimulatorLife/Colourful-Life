@@ -64,10 +64,14 @@ function predictDeterministicOffspring(
   mutationChance,
   mutationRange,
   entropyRoll = 0,
+  rngOverride = null,
 ) {
   const parentSeed = (dnaA.seed() ^ dnaB.seed()) >>> 0;
   const entropy = Math.floor(entropyRoll * 0xffffffff) >>> 0;
-  const rng = createRNG((parentSeed ^ entropy) >>> 0);
+  const rng =
+    typeof rngOverride === "function"
+      ? rngOverride
+      : createRNG((parentSeed ^ entropy) >>> 0);
   const blendA = typeof dnaA.crossoverMix === "function" ? dnaA.crossoverMix() : 0.5;
   const blendB = typeof dnaB.crossoverMix === "function" ? dnaB.crossoverMix() : 0.5;
   const blendProbability = clamp((blendA + blendB) / 2, 0, 1);
@@ -500,17 +504,19 @@ test("breed applies deterministic crossover and honors forced mutation", () => {
 
   const chance = 1;
   const range = 12;
-  const entropyRoll = 0.25;
+  const reproductionRng =
+    typeof dnaA.sharedRng === "function"
+      ? dnaA.sharedRng(dnaB, "offspringGenome")
+      : null;
   const expectedGenes = predictDeterministicOffspring(
     dnaA,
     dnaB,
     chance,
     range,
-    entropyRoll,
+    0,
+    reproductionRng,
   );
-  const child = withMockedRandom([entropyRoll, 0.5], () =>
-    Cell.breed(parentA, parentB),
-  );
+  const child = Cell.breed(parentA, parentB);
 
   assert.is(child.dna.length, expectedGenes.length);
   for (let i = 0; i < expectedGenes.length; i++) {

@@ -1,10 +1,4 @@
-import {
-  randomRange,
-  randomPercent,
-  clamp,
-  lerp,
-  createRankedBuffer,
-} from "../utils.js";
+import { randomRange, clamp, lerp, createRankedBuffer } from "../utils.js";
 import DNA from "../genome.js";
 import Cell from "../cell.js";
 import { computeFitness } from "../fitness.mjs";
@@ -1881,9 +1875,14 @@ export default class GridManager {
       };
     }
 
+    const reproductionRng =
+      typeof cell.resolveSharedRng === "function"
+        ? cell.resolveSharedRng(bestMate.target, "reproductionRoll")
+        : Math.random;
+
     if (
       !blockedInfo &&
-      randomPercent(effectiveReproProb) &&
+      reproductionRng() < effectiveReproProb &&
       cell.energy >= thrA &&
       bestMate.target.energy >= thrB
     ) {
@@ -2343,7 +2342,17 @@ export default class GridManager {
             classification: "society",
             precomputedSimilarity: similarity,
           });
-        } else if (similarity <= enemyT || randomPercent(enemyBias)) {
+        } else if (
+          similarity <= enemyT ||
+          (() => {
+            const hostilityRng =
+              typeof cell.resolveSharedRng === "function"
+                ? cell.resolveSharedRng(target, "hostilityGate")
+                : Math.random;
+
+            return hostilityRng() < enemyBias;
+          })()
+        ) {
           enemies.push({ row: newRow, col: newCol, target });
         } else {
           mates.push({

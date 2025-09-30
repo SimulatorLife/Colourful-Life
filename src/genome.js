@@ -157,6 +157,20 @@ export class DNA {
     return createRNG(h >>> 0);
   }
 
+  sharedRng(other, tag = "") {
+    const otherSeed = other && typeof other.seed === "function" ? other.seed() : 0;
+    let h = (this.seed() ^ otherSeed ^ 0x9e3779b9) >>> 0;
+
+    if (typeof tag === "string" && tag.length > 0) {
+      for (let i = 0; i < tag.length; i++) {
+        h ^= tag.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+    }
+
+    return createRNG(h >>> 0);
+  }
+
   isLegacyGenome() {
     const extraBytes = this.genes.length - BASE_GENE_COUNT;
 
@@ -634,6 +648,39 @@ export class DNA {
     const base = 0.2 + 0.5 * sense + 0.2 * exploration - 0.2 * recovery;
 
     return clamp(base, 0.1, 0.85);
+  }
+
+  eventResponseProfile() {
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+
+    const drainMitigation = clamp(
+      0.25 + 0.55 * recovery + 0.15 * cooperation - 0.3 * risk,
+      0.05,
+      0.85,
+    );
+    const vigilance = clamp(
+      0.4 + 0.35 * risk + 0.25 * sense + 0.2 * exploration - 0.2 * strategy,
+      0.2,
+      1.25,
+    );
+    const pressureRetention = clamp(
+      0.35 + 0.3 * risk + 0.25 * density - 0.28 * recovery - 0.18 * strategy,
+      0.05,
+      0.95,
+    );
+    const rebound = clamp(
+      0.1 + 0.45 * recovery + 0.2 * strategy + 0.1 * cooperation - 0.25 * risk,
+      0.02,
+      0.75,
+    );
+
+    return { drainMitigation, vigilance, pressureRetention, rebound };
   }
 
   interactionPlasticity() {
@@ -1524,10 +1571,27 @@ export class DNA {
     };
   }
 
-  reproduceWith(other, mutationChance = 0.15, mutationRange = 12) {
+  reproduceWith(other, mutationChance = 0.15, mutationRange = 12, rngOverride) {
     const parentSeed = (this.seed() ^ (other?.seed?.() ?? 0)) >>> 0;
-    const entropy = Math.floor(Math.random() * 0xffffffff) >>> 0;
-    const rng = createRNG((parentSeed ^ entropy) >>> 0);
+    let rng = null;
+
+    if (typeof rngOverride === "function") {
+      rng = rngOverride;
+    } else {
+      let sharedEntropy = 0;
+
+      if (typeof this.sharedRng === "function") {
+        const shared = this.sharedRng(other, "offspringMix");
+
+        if (typeof shared === "function") {
+          sharedEntropy = Math.floor(shared() * 0xffffffff) >>> 0;
+        }
+      }
+
+      const runtimeEntropy = Math.floor(Math.random() * 0xffffffff) >>> 0;
+
+      rng = createRNG((parentSeed ^ sharedEntropy ^ runtimeEntropy) >>> 0);
+    }
     const blendA = typeof this.crossoverMix === "function" ? this.crossoverMix() : 0.5;
     const blendB =
       typeof other?.crossoverMix === "function" ? other.crossoverMix() : 0.5;
