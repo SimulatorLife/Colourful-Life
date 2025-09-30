@@ -1,6 +1,6 @@
-import { EVENT_TYPES } from './eventEffects.js';
-import { randomRange } from './utils.js';
-import { defaultIsEventAffecting } from './events/eventContext.js';
+import { EVENT_TYPES } from "./eventEffects.js";
+import { randomRange } from "./utils.js";
+import { defaultIsEventAffecting } from "./events/eventContext.js";
 
 export { defaultIsEventAffecting as isEventAffecting };
 
@@ -12,13 +12,13 @@ export { defaultIsEventAffecting as isEventAffecting };
  */
 export default class EventManager {
   static EVENT_COLORS = {
-    flood: 'rgba(0, 0, 255, 0.5)',
-    drought: 'rgba(210, 180, 140, 0.5)',
-    heatwave: 'rgba(255, 140, 0, 0.5)',
-    coldwave: 'rgba(135, 206, 235, 0.5)',
+    flood: "rgba(0, 0, 255, 0.5)",
+    drought: "rgba(210, 180, 140, 0.5)",
+    heatwave: "rgba(255, 140, 0, 0.5)",
+    coldwave: "rgba(135, 206, 235, 0.5)",
   };
 
-  static DEFAULT_EVENT_COLOR = 'rgba(0,0,0,0)';
+  static DEFAULT_EVENT_COLOR = "rgba(0,0,0,0)";
 
   constructor(rows, cols, rng = Math.random, options = {}) {
     this.rows = rows;
@@ -27,35 +27,37 @@ export default class EventManager {
     this.cooldown = 0;
     this.activeEvents = [];
     this.currentEvent = null;
-    const { resolveEventColor, eventColors } = options || {};
+    const { resolveEventColor, eventColors, startWithEvent = true } = options || {};
     // Allow callers to override the event color palette without changing defaults.
     const defaultResolver = (eventType) =>
       EventManager.EVENT_COLORS[eventType] ?? EventManager.DEFAULT_EVENT_COLOR;
 
-    if (typeof resolveEventColor === 'function') {
+    if (typeof resolveEventColor === "function") {
       this.eventColorResolver = (eventType) => {
         const resolved = resolveEventColor(eventType);
 
-        return typeof resolved === 'string' && resolved.length > 0
+        return typeof resolved === "string" && resolved.length > 0
           ? resolved
           : defaultResolver(eventType);
       };
     } else {
       const mergedColors = {
         ...EventManager.EVENT_COLORS,
-        ...(eventColors && typeof eventColors === 'object' ? eventColors : {}),
+        ...(eventColors && typeof eventColors === "object" ? eventColors : {}),
       };
 
       this.eventColorResolver = (eventType) =>
-        typeof mergedColors[eventType] === 'string' && mergedColors[eventType].length > 0
+        typeof mergedColors[eventType] === "string" &&
+        mergedColors[eventType].length > 0
           ? mergedColors[eventType]
           : EventManager.DEFAULT_EVENT_COLOR;
     }
-    // start with one event for visibility
-    const e = this.generateRandomEvent();
+    if (startWithEvent) {
+      const e = this.generateRandomEvent();
 
-    this.activeEvents.push(e);
-    this.currentEvent = e;
+      this.activeEvents.push(e);
+      this.currentEvent = e;
+    }
   }
 
   getColor(ev) {
@@ -65,7 +67,8 @@ export default class EventManager {
   }
 
   generateRandomEvent() {
-    const eventType = EVENT_TYPES[Math.floor(randomRange(0, EVENT_TYPES.length, this.rng))];
+    const eventType =
+      EVENT_TYPES[Math.floor(randomRange(0, EVENT_TYPES.length, this.rng))];
     // Bias durations so events are visible but not constant
     const duration = Math.floor(randomRange(300, 900, this.rng)); // frames
     const strength = randomRange(0.25, 1, this.rng); // 0.25..1
@@ -96,7 +99,10 @@ export default class EventManager {
       // Next cooldown scales inversely with frequency multiplier
       const base = Math.floor(randomRange(180, 480, this.rng));
 
-      this.cooldown = Math.max(0, Math.floor(base / Math.max(0.01, frequencyMultiplier)));
+      this.cooldown = Math.max(
+        0,
+        Math.floor(base / Math.max(0.01, frequencyMultiplier)),
+      );
     }
 
     // Maintain compatibility: expose the first active event as currentEvent

@@ -1,11 +1,11 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
 import {
   MockCanvas,
   loadSimulationModules,
   patchSimulationPrototypes,
-} from './helpers/simulationEngine.js';
+} from "./helpers/simulationEngine.js";
 
 function createEngine(modules) {
   const { SimulationEngine } = modules;
@@ -19,7 +19,29 @@ function createEngine(modules) {
   });
 }
 
-test('numeric setters sanitize input, clamp values, and flag slow UI updates', async () => {
+test("SimulationEngine skips initial events when frequency multiplier is zero", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      config: { eventFrequencyMultiplier: 0 },
+    });
+
+    assert.is(engine.eventManager.activeEvents.length, 0);
+    assert.is(engine.eventManager.currentEvent, null);
+  } finally {
+    restore();
+  }
+});
+
+test("numeric setters sanitize input, clamp values, and flag slow UI updates", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
 
@@ -27,39 +49,61 @@ test('numeric setters sanitize input, clamp values, and flag slow UI updates', a
     const engine = createEngine(modules);
 
     engine.pendingSlowUiUpdate = false;
-    const rounded = engine.setUpdatesPerSecond('120.7');
+    const rounded = engine.setUpdatesPerSecond("120.7");
 
-    assert.is(rounded, 121, 'updatesPerSecond is rounded to nearest integer');
+    assert.is(rounded, 121, "updatesPerSecond is rounded to nearest integer");
     assert.is(engine.state.updatesPerSecond, 121);
-    assert.ok(engine.pendingSlowUiUpdate, 'changing updatesPerSecond flags slow UI updates');
+    assert.ok(
+      engine.pendingSlowUiUpdate,
+      "changing updatesPerSecond flags slow UI updates",
+    );
 
     engine.pendingSlowUiUpdate = false;
     const previousEventFrequency = engine.state.eventFrequencyMultiplier;
 
-    engine.setEventFrequencyMultiplier('not-a-number');
+    engine.setEventFrequencyMultiplier("not-a-number");
 
     assert.is(engine.state.eventFrequencyMultiplier, previousEventFrequency);
-    assert.is(engine.pendingSlowUiUpdate, false, 'fallback path does not mark slow UI updates');
+    assert.is(
+      engine.pendingSlowUiUpdate,
+      false,
+      "fallback path does not mark slow UI updates",
+    );
 
     engine.pendingSlowUiUpdate = false;
     engine.setEnergyRates({ regen: -5, diffusion: 0.9 });
 
-    assert.is(engine.state.energyRegenRate, 0, 'regen rate is clamped at zero');
-    assert.is(engine.state.energyDiffusionRate, 0.9, 'diffusion rate accepts valid values');
-    assert.ok(engine.pendingSlowUiUpdate, 'energy tuning triggers leaderboard refresh');
+    assert.is(engine.state.energyRegenRate, 0, "regen rate is clamped at zero");
+    assert.is(
+      engine.state.energyDiffusionRate,
+      0.9,
+      "diffusion rate accepts valid values",
+    );
+    assert.ok(engine.pendingSlowUiUpdate, "energy tuning triggers leaderboard refresh");
 
     engine.pendingSlowUiUpdate = false;
     engine.setSimilarityThresholds({ societySimilarity: 2, enemySimilarity: -1 });
 
-    assert.is(engine.state.societySimilarity, 1, 'society similarity clamps to upper bound');
-    assert.is(engine.state.enemySimilarity, 0, 'enemy similarity clamps to lower bound');
-    assert.ok(engine.pendingSlowUiUpdate, 'similarity adjustments mark slow UI updates');
+    assert.is(
+      engine.state.societySimilarity,
+      1,
+      "society similarity clamps to upper bound",
+    );
+    assert.is(
+      engine.state.enemySimilarity,
+      0,
+      "enemy similarity clamps to lower bound",
+    );
+    assert.ok(
+      engine.pendingSlowUiUpdate,
+      "similarity adjustments mark slow UI updates",
+    );
   } finally {
     restore();
   }
 });
 
-test('overlay visibility toggles mutate only requested flags', async () => {
+test("overlay visibility toggles mutate only requested flags", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
 
@@ -75,18 +119,22 @@ test('overlay visibility toggles mutate only requested flags', async () => {
 
     assert.is(engine.state.showObstacles, false);
     assert.is(engine.state.showFitness, true);
-    assert.is(engine.state.showDensity, false, 'unset overlay flags retain their existing values');
+    assert.is(
+      engine.state.showDensity,
+      false,
+      "unset overlay flags retain their existing values",
+    );
     assert.is(
       engine.pendingSlowUiUpdate,
       false,
-      'overlay toggles do not schedule leaderboard work'
+      "overlay toggles do not schedule leaderboard work",
     );
   } finally {
     restore();
   }
 });
 
-test('setBrainSnapshotCollector stores collector and forwards to grid', async () => {
+test("setBrainSnapshotCollector stores collector and forwards to grid", async () => {
   const modules = await loadSimulationModules();
   const { restore, calls } = patchSimulationPrototypes(modules);
 
@@ -102,37 +150,45 @@ test('setBrainSnapshotCollector stores collector and forwards to grid', async ()
 
     engine.setBrainSnapshotCollector();
 
-    assert.is(engine.brainSnapshotCollector, null, 'collector defaults to null when omitted');
+    assert.is(
+      engine.brainSnapshotCollector,
+      null,
+      "collector defaults to null when omitted",
+    );
     assert.equal(calls.grid.setBrainSnapshotCollector.at(-1), [undefined]);
   } finally {
     restore();
   }
 });
 
-test('autoPauseOnBlur setter keeps engine state aligned', async () => {
+test("autoPauseOnBlur setter keeps engine state aligned", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
 
   try {
     const engine = createEngine(modules);
 
-    assert.is(engine.state.autoPauseOnBlur, true, 'autopause defaults to enabled');
+    assert.is(engine.state.autoPauseOnBlur, true, "autopause defaults to enabled");
 
     engine._autoPauseResumePending = true;
     engine.setAutoPauseOnBlur(false);
 
-    assert.is(engine.state.autoPauseOnBlur, false, 'disabling autopause updates state');
-    assert.is(engine.autoPauseOnBlur, false, 'instance flag mirrors state change');
+    assert.is(engine.state.autoPauseOnBlur, false, "disabling autopause updates state");
+    assert.is(engine.autoPauseOnBlur, false, "instance flag mirrors state change");
     assert.is(
       engine._autoPauseResumePending,
       false,
-      'disabling autopause clears any pending auto-resume markers'
+      "disabling autopause clears any pending auto-resume markers",
     );
 
     engine.setAutoPauseOnBlur(true);
 
-    assert.is(engine.state.autoPauseOnBlur, true, 're-enabling autopause updates state');
-    assert.is(engine.autoPauseOnBlur, true, 'instance flag mirrors re-enabled state');
+    assert.is(
+      engine.state.autoPauseOnBlur,
+      true,
+      "re-enabling autopause updates state",
+    );
+    assert.is(engine.autoPauseOnBlur, true, "instance flag mirrors re-enabled state");
   } finally {
     restore();
   }
