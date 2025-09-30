@@ -13,6 +13,7 @@ import { computeTileEnergyUpdate } from "./energySystem.js";
 import InteractionSystem from "./interactionSystem.js";
 import GridInteractionAdapter from "./grid/gridAdapter.js";
 import ReproductionZonePolicy from "./grid/reproductionZonePolicy.js";
+import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -22,49 +23,6 @@ import {
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
 } from "./config.js";
-
-export const OBSTACLE_PRESETS = [
-  {
-    id: "none",
-    label: "Open Field",
-    description: "Clears all obstacles for free movement.",
-  },
-  {
-    id: "midline",
-    label: "Midline Wall",
-    description: "Single vertical barrier with regular gates.",
-  },
-  {
-    id: "corridor",
-    label: "Triple Corridor",
-    description: "Two vertical walls that divide the map into three lanes.",
-  },
-  {
-    id: "checkerboard",
-    label: "Checkerboard Gaps",
-    description: "Alternating impassable tiles to force weaving paths.",
-  },
-  {
-    id: "perimeter",
-    label: "Perimeter Ring",
-    description: "Walls around the rim that keep populations in-bounds.",
-  },
-  {
-    id: "sealed-quadrants",
-    label: "Sealed Quadrants",
-    description: "Thick cross-shaped walls isolate four distinct quadrants.",
-  },
-  {
-    id: "sealed-chambers",
-    label: "Sealed Chambers",
-    description: "Grid partitions create multiple closed rectangular chambers.",
-  },
-  {
-    id: "corner-islands",
-    label: "Corner Islands",
-    description: "Four isolated pockets carved out of a blocked landscape.",
-  },
-];
 const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
