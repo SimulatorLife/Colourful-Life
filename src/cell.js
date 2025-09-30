@@ -1,6 +1,6 @@
 import DNA from "./genome.js";
 import Brain, { OUTPUT_GROUPS } from "./brain.js";
-import { randomRange, clamp, lerp, cloneTracePayload } from "./utils.js";
+import { randomRange, clamp, lerp, cloneTracePayload, warnOnce } from "./utils.js";
 import { isEventAffecting } from "./eventManager.js";
 import { getEventEffect } from "./eventEffects.js";
 import { accumulateEventModifiers } from "./energySystem.js";
@@ -220,7 +220,10 @@ export default class Cell {
     const similarityCandidate = mate?.precomputedSimilarity;
     const similarity = Number.isFinite(similarityCandidate)
       ? similarityCandidate
-      : this.similarityTo(target);
+      : this.#safeSimilarityTo(target, {
+          context: "mate candidate evaluation",
+          fallback: 0,
+        });
     const diversity = 1 - similarity;
     const bias = this.matePreferenceBias ?? 0;
     const appetite = this.diversityAppetite ?? 0;
@@ -398,7 +401,12 @@ export default class Cell {
     for (const mate of potentialMates) {
       if (!mate?.target) continue;
 
-      const similarity = this.similarityTo(mate.target);
+      const similarity = this.#safeSimilarityTo(mate.target, {
+        context: "fallback mate selection scoring",
+        fallback: Number.NaN,
+      });
+
+      if (!Number.isFinite(similarity)) continue;
       const diff = Math.abs(similarity - target);
       const targetScore = Math.max(0, 1 - diff / tolerance);
       const kinScore = similarity;
@@ -921,11 +929,35 @@ export default class Cell {
 
     for (const entry of list) {
       if (!entry?.target) continue;
-      total += this.similarityTo(entry.target);
+      const similarity = this.#safeSimilarityTo(entry.target, {
+        context: "average similarity aggregation",
+        fallback: Number.NaN,
+      });
+
+      if (!Number.isFinite(similarity)) continue;
+
+      total += similarity;
       count++;
     }
 
     return count > 0 ? total / count : 0;
+  }
+
+  #safeSimilarityTo(
+    candidate,
+    { context = "similarity evaluation", fallback = null } = {},
+  ) {
+    if (!candidate?.dna) return fallback;
+
+    try {
+      const value = this.similarityTo(candidate);
+
+      return Number.isFinite(value) ? value : fallback;
+    } catch (error) {
+      warnOnce(`Failed to compute similarity during ${context}.`, error);
+
+      return fallback;
+    }
   }
 
   #updateResourceSignal({ tileEnergy = 0, tileEnergyDelta = 0 } = {}) {
@@ -1089,11 +1121,14 @@ export default class Cell {
     const partner = event.partner ?? null;
 
     if (!Number.isFinite(kinship) && partner) {
-      try {
-        kinship = clamp(this.similarityTo(partner), 0, 1);
-      } catch (error) {
-        kinship = 0;
-      }
+      kinship = clamp(
+        this.#safeSimilarityTo(partner, {
+          context: "interaction kinship estimation",
+          fallback: 0,
+        }),
+        0,
+        1,
+      );
     }
 
     if (!Number.isFinite(kinship)) kinship = 0;
@@ -1368,7 +1403,14 @@ export default class Cell {
       0,
       1,
     );
-    const similarity = partner ? this.similarityTo(partner) : 0;
+    const similarity = clamp(
+      this.#safeSimilarityTo(partner, {
+        context: "reproduction sensor partner similarity",
+        fallback: 0,
+      }),
+      0,
+      1,
+    );
     const ageFrac = this.lifespan > 0 ? clamp(this.age / this.lifespan, 0, 1) : 0;
     const partnerAgeFrac =
       partner?.lifespan > 0 ? clamp(partner.age / partner.lifespan, 0, 1) : 0;
@@ -1435,13 +1477,14 @@ export default class Cell {
 
       attritionSum += attrition;
 
-      let similarity = 0;
-
-      try {
-        similarity = clamp(this.similarityTo(target), 0, 1);
-      } catch (error) {
-        similarity = 0;
-      }
+      const similarity = clamp(
+        this.#safeSimilarityTo(target, {
+          context: "targeting sensor similarity accumulation",
+          fallback: 0,
+        }),
+        0,
+        1,
+      );
 
       similaritySum += similarity;
       count++;
@@ -2418,13 +2461,15 @@ export default class Cell {
       if (score > bestScore) {
         bestScore = score;
         best = enemy;
-        let similarity = 0;
+        const similarity = clamp(
+          this.#safeSimilarityTo(enemy.target, {
+            context: "targeting decision similarity ranking",
+            fallback: 0,
+          }),
+          0,
+          1,
+        );
 
-        try {
-          similarity = clamp(this.similarityTo(enemy.target), 0, 1);
-        } catch (error) {
-          similarity = 0;
-        }
         chosenSummary = {
           row: enemy.row,
           col: enemy.col,
@@ -2443,13 +2488,14 @@ export default class Cell {
         const row = best.row ?? best.target.row ?? this.row;
         const col = best.col ?? best.target.col ?? this.col;
         const dist = Math.max(Math.abs(row - this.row), Math.abs(col - this.col));
-        let similarity = 0;
-
-        try {
-          similarity = clamp(this.similarityTo(best.target), 0, 1);
-        } catch (error) {
-          similarity = 0;
-        }
+        const similarity = clamp(
+          this.#safeSimilarityTo(best.target, {
+            context: "targeting fallback similarity",
+            fallback: 0,
+          }),
+          0,
+          1,
+        );
 
         chosenSummary = {
           row: best.row,
@@ -2579,7 +2625,14 @@ export default class Cell {
       partnerEnergy != null && Number.isFinite(partnerEnergy)
         ? clamp(partnerEnergy / capacity, 0, 1)
         : selfEnergyNorm;
-    const kinship = partner?.dna ? this.similarityTo(partner) : 0;
+    const kinship = clamp(
+      this.#safeSimilarityTo(partner, {
+        context: "cooperation intent kinship",
+        fallback: 0,
+      }),
+      0,
+      1,
+    );
     const shareFraction =
       typeof this.dna.cooperateShareFrac === "function"
         ? this.dna.cooperateShareFrac({
