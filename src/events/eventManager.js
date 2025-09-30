@@ -18,6 +18,26 @@ function normalizeEventTypes(candidate) {
   return Array.from(new Set(filtered));
 }
 
+function sampleEventSpan(limit, rng) {
+  const maxSpan = Math.max(1, Math.floor(limit));
+  const minSpan = Math.min(10, maxSpan);
+  const spanCandidate = Math.max(minSpan, Math.floor(maxSpan / 3));
+  const upperExclusive = spanCandidate === minSpan ? minSpan + 1 : spanCandidate + 1;
+  const raw = Math.floor(randomRange(minSpan, upperExclusive, rng));
+
+  return Math.max(1, Math.min(maxSpan, raw));
+}
+
+function clampEventStart(rawStart, span, limit) {
+  const maxStart = Math.max(0, Math.floor(limit) - span);
+
+  if (maxStart <= 0) {
+    return 0;
+  }
+
+  return Math.min(maxStart, Math.max(0, rawStart));
+}
+
 /**
  * Generates and tracks environmental events that influence energy regeneration
  * and drain across the grid. Events are spawned with randomized type, strength,
@@ -128,11 +148,17 @@ export default class EventManager {
     // Bias durations so events are visible but not constant
     const duration = Math.floor(randomRange(300, 900, this.rng)); // frames
     const strength = randomRange(0.25, 1, this.rng); // 0.25..1
+    const rawX = Math.floor(randomRange(0, this.cols, this.rng));
+    const rawY = Math.floor(randomRange(0, this.rows, this.rng));
+    const width = sampleEventSpan(this.cols, this.rng);
+    const height = sampleEventSpan(this.rows, this.rng);
+    const x = clampEventStart(rawX, width, this.cols);
+    const y = clampEventStart(rawY, height, this.rows);
     const affectedArea = {
-      x: Math.floor(randomRange(0, this.cols, this.rng)),
-      y: Math.floor(randomRange(0, this.rows, this.rng)),
-      width: Math.max(10, Math.floor(randomRange(6, this.cols / 3, this.rng))),
-      height: Math.max(10, Math.floor(randomRange(6, this.rows / 3, this.rng))),
+      x,
+      y,
+      width,
+      height,
     };
 
     return { eventType, duration, affectedArea, strength, remaining: duration };
