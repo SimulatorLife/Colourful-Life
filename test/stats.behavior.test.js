@@ -182,6 +182,8 @@ test('updateFromSnapshot aggregates metrics and caps histories', async () => {
   assert.is(result.meanEnergy, 3);
   assert.is(result.meanAge, 4.5);
   assert.is(result.diversity, 0.42);
+  assert.is(result.diversityPressure, 0);
+  assert.is(result.diversityTarget, stats.getDiversityTarget());
   assert.equal(result.traitPresence, stats.traitPresence);
   assert.is(result.mateChoices, 2);
   assert.is(result.successfulMatings, 1);
@@ -196,6 +198,7 @@ test('updateFromSnapshot aggregates metrics and caps histories', async () => {
 
   assert.is(stats.history.population.length, 1);
   assert.is(stats.history.diversity.length, 1);
+  assert.is(stats.history.diversityPressure.length, 1);
   assert.is(stats.history.energy.length, 1);
   assert.is(stats.history.growth.length, 1);
   assert.is(stats.history.diversePairingRate.length, 1);
@@ -242,6 +245,48 @@ test('updateFromSnapshot aggregates metrics and caps histories', async () => {
   assert.equal(stats.history.diversity, [0.1, 0.2, 0.3]);
   assert.equal(stats.getHistorySeries('population'), [1, 1, 1]);
   assert.equal(stats.getTraitHistorySeries('presence', 'cooperation'), [0.5, 0.5, 0.5]);
+});
+
+test('diversity pressure increases when diversity stays below target', async () => {
+  const { default: Stats } = await statsModulePromise;
+
+  class PressureStats extends Stats {
+    constructor() {
+      super();
+      this.mockDiversity = 0.1;
+    }
+
+    estimateDiversity() {
+      return this.mockDiversity;
+    }
+  }
+
+  const stats = new PressureStats();
+  const snapshot = {
+    population: 2,
+    totalEnergy: 0,
+    totalAge: 0,
+    cells: [createCell(), createCell()],
+  };
+
+  stats.setDiversityTarget(0.5);
+  stats.updateFromSnapshot(snapshot);
+
+  assert.ok(stats.getDiversityPressure() > 0);
+
+  const firstPressure = stats.getDiversityPressure();
+
+  stats.mockDiversity = 0.05;
+  stats.updateFromSnapshot(snapshot);
+
+  const elevatedPressure = stats.getDiversityPressure();
+
+  assert.ok(elevatedPressure > firstPressure);
+
+  stats.mockDiversity = 0.8;
+  stats.updateFromSnapshot(snapshot);
+
+  assert.ok(stats.getDiversityPressure() < elevatedPressure);
 });
 
 test('history buffers maintain order while capping size', async () => {
