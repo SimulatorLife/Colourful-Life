@@ -1,5 +1,6 @@
 import { clamp, clamp01 } from './utils.js';
 import GridInteractionAdapter from './grid/gridAdapter.js';
+import { COMBAT_EDGE_SHARPNESS_DEFAULT } from './config.js';
 
 function asFiniteCoordinate(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -51,6 +52,18 @@ function computeCombatPower(cell) {
   return cell?.energy * modifier;
 }
 
+function resolveCombatSharpness(cell) {
+  const fn = cell?.dna?.combatEdgeSharpness;
+
+  if (typeof fn !== 'function') return 1;
+
+  const value = Number(fn.call(cell?.dna));
+
+  if (!Number.isFinite(value)) return 1;
+
+  return clamp(value, 0.25, 4);
+}
+
 function resolveTrait01(cell, traitName, fallback = 0.5) {
   const trait = cell?.dna?.[traitName];
 
@@ -96,6 +109,7 @@ function computeCombatOdds({
   targetCol,
   densityGrid,
   densityEffectMultiplier,
+  combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT,
 }) {
   const totalPower = Math.abs(attackerPower) + Math.abs(defenderPower);
   const baseEdge = totalPower > 0 ? clamp((attackerPower - defenderPower) / totalPower, -1, 1) : 0;
@@ -113,7 +127,13 @@ function computeCombatOdds({
     densityEffectMultiplier,
   });
   const combinedEdge = clamp(baseEdge + riskEdge + resilienceEdge + territoryEdge, -0.95, 0.95);
-  const logisticInput = combinedEdge * 3.2;
+  const baseSharpness = Number.isFinite(combatEdgeSharpness)
+    ? combatEdgeSharpness
+    : COMBAT_EDGE_SHARPNESS_DEFAULT;
+  const attackerSharpness = resolveCombatSharpness(attacker);
+  const defenderSharpness = resolveCombatSharpness(defender);
+  const dnaScale = clamp((attackerSharpness + defenderSharpness) / 2, 0.1, 5);
+  const logisticInput = combinedEdge * baseSharpness * dnaScale;
   const attackerWinChance = clamp01(1 / (1 + Math.exp(-logisticInput)));
 
   return { attackerWinChance, edge: combinedEdge };
@@ -250,25 +270,35 @@ export default class InteractionSystem {
     return true;
   }
 
-  process({ stats, densityGrid, densityEffectMultiplier } = {}) {
+  process({ stats, densityGrid, densityEffectMultiplier, combatEdgeSharpness } = {}) {
     let processed = false;
 
     while (this.pendingIntents.length > 0) {
       const intent = this.pendingIntents.shift();
 
       processed =
-        this.resolveIntent(intent, { stats, densityGrid, densityEffectMultiplier }) || processed;
+        this.resolveIntent(intent, {
+          stats,
+          densityGrid,
+          densityEffectMultiplier,
+          combatEdgeSharpness,
+        }) || processed;
     }
 
     return processed;
   }
 
-  resolveIntent(intent, { stats, densityGrid, densityEffectMultiplier } = {}) {
+  resolveIntent(intent, { stats, densityGrid, densityEffectMultiplier, combatEdgeSharpness } = {}) {
     if (!intent || typeof intent !== 'object') return false;
 
     switch (intent.type) {
       case 'fight':
-        return this.#resolveFight(intent, { stats, densityGrid, densityEffectMultiplier });
+        return this.#resolveFight(intent, {
+          stats,
+          densityGrid,
+          densityEffectMultiplier,
+          combatEdgeSharpness,
+        });
       case 'cooperate':
         return this.#resolveCooperation(intent, { stats });
       default:
@@ -276,7 +306,7 @@ export default class InteractionSystem {
     }
   }
 
-  #resolveFight(intent, { stats, densityGrid, densityEffectMultiplier } = {}) {
+  #resolveFight(intent, { stats, densityGrid, densityEffectMultiplier, combatEdgeSharpness } = {}) {
     const adapter = this.adapter;
 
     if (!adapter) return false;
@@ -311,6 +341,7 @@ export default class InteractionSystem {
       targetCol,
       densityGrid,
       densityEffectMultiplier,
+      combatEdgeSharpness,
     });
     const attackerWins = Math.random() < odds.attackerWinChance;
     const intensity = clamp(

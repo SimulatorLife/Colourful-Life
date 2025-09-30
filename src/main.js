@@ -108,6 +108,7 @@ function createHeadlessCanvas(config = {}) {
  * @param {number} [options.eventStrengthMultiplier] Event strength multiplier.
  * @param {number} [options.energyRegenRate] Baseline energy regeneration.
  * @param {number} [options.energyDiffusionRate] Ambient energy spread.
+ * @param {number} [options.combatEdgeSharpness] Sharpness multiplier for combat odds.
  * @param {number} [options.matingDiversityThreshold] Genetic similarity tolerance for mating.
  * @param {number} [options.lowDiversityReproMultiplier] Reproduction multiplier applied when diversity is low.
  * @param {boolean} [options.showObstacles] Whether obstacle overlays are shown.
@@ -175,6 +176,7 @@ function createHeadlessUiManager(options = {}) {
     getSocietySimilarity: () => settings.societySimilarity,
     getEnemySimilarity: () => settings.enemySimilarity,
     getEventStrengthMultiplier: () => settings.eventStrengthMultiplier,
+    getCombatEdgeSharpness: () => settings.combatEdgeSharpness,
     getEnergyRegenRate: () => settings.energyRegenRate,
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
     getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
@@ -184,6 +186,9 @@ function createHeadlessUiManager(options = {}) {
     getLowDiversityReproMultiplier: () => settings.lowDiversityReproMultiplier,
     setLowDiversityReproMultiplier: (value) => {
       updateIfFinite('lowDiversityReproMultiplier', value);
+    },
+    setCombatEdgeSharpness: (value) => {
+      updateIfFinite('combatEdgeSharpness', value);
     },
     getShowObstacles: () => settings.showObstacles,
     getShowEnergy: () => settings.showEnergy,

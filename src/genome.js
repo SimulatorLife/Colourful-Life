@@ -679,6 +679,18 @@ export class DNA {
     };
   }
 
+  combatEdgeSharpness() {
+    const combat = this.geneFraction(GENE_LOCI.COMBAT);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const aggressiveness = 0.5 * combat + 0.35 * risk;
+    const caution = 0.25 * recovery + 0.25 * strategy;
+    const raw = 0.85 + aggressiveness - caution;
+
+    return clamp(raw, 0.5, 1.6);
+  }
+
   neuralSensorModulation() {
     const sensorCount = Brain?.SENSOR_COUNT ?? 0;
 
