@@ -1,7 +1,5 @@
 import { clamp01 } from "./utils.js";
 
-// Traits tracked for population presence/averages; keep aligned with UI labels.
-const TRAIT_NAMES = ["cooperation", "fighting", "breeding", "sight"];
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = 0.6;
 const MAX_REPRODUCTION_PROB = 0.8;
@@ -23,13 +21,134 @@ const HISTORY_SERIES_KEYS = [
 const DIVERSITY_TARGET_DEFAULT = 0.35;
 const DIVERSITY_PRESSURE_SMOOTHING = 0.85;
 
-const createTraitValueMap = (initializer) =>
-  Object.fromEntries(
-    TRAIT_NAMES.map((key) => [
+function wrapTraitCompute(fn) {
+  if (typeof fn !== "function") {
+    return () => 0;
+  }
+
+  return (cell) => {
+    try {
+      return clamp01(fn(cell));
+    } catch {
+      return 0;
+    }
+  };
+}
+
+function normalizeThreshold(value, fallback = TRAIT_THRESHOLD) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) {
+    return clamp01(fallback);
+  }
+
+  return clamp01(numeric);
+}
+
+const clampInteractionTrait = (genes, key) => {
+  const value = genes && typeof genes[key] === "number" ? genes[key] : 0;
+
+  return clamp01(value);
+};
+
+// Baseline trait metrics tracked by Stats; callers may extend via constructor options.
+const DEFAULT_TRAIT_DEFINITIONS = Object.freeze([
+  Object.freeze({
+    key: "cooperation",
+    compute: wrapTraitCompute((cell) =>
+      clampInteractionTrait(cell?.interactionGenes, "cooperate"),
+    ),
+    threshold: TRAIT_THRESHOLD,
+  }),
+  Object.freeze({
+    key: "fighting",
+    compute: wrapTraitCompute((cell) =>
+      clampInteractionTrait(cell?.interactionGenes, "fight"),
+    ),
+    threshold: TRAIT_THRESHOLD,
+  }),
+  Object.freeze({
+    key: "breeding",
+    compute: wrapTraitCompute((cell) => {
+      const probability =
+        typeof cell?.dna?.reproductionProb === "function"
+          ? cell.dna.reproductionProb()
+          : 0;
+      const normalized = probability > 0 ? probability / MAX_REPRODUCTION_PROB : 0;
+
+      return normalized;
+    }),
+    threshold: TRAIT_THRESHOLD,
+  }),
+  Object.freeze({
+    key: "sight",
+    compute: wrapTraitCompute((cell) => {
+      const sight = cell?.sight || 0;
+      const normalized = sight > 0 ? sight / MAX_SIGHT_RANGE : 0;
+
+      return normalized;
+    }),
+    threshold: TRAIT_THRESHOLD,
+  }),
+]);
+
+// Normalises caller-supplied trait overrides, merging them with defaults.
+function resolveTraitDefinitions(candidate) {
+  const baseDefinitions = new Map(
+    DEFAULT_TRAIT_DEFINITIONS.map((definition) => [
+      definition.key,
+      {
+        key: definition.key,
+        compute: definition.compute,
+        threshold: definition.threshold,
+      },
+    ]),
+  );
+
+  if (!Array.isArray(candidate)) {
+    return Array.from(baseDefinitions.values());
+  }
+
+  for (const entry of candidate) {
+    if (!entry || typeof entry !== "object") continue;
+
+    const key = typeof entry.key === "string" ? entry.key.trim() : "";
+
+    if (!key) continue;
+
+    const overrideCompute =
+      typeof entry.compute === "function" ? wrapTraitCompute(entry.compute) : null;
+    const prior = baseDefinitions.get(key);
+    const compute = overrideCompute ?? prior?.compute;
+
+    if (typeof compute !== "function") {
+      continue;
+    }
+
+    const threshold = normalizeThreshold(
+      entry.threshold,
+      prior?.threshold ?? TRAIT_THRESHOLD,
+    );
+
+    baseDefinitions.set(key, { key, compute, threshold });
+  }
+
+  return Array.from(baseDefinitions.values());
+}
+
+const createTraitValueMap = (definitions, initializer) => {
+  const source =
+    Array.isArray(definitions) && definitions.length > 0
+      ? definitions
+      : DEFAULT_TRAIT_DEFINITIONS;
+
+  return Object.fromEntries(
+    source.map(({ key }) => [
       key,
       typeof initializer === "function" ? initializer(key) : initializer,
     ]),
   );
+};
 
 /**
  * Minimal fixed-capacity ring buffer used by chart history accessors.
@@ -77,38 +196,12 @@ class FixedSizeRingBuffer {
 // Helper ensures ring construction is consistently clamped to integers.
 const createHistoryRing = (size = 0) => new FixedSizeRingBuffer(size);
 
-const createEmptyTraitPresence = () => ({
+const createEmptyTraitPresence = (definitions) => ({
   population: 0,
-  averages: createTraitValueMap(0),
-  fractions: createTraitValueMap(0),
-  counts: createTraitValueMap(0),
+  averages: createTraitValueMap(definitions, 0),
+  fractions: createTraitValueMap(definitions, 0),
+  counts: createTraitValueMap(definitions, 0),
 });
-
-const clampInteractionTrait = (genes, key) => {
-  const value = genes && typeof genes[key] === "number" ? genes[key] : 0;
-
-  return clamp01(value);
-};
-
-const TRAIT_CALCULATORS = {
-  cooperation: (cell) => clampInteractionTrait(cell?.interactionGenes, "cooperate"),
-  fighting: (cell) => clampInteractionTrait(cell?.interactionGenes, "fight"),
-  breeding: (cell) => {
-    const probability =
-      typeof cell?.dna?.reproductionProb === "function"
-        ? cell.dna.reproductionProb()
-        : 0;
-    const normalized = probability > 0 ? probability / MAX_REPRODUCTION_PROB : 0;
-
-    return clamp01(normalized);
-  },
-  sight: (cell) => {
-    const sight = cell?.sight || 0;
-    const normalized = sight > 0 ? sight / MAX_SIGHT_RANGE : 0;
-
-    return clamp01(normalized);
-  },
-};
 
 // Captures counters for the mating subsystem; reused to avoid churn.
 const createEmptyMatingSnapshot = () => ({
@@ -131,8 +224,16 @@ const createEmptyMatingSnapshot = () => ({
 export default class Stats {
   #historyRings;
   #traitHistoryRings;
-  constructor(historySize = 10000) {
+  /**
+   * @param {number} [historySize=10000] Maximum retained history samples per series.
+   * @param {{traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>}} [options]
+   *   Optional configuration allowing callers to extend or override tracked trait metrics.
+   */
+  constructor(historySize = 10000, options = {}) {
     this.historySize = historySize;
+    const { traitDefinitions } = options ?? {};
+
+    this.traitDefinitions = resolveTraitDefinitions(traitDefinitions);
     this.resetTick();
     this.history = {};
     this.#historyRings = {};
@@ -157,8 +258,7 @@ export default class Stats {
       });
     });
 
-    for (let i = 0; i < TRAIT_NAMES.length; i++) {
-      const key = TRAIT_NAMES[i];
+    for (const { key } of this.traitDefinitions) {
       const presenceRing = createHistoryRing(this.historySize);
       const averageRing = createHistoryRing(this.historySize);
 
@@ -178,7 +278,7 @@ export default class Stats {
       });
     }
 
-    this.traitPresence = createEmptyTraitPresence();
+    this.traitPresence = createEmptyTraitPresence(this.traitDefinitions);
   }
 
   resetTick() {
@@ -300,11 +400,9 @@ export default class Stats {
     }
 
     this.traitPresence = traitPresence;
-    for (let i = 0; i < TRAIT_NAMES.length; i++) {
-      const key = TRAIT_NAMES[i];
-
-      this.pushTraitHistory("presence", key, traitPresence.fractions[key]);
-      this.pushTraitHistory("average", key, traitPresence.averages[key]);
+    for (const { key } of this.traitDefinitions) {
+      this.pushTraitHistory("presence", key, traitPresence.fractions[key] ?? 0);
+      this.pushTraitHistory("average", key, traitPresence.averages[key] ?? 0);
     }
 
     return {
@@ -428,26 +526,28 @@ export default class Stats {
   /**
    * Summarise per-trait participation across the provided cell population.
    * Returns population counts as well as normalised fractions for UI charts.
+   * The tracked trait set reflects the definitions supplied to the constructor.
    */
   computeTraitPresence(cells = []) {
     const population = Array.isArray(cells) ? cells.length : 0;
 
-    if (!population) return createEmptyTraitPresence();
+    if (!population) return createEmptyTraitPresence(this.traitDefinitions);
 
-    const sums = createTraitValueMap(0);
-    const activeCounts = createTraitValueMap(0);
+    const sums = createTraitValueMap(this.traitDefinitions, 0);
+    const activeCounts = createTraitValueMap(this.traitDefinitions, 0);
 
     for (let i = 0; i < population; i++) {
       const cell = cells[i];
 
       if (!cell) continue;
 
-      for (let t = 0; t < TRAIT_NAMES.length; t++) {
-        const key = TRAIT_NAMES[t];
-        const value = TRAIT_CALCULATORS[key](cell);
+      for (let t = 0; t < this.traitDefinitions.length; t++) {
+        const definition = this.traitDefinitions[t];
+        const key = definition.key;
+        const value = definition.compute(cell);
 
         sums[key] += value;
-        if (value >= TRAIT_THRESHOLD) {
+        if (value >= definition.threshold) {
           activeCounts[key] += 1;
         }
       }
@@ -457,9 +557,12 @@ export default class Stats {
 
     return {
       population,
-      averages: createTraitValueMap((key) => sums[key] * invPop),
-      fractions: createTraitValueMap((key) => activeCounts[key] * invPop),
-      counts: createTraitValueMap((key) => activeCounts[key]),
+      averages: createTraitValueMap(this.traitDefinitions, (key) => sums[key] * invPop),
+      fractions: createTraitValueMap(
+        this.traitDefinitions,
+        (key) => activeCounts[key] * invPop,
+      ),
+      counts: createTraitValueMap(this.traitDefinitions, (key) => activeCounts[key]),
     };
   }
 

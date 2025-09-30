@@ -248,6 +248,59 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.5, 0.5, 0.5]);
 });
 
+test("traitDefinitions option extends and overrides tracked trait metrics", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(2, {
+    traitDefinitions: [
+      { key: "cooperation", threshold: 0.9 },
+      {
+        key: "exploration",
+        compute: (cell) => cell?.exploration ?? 0,
+        threshold: 0.5,
+      },
+    ],
+  });
+
+  const cells = [
+    createCell({
+      interactionGenes: { cooperate: 0.95 },
+      exploration: 0.9,
+      dna: { reproductionProb: () => 0.8, similarity: () => 0.5 },
+    }),
+    createCell({
+      interactionGenes: { cooperate: 0.65 },
+      exploration: 0.4,
+      dna: { reproductionProb: () => 0.3, similarity: () => 0.5 },
+    }),
+    createCell({
+      interactionGenes: { cooperate: 0.55 },
+      exploration: 0.8,
+      dna: { reproductionProb: () => 0.2, similarity: () => 0.5 },
+    }),
+  ];
+
+  const presence = stats.computeTraitPresence(cells);
+
+  const expectedExplorationAverage = (0.9 + 0.4 + 0.8) / cells.length;
+
+  assert.ok("exploration" in presence.averages);
+  assert.ok(
+    Math.abs(presence.averages.exploration - expectedExplorationAverage) < 1e-9,
+  );
+  assert.is(presence.counts.cooperation, 1);
+  assert.is(presence.counts.exploration, 2);
+
+  stats.updateFromSnapshot({
+    population: cells.length,
+    totalEnergy: 0,
+    totalAge: 0,
+    cells,
+  });
+
+  assert.is(stats.traitHistory.presence.exploration.length, 1);
+  assert.is(stats.traitHistory.average.exploration.length, 1);
+});
+
 test("diversity pressure increases when diversity stays below target", async () => {
   const { default: Stats } = await statsModulePromise;
 
