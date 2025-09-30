@@ -1,21 +1,21 @@
-import EventManager from './eventManager.js';
-import GridManager, { OBSTACLE_PRESETS } from './gridManager.js';
-import SelectionManager from './selectionManager.js';
-import Stats from './stats.js';
-import { drawOverlays as defaultDrawOverlays } from './overlays.js';
-import { computeLeaderboard } from './leaderboard.js';
+import EventManager from "./eventManager.js";
+import GridManager, { OBSTACLE_PRESETS } from "./gridManager.js";
+import SelectionManager from "./selectionManager.js";
+import Stats from "./stats.js";
+import { drawOverlays as defaultDrawOverlays } from "./overlays.js";
+import { computeLeaderboard } from "./leaderboard.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
   UI_SLIDER_CONFIG,
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   resolveSimulationDefaults,
-} from './config.js';
+} from "./config.js";
 
-const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
+const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
 const defaultNow = () => {
-  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
     return performance.now();
   }
 
@@ -27,7 +27,12 @@ const defaultCancelAnimationFrame = (id) => clearTimeout(id);
 
 function sanitizeNumeric(
   value,
-  { fallback, min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY, round = false }
+  {
+    fallback,
+    min = Number.NEGATIVE_INFINITY,
+    max = Number.POSITIVE_INFINITY,
+    round = false,
+  },
 ) {
   const numeric = Number(value);
 
@@ -37,7 +42,7 @@ function sanitizeNumeric(
 
   if (round === true) {
     sanitized = Math.round(sanitized);
-  } else if (typeof round === 'function') {
+  } else if (typeof round === "function") {
     sanitized = round(sanitized);
   }
 
@@ -50,15 +55,20 @@ function sanitizeNumeric(
 function resolveCanvas(canvas, documentRef) {
   if (canvas) return canvas;
 
-  if (documentRef && typeof documentRef.getElementById === 'function') {
-    return documentRef.getElementById('gameCanvas');
+  if (documentRef && typeof documentRef.getElementById === "function") {
+    return documentRef.getElementById("gameCanvas");
   }
 
   return null;
 }
 
 function ensureCanvasDimensions(canvas, config) {
-  const candidates = [config?.width, config?.canvasWidth, config?.canvasSize?.width, canvas?.width];
+  const candidates = [
+    config?.width,
+    config?.canvasWidth,
+    config?.canvasSize?.width,
+    canvas?.width,
+  ];
   const heightCandidates = [
     config?.height,
     config?.canvasHeight,
@@ -66,21 +76,21 @@ function ensureCanvasDimensions(canvas, config) {
     canvas?.height,
   ];
 
-  const width = candidates.find((value) => typeof value === 'number');
-  const height = heightCandidates.find((value) => typeof value === 'number');
+  const width = candidates.find((value) => typeof value === "number");
+  const height = heightCandidates.find((value) => typeof value === "number");
 
-  if (canvas && typeof width === 'number') canvas.width = width;
-  if (canvas && typeof height === 'number') canvas.height = height;
+  if (canvas && typeof width === "number") canvas.width = width;
+  if (canvas && typeof height === "number") canvas.height = height;
 
-  if (typeof canvas?.width === 'number' && typeof canvas?.height === 'number') {
+  if (typeof canvas?.width === "number" && typeof canvas?.height === "number") {
     return { width: canvas.width, height: canvas.height };
   }
 
-  if (typeof width === 'number' && typeof height === 'number') {
+  if (typeof width === "number" && typeof height === "number") {
     return { width, height };
   }
 
-  throw new Error('SimulationEngine requires canvas dimensions to be specified.');
+  throw new Error("SimulationEngine requires canvas dimensions to be specified.");
 }
 
 /**
@@ -129,18 +139,19 @@ export default class SimulationEngine {
     autoStart = true,
     brainSnapshotCollector,
   } = {}) {
-    const win = injectedWindow ?? (typeof window !== 'undefined' ? window : undefined);
-    const doc = injectedDocument ?? (typeof document !== 'undefined' ? document : undefined);
+    const win = injectedWindow ?? (typeof window !== "undefined" ? window : undefined);
+    const doc =
+      injectedDocument ?? (typeof document !== "undefined" ? document : undefined);
     const resolvedCanvas = resolveCanvas(canvas, doc);
 
     if (!resolvedCanvas) {
-      throw new Error('SimulationEngine requires a canvas element.');
+      throw new Error("SimulationEngine requires a canvas element.");
     }
 
-    const ctx = resolvedCanvas.getContext('2d');
+    const ctx = resolvedCanvas.getContext("2d");
 
     if (!ctx) {
-      throw new Error('SimulationEngine requires a 2D canvas context.');
+      throw new Error("SimulationEngine requires a 2D canvas context.");
     }
 
     const { width, height } = ensureCanvasDimensions(resolvedCanvas, config);
@@ -155,33 +166,37 @@ export default class SimulationEngine {
     this.cellSize = cellSize;
     this.rows = rows;
     this.cols = cols;
-    this.now = typeof injectedNow === 'function' ? injectedNow : defaultNow;
+    this.now = typeof injectedNow === "function" ? injectedNow : defaultNow;
     this.raf =
-      typeof injectedRaf === 'function'
+      typeof injectedRaf === "function"
         ? injectedRaf
-        : win && typeof win.requestAnimationFrame === 'function'
+        : win && typeof win.requestAnimationFrame === "function"
           ? win.requestAnimationFrame.bind(win)
           : defaultRequestAnimationFrame;
     this.caf =
-      typeof injectedCaf === 'function'
+      typeof injectedCaf === "function"
         ? injectedCaf
-        : win && typeof win.cancelAnimationFrame === 'function'
+        : win && typeof win.cancelAnimationFrame === "function"
           ? win.cancelAnimationFrame.bind(win)
           : defaultCancelAnimationFrame;
     this.drawOverlays = drawOverlays;
 
-    this.eventManager = new EventManager(rows, cols, rng);
+    const defaults = resolveSimulationDefaults(config);
+
+    this.eventManager = new EventManager(rows, cols, rng, {
+      startWithEvent: (defaults.eventFrequencyMultiplier ?? 1) > 0,
+    });
     this.stats = new Stats();
     this.selectionManager = new SelectionManager(rows, cols);
-    const hasInitialPreset = typeof config.initialObstaclePreset === 'string';
+    const hasInitialPreset = typeof config.initialObstaclePreset === "string";
     const randomizeInitialObstacles =
       config.randomizeInitialObstacles ??
-      (!hasInitialPreset || config.initialObstaclePreset === 'random');
+      (!hasInitialPreset || config.initialObstaclePreset === "random");
     const initialObstaclePreset = hasInitialPreset
       ? config.initialObstaclePreset
       : randomizeInitialObstacles
-        ? 'random'
-        : 'none';
+        ? "random"
+        : "none";
 
     this.brainSnapshotCollector = brainSnapshotCollector ?? null;
     this.grid = new GridManager(rows, cols, {
@@ -205,8 +220,6 @@ export default class SimulationEngine {
       GLOBAL.grid = this.grid;
       GLOBAL.simulationEngine = this;
     }
-
-    const defaults = resolveSimulationDefaults(config);
 
     this.autoPauseOnBlur = Boolean(defaults.autoPauseOnBlur);
     this._autoPauseResumePending = false;
@@ -239,7 +252,7 @@ export default class SimulationEngine {
 
     const initialThreshold = this.state.matingDiversityThreshold;
 
-    if (typeof this.stats?.setMatingDiversityThreshold === 'function') {
+    if (typeof this.stats?.setMatingDiversityThreshold === "function") {
       this.stats.setMatingDiversityThreshold(initialThreshold);
     } else if (this.stats) {
       this.stats.matingDiversityThreshold = initialThreshold;
@@ -284,7 +297,7 @@ export default class SimulationEngine {
   }
 
   on(event, handler) {
-    if (typeof handler !== 'function') return () => {};
+    if (typeof handler !== "function") return () => {};
 
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
@@ -318,7 +331,7 @@ export default class SimulationEngine {
   }
 
   #updateState(partial) {
-    if (!partial || typeof partial !== 'object') return false;
+    if (!partial || typeof partial !== "object") return false;
 
     let changed = false;
     const changes = {};
@@ -336,7 +349,7 @@ export default class SimulationEngine {
         this.lastSlowUiRender = Number.NEGATIVE_INFINITY;
       }
 
-      this.emit('state', { state: this.getStateSnapshot(), changes });
+      this.emit("state", { state: this.getStateSnapshot(), changes });
     }
 
     return changed;
@@ -373,12 +386,12 @@ export default class SimulationEngine {
   }
 
   #installAutoPauseHandlers(win, doc) {
-    if (!win || typeof win.addEventListener !== 'function') return () => {};
+    if (!win || typeof win.addEventListener !== "function") return () => {};
 
     const visibilityHandler = () => {
       if (!this.autoPauseOnBlur) return;
 
-      const hidden = doc?.visibilityState === 'hidden' || doc?.hidden === true;
+      const hidden = doc?.visibilityState === "hidden" || doc?.hidden === true;
 
       if (hidden) {
         this.#handleAutoPauseTrigger();
@@ -389,7 +402,7 @@ export default class SimulationEngine {
 
     const blurHandler = () => {
       if (!this.autoPauseOnBlur) return;
-      if (doc && doc.visibilityState === 'hidden') return;
+      if (doc && doc.visibilityState === "hidden") return;
 
       this.#handleAutoPauseTrigger();
     };
@@ -402,16 +415,16 @@ export default class SimulationEngine {
       this.#handleAutoPauseResume();
     };
 
-    doc?.addEventListener('visibilitychange', visibilityHandler);
-    win.addEventListener('blur', blurHandler);
-    win.addEventListener('focus', focusHandler);
-    win.addEventListener('pageshow', pageShowHandler);
+    doc?.addEventListener("visibilitychange", visibilityHandler);
+    win.addEventListener("blur", blurHandler);
+    win.addEventListener("focus", focusHandler);
+    win.addEventListener("pageshow", pageShowHandler);
 
     return () => {
-      doc?.removeEventListener('visibilitychange', visibilityHandler);
-      win.removeEventListener('blur', blurHandler);
-      win.removeEventListener('focus', focusHandler);
-      win.removeEventListener('pageshow', pageShowHandler);
+      doc?.removeEventListener("visibilitychange", visibilityHandler);
+      win.removeEventListener("blur", blurHandler);
+      win.removeEventListener("focus", focusHandler);
+      win.removeEventListener("pageshow", pageShowHandler);
     };
   }
 
@@ -420,7 +433,7 @@ export default class SimulationEngine {
 
     this.frameHandle = this.raf((timestamp) => {
       this.frameHandle = null;
-      const ts = typeof timestamp === 'number' ? timestamp : this.now();
+      const ts = typeof timestamp === "number" ? timestamp : this.now();
 
       this.#frame(ts, { scheduleNext: true });
     });
@@ -456,16 +469,20 @@ export default class SimulationEngine {
    *
    * @private
    */
-  #frame(timestamp, { scheduleNext = false, force = false, allowPausedTick = false } = {}) {
+  #frame(
+    timestamp,
+    { scheduleNext = false, force = false, allowPausedTick = false } = {},
+  ) {
     if (!this.running && !force) return false;
 
-    const effectiveTimestamp = typeof timestamp === 'number' ? timestamp : this.now();
+    const effectiveTimestamp = typeof timestamp === "number" ? timestamp : this.now();
     let tickOccurred = false;
 
     const paused = Boolean(this.state.paused);
     const interval = 1000 / Math.max(1, this.state.updatesPerSecond);
     const elapsed = effectiveTimestamp - this.lastUpdateTime;
-    const shouldAdvance = (!paused && elapsed >= interval) || (allowPausedTick && paused);
+    const shouldAdvance =
+      (!paused && elapsed >= interval) || (allowPausedTick && paused);
 
     if (shouldAdvance) {
       this.lastUpdateTime = effectiveTimestamp;
@@ -476,30 +493,34 @@ export default class SimulationEngine {
         densityEffectMultiplier: this.state.densityEffectMultiplier ?? 1,
         societySimilarity:
           this.state.societySimilarity ?? UI_SLIDER_CONFIG.societySimilarity.default,
-        enemySimilarity: this.state.enemySimilarity ?? UI_SLIDER_CONFIG.enemySimilarity.default,
+        enemySimilarity:
+          this.state.enemySimilarity ?? UI_SLIDER_CONFIG.enemySimilarity.default,
         eventStrengthMultiplier: this.state.eventStrengthMultiplier ?? 1,
         energyRegenRate: this.state.energyRegenRate ?? ENERGY_REGEN_RATE_DEFAULT,
-        energyDiffusionRate: this.state.energyDiffusionRate ?? ENERGY_DIFFUSION_RATE_DEFAULT,
+        energyDiffusionRate:
+          this.state.energyDiffusionRate ?? ENERGY_DIFFUSION_RATE_DEFAULT,
         mutationMultiplier: this.state.mutationMultiplier ?? 1,
         matingDiversityThreshold:
-          this.state.matingDiversityThreshold ?? UI_SLIDER_CONFIG.matingDiversityThreshold?.default,
+          this.state.matingDiversityThreshold ??
+          UI_SLIDER_CONFIG.matingDiversityThreshold?.default,
         lowDiversityReproMultiplier:
           this.state.lowDiversityReproMultiplier ??
           UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default,
-        combatEdgeSharpness: this.state.combatEdgeSharpness ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
+        combatEdgeSharpness:
+          this.state.combatEdgeSharpness ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
       });
 
       this.lastSnapshot = snapshot;
       this.stats.logEvent?.(
         this.eventManager.currentEvent,
-        this.state.eventStrengthMultiplier ?? 1
+        this.state.eventStrengthMultiplier ?? 1,
       );
       this.stats.setMutationMultiplier?.(this.state.mutationMultiplier ?? 1);
       this.lastMetrics = this.stats.updateFromSnapshot?.(snapshot);
       // Defer leaderboard/metrics publication until the throttle window allows another emit.
       this.pendingSlowUiUpdate = true;
 
-      this.emit('tick', {
+      this.emit("tick", {
         snapshot,
         metrics: this.lastMetrics,
         timestamp: effectiveTimestamp,
@@ -527,12 +548,12 @@ export default class SimulationEngine {
         this.lastSlowUiRender = effectiveTimestamp;
 
         if (this.lastMetrics) {
-          this.emit('metrics', { stats: this.stats, metrics: this.lastMetrics });
+          this.emit("metrics", { stats: this.stats, metrics: this.lastMetrics });
         }
 
         const top = this.lastSnapshot ? computeLeaderboard(this.lastSnapshot, 5) : [];
 
-        this.emit('leaderboard', { entries: top });
+        this.emit("leaderboard", { entries: top });
         this.pendingSlowUiUpdate = false;
       }
     }
@@ -604,7 +625,7 @@ export default class SimulationEngine {
   }
 
   destroy() {
-    if (typeof this._autoPauseCleanup === 'function') {
+    if (typeof this._autoPauseCleanup === "function") {
       this._autoPauseCleanup();
       this._autoPauseCleanup = null;
     }
@@ -634,7 +655,11 @@ export default class SimulationEngine {
   step() {
     if (!this.state.paused) return false;
 
-    return this.#frame(this.now(), { scheduleNext: false, force: true, allowPausedTick: true });
+    return this.#frame(this.now(), {
+      scheduleNext: false,
+      force: true,
+      allowPausedTick: true,
+    });
   }
 
   setUpdatesPerSecond(value) {
@@ -750,7 +775,12 @@ export default class SimulationEngine {
   }
 
   setOverlayVisibility({ showObstacles, showEnergy, showDensity, showFitness }) {
-    const entries = Object.entries({ showObstacles, showEnergy, showDensity, showFitness })
+    const entries = Object.entries({
+      showObstacles,
+      showEnergy,
+      showDensity,
+      showFitness,
+    })
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => [key, Boolean(value)]);
 
@@ -774,7 +804,10 @@ export default class SimulationEngine {
 
     this.lingerPenalty = sanitized;
     this.grid.setLingerPenalty(sanitized);
-    this.emit('state', { state: this.getStateSnapshot(), changes: { lingerPenalty: sanitized } });
+    this.emit("state", {
+      state: this.getStateSnapshot(),
+      changes: { lingerPenalty: sanitized },
+    });
   }
 
   setAutoPauseOnBlur(value) {
@@ -793,59 +826,59 @@ export default class SimulationEngine {
 
   updateSetting(key, value) {
     switch (key) {
-      case 'societySimilarity':
+      case "societySimilarity":
         this.setSimilarityThresholds({ societySimilarity: value });
         break;
-      case 'enemySimilarity':
+      case "enemySimilarity":
         this.setSimilarityThresholds({ enemySimilarity: value });
         break;
-      case 'eventStrengthMultiplier':
+      case "eventStrengthMultiplier":
         this.setEventStrengthMultiplier(value);
         break;
-      case 'eventFrequencyMultiplier':
+      case "eventFrequencyMultiplier":
         this.setEventFrequencyMultiplier(value);
         break;
-      case 'combatEdgeSharpness':
+      case "combatEdgeSharpness":
         this.setCombatEdgeSharpness(value);
         break;
-      case 'densityEffectMultiplier':
+      case "densityEffectMultiplier":
         this.setDensityEffectMultiplier(value);
         break;
-      case 'energyRegenRate':
+      case "energyRegenRate":
         this.setEnergyRates({ regen: value });
         break;
-      case 'energyDiffusionRate':
+      case "energyDiffusionRate":
         this.setEnergyRates({ diffusion: value });
         break;
-      case 'mutationMultiplier':
+      case "mutationMultiplier":
         this.setMutationMultiplier(value);
         break;
-      case 'matingDiversityThreshold':
+      case "matingDiversityThreshold":
         this.setMatingDiversityThreshold(value);
         break;
-      case 'lowDiversityReproMultiplier':
+      case "lowDiversityReproMultiplier":
         this.setLowDiversityReproMultiplier(value);
         break;
-      case 'speedMultiplier': {
+      case "speedMultiplier": {
         const numeric = Number(value);
         const sanitized = Number.isFinite(numeric) ? Math.max(0.5, numeric) : 1;
 
         this.setUpdatesPerSecond(60 * sanitized);
         break;
       }
-      case 'leaderboardIntervalMs':
+      case "leaderboardIntervalMs":
         this.setLeaderboardInterval(value);
         break;
-      case 'showObstacles':
-      case 'showEnergy':
-      case 'showDensity':
-      case 'showFitness':
+      case "showObstacles":
+      case "showEnergy":
+      case "showDensity":
+      case "showFitness":
         this.setOverlayVisibility({ [key]: value });
         break;
-      case 'lingerPenalty':
+      case "lingerPenalty":
         this.setLingerPenalty(value);
         break;
-      case 'autoPauseOnBlur':
+      case "autoPauseOnBlur":
         this.setAutoPauseOnBlur(value);
         break;
       default:
@@ -862,7 +895,7 @@ export default class SimulationEngine {
 
     if (this.state.matingDiversityThreshold === clamped) return;
 
-    if (typeof this.stats?.setMatingDiversityThreshold === 'function') {
+    if (typeof this.stats?.setMatingDiversityThreshold === "function") {
       this.stats.setMatingDiversityThreshold(clamped);
     } else if (this.stats) {
       this.stats.matingDiversityThreshold = clamped;
