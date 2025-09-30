@@ -111,8 +111,12 @@ export default class Brain {
       typeof dna.neuralSensorModulation === "function"
         ? dna.neuralSensorModulation()
         : null;
+    const plasticityProfile =
+      typeof dna.neuralPlasticityProfile === "function"
+        ? dna.neuralPlasticityProfile()
+        : null;
 
-    const brain = new Brain({ genes, sensorModulation });
+    const brain = new Brain({ genes, sensorModulation, plasticityProfile });
 
     if (typeof dna.updateBrainMetrics === "function") {
       dna.updateBrainMetrics({
@@ -124,7 +128,7 @@ export default class Brain {
     return brain;
   }
 
-  constructor({ genes = [], sensorModulation = null } = {}) {
+  constructor({ genes = [], sensorModulation = null, plasticityProfile = null } = {}) {
     this.connections = [];
     this.activationMap = new Map();
     this.incoming = new Map();
@@ -139,10 +143,23 @@ export default class Brain {
     this.sensorGainLimits = { min: 0.5, max: 1.8 };
     this.sensorAdaptationRate = 0;
     this.sensorReversionRate = 0;
+    this.sensorExperienceTargets = null;
+    this.sensorPlasticity = {
+      enabled: false,
+      learningRate: 0,
+      rewardSensitivity: 0,
+      punishmentSensitivity: 0,
+      retention: 1,
+      volatility: 0,
+      fatigueWeight: 0,
+      costWeight: 0,
+    };
 
     if (sensorModulation) {
       this.#initializeSensorModulation(sensorModulation);
     }
+
+    this.#initializeSensorPlasticity(plasticityProfile);
 
     for (let i = 0; i < genes.length; i++) {
       const gene = genes[i];
@@ -420,11 +437,15 @@ export default class Brain {
         : null,
       sensorGains: this.sensorGains ? Array.from(this.sensorGains) : null,
       sensorTargets: this.sensorTargets ? Array.from(this.sensorTargets) : null,
+      sensorExperienceTargets: this.sensorExperienceTargets
+        ? Array.from(this.sensorExperienceTargets)
+        : null,
       sensorGainLimits: this.sensorGainLimits
         ? { ...this.sensorGainLimits }
         : { min: 0.5, max: 1.8 },
       sensorAdaptationRate: this.sensorAdaptationRate,
       sensorReversionRate: this.sensorReversionRate,
+      sensorPlasticity: this.sensorPlasticity ? { ...this.sensorPlasticity } : null,
     };
   }
 
@@ -467,6 +488,70 @@ export default class Brain {
     this.sensorReversionRate = clamp(suggestedReversion, 0, 1);
 
     this.#enforceGainBounds();
+  }
+
+  #initializeSensorPlasticity(profile = null) {
+    const learningRate = clamp(
+      Number.isFinite(profile?.learningRate) ? profile.learningRate : 0,
+      0,
+      0.5,
+    );
+    const rewardSensitivity = clamp(
+      Number.isFinite(profile?.rewardSensitivity) ? profile.rewardSensitivity : 0,
+      0,
+      2,
+    );
+    const punishmentSensitivity = clamp(
+      Number.isFinite(profile?.punishmentSensitivity)
+        ? profile.punishmentSensitivity
+        : 0,
+      0,
+      2,
+    );
+    const retention = clamp(
+      Number.isFinite(profile?.retention) ? profile.retention : 1,
+      0,
+      1,
+    );
+    const volatility = clamp(
+      Number.isFinite(profile?.volatility) ? profile.volatility : 0,
+      0,
+      2,
+    );
+    const fatigueWeight = clamp(
+      Number.isFinite(profile?.fatigueWeight) ? profile.fatigueWeight : 0,
+      0,
+      2,
+    );
+    const costWeight = clamp(
+      Number.isFinite(profile?.costWeight) ? profile.costWeight : 0,
+      0,
+      2,
+    );
+
+    this.sensorPlasticity = {
+      enabled: learningRate > 0 && (rewardSensitivity > 0 || punishmentSensitivity > 0),
+      learningRate,
+      rewardSensitivity,
+      punishmentSensitivity,
+      retention,
+      volatility,
+      fatigueWeight,
+      costWeight,
+    };
+
+    if (
+      !this.sensorExperienceTargets ||
+      this.sensorExperienceTargets.length !== SENSOR_COUNT
+    ) {
+      this.sensorExperienceTargets = new Float32Array(SENSOR_COUNT);
+    }
+
+    if (this.sensorExperienceTargets) {
+      for (let i = 0; i < this.sensorExperienceTargets.length; i++) {
+        this.sensorExperienceTargets[i] = Number.NaN;
+      }
+    }
   }
 
   #initSensorArray(source, defaultValue, bounds = null) {
@@ -534,6 +619,151 @@ export default class Brain {
     }
   }
 
+  #applyRetentionDecay() {
+    if (!this.sensorExperienceTargets || !this.sensorPlasticity) return;
+
+    const retention = this.sensorPlasticity.retention;
+
+    if (!(Number.isFinite(retention) && retention > 0 && retention < 1)) return;
+
+    for (let i = 1; i < this.sensorExperienceTargets.length; i++) {
+      const learned = this.sensorExperienceTargets[i];
+
+      if (!Number.isFinite(learned)) continue;
+
+      const base =
+        this.sensorTargets && i < this.sensorTargets.length ? this.sensorTargets[i] : 0;
+
+      this.sensorExperienceTargets[i] = mix(
+        Number.isFinite(base) ? clamp(base, -1, 1) : 0,
+        clamp(learned, -1, 1),
+        retention,
+      );
+    }
+  }
+
+  applySensorFeedback({
+    sensorVector,
+    activationCount = 0,
+    energyCost = 0,
+    fatigueDelta = 0,
+    rewardSignal = 0,
+    maxTileEnergy = 1,
+  } = {}) {
+    if (!this.sensorPlasticity?.enabled) return;
+    if (!sensorVector || typeof sensorVector.length !== "number") return;
+
+    this.#applyRetentionDecay();
+
+    const normalizedCost = clamp(
+      Number.isFinite(energyCost)
+        ? energyCost /
+            Math.max(1e-4, Number.isFinite(maxTileEnergy) ? maxTileEnergy : 1)
+        : 0,
+      -2,
+      2,
+    );
+    const normalizedFatigue = clamp(
+      Number.isFinite(fatigueDelta) ? fatigueDelta : 0,
+      -1,
+      1,
+    );
+    const combinedBase = clamp(
+      normalizedFatigue * this.sensorPlasticity.fatigueWeight -
+        normalizedCost * this.sensorPlasticity.costWeight,
+      -2,
+      2,
+    );
+    const combinedSignal = clamp(
+      combinedBase + (Number.isFinite(rewardSignal) ? rewardSignal : 0),
+      -2,
+      2,
+    );
+
+    if (Math.abs(combinedSignal) < 1e-6) return;
+
+    const direction = combinedSignal >= 0 ? 1 : -1;
+    const sensitivity =
+      direction > 0
+        ? this.sensorPlasticity.rewardSensitivity
+        : this.sensorPlasticity.punishmentSensitivity;
+
+    if (!Number.isFinite(sensitivity) || sensitivity <= 0) return;
+
+    const activationScale =
+      Number.isFinite(activationCount) && activationCount > 0
+        ? Math.min(2, activationCount / 6)
+        : 0.25;
+    const magnitude =
+      Math.abs(combinedSignal) *
+      this.sensorPlasticity.learningRate *
+      sensitivity *
+      (0.6 + activationScale * 0.4);
+
+    if (!Number.isFinite(magnitude) || magnitude <= 0) return;
+
+    const minGain = this.sensorGainLimits?.min ?? 0.5;
+    const maxGain = this.sensorGainLimits?.max ?? 1.8;
+
+    if (
+      !this.sensorExperienceTargets ||
+      this.sensorExperienceTargets.length !== SENSOR_COUNT
+    ) {
+      this.sensorExperienceTargets = new Float32Array(SENSOR_COUNT);
+
+      for (let i = 0; i < this.sensorExperienceTargets.length; i++) {
+        this.sensorExperienceTargets[i] = Number.NaN;
+      }
+    }
+
+    const boundedMagnitude = Math.min(1, magnitude);
+    const volatility = Math.min(1, this.sensorPlasticity.volatility || 0);
+
+    for (let i = 1; i < SENSOR_COUNT && i < sensorVector.length; i++) {
+      const sensorValue = clampSensorValue(sensorVector[i] ?? 0);
+      const baseTarget =
+        this.sensorTargets && i < this.sensorTargets.length
+          ? this.sensorTargets[i]
+          : Number.NaN;
+      const fallback = Number.isFinite(baseTarget) ? clamp(baseTarget, -1, 1) : 0;
+      const current =
+        this.sensorExperienceTargets && i < this.sensorExperienceTargets.length
+          ? this.sensorExperienceTargets[i]
+          : Number.NaN;
+
+      if (direction > 0) {
+        const desired = sensorValue;
+        const start = Number.isFinite(current) ? current : fallback;
+        const updated = Number.isFinite(desired)
+          ? mix(start, desired, boundedMagnitude)
+          : start;
+
+        if (Number.isFinite(updated)) {
+          this.sensorExperienceTargets[i] = clamp(updated, -1, 1);
+        }
+      } else {
+        const start = Number.isFinite(current) ? current : fallback;
+        const repulseBase = mix(fallback, 0, volatility);
+        const updated = mix(start, repulseBase, boundedMagnitude);
+
+        if (Number.isFinite(updated)) {
+          this.sensorExperienceTargets[i] = clamp(updated, -1, 1);
+        }
+      }
+
+      if (this.sensorGains && i < this.sensorGains.length) {
+        const baseGain = Number.isFinite(this.sensorGains[i])
+          ? this.sensorGains[i]
+          : (this.sensorBaselines?.[i] ?? 1);
+        const gainDelta =
+          Math.abs(sensorValue) * boundedMagnitude * volatility * direction;
+        const nextGain = clamp(baseGain + gainDelta, minGain, maxGain);
+
+        this.sensorGains[i] = nextGain;
+      }
+    }
+  }
+
   #applySensorModulation(sensors) {
     if (!Array.isArray(sensors) && !(sensors instanceof Float32Array)) return;
     if (!this.sensorGains || !this.sensorBaselines) return;
@@ -547,10 +777,15 @@ export default class Brain {
 
       if (!Number.isFinite(gain)) gain = this.sensorBaselines[i];
 
-      const target =
+      const learnedTarget =
+        this.sensorExperienceTargets && i < this.sensorExperienceTargets.length
+          ? this.sensorExperienceTargets[i]
+          : Number.NaN;
+      const baseTarget =
         this.sensorTargets && i < this.sensorTargets.length
           ? this.sensorTargets[i]
           : Number.NaN;
+      const target = Number.isFinite(learnedTarget) ? learnedTarget : baseTarget;
 
       if (
         Number.isFinite(this.sensorAdaptationRate) &&

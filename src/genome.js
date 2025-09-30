@@ -985,6 +985,55 @@ export class DNA {
     };
   }
 
+  neuralPlasticityProfile() {
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
+    const activity = this.geneFraction(GENE_LOCI.ACTIVITY);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+
+    const learningRate = clamp(
+      0.03 + 0.22 * neural + 0.12 * sense - 0.08 * risk,
+      0.01,
+      0.32,
+    );
+    const rewardSensitivity = clamp(
+      0.35 + 0.5 * recovery + 0.2 * neural + 0.15 * parental,
+      0.1,
+      1.4,
+    );
+    const punishmentSensitivity = clamp(
+      0.3 + 0.45 * risk + 0.2 * (1 - recovery) + 0.15 * (1 - strategy),
+      0.1,
+      1.5,
+    );
+    const retention = clamp(
+      0.78 + 0.14 * strategy + 0.12 * neural - 0.1 * activity,
+      0.4,
+      0.97,
+    );
+    const volatility = clamp(
+      0.18 + 0.35 * activity + 0.18 * (1 - strategy),
+      0.05,
+      0.75,
+    );
+    const fatigueWeight = clamp(0.28 + 0.45 * recovery + 0.2 * parental, 0.1, 1.1);
+    const costWeight = clamp(0.3 + 0.55 * (1 - efficiency) + 0.25 * activity, 0.1, 1.4);
+
+    return {
+      learningRate,
+      rewardSensitivity,
+      punishmentSensitivity,
+      retention,
+      volatility,
+      fatigueWeight,
+      costWeight,
+    };
+  }
+
   // Energy cost characteristics for actions
   moveCost() {
     const movement = this.geneFraction(GENE_LOCI.MOVEMENT);

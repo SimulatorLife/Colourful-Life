@@ -112,6 +112,10 @@ export default class Cell {
       typeof this.dna.neuralFatigueProfile === "function"
         ? this.dna.neuralFatigueProfile()
         : null;
+    this.neuralPlasticityProfile =
+      typeof this.dna.neuralPlasticityProfile === "function"
+        ? this.dna.neuralPlasticityProfile()
+        : null;
     this.fitnessScore = null;
     this.matePreferenceBias =
       typeof this.dna.mateSimilarityBias === "function"
@@ -586,6 +590,7 @@ export default class Cell {
     totalLoss = energyLoss + cognitiveLoss,
     baselineNeurons = Math.max(0, this.neurons || 0),
     neuralFatigueSnapshot = this._neuralFatigueSnapshot ?? null,
+    maxTileEnergy = MAX_TILE_ENERGY,
   } = {}) {
     const pending = Array.isArray(this._pendingDecisionContexts)
       ? this._pendingDecisionContexts
@@ -682,6 +687,37 @@ export default class Cell {
             : null,
       };
     });
+
+    if (this.brain && typeof this.brain.applySensorFeedback === "function") {
+      for (let i = 0; i < decisions.length; i++) {
+        const decision = decisions[i];
+
+        if (!decision?.sensorVector) continue;
+
+        const energyCost = Number.isFinite(decision.energyImpact?.cognitive)
+          ? decision.energyImpact.cognitive
+          : 0;
+        const fatigueBefore = decision.neuralFatigue?.before;
+        const fatigueAfter = decision.neuralFatigue?.after;
+        const fatigueDelta =
+          Number.isFinite(fatigueBefore) && Number.isFinite(fatigueAfter)
+            ? fatigueBefore - fatigueAfter
+            : 0;
+        const rewardSignal = Number.isFinite(decision.outcome?.rewardSignal)
+          ? clamp(decision.outcome.rewardSignal, -1, 1)
+          : 0;
+
+        this.brain.applySensorFeedback({
+          group: decision.group,
+          sensorVector: decision.sensorVector,
+          activationCount: decision.activationCount,
+          energyCost,
+          fatigueDelta,
+          rewardSignal,
+          maxTileEnergy,
+        });
+      }
+    }
 
     const record = {
       tick: this.age,
@@ -1785,6 +1821,7 @@ export default class Cell {
       baselineNeurons,
       totalLoss: energyLoss + cognitiveLoss,
       neuralFatigueSnapshot: fatigueSnapshot,
+      maxTileEnergy,
     });
 
     this._neuralLoad = 0;
