@@ -1609,10 +1609,9 @@ export default class GridManager {
         penaltyMultiplier = lerp(1, penaltyBase, penaltyIntensity);
         effectiveReproProb =
           penaltyMultiplier <= 0 ? 0 : clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
-      } else if (diversityPressure > 0) {
-        const reduction = clamp(1 - (diversityThreshold - diversity) * diversityPressure, 0, 1);
-
-        effectiveReproProb = clamp(effectiveReproProb * reduction, 0, 1);
+      } else {
+        penaltyMultiplier = penaltyBase;
+        effectiveReproProb = 0;
       }
     } else if (diversityPressure > 0 && diversityThreshold < 1) {
       const normalizedExcess = clamp(

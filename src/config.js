@@ -68,6 +68,7 @@ const BASE_SIMULATION_DEFAULTS = {
   lowDiversityReproMultiplier: SLIDER_DEFAULTS.lowDiversityReproMultiplier,
   speedMultiplier: SLIDER_DEFAULTS.speedMultiplier,
   lingerPenalty: 0,
+  autoPauseOnBlur: true,
 };
 
 /**

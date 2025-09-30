@@ -167,6 +167,7 @@ test('resolveSimulationDefaults returns expected baseline configuration', async 
     lowDiversityReproMultiplier: UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ?? 0.1,
     speedMultiplier: UI_SLIDER_CONFIG.speedMultiplier?.default ?? 1,
     lingerPenalty: 0,
+    autoPauseOnBlur: defaults.autoPauseOnBlur,
   };
 
   assert.equal(defaults, expected);
@@ -209,6 +210,7 @@ test('UIManager constructor seeds settings from resolveSimulationDefaults', asyn
   assert.is(uiManager.showDensity, defaults.showDensity);
   assert.is(uiManager.showFitness, defaults.showFitness);
   assert.is(uiManager.lingerPenalty, defaults.lingerPenalty);
+  assert.is(uiManager.autoPauseOnBlur, defaults.autoPauseOnBlur);
 
   if (originalDocument === undefined) delete global.document;
   else global.document = originalDocument;
@@ -247,6 +249,7 @@ test('SimulationEngine state initialization mirrors resolveSimulationDefaults', 
     leaderboardIntervalMs: defaults.leaderboardIntervalMs,
     matingDiversityThreshold: defaults.matingDiversityThreshold,
     lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
+    autoPauseOnBlur: defaults.autoPauseOnBlur,
   };
 
   assert.equal(engine.state, expectedState);
@@ -280,6 +283,7 @@ test('createHeadlessUiManager exposes resolveSimulationDefaults-derived values',
   assert.is(ui.getShowDensity(), defaults.showDensity);
   assert.is(ui.getShowFitness(), defaults.showFitness);
   assert.is(ui.getLingerPenalty(), defaults.lingerPenalty);
+  assert.is(ui.getAutoPauseOnBlur(), defaults.autoPauseOnBlur);
   assert.ok(ui.shouldRenderSlowUi(0));
   assert.ok(!ui.shouldRenderSlowUi(defaults.leaderboardIntervalMs - 1));
   assert.ok(ui.shouldRenderSlowUi(defaults.leaderboardIntervalMs));

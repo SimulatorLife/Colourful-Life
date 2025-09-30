@@ -59,8 +59,10 @@ export default class UIManager {
     this.showEnergy = defaults.showEnergy;
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
+    this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? 'none';
     this.lingerPenalty = defaults.lingerPenalty;
+    this.autoPauseCheckbox = null;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
 
@@ -738,6 +740,17 @@ export default class UIManager {
       .filter((cfg) => cfg.position === 'beforeOverlays')
       .forEach((cfg) => renderSlider(cfg, generalGroup));
 
+    this.autoPauseCheckbox = this.#addCheckbox(
+      generalGroup,
+      'Pause When Hidden',
+      'Automatically pause when the tab or window loses focus, resuming on return.',
+      this.autoPauseOnBlur,
+      (checked) => {
+        this.setAutoPauseOnBlur(checked);
+        this.#updateSetting('autoPauseOnBlur', checked);
+      }
+    );
+
     return { renderSlider, withSliderConfig, energyConfigs, generalConfigs, generalGroup };
   }
 
@@ -1056,6 +1069,13 @@ export default class UIManager {
       this.stepButton.title = this.paused
         ? 'Advance one tick while paused to inspect changes frame-by-frame.'
         : 'Pause the simulation to enable single-step playback.';
+    }
+  }
+
+  setAutoPauseOnBlur(enabled) {
+    this.autoPauseOnBlur = Boolean(enabled);
+    if (this.autoPauseCheckbox) {
+      this.autoPauseCheckbox.checked = this.autoPauseOnBlur;
     }
   }
 
