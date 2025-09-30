@@ -4,6 +4,20 @@ import { defaultIsEventAffecting } from "./events/eventContext.js";
 
 export { defaultIsEventAffecting as isEventAffecting };
 
+function normalizeEventTypes(candidate) {
+  if (!Array.isArray(candidate)) {
+    return null;
+  }
+
+  const filtered = candidate.filter((value) => typeof value === "string" && value);
+
+  if (filtered.length === 0) {
+    return null;
+  }
+
+  return Array.from(new Set(filtered));
+}
+
 /**
  * Generates and tracks environmental events that influence energy regeneration
  * and drain across the grid. Events are spawned with randomized type, strength,
@@ -19,7 +33,19 @@ export default class EventManager {
   };
 
   static DEFAULT_EVENT_COLOR = "rgba(0,0,0,0)";
+  static DEFAULT_EVENT_TYPES = EVENT_TYPES;
 
+  /**
+   * @param {number} rows
+   * @param {number} cols
+   * @param {() => number} [rng=Math.random]
+   * @param {Object} [options]
+   * @param {(eventType: string) => string} [options.resolveEventColor]
+   * @param {Record<string, string>} [options.eventColors]
+   * @param {boolean} [options.startWithEvent=true]
+   * @param {string[]} [options.eventTypes] Custom pool used when picking random events.
+   * @param {(context: {rng: () => number, eventTypes: string[], defaultPick: () => string}) => string} [options.pickEventType]
+   */
   constructor(rows, cols, rng = Math.random, options = {}) {
     this.rows = rows;
     this.cols = cols;
@@ -27,7 +53,13 @@ export default class EventManager {
     this.cooldown = 0;
     this.activeEvents = [];
     this.currentEvent = null;
-    const { resolveEventColor, eventColors, startWithEvent = true } = options || {};
+    const {
+      resolveEventColor,
+      eventColors,
+      startWithEvent = true,
+      eventTypes: injectedEventTypes,
+      pickEventType,
+    } = options || {};
     // Allow callers to override the event color palette without changing defaults.
     const defaultResolver = (eventType) =>
       EventManager.EVENT_COLORS[eventType] ?? EventManager.DEFAULT_EVENT_COLOR;
@@ -52,6 +84,31 @@ export default class EventManager {
           ? mergedColors[eventType]
           : EventManager.DEFAULT_EVENT_COLOR;
     }
+
+    const normalizedTypes = normalizeEventTypes(injectedEventTypes);
+    const pool = normalizedTypes?.length
+      ? normalizedTypes
+      : EventManager.DEFAULT_EVENT_TYPES;
+    const fallbackPool = pool.length ? pool : EventManager.DEFAULT_EVENT_TYPES;
+    const defaultPicker = () => {
+      const index = Math.floor(randomRange(0, fallbackPool.length, this.rng));
+
+      return fallbackPool[index];
+    };
+
+    if (typeof pickEventType === "function") {
+      this.pickEventType = () => {
+        const candidate = pickEventType({
+          rng: this.rng,
+          eventTypes: [...fallbackPool],
+          defaultPick: defaultPicker,
+        });
+
+        return typeof candidate === "string" && candidate ? candidate : defaultPicker();
+      };
+    } else {
+      this.pickEventType = defaultPicker;
+    }
     if (startWithEvent) {
       const e = this.generateRandomEvent();
 
@@ -67,8 +124,7 @@ export default class EventManager {
   }
 
   generateRandomEvent() {
-    const eventType =
-      EVENT_TYPES[Math.floor(randomRange(0, EVENT_TYPES.length, this.rng))];
+    const eventType = this.pickEventType();
     // Bias durations so events are visible but not constant
     const duration = Math.floor(randomRange(300, 900, this.rng)); // frames
     const strength = randomRange(0.25, 1, this.rng); // 0.25..1
