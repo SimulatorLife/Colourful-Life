@@ -457,6 +457,7 @@ test('interaction intents resolve fights via interaction system', () => {
 
 test('movement and interaction genes reflect DNA-coded tendencies', () => {
   const fastDNA = new DNA(120, 80, 40);
+
   fastDNA.genes[GENE_LOCI.MOVEMENT] = 240;
   fastDNA.genes[GENE_LOCI.EXPLORATION] = 40;
   fastDNA.genes[GENE_LOCI.RISK] = 210;
@@ -464,6 +465,7 @@ test('movement and interaction genes reflect DNA-coded tendencies', () => {
   fastDNA.genes[GENE_LOCI.STRATEGY] = 200;
 
   const cautiousDNA = new DNA(60, 200, 180);
+
   cautiousDNA.genes[GENE_LOCI.MOVEMENT] = 30;
   cautiousDNA.genes[GENE_LOCI.EXPLORATION] = 220;
   cautiousDNA.genes[GENE_LOCI.RISK] = 20;
@@ -478,12 +480,14 @@ test('movement and interaction genes reflect DNA-coded tendencies', () => {
   assert.ok(cautiousMovement.wandering > fastMovement.wandering, 'explorers wander more');
 
   const aggressiveDNA = new DNA(220, 40, 40);
+
   aggressiveDNA.genes[GENE_LOCI.RISK] = 240;
   aggressiveDNA.genes[GENE_LOCI.COMBAT] = 240;
   aggressiveDNA.genes[GENE_LOCI.COOPERATION] = 10;
   aggressiveDNA.genes[GENE_LOCI.RECOVERY] = 20;
 
   const altruistDNA = new DNA(40, 220, 120);
+
   altruistDNA.genes[GENE_LOCI.RISK] = 20;
   altruistDNA.genes[GENE_LOCI.COMBAT] = 20;
   altruistDNA.genes[GENE_LOCI.COOPERATION] = 230;
@@ -500,12 +504,14 @@ test('movement and interaction genes reflect DNA-coded tendencies', () => {
 
 test('chooseEnemyTarget uses conflict focus derived from DNA', () => {
   const cautiousDNA = new DNA(80, 180, 200);
+
   cautiousDNA.genes[GENE_LOCI.RISK] = 20;
   cautiousDNA.genes[GENE_LOCI.COMBAT] = 30;
   cautiousDNA.genes[GENE_LOCI.STRATEGY] = 220;
   cautiousDNA.genes[GENE_LOCI.MOVEMENT] = 80;
 
   const boldDNA = new DNA(220, 60, 60);
+
   boldDNA.genes[GENE_LOCI.RISK] = 230;
   boldDNA.genes[GENE_LOCI.COMBAT] = 220;
   boldDNA.genes[GENE_LOCI.STRATEGY] = 30;
@@ -515,9 +521,11 @@ test('chooseEnemyTarget uses conflict focus derived from DNA', () => {
   const boldCell = new Cell(5, 5, boldDNA, 6);
 
   const weakEnemy = new Cell(6, 5, new DNA(120, 120, 120), 2);
+
   weakEnemy.age = 5;
   weakEnemy.lifespan = 100;
   const strongEnemy = new Cell(1, 5, new DNA(120, 120, 120), 8);
+
   strongEnemy.age = 20;
   strongEnemy.lifespan = 100;
 
@@ -535,6 +543,7 @@ test('chooseEnemyTarget uses conflict focus derived from DNA', () => {
 
 test('neural targeting can override conflict focus weighting', () => {
   const strategicDNA = new DNA(160, 140, 180);
+
   strategicDNA.conflictFocus = () => ({
     weak: 0.2,
     strong: 1.6,
@@ -543,10 +552,12 @@ test('neural targeting can override conflict focus weighting', () => {
   });
 
   const neuralCell = new Cell(5, 5, strategicDNA, 6);
+
   neuralCell.age = 10;
   neuralCell.lifespan = 100;
 
   const attritionOutput = OUTPUT_GROUPS.targeting.find((entry) => entry.key === 'focusAttrition');
+
   assert.ok(attritionOutput, 'targeting output for attrition exists');
   const attritionGene = {
     sourceId: Brain.sensorIndex('bias'),
@@ -561,11 +572,13 @@ test('neural targeting can override conflict focus weighting', () => {
 
   const strongDNA = new DNA(200, 80, 80);
   const strongEnemy = new Cell(4, 5, strongDNA, 8);
+
   strongEnemy.age = 5;
   strongEnemy.lifespan = 100;
 
   const weakDNA = new DNA(80, 200, 120);
   const weakEnemy = new Cell(8, 8, weakDNA, 3);
+
   weakEnemy.age = 70;
   weakEnemy.lifespan = 80;
 
@@ -575,9 +588,11 @@ test('neural targeting can override conflict focus weighting', () => {
   ];
 
   const fallbackCell = new Cell(5, 5, strategicDNA, 6);
+
   fallbackCell.brain = null;
 
   const fallbackChoice = fallbackCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
+
   assert.is(
     fallbackChoice.target,
     strongEnemy,
@@ -585,6 +600,7 @@ test('neural targeting can override conflict focus weighting', () => {
   );
 
   const neuralChoice = neuralCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
+
   assert.is(
     neuralChoice.target,
     weakEnemy,
@@ -594,6 +610,7 @@ test('neural targeting can override conflict focus weighting', () => {
 
 test('cooperateShareFrac adapts to ally deficits and kinship', () => {
   const dna = new DNA(80, 200, 140);
+
   dna.genes[GENE_LOCI.COOPERATION] = 230;
   dna.genes[GENE_LOCI.PARENTAL] = 210;
   dna.genes[GENE_LOCI.ENERGY_EFFICIENCY] = 60;

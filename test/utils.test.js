@@ -13,6 +13,7 @@ import {
 
 function* cycle(values) {
   let index = 0;
+
   while (true) {
     yield values[index % values.length];
     index += 1;
@@ -86,6 +87,7 @@ test('createRankedBuffer maintains sorted order and honors capacity limits', () 
   ]);
 
   const zeroBuffer = createRankedBuffer(0, (a, b) => b - a);
+
   zeroBuffer.add(1);
   assert.equal(zeroBuffer.getItems(), []);
 });
@@ -93,6 +95,7 @@ test('createRankedBuffer maintains sorted order and honors capacity limits', () 
 test('createRNG yields deterministic pseudo-random sequences', () => {
   const sequenceFrom = (seed) => {
     const rng = createRNG(seed);
+
     return Array.from({ length: 5 }, () => rng());
   };
 

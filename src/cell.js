@@ -79,6 +79,7 @@ export default class Cell {
       typeof this.dna.interactionPlasticity === 'function'
         ? this.dna.interactionPlasticity()
         : null;
+
     this._interactionBaseline = clamp(interactionProfile?.baseline ?? 0, -1, 1);
     this._interactionMomentum = this._interactionBaseline;
     this._interactionLearning = clamp(interactionProfile?.learningRate ?? 0.35, 0.05, 0.95);
@@ -763,6 +764,7 @@ export default class Cell {
 
       const enemyEnergy = Number.isFinite(target.energy) ? target.energy : 0;
       const diff = clamp(((this.energy ?? 0) - enemyEnergy) / energyCap, -1, 1);
+
       minDiff = Math.min(minDiff, diff);
       maxDiff = Math.max(maxDiff, diff);
 

@@ -25,6 +25,7 @@ class MockElement {
   appendChild(child) {
     this.children.push(child);
     child.parentNode = this;
+
     return child;
   }
 
