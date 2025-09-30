@@ -70,4 +70,21 @@ test('createSimulation runs in a headless Node environment', async () => {
   assert.ok(Array.isArray(calls));
 });
 
+test('createSimulation headless mode infers a canvas when omitted', async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    performanceNow: () => 0,
+    config: { rows: 8, cols: 12, cellSize: 5 },
+  });
+
+  assert.ok(simulation.engine.canvas, 'engine exposes a fallback canvas');
+  assert.is(simulation.engine.canvas.width, 60);
+  assert.is(simulation.engine.canvas.height, 40);
+
+  simulation.destroy();
+});
+
 test.run();
