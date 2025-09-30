@@ -1,7 +1,7 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
-const statsModulePromise = import('../src/stats.js');
+const statsModulePromise = import("../src/stats.js");
 
 const createCell = (overrides = {}) => ({
   interactionGenes: { cooperate: 0, fight: 0, ...overrides.interactionGenes },
@@ -13,7 +13,7 @@ const createCell = (overrides = {}) => ({
   ...overrides,
 });
 
-test('computeTraitPresence clamps trait values and tracks active fractions', async () => {
+test("computeTraitPresence clamps trait values and tracks active fractions", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(4);
 
@@ -52,22 +52,22 @@ test('computeTraitPresence clamps trait values and tracks active fractions', asy
   assert.is(presence.counts.sight, 2);
 });
 
-test('mating records track diversity-aware outcomes and block reasons', async () => {
+test("mating records track diversity-aware outcomes and block reasons", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(3);
 
   stats.setMatingDiversityThreshold(0.6);
 
   stats.recordReproductionBlocked({
-    reason: 'Too similar',
-    parentA: { id: 'a' },
-    parentB: { id: 'b' },
-    spawn: { id: 'c' },
+    reason: "Too similar",
+    parentA: { id: "a" },
+    parentB: { id: "b" },
+    spawn: { id: "c" },
   });
 
   assert.is(stats.mating.blocks, 1);
-  assert.is(stats.mating.lastBlockReason, 'Too similar');
-  assert.equal(stats.lastBlockedReproduction.reason, 'Too similar');
+  assert.is(stats.mating.lastBlockReason, "Too similar");
+  assert.equal(stats.lastBlockedReproduction.reason, "Too similar");
   assert.is(stats.lastBlockedReproduction.tick, 0);
 
   stats.recordMateChoice({
@@ -75,7 +75,7 @@ test('mating records track diversity-aware outcomes and block reasons', async ()
     diversity: 0.7,
     appetite: 0.5,
     bias: 0.1,
-    selectionMode: 'curiosity',
+    selectionMode: "curiosity",
     poolSize: 3,
     success: true,
     penalized: true,
@@ -90,14 +90,14 @@ test('mating records track diversity-aware outcomes and block reasons', async ()
   assert.is(stats.mating.selectionModes.preference, 0);
   assert.ok(Math.abs(stats.mating.appetiteSum - 0.5) < 1e-9);
   assert.is(stats.mating.poolSizeSum, 3);
-  assert.equal(stats.lastMatingDebug.blockedReason, 'Too similar');
+  assert.equal(stats.lastMatingDebug.blockedReason, "Too similar");
   assert.is(stats.lastMatingDebug.threshold, 0.6);
   assert.is(stats.mating.lastBlockReason, null);
 
   stats.recordMateChoice({
     similarity: 0.8,
     diversity: 0.5,
-    selectionMode: 'preference',
+    selectionMode: "preference",
     poolSize: 2,
     success: false,
   });
@@ -111,14 +111,14 @@ test('mating records track diversity-aware outcomes and block reasons', async ()
   assert.equal(stats.lastMatingDebug.success, false);
   assert.is(stats.lastMatingDebug.threshold, 0.6);
 
-  stats.recordReproductionBlocked({ reason: 'Blocked by reproductive zone' });
+  stats.recordReproductionBlocked({ reason: "Blocked by reproductive zone" });
 
   assert.is(stats.mating.blocks, 2);
-  assert.is(stats.mating.lastBlockReason, 'Blocked by reproductive zone');
-  assert.equal(stats.lastBlockedReproduction.reason, 'Blocked by reproductive zone');
+  assert.is(stats.mating.lastBlockReason, "Blocked by reproductive zone");
+  assert.equal(stats.lastBlockedReproduction.reason, "Blocked by reproductive zone");
 });
 
-test('updateFromSnapshot aggregates metrics and caps histories', async () => {
+test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   const { default: Stats } = await statsModulePromise;
 
   class DeterministicStats extends Stats {
@@ -143,10 +143,10 @@ test('updateFromSnapshot aggregates metrics and caps histories', async () => {
     selectionModes: { curiosity: 1, preference: 0 },
     poolSizeSum: 5,
     blocks: 1,
-    lastBlockReason: 'Still recent',
+    lastBlockReason: "Still recent",
   };
-  stats.lastMatingDebug = { mode: 'test' };
-  stats.lastBlockedReproduction = { reason: 'Still recent', tick: 0 };
+  stats.lastMatingDebug = { mode: "test" };
+  stats.lastBlockedReproduction = { reason: "Still recent", tick: 0 };
   stats.mutationMultiplier = 2;
   stats.diversitySequence.push(0.42, 0.1, 0.2, 0.3);
 
@@ -194,7 +194,7 @@ test('updateFromSnapshot aggregates metrics and caps histories', async () => {
   assert.equal(result.lastMating, stats.lastMatingDebug);
   assert.is(result.mutationMultiplier, 2);
   assert.is(result.blockedMatings, 1);
-  assert.equal(result.lastBlockedReproduction.reason, 'Still recent');
+  assert.equal(result.lastBlockedReproduction.reason, "Still recent");
 
   assert.is(stats.history.population.length, 1);
   assert.is(stats.history.diversity.length, 1);
@@ -202,6 +202,7 @@ test('updateFromSnapshot aggregates metrics and caps histories', async () => {
   assert.is(stats.history.energy.length, 1);
   assert.is(stats.history.growth.length, 1);
   assert.is(stats.history.diversePairingRate.length, 1);
+  assert.is(stats.history.diversePairingRate[0], 0.5);
   assert.is(stats.history.meanDiversityAppetite.length, 1);
   assert.is(stats.history.mutationMultiplier.length, 1);
 
@@ -243,11 +244,11 @@ test('updateFromSnapshot aggregates metrics and caps histories', async () => {
 
   assert.equal(stats.history.population, [1, 1, 1]);
   assert.equal(stats.history.diversity, [0.1, 0.2, 0.3]);
-  assert.equal(stats.getHistorySeries('population'), [1, 1, 1]);
-  assert.equal(stats.getTraitHistorySeries('presence', 'cooperation'), [0.5, 0.5, 0.5]);
+  assert.equal(stats.getHistorySeries("population"), [1, 1, 1]);
+  assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.5, 0.5, 0.5]);
 });
 
-test('diversity pressure increases when diversity stays below target', async () => {
+test("diversity pressure increases when diversity stays below target", async () => {
   const { default: Stats } = await statsModulePromise;
 
   class PressureStats extends Stats {
@@ -289,31 +290,31 @@ test('diversity pressure increases when diversity stays below target', async () 
   assert.ok(stats.getDiversityPressure() < elevatedPressure);
 });
 
-test('history buffers maintain order while capping size', async () => {
+test("history buffers maintain order while capping size", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(3);
 
-  stats.pushHistory('population', 1);
-  stats.pushHistory('population', 2);
-  stats.pushHistory('population', 3);
+  stats.pushHistory("population", 1);
+  stats.pushHistory("population", 2);
+  stats.pushHistory("population", 3);
 
   assert.equal(stats.history.population, [1, 2, 3]);
 
-  stats.pushHistory('population', 4);
+  stats.pushHistory("population", 4);
 
   assert.equal(stats.history.population, [2, 3, 4]);
-  assert.equal(stats.getHistorySeries('population'), [2, 3, 4]);
+  assert.equal(stats.getHistorySeries("population"), [2, 3, 4]);
 
-  stats.pushTraitHistory('presence', 'cooperation', 0.1);
-  stats.pushTraitHistory('presence', 'cooperation', 0.2);
-  stats.pushTraitHistory('presence', 'cooperation', 0.3);
+  stats.pushTraitHistory("presence", "cooperation", 0.1);
+  stats.pushTraitHistory("presence", "cooperation", 0.2);
+  stats.pushTraitHistory("presence", "cooperation", 0.3);
 
   assert.equal(stats.traitHistory.presence.cooperation, [0.1, 0.2, 0.3]);
 
-  stats.pushTraitHistory('presence', 'cooperation', 0.4);
+  stats.pushTraitHistory("presence", "cooperation", 0.4);
 
   assert.equal(stats.traitHistory.presence.cooperation, [0.2, 0.3, 0.4]);
-  assert.equal(stats.getTraitHistorySeries('presence', 'cooperation'), [0.2, 0.3, 0.4]);
+  assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.2, 0.3, 0.4]);
 
   const chartSeries = stats.history.population;
 
@@ -321,7 +322,7 @@ test('history buffers maintain order while capping size', async () => {
   assert.is(chartSeries.length, 3);
 });
 
-test('setters sanitize non-finite mutation and diversity threshold inputs', async () => {
+test("setters sanitize non-finite mutation and diversity threshold inputs", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(2);
 
@@ -331,10 +332,10 @@ test('setters sanitize non-finite mutation and diversity threshold inputs', asyn
   stats.setMatingDiversityThreshold(-0.2);
   assert.is(stats.matingDiversityThreshold, 0);
 
-  stats.setMatingDiversityThreshold('0.3');
+  stats.setMatingDiversityThreshold("0.3");
   assert.is(stats.matingDiversityThreshold, 0.3);
 
-  stats.setMatingDiversityThreshold('not-number');
+  stats.setMatingDiversityThreshold("not-number");
   assert.is(stats.matingDiversityThreshold, 0.3);
 
   stats.setMutationMultiplier(3.2);
@@ -343,7 +344,7 @@ test('setters sanitize non-finite mutation and diversity threshold inputs', asyn
   stats.setMutationMultiplier(-1);
   assert.is(stats.mutationMultiplier, 0);
 
-  stats.setMutationMultiplier('not-number');
+  stats.setMutationMultiplier("not-number");
   assert.is(stats.mutationMultiplier, 1);
 
   stats.setMutationMultiplier(Infinity);
