@@ -1,4 +1,4 @@
-import { getEventEffect } from "../eventEffects.js";
+import { getEventEffect } from "./eventEffects.js";
 
 /**
  * Determines whether the supplied event overlaps the provided grid

@@ -7,7 +7,7 @@ if (typeof globalThis.window === "undefined") {
 }
 
 test("GridManager.regenerateEnergyGrid applies event effect modifiers", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
 
   class TestGridManager extends GridManager {
     init() {}

@@ -4,16 +4,16 @@ import {
   clamp,
   lerp,
   createRankedBuffer,
-} from "./utils.js";
-import DNA from "./genome.js";
-import Cell from "./cell.js";
-import { computeFitness } from "./fitness.mjs";
-import { createEventContext, defaultEventContext } from "./events/eventContext.js";
-import { computeTileEnergyUpdate } from "./energySystem.js";
-import InteractionSystem from "./interactionSystem.js";
-import GridInteractionAdapter from "./grid/gridAdapter.js";
-import ReproductionZonePolicy from "./grid/reproductionZonePolicy.js";
-import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
+} from "../utils.js";
+import DNA from "../genome.js";
+import Cell from "../cell.js";
+import { computeFitness } from "../fitness.mjs";
+import { createEventContext, defaultEventContext } from "../events/eventContext.js";
+import { computeTileEnergyUpdate } from "../energySystem.js";
+import InteractionSystem from "../interactionSystem.js";
+import GridInteractionAdapter from "./gridAdapter.js";
+import ReproductionZonePolicy from "./reproductionZonePolicy.js";
+import { OBSTACLE_PRESETS } from "./obstaclePresets.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -22,7 +22,7 @@ import {
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
-} from "./config.js";
+} from "../config.js";
 const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);

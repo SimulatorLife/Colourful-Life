@@ -29,13 +29,13 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 The simulation runs on cooperating modules housed in `src/`:
 
 - **Simulation engine** (`src/simulationEngine.js`) — Coordinates the render loop, tick cadence, and lifecycle events consumed by UI panels and automation hooks.
-- **Grid manager** (`src/gridManager.js`) — Maintains the cellular grid, applies movement, reproduction, energy transfer, and obstacle interactions, and surfaces leaderboard snapshots.
+- **Grid manager** (`src/grid/gridManager.js`) — Maintains the cellular grid, applies movement, reproduction, energy transfer, and obstacle interactions, and surfaces leaderboard snapshots.
 - **Energy system** (`src/energySystem.js`) — Computes tile-level regeneration, diffusion, and drain while blending in environmental events and density penalties.
 - **Genetics and brains** (`src/genome.js`, `src/brain.js`) — DNA factories encode traits ranging from combat appetite to neural wiring. Brains interpret sensor inputs, adapt gains over time, and emit movement/interaction intents.
 - **Interaction system** (`src/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
-- **Events & overlays** (`src/eventManager.js`, `src/events/`, `src/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and colour overlays.
+- **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and colour overlays.
 - **Stats & leaderboard** (`src/stats.js`, `src/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, and select the top-performing organisms.
-- **UI manager** (`src/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/main.js` mirrors the interface for tests and Node scripts.
+- **UI manager** (`src/ui/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/main.js` mirrors the interface for tests and Node scripts.
 
 For an architectural deep dive—including subsystem hand-offs, data flow, and extension tips—see [`docs/architecture-overview.md`](docs/architecture-overview.md).
 
@@ -54,7 +54,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 - `src/` — Simulation engine, UI construction, and supporting utilities.
   - `src/events/` — Event configuration, context helpers, and presets.
   - `src/grid/` — Adaptors for interacting with the grid from other systems.
-  - `src/ui/` — DOM builders used by `UIManager`.
+  - `src/ui/` — UI manager, control builders, overlays, and debugging helpers.
 - `scripts/` — Node scripts (e.g., performance profiling) that exercise the engine headlessly.
 - `test/` — UVU tests executed via `npm test`.
 - `docs/` — Architecture notes, developer guides, and background reading.

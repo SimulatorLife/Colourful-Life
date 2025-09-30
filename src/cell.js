@@ -1,8 +1,8 @@
 import DNA from "./genome.js";
 import Brain, { OUTPUT_GROUPS } from "./brain.js";
 import { randomRange, clamp, lerp, cloneTracePayload, warnOnce } from "./utils.js";
-import { isEventAffecting } from "./eventManager.js";
-import { getEventEffect } from "./eventEffects.js";
+import { isEventAffecting } from "./events/eventManager.js";
+import { getEventEffect } from "./events/eventEffects.js";
 import { accumulateEventModifiers } from "./energySystem.js";
 import { MAX_TILE_ENERGY } from "./config.js";
 

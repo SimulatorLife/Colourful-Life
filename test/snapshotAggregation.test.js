@@ -1,7 +1,7 @@
 import { test } from "uvu";
 import * as assert from "uvu/assert";
 
-const gridManagerModulePromise = import("../src/gridManager.js");
+const gridManagerModulePromise = import("../src/grid/gridManager.js");
 const leaderboardModulePromise = import("../src/leaderboard.js");
 
 function createStubCell(data) {

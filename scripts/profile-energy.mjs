@@ -20,8 +20,8 @@ const [
   { ENERGY_REGEN_RATE_DEFAULT, ENERGY_DIFFUSION_RATE_DEFAULT },
   { default: Stats },
 ] = await Promise.all([
-  import("../src/gridManager.js"),
-  import("../src/eventManager.js"),
+  import("../src/grid/gridManager.js"),
+  import("../src/events/eventManager.js"),
   import("../src/config.js"),
   import("../src/stats.js"),
 ]);

@@ -44,8 +44,8 @@ function expectedEventFromSequence(sequence, rows, cols, eventTypes) {
 
 test("EventManager respects injected RNG for deterministic events", async () => {
   const [{ default: EventManager }, { EVENT_TYPES }] = await Promise.all([
-    import("../src/eventManager.js"),
-    import("../src/eventEffects.js"),
+    import("../src/events/eventManager.js"),
+    import("../src/events/eventEffects.js"),
   ]);
   const rows = 40;
   const cols = 60;
@@ -59,7 +59,7 @@ test("EventManager respects injected RNG for deterministic events", async () => 
 });
 
 test("EventManager can disable the initial event when requested", async () => {
-  const { default: EventManager } = await import("../src/eventManager.js");
+  const { default: EventManager } = await import("../src/events/eventManager.js");
   const manager = new EventManager(12, 18, Math.random, { startWithEvent: false });
 
   assert.is(manager.activeEvents.length, 0);
@@ -67,7 +67,7 @@ test("EventManager can disable the initial event when requested", async () => {
 });
 
 test("EventManager allows overriding event colors via options", async () => {
-  const { default: EventManager } = await import("../src/eventManager.js");
+  const { default: EventManager } = await import("../src/events/eventManager.js");
   const rows = 10;
   const cols = 10;
   const customColors = {
@@ -105,7 +105,7 @@ test("EventManager allows overriding event colors via options", async () => {
 });
 
 test("isEventAffecting checks if coordinates fall within event area", async () => {
-  const { isEventAffecting } = await import("../src/eventManager.js");
+  const { isEventAffecting } = await import("../src/events/eventManager.js");
   const event = {
     affectedArea: { x: 5, y: 10, width: 3, height: 4 },
   };

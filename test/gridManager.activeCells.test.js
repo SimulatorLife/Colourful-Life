@@ -12,7 +12,7 @@ const baseOptions = {
 };
 
 test("GridManager keeps activeCells aligned with grid mutations", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
 
   class TestGridManager extends GridManager {
     init() {}

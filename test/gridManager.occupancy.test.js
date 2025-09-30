@@ -14,7 +14,7 @@ const baseOptions = {
 test("GridManager prevents moves into occupied cells", async () => {
   const [{ default: GridManager }, { default: Cell }, { default: DNA }] =
     await Promise.all([
-      import("../src/gridManager.js"),
+      import("../src/grid/gridManager.js"),
       import("../src/cell.js"),
       import("../src/genome.js"),
     ]);
@@ -49,7 +49,7 @@ test("GridManager prevents moves into occupied cells", async () => {
 test("GridManager relocation respects occupied destinations", async () => {
   const [{ default: GridManager }, { default: Cell }, { default: DNA }] =
     await Promise.all([
-      import("../src/gridManager.js"),
+      import("../src/grid/gridManager.js"),
       import("../src/cell.js"),
       import("../src/genome.js"),
     ]);

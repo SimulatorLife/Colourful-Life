@@ -1,7 +1,11 @@
 import { test } from "uvu";
 import * as assert from "uvu/assert";
 
-import { EVENT_EFFECTS, EVENT_TYPES, getEventEffect } from "../src/eventEffects.js";
+import {
+  EVENT_EFFECTS,
+  EVENT_TYPES,
+  getEventEffect,
+} from "../src/events/eventEffects.js";
 
 test("event effect descriptors expose consistent structure and tuning", () => {
   const expected = {

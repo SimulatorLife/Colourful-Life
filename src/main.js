@@ -1,5 +1,5 @@
-import UIManager from "./uiManager.js";
-import BrainDebugger from "./brainDebugger.js";
+import UIManager from "./ui/uiManager.js";
+import BrainDebugger from "./ui/brainDebugger.js";
 import SimulationEngine from "./simulationEngine.js";
 import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
 import { resolveSimulationDefaults } from "./config.js";
@@ -271,9 +271,9 @@ function createHeadlessUiManager(options = {}) {
  *   Document used by the {@link UIManager} when mounting.
  * @returns {{
  *   engine: SimulationEngine,
- *   grid: import('./gridManager.js').default,
+ *   grid: import('./grid/gridManager.js').default,
  *   uiManager: ReturnType<typeof UIManager> | ReturnType<typeof createHeadlessUiManager>,
- *   eventManager: import('./eventManager.js').default,
+ *   eventManager: import('./events/eventManager.js').default,
  *   stats: import('./stats.js').default,
  *   selectionManager: import('./selectionManager.js').default,
  *   start: () => void,

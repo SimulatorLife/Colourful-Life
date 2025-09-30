@@ -36,9 +36,9 @@ export class MockCanvas {
 export async function loadSimulationModules() {
   const [simulationModule, gridModule, statsModule, eventModule] = await Promise.all([
     import("../../src/simulationEngine.js"),
-    import("../../src/gridManager.js"),
+    import("../../src/grid/gridManager.js"),
     import("../../src/stats.js"),
-    import("../../src/eventManager.js"),
+    import("../../src/events/eventManager.js"),
   ]);
 
   return {

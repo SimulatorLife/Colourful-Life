@@ -2,7 +2,7 @@ import { test } from "uvu";
 import * as assert from "uvu/assert";
 
 const configModulePromise = import("../src/config.js");
-const uiManagerModulePromise = import("../src/uiManager.js");
+const uiManagerModulePromise = import("../src/ui/uiManager.js");
 const simulationEngineModulePromise = import("../src/simulationEngine.js");
 const mainModulePromise = import("../src/main.js");
 

@@ -1,5 +1,5 @@
-import { MAX_TILE_ENERGY } from "./config.js";
-import { lerp } from "./utils.js";
+import { MAX_TILE_ENERGY } from "../config.js";
+import { lerp } from "../utils.js";
 
 const FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;

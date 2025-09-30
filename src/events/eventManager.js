@@ -1,6 +1,6 @@
 import { EVENT_TYPES } from "./eventEffects.js";
-import { randomRange } from "./utils.js";
-import { defaultIsEventAffecting } from "./events/eventContext.js";
+import { randomRange } from "../utils.js";
+import { defaultIsEventAffecting } from "./eventContext.js";
 
 export { defaultIsEventAffecting as isEventAffecting };
 

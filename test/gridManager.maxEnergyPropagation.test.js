@@ -9,7 +9,7 @@ const baseOptions = {
 };
 
 test("obstacles block regeneration and diffusion", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
 
   class ObstacleGrid extends GridManager {
     init() {}
@@ -34,7 +34,7 @@ test("obstacles block regeneration and diffusion", async () => {
 });
 
 test("GridManager supports custom max tile energy for harvesting and regen", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -77,7 +77,7 @@ test("GridManager supports custom max tile energy for harvesting and regen", asy
 });
 
 test("processCell forwards custom max tile energy to cell energy management", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
 
   class ContextGrid extends GridManager {
     init() {}
@@ -130,7 +130,7 @@ test("processCell forwards custom max tile energy to cell energy management", as
 });
 
 test("GridManager passes custom max tile energy to combat and movement helpers", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
 
   class HooksGrid extends GridManager {
     init() {}
@@ -203,7 +203,7 @@ test("GridManager passes custom max tile energy to combat and movement helpers",
 });
 
 test("density effect multiplier scales harvesting and regeneration penalties", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
 
   class DensityGrid extends GridManager {
     init() {}
@@ -248,7 +248,7 @@ test("density effect multiplier scales harvesting and regeneration penalties", a
 });
 
 test("DNA-driven crowd tolerance shapes harvesting under pressure", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { DNA, GENE_LOCI } = await import("../src/genome.js");
 
@@ -296,7 +296,7 @@ test("DNA-driven crowd tolerance shapes harvesting under pressure", async () => 
 });
 
 test("handleReproduction threads custom max tile energy through cell decisions", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
 
   class ReproGrid extends GridManager {

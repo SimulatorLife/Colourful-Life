@@ -2,7 +2,7 @@ import { test } from "uvu";
 import * as assert from "uvu/assert";
 
 test("GridManager.tryMove updates a cell's stored coordinates", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
 
@@ -20,7 +20,7 @@ test("GridManager.tryMove updates a cell's stored coordinates", async () => {
 });
 
 test("GridManager.tryMove ignores empty sources without mutating density data", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -56,7 +56,7 @@ test("GridManager.tryMove ignores empty sources without mutating density data", 
 });
 
 test("setObstacle with evict=false preserves the occupant and clears tile energy", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
 
@@ -94,7 +94,7 @@ test("setObstacle with evict=false preserves the occupant and clears tile energy
 });
 
 test("Breeding uses the mover's refreshed coordinates for offspring placement", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
 
@@ -121,7 +121,7 @@ test("Breeding uses the mover's refreshed coordinates for offspring placement", 
 });
 
 test("handleReproduction returns false when offspring cannot be placed", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
   const { MAX_TILE_ENERGY } = await import("../src/config.js");
@@ -216,7 +216,7 @@ test("handleReproduction returns false when offspring cannot be placed", async (
 });
 
 test("handleReproduction does not wrap offspring placement across map edges", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
   const { MAX_TILE_ENERGY } = await import("../src/config.js");
@@ -313,7 +313,7 @@ test("handleReproduction does not wrap offspring placement across map edges", as
 });
 
 test("handleReproduction bases reproduction decisions on the post-move density", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
   const { MAX_TILE_ENERGY } = await import("../src/config.js");
@@ -404,7 +404,7 @@ test("handleReproduction bases reproduction decisions on the post-move density",
 });
 
 test("handleReproduction throttles near-clone pairings below the diversity floor", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
   const { MAX_TILE_ENERGY } = await import("../src/config.js");
@@ -503,7 +503,7 @@ test("handleReproduction throttles near-clone pairings below the diversity floor
 });
 
 test("handleReproduction strengthens low-diversity penalties when global pressure spikes", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
   const { MAX_TILE_ENERGY } = await import("../src/config.js");
@@ -604,7 +604,7 @@ test("handleReproduction strengthens low-diversity penalties when global pressur
 });
 
 test("low-diversity penalties respond to mate preferences and environment", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
   const { MAX_TILE_ENERGY } = await import("../src/config.js");
@@ -784,7 +784,7 @@ test("low-diversity penalties respond to mate preferences and environment", asyn
 });
 
 test("handleReproduction leaves diverse pairs unaffected by low-diversity penalties", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
   const { MAX_TILE_ENERGY } = await import("../src/config.js");
@@ -886,7 +886,7 @@ test("handleReproduction leaves diverse pairs unaffected by low-diversity penalt
 });
 
 test("processCell continues to combat when reproduction fails", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
   const { MAX_TILE_ENERGY } = await import("../src/config.js");
@@ -1003,7 +1003,7 @@ test("processCell continues to combat when reproduction fails", async () => {
 });
 
 test("density counts stay consistent through spawn, movement, and removal", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: DNA } = await import("../src/genome.js");
 
   const originalInit = GridManager.prototype.init;

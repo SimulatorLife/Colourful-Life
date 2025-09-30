@@ -1,6 +1,6 @@
 import { test } from "uvu";
 import * as assert from "uvu/assert";
-import { drawDensityHeatmap, densityToRgba, getDensityAt } from "../src/overlays.js";
+import { drawDensityHeatmap, densityToRgba, getDensityAt } from "../src/ui/overlays.js";
 
 function drawDensityHeatmapBaseline(grid) {
   const { rows, cols } = grid;

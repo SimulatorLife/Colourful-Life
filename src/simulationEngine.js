@@ -1,8 +1,8 @@
-import EventManager from "./eventManager.js";
-import GridManager from "./gridManager.js";
+import EventManager from "./events/eventManager.js";
+import GridManager from "./grid/gridManager.js";
 import SelectionManager from "./selectionManager.js";
 import Stats from "./stats.js";
-import { drawOverlays as defaultDrawOverlays } from "./overlays.js";
+import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { computeLeaderboard } from "./leaderboard.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,

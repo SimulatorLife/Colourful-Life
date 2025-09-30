@@ -49,7 +49,7 @@ changing simulation logic, utilities, or behaviour-affecting configuration.
 - Keep the README and architecture documents aligned with the current module
   layout. Update them when adding or removing systems.
 - Prefer short, focused sections. Link to source files (e.g.
-  ``[`src/gridManager.js`](../src/gridManager.js)``) when detailing
+  ``[`src/grid/gridManager.js`](../src/grid/gridManager.js)``) when detailing
   behaviour so readers can dive deeper.
 - Use JSDoc for exported functions and classes. Include parameter types,
   default values, and noteworthy side effects. Internal helper functions should

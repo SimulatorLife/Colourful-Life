@@ -1,12 +1,12 @@
-import { UI_SLIDER_CONFIG, resolveSimulationDefaults } from "./config.js";
-import { warnOnce } from "./utils.js";
+import { UI_SLIDER_CONFIG, resolveSimulationDefaults } from "../config.js";
+import { warnOnce } from "../utils.js";
 import {
   createControlButtonRow,
   createControlGrid,
   createSectionHeading,
   createSelectRow,
   createSliderRow,
-} from "./ui/controlBuilders.js";
+} from "./controlBuilders.js";
 
 /**
  * Constructs and manages the browser-based control surface. The UI manager

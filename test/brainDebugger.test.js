@@ -2,7 +2,7 @@ import { test } from "uvu";
 import * as assert from "uvu/assert";
 
 test("captureFromEntries falls back to cell neuron count when brain reports zero", async () => {
-  const { default: BrainDebugger } = await import("../src/brainDebugger.js");
+  const { default: BrainDebugger } = await import("../src/ui/brainDebugger.js");
   const telemetry = ["decision"];
   const snapshots = BrainDebugger.captureFromEntries(
     [
@@ -37,7 +37,7 @@ test("captureFromEntries falls back to cell neuron count when brain reports zero
 });
 
 test("captureFromEntries falls back to DNA connection count when brain reports zero", async () => {
-  const { default: BrainDebugger } = await import("../src/brainDebugger.js");
+  const { default: BrainDebugger } = await import("../src/ui/brainDebugger.js");
   const genes = [{ enabled: true }, { enabled: false }, { enabled: true }];
   const snapshots = BrainDebugger.captureFromEntries(
     [

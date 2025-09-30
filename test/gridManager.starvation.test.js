@@ -2,7 +2,7 @@ import { test } from "uvu";
 import * as assert from "uvu/assert";
 
 test("GridManager removes cells that report starvation", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -49,7 +49,7 @@ test("GridManager removes cells that report starvation", async () => {
 });
 
 test("GridManager respects dynamic max tile energy", async () => {
-  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
 
   class HarvestTestGridManager extends GridManager {
     init() {}

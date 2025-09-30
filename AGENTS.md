@@ -46,7 +46,7 @@ This document captures the guardrails and shared context for any automation or A
 
 - Treat configuration files (`config.toml`, `package.json`, `package-lock.json`) with caution. Update only when intentional and validated.
 - When editing long-form docs like `README.md`, keep the tone consistent and update relevant sections together.
-- For performance-sensitive code in `gridManager.js` or rendering loops, measure impacts when feasible before merging.
+- For performance-sensitive code in `grid/gridManager.js` or rendering loops, measure impacts when feasible before merging.
 - Maintain accessibility and usability when adjusting UI components: preserve keyboard navigation, color contrast, and responsive layouts.
 
 Following these practices keeps the simulation delightful, maintainable, and ready for iterative experimentation.

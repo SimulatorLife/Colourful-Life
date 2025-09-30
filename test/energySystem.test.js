@@ -8,8 +8,8 @@ test("accumulateEventModifiers combines overlapping event effects", async () => 
   const [{ accumulateEventModifiers }, { getEventEffect }, { isEventAffecting }] =
     await Promise.all([
       import("../src/energySystem.js"),
-      import("../src/eventEffects.js"),
-      import("../src/eventManager.js"),
+      import("../src/events/eventEffects.js"),
+      import("../src/events/eventManager.js"),
     ]);
 
   const events = [
@@ -84,8 +84,8 @@ test("computeTileEnergyUpdate applies density penalties and diffusion", async ()
     { REGEN_DENSITY_PENALTY },
   ] = await Promise.all([
     import("../src/energySystem.js"),
-    import("../src/eventEffects.js"),
-    import("../src/eventManager.js"),
+    import("../src/events/eventEffects.js"),
+    import("../src/events/eventManager.js"),
     import("../src/config.js"),
   ]);
 
