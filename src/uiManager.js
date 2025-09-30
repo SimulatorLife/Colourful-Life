@@ -412,6 +412,10 @@ export default class UIManager {
   // Utility to create a collapsible panel with a header
   #createPanel(title, options = {}) {
     const { collapsed = false } = options;
+
+    this._panelIdSequence = (this._panelIdSequence ?? 0) + 1;
+    const headingId = `panel-${this._panelIdSequence}-title`;
+    const bodyId = `panel-${this._panelIdSequence}-body`;
     const panel = document.createElement('div');
 
     panel.className = 'panel';
@@ -420,22 +424,30 @@ export default class UIManager {
     header.className = 'panel-header';
     const heading = document.createElement('h3');
 
+    heading.id = headingId;
     heading.textContent = title;
     const toggle = document.createElement('button');
 
+    toggle.type = 'button';
     toggle.textContent = '–';
     toggle.className = 'panel-toggle';
+    toggle.setAttribute('aria-label', `Toggle ${title} panel`);
+    toggle.setAttribute('aria-controls', bodyId);
     header.appendChild(heading);
     header.appendChild(toggle);
     panel.appendChild(header);
     const body = document.createElement('div');
 
     body.className = 'panel-body';
+    body.id = bodyId;
+    body.setAttribute('role', 'region');
+    body.setAttribute('aria-labelledby', headingId);
     panel.appendChild(body);
 
     const setCollapsed = (shouldCollapse) => {
       panel.classList.toggle('collapsed', shouldCollapse);
       toggle.textContent = shouldCollapse ? '+' : '–';
+      toggle.setAttribute('aria-expanded', shouldCollapse ? 'false' : 'true');
     };
 
     const toggleCollapsed = () => {
