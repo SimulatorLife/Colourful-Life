@@ -51,9 +51,11 @@ test('addCustomRectangle clamps coordinates and exposes accurate bounds/contains
   assert.is(zone.contains(5, 6), false, 'coordinates outside bounds should fail contains');
 
   assert.is(manager.getActiveZones().length, 1, 'custom zones contribute to active zones');
+  assert.is(manager.hasCustomZones(), true, 'custom zone presence is reflected');
 
   manager.clearCustomZones();
   assert.is(manager.getActiveZones().length, 0, 'clearCustomZones removes user zones');
+  assert.is(manager.hasCustomZones(), false, 'custom zone tracker resets after clearing');
   assert.is(manager.describeActiveZones(), 'All tiles eligible');
 });
 
