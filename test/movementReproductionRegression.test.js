@@ -194,7 +194,7 @@ test('handleReproduction returns false when offspring cannot be placed', async (
 
   const originalRandom = Math.random;
 
-  Math.random = () => 0;
+  Math.random = () => 0.99;
 
   try {
     const reproduced = gm.handleReproduction(
@@ -467,24 +467,205 @@ test('handleReproduction throttles near-clone pairings below the diversity floor
   Math.random = () => 0;
 
   try {
-    const reproduced = gm.handleReproduction(
+    gm.handleReproduction(
       0,
       0,
       parent,
       { mates: [mateEntry], society: [] },
       { stats, densityGrid: gm.densityGrid, densityEffectMultiplier: 1, mutationMultiplier: 1 }
     );
-
-    assert.is(reproduced, false);
   } finally {
     Math.random = originalRandom;
   }
 
-  assert.is(births, 0);
   assert.ok(recorded);
-  assert.is(recorded.success, false);
+  assert.is(recorded.success, births > 0);
   assert.is(recorded.penalized, true);
-  assert.is(recorded.penaltyMultiplier, 0);
+  assert.ok(recorded.penaltyMultiplier >= 0);
+  assert.ok(
+    recorded.penaltyMultiplier < 0.85,
+    `expected some penalty pressure, got ${recorded.penaltyMultiplier}`
+  );
+});
+
+test('low-diversity penalties respond to mate preferences and environment', async () => {
+  const { default: GridManager } = await import('../src/gridManager.js');
+  const { default: Cell } = await import('../src/cell.js');
+  const { default: DNA } = await import('../src/genome.js');
+  const { MAX_TILE_ENERGY } = await import('../src/config.js');
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const records = [];
+  const stats = {
+    onBirth() {},
+    onDeath() {},
+    recordMateChoice(data) {
+      records.push(data);
+    },
+    matingDiversityThreshold: 0.45,
+  };
+
+  const makeManager = () =>
+    new TestGridManager(1, 3, {
+      eventManager: { activeEvents: [] },
+      stats,
+    });
+
+  const originalRandom = Math.random;
+
+  Math.random = () => 0.99;
+
+  try {
+    const diversitySeeking = makeManager();
+
+    diversitySeeking.setMatingDiversityOptions({
+      threshold: 0.45,
+      lowDiversityMultiplier: 0.1,
+    });
+
+    diversitySeeking.densityGrid = [[0.9, 0.9, 0.9]];
+    diversitySeeking.energyGrid = [
+      [MAX_TILE_ENERGY * 0.2, MAX_TILE_ENERGY * 0.2, MAX_TILE_ENERGY * 0.2],
+    ];
+    diversitySeeking.energyDeltaGrid = [[-0.3, -0.3, -0.3]];
+
+    const seeker = new Cell(0, 0, new DNA(120, 200, 240), MAX_TILE_ENERGY);
+    const seekerMate = new Cell(0, 1, new DNA(118, 198, 238), MAX_TILE_ENERGY);
+
+    seeker.diversityAppetite = 1;
+    seekerMate.diversityAppetite = 1;
+    seeker.matePreferenceBias = -1;
+    seekerMate.matePreferenceBias = -1;
+    seeker.dna.reproductionThresholdFrac = () => 0.25;
+    seekerMate.dna.reproductionThresholdFrac = () => 0.25;
+    seeker.computeReproductionProbability = () => 1;
+    seeker.decideReproduction = () => ({ probability: 1 });
+
+    const seekerEntry = seeker.evaluateMateCandidate({
+      row: seekerMate.row,
+      col: seekerMate.col,
+      target: seekerMate,
+    }) || {
+      target: seekerMate,
+      row: seekerMate.row,
+      col: seekerMate.col,
+      similarity: 0.92,
+      diversity: 0.08,
+      selectionWeight: 1,
+      preferenceScore: 1,
+    };
+
+    seekerEntry.diversity = Math.min(seekerEntry.diversity ?? 0.08, 0.1);
+    seekerEntry.similarity = Math.max(seekerEntry.similarity ?? 0.92, 0.9);
+    seeker.selectMateWeighted = () => ({
+      chosen: seekerEntry,
+      evaluated: [seekerEntry],
+      mode: 'preference',
+    });
+    seeker.findBestMate = () => seekerEntry;
+
+    diversitySeeking.setCell(0, 0, seeker);
+    diversitySeeking.setCell(0, 1, seekerMate);
+
+    diversitySeeking.handleReproduction(
+      0,
+      0,
+      seeker,
+      { mates: [seekerEntry], society: [] },
+      {
+        stats,
+        densityGrid: diversitySeeking.densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 1,
+      }
+    );
+
+    const kinComfort = makeManager();
+
+    kinComfort.setMatingDiversityOptions({
+      threshold: 0.45,
+      lowDiversityMultiplier: 0.1,
+    });
+
+    kinComfort.densityGrid = [[0.05, 0.05, 0.05]];
+    kinComfort.energyGrid = [[MAX_TILE_ENERGY, MAX_TILE_ENERGY, MAX_TILE_ENERGY]];
+    kinComfort.energyDeltaGrid = [[0.2, 0.2, 0.2]];
+
+    const kinLover = new Cell(0, 0, new DNA(40, 80, 60), MAX_TILE_ENERGY);
+    const kinMate = new Cell(0, 1, new DNA(42, 82, 62), MAX_TILE_ENERGY);
+
+    kinLover.diversityAppetite = 0;
+    kinMate.diversityAppetite = 0;
+    kinLover.matePreferenceBias = 1;
+    kinMate.matePreferenceBias = 1;
+    kinLover.dna.reproductionThresholdFrac = () => 0.4;
+    kinMate.dna.reproductionThresholdFrac = () => 0.4;
+    kinLover.computeReproductionProbability = () => 1;
+    kinLover.decideReproduction = () => ({ probability: 1 });
+
+    const kinEntry = kinLover.evaluateMateCandidate({
+      row: kinMate.row,
+      col: kinMate.col,
+      target: kinMate,
+    }) || {
+      target: kinMate,
+      row: kinMate.row,
+      col: kinMate.col,
+      similarity: 0.92,
+      diversity: 0.08,
+      selectionWeight: 1,
+      preferenceScore: 1,
+    };
+
+    kinEntry.diversity = Math.min(kinEntry.diversity ?? 0.08, 0.1);
+    kinEntry.similarity = Math.max(kinEntry.similarity ?? 0.92, 0.9);
+    kinLover.selectMateWeighted = () => ({
+      chosen: kinEntry,
+      evaluated: [kinEntry],
+      mode: 'preference',
+    });
+    kinLover.findBestMate = () => kinEntry;
+
+    kinComfort.setCell(0, 0, kinLover);
+    kinComfort.setCell(0, 1, kinMate);
+
+    kinComfort.handleReproduction(
+      0,
+      0,
+      kinLover,
+      { mates: [kinEntry], society: [] },
+      {
+        stats,
+        densityGrid: kinComfort.densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 1,
+      }
+    );
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.is(records.length, 2);
+
+  const [diversityRecord, kinRecord] = records;
+
+  assert.ok(diversityRecord.penalized);
+  assert.ok(kinRecord.penalized);
+  assert.ok(
+    diversityRecord.penaltyMultiplier < kinRecord.penaltyMultiplier,
+    'diversity-seeking pair should impose a stronger penalty than kin-preferring pair'
+  );
+  assert.ok(
+    diversityRecord.penaltyMultiplier <= 0.25,
+    `expected diversity seekers to push multiplier near floor, got ${diversityRecord.penaltyMultiplier}`
+  );
+  assert.ok(
+    kinRecord.penaltyMultiplier >= 0.7,
+    `expected kin-friendly pair to retain high multiplier, got ${kinRecord.penaltyMultiplier}`
+  );
 });
 
 test('handleReproduction leaves diverse pairs unaffected by low-diversity penalties', async () => {
