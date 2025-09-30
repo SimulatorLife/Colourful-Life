@@ -36,6 +36,20 @@ function placeAdapterCell(adapter, row, col, cell) {
   adapter?.setCell?.(row, col, cell);
 }
 
+function resolveAdapterOccupant(adapter, location, fallback = location?.cell ?? null) {
+  if (!adapter) return null;
+
+  const { row, col } = resolveCoordinates(location, fallback);
+
+  if (row == null || col == null) {
+    return null;
+  }
+
+  const cell = getAdapterCell(adapter, row, col);
+
+  return cell ? { cell, row, col } : null;
+}
+
 function computeAgeEnergyScale(cell) {
   return typeof cell?.ageEnergyMultiplier === 'function' ? cell.ageEnergyMultiplier(1) : 1;
 }
@@ -233,13 +247,11 @@ function prepareFightParticipants({ adapter, initiator, target }) {
 
   if (attackerRow == null || attackerCol == null) return null;
 
-  const { row: targetRow, col: targetCol } = resolveCoordinates(target);
+  const defenderInfo = resolveAdapterOccupant(adapter, target);
 
-  if (targetRow == null || targetCol == null) return null;
+  if (!defenderInfo) return null;
 
-  const defender = getAdapterCell(adapter, targetRow, targetCol);
-
-  if (!defender) return null;
+  const { cell: defender, row: targetRow, col: targetCol } = defenderInfo;
 
   return { attacker, defender, attackerRow, attackerCol, targetRow, targetCol };
 }
@@ -403,14 +415,11 @@ export default class InteractionSystem {
     if (!initiator?.cell || !target) return false;
 
     const actor = initiator.cell;
-    const targetRow = target.row;
-    const targetCol = target.col;
+    const partnerInfo = resolveAdapterOccupant(adapter, target);
 
-    if (targetRow == null || targetCol == null) return false;
+    if (!partnerInfo) return false;
 
-    const partner = adapter.getCell?.(targetRow, targetCol) ?? null;
-
-    if (!partner) return false;
+    const { cell: partner } = partnerInfo;
 
     const shareFraction = clamp01(intent.metadata?.shareFraction);
     const maxTileEnergy = typeof adapter.maxTileEnergy === 'function' ? adapter.maxTileEnergy() : 0;
