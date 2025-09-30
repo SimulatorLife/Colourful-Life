@@ -74,6 +74,9 @@ export default class UIManager {
     this.mainRow.appendChild(this.canvasContainer);
     this.mainRow.appendChild(this.sidebar);
 
+    // Allow callers to customize which keys toggle the pause state.
+    this.pauseHotkeySet = this.#resolveHotkeySet(layoutOptions.pauseHotkeys);
+
     const canvasEl = layoutOptions.canvasElement || this.#resolveNode(layoutOptions.canvasSelector);
     const anchorNode =
       this.#resolveNode(layoutOptions.before) || this.#resolveNode(layoutOptions.insertBefore);
@@ -90,8 +93,30 @@ export default class UIManager {
 
     // Keyboard toggle
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'p' || e.key === 'P') this.togglePause();
+      if (!e?.key) return;
+
+      const key = e.key.toLowerCase();
+
+      if (this.pauseHotkeySet.has(key)) {
+        this.togglePause();
+      }
     });
+  }
+
+  #resolveHotkeySet(candidate) {
+    const fallback = ['p'];
+
+    const values = Array.isArray(candidate)
+      ? candidate
+      : typeof candidate === 'string' && candidate.length > 0
+        ? [candidate]
+        : fallback;
+
+    const normalized = values
+      .map((value) => (typeof value === 'string' ? value.trim().toLowerCase() : ''))
+      .filter((value) => value.length > 0);
+
+    return new Set(normalized.length > 0 ? normalized : fallback);
   }
 
   attachCanvas(canvasElement, options = {}) {
