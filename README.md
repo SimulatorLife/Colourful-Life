@@ -7,8 +7,9 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 - [Quick start](#quick-start)
 - [Core systems](#core-systems)
 - [Developer workflow](#developer-workflow)
+- [Key scripts and commands](#key-scripts-and-commands)
 - [Repository layout](#repository-layout)
-- [Further reading](#further-reading)
+- [Documentation map](#documentation-map)
 
 ## Quick start
 
@@ -18,8 +19,12 @@ npm run start    # Parcel dev server with hot reloading
 
 # Optional helpers
 npm run build    # Production bundle written to dist/
+npm run clean:parcel  # Remove dist/ and the Parcel cache when builds misbehave
 npm run format   # Format code with Prettier
+npm run format:check  # Validate formatting without writing
 npm run test     # UVU unit tests
+npm run lint     # ESLint across JS modules and inline HTML
+npm run lint:fix # ESLint with autofix enabled
 ```
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
@@ -56,13 +61,32 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
   - `src/grid/` — Adaptors for interacting with the grid from other systems.
   - `src/ui/` — UI manager, control builders, overlays, and debugging helpers.
 - `scripts/` — Node scripts (e.g., performance profiling) that exercise the engine headlessly.
+- `scripts/clean-parcel.js` — Utility invoked by `npm run clean:parcel` to wipe the Parcel cache (`.parcel-cache/`) and `dist/` outputs when builds or hot reloads drift out of sync.
 - `test/` — UVU tests executed via `npm test`.
 - `docs/` — Architecture notes, developer guides, and background reading.
 - `index.html`, `styles.css` — Browser entry point and shared styles.
 - `eslint.config.mjs`, `package.json` — Tooling and dependency configuration.
+
+## Key scripts and commands
+
+| Command                                   | Purpose                                                                                        |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `npm run start`                           | Launches the Parcel development server with hot module replacement at `http://localhost:1234`. |
+| `npm run build`                           | Produces an optimized production bundle in `dist/`.                                            |
+| `npm run clean:parcel`                    | Removes `dist/` and `.parcel-cache/` to recover from stubborn Parcel caches.                   |
+| `npm run lint` / `npm run lint:fix`       | Runs ESLint across the codebase, optionally applying autofixes.                                |
+| `npm run format` / `npm run format:check` | Applies or verifies Prettier formatting for source, documentation, and configuration files.    |
+| `npm test`                                | Executes UVU suites under an esbuild loader.                                                   |
+| `node scripts/profile-energy.mjs`         | Benchmarks the energy preparation loop with configurable grid sizes via environment variables. |
 
 ## Further reading
 
 - [`docs/architecture-overview.md`](docs/architecture-overview.md) — Component responsibilities and data flow diagrams.
 - [`docs/developer-guide.md`](docs/developer-guide.md) — Conventions for contributors, testing expectations, and documentation tips.
 - Inline JSDoc and comments throughout `src/` describing exported functions, complex routines, and configuration helpers.
+
+## Documentation map
+
+- [`docs/architecture-overview.md`](docs/architecture-overview.md) details module boundaries, update loops, and subsystem hand-offs.
+- [`docs/developer-guide.md`](docs/developer-guide.md) covers environment setup, workflow practices, and expectations for testing and documentation.
+- [`CHANGELOG.md`](CHANGELOG.md) captures notable changes between releases so contributors can track evolution over time.

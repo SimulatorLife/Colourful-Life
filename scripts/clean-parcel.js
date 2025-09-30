@@ -2,6 +2,12 @@
 import { rm, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
+/**
+ * Removes the provided path if it exists.
+ *
+ * @param {string} target - Absolute path to delete.
+ * @returns {Promise<boolean>} Whether the path was removed.
+ */
 async function deleteIfExists(target) {
   try {
     await stat(target);
@@ -18,6 +24,9 @@ async function deleteIfExists(target) {
   return true;
 }
 
+/**
+ * Entry point that deletes the Parcel cache and build output directories.
+ */
 async function main() {
   const root = resolve(process.cwd());
   const targets = [".parcel-cache", "dist"].map((relative) => resolve(root, relative));
