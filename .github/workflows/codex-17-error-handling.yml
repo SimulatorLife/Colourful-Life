@@ -16,8 +16,6 @@ jobs:
     with:
       pr_title: "Codex: Error Handling Consistency"
       pr_body: "Seed PR for Codex to standardize error handling atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Review the codebase and pinpoint an area where error handling is inconsistent, ad-hoc, or
         missing. Refactor that area to align with a consistent project-wide pattern—whether through

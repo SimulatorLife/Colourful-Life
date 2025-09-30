@@ -1,6 +1,16 @@
 import { EVENT_TYPES } from './eventEffects.js';
 import { randomRange } from './utils.js';
 
+/**
+ * Determines whether the supplied event overlaps the provided grid
+ * coordinates. Events operate on rectangular regions described by their
+ * `affectedArea` bounds.
+ *
+ * @param {Object} event - Event definition.
+ * @param {number} row - Tile row to test.
+ * @param {number} col - Tile column to test.
+ * @returns {boolean} Whether the tile is affected by the event.
+ */
 export function isEventAffecting(event, row, col) {
   if (!event || !event.affectedArea) return false;
   const { x, y, width, height } = event.affectedArea;
@@ -8,6 +18,12 @@ export function isEventAffecting(event, row, col) {
   return row >= y && row < y + height && col >= x && col < x + width;
 }
 
+/**
+ * Generates and tracks environmental events that influence energy regeneration
+ * and drain across the grid. Events are spawned with randomized type, strength,
+ * duration, and affected area and are exposed via `activeEvents` for overlays
+ * and analytics.
+ */
 export default class EventManager {
   static EVENT_COLORS = {
     flood: 'rgba(0, 0, 255, 0.5)',
@@ -16,13 +32,39 @@ export default class EventManager {
     coldwave: 'rgba(135, 206, 235, 0.5)',
   };
 
-  constructor(rows, cols, rng = Math.random) {
+  static DEFAULT_EVENT_COLOR = 'rgba(0,0,0,0)';
+
+  constructor(rows, cols, rng = Math.random, options = {}) {
     this.rows = rows;
     this.cols = cols;
     this.rng = rng;
     this.cooldown = 0;
     this.activeEvents = [];
     this.currentEvent = null;
+    const { resolveEventColor, eventColors } = options || {};
+    // Allow callers to override the event color palette without changing defaults.
+    const defaultResolver = (eventType) =>
+      EventManager.EVENT_COLORS[eventType] ?? EventManager.DEFAULT_EVENT_COLOR;
+
+    if (typeof resolveEventColor === 'function') {
+      this.eventColorResolver = (eventType) => {
+        const resolved = resolveEventColor(eventType);
+
+        return typeof resolved === 'string' && resolved.length > 0
+          ? resolved
+          : defaultResolver(eventType);
+      };
+    } else {
+      const mergedColors = {
+        ...EventManager.EVENT_COLORS,
+        ...(eventColors && typeof eventColors === 'object' ? eventColors : {}),
+      };
+
+      this.eventColorResolver = (eventType) =>
+        typeof mergedColors[eventType] === 'string' && mergedColors[eventType].length > 0
+          ? mergedColors[eventType]
+          : EventManager.DEFAULT_EVENT_COLOR;
+    }
     // start with one event for visibility
     const e = this.generateRandomEvent();
 
@@ -32,12 +74,14 @@ export default class EventManager {
 
   getEventColor() {
     return this.currentEvent
-      ? EventManager.EVENT_COLORS[this.currentEvent.eventType]
-      : 'rgba(0,0,0,0)';
+      ? this.eventColorResolver(this.currentEvent.eventType)
+      : EventManager.DEFAULT_EVENT_COLOR;
   }
 
   getColor(ev) {
-    return EventManager.EVENT_COLORS[ev.eventType];
+    if (!ev) return EventManager.DEFAULT_EVENT_COLOR;
+
+    return this.eventColorResolver(ev.eventType);
   }
 
   generateRandomEvent() {

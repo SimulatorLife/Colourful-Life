@@ -16,8 +16,6 @@ jobs:
     with:
       pr_title: "Codex: Neural System Expansion"
       pr_body: "Seed PR for Codex to expand neural system control atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Review the neural or brain system and find one behavior currently controlled by rigid
         conditions that should instead be neuron-driven. Refactor that case so neural activation

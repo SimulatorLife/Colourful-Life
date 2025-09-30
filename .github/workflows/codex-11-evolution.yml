@@ -16,8 +16,6 @@ jobs:
     with:
       pr_title: "Codex: Evolutionary Pressure Tuning"
       pr_body: "Seed PR for Codex to refine evolutionary pressures atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Assess fitness, selection, or survival logic and identify an opportunity to refine how
         evolutionary pressures shape organisms. Adjust the system to better encourage diverse,

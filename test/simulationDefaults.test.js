@@ -27,20 +27,6 @@ class MockContext {
   strokeText() {}
 }
 
-class MockCanvas {
-  constructor(width, height) {
-    this.width = width;
-    this.height = height;
-    this._context = new MockContext(width, height);
-  }
-
-  getContext(type) {
-    if (type !== '2d') return null;
-
-    return this._context;
-  }
-}
-
 class MockElement {
   constructor(tagName = 'div') {
     this.tagName = tagName.toUpperCase();
@@ -83,15 +69,36 @@ class MockElement {
 
     if (index === -1) {
       this.children.push(child);
-    } else {
-      this.children.splice(index, 0, child);
+
+      return child;
+    }
+
+    this.children.splice(index, 0, child);
+
+    return child;
+  }
+
+  removeChild(child) {
+    const index = this.children.indexOf(child);
+
+    if (index >= 0) {
+      this.children.splice(index, 1);
+      child.parentElement = null;
     }
 
     return child;
   }
 
-  querySelector() {
-    return null;
+  querySelector(selector) {
+    if (selector.startsWith('#')) {
+      return this.children.find((child) => child.id === selector.slice(1)) ?? null;
+    }
+
+    if (selector.startsWith('.')) {
+      return this.children.find((child) => child.className.split(' ').includes(selector.slice(1))) ?? null;
+    }
+
+    return this.children.find((child) => child.tagName === selector.toUpperCase()) ?? null;
   }
 
   addEventListener(type, handler) {
@@ -101,6 +108,29 @@ class MockElement {
   getBoundingClientRect() {
     return { left: 0, top: 0, width: this.width ?? 0, height: this.height ?? 0 };
   }
+
+  setAttribute(name, value) {
+    this[name] = value;
+  }
+
+  removeAttribute(name) {
+    delete this[name];
+  }
+}
+
+class MockCanvas extends MockElement {
+  constructor(width, height) {
+    super('canvas');
+    this.width = width;
+    this.height = height;
+    this._context = new MockContext(width, height);
+  }
+
+  getContext(type) {
+    if (type !== '2d') return null;
+
+    return this._context;
+  }
 }
 
 class MockDocument {
@@ -108,17 +138,25 @@ class MockDocument {
     this.body = new MockElement('body');
     this.appRoot = new MockElement('div');
     this.appRoot.id = 'app';
+    this.canvas = new MockCanvas(640, 480);
     this.body.appendChild(this.appRoot);
+    this.body.appendChild(this.canvas);
     this.listeners = {};
   }
 
   querySelector(selector) {
     if (selector === '#app') return this.appRoot;
 
+    if (selector === 'canvas') return this.canvas;
+
     return null;
   }
 
   createElement(tagName) {
+    if (tagName.toLowerCase() === 'canvas') {
+      return new MockCanvas(640, 480);
+    }
+
     return new MockElement(tagName);
   }
 

@@ -16,8 +16,6 @@ jobs:
     with:
       pr_title: "Codex: Dead Code & Asset Audit"
       pr_body: "Seed PR for Codex to prune unused code or assets atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Scan the repository for unused functions, variables, files, assets, or configuration entries.
         Remove or archive one meaningful set of unused items, consolidating duplicates if needed.

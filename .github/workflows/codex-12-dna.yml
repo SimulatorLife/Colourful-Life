@@ -16,8 +16,6 @@ jobs:
     with:
       pr_title: "Codex: DNA Encoding Improvements"
       pr_body: "Seed PR for Codex to enrich DNA encoding capabilities atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Examine how DNA is represented and used throughout the simulation. Expand its ability to
         encode meaningful organism traits and behaviors, replacing ad-hoc or hardcoded logic with

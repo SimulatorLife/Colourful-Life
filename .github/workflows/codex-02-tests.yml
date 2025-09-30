@@ -16,7 +16,5 @@ jobs:
     with:
       pr_title: "Codex: Improve Test Coverage & Quality"
       pr_body: "Seed PR for Codex to implement the intended test improvements atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Audit the codebase for test coverage, reliability, and resilience. Identify critical paths, edge cases, and modules with insufficient or missing tests. Add or expand automated tests to ensure both expected and edge-case behavior are validated. Modernize existing tests for readability, speed, and maintainability, and eliminate redundant or flaky tests. Where logic is complex or risky, write focused unit tests; where integration is essential, add end-to-end coverage. The goal is to ensure the codebase is robust, with a strong safety net that prevents regressions and increases confidence in future changes.

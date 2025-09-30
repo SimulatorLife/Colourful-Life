@@ -7,6 +7,12 @@ import {
   createSliderRow,
 } from './ui/controlBuilders.js';
 
+/**
+ * Constructs and manages the browser-based control surface. The UI manager
+ * renders the canvas layout, exposes slider/button controls, and synchronizes
+ * user interactions back to the {@link SimulationEngine}. It also forwards
+ * slow-updating metrics to dashboards and coordinates selection drawing.
+ */
 export default class UIManager {
   constructor(simulationCallbacks = {}, mountSelector = '#app', actions = {}, layoutOptions = {}) {
     const { obstaclePresets = [], ...actionFns } = actions || {};
@@ -287,19 +293,21 @@ export default class UIManager {
     const row = document.createElement('label');
 
     row.className = 'control-row';
-    row.title = title;
+    if (title) row.title = title;
     const line = document.createElement('div');
 
     line.className = 'control-line control-line--checkbox';
     const input = document.createElement('input');
 
     input.type = 'checkbox';
-    input.checked = initial;
-    input.addEventListener('input', () => onChange(input.checked));
+    input.checked = Boolean(initial);
+    if (typeof onChange === 'function') {
+      input.addEventListener('input', () => onChange(input.checked));
+    }
     const name = document.createElement('div');
 
     name.className = 'control-name';
-    name.textContent = label;
+    name.textContent = label ?? '';
     line.appendChild(input);
     line.appendChild(name);
     row.appendChild(line);
@@ -308,7 +316,7 @@ export default class UIManager {
     return input;
   }
 
-  #appendControlRow(container, { label, value, title, color }) {
+  #appendControlRow(container, { label, value, title, color, valueClass }) {
     const row = document.createElement('div');
 
     row.className = 'control-line';
@@ -331,7 +339,7 @@ export default class UIManager {
 
     const valueEl = document.createElement('div');
 
-    valueEl.className = 'control-value';
+    valueEl.className = valueClass ? `control-value ${valueClass}` : 'control-value';
 
     if (value instanceof Node) {
       valueEl.appendChild(value);
@@ -706,30 +714,38 @@ export default class UIManager {
 
     const overlayGrid = createControlGrid(body, 'control-grid--compact');
 
-    const addToggle = (label, title, initial, onChange) =>
-      this.#addCheckbox(overlayGrid, label, title, initial, onChange);
+    const overlayConfigs = [
+      {
+        key: 'showObstacles',
+        label: 'Show Obstacles',
+        title: 'Highlight impassable tiles such as walls and barriers',
+        initial: this.showObstacles,
+      },
+      {
+        key: 'showDensity',
+        label: 'Show Density Heatmap',
+        title: 'Overlay local population density as a heatmap',
+        initial: this.showDensity,
+      },
+      {
+        key: 'showEnergy',
+        label: 'Show Energy Heatmap',
+        title: 'Overlay tile energy levels as a heatmap',
+        initial: this.showEnergy,
+      },
+      {
+        key: 'showFitness',
+        label: 'Show Fitness Heatmap',
+        title: 'Overlay cell fitness as a heatmap',
+        initial: this.showFitness,
+      },
+    ];
 
-    addToggle(
-      'Show Obstacles',
-      'Highlight impassable tiles such as walls and barriers',
-      this.showObstacles,
-      (v) => this.#updateSetting('showObstacles', v)
-    );
-    addToggle(
-      'Show Density Heatmap',
-      'Overlay local population density as a heatmap',
-      this.showDensity,
-      (v) => this.#updateSetting('showDensity', v)
-    );
-    addToggle(
-      'Show Energy Heatmap',
-      'Overlay tile energy levels as a heatmap',
-      this.showEnergy,
-      (v) => this.#updateSetting('showEnergy', v)
-    );
-    addToggle('Show Fitness Heatmap', 'Overlay cell fitness as a heatmap', this.showFitness, (v) =>
-      this.#updateSetting('showFitness', v)
-    );
+    overlayConfigs.forEach(({ key, label, title, initial }) => {
+      this.#addCheckbox(overlayGrid, label, title, initial, (checked) => {
+        this.#updateSetting(key, checked);
+      });
+    });
   }
 
   #buildObstacleControls(body, sliderContext) {
@@ -928,17 +944,25 @@ export default class UIManager {
     sparkDescriptors.forEach(({ label, property, color }) => {
       const card = document.createElement('div');
       const caption = document.createElement('div');
+      const colorDot = document.createElement('span');
+      const captionText = document.createElement('span');
 
       card.className = 'sparkline-card';
-      caption.className = 'control-name';
-      caption.textContent = label;
-      if (color) caption.style.color = color;
+      caption.className = 'sparkline-caption';
+      colorDot.className = 'sparkline-color-dot';
+      if (color) colorDot.style.background = color;
+      captionText.className = 'sparkline-caption-text';
+      captionText.textContent = label;
+      caption.appendChild(colorDot);
+      caption.appendChild(captionText);
 
       const canvas = document.createElement('canvas');
 
       canvas.className = 'sparkline';
       canvas.width = 220;
       canvas.height = 40;
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-label', `${label} trend over time`);
 
       card.appendChild(caption);
       card.appendChild(canvas);
@@ -1044,29 +1068,61 @@ export default class UIManager {
     const coopDelta = Math.max(0, (totals.cooperations ?? 0) - (lastTotals.cooperations ?? 0));
     const interactionTotal = fightDelta + coopDelta;
 
+    const appendMetricRow = (container, { label, value, title, valueClass }) => {
+      this.#appendControlRow(container, { label, value, title, valueClass });
+    };
+
+    const createSection = (title, options = {}) => {
+      const { wide = false } = options;
+      const section = document.createElement('section');
+
+      section.className = 'metrics-section';
+      if (wide) section.classList.add('metrics-section--wide');
+      const heading = document.createElement('h4');
+
+      heading.className = 'metrics-section-title';
+      heading.textContent = title;
+      section.appendChild(heading);
+      const body = document.createElement('div');
+
+      body.className = 'metrics-section-body';
+      section.appendChild(body);
+      this.metricsBox.appendChild(section);
+
+      return body;
+    };
+
+    const finiteOrDash = (value, formatter = String) =>
+      Number.isFinite(value) ? formatter(value) : '—';
+    const percentOrDash = (value) => finiteOrDash(value, (v) => `${(v * 100).toFixed(0)}%`);
+    const countOrDash = (value) => finiteOrDash(value);
+    const fixedOrDash = (value, digits) => finiteOrDash(value, (v) => v.toFixed(digits));
+
     this._lastInteractionTotals = {
       fights: totals.fights ?? lastTotals.fights ?? 0,
       cooperations: totals.cooperations ?? lastTotals.cooperations ?? 0,
     };
 
-    this.#appendControlRow(this.metricsBox, {
+    const populationSection = createSection('Population Snapshot');
+
+    appendMetricRow(populationSection, {
       label: 'Population',
-      value: String(s.population),
+      value: countOrDash(s.population),
       title: 'Total living cells',
     });
-    this.#appendControlRow(this.metricsBox, {
+    appendMetricRow(populationSection, {
       label: 'Births',
-      value: String(s.births),
+      value: countOrDash(s.births),
       title: 'Births in the last tick',
     });
-    this.#appendControlRow(this.metricsBox, {
+    appendMetricRow(populationSection, {
       label: 'Deaths',
-      value: String(s.deaths),
+      value: countOrDash(s.deaths),
       title: 'Deaths in the last tick',
     });
-    this.#appendControlRow(this.metricsBox, {
+    appendMetricRow(populationSection, {
       label: 'Growth',
-      value: String(s.growth),
+      value: countOrDash(s.growth),
       title: 'Births - Deaths',
     });
     const autoRespawn = s.autoRespawn || null;
@@ -1103,111 +1159,108 @@ export default class UIManager {
       const formatted = s.mutationMultiplier.toFixed(2);
       const suffix = s.mutationMultiplier <= 0 ? '× (off)' : '×';
 
-      this.#appendControlRow(this.metricsBox, {
+      appendMetricRow(populationSection, {
         label: 'Mutation Multiplier',
         value: `${formatted}${suffix}`,
         title: 'Global multiplier applied to mutation chance and range for offspring',
       });
     }
-    this.#appendControlRow(this.metricsBox, {
+    const interactionSection = createSection('Interaction Pulse');
+
+    appendMetricRow(interactionSection, {
       label: 'Skirmishes',
-      value: String(fightDelta),
+      value: countOrDash(fightDelta),
       title: 'Skirmishes resolved since the last dashboard update',
     });
-    this.#appendControlRow(this.metricsBox, {
+    appendMetricRow(interactionSection, {
       label: 'Cooperations',
-      value: String(coopDelta),
+      value: countOrDash(coopDelta),
       title: 'Mutual aid events completed since the last dashboard update',
     });
-
-    this.#appendControlRow(this.metricsBox, {
+    appendMetricRow(interactionSection, {
       label: 'Cooperation Share',
-      value: interactionTotal ? `${((coopDelta / interactionTotal) * 100).toFixed(0)}%` : '—',
+      value: interactionTotal ? percentOrDash(coopDelta / interactionTotal) : '—',
       title: 'Share of cooperative interactions vs total interactions recorded for this update',
     });
-    this.#appendControlRow(this.metricsBox, {
+
+    const vitalitySection = createSection('Vitality Signals');
+
+    appendMetricRow(vitalitySection, {
       label: 'Mean Energy',
-      value: s.meanEnergy.toFixed(2),
+      value: fixedOrDash(s.meanEnergy, 2),
       title: 'Average energy per cell',
     });
-    this.#appendControlRow(this.metricsBox, {
+    appendMetricRow(vitalitySection, {
       label: 'Mean Age',
-      value: s.meanAge.toFixed(1),
+      value: fixedOrDash(s.meanAge, 1),
       title: 'Average age of living cells',
     });
-    this.#appendControlRow(this.metricsBox, {
+    appendMetricRow(vitalitySection, {
       label: 'Diversity',
-      value: s.diversity.toFixed(3),
+      value: fixedOrDash(s.diversity, 3),
       title: 'Estimated mean pairwise genetic distance',
     });
 
-    const mateChoicesValue = Number.isFinite(s.mateChoices) ? String(s.mateChoices) : '—';
-    const successfulMatingsValue = Number.isFinite(s.successfulMatings)
-      ? String(s.successfulMatings)
-      : '—';
-    const diverseChoiceRateValue = Number.isFinite(s.diverseChoiceRate)
-      ? `${(s.diverseChoiceRate * 100).toFixed(0)}%`
-      : '—';
-    const diverseMatingRateValue = Number.isFinite(s.diverseMatingRate)
-      ? `${(s.diverseMatingRate * 100).toFixed(0)}%`
-      : '—';
-    const meanDiversityAppetiteValue = Number.isFinite(s.meanDiversityAppetite)
-      ? s.meanDiversityAppetite.toFixed(2)
-      : '—';
-    const curiositySelectionsValue = Number.isFinite(s.curiositySelections)
-      ? String(s.curiositySelections)
-      : '—';
+    const reproductionSection = createSection('Reproduction Trends');
 
     if (typeof s.blockedMatings === 'number') {
-      this.#appendControlRow(this.metricsBox, {
+      appendMetricRow(reproductionSection, {
         label: 'Blocked Matings',
-        value: String(s.blockedMatings),
+        value: countOrDash(s.blockedMatings),
         title: 'Matings prevented by reproductive zones this tick',
       });
     }
 
     if (s.lastBlockedReproduction?.reason) {
-      this.#appendControlRow(this.metricsBox, {
+      appendMetricRow(reproductionSection, {
         label: 'Last Blocked Reason',
         value: s.lastBlockedReproduction.reason,
         title: 'Most recent reason reproduction was denied',
+        valueClass: 'control-value--left',
       });
     }
 
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Mate Choices',
-      value: mateChoicesValue,
-      title: 'Potential mates evaluated by the population this tick',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Successful Matings',
-      value: successfulMatingsValue,
-      title: 'Pairs that successfully reproduced this tick',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Diverse Choice Rate',
-      value: diverseChoiceRateValue,
-      title: 'Share of mate choices favoring genetically diverse partners this tick',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Diverse Mating Rate',
-      value: diverseMatingRateValue,
-      title: 'Share of completed matings rated as genetically diverse this tick',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Mean Diversity Appetite',
-      value: meanDiversityAppetiteValue,
-      title: 'Average preferred genetic difference when selecting a mate',
-    });
-    this.#appendControlRow(this.metricsBox, {
-      label: 'Curiosity Selections',
-      value: curiositySelectionsValue,
-      title: 'Mate selections driven by curiosity-driven exploration this tick',
-    });
+    const reproductionMetrics = [
+      {
+        label: 'Mate Choices',
+        value: countOrDash(s.mateChoices),
+        title: 'Potential mates evaluated by the population this tick',
+      },
+      {
+        label: 'Successful Matings',
+        value: countOrDash(s.successfulMatings),
+        title: 'Pairs that successfully reproduced this tick',
+      },
+      {
+        label: 'Diverse Choice Rate',
+        value: percentOrDash(s.diverseChoiceRate),
+        title: 'Share of mate choices favoring genetically diverse partners this tick',
+      },
+      {
+        label: 'Diverse Mating Rate',
+        value: percentOrDash(s.diverseMatingRate),
+        title: 'Share of completed matings rated as genetically diverse this tick',
+      },
+      {
+        label: 'Mean Diversity Appetite',
+        value: fixedOrDash(s.meanDiversityAppetite, 2),
+        title: 'Average preferred genetic difference when selecting a mate',
+      },
+      {
+        label: 'Curiosity Selections',
+        value: countOrDash(s.curiositySelections),
+        title: 'Mate selections driven by curiosity-driven exploration this tick',
+      },
+    ];
+
+    reproductionMetrics.forEach(({ label, value, title }) =>
+      appendMetricRow(reproductionSection, { label, value, title })
+    );
 
     const traitPresence = stats?.traitPresence;
 
     if (traitPresence) {
+      const traitSection = createSection('Trait Presence', { wide: true });
       const traitGroup = document.createElement('div');
 
       traitGroup.className = 'metrics-group';
@@ -1245,7 +1298,7 @@ export default class UIManager {
         });
       }
 
-      this.metricsBox.appendChild(traitGroup);
+      traitSection.appendChild(traitGroup);
     }
 
     this.drawSpark(this.sparkPop, stats.history.population, '#88d');

@@ -1,0 +1,20 @@
+name: Codex 19 – UI Polish
+on:
+  schedule:
+    - cron: "21 */23 * * *" # every 23 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: UI Polish"
+      pr_body: "Seed PR for Codex to refine a focused UI area atop current master."
+      prompt: >
+        Sweep the user interface and select one coherent area (a screen, panel, or component) where the user experience can be materially improved. In that area, align elements for visual consistency, fix spacing/padding/margin issues, ensure color usage is consistent with the palette, clarify text labels, headings, or tooltips, add missing labels or accessibility hints for inputs, repair broken or misrendered UI elements, and refine small behaviors (default states, focus, validation) that improve clarity and ease of use. Where appropriate, consolidate or combine disparate elements that duplicate information or would be clearer if presented together (e.g. merging scattered statistics into a concise chart, or removing redundant displays). If, after careful analysis, you find that a UI element is confusing, redundant, or detracts from usability, you may simplify, remove, or replace it — but only where doing so clearly improves the user’s experience. The goal is a cleaner, more consistent, intuitive, and discoverable UI that integrates seamlessly with the existing style. Keep the scope focused, avoid broad overhauls or introducing new design systems, and ensure changes are practical, maintainable, and tested.

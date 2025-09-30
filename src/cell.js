@@ -75,6 +75,17 @@ export default class Cell {
     this._resourceDelta = 0;
     this._resourceSignal = 0;
     this._resourceSignalLastInput = { energy: initialResourceLevel, delta: 0 };
+    const interactionProfile =
+      typeof this.dna.interactionPlasticity === 'function'
+        ? this.dna.interactionPlasticity()
+        : null;
+    this._interactionBaseline = clamp(interactionProfile?.baseline ?? 0, -1, 1);
+    this._interactionMomentum = this._interactionBaseline;
+    this._interactionLearning = clamp(interactionProfile?.learningRate ?? 0.35, 0.05, 0.95);
+    this._interactionVolatility = clamp(interactionProfile?.volatility ?? 0.5, 0.05, 2);
+    this._interactionDecay = clamp(interactionProfile?.decay ?? 0.08, 0.001, 0.6);
+    this._lastInteractionDecayAge = this.age;
+    this._lastInteractionSummary = null;
     // Cache metabolism from gene row 5 to avoid per-tick recompute
     const geneRow = this.genes?.[5];
 
@@ -479,6 +490,127 @@ export default class Cell {
     return signal;
   }
 
+  #resolveInteractionMomentum({ applyDecay = true } = {}) {
+    const baseline = Number.isFinite(this._interactionBaseline) ? this._interactionBaseline : 0;
+
+    if (!Number.isFinite(this._interactionMomentum)) {
+      this._interactionMomentum = baseline;
+    }
+
+    if (!applyDecay) {
+      return clamp(this._interactionMomentum, -1, 1);
+    }
+
+    if (this._interactionDecay <= 0) {
+      return clamp(this._interactionMomentum, -1, 1);
+    }
+
+    const lastAge = Number.isFinite(this._lastInteractionDecayAge)
+      ? this._lastInteractionDecayAge
+      : this.age;
+
+    if (this.age !== lastAge) {
+      const iterations = Math.max(0, Math.min(6, Math.floor(this.age - lastAge)));
+
+      for (let i = 0; i < iterations; i++) {
+        this._interactionMomentum = clamp(
+          lerp(this._interactionMomentum, baseline, this._interactionDecay),
+          -1,
+          1
+        );
+      }
+
+      this._lastInteractionDecayAge = this.age;
+    }
+
+    return clamp(this._interactionMomentum, -1, 1);
+  }
+
+  getInteractionMomentum({ decay = false } = {}) {
+    return this.#resolveInteractionMomentum({ applyDecay: Boolean(decay) });
+  }
+
+  experienceInteraction(event = {}) {
+    if (!event || typeof event !== 'object') {
+      return this.#resolveInteractionMomentum({ applyDecay: false });
+    }
+
+    const baseline = Number.isFinite(this._interactionBaseline) ? this._interactionBaseline : 0;
+    const learning = clamp(this._interactionLearning ?? 0, 0, 1);
+    const volatility = Math.max(0, this._interactionVolatility ?? 0);
+
+    if (learning <= 0 || volatility <= 0) {
+      return this.#resolveInteractionMomentum({ applyDecay: false });
+    }
+
+    let kinship = Number.isFinite(event.kinship) ? clamp(event.kinship, 0, 1) : Number.NaN;
+    const partner = event.partner ?? null;
+
+    if (!Number.isFinite(kinship) && partner) {
+      try {
+        kinship = clamp(this.similarityTo(partner), 0, 1);
+      } catch (error) {
+        kinship = 0;
+      }
+    }
+
+    if (!Number.isFinite(kinship)) kinship = 0;
+
+    let signal = 0;
+    const type = event.type;
+    const outcome = event.outcome ?? null;
+
+    switch (type) {
+      case 'fight': {
+        signal = outcome === 'win' ? -0.45 : -0.75;
+        signal -= kinship * 0.35;
+        break;
+      }
+      case 'cooperate': {
+        signal = outcome === 'receive' ? 0.6 : 0.4;
+        signal += kinship * 0.3;
+        break;
+      }
+      case 'reproduce': {
+        signal = 0.3 + kinship * 0.2;
+        break;
+      }
+      default: {
+        if (outcome === 'positive') signal += 0.2;
+        if (outcome === 'negative') signal -= 0.2;
+        break;
+      }
+    }
+
+    const energyDelta = clamp(
+      Number.isFinite(event.energyDelta) ? event.energyDelta / (MAX_TILE_ENERGY || 1) : 0,
+      -1,
+      1
+    );
+    const intensity = clamp(Number.isFinite(event.intensity) ? event.intensity : 1, 0, 2);
+
+    signal += energyDelta * 0.35;
+
+    const target = clamp(baseline + signal * volatility * intensity, -1, 1);
+    const current = Number.isFinite(this._interactionMomentum)
+      ? this._interactionMomentum
+      : baseline;
+    const next = clamp(current + (target - current) * learning, -1, 1);
+
+    this._interactionMomentum = next;
+    this._lastInteractionDecayAge = this.age;
+    this._lastInteractionSummary = {
+      type,
+      outcome,
+      kinship,
+      energyDelta,
+      intensity,
+      resultingMomentum: next,
+    };
+
+    return next;
+  }
+
   #movementSensors({
     localDensity = 0,
     densityEffectMultiplier = 1,
@@ -506,6 +638,7 @@ export default class Cell {
     const enemySimilarity = this.#averageSimilarity(enemies);
     const mateSimilarity = this.#averageSimilarity(mates);
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
+    const interactionMomentum = this.#resolveInteractionMomentum();
 
     return {
       energy: energyFrac,
@@ -517,6 +650,7 @@ export default class Cell {
       enemySimilarity,
       mateSimilarity,
       ageFraction: ageFrac,
+      interactionMomentum,
       eventPressure,
       resourceTrend,
     };
@@ -548,6 +682,7 @@ export default class Cell {
     const riskTolerance =
       typeof this.dna?.riskTolerance === 'function' ? this.dna.riskTolerance() : 0.5;
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
+    const interactionMomentum = this.#resolveInteractionMomentum();
 
     return {
       energy: energyFrac,
@@ -558,6 +693,7 @@ export default class Cell {
       allySimilarity,
       ageFraction: ageFrac,
       riskTolerance,
+      interactionMomentum,
       eventPressure,
       resourceTrend,
     };
@@ -592,6 +728,7 @@ export default class Cell {
         ? partner.dna.senescenceRate()
         : 0;
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
+    const interactionMomentum = this.#resolveInteractionMomentum();
 
     return {
       energy: energyFrac,
@@ -603,8 +740,94 @@ export default class Cell {
       partnerAgeFraction: partnerAgeFrac,
       selfSenescence: senSelf,
       partnerSenescence: senPartner,
+      interactionMomentum,
       eventPressure,
       resourceTrend,
+    };
+  }
+
+  #targetingSensors(enemies = [], { maxTileEnergy = MAX_TILE_ENERGY } = {}) {
+    const energyCap = maxTileEnergy > 0 ? maxTileEnergy : MAX_TILE_ENERGY || 1;
+    const resolvedEnemies = Array.isArray(enemies) ? enemies : [];
+    let count = 0;
+    let minDiff = Infinity;
+    let maxDiff = -Infinity;
+    let attritionSum = 0;
+    let similaritySum = 0;
+    let closest = Infinity;
+
+    for (const entry of resolvedEnemies) {
+      const target = entry?.target;
+
+      if (!target) continue;
+
+      const enemyEnergy = Number.isFinite(target.energy) ? target.energy : 0;
+      const diff = clamp(((this.energy ?? 0) - enemyEnergy) / energyCap, -1, 1);
+      minDiff = Math.min(minDiff, diff);
+      maxDiff = Math.max(maxDiff, diff);
+
+      const distance = Math.max(
+        Math.abs((entry.row ?? target.row ?? this.row) - this.row),
+        Math.abs((entry.col ?? target.col ?? this.col) - this.col)
+      );
+
+      if (Number.isFinite(distance)) {
+        closest = Math.min(closest, distance);
+      }
+
+      const attrition = target.lifespan ? clamp((target.age ?? 0) / target.lifespan, 0, 1) : 0;
+
+      attritionSum += attrition;
+
+      let similarity = 0;
+
+      try {
+        similarity = clamp(this.similarityTo(target), 0, 1);
+      } catch (error) {
+        similarity = 0;
+      }
+
+      similaritySum += similarity;
+      count++;
+    }
+
+    const averageSimilarity = count > 0 ? similaritySum / count : 0;
+    const averageAttrition = count > 0 ? attritionSum / count : 0;
+    const weaknessSignal = Number.isFinite(maxDiff) ? clamp(maxDiff, -1, 1) : 0;
+    const threatSignal = Number.isFinite(minDiff) ? clamp(-minDiff, -1, 1) : 0;
+    const proximity = Number.isFinite(closest) ? 1 / (1 + closest) : 0;
+    const proximitySignal = clamp(proximity * 2 - 1, -1, 1);
+    const attritionSignal = clamp(averageAttrition * 2 - 1, -1, 1);
+    const sightRange = Math.max(1, Math.floor(this.sight ?? 1));
+    const maxNeighbors = (sightRange * 2 + 1) * (sightRange * 2 + 1) - 1;
+    const enemyFraction = clamp(count / Math.max(1, maxNeighbors), 0, 1);
+    const resourceTrend = clamp(
+      Number.isFinite(this._resourceSignal) ? this._resourceSignal : 0,
+      -1,
+      1
+    );
+    const riskTolerance = clamp(
+      typeof this.dna?.riskTolerance === 'function' ? this.dna.riskTolerance() : 0,
+      0,
+      1
+    );
+    const interactionMomentum = this.#resolveInteractionMomentum();
+    const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
+
+    return {
+      energy: clamp((this.energy ?? 0) / energyCap, 0, 1),
+      effectiveDensity: enemyFraction,
+      enemyFraction,
+      enemySimilarity: averageSimilarity,
+      interactionMomentum,
+      eventPressure,
+      ageFraction: this.getAgeFraction(),
+      riskTolerance,
+      resourceTrend,
+      targetWeakness: weaknessSignal,
+      targetThreat: threatSignal,
+      targetProximity: proximitySignal,
+      targetAttrition: attritionSignal,
     };
   }
 
@@ -1282,6 +1505,187 @@ export default class Cell {
     return fallbackAction;
   }
 
+  chooseEnemyTarget(enemies = [], { maxTileEnergy = MAX_TILE_ENERGY } = {}) {
+    if (!Array.isArray(enemies) || enemies.length === 0) return null;
+
+    const focus = typeof this.dna.conflictFocus === 'function' ? this.dna.conflictFocus() : null;
+    const weights = {
+      weak: Math.max(0.0001, focus?.weak ?? 1),
+      strong: Math.max(0.0001, focus?.strong ?? 1),
+      proximity: Math.max(0.0001, focus?.proximity ?? 1),
+      attrition: Math.max(0.0001, focus?.attrition ?? 1),
+    };
+    const energyCap = maxTileEnergy > 0 ? maxTileEnergy : MAX_TILE_ENERGY || 1;
+    let decisionDetails = null;
+
+    if (this.#canUseNeuralPolicies()) {
+      const sensors = this.#targetingSensors(enemies, { maxTileEnergy });
+      const values = this.#evaluateBrainGroup('targeting', sensors);
+
+      if (values) {
+        const entries = OUTPUT_GROUPS.targeting;
+        const logits = entries.map(({ key }) => values[key] ?? 0);
+        const probabilities = softmax(logits);
+        const logitsByKey = {};
+        const probabilitiesByKey = {};
+        const fallbackTotal = Object.values(weights).reduce(
+          (sum, value) => sum + Math.max(0, value),
+          0
+        );
+        const fallbackNormalized = fallbackTotal
+          ? {
+              weak: weights.weak / fallbackTotal,
+              strong: weights.strong / fallbackTotal,
+              proximity: weights.proximity / fallbackTotal,
+              attrition: weights.attrition / fallbackTotal,
+            }
+          : { weak: 0.25, strong: 0.25, proximity: 0.25, attrition: 0.25 };
+        const mapping = {
+          focusWeak: 'weak',
+          focusStrong: 'strong',
+          focusProximity: 'proximity',
+          focusAttrition: 'attrition',
+        };
+        const neuralNormalized = { ...fallbackNormalized };
+
+        for (let i = 0; i < entries.length; i++) {
+          const { key } = entries[i];
+
+          logitsByKey[key] = logits[i] ?? 0;
+          probabilitiesByKey[key] = probabilities[i] ?? 0;
+
+          const mapped = mapping[key];
+
+          if (!mapped) continue;
+
+          neuralNormalized[mapped] = probabilities[i] ?? neuralNormalized[mapped];
+        }
+
+        const influence = 0.75;
+        const combinedNormalized = {};
+
+        for (const key of Object.keys(fallbackNormalized)) {
+          const neuralValue = neuralNormalized[key] ?? fallbackNormalized[key];
+
+          combinedNormalized[key] = lerp(fallbackNormalized[key], neuralValue, influence);
+        }
+
+        const combinedTotal = Object.values(combinedNormalized).reduce(
+          (sum, value) => sum + value,
+          0
+        );
+        const scaling = combinedTotal > 0 ? fallbackTotal / combinedTotal : fallbackTotal;
+
+        for (const key of Object.keys(combinedNormalized)) {
+          const normalized = combinedTotal > 0 ? combinedNormalized[key] / combinedTotal : 0.25;
+
+          combinedNormalized[key] = normalized;
+          weights[key] = Math.max(0.0001, normalized * (scaling || 1));
+        }
+
+        decisionDetails = {
+          usedNetwork: true,
+          probabilities: probabilitiesByKey,
+          logits: logitsByKey,
+          weights: { ...combinedNormalized },
+        };
+      }
+    }
+
+    let best = null;
+    let bestScore = -Infinity;
+    let chosenSummary = null;
+
+    for (const enemy of enemies) {
+      if (!enemy || !enemy.target) continue;
+
+      const row = enemy.row ?? enemy.target.row ?? this.row;
+      const col = enemy.col ?? enemy.target.col ?? this.col;
+      const dist = Math.max(Math.abs(row - this.row), Math.abs(col - this.col));
+      const enemyEnergy = Number.isFinite(enemy.target.energy) ? enemy.target.energy : 0;
+      const diff = clamp(((this.energy ?? 0) - enemyEnergy) / energyCap, -1, 1);
+      const weakSignal = clamp(1 + diff, 0.05, 1.95);
+      const strongSignal = clamp(1 - diff, 0.05, 1.95);
+      const proximitySignal = clamp(1 / (1 + (Number.isFinite(dist) ? dist : 0)), 0, 1);
+      const attritionSignal = enemy.target.lifespan
+        ? clamp((enemy.target.age ?? 0) / enemy.target.lifespan, 0, 1)
+        : 0;
+      const score =
+        weights.weak * weakSignal +
+        weights.strong * strongSignal +
+        weights.proximity * proximitySignal +
+        weights.attrition * attritionSignal;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = enemy;
+        let similarity = 0;
+
+        try {
+          similarity = clamp(this.similarityTo(enemy.target), 0, 1);
+        } catch (error) {
+          similarity = 0;
+        }
+        chosenSummary = {
+          row: enemy.row,
+          col: enemy.col,
+          energy: enemyEnergy,
+          distance: Number.isFinite(dist) ? dist : null,
+          similarity,
+          attrition: attritionSignal,
+        };
+      }
+    }
+
+    if (!best && enemies.length > 0) {
+      best = enemies[Math.floor(Math.random() * enemies.length)];
+
+      if (best?.target) {
+        const row = best.row ?? best.target.row ?? this.row;
+        const col = best.col ?? best.target.col ?? this.col;
+        const dist = Math.max(Math.abs(row - this.row), Math.abs(col - this.col));
+        let similarity = 0;
+
+        try {
+          similarity = clamp(this.similarityTo(best.target), 0, 1);
+        } catch (error) {
+          similarity = 0;
+        }
+
+        chosenSummary = {
+          row: best.row,
+          col: best.col,
+          energy: Number.isFinite(best.target.energy) ? best.target.energy : null,
+          distance: Number.isFinite(dist) ? dist : null,
+          similarity,
+          attrition: best.target.lifespan
+            ? clamp((best.target.age ?? 0) / best.target.lifespan, 0, 1)
+            : null,
+        };
+      }
+    }
+
+    if (decisionDetails) {
+      decisionDetails.chosen = chosenSummary;
+      decisionDetails.candidateCount = enemies.length;
+      this.#assignDecisionOutcome('targeting', decisionDetails);
+    } else {
+      this.#assignDecisionOutcome('targeting', {
+        usedNetwork: false,
+        weights: {
+          weak: weights.weak,
+          strong: weights.strong,
+          proximity: weights.proximity,
+          attrition: weights.attrition,
+        },
+        candidateCount: enemies.length,
+        chosen: chosenSummary,
+      });
+    }
+
+    return best ?? null;
+  }
+
   applyEventEffects(row, col, currentEvent, eventStrengthMultiplier = 1, maxTileEnergy = 5) {
     const events = Array.isArray(currentEvent) ? currentEvent : currentEvent ? [currentEvent] : [];
 
@@ -1339,10 +1743,31 @@ export default class Cell {
     };
   }
 
-  createCooperationIntent({ row = this.row, col = this.col, targetRow, targetCol } = {}) {
+  createCooperationIntent({
+    row = this.row,
+    col = this.col,
+    targetRow,
+    targetCol,
+    targetCell = null,
+    maxTileEnergy = MAX_TILE_ENERGY,
+  } = {}) {
     if (targetRow == null || targetCol == null) return null;
+    const partner = targetCell ?? null;
+    const capacity = maxTileEnergy > 0 ? maxTileEnergy : MAX_TILE_ENERGY;
+    const selfEnergyNorm = capacity > 0 ? clamp((this.energy ?? 0) / capacity, 0, 1) : 0;
+    const partnerEnergy = Number.isFinite(partner?.energy) ? partner.energy : null;
+    const partnerNorm =
+      partnerEnergy != null && Number.isFinite(partnerEnergy)
+        ? clamp(partnerEnergy / capacity, 0, 1)
+        : selfEnergyNorm;
+    const kinship = partner?.dna ? this.similarityTo(partner) : 0;
     const shareFraction =
-      typeof this.dna.cooperateShareFrac === 'function' ? this.dna.cooperateShareFrac() : 0;
+      typeof this.dna.cooperateShareFrac === 'function'
+        ? this.dna.cooperateShareFrac({
+            energyDelta: partnerNorm - selfEnergyNorm,
+            kinship,
+          })
+        : 0;
 
     return {
       type: 'cooperate',

@@ -13,6 +13,7 @@ export const SENSOR_KEYS = Object.freeze([
   'enemySimilarity',
   'mateSimilarity',
   'ageFraction',
+  'interactionMomentum',
   'eventPressure',
   'partnerEnergy',
   'partnerAgeFraction',
@@ -22,6 +23,10 @@ export const SENSOR_KEYS = Object.freeze([
   'selfSenescence',
   'partnerSenescence',
   'resourceTrend',
+  'targetWeakness',
+  'targetThreat',
+  'targetProximity',
+  'targetAttrition',
 ]);
 
 const SENSOR_LOOKUP = new Map(SENSOR_KEYS.map((key, index) => [key, index]));
@@ -45,6 +50,12 @@ export const OUTPUT_GROUPS = Object.freeze({
   reproduction: createOutputGroup([
     [208, 'decline', 'Decline mating'],
     [209, 'accept', 'Accept mating'],
+  ]),
+  targeting: createOutputGroup([
+    [216, 'focusWeak', 'Focus on weaker enemies'],
+    [217, 'focusStrong', 'Challenge strong enemies'],
+    [218, 'focusProximity', 'Prioritize nearby enemies'],
+    [219, 'focusAttrition', 'Exploit attrition'],
   ]),
 });
 
@@ -72,6 +83,12 @@ const clampSensorValue = (value) => {
   return clamp(value, -1, 1);
 };
 
+/**
+ * Neural controller constructed from DNA-provided genes. Each Brain maintains
+ * sensor modulation targets, neuron connections, and activation histories. It
+ * evaluates sensors every tick to emit intents for movement, interaction,
+ * reproduction, and targeting behaviours.
+ */
 export default class Brain {
   static SENSOR_COUNT = SENSOR_COUNT;
 

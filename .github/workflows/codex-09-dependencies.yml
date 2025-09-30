@@ -16,8 +16,6 @@ jobs:
     with:
       pr_title: "Codex: Dependency Hygiene"
       pr_body: "Seed PR for Codex to streamline dependencies and build tooling atop current master."
-      branch_prefix: "codex"
-      base_branch: "master"
       prompt: >
         Review dependencies, build scripts, and configurations. Remove unused or outdated libraries,
         upgrade to stable versions, and replace deprecated APIs with supported alternatives. Simplify

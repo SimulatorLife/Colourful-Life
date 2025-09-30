@@ -63,6 +63,16 @@ const BASE_SIMULATION_DEFAULTS = {
   autoRespawnFloor: SLIDER_DEFAULTS.autoRespawnFloor,
 };
 
+/**
+ * Resolves simulation defaults while allowing selective overrides.
+ *
+ * The helper keeps UI builders and headless adapters in sync by ensuring any
+ * omitted setting falls back to the canonical baseline defined above.
+ *
+ * @param {Partial<typeof BASE_SIMULATION_DEFAULTS>} [overrides] - Custom values
+ *   to merge into the defaults.
+ * @returns {typeof BASE_SIMULATION_DEFAULTS} Finalized defaults object.
+ */
 export function resolveSimulationDefaults(overrides = {}) {
   const entries = Object.entries(BASE_SIMULATION_DEFAULTS).map(([key, value]) => [
     key,

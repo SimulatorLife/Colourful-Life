@@ -9,6 +9,8 @@ let lerp;
 let randomRange;
 let createRNG;
 let InteractionSystem;
+let Brain;
+let OUTPUT_GROUPS;
 
 function investmentFor(energy, investFrac, starvation) {
   const desired = Math.max(0, Math.min(energy, energy * investFrac));
@@ -45,6 +47,7 @@ test.before(async () => {
   ({ DNA, GENE_LOCI } = await import('../src/genome.js'));
   ({ clamp, lerp, randomRange, createRNG } = await import('../src/utils.js'));
   ({ default: InteractionSystem } = await import('../src/interactionSystem.js'));
+  ({ default: Brain, OUTPUT_GROUPS } = await import('../src/brain.js'));
   if (typeof global.window === 'undefined') global.window = globalThis;
   if (!window.GridManager) window.GridManager = {};
   if (typeof window.GridManager.maxTileEnergy !== 'number') {
@@ -187,6 +190,61 @@ test('breed spends parental investment energy without creating extra energy', ()
   assert.is(parentB.offspring, 1);
   assert.ok(parentA.energy >= starvationA, 'parent A respects starvation floor');
   assert.ok(parentB.energy >= starvationB, 'parent B respects starvation floor');
+});
+
+test('interaction momentum responds to conflicts and cooperation history', () => {
+  const dna = new DNA(180, 200, 80);
+
+  dna.genes[GENE_LOCI.COOPERATION] = 230;
+  dna.genes[GENE_LOCI.COMBAT] = 20;
+  dna.genes[GENE_LOCI.PARENTAL] = 200;
+  dna.genes[GENE_LOCI.SENSE] = 220;
+  dna.genes[GENE_LOCI.DENSITY] = 120;
+  dna.genes[GENE_LOCI.ACTIVITY] = 80;
+
+  const cell = new Cell(2, 2, dna, 6);
+  const baseline = cell.getInteractionMomentum();
+
+  assert.ok(baseline > -0.2 && baseline <= 1, 'baseline mood should be cooperative leaning');
+
+  const rival = { dna: new DNA(40, 60, 210) };
+  const afterLoss = cell.experienceInteraction({
+    type: 'fight',
+    outcome: 'loss',
+    partner: rival,
+    energyDelta: -1.5,
+  });
+
+  assert.ok(afterLoss < baseline, 'losing a fight should depress social momentum');
+  expectClose(
+    cell.getInteractionMomentum(),
+    afterLoss,
+    1e-12,
+    'momentum snapshot matches recorded value'
+  );
+
+  const partner = { dna: new DNA(210, 170, 90) };
+  const afterCoop = cell.experienceInteraction({
+    type: 'cooperate',
+    outcome: 'receive',
+    partner,
+    energyDelta: 2.2,
+  });
+
+  assert.ok(afterCoop > afterLoss, 'receiving cooperation should raise momentum');
+
+  cell.age += 1;
+  cell.chooseInteractionAction({
+    localDensity: 0.25,
+    densityEffectMultiplier: 1,
+    enemies: [],
+    allies: [],
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+  });
+
+  const decayed = cell.getInteractionMomentum();
+
+  assert.ok(decayed > afterLoss, 'decay pulls momentum back toward baseline');
 });
 
 test('breed returns null when either parent lacks investable energy', () => {
@@ -383,7 +441,7 @@ test('interaction intents resolve fights via interaction system', () => {
   const interactionSystem = new InteractionSystem({ adapter });
   const intent = attacker.createFightIntent({ targetRow: 0, targetCol: 1 });
 
-  interactionSystem.resolveIntent(intent, { stats });
+  withMockedRandom([0], () => interactionSystem.resolveIntent(intent, { stats }));
 
   assert.is(manager.grid[0][1], attacker, 'attacker occupies the target tile after winning');
   assert.is(manager.grid[0][0], null, 'original attacker tile is emptied');
@@ -395,6 +453,159 @@ test('interaction intents resolve fights via interaction system', () => {
   assert.equal(consumeCalls[0], { cell: attacker, row: 0, col: 1 });
   assert.is(fights, 1, 'fight stat increments once');
   assert.is(deaths, 1, 'death stat increments once');
+});
+
+test('movement and interaction genes reflect DNA-coded tendencies', () => {
+  const fastDNA = new DNA(120, 80, 40);
+  fastDNA.genes[GENE_LOCI.MOVEMENT] = 240;
+  fastDNA.genes[GENE_LOCI.EXPLORATION] = 40;
+  fastDNA.genes[GENE_LOCI.RISK] = 210;
+  fastDNA.genes[GENE_LOCI.COHESION] = 40;
+  fastDNA.genes[GENE_LOCI.STRATEGY] = 200;
+
+  const cautiousDNA = new DNA(60, 200, 180);
+  cautiousDNA.genes[GENE_LOCI.MOVEMENT] = 30;
+  cautiousDNA.genes[GENE_LOCI.EXPLORATION] = 220;
+  cautiousDNA.genes[GENE_LOCI.RISK] = 20;
+  cautiousDNA.genes[GENE_LOCI.COHESION] = 210;
+  cautiousDNA.genes[GENE_LOCI.STRATEGY] = 40;
+
+  const fastMovement = fastDNA.movementGenes();
+  const cautiousMovement = cautiousDNA.movementGenes();
+
+  assert.ok(fastMovement.pursuit > cautiousMovement.pursuit, 'fast genome pursues more');
+  assert.ok(cautiousMovement.cautious > fastMovement.cautious, 'cautious genome rests more');
+  assert.ok(cautiousMovement.wandering > fastMovement.wandering, 'explorers wander more');
+
+  const aggressiveDNA = new DNA(220, 40, 40);
+  aggressiveDNA.genes[GENE_LOCI.RISK] = 240;
+  aggressiveDNA.genes[GENE_LOCI.COMBAT] = 240;
+  aggressiveDNA.genes[GENE_LOCI.COOPERATION] = 10;
+  aggressiveDNA.genes[GENE_LOCI.RECOVERY] = 20;
+
+  const altruistDNA = new DNA(40, 220, 120);
+  altruistDNA.genes[GENE_LOCI.RISK] = 20;
+  altruistDNA.genes[GENE_LOCI.COMBAT] = 20;
+  altruistDNA.genes[GENE_LOCI.COOPERATION] = 230;
+  altruistDNA.genes[GENE_LOCI.PARENTAL] = 220;
+  altruistDNA.genes[GENE_LOCI.RECOVERY] = 200;
+
+  const aggressiveInteraction = aggressiveDNA.interactionGenes();
+  const altruistInteraction = altruistDNA.interactionGenes();
+
+  assert.ok(aggressiveInteraction.fight > altruistInteraction.fight, 'aggressive genome fights');
+  assert.ok(altruistInteraction.cooperate > aggressiveInteraction.cooperate, 'helpers cooperate');
+  assert.ok(altruistInteraction.avoid > aggressiveInteraction.avoid, 'cautious genomes avoid');
+});
+
+test('chooseEnemyTarget uses conflict focus derived from DNA', () => {
+  const cautiousDNA = new DNA(80, 180, 200);
+  cautiousDNA.genes[GENE_LOCI.RISK] = 20;
+  cautiousDNA.genes[GENE_LOCI.COMBAT] = 30;
+  cautiousDNA.genes[GENE_LOCI.STRATEGY] = 220;
+  cautiousDNA.genes[GENE_LOCI.MOVEMENT] = 80;
+
+  const boldDNA = new DNA(220, 60, 60);
+  boldDNA.genes[GENE_LOCI.RISK] = 230;
+  boldDNA.genes[GENE_LOCI.COMBAT] = 220;
+  boldDNA.genes[GENE_LOCI.STRATEGY] = 30;
+  boldDNA.genes[GENE_LOCI.MOVEMENT] = 200;
+
+  const cautiousCell = new Cell(5, 5, cautiousDNA, 6);
+  const boldCell = new Cell(5, 5, boldDNA, 6);
+
+  const weakEnemy = new Cell(6, 5, new DNA(120, 120, 120), 2);
+  weakEnemy.age = 5;
+  weakEnemy.lifespan = 100;
+  const strongEnemy = new Cell(1, 5, new DNA(120, 120, 120), 8);
+  strongEnemy.age = 20;
+  strongEnemy.lifespan = 100;
+
+  const enemies = [
+    { row: weakEnemy.row, col: weakEnemy.col, target: weakEnemy },
+    { row: strongEnemy.row, col: strongEnemy.col, target: strongEnemy },
+  ];
+
+  const cautiousTarget = cautiousCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
+  const boldTarget = boldCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
+
+  assert.is(cautiousTarget.target, weakEnemy, 'cautious genome prefers weaker enemy');
+  assert.is(boldTarget.target, strongEnemy, 'bold genome prefers strong enemy');
+});
+
+test('neural targeting can override conflict focus weighting', () => {
+  const strategicDNA = new DNA(160, 140, 180);
+  strategicDNA.conflictFocus = () => ({
+    weak: 0.2,
+    strong: 1.6,
+    proximity: 1.6,
+    attrition: 0.2,
+  });
+
+  const neuralCell = new Cell(5, 5, strategicDNA, 6);
+  neuralCell.age = 10;
+  neuralCell.lifespan = 100;
+
+  const attritionOutput = OUTPUT_GROUPS.targeting.find((entry) => entry.key === 'focusAttrition');
+  assert.ok(attritionOutput, 'targeting output for attrition exists');
+  const attritionGene = {
+    sourceId: Brain.sensorIndex('bias'),
+    targetId: attritionOutput?.id ?? 0,
+    weight: 6,
+    activationType: 0,
+    enabled: true,
+  };
+
+  neuralCell.brain = new Brain({ genes: [attritionGene] });
+  neuralCell.neurons = neuralCell.brain.neuronCount;
+
+  const strongDNA = new DNA(200, 80, 80);
+  const strongEnemy = new Cell(4, 5, strongDNA, 8);
+  strongEnemy.age = 5;
+  strongEnemy.lifespan = 100;
+
+  const weakDNA = new DNA(80, 200, 120);
+  const weakEnemy = new Cell(8, 8, weakDNA, 3);
+  weakEnemy.age = 70;
+  weakEnemy.lifespan = 80;
+
+  const enemies = [
+    { row: strongEnemy.row, col: strongEnemy.col, target: strongEnemy },
+    { row: weakEnemy.row, col: weakEnemy.col, target: weakEnemy },
+  ];
+
+  const fallbackCell = new Cell(5, 5, strategicDNA, 6);
+  fallbackCell.brain = null;
+
+  const fallbackChoice = fallbackCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
+  assert.is(
+    fallbackChoice.target,
+    strongEnemy,
+    'DNA-focused cell challenges the stronger opponent'
+  );
+
+  const neuralChoice = neuralCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
+  assert.is(
+    neuralChoice.target,
+    weakEnemy,
+    'Neural targeting pivots toward attrition despite DNA bias'
+  );
+});
+
+test('cooperateShareFrac adapts to ally deficits and kinship', () => {
+  const dna = new DNA(80, 200, 140);
+  dna.genes[GENE_LOCI.COOPERATION] = 230;
+  dna.genes[GENE_LOCI.PARENTAL] = 210;
+  dna.genes[GENE_LOCI.ENERGY_EFFICIENCY] = 60;
+  dna.genes[GENE_LOCI.COHESION] = 220;
+
+  const baseline = dna.cooperateShareFrac();
+  const assistWeakKin = dna.cooperateShareFrac({ energyDelta: -0.6, kinship: 0.9 });
+  const holdBack = dna.cooperateShareFrac({ energyDelta: 0.6, kinship: 0.1 });
+
+  assert.ok(assistWeakKin > baseline, 'shares more with weaker kin');
+  assert.ok(holdBack < baseline, 'shares less with stronger partners');
+  assert.ok(assistWeakKin > holdBack, 'overall preference favors helping the weak');
 });
 
 test.run();

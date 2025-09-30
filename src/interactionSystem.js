@@ -51,6 +51,74 @@ function computeCombatPower(cell) {
   return cell?.energy * modifier;
 }
 
+function resolveTrait01(cell, traitName, fallback = 0.5) {
+  const trait = cell?.dna?.[traitName];
+
+  if (typeof trait !== 'function') return fallback;
+
+  const value = Number(trait.call(cell.dna));
+
+  if (!Number.isFinite(value)) return fallback;
+
+  return clamp01(value);
+}
+
+function computeDensityAdvantage({
+  adapter,
+  attackerRow,
+  attackerCol,
+  targetRow,
+  targetCol,
+  densityGrid,
+  densityEffectMultiplier,
+}) {
+  if (!adapter) return 0;
+
+  const attackerDensity = clamp01(
+    adapter.densityAt?.(attackerRow, attackerCol, { densityGrid }) ?? 0
+  );
+  const defenderDensity = clamp01(adapter.densityAt?.(targetRow, targetCol, { densityGrid }) ?? 0);
+  const densityDelta = clamp(attackerDensity - defenderDensity, -1, 1);
+  const effect = Number.isFinite(densityEffectMultiplier) ? densityEffectMultiplier : 1;
+
+  return densityDelta * clamp(effect, 0, 2) * 0.25;
+}
+
+function computeCombatOdds({
+  attacker,
+  defender,
+  attackerPower,
+  defenderPower,
+  adapter,
+  attackerRow,
+  attackerCol,
+  targetRow,
+  targetCol,
+  densityGrid,
+  densityEffectMultiplier,
+}) {
+  const totalPower = Math.abs(attackerPower) + Math.abs(defenderPower);
+  const baseEdge = totalPower > 0 ? clamp((attackerPower - defenderPower) / totalPower, -1, 1) : 0;
+  const riskEdge =
+    (resolveTrait01(attacker, 'riskTolerance') - resolveTrait01(defender, 'riskTolerance')) * 0.2;
+  const resilienceEdge =
+    (resolveTrait01(attacker, 'recoveryRate') - resolveTrait01(defender, 'recoveryRate')) * 0.15;
+  const territoryEdge = computeDensityAdvantage({
+    adapter,
+    attackerRow,
+    attackerCol,
+    targetRow,
+    targetCol,
+    densityGrid,
+    densityEffectMultiplier,
+  });
+  const combinedEdge = clamp(baseEdge + riskEdge + resilienceEdge + territoryEdge, -0.95, 0.95);
+  const logisticInput = combinedEdge * 3.2;
+  const attackerWinChance = clamp01(1 / (1 + Math.exp(-logisticInput)));
+
+  return { attackerWinChance, edge: combinedEdge };
+}
+
 function subtractEnergy(cell, amount) {
   if (!cell) return;
 
@@ -60,23 +128,41 @@ function subtractEnergy(cell, amount) {
 }
 
 function applyFightCost(cell) {
-  if (!cell) return;
+  if (!cell) return 0;
 
   const cost = computeFightCost(cell);
 
   subtractEnergy(cell, cost);
+
+  return cost;
 }
 
-function recordFight(stats, winner, loser) {
+function recordFight(stats, winner, loser, context = {}) {
   stats?.onFight?.();
   stats?.onDeath?.();
 
   if (winner) {
     winner.fightsWon = (winner.fightsWon || 0) + 1;
+    winner.experienceInteraction?.({
+      type: 'fight',
+      outcome: 'win',
+      partner: loser,
+      kinship: clamp(context.kinship ?? 0, 0, 1),
+      energyDelta: Number.isFinite(context.winnerCost) ? -context.winnerCost : 0,
+      intensity: clamp(context.intensity ?? 1, 0, 2),
+    });
   }
 
   if (loser) {
     loser.fightsLost = (loser.fightsLost || 0) + 1;
+    loser.experienceInteraction?.({
+      type: 'fight',
+      outcome: 'loss',
+      partner: winner,
+      kinship: clamp(context.kinship ?? 0, 0, 1),
+      energyDelta: Number.isFinite(context.loserCost) ? -context.loserCost : 0,
+      intensity: clamp(context.intensity ?? 1, 0, 2),
+    });
   }
 }
 
@@ -138,6 +224,12 @@ function prepareFightParticipants({ adapter, initiator, target }) {
   return { attacker, defender, attackerRow, attackerCol, targetRow, targetCol };
 }
 
+/**
+ * Resolves social interactions between organisms by interpreting neural
+ * intents alongside environmental context. The system handles combat odds,
+ * cooperation transfers, reproduction gating, and the bookkeeping required to
+ * keep stats and DNA-driven memories up to date.
+ */
 export default class InteractionSystem {
   constructor({ adapter, gridManager } = {}) {
     if (adapter) {
@@ -198,15 +290,38 @@ export default class InteractionSystem {
 
     const { attacker, defender, attackerRow, attackerCol, targetRow, targetCol } = participants;
 
-    applyFightCost(attacker);
-    applyFightCost(defender);
+    const attackerCost = applyFightCost(attacker);
+    const defenderCost = applyFightCost(defender);
 
     const attackerPower = computeCombatPower(attacker);
     const defenderPower = computeCombatPower(defender);
+    const kinship =
+      typeof attacker?.similarityTo === 'function' && defender
+        ? clamp(attacker.similarityTo(defender), 0, 1)
+        : 0;
+    const odds = computeCombatOdds({
+      attacker,
+      defender,
+      attackerPower,
+      defenderPower,
+      adapter,
+      attackerRow,
+      attackerCol,
+      targetRow,
+      targetCol,
+      densityGrid,
+      densityEffectMultiplier,
+    });
+    const attackerWins = Math.random() < odds.attackerWinChance;
+    const intensity = clamp(
+      0.5 + Math.abs(odds.edge) * 0.9 + Math.abs(odds.attackerWinChance - 0.5),
+      0,
+      1.6
+    );
 
     const attackerTile = getAdapterCell(adapter, attackerRow, attackerCol);
 
-    if (attackerPower >= defenderPower) {
+    if (attackerWins) {
       clearAdapterCell(adapter, targetRow, targetCol);
       moveVictoriousAttacker({
         adapter,
@@ -220,7 +335,13 @@ export default class InteractionSystem {
         densityEffectMultiplier,
       });
 
-      recordFight(stats, attacker, defender);
+      recordFight(stats, attacker, defender, {
+        kinship,
+        winnerCost: attackerCost,
+        loserCost: defenderCost,
+        intensity,
+        winChance: odds.attackerWinChance,
+      });
 
       return true;
     }
@@ -229,7 +350,13 @@ export default class InteractionSystem {
       clearAdapterCell(adapter, attackerRow, attackerCol);
     }
 
-    recordFight(stats, defender, attacker);
+    recordFight(stats, defender, attacker, {
+      kinship,
+      winnerCost: defenderCost,
+      loserCost: attackerCost,
+      intensity,
+      winChance: 1 - odds.attackerWinChance,
+    });
 
     return true;
   }
@@ -269,6 +396,29 @@ export default class InteractionSystem {
     if (transferred <= 0) return false;
 
     stats?.onCooperate?.();
+
+    const kinship =
+      typeof actor?.similarityTo === 'function' && partner
+        ? clamp(actor.similarityTo(partner), 0, 1)
+        : 0;
+
+    actor.experienceInteraction?.({
+      type: 'cooperate',
+      outcome: 'give',
+      partner,
+      kinship,
+      energyDelta: -transferred,
+      intensity: 0.6 + kinship * 0.4,
+    });
+
+    partner.experienceInteraction?.({
+      type: 'cooperate',
+      outcome: 'receive',
+      partner: actor,
+      kinship,
+      energyDelta: transferred,
+      intensity: 0.6 + kinship * 0.4,
+    });
 
     return true;
   }
