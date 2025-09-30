@@ -540,6 +540,57 @@ export default class Cell {
     const learning = clamp(this._interactionLearning ?? 0, 0, 1);
     const volatility = Math.max(0, this._interactionVolatility ?? 0);
 
+    const defaultProfile = {
+      fightWin: { base: -0.45, kinship: -0.35 },
+      fightLoss: { base: -0.75, kinship: -0.35 },
+      cooperateGive: { base: 0.4, kinship: 0.3 },
+      cooperateReceive: { base: 0.6, kinship: 0.3 },
+      reproduce: { base: 0.3, kinship: 0.2 },
+      genericPositive: 0.2,
+      genericNegative: -0.2,
+      energyDeltaWeight: 0.35,
+      intensityWeight: 1,
+    };
+
+    const affectProfile =
+      typeof this.dna?.interactionAffectProfile === 'function'
+        ? this.dna.interactionAffectProfile()
+        : null;
+
+    const sanitizePair = (candidate, fallback) => {
+      const base = Number.isFinite(candidate?.base) ? clamp(candidate.base, -2, 2) : fallback.base;
+      const kinship = Number.isFinite(candidate?.kinship)
+        ? clamp(candidate.kinship, -2, 2)
+        : fallback.kinship;
+
+      return { base, kinship };
+    };
+
+    const fightWin = sanitizePair(affectProfile?.fight?.win, defaultProfile.fightWin);
+    const fightLoss = sanitizePair(affectProfile?.fight?.loss, defaultProfile.fightLoss);
+    const cooperateGive = sanitizePair(
+      affectProfile?.cooperation?.give,
+      defaultProfile.cooperateGive
+    );
+    const cooperateReceive = sanitizePair(
+      affectProfile?.cooperation?.receive,
+      defaultProfile.cooperateReceive
+    );
+    const reproduceProfile = sanitizePair(affectProfile?.reproduce, defaultProfile.reproduce);
+
+    const genericPositive = Number.isFinite(affectProfile?.generic?.positive)
+      ? clamp(affectProfile.generic.positive, -1, 1)
+      : defaultProfile.genericPositive;
+    const genericNegative = Number.isFinite(affectProfile?.generic?.negative)
+      ? clamp(affectProfile.generic.negative, -1, 1)
+      : defaultProfile.genericNegative;
+    const energyDeltaWeight = Number.isFinite(affectProfile?.energyDeltaWeight)
+      ? clamp(affectProfile.energyDeltaWeight, -1, 1)
+      : defaultProfile.energyDeltaWeight;
+    const intensityWeight = Number.isFinite(affectProfile?.intensityWeight)
+      ? clamp(affectProfile.intensityWeight, 0, 3)
+      : defaultProfile.intensityWeight;
+
     if (learning <= 0 || volatility <= 0) {
       return this.#resolveInteractionMomentum({ applyDecay: false });
     }
@@ -563,22 +614,24 @@ export default class Cell {
 
     switch (type) {
       case 'fight': {
-        signal = outcome === 'win' ? -0.45 : -0.75;
-        signal -= kinship * 0.35;
+        const profile = outcome === 'win' ? fightWin : fightLoss;
+
+        signal = profile.base + kinship * profile.kinship;
         break;
       }
       case 'cooperate': {
-        signal = outcome === 'receive' ? 0.6 : 0.4;
-        signal += kinship * 0.3;
+        const profile = outcome === 'receive' ? cooperateReceive : cooperateGive;
+
+        signal = profile.base + kinship * profile.kinship;
         break;
       }
       case 'reproduce': {
-        signal = 0.3 + kinship * 0.2;
+        signal = reproduceProfile.base + kinship * reproduceProfile.kinship;
         break;
       }
       default: {
-        if (outcome === 'positive') signal += 0.2;
-        if (outcome === 'negative') signal -= 0.2;
+        if (outcome === 'positive') signal += genericPositive;
+        if (outcome === 'negative') signal += genericNegative;
         break;
       }
     }
@@ -590,9 +643,13 @@ export default class Cell {
     );
     const intensity = clamp(Number.isFinite(event.intensity) ? event.intensity : 1, 0, 2);
 
-    signal += energyDelta * 0.35;
+    signal += energyDelta * energyDeltaWeight;
 
-    const target = clamp(baseline + signal * volatility * intensity, -1, 1);
+    const target = clamp(
+      baseline + signal * volatility * clamp(intensity * intensityWeight, 0, 4),
+      -1,
+      1
+    );
     const current = Number.isFinite(this._interactionMomentum)
       ? this._interactionMomentum
       : baseline;
@@ -606,6 +663,18 @@ export default class Cell {
       kinship,
       energyDelta,
       intensity,
+      signalContribution: signal,
+      affectProfileSnapshot: {
+        fightWin: { ...fightWin },
+        fightLoss: { ...fightLoss },
+        cooperateGive: { ...cooperateGive },
+        cooperateReceive: { ...cooperateReceive },
+        reproduce: { ...reproduceProfile },
+        genericPositive,
+        genericNegative,
+        energyDeltaWeight,
+        intensityWeight,
+      },
       resultingMomentum: next,
     };
 

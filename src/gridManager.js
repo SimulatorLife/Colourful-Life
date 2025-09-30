@@ -125,12 +125,33 @@ export default class GridManager {
   static #applyWallPenalty(cell, penalty, context) {
     if (!cell || typeof cell !== 'object' || cell.energy == null) return;
 
-    const amount = GridManager.#resolvePenaltyAmount(penalty, context);
+    let amount = GridManager.#resolvePenaltyAmount(penalty, context);
+    const profile =
+      cell?.dna && typeof cell.dna.wallContactProfile === 'function'
+        ? cell.dna.wallContactProfile()
+        : null;
+
+    const baseMultiplier = Number.isFinite(profile?.baseMultiplier)
+      ? Math.max(0, profile.baseMultiplier)
+      : 1;
+    const lingerMultiplier = Number.isFinite(profile?.lingerMultiplier)
+      ? Math.max(0, profile.lingerMultiplier)
+      : 1;
+    const contactGrowth = Number.isFinite(profile?.contactGrowth)
+      ? clamp(profile.contactGrowth, 0, 1)
+      : 0.25;
+    const maxMemory = Number.isFinite(profile?.maxMemory)
+      ? Math.max(0, Math.round(profile.maxMemory))
+      : 6;
+
+    if (!Number.isFinite(amount)) amount = 0;
+    amount *= baseMultiplier * lingerMultiplier;
 
     if (amount <= 0) return;
 
     const prior = cell.wallContactTicks || 0;
-    const scale = 1 + Math.min(prior, 6) * 0.25;
+    const effectiveContacts = Math.min(prior, maxMemory);
+    const scale = 1 + effectiveContacts * contactGrowth;
     const ageScale =
       typeof cell.ageEnergyMultiplier === 'function' ? cell.ageEnergyMultiplier(0.4) : 1;
 

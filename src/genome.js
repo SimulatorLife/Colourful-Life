@@ -622,6 +622,63 @@ export class DNA {
     return { baseline, learningRate, volatility, decay };
   }
 
+  interactionAffectProfile() {
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const combat = this.geneFraction(GENE_LOCI.COMBAT);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const ally = this.geneFraction(GENE_LOCI.ALLY);
+    const enemy = this.geneFraction(GENE_LOCI.ENEMY);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+
+    const aggression = clamp(0.35 + 0.5 * combat + 0.35 * risk - 0.25 * cooperation, 0, 1.2);
+    const empathy = clamp(0.25 + 0.5 * cooperation + 0.25 * parental - 0.25 * risk, 0, 1);
+    const kinFavor = clamp(0.2 + 0.45 * ally - 0.25 * enemy + 0.25 * parental, 0, 1);
+    const prudence = clamp(0.3 + 0.5 * strategy + 0.25 * recovery - 0.2 * risk, 0, 1);
+
+    const fightWinBase = clamp(-0.25 - aggression * 0.9 + prudence * 0.3, -1.4, -0.05);
+    const fightWinKin = clamp(-0.15 - empathy * 0.7, -1, 0);
+    const fightLossBase = clamp(fightWinBase - 0.25 - (1 - recovery) * 0.4, -1.7, -0.15);
+    const fightLossKin = clamp(fightWinKin - 0.2 - (1 - recovery) * 0.3, -1.2, 0);
+    const coopReceiveBase = clamp(0.3 + empathy * 0.9 + kinFavor * 0.2, 0.05, 1.4);
+    const coopGiveBase = clamp(
+      coopReceiveBase - 0.15 + cooperation * 0.1 - aggression * 0.2,
+      0.02,
+      1.2
+    );
+    const coopReceiveKin = clamp(0.2 + kinFavor * 0.6, 0, 1);
+    const coopGiveKin = clamp(coopReceiveKin - 0.05 + kinFavor * 0.1, 0, 0.9);
+    const reproduceBase = clamp(0.25 + parental * 0.6 + cooperation * 0.25 - risk * 0.15, 0.05, 1);
+    const reproduceKin = clamp(0.15 + kinFavor * 0.5, 0, 0.8);
+    const genericPositive = clamp(0.1 + empathy * 0.5 - aggression * 0.2, -0.1, 0.6);
+    const genericNegative = clamp(-0.15 - aggression * 0.6 + prudence * 0.2, -1, 0.1);
+    const energyWeight = clamp(0.25 + cooperation * 0.35 - risk * 0.25, 0.05, 0.6);
+    const intensityWeight = clamp(
+      0.5 + aggression * 0.4 + prudence * 0.2 - empathy * 0.2,
+      0.2,
+      1.5
+    );
+
+    return {
+      fight: {
+        win: { base: fightWinBase, kinship: fightWinKin },
+        loss: { base: fightLossBase, kinship: fightLossKin },
+      },
+      cooperation: {
+        give: { base: coopGiveBase, kinship: coopGiveKin },
+        receive: { base: coopReceiveBase, kinship: coopReceiveKin },
+      },
+      reproduce: { base: reproduceBase, kinship: reproduceKin },
+      generic: {
+        positive: genericPositive,
+        negative: genericNegative,
+      },
+      energyDeltaWeight: energyWeight,
+      intensityWeight,
+    };
+  }
+
   neuralSensorModulation() {
     const sensorCount = Brain?.SENSOR_COUNT ?? 0;
 
@@ -839,6 +896,34 @@ export class DNA {
     const combat = this.geneFraction(GENE_LOCI.COMBAT);
 
     return 0.01 + 0.03 * combat; // 0.01..0.04
+  }
+
+  wallContactProfile() {
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+
+    const baseMultiplier = clamp(
+      0.6 + 0.6 * movement + 0.3 * risk - 0.5 * strategy - 0.3 * sense,
+      0.2,
+      1.8
+    );
+    const contactGrowth = clamp(
+      0.18 + 0.32 * risk + 0.25 * movement - 0.28 * strategy - 0.1 * sense,
+      0.05,
+      0.6
+    );
+    const maxMemory = Math.round(clamp(3 + 6 * (1 - strategy) + 3 * risk - 2 * sense, 1, 10));
+    const lingerMultiplier = clamp(
+      0.45 + 0.45 * density + 0.2 * movement - 0.35 * recovery,
+      0.2,
+      1.4
+    );
+
+    return { baseMultiplier, contactGrowth, maxMemory, lingerMultiplier };
   }
 
   cognitiveCostComponents({
