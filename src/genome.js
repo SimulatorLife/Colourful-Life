@@ -612,6 +612,20 @@ export class DNA {
     return clamp(raw, 0.2, 0.9);
   }
 
+  // DNA-weighted tolerance for harvesting in crowded tiles (0..1)
+  forageCrowdingTolerance() {
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const rnd = this.prngFor("crowdTolerance");
+    const baseline =
+      0.22 + 0.55 * density + 0.18 * cooperation - 0.22 * risk + 0.12 * exploration;
+    const jitter = (rnd() - 0.5) * 0.06;
+
+    return clamp(baseline + jitter, 0.05, 0.95);
+  }
+
   // DNA-tuned smoothing factor for the resource trend sensor (0.1..0.85)
   resourceTrendAdaptation() {
     const sense = this.geneFraction(GENE_LOCI.SENSE);
