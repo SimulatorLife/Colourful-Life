@@ -55,6 +55,7 @@ test('start schedules a frame and ticking through RAF uses sanitized defaults', 
       mutationMultiplier: 1,
       matingDiversityThreshold: 0.45,
       lowDiversityReproMultiplier: 0.1,
+      combatEdgeSharpness: 3.2,
     });
 
     assert.is(engine.lastSnapshot, snapshot, 'snapshot from update stored on engine');

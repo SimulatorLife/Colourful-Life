@@ -1,4 +1,5 @@
 import { UI_SLIDER_CONFIG, resolveSimulationDefaults } from './config.js';
+import { warnOnce } from './utils.js';
 import {
   createControlButtonRow,
   createControlGrid,
@@ -36,6 +37,7 @@ export default class UIManager {
     this.patternCheckboxes = {};
     this._selectionListenersInstalled = false;
     this.stepButton = null;
+    this.clearZonesButton = null;
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -45,6 +47,7 @@ export default class UIManager {
     this.speedMultiplier = defaults.speedMultiplier;
     this.densityEffectMultiplier = defaults.densityEffectMultiplier;
     this.mutationMultiplier = defaults.mutationMultiplier;
+    this.combatEdgeSharpness = defaults.combatEdgeSharpness;
     this.matingDiversityThreshold = defaults.matingDiversityThreshold;
     this.lowDiversityReproMultiplier = defaults.lowDiversityReproMultiplier;
     this.energyRegenRate = defaults.energyRegenRate; // base logistic regen rate (0..0.2)
@@ -56,8 +59,10 @@ export default class UIManager {
     this.showEnergy = defaults.showEnergy;
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
+    this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? 'none';
     this.lingerPenalty = defaults.lingerPenalty;
+    this.autoPauseCheckbox = null;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
 
@@ -73,6 +78,9 @@ export default class UIManager {
     this.sidebar.appendChild(this.dashboardGrid);
     this.mainRow.appendChild(this.canvasContainer);
     this.mainRow.appendChild(this.sidebar);
+
+    // Allow callers to customize which keys toggle the pause state.
+    this.pauseHotkeySet = this.#resolveHotkeySet(layoutOptions.pauseHotkeys);
 
     const canvasEl = layoutOptions.canvasElement || this.#resolveNode(layoutOptions.canvasSelector);
     const anchorNode =
@@ -90,8 +98,30 @@ export default class UIManager {
 
     // Keyboard toggle
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'p' || e.key === 'P') this.togglePause();
+      if (!e?.key) return;
+
+      const key = e.key.toLowerCase();
+
+      if (this.pauseHotkeySet.has(key)) {
+        this.togglePause();
+      }
     });
+  }
+
+  #resolveHotkeySet(candidate) {
+    const fallback = ['p'];
+
+    const values = Array.isArray(candidate)
+      ? candidate
+      : typeof candidate === 'string' && candidate.length > 0
+        ? [candidate]
+        : fallback;
+
+    const normalized = values
+      .map((value) => (typeof value === 'string' ? value.trim().toLowerCase() : ''))
+      .filter((value) => value.length > 0);
+
+    return new Set(normalized.length > 0 ? normalized : fallback);
   }
 
   attachCanvas(canvasElement, options = {}) {
@@ -127,6 +157,26 @@ export default class UIManager {
     return null;
   }
 
+  #setPointerCapture(target, pointerId) {
+    if (!target || typeof target.setPointerCapture !== 'function') return;
+
+    try {
+      target.setPointerCapture(pointerId);
+    } catch (error) {
+      warnOnce('Failed to set pointer capture for selection drawing.', error);
+    }
+  }
+
+  #releasePointerCapture(target, pointerId) {
+    if (!target || typeof target.releasePointerCapture !== 'function') return;
+
+    try {
+      target.releasePointerCapture(pointerId);
+    } catch (error) {
+      warnOnce('Failed to release pointer capture after selection drawing.', error);
+    }
+  }
+
   #scheduleUpdate() {
     if (typeof this.simulationCallbacks?.requestFrame === 'function') {
       this.simulationCallbacks.requestFrame();
@@ -152,15 +202,18 @@ export default class UIManager {
 
   #setDrawingEnabled(enabled) {
     this.selectionDrawingEnabled = Boolean(enabled);
+    const isActive = this.selectionDrawingEnabled;
 
     if (this.drawZoneButton) {
-      this.drawZoneButton.classList.toggle('active', this.selectionDrawingEnabled);
-      this.drawZoneButton.textContent = this.selectionDrawingEnabled
-        ? 'Cancel Drawing'
-        : 'Draw Custom Zone';
+      this.drawZoneButton.classList.toggle('active', isActive);
+      this.drawZoneButton.textContent = isActive ? 'Cancel Drawing' : 'Draw Custom Zone';
+      this.drawZoneButton.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      this.drawZoneButton.title = isActive
+        ? 'Cancel drawing mode and keep the current reproductive zones.'
+        : 'Enable drawing mode to sketch a custom reproductive zone on the canvas.';
     }
 
-    if (!this.selectionDrawingEnabled) {
+    if (!isActive) {
       this.selectionDragStart = null;
       this.selectionDragEnd = null;
       this.selectionDrawingActive = false;
@@ -179,7 +232,23 @@ export default class UIManager {
       ? this.selectionManager.describeActiveZones()
       : 'All tiles eligible';
 
-    this.zoneSummaryEl.textContent = `Active zones: ${summary}`;
+    this.zoneSummaryEl.textContent = summary;
+    this.#updateCustomZoneButtons();
+  }
+
+  #updateCustomZoneButtons() {
+    if (!this.clearZonesButton) return;
+
+    const hasZones = Boolean(
+      this.selectionManager &&
+        typeof this.selectionManager.hasCustomZones === 'function' &&
+        this.selectionManager.hasCustomZones()
+    );
+
+    this.clearZonesButton.disabled = !hasZones;
+    this.clearZonesButton.title = hasZones
+      ? 'Remove all custom reproductive zones.'
+      : 'No custom reproductive zones to clear.';
   }
 
   #canvasToGrid(event) {
@@ -216,7 +285,7 @@ export default class UIManager {
       this.selectionDrawingActive = true;
       this.selectionDragStart = start;
       this.selectionDragEnd = start;
-      if (typeof canvas.setPointerCapture === 'function') canvas.setPointerCapture(event.pointerId);
+      this.#setPointerCapture(canvas, event.pointerId);
     };
 
     const handlePointerMove = (event) => {
@@ -230,13 +299,7 @@ export default class UIManager {
       if (!this.selectionDrawingActive) return;
 
       event.preventDefault();
-      if (typeof canvas.releasePointerCapture === 'function') {
-        try {
-          canvas.releasePointerCapture(event.pointerId);
-        } catch (err) {
-          // ignore release errors
-        }
-      }
+      this.#releasePointerCapture(canvas, event.pointerId);
 
       const end = this.#canvasToGrid(event) || this.selectionDragEnd;
       const start = this.selectionDragStart;
@@ -263,13 +326,7 @@ export default class UIManager {
 
     const cancelDrawing = (event) => {
       if (!this.selectionDrawingActive) return;
-      if (typeof canvas.releasePointerCapture === 'function') {
-        try {
-          canvas.releasePointerCapture(event.pointerId);
-        } catch (err) {
-          // ignore release errors
-        }
-      }
+      this.#releasePointerCapture(canvas, event.pointerId);
 
       this.selectionDrawingActive = false;
       this.selectionDragStart = null;
@@ -619,6 +676,17 @@ export default class UIManager {
         setValue: (v) => this.#updateSetting('mutationMultiplier', v),
         position: 'beforeOverlays',
       }),
+      withSliderConfig('combatEdgeSharpness', {
+        label: 'Combat Edge Sharpness',
+        min: 0.5,
+        max: 6,
+        step: 0.1,
+        title: 'Controls how sharply combat power differences translate into win odds (0.5..6)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.combatEdgeSharpness,
+        setValue: (v) => this.#updateSetting('combatEdgeSharpness', v),
+        position: 'beforeOverlays',
+      }),
       withSliderConfig('lowDiversityReproMultiplier', {
         label: 'Low Diversity Penalty ×',
         min: 0,
@@ -671,6 +739,17 @@ export default class UIManager {
     generalConfigs
       .filter((cfg) => cfg.position === 'beforeOverlays')
       .forEach((cfg) => renderSlider(cfg, generalGroup));
+
+    this.autoPauseCheckbox = this.#addCheckbox(
+      generalGroup,
+      'Pause When Hidden',
+      'Automatically pause when the tab or window loses focus, resuming on return.',
+      this.autoPauseOnBlur,
+      (checked) => {
+        this.setAutoPauseOnBlur(checked);
+        this.#updateSetting('autoPauseOnBlur', checked);
+      }
+    );
 
     return { renderSlider, withSliderConfig, energyConfigs, generalConfigs, generalGroup };
   }
@@ -817,8 +896,15 @@ export default class UIManager {
 
     const zoneButtons = createControlButtonRow(body);
 
+    zoneButtons.setAttribute('role', 'group');
+    zoneButtons.setAttribute('aria-label', 'Custom reproductive zone controls');
+
     this.drawZoneButton = document.createElement('button');
     this.drawZoneButton.textContent = 'Draw Custom Zone';
+    this.drawZoneButton.type = 'button';
+    this.drawZoneButton.title =
+      'Enable drawing mode to sketch a custom reproductive zone on the canvas.';
+    this.drawZoneButton.setAttribute('aria-pressed', 'false');
     this.drawZoneButton.addEventListener('click', () => {
       this.#toggleRegionDrawing(!this.selectionDrawingEnabled);
     });
@@ -827,17 +913,38 @@ export default class UIManager {
     const clearButton = document.createElement('button');
 
     clearButton.textContent = 'Clear Custom Zones';
+    clearButton.type = 'button';
+    clearButton.title = 'No custom reproductive zones to clear.';
     clearButton.addEventListener('click', () => {
       this.selectionManager.clearCustomZones();
       this.#setDrawingEnabled(false);
       this.#updateZoneSummary();
       this.#scheduleUpdate();
+      this.#updateCustomZoneButtons();
     });
     zoneButtons.appendChild(clearButton);
-    this.zoneSummaryEl = document.createElement('div');
+    this.clearZonesButton = clearButton;
 
-    this.zoneSummaryEl.className = 'control-hint';
-    body.appendChild(this.zoneSummaryEl);
+    const summaryRow = this.#appendControlRow(body, {
+      label: 'Active Zones',
+      value: this.selectionManager.describeActiveZones(),
+      valueClass: 'control-value--left control-hint',
+    });
+
+    this.zoneSummaryEl = summaryRow.querySelector('.control-value');
+    if (this.zoneSummaryEl) {
+      this.zoneSummaryEl.id = 'zone-summary';
+      this.zoneSummaryEl.setAttribute('role', 'status');
+      this.zoneSummaryEl.setAttribute('aria-live', 'polite');
+    }
+    if (this.zoneSummaryEl) {
+      zoneButtons.setAttribute('aria-describedby', 'zone-summary');
+      if (this.drawZoneButton) {
+        this.drawZoneButton.setAttribute('aria-controls', 'zone-summary');
+      }
+      clearButton.setAttribute('aria-controls', 'zone-summary');
+    }
+
     this.#updateZoneSummary();
   }
 
@@ -962,6 +1069,13 @@ export default class UIManager {
       this.stepButton.title = this.paused
         ? 'Advance one tick while paused to inspect changes frame-by-frame.'
         : 'Pause the simulation to enable single-step playback.';
+    }
+  }
+
+  setAutoPauseOnBlur(enabled) {
+    this.autoPauseOnBlur = Boolean(enabled);
+    if (this.autoPauseCheckbox) {
+      this.autoPauseCheckbox.checked = this.autoPauseOnBlur;
     }
   }
 

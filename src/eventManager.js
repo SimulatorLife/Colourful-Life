@@ -4,8 +4,6 @@ import { defaultIsEventAffecting } from './events/eventContext.js';
 
 export { defaultIsEventAffecting as isEventAffecting };
 
-const isEventAffecting = defaultIsEventAffecting;
-
 /**
  * Generates and tracks environmental events that influence energy regeneration
  * and drain across the grid. Events are spawned with randomized type, strength,
@@ -60,12 +58,6 @@ export default class EventManager {
     this.currentEvent = e;
   }
 
-  getEventColor() {
-    return this.currentEvent
-      ? this.eventColorResolver(this.currentEvent.eventType)
-      : EventManager.DEFAULT_EVENT_COLOR;
-  }
-
   getColor(ev) {
     if (!ev) return EventManager.DEFAULT_EVENT_COLOR;
 
@@ -109,14 +101,5 @@ export default class EventManager {
 
     // Maintain compatibility: expose the first active event as currentEvent
     this.currentEvent = this.activeEvents.length > 0 ? this.activeEvents[0] : null;
-  }
-
-  applyEventEffects(cell, row, col) {
-    const event = this.currentEvent;
-
-    if (isEventAffecting(event, row, col)) {
-      // Event effects on individual cells are handled in Cell.applyEventEffects
-      // This hook is reserved for global side-effects if needed.
-    }
   }
 }

@@ -6,11 +6,13 @@ import { createEventContext, defaultEventContext } from './events/eventContext.j
 import { computeTileEnergyUpdate } from './energySystem.js';
 import InteractionSystem from './interactionSystem.js';
 import GridInteractionAdapter from './grid/gridAdapter.js';
+import ReproductionZonePolicy from './grid/reproductionZonePolicy.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
   ENERGY_DIFFUSION_RATE_DEFAULT,
   DENSITY_RADIUS_DEFAULT,
+  COMBAT_EDGE_SHARPNESS_DEFAULT,
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
 } from './config.js';
@@ -61,6 +63,38 @@ const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 
+const similarityCache = new WeakMap();
+
+function getPairSimilarity(cellA, cellB) {
+  if (!cellA || !cellB) return 0;
+
+  let cacheA = similarityCache.get(cellA);
+
+  if (!cacheA) {
+    cacheA = new WeakMap();
+    similarityCache.set(cellA, cacheA);
+  }
+
+  if (cacheA.has(cellB)) {
+    return cacheA.get(cellB);
+  }
+
+  const value = cellA.similarityTo(cellB);
+
+  cacheA.set(cellB, value);
+
+  let cacheB = similarityCache.get(cellB);
+
+  if (!cacheB) {
+    cacheB = new WeakMap();
+    similarityCache.set(cellB, cacheB);
+  }
+
+  cacheB.set(cellA, value);
+
+  return value;
+}
+
 function toBrainSnapshotCollector(candidate) {
   if (typeof candidate === 'function') {
     return candidate;
@@ -80,6 +114,7 @@ export default class GridManager {
   static energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT;
   static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
   static maxTileEnergy = MAX_TILE_ENERGY;
+  static combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -375,6 +410,15 @@ export default class GridManager {
     this.ctx = ctx || window.ctx;
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
+    this.reproductionZones = new ReproductionZonePolicy();
+    Object.defineProperty(this, 'selectionManager', {
+      configurable: true,
+      enumerable: true,
+      get: () => this.reproductionZones.getSelectionManager(),
+      set: (manager) => {
+        this.reproductionZones.setSelectionManager(manager);
+      },
+    });
     this.selectionManager = selectionManager || null;
     const initialThreshold =
       typeof stats?.matingDiversityThreshold === 'number'
@@ -528,7 +572,7 @@ export default class GridManager {
   }
 
   setSelectionManager(selectionManager) {
-    this.selectionManager = selectionManager || null;
+    this.reproductionZones.setSelectionManager(selectionManager);
   }
 
   setBrainSnapshotCollector(collector) {
@@ -1463,6 +1507,7 @@ export default class GridManager {
       enemySimilarity,
       eventStrengthMultiplier,
       mutationMultiplier,
+      combatEdgeSharpness,
     }
   ) {
     const cell = this.grid[row][col];
@@ -1527,6 +1572,7 @@ export default class GridManager {
         stats,
         densityEffectMultiplier,
         densityGrid,
+        combatEdgeSharpness,
       })
     ) {
       return;
@@ -1628,6 +1674,11 @@ export default class GridManager {
     const diversity = typeof bestMate.diversity === 'number' ? bestMate.diversity : 1 - similarity;
     const diversityThreshold =
       typeof this.matingDiversityThreshold === 'number' ? this.matingDiversityThreshold : 0;
+    const diversityPressure = clamp(
+      typeof stats?.getDiversityPressure === 'function' ? stats.getDiversityPressure() : 0,
+      0,
+      1
+    );
     const penaltyFloor =
       typeof this.lowDiversityReproMultiplier === 'number'
         ? clamp(this.lowDiversityReproMultiplier, 0, 1)
@@ -1690,8 +1741,23 @@ export default class GridManager {
         floor: penaltyFloor,
       });
 
-      if (penaltyMultiplier <= 0) effectiveReproProb = 0;
-      else effectiveReproProb = clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
+      if (penaltyMultiplier <= 0) {
+        effectiveReproProb = 0;
+      } else {
+        effectiveReproProb = clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
+      }
+    } else if (diversityPressure > 0 && diversityThreshold < 1) {
+      const normalizedExcess = clamp(
+        (diversity - diversityThreshold) / (1 - diversityThreshold),
+        0,
+        1
+      );
+
+      if (normalizedExcess > 0) {
+        const bonus = 1 + normalizedExcess * diversityPressure * 0.3;
+
+        effectiveReproProb = clamp(effectiveReproProb * bonus, 0, 1);
+      }
     }
 
     const thrFracA =
@@ -1710,12 +1776,10 @@ export default class GridManager {
     const selectionKind = selectedMate && selectedMate.target ? selectionMode : 'legacy';
 
     let reproduced = false;
-    const zoneParents = this.selectionManager
-      ? this.selectionManager.validateReproductionArea({
-          parentA: { row: parentRow, col: parentCol },
-          parentB: { row: mateRow, col: mateCol },
-        })
-      : { allowed: true };
+    const zoneParents = this.reproductionZones.validateArea({
+      parentA: { row: parentRow, col: parentCol },
+      parentB: { row: mateRow, col: mateCol },
+    });
 
     let blockedInfo = null;
 
@@ -1763,21 +1827,16 @@ export default class GridManager {
       addNeighbors(mateRow, mateCol);
 
       const freeSlots = candidates.filter(({ r, c }) => !this.grid[r][c] && !this.isObstacle(r, c));
-      const eligibleSlots =
-        this.selectionManager && freeSlots.length > 0 && this.selectionManager.hasActiveZones()
-          ? freeSlots.filter(({ r, c }) => this.selectionManager.isInActiveZone(r, c))
-          : freeSlots;
-      const slotPool = eligibleSlots.length > 0 ? eligibleSlots : freeSlots;
+      const restrictedSlots = this.reproductionZones.filterSpawnCandidates(freeSlots);
+      const slotPool = restrictedSlots.length > 0 ? restrictedSlots : freeSlots;
 
       if (slotPool.length > 0) {
         const spawn = slotPool[Math.floor(randomRange(0, slotPool.length))];
-        const zoneCheck = this.selectionManager
-          ? this.selectionManager.validateReproductionArea({
-              parentA: { row: parentRow, col: parentCol },
-              parentB: { row: mateRow, col: mateCol },
-              spawn: { row: spawn.r, col: spawn.c },
-            })
-          : { allowed: true };
+        const zoneCheck = this.reproductionZones.validateArea({
+          parentA: { row: parentRow, col: parentCol },
+          parentB: { row: mateRow, col: mateCol },
+          spawn: { row: spawn.r, col: spawn.c },
+        });
 
         if (!zoneCheck.allowed) {
           blockedInfo = {
@@ -1828,7 +1887,7 @@ export default class GridManager {
     col,
     cell,
     { enemies, society = [] },
-    { stats, densityEffectMultiplier, densityGrid }
+    { stats, densityEffectMultiplier, densityGrid, combatEdgeSharpness }
   ) {
     if (!Array.isArray(enemies) || enemies.length === 0) return false;
 
@@ -1880,6 +1939,7 @@ export default class GridManager {
             stats,
             densityGrid,
             densityEffectMultiplier,
+            combatEdgeSharpness,
           });
       } else {
         this.boundMoveToTarget(
@@ -1962,9 +2022,13 @@ export default class GridManager {
     mutationMultiplier = 1,
     matingDiversityThreshold,
     lowDiversityReproMultiplier,
+    combatEdgeSharpness = GridManager.combatEdgeSharpness,
   } = {}) {
     const stats = this.stats;
     const eventManager = this.eventManager;
+    const combatSharpness = Number.isFinite(combatEdgeSharpness)
+      ? combatEdgeSharpness
+      : GridManager.combatEdgeSharpness;
 
     this.setMatingDiversityOptions({
       threshold:
@@ -2016,6 +2080,7 @@ export default class GridManager {
         enemySimilarity,
         eventStrengthMultiplier,
         mutationMultiplier,
+        combatEdgeSharpness: combatSharpness,
       });
     }
 
@@ -2120,34 +2185,49 @@ export default class GridManager {
     const enemyT =
       typeof cell.dna.enemyThreshold === 'function' ? cell.dna.enemyThreshold() : enemySimilarity;
 
-    for (let x = -cell.sight; x <= cell.sight; x++) {
-      for (let y = -cell.sight; y <= cell.sight; y++) {
-        if (x === 0 && y === 0) continue;
-        const newRow = row + y;
-        const newCol = col + x;
+    const grid = this.grid;
+    const rows = this.rows;
+    const cols = this.cols;
+    const sight = cell.sight;
 
-        if (newRow < 0 || newRow >= this.rows || newCol < 0 || newCol >= this.cols) continue;
-        const target = this.grid[newRow][newCol];
+    for (let dy = -sight; dy <= sight; dy++) {
+      const newRow = row + dy;
 
-        if (target) {
-          const similarity = cell.similarityTo(target);
+      if (newRow < 0 || newRow >= rows) continue;
 
-          const candidate = { row: newRow, col: newCol, target };
+      const gridRow = grid[newRow];
 
-          if (similarity >= allyT) {
-            const evaluated = cell.evaluateMateCandidate({
-              ...candidate,
-              classification: 'society',
-            });
+      for (let dx = -sight; dx <= sight; dx++) {
+        if (dx === 0 && dy === 0) continue;
 
-            if (evaluated) society.push(evaluated);
-          } else if (similarity <= enemyT || randomPercent(enemyBias)) {
-            enemies.push({ row: newRow, col: newCol, target });
-          } else {
-            const evaluated = cell.evaluateMateCandidate({ ...candidate, classification: 'mate' });
+        const newCol = col + dx;
 
-            if (evaluated) mates.push(evaluated);
-          }
+        if (newCol < 0 || newCol >= cols) continue;
+
+        const target = gridRow[newCol];
+
+        if (!target) continue;
+
+        const similarity = getPairSimilarity(cell, target);
+
+        if (similarity >= allyT) {
+          society.push({
+            row: newRow,
+            col: newCol,
+            target,
+            classification: 'society',
+            precomputedSimilarity: similarity,
+          });
+        } else if (similarity <= enemyT || randomPercent(enemyBias)) {
+          enemies.push({ row: newRow, col: newCol, target });
+        } else {
+          mates.push({
+            row: newRow,
+            col: newCol,
+            target,
+            classification: 'mate',
+            precomputedSimilarity: similarity,
+          });
         }
       }
     }

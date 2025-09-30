@@ -3,6 +3,7 @@ export const MAX_TILE_ENERGY = 5;
 export const ENERGY_REGEN_RATE_DEFAULT = 0.007; // baseline logistic regen (per tick)
 export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.05; // smoothing between tiles (per tick)
 export const DENSITY_RADIUS_DEFAULT = 1;
+export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 
 // UI defaults and slider bounds
 export const UI_SLIDER_CONFIG = {
@@ -15,6 +16,13 @@ export const UI_SLIDER_CONFIG = {
   mutationMultiplier: { default: 1, min: 0, max: 3, step: 0.05, floor: 0 },
   matingDiversityThreshold: { default: 0.45, min: 0, max: 1, step: 0.01, floor: 0 },
   lowDiversityReproMultiplier: { default: 0.1, min: 0, max: 1, step: 0.05, floor: 0 },
+  combatEdgeSharpness: {
+    default: COMBAT_EDGE_SHARPNESS_DEFAULT,
+    min: 0.5,
+    max: 6,
+    step: 0.1,
+    floor: 0.1,
+  },
   energyRegenRate: { min: 0, max: 0.2, step: 0.005, floor: 0 },
   energyDiffusionRate: { min: 0, max: 0.5, step: 0.01, floor: 0 },
   leaderboardIntervalMs: { default: 750, min: 100, max: 3000, step: 50, floor: 0 },
@@ -32,6 +40,8 @@ const SLIDER_DEFAULTS = {
   enemySimilarity: UI_SLIDER_CONFIG.enemySimilarity?.default ?? 0.4,
   eventStrengthMultiplier: UI_SLIDER_CONFIG.eventStrengthMultiplier?.default ?? 1,
   speedMultiplier: UI_SLIDER_CONFIG.speedMultiplier?.default ?? 1,
+  combatEdgeSharpness:
+    UI_SLIDER_CONFIG.combatEdgeSharpness?.default ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
   leaderboardIntervalMs: UI_SLIDER_CONFIG.leaderboardIntervalMs?.default ?? 750,
   matingDiversityThreshold: UI_SLIDER_CONFIG.matingDiversityThreshold?.default ?? 0.45,
   lowDiversityReproMultiplier: UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ?? 0.1,
@@ -48,6 +58,7 @@ const BASE_SIMULATION_DEFAULTS = {
   eventStrengthMultiplier: SLIDER_DEFAULTS.eventStrengthMultiplier,
   energyRegenRate: ENERGY_REGEN_RATE_DEFAULT,
   energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
+  combatEdgeSharpness: COMBAT_EDGE_SHARPNESS_DEFAULT,
   showObstacles: true,
   showEnergy: false,
   showDensity: false,
@@ -57,6 +68,7 @@ const BASE_SIMULATION_DEFAULTS = {
   lowDiversityReproMultiplier: SLIDER_DEFAULTS.lowDiversityReproMultiplier,
   speedMultiplier: SLIDER_DEFAULTS.speedMultiplier,
   lingerPenalty: 0,
+  autoPauseOnBlur: true,
 };
 
 /**

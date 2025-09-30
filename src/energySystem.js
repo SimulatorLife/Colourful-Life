@@ -54,15 +54,39 @@ export function accumulateEventModifiers({
     };
   }
 
+  const eventApplies = typeof isEventAffecting === 'function' ? isEventAffecting : null;
+  const resolveEffect = typeof getEventEffect === 'function' ? getEventEffect : null;
+  // Cache event effect lookups so tiles affected by the same event type do not
+  // repeatedly resolve identical configuration objects during tight update
+  // loops.
+  const effectCache = resolveEffect ? new Map() : null;
+  const strengthMultiplier = Number(eventStrengthMultiplier || 1);
+
   for (const ev of events) {
     if (!ev) continue;
-    if (typeof isEventAffecting === 'function' && !isEventAffecting(ev, row, col)) continue;
+    if (eventApplies && !eventApplies(ev, row, col)) continue;
 
-    const effect = typeof getEventEffect === 'function' ? getEventEffect(ev.eventType) : null;
+    let effect = null;
+
+    if (resolveEffect) {
+      const type = ev.eventType;
+
+      if (effectCache) {
+        if (effectCache.has(type)) {
+          effect = effectCache.get(type);
+        } else {
+          effect = resolveEffect(type);
+          effectCache.set(type, effect);
+        }
+      } else {
+        effect = resolveEffect(type);
+      }
+    }
 
     if (!effect) continue;
 
-    const strength = (ev.strength || 0) * (eventStrengthMultiplier || 1);
+    const baseStrength = Number(ev.strength || 0);
+    const strength = baseStrength * strengthMultiplier;
 
     if (!Number.isFinite(strength) || strength === 0) continue;
 
@@ -73,16 +97,17 @@ export function accumulateEventModifiers({
       regenMultiplier *= scale;
     }
 
-    if (typeof effect.regenAdd === 'number') {
-      regenAdd += effect.regenAdd * strength;
+    const { regenAdd: effectRegenAdd, drainAdd: effectDrainAdd } = effect;
+
+    if (typeof effectRegenAdd === 'number') {
+      regenAdd += effectRegenAdd * strength;
     }
 
-    if (typeof effect.drainAdd === 'number') {
-      drainAdd += effect.drainAdd * strength;
+    if (typeof effectDrainAdd === 'number') {
+      drainAdd += effectDrainAdd * strength;
     }
 
-    if (!appliedEvents) appliedEvents = [];
-    appliedEvents.push({ event: ev, effect, strength });
+    (appliedEvents ??= []).push({ event: ev, effect, strength });
   }
 
   return {

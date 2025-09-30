@@ -3,15 +3,7 @@ import htmlPlugin from 'eslint-plugin-html';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import globals from 'globals';
 
-const IGNORE_PATTERNS = [
-  'node_modules/',
-  'dist/',
-  '.parcel-cache/',
-  'coverage/',
-  '*.min.js',
-  'colourful_life_v2.html',
-  'evolution.html',
-];
+const IGNORE_PATTERNS = ['node_modules/', 'dist/', '.parcel-cache/', 'coverage/', '*.min.js'];
 
 export default [
   {

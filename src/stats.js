@@ -11,6 +11,7 @@ const MAX_SIGHT_RANGE = 5;
 const HISTORY_SERIES_KEYS = [
   'population',
   'diversity',
+  'diversityPressure',
   'energy',
   'growth',
   'eventStrength',
@@ -18,6 +19,9 @@ const HISTORY_SERIES_KEYS = [
   'meanDiversityAppetite',
   'mutationMultiplier',
 ];
+
+const DIVERSITY_TARGET_DEFAULT = 0.35;
+const DIVERSITY_PRESSURE_SMOOTHING = 0.85;
 
 const createTraitValueMap = (initializer) => {
   const map = {};
@@ -141,6 +145,8 @@ export default class Stats {
     this.lastMatingDebug = null;
     this.mutationMultiplier = 1;
     this.lastBlockedReproduction = null;
+    this.diversityTarget = DIVERSITY_TARGET_DEFAULT;
+    this.diversityPressure = 0;
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -185,6 +191,40 @@ export default class Stats {
     this.mating = createEmptyMatingSnapshot();
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
+  }
+
+  setDiversityTarget(value) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return;
+
+    this.diversityTarget = clamp01(numeric);
+  }
+
+  getDiversityTarget() {
+    return this.diversityTarget;
+  }
+
+  getDiversityPressure() {
+    return this.diversityPressure;
+  }
+
+  #updateDiversityPressure(observedDiversity = 0) {
+    const target = clamp01(this.diversityTarget ?? DIVERSITY_TARGET_DEFAULT);
+
+    if (target <= 0) {
+      this.diversityPressure = 0;
+
+      return;
+    }
+
+    const normalizedShortfall = clamp01((target - observedDiversity) / target);
+    const prev = Number.isFinite(this.diversityPressure) ? this.diversityPressure : 0;
+    const next =
+      prev * DIVERSITY_PRESSURE_SMOOTHING +
+      normalizedShortfall * (1 - DIVERSITY_PRESSURE_SMOOTHING);
+
+    this.diversityPressure = clamp01(next);
   }
 
   onBirth() {
@@ -238,6 +278,8 @@ export default class Stats {
     const meanEnergy = pop ? snapshot.totalEnergy / pop : 0;
     const meanAge = pop ? snapshot.totalAge / pop : 0;
     const diversity = this.estimateDiversity(cells);
+
+    this.#updateDiversityPressure(diversity);
     const traitPresence = this.computeTraitPresence(cells);
     const mateStats = this.mating || createEmptyMatingSnapshot();
     const choiceCount = mateStats.choices || 0;
@@ -248,6 +290,7 @@ export default class Stats {
 
     this.pushHistory('population', pop);
     this.pushHistory('diversity', diversity);
+    this.pushHistory('diversityPressure', this.diversityPressure);
     this.pushHistory('energy', meanEnergy);
     this.pushHistory('growth', this.births - this.deaths);
     this.pushHistory('diversePairingRate', diverseSuccessRate);
@@ -274,6 +317,8 @@ export default class Stats {
       meanEnergy,
       meanAge,
       diversity,
+      diversityPressure: this.diversityPressure,
+      diversityTarget: this.diversityTarget,
       traitPresence,
       mateChoices: choiceCount,
       successfulMatings: successCount,

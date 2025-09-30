@@ -153,3 +153,30 @@ function mulberry32(seed) {
 export function createRNG(seed) {
   return mulberry32(seed);
 }
+
+const warnedMessages = new Set();
+
+/**
+ * Logs a warning message once per unique combination of message and error
+ * details. Useful for surfacing recoverable issues without flooding the
+ * console each frame/tick.
+ *
+ * @param {string} message - Human-readable description of the warning.
+ * @param {Error} [error] - Optional error object for context.
+ */
+export function warnOnce(message, error) {
+  if (typeof message !== 'string' || message.length === 0) return;
+
+  const descriptor = `${message}::$${error?.name ?? ''}::$${error?.message ?? ''}`;
+
+  if (warnedMessages.has(descriptor)) return;
+  warnedMessages.add(descriptor);
+
+  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+    if (error) {
+      console.warn(message, error);
+    } else {
+      console.warn(message);
+    }
+  }
+}

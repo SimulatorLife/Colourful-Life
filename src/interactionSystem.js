@@ -1,5 +1,6 @@
 import { clamp, clamp01 } from './utils.js';
 import GridInteractionAdapter from './grid/gridAdapter.js';
+import { COMBAT_EDGE_SHARPNESS_DEFAULT } from './config.js';
 
 function asFiniteCoordinate(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -35,6 +36,20 @@ function placeAdapterCell(adapter, row, col, cell) {
   adapter?.setCell?.(row, col, cell);
 }
 
+function resolveAdapterOccupant(adapter, location, fallback = location?.cell ?? null) {
+  if (!adapter) return null;
+
+  const { row, col } = resolveCoordinates(location, fallback);
+
+  if (row == null || col == null) {
+    return null;
+  }
+
+  const cell = getAdapterCell(adapter, row, col);
+
+  return cell ? { cell, row, col } : null;
+}
+
 function computeAgeEnergyScale(cell) {
   return typeof cell?.ageEnergyMultiplier === 'function' ? cell.ageEnergyMultiplier(1) : 1;
 }
@@ -49,6 +64,18 @@ function computeCombatPower(cell) {
   const modifier = cell?.dna?.combatPower?.() ?? 1;
 
   return cell?.energy * modifier;
+}
+
+function resolveCombatSharpness(cell) {
+  const fn = cell?.dna?.combatEdgeSharpness;
+
+  if (typeof fn !== 'function') return 1;
+
+  const value = Number(fn.call(cell?.dna));
+
+  if (!Number.isFinite(value)) return 1;
+
+  return clamp(value, 0.25, 4);
 }
 
 function resolveTrait01(cell, traitName, fallback = 0.5) {
@@ -96,6 +123,7 @@ function computeCombatOdds({
   targetCol,
   densityGrid,
   densityEffectMultiplier,
+  combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT,
 }) {
   const totalPower = Math.abs(attackerPower) + Math.abs(defenderPower);
   const baseEdge = totalPower > 0 ? clamp((attackerPower - defenderPower) / totalPower, -1, 1) : 0;
@@ -113,7 +141,13 @@ function computeCombatOdds({
     densityEffectMultiplier,
   });
   const combinedEdge = clamp(baseEdge + riskEdge + resilienceEdge + territoryEdge, -0.95, 0.95);
-  const logisticInput = combinedEdge * 3.2;
+  const baseSharpness = Number.isFinite(combatEdgeSharpness)
+    ? combatEdgeSharpness
+    : COMBAT_EDGE_SHARPNESS_DEFAULT;
+  const attackerSharpness = resolveCombatSharpness(attacker);
+  const defenderSharpness = resolveCombatSharpness(defender);
+  const dnaScale = clamp((attackerSharpness + defenderSharpness) / 2, 0.1, 5);
+  const logisticInput = combinedEdge * baseSharpness * dnaScale;
   const attackerWinChance = clamp01(1 / (1 + Math.exp(-logisticInput)));
 
   return { attackerWinChance, edge: combinedEdge };
@@ -213,13 +247,11 @@ function prepareFightParticipants({ adapter, initiator, target }) {
 
   if (attackerRow == null || attackerCol == null) return null;
 
-  const { row: targetRow, col: targetCol } = resolveCoordinates(target);
+  const defenderInfo = resolveAdapterOccupant(adapter, target);
 
-  if (targetRow == null || targetCol == null) return null;
+  if (!defenderInfo) return null;
 
-  const defender = getAdapterCell(adapter, targetRow, targetCol);
-
-  if (!defender) return null;
+  const { cell: defender, row: targetRow, col: targetCol } = defenderInfo;
 
   return { attacker, defender, attackerRow, attackerCol, targetRow, targetCol };
 }
@@ -250,25 +282,35 @@ export default class InteractionSystem {
     return true;
   }
 
-  process({ stats, densityGrid, densityEffectMultiplier } = {}) {
+  process({ stats, densityGrid, densityEffectMultiplier, combatEdgeSharpness } = {}) {
     let processed = false;
 
     while (this.pendingIntents.length > 0) {
       const intent = this.pendingIntents.shift();
 
       processed =
-        this.resolveIntent(intent, { stats, densityGrid, densityEffectMultiplier }) || processed;
+        this.resolveIntent(intent, {
+          stats,
+          densityGrid,
+          densityEffectMultiplier,
+          combatEdgeSharpness,
+        }) || processed;
     }
 
     return processed;
   }
 
-  resolveIntent(intent, { stats, densityGrid, densityEffectMultiplier } = {}) {
+  resolveIntent(intent, { stats, densityGrid, densityEffectMultiplier, combatEdgeSharpness } = {}) {
     if (!intent || typeof intent !== 'object') return false;
 
     switch (intent.type) {
       case 'fight':
-        return this.#resolveFight(intent, { stats, densityGrid, densityEffectMultiplier });
+        return this.#resolveFight(intent, {
+          stats,
+          densityGrid,
+          densityEffectMultiplier,
+          combatEdgeSharpness,
+        });
       case 'cooperate':
         return this.#resolveCooperation(intent, { stats });
       default:
@@ -276,7 +318,7 @@ export default class InteractionSystem {
     }
   }
 
-  #resolveFight(intent, { stats, densityGrid, densityEffectMultiplier } = {}) {
+  #resolveFight(intent, { stats, densityGrid, densityEffectMultiplier, combatEdgeSharpness } = {}) {
     const adapter = this.adapter;
 
     if (!adapter) return false;
@@ -311,6 +353,7 @@ export default class InteractionSystem {
       targetCol,
       densityGrid,
       densityEffectMultiplier,
+      combatEdgeSharpness,
     });
     const attackerWins = Math.random() < odds.attackerWinChance;
     const intensity = clamp(
@@ -372,14 +415,11 @@ export default class InteractionSystem {
     if (!initiator?.cell || !target) return false;
 
     const actor = initiator.cell;
-    const targetRow = target.row;
-    const targetCol = target.col;
+    const partnerInfo = resolveAdapterOccupant(adapter, target);
 
-    if (targetRow == null || targetCol == null) return false;
+    if (!partnerInfo) return false;
 
-    const partner = adapter.getCell?.(targetRow, targetCol) ?? null;
-
-    if (!partner) return false;
+    const { cell: partner } = partnerInfo;
 
     const shareFraction = clamp01(intent.metadata?.shareFraction);
     const maxTileEnergy = typeof adapter.maxTileEnergy === 'function' ? adapter.maxTileEnergy() : 0;

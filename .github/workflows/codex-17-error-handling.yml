@@ -1,7 +1,7 @@
 name: Codex 17 – Error Handling Consistency
 on:
   schedule:
-    - cron: "54 */20 * * *" # every 20 hours
+    - cron: "35 9,21 * * *" # twice daily at 09:35, 21:35 UTC
   workflow_dispatch:
 
 permissions:
