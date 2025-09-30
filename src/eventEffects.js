@@ -10,7 +10,7 @@ export const EVENT_EFFECTS = {
     drainAdd: 0,
     cell: {
       energyLoss: 0.3,
-      resistanceGene: 'floodResist',
+      resistanceGene: "floodResist",
     },
   },
   drought: {
@@ -19,7 +19,7 @@ export const EVENT_EFFECTS = {
     drainAdd: 0.1,
     cell: {
       energyLoss: 0.25,
-      resistanceGene: 'droughtResist',
+      resistanceGene: "droughtResist",
     },
   },
   heatwave: {
@@ -28,7 +28,7 @@ export const EVENT_EFFECTS = {
     drainAdd: 0.08,
     cell: {
       energyLoss: 0.35,
-      resistanceGene: 'heatResist',
+      resistanceGene: "heatResist",
     },
   },
   coldwave: {
@@ -37,7 +37,7 @@ export const EVENT_EFFECTS = {
     drainAdd: 0,
     cell: {
       energyLoss: 0.2,
-      resistanceGene: 'coldResist',
+      resistanceGene: "coldResist",
     },
   },
 };
