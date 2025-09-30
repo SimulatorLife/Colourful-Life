@@ -1541,6 +1541,11 @@ export default class GridManager {
     const diversity = typeof bestMate.diversity === 'number' ? bestMate.diversity : 1 - similarity;
     const diversityThreshold =
       typeof this.matingDiversityThreshold === 'number' ? this.matingDiversityThreshold : 0;
+    const diversityPressure = clamp(
+      typeof stats?.getDiversityPressure === 'function' ? stats.getDiversityPressure() : 0,
+      0,
+      1
+    );
     const penaltyBase =
       typeof this.lowDiversityReproMultiplier === 'number'
         ? clamp(this.lowDiversityReproMultiplier, 0, 1)
@@ -1591,10 +1596,29 @@ export default class GridManager {
 
     if (diversity < diversityThreshold) {
       penalizedForSimilarity = true;
-      penaltyMultiplier = penaltyBase;
+      if (penaltyBase > 0) {
+        const penaltyIntensity = clamp(0.4 + diversityPressure * 0.6, 0, 1);
 
-      if (penaltyMultiplier <= 0) effectiveReproProb = 0;
-      else effectiveReproProb = clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
+        penaltyMultiplier = lerp(1, penaltyBase, penaltyIntensity);
+        effectiveReproProb =
+          penaltyMultiplier <= 0 ? 0 : clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
+      } else if (diversityPressure > 0) {
+        const reduction = clamp(1 - (diversityThreshold - diversity) * diversityPressure, 0, 1);
+
+        effectiveReproProb = clamp(effectiveReproProb * reduction, 0, 1);
+      }
+    } else if (diversityPressure > 0 && diversityThreshold < 1) {
+      const normalizedExcess = clamp(
+        (diversity - diversityThreshold) / (1 - diversityThreshold),
+        0,
+        1
+      );
+
+      if (normalizedExcess > 0) {
+        const bonus = 1 + normalizedExcess * diversityPressure * 0.3;
+
+        effectiveReproProb = clamp(effectiveReproProb * bonus, 0, 1);
+      }
     }
 
     const thrFracA =
