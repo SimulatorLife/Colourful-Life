@@ -1,7 +1,7 @@
 name: Codex 20 – Targeted Micro-Optimization
 on:
   schedule:
-    - cron: "20 */13 * * *" # every 13 hours (staggered vs. other perf jobs)
+    - cron: "50 10,22 * * *" # twice daily at 10:50, 22:50 UTC
   workflow_dispatch:
 
 permissions:

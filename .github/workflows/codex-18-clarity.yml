@@ -1,7 +1,7 @@
 name: Codex 18 – Clarity Improvements
 on:
   schedule:
-    - cron: "39 */22 * * *" # every 22 hours
+    - cron: "0 10,22 * * *" # twice daily at 10:00, 22:00 UTC
   workflow_dispatch:
 
 permissions:

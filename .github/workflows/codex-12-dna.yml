@@ -1,7 +1,7 @@
 name: Codex 12 – DNA Encoding Improvements
 on:
   schedule:
-    - cron: "06 */3 * * *" # every 3 hours
+    - cron: "40 6,18 * * *" # twice daily at 06:40, 18:40 UTC
   workflow_dispatch:
 
 permissions:

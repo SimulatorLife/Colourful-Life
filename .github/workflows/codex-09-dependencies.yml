@@ -1,7 +1,7 @@
 name: Codex 09 – Dependency Hygiene
 on:
   schedule:
-    - cron: "12 0 */2 * *"  # every 2 days at 00:12 UTC
+    - cron: "0 5,17 * * *" # twice daily at 05:00, 17:00 UTC
   workflow_dispatch:
 
 permissions:
