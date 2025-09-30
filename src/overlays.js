@@ -1,5 +1,5 @@
-import { MAX_TILE_ENERGY } from './config.js';
-import { lerp } from './utils.js';
+import { MAX_TILE_ENERGY } from "./config.js";
+import { lerp } from "./utils.js";
 
 const FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
@@ -36,9 +36,9 @@ export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
 
     const { affectedArea } = event;
     const color =
-      (typeof getColor === 'function' && getColor(event)) ||
+      (typeof getColor === "function" && getColor(event)) ||
       event.color ||
-      'rgba(255,255,255,0.15)';
+      "rgba(255,255,255,0.15)";
 
     if (!color) continue;
 
@@ -47,7 +47,7 @@ export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
       affectedArea.x * cellSize,
       affectedArea.y * cellSize,
       affectedArea.width * cellSize,
-      affectedArea.height * cellSize
+      affectedArea.height * cellSize,
     );
   }
   ctx.restore();
@@ -57,7 +57,7 @@ function drawObstacleMask(
   grid,
   ctx,
   cellSize,
-  { fill = 'rgba(40,40,55,0.35)', outline = 'rgba(200,200,255,0.35)' } = {}
+  { fill = "rgba(40,40,55,0.35)", outline = "rgba(200,200,255,0.35)" } = {},
 ) {
   const mask = grid?.obstacles;
 
@@ -85,7 +85,7 @@ function drawObstacleMask(
   ctx.restore();
 }
 
-function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = '0,0,0') {
+function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = "0,0,0") {
   const rows = grid.rows;
   const cols = grid.cols;
 
@@ -105,9 +105,9 @@ function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = '0,0,0') {
 }
 
 function getDensityAt(grid, r, c) {
-  if (typeof grid.getDensityAt === 'function') return grid.getDensityAt(r, c);
+  if (typeof grid.getDensityAt === "function") return grid.getDensityAt(r, c);
   if (Array.isArray(grid.densityGrid)) return grid.densityGrid[r]?.[c] ?? 0;
-  if (typeof grid.localDensity === 'function') return grid.localDensity(r, c, 1);
+  if (typeof grid.localDensity === "function") return grid.localDensity(r, c, 1);
 
   return 0;
 }
@@ -153,7 +153,7 @@ function drawDensityLegend(ctx, cellSize, cols, rows, minDensity, maxDensity) {
   const y = rows * cellSize - blockHeight - padding;
 
   ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
   ctx.fillRect(x, y, blockWidth, blockHeight);
 
   const gradientX = x + padding;
@@ -163,7 +163,7 @@ function drawDensityLegend(ctx, cellSize, cols, rows, minDensity, maxDensity) {
     gradientX,
     gradientY,
     gradientX + gradientWidth,
-    gradientY
+    gradientY,
   );
   const stops = [0, 0.25, 0.5, 0.75, 1];
 
@@ -174,16 +174,20 @@ function drawDensityLegend(ctx, cellSize, cols, rows, minDensity, maxDensity) {
   ctx.fillStyle = gradient;
   ctx.fillRect(gradientX, gradientY, gradientWidth, gradientHeight);
 
-  ctx.fillStyle = '#fff';
-  ctx.font = '12px sans-serif';
-  ctx.textBaseline = 'top';
+  ctx.fillStyle = "#fff";
+  ctx.font = "12px sans-serif";
+  ctx.textBaseline = "top";
 
-  ctx.textAlign = 'left';
-  ctx.fillText(`Min: ${minDensity.toFixed(2)}`, gradientX, gradientY + gradientHeight + padding);
+  ctx.textAlign = "left";
+  ctx.fillText(
+    `Min: ${minDensity.toFixed(2)}`,
+    gradientX,
+    gradientY + gradientHeight + padding,
+  );
   ctx.fillText(
     `Max: ${maxDensity.toFixed(2)}`,
     gradientX,
-    gradientY + gradientHeight + padding + textLineHeight
+    gradientY + gradientHeight + padding + textLineHeight,
   );
 
   ctx.restore();
@@ -193,7 +197,7 @@ function drawSelectionZones(selectionManager, ctx, cellSize) {
   if (!selectionManager?.hasActiveZones()) return;
 
   const zoneEntries =
-    typeof selectionManager.getActiveZoneRenderData === 'function'
+    typeof selectionManager.getActiveZoneRenderData === "function"
       ? selectionManager.getActiveZoneRenderData()
       : null;
 
@@ -206,7 +210,7 @@ function drawSelectionZones(selectionManager, ctx, cellSize) {
 
     if (!zone) continue;
 
-    const color = zone.color || 'rgba(255,255,255,0.2)';
+    const color = zone.color || "rgba(255,255,255,0.2)";
 
     if (!color) continue;
 
@@ -226,7 +230,12 @@ function drawSelectionZones(selectionManager, ctx, cellSize) {
 
       if (rowSpan <= 0 || colSpan <= 0) continue;
 
-      ctx.fillRect(col * cellSize, row * cellSize, colSpan * cellSize, rowSpan * cellSize);
+      ctx.fillRect(
+        col * cellSize,
+        row * cellSize,
+        colSpan * cellSize,
+        rowSpan * cellSize,
+      );
     }
   }
   ctx.restore();
@@ -261,14 +270,19 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);
   if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
   if (showFitness) {
-    if (!snapshot && typeof grid?.getLastSnapshot === 'function') {
+    if (!snapshot && typeof grid?.getLastSnapshot === "function") {
       snapshot = grid.getLastSnapshot();
     }
     drawFitnessHeatmap(snapshot, ctx, cellSize);
   }
 }
 
-export function drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy = MAX_TILE_ENERGY) {
+export function drawEnergyHeatmap(
+  grid,
+  ctx,
+  cellSize,
+  maxTileEnergy = MAX_TILE_ENERGY,
+) {
   const scale = 0.99;
 
   drawScalarHeatmap(
@@ -276,7 +290,7 @@ export function drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy = MAX_TILE_
     ctx,
     cellSize,
     (r, c) => (grid.energyGrid[r][c] / maxTileEnergy) * scale,
-    '0,255,0'
+    "0,255,0",
   );
 }
 
@@ -310,7 +324,9 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
 
     for (let c = 0; c < cols; c++) {
       const rawDensity =
-        densityRow && Number.isFinite(densityRow[c]) ? densityRow[c] : getDensityAt(grid, r, c);
+        densityRow && Number.isFinite(densityRow[c])
+          ? densityRow[c]
+          : getDensityAt(grid, r, c);
       const density = Number.isFinite(rawDensity) ? rawDensity : 0;
 
       scratch[scratchIndex++] = density;
@@ -363,7 +379,7 @@ export function drawFitnessHeatmap(snapshot, ctx, cellSize) {
   const palette = createFitnessPalette(FITNESS_GRADIENT_STEPS, FITNESS_BASE_HUE);
   const tierSize = Math.max(1, Math.ceil(topEntries.length / palette.length));
 
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
   ctx.fillRect(0, 0, cols * cellSize, rows * cellSize);
 
   topEntries.forEach(({ row, col }, index) => {

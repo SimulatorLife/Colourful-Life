@@ -1,10 +1,10 @@
-import UIManager from './uiManager.js';
-import BrainDebugger from './brainDebugger.js';
-import SimulationEngine from './simulationEngine.js';
-import { OBSTACLE_PRESETS } from './gridManager.js';
-import { resolveSimulationDefaults } from './config.js';
+import UIManager from "./uiManager.js";
+import BrainDebugger from "./brainDebugger.js";
+import SimulationEngine from "./simulationEngine.js";
+import { OBSTACLE_PRESETS } from "./gridManager.js";
+import { resolveSimulationDefaults } from "./config.js";
 
-const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
+const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
 function resolveHeadlessCanvasSize(config = {}) {
   const cellSize = Number.isFinite(config?.cellSize) ? config.cellSize : 5;
@@ -46,12 +46,12 @@ function createHeadlessCanvas(config = {}) {
   const { width, height } = resolveHeadlessCanvasSize(config);
   const context = {
     canvas: null,
-    fillStyle: '#000',
-    strokeStyle: '#000',
+    fillStyle: "#000",
+    strokeStyle: "#000",
     lineWidth: 1,
-    font: '',
-    textBaseline: 'top',
-    textAlign: 'left',
+    font: "",
+    textBaseline: "top",
+    textAlign: "left",
     clearRect() {},
     fillRect() {},
     strokeRect() {},
@@ -71,7 +71,7 @@ function createHeadlessCanvas(config = {}) {
     width,
     height,
     getContext(type) {
-      if (type !== '2d') return null;
+      if (type !== "2d") return null;
 
       return context;
     },
@@ -168,7 +168,7 @@ function createHeadlessUiManager(options = {}) {
     },
     getUpdatesPerSecond: () => settings.updatesPerSecond,
     setUpdatesPerSecond: (value) => {
-      updateIfFinite('updatesPerSecond', value);
+      updateIfFinite("updatesPerSecond", value);
     },
     getEventFrequencyMultiplier: () => settings.eventFrequencyMultiplier,
     getMutationMultiplier: () => settings.mutationMultiplier,
@@ -181,14 +181,14 @@ function createHeadlessUiManager(options = {}) {
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
     getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
     setMatingDiversityThreshold: (value) => {
-      updateIfFinite('matingDiversityThreshold', value);
+      updateIfFinite("matingDiversityThreshold", value);
     },
     getLowDiversityReproMultiplier: () => settings.lowDiversityReproMultiplier,
     setLowDiversityReproMultiplier: (value) => {
-      updateIfFinite('lowDiversityReproMultiplier', value);
+      updateIfFinite("lowDiversityReproMultiplier", value);
     },
     setCombatEdgeSharpness: (value) => {
-      updateIfFinite('combatEdgeSharpness', value);
+      updateIfFinite("combatEdgeSharpness", value);
     },
     getShowObstacles: () => settings.showObstacles,
     getShowEnergy: () => settings.showEnergy,
@@ -208,7 +208,7 @@ function createHeadlessUiManager(options = {}) {
     renderLeaderboard: () => {},
     getLingerPenalty: () => settings.lingerPenalty,
     setLingerPenalty: (value) => {
-      updateIfFinite('lingerPenalty', value);
+      updateIfFinite("lingerPenalty", value);
     },
     getAutoPauseOnBlur: () => settings.autoPauseOnBlur,
     setAutoPauseOnBlur: (value) => {
@@ -307,7 +307,7 @@ export function createSimulation({
   window: injectedWindow,
   document: injectedDocument,
 } = {}) {
-  const win = injectedWindow ?? (typeof window !== 'undefined' ? window : undefined);
+  const win = injectedWindow ?? (typeof window !== "undefined" ? window : undefined);
 
   if (win) {
     win.BrainDebugger = BrainDebugger;
@@ -352,11 +352,19 @@ export function createSimulation({
   };
 
   const uiManager = headless
-    ? createHeadlessUiManager({ ...uiOptions, selectionManager: engine.selectionManager })
-    : new UIManager(simulationCallbacks, uiOptions.mountSelector ?? '#app', baseActions, {
-        canvasElement: engine.canvas,
-        ...(uiOptions.layout || {}),
-      });
+    ? createHeadlessUiManager({
+        ...uiOptions,
+        selectionManager: engine.selectionManager,
+      })
+    : new UIManager(
+        simulationCallbacks,
+        uiOptions.mountSelector ?? "#app",
+        baseActions,
+        {
+          canvasElement: engine.canvas,
+          ...(uiOptions.layout || {}),
+        },
+      );
 
   if (!headless) {
     uiManager.setPauseState?.(engine.isPaused());
@@ -366,7 +374,7 @@ export function createSimulation({
     win.uiManager = uiManager;
   }
 
-  if (typeof uiManager?.getLingerPenalty === 'function') {
+  if (typeof uiManager?.getLingerPenalty === "function") {
     engine.setLingerPenalty(uiManager.getLingerPenalty());
   }
 
@@ -374,33 +382,36 @@ export function createSimulation({
 
   if (!headless && uiManager) {
     unsubscribers.push(
-      engine.on('metrics', ({ stats, metrics }) => {
-        if (typeof uiManager.renderMetrics === 'function') {
+      engine.on("metrics", ({ stats, metrics }) => {
+        if (typeof uiManager.renderMetrics === "function") {
           uiManager.renderMetrics(stats, metrics);
         }
-      })
+      }),
     );
 
     unsubscribers.push(
-      engine.on('leaderboard', ({ entries }) => {
-        if (typeof uiManager.renderLeaderboard === 'function') {
+      engine.on("leaderboard", ({ entries }) => {
+        if (typeof uiManager.renderLeaderboard === "function") {
           uiManager.renderLeaderboard(entries);
         }
-      })
+      }),
     );
 
     unsubscribers.push(
-      engine.on('state', ({ changes }) => {
-        if (changes?.paused !== undefined && typeof uiManager.setPauseState === 'function') {
+      engine.on("state", ({ changes }) => {
+        if (
+          changes?.paused !== undefined &&
+          typeof uiManager.setPauseState === "function"
+        ) {
           uiManager.setPauseState(changes.paused);
         }
         if (
           changes?.autoPauseOnBlur !== undefined &&
-          typeof uiManager.setAutoPauseOnBlur === 'function'
+          typeof uiManager.setAutoPauseOnBlur === "function"
         ) {
           uiManager.setAutoPauseOnBlur(changes.autoPauseOnBlur);
         }
-      })
+      }),
     );
   }
 
@@ -431,9 +442,9 @@ export function createSimulation({
       while (unsubscribers.length) {
         const unsub = unsubscribers.pop();
 
-        if (typeof unsub === 'function') unsub();
+        if (typeof unsub === "function") unsub();
       }
-      if (typeof engine.destroy === 'function') {
+      if (typeof engine.destroy === "function") {
         engine.destroy();
       } else {
         engine.stop();

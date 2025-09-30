@@ -1,13 +1,13 @@
-import { warnOnce } from '../utils.js';
+import { warnOnce } from "../utils.js";
 
 function isFunction(fn) {
-  return typeof fn === 'function';
+  return typeof fn === "function";
 }
 
 const ALLOW_ALL = Object.freeze({ allowed: true });
 
 function coerceValidationResult(result) {
-  if (result && typeof result === 'object' && 'allowed' in result) {
+  if (result && typeof result === "object" && "allowed" in result) {
     return result;
   }
 
@@ -34,8 +34,8 @@ export default class ReproductionZonePolicy {
   }
 
   setSelectionManager(selectionManager) {
-    if (selectionManager && typeof selectionManager !== 'object') {
-      warnOnce('Selection manager must be an object; ignoring assignment.');
+    if (selectionManager && typeof selectionManager !== "object") {
+      warnOnce("Selection manager must be an object; ignoring assignment.");
 
       return;
     }
@@ -46,7 +46,9 @@ export default class ReproductionZonePolicy {
   hasActiveZones() {
     const manager = this.#selectionManager;
 
-    return Boolean(manager && isFunction(manager.hasActiveZones) && manager.hasActiveZones());
+    return Boolean(
+      manager && isFunction(manager.hasActiveZones) && manager.hasActiveZones(),
+    );
   }
 
   validateArea({ parentA, parentB, spawn } = {}) {
@@ -57,9 +59,11 @@ export default class ReproductionZonePolicy {
     }
 
     try {
-      return coerceValidationResult(manager.validateReproductionArea({ parentA, parentB, spawn }));
+      return coerceValidationResult(
+        manager.validateReproductionArea({ parentA, parentB, spawn }),
+      );
     } catch (error) {
-      warnOnce('Selection manager threw during reproduction validation.', error);
+      warnOnce("Selection manager threw during reproduction validation.", error);
 
       return ALLOW_ALL;
     }

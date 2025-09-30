@@ -1,4 +1,4 @@
-import { MAX_TILE_ENERGY } from './config.js';
+import { MAX_TILE_ENERGY } from "./config.js";
 
 /**
  * Calculates the leaderboard fitness score for a cell.

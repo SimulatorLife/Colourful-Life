@@ -1,9 +1,13 @@
-import { clamp } from './utils.js';
+import { clamp } from "./utils.js";
 
 const EMPTY_APPLIED_EVENTS = Object.freeze([]);
 
 function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }) {
-  if (Number.isFinite(neighborSum) && Number.isFinite(neighborCount) && neighborCount > 0) {
+  if (
+    Number.isFinite(neighborSum) &&
+    Number.isFinite(neighborCount) &&
+    neighborCount > 0
+  ) {
     return neighborSum / neighborCount;
   }
 
@@ -54,8 +58,8 @@ export function accumulateEventModifiers({
     };
   }
 
-  const eventApplies = typeof isEventAffecting === 'function' ? isEventAffecting : null;
-  const resolveEffect = typeof getEventEffect === 'function' ? getEventEffect : null;
+  const eventApplies = typeof isEventAffecting === "function" ? isEventAffecting : null;
+  const resolveEffect = typeof getEventEffect === "function" ? getEventEffect : null;
   // Cache event effect lookups so tiles affected by the same event type do not
   // repeatedly resolve identical configuration objects during tight update
   // loops.
@@ -99,11 +103,11 @@ export function accumulateEventModifiers({
 
     const { regenAdd: effectRegenAdd, drainAdd: effectDrainAdd } = effect;
 
-    if (typeof effectRegenAdd === 'number') {
+    if (typeof effectRegenAdd === "number") {
       regenAdd += effectRegenAdd * strength;
     }
 
-    if (typeof effectDrainAdd === 'number') {
+    if (typeof effectDrainAdd === "number") {
       drainAdd += effectDrainAdd * strength;
     }
 
@@ -164,7 +168,7 @@ export function computeTileEnergyUpdate({
   } = config || {};
 
   if (!Number.isFinite(maxTileEnergy)) {
-    throw new Error('maxTileEnergy must be provided to computeTileEnergyUpdate');
+    throw new Error("maxTileEnergy must be provided to computeTileEnergyUpdate");
   }
 
   const energy = Number.isFinite(currentEnergy) ? currentEnergy : 0;
