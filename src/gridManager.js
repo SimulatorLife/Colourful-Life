@@ -62,6 +62,38 @@ const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 
+const similarityCache = new WeakMap();
+
+function getPairSimilarity(cellA, cellB) {
+  if (!cellA || !cellB) return 0;
+
+  let cacheA = similarityCache.get(cellA);
+
+  if (!cacheA) {
+    cacheA = new WeakMap();
+    similarityCache.set(cellA, cacheA);
+  }
+
+  if (cacheA.has(cellB)) {
+    return cacheA.get(cellB);
+  }
+
+  const value = cellA.similarityTo(cellB);
+
+  cacheA.set(cellB, value);
+
+  let cacheB = similarityCache.get(cellB);
+
+  if (!cacheB) {
+    cacheB = new WeakMap();
+    similarityCache.set(cellB, cacheB);
+  }
+
+  cacheB.set(cellA, value);
+
+  return value;
+}
+
 function toBrainSnapshotCollector(candidate) {
   if (typeof candidate === 'function') {
     return candidate;
@@ -2059,34 +2091,49 @@ export default class GridManager {
     const enemyT =
       typeof cell.dna.enemyThreshold === 'function' ? cell.dna.enemyThreshold() : enemySimilarity;
 
-    for (let x = -cell.sight; x <= cell.sight; x++) {
-      for (let y = -cell.sight; y <= cell.sight; y++) {
-        if (x === 0 && y === 0) continue;
-        const newRow = row + y;
-        const newCol = col + x;
+    const grid = this.grid;
+    const rows = this.rows;
+    const cols = this.cols;
+    const sight = cell.sight;
 
-        if (newRow < 0 || newRow >= this.rows || newCol < 0 || newCol >= this.cols) continue;
-        const target = this.grid[newRow][newCol];
+    for (let dy = -sight; dy <= sight; dy++) {
+      const newRow = row + dy;
 
-        if (target) {
-          const similarity = cell.similarityTo(target);
+      if (newRow < 0 || newRow >= rows) continue;
 
-          const candidate = { row: newRow, col: newCol, target };
+      const gridRow = grid[newRow];
 
-          if (similarity >= allyT) {
-            const evaluated = cell.evaluateMateCandidate({
-              ...candidate,
-              classification: 'society',
-            });
+      for (let dx = -sight; dx <= sight; dx++) {
+        if (dx === 0 && dy === 0) continue;
 
-            if (evaluated) society.push(evaluated);
-          } else if (similarity <= enemyT || randomPercent(enemyBias)) {
-            enemies.push({ row: newRow, col: newCol, target });
-          } else {
-            const evaluated = cell.evaluateMateCandidate({ ...candidate, classification: 'mate' });
+        const newCol = col + dx;
 
-            if (evaluated) mates.push(evaluated);
-          }
+        if (newCol < 0 || newCol >= cols) continue;
+
+        const target = gridRow[newCol];
+
+        if (!target) continue;
+
+        const similarity = getPairSimilarity(cell, target);
+
+        if (similarity >= allyT) {
+          society.push({
+            row: newRow,
+            col: newCol,
+            target,
+            classification: 'society',
+            precomputedSimilarity: similarity,
+          });
+        } else if (similarity <= enemyT || randomPercent(enemyBias)) {
+          enemies.push({ row: newRow, col: newCol, target });
+        } else {
+          mates.push({
+            row: newRow,
+            col: newCol,
+            target,
+            classification: 'mate',
+            precomputedSimilarity: similarity,
+          });
         }
       }
     }
