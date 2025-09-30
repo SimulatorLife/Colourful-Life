@@ -248,9 +248,7 @@ canvas {
   accent-color: var(--color-text);
 }
 
-.control-line select,
-.control-line input[type="number"],
-.control-line input[type="text"] {
+.control-line select {
   flex: 1 1 auto;
   width: 100%;
   padding: 6px 8px;
@@ -262,9 +260,7 @@ canvas {
   box-sizing: border-box;
 }
 
-.control-line select:focus,
-.control-line input[type="number"]:focus,
-.control-line input[type="text"]:focus {
+.control-line select:focus {
   outline: 2px solid rgba(255, 255, 255, 0.35);
   outline-offset: 2px;
 }
