@@ -36,6 +36,7 @@ export const GENE_LOCI = Object.freeze({
   RESIST_COLD: 26,
   DENSITY: 27,
   COOPERATION: 28,
+  COURTSHIP: 29,
 });
 
 const BASE_GENE_COUNT = Math.max(...Object.values(GENE_LOCI)) + 1;
@@ -1203,6 +1204,44 @@ export class DNA {
     return clamp(anchor * 0.7 + rnd() * 0.3, 0, 1); // 0..1
   }
 
+  strategyDriftRange() {
+    const mutationSpan = this.geneFraction(GENE_LOCI.MUTATION_RANGE);
+    const courtship = this.geneFraction(GENE_LOCI.COURTSHIP);
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const base = 0.05 + 0.4 * mutationSpan;
+    const openness = 0.2 * courtship + 0.15 * neural;
+    const restraint = 0.25 * strategy;
+
+    return clamp(base + openness - restraint, 0.02, 0.8);
+  }
+
+  inheritStrategy(parentStrategies = [], { fallback = null } = {}) {
+    const rng = this.prngFor("inheritStrategy");
+    const sanitized = Array.isArray(parentStrategies)
+      ? parentStrategies.filter((value) => Number.isFinite(value))
+      : [];
+    const anchor = this.strategy();
+    const fallbackValue = Number.isFinite(fallback) ? clamp(fallback, 0, 1) : anchor;
+    const parentAvg =
+      sanitized.length > 0
+        ? sanitized.reduce((sum, value) => sum + clamp(value, 0, 1), 0) /
+          sanitized.length
+        : fallbackValue;
+    const courtship = this.geneFraction(GENE_LOCI.COURTSHIP);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const strategyGene = this.geneFraction(GENE_LOCI.STRATEGY);
+    const heritageWeight = clamp(
+      0.25 + 0.35 * courtship + 0.2 * exploration - 0.3 * strategyGene,
+      0.1,
+      0.8,
+    );
+    const drift = (rng() - 0.5) * this.strategyDriftRange();
+    const combined = anchor * (1 - heritageWeight) + parentAvg * heritageWeight + drift;
+
+    return clamp(combined, 0, 1);
+  }
+
   // Preference (-1..1) for genetic similarity in mates. Positive -> likes similar, negative -> seeks diversity.
   mateSimilarityBias() {
     const rnd = this.prngFor("mateSimilarityBias");
@@ -1222,16 +1261,87 @@ export class DNA {
     const g = this.g / 255;
     const b = this.b / 255;
     const bias = this.mateSimilarityBias();
-    const curiosityBase = 0.25 + 0.45 * b; // bluer genomes are more exploratory
-    const efficiencyBrake = 0.25 * g; // greener genomes conserve effort
-    const jitter = (rnd() - 0.5) * 0.3;
+    const courtship = this.geneFraction(GENE_LOCI.COURTSHIP);
+    const curiosityBase = 0.22 + 0.35 * b + 0.28 * courtship; // bluer and courtship-heavy genomes are curious
+    const efficiencyBrake = 0.18 * g + 0.07 * (1 - courtship); // greener genomes conserve effort; low courtship tempers swings
+    const jitter = (rnd() - 0.5) * (0.25 + 0.15 * courtship);
     let appetite = curiosityBase - efficiencyBrake + jitter;
 
-    // Strong homophily dampens curiosity, heterophily boosts it
-    appetite += Math.max(0, -bias) * 0.4;
-    appetite -= Math.max(0, bias) * 0.3;
+    // Strong homophily dampens curiosity, heterophily boosts it with courtship modulation
+    appetite += Math.max(0, -bias) * (0.35 + 0.25 * courtship);
+    appetite -= Math.max(0, bias) * (0.25 + 0.2 * (1 - courtship));
 
     return clamp(appetite, 0, 1);
+  }
+
+  mateSamplingProfile() {
+    const rng = this.prngFor("mateSamplingProfile");
+    const courtship = this.geneFraction(GENE_LOCI.COURTSHIP);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+
+    const curiosityBase = 0.04 + 0.45 * courtship + 0.25 * exploration + 0.1 * risk;
+    const cautionBrake =
+      0.15 * (1 - fertility) + 0.12 * (1 - cooperation) + 0.15 * strategy;
+    const curiosityChance = clamp(
+      curiosityBase - cautionBrake + (rng() - 0.5) * 0.08,
+      0.01,
+      0.8,
+    );
+
+    const tailBase = 0.15 + 0.5 * courtship + 0.2 * exploration;
+    const tailModeration = 0.25 * strategy + 0.1 * (1 - sense);
+    const tailFraction = clamp(
+      tailBase - tailModeration + (rng() - 0.5) * 0.1,
+      0.05,
+      0.75,
+    );
+
+    const preferenceSoftening = clamp(
+      0.6 + 0.8 * courtship + 0.3 * cooperation - 0.5 * strategy,
+      0.3,
+      2.4,
+    );
+    const selectionJitter = clamp(
+      0.03 + 0.4 * courtship - 0.25 * strategy + (rng() - 0.5) * 0.08,
+      0,
+      0.5,
+    );
+    const noveltyWeight = clamp(
+      -0.1 + 0.6 * courtship + 0.25 * exploration - 0.2 * strategy,
+      -0.4,
+      0.6,
+    );
+    const fallbackNoveltyBias = clamp(
+      -0.15 + 0.7 * courtship + 0.3 * exploration - 0.25 * strategy,
+      -0.5,
+      0.65,
+    );
+    const fallbackStabilityWeight = clamp(
+      0.25 + 0.45 * fertility + 0.25 * cooperation - 0.4 * exploration,
+      0.05,
+      0.9,
+    );
+    const fallbackNoise = clamp(
+      0.04 + 0.35 * courtship - 0.2 * strategy + 0.1 * (1 - sense),
+      0.02,
+      0.4,
+    );
+
+    return {
+      curiosityChance,
+      tailFraction,
+      preferenceSoftening,
+      selectionJitter,
+      noveltyWeight,
+      fallbackNoveltyBias,
+      fallbackStabilityWeight,
+      fallbackNoise,
+    };
   }
 
   lifespanAdj() {
