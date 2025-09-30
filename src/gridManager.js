@@ -113,6 +113,15 @@ function toBrainSnapshotCollector(candidate) {
   return null;
 }
 
+/**
+ * Primary orchestrator for cell lifecycle, energy management, and spatial
+ * interactions. `GridManager` owns the grid data structures, applies movement
+ * and reproduction rules, coordinates energy updates, and relays leaderboard
+ * snapshots. The class exposes numerous hooks consumed by
+ * {@link SimulationEngine}, UI controls, and tests; the JSDoc on public
+ * methods documents parameters and side effects so external systems can
+ * safely coordinate behaviour.
+ */
 export default class GridManager {
   // Base per-tick regen before modifiers; logistic to max, density-aware
   static energyRegenRate = ENERGY_REGEN_RATE_DEFAULT;

@@ -1,5 +1,14 @@
 import { createRankedBuffer } from "./utils.js";
 
+/**
+ * Generates a ranked leaderboard from the latest grid snapshot. The helper
+ * combines raw fitness metrics with smoothed scores and optional brain
+ * telemetry so UI panels can highlight the most successful organisms.
+ *
+ * @param {{entries:Array,brainSnapshots:Array}} snapshot - Data collected by {@link GridManager}.
+ * @param {number} [topN=5] - Maximum number of entries to return.
+ * @returns {Array<Object>} Ranked list sorted by smoothed then raw fitness.
+ */
 export function computeLeaderboard(snapshot, topN = 5) {
   const numericTopN = Number(topN);
   const sanitizedTopN = Number.isFinite(numericTopN)
