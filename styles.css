@@ -19,8 +19,8 @@
 
   /* Typography */
   --font:
-    ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans,
-    Helvetica Neue, Arial, sans-serif;
+    ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell,
+    Noto Sans, Helvetica Neue, Arial, sans-serif;
 }
 html,
 body {
@@ -243,14 +243,14 @@ canvas {
 .control-line--checkbox .control-name {
   margin-bottom: 0;
 }
-.control-line input[type='range'] {
+.control-line input[type="range"] {
   flex: 1 1 auto;
   accent-color: var(--color-text);
 }
 
 .control-line select,
-.control-line input[type='number'],
-.control-line input[type='text'] {
+.control-line input[type="number"],
+.control-line input[type="text"] {
   flex: 1 1 auto;
   width: 100%;
   padding: 6px 8px;
@@ -263,13 +263,13 @@ canvas {
 }
 
 .control-line select:focus,
-.control-line input[type='number']:focus,
-.control-line input[type='text']:focus {
+.control-line input[type="number"]:focus,
+.control-line input[type="text"]:focus {
   outline: 2px solid rgba(255, 255, 255, 0.35);
   outline-offset: 2px;
 }
 
-.control-line--checkbox input[type='checkbox'] {
+.control-line--checkbox input[type="checkbox"] {
   accent-color: var(--color-text);
 }
 .control-value {
@@ -284,12 +284,6 @@ canvas {
   color: var(--color-text-subtle);
   font-size: 12px;
   line-height: 1.5;
-}
-
-.insights-panel h3 {
-  margin: 0 0 var(--space-md);
-  font-size: 16px;
-  color: var(--color-text);
 }
 
 /* Leaderboard panel */
