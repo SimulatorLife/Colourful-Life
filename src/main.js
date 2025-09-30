@@ -205,6 +205,10 @@ function createHeadlessUiManager(options = {}) {
     setLingerPenalty: (value) => {
       updateIfFinite('lingerPenalty', value);
     },
+    getAutoPauseOnBlur: () => settings.autoPauseOnBlur,
+    setAutoPauseOnBlur: (value) => {
+      settings.autoPauseOnBlur = Boolean(value);
+    },
     selectionManager: selectionManager ?? null,
   };
 }
@@ -385,6 +389,12 @@ export function createSimulation({
         if (changes?.paused !== undefined && typeof uiManager.setPauseState === 'function') {
           uiManager.setPauseState(changes.paused);
         }
+        if (
+          changes?.autoPauseOnBlur !== undefined &&
+          typeof uiManager.setAutoPauseOnBlur === 'function'
+        ) {
+          uiManager.setAutoPauseOnBlur(changes.autoPauseOnBlur);
+        }
       })
     );
   }
@@ -418,7 +428,11 @@ export function createSimulation({
 
         if (typeof unsub === 'function') unsub();
       }
-      engine.stop();
+      if (typeof engine.destroy === 'function') {
+        engine.destroy();
+      } else {
+        engine.stop();
+      }
     },
   };
 }
