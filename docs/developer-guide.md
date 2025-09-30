@@ -19,6 +19,9 @@ workflow, tooling, and documentation expectations.
 - Follow the existing module structure. Simulation logic belongs in `src/`,
   documentation in `docs/`, tests in `test/`, and profiling scripts in
   `scripts/`.
+- Rely on the root `package.json` for module settings; nested manifests inside
+  `src/` or other subdirectories are unnecessary and should be removed when
+  discovered.
 - Prefer pure functions for deterministic systems. Stateful helpers (e.g.
   `Stats`) should surface clear methods for mutation.
 - Avoid adding new dependencies unless they are lightweight and Parcel
