@@ -1,12 +1,9 @@
 import { test } from 'uvu';
 import * as assert from 'uvu/assert';
+import { approxEqual } from './helpers/assertions.js';
 
 if (typeof globalThis.window === 'undefined') {
   globalThis.window = {};
-}
-
-function approxEqual(actual, expected, epsilon = 1e-6) {
-  assert.ok(Math.abs(actual - expected) <= epsilon, `Expected ${expected}, received ${actual}`);
 }
 
 test('GridManager.regenerateEnergyGrid applies event effect modifiers', async () => {

@@ -1,11 +1,8 @@
 import { test } from 'uvu';
 import * as assert from 'uvu/assert';
+import { approxEqual } from './helpers/assertions.js';
 
 const baseArea = { x: 0, y: 0, width: 5, height: 5 };
-
-function approxEqual(actual, expected, epsilon = 1e-6) {
-  assert.ok(Math.abs(actual - expected) <= epsilon, `Expected ${expected}, received ${actual}`);
-}
 
 test('accumulateEventModifiers combines overlapping event effects', async () => {
   const [{ accumulateEventModifiers }, { getEventEffect }, { isEventAffecting }] =

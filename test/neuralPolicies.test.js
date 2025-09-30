@@ -1,5 +1,6 @@
 import { test } from 'uvu';
 import * as assert from 'uvu/assert';
+import { approxEqual } from './helpers/assertions.js';
 
 let Cell;
 let DNA;
@@ -9,10 +10,6 @@ let lerp;
 let Brain;
 let OUTPUT_GROUPS;
 let NEURAL_GENE_BYTES;
-
-function approxEqual(a, b, tolerance = 1e-9) {
-  assert.ok(Math.abs(a - b) <= tolerance, `expected ${a} ≈ ${b}`);
-}
 
 function setNeuralGene(
   dna,
