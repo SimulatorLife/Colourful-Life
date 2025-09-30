@@ -293,7 +293,7 @@ export default class Stats {
     this.pushHistory("diversityPressure", this.diversityPressure);
     this.pushHistory("energy", meanEnergy);
     this.pushHistory("growth", this.births - this.deaths);
-    this.pushHistory("diversePairingRate", diverseSuccessRate);
+    this.pushHistory("diversePairingRate", diverseChoiceRate);
     this.pushHistory("meanDiversityAppetite", meanAppetite);
     if (typeof this.mutationMultiplier === "number") {
       this.pushHistory("mutationMultiplier", this.mutationMultiplier);
