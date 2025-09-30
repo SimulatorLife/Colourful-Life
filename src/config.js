@@ -1,5 +1,32 @@
 // Centralized simulation config defaults
-export const MAX_TILE_ENERGY = 5;
+const DEFAULT_MAX_TILE_ENERGY = 5;
+const RUNTIME_ENV =
+  typeof process !== "undefined" && typeof process.env === "object"
+    ? process.env
+    : undefined;
+
+/**
+ * Resolves the maximum amount of energy a single tile can store, allowing tests
+ * and runtime environments to override the baseline via an environment
+ * variable.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Sanitized maximum tile energy value.
+ */
+export function resolveMaxTileEnergy(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_MAX_TILE_ENERGY;
+  const parsed = Number.parseFloat(raw);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_MAX_TILE_ENERGY;
+  }
+
+  return parsed;
+}
+
+export const MAX_TILE_ENERGY = resolveMaxTileEnergy();
 export const ENERGY_REGEN_RATE_DEFAULT = 0.007; // baseline logistic regen (per tick)
 export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.05; // smoothing between tiles (per tick)
 export const DENSITY_RADIUS_DEFAULT = 1;
@@ -44,7 +71,8 @@ const SLIDER_DEFAULTS = {
     UI_SLIDER_CONFIG.combatEdgeSharpness?.default ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
   leaderboardIntervalMs: UI_SLIDER_CONFIG.leaderboardIntervalMs?.default ?? 750,
   matingDiversityThreshold: UI_SLIDER_CONFIG.matingDiversityThreshold?.default ?? 0.45,
-  lowDiversityReproMultiplier: UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ?? 0.1,
+  lowDiversityReproMultiplier:
+    UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ?? 0.1,
 };
 
 const BASE_SIMULATION_DEFAULTS = {
