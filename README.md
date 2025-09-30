@@ -18,11 +18,11 @@ npm run start    # Parcel dev server with hot reloading
 
 # Optional helpers
 npm run build    # Production bundle written to dist/
-npm run serve    # Lightweight static server
+npm run format   # Format code with Prettier
 npm run test     # UVU unit tests
 ```
 
-> ℹ️ Browsers block `file://` module imports. Always launch the simulation through Parcel (`npm run start`) or the static server (`npm run serve`).
+Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
 ## Core systems
 
