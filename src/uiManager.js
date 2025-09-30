@@ -47,6 +47,7 @@ export default class UIManager {
     this.speedMultiplier = defaults.speedMultiplier;
     this.densityEffectMultiplier = defaults.densityEffectMultiplier;
     this.mutationMultiplier = defaults.mutationMultiplier;
+    this.combatEdgeSharpness = defaults.combatEdgeSharpness;
     this.matingDiversityThreshold = defaults.matingDiversityThreshold;
     this.lowDiversityReproMultiplier = defaults.lowDiversityReproMultiplier;
     this.energyRegenRate = defaults.energyRegenRate; // base logistic regen rate (0..0.2)
@@ -671,6 +672,17 @@ export default class UIManager {
         format: (v) => v.toFixed(2),
         getValue: () => this.mutationMultiplier,
         setValue: (v) => this.#updateSetting('mutationMultiplier', v),
+        position: 'beforeOverlays',
+      }),
+      withSliderConfig('combatEdgeSharpness', {
+        label: 'Combat Edge Sharpness',
+        min: 0.5,
+        max: 6,
+        step: 0.1,
+        title: 'Controls how sharply combat power differences translate into win odds (0.5..6)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.combatEdgeSharpness,
+        setValue: (v) => this.#updateSetting('combatEdgeSharpness', v),
         position: 'beforeOverlays',
       }),
       withSliderConfig('lowDiversityReproMultiplier', {

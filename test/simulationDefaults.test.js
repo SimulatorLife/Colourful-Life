@@ -142,6 +142,7 @@ test('resolveSimulationDefaults returns expected baseline configuration', async 
     UI_SLIDER_CONFIG,
     ENERGY_REGEN_RATE_DEFAULT,
     ENERGY_DIFFUSION_RATE_DEFAULT,
+    COMBAT_EDGE_SHARPNESS_DEFAULT,
   } = await configModulePromise;
   const defaults = resolveSimulationDefaults();
   const expected = {
@@ -155,6 +156,8 @@ test('resolveSimulationDefaults returns expected baseline configuration', async 
     eventStrengthMultiplier: UI_SLIDER_CONFIG.eventStrengthMultiplier?.default ?? 1,
     energyRegenRate: ENERGY_REGEN_RATE_DEFAULT,
     energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
+    combatEdgeSharpness:
+      UI_SLIDER_CONFIG.combatEdgeSharpness?.default ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
     showObstacles: true,
     showEnergy: false,
     showDensity: false,
@@ -195,6 +198,7 @@ test('UIManager constructor seeds settings from resolveSimulationDefaults', asyn
   assert.is(uiManager.speedMultiplier, defaults.speedMultiplier);
   assert.is(uiManager.densityEffectMultiplier, defaults.densityEffectMultiplier);
   assert.is(uiManager.mutationMultiplier, defaults.mutationMultiplier);
+  assert.is(uiManager.combatEdgeSharpness, defaults.combatEdgeSharpness);
   assert.is(uiManager.matingDiversityThreshold, defaults.matingDiversityThreshold);
   assert.is(uiManager.lowDiversityReproMultiplier, defaults.lowDiversityReproMultiplier);
   assert.is(uiManager.energyRegenRate, defaults.energyRegenRate);
@@ -235,6 +239,7 @@ test('SimulationEngine state initialization mirrors resolveSimulationDefaults', 
     eventStrengthMultiplier: defaults.eventStrengthMultiplier,
     energyRegenRate: defaults.energyRegenRate,
     energyDiffusionRate: defaults.energyDiffusionRate,
+    combatEdgeSharpness: defaults.combatEdgeSharpness,
     showObstacles: defaults.showObstacles,
     showEnergy: defaults.showEnergy,
     showDensity: defaults.showDensity,
@@ -263,10 +268,13 @@ test('createHeadlessUiManager exposes resolveSimulationDefaults-derived values',
   assert.is(ui.getSocietySimilarity(), defaults.societySimilarity);
   assert.is(ui.getEnemySimilarity(), defaults.enemySimilarity);
   assert.is(ui.getEventStrengthMultiplier(), defaults.eventStrengthMultiplier);
+  assert.is(ui.getCombatEdgeSharpness(), defaults.combatEdgeSharpness);
   assert.is(ui.getEnergyRegenRate(), defaults.energyRegenRate);
   assert.is(ui.getEnergyDiffusionRate(), defaults.energyDiffusionRate);
   assert.is(ui.getMatingDiversityThreshold(), defaults.matingDiversityThreshold);
   assert.is(ui.getLowDiversityReproMultiplier(), defaults.lowDiversityReproMultiplier);
+  ui.setCombatEdgeSharpness(4.2);
+  assert.is(ui.getCombatEdgeSharpness(), 4.2);
   assert.is(ui.getShowObstacles(), defaults.showObstacles);
   assert.is(ui.getShowEnergy(), defaults.showEnergy);
   assert.is(ui.getShowDensity(), defaults.showDensity);

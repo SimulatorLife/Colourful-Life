@@ -8,6 +8,7 @@ import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
   UI_SLIDER_CONFIG,
+  COMBAT_EDGE_SHARPNESS_DEFAULT,
   resolveSimulationDefaults,
 } from './config.js';
 
@@ -218,6 +219,7 @@ export default class SimulationEngine {
       eventStrengthMultiplier: defaults.eventStrengthMultiplier,
       energyRegenRate: defaults.energyRegenRate,
       energyDiffusionRate: defaults.energyDiffusionRate,
+      combatEdgeSharpness: defaults.combatEdgeSharpness,
       showObstacles: defaults.showObstacles,
       showEnergy: defaults.showEnergy,
       showDensity: defaults.showDensity,
@@ -414,6 +416,7 @@ export default class SimulationEngine {
         lowDiversityReproMultiplier:
           this.state.lowDiversityReproMultiplier ??
           UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default,
+        combatEdgeSharpness: this.state.combatEdgeSharpness ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
       });
 
       this.lastSnapshot = snapshot;
@@ -581,6 +584,15 @@ export default class SimulationEngine {
     this.#updateStateAndFlag({ mutationMultiplier: sanitized });
   }
 
+  setCombatEdgeSharpness(value) {
+    const sanitized = sanitizeNumeric(value, {
+      fallback: this.state.combatEdgeSharpness,
+      min: 0.1,
+    });
+
+    this.#updateStateAndFlag({ combatEdgeSharpness: sanitized });
+  }
+
   setDensityEffectMultiplier(value) {
     const sanitized = sanitizeNumeric(value, {
       fallback: this.state.densityEffectMultiplier,
@@ -695,6 +707,9 @@ export default class SimulationEngine {
         break;
       case 'eventFrequencyMultiplier':
         this.setEventFrequencyMultiplier(value);
+        break;
+      case 'combatEdgeSharpness':
+        this.setCombatEdgeSharpness(value);
         break;
       case 'densityEffectMultiplier':
         this.setDensityEffectMultiplier(value);
