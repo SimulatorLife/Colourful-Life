@@ -1,12 +1,18 @@
-import { randomRange, randomPercent, clamp, lerp, createRankedBuffer } from './utils.js';
-import DNA from './genome.js';
-import Cell from './cell.js';
-import { computeFitness } from './fitness.mjs';
-import { createEventContext, defaultEventContext } from './events/eventContext.js';
-import { computeTileEnergyUpdate } from './energySystem.js';
-import InteractionSystem from './interactionSystem.js';
-import GridInteractionAdapter from './grid/gridAdapter.js';
-import ReproductionZonePolicy from './grid/reproductionZonePolicy.js';
+import {
+  randomRange,
+  randomPercent,
+  clamp,
+  lerp,
+  createRankedBuffer,
+} from "./utils.js";
+import DNA from "./genome.js";
+import Cell from "./cell.js";
+import { computeFitness } from "./fitness.mjs";
+import { createEventContext, defaultEventContext } from "./events/eventContext.js";
+import { computeTileEnergyUpdate } from "./energySystem.js";
+import InteractionSystem from "./interactionSystem.js";
+import GridInteractionAdapter from "./grid/gridAdapter.js";
+import ReproductionZonePolicy from "./grid/reproductionZonePolicy.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -15,52 +21,52 @@ import {
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
-} from './config.js';
+} from "./config.js";
 
 export const OBSTACLE_PRESETS = [
   {
-    id: 'none',
-    label: 'Open Field',
-    description: 'Clears all obstacles for free movement.',
+    id: "none",
+    label: "Open Field",
+    description: "Clears all obstacles for free movement.",
   },
   {
-    id: 'midline',
-    label: 'Midline Wall',
-    description: 'Single vertical barrier with regular gates.',
+    id: "midline",
+    label: "Midline Wall",
+    description: "Single vertical barrier with regular gates.",
   },
   {
-    id: 'corridor',
-    label: 'Triple Corridor',
-    description: 'Two vertical walls that divide the map into three lanes.',
+    id: "corridor",
+    label: "Triple Corridor",
+    description: "Two vertical walls that divide the map into three lanes.",
   },
   {
-    id: 'checkerboard',
-    label: 'Checkerboard Gaps',
-    description: 'Alternating impassable tiles to force weaving paths.',
+    id: "checkerboard",
+    label: "Checkerboard Gaps",
+    description: "Alternating impassable tiles to force weaving paths.",
   },
   {
-    id: 'perimeter',
-    label: 'Perimeter Ring',
-    description: 'Walls around the rim that keep populations in-bounds.',
+    id: "perimeter",
+    label: "Perimeter Ring",
+    description: "Walls around the rim that keep populations in-bounds.",
   },
   {
-    id: 'sealed-quadrants',
-    label: 'Sealed Quadrants',
-    description: 'Thick cross-shaped walls isolate four distinct quadrants.',
+    id: "sealed-quadrants",
+    label: "Sealed Quadrants",
+    description: "Thick cross-shaped walls isolate four distinct quadrants.",
   },
   {
-    id: 'sealed-chambers',
-    label: 'Sealed Chambers',
-    description: 'Grid partitions create multiple closed rectangular chambers.',
+    id: "sealed-chambers",
+    label: "Sealed Chambers",
+    description: "Grid partitions create multiple closed rectangular chambers.",
   },
   {
-    id: 'corner-islands',
-    label: 'Corner Islands',
-    description: 'Four isolated pockets carved out of a blocked landscape.',
+    id: "corner-islands",
+    label: "Corner Islands",
+    description: "Four isolated pockets carved out of a blocked landscape.",
   },
 ];
 const BRAIN_SNAPSHOT_LIMIT = 5;
-const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
+const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 
 const similarityCache = new WeakMap();
@@ -96,11 +102,11 @@ function getPairSimilarity(cellA, cellB) {
 }
 
 function toBrainSnapshotCollector(candidate) {
-  if (typeof candidate === 'function') {
+  if (typeof candidate === "function") {
     return candidate;
   }
 
-  if (candidate && typeof candidate.captureFromEntries === 'function') {
+  if (candidate && typeof candidate.captureFromEntries === "function") {
     return (entries, options) => candidate.captureFromEntries(entries, options);
   }
 
@@ -147,7 +153,7 @@ export default class GridManager {
   }
 
   static #resolvePenaltyAmount(penalty, context) {
-    if (typeof penalty === 'function') {
+    if (typeof penalty === "function") {
       const value = penalty(context);
 
       return Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -157,11 +163,11 @@ export default class GridManager {
   }
 
   static #applyWallPenalty(cell, penalty, context) {
-    if (!cell || typeof cell !== 'object' || cell.energy == null) return;
+    if (!cell || typeof cell !== "object" || cell.energy == null) return;
 
     let amount = GridManager.#resolvePenaltyAmount(penalty, context);
     const profile =
-      cell?.dna && typeof cell.dna.wallContactProfile === 'function'
+      cell?.dna && typeof cell.dna.wallContactProfile === "function"
         ? cell.dna.wallContactProfile()
         : null;
 
@@ -187,42 +193,48 @@ export default class GridManager {
     const effectiveContacts = Math.min(prior, maxMemory);
     const scale = 1 + effectiveContacts * contactGrowth;
     const ageScale =
-      typeof cell.ageEnergyMultiplier === 'function' ? cell.ageEnergyMultiplier(0.4) : 1;
+      typeof cell.ageEnergyMultiplier === "function"
+        ? cell.ageEnergyMultiplier(0.4)
+        : 1;
 
     cell.energy = Math.max(0, cell.energy - amount * scale * ageScale);
     cell.wallContactTicks = prior + 1;
   }
 
   static #resetWallPenalty(cell) {
-    if (cell && typeof cell === 'object' && cell.wallContactTicks) {
+    if (cell && typeof cell === "object" && cell.wallContactTicks) {
       cell.wallContactTicks = 0;
     }
   }
 
   static #resolveDiversityDrive(
     cell,
-    { localDensity = 0, tileEnergy = 0.5, tileEnergyDelta = 0 } = {}
+    { localDensity = 0, tileEnergy = 0.5, tileEnergyDelta = 0 } = {},
   ) {
-    if (!cell || typeof cell !== 'object') return 0;
+    if (!cell || typeof cell !== "object") return 0;
 
     const appetite = clamp(cell.diversityAppetite ?? 0, 0, 1);
     const bias = clamp(cell.matePreferenceBias ?? 0, -1, 1);
     const fertilityFrac = clamp(
-      typeof cell.dna?.reproductionThresholdFrac === 'function'
+      typeof cell.dna?.reproductionThresholdFrac === "function"
         ? cell.dna.reproductionThresholdFrac()
         : 0.4,
       0,
-      1
+      1,
     );
     const densitySignal = clamp(localDensity ?? 0, 0, 1);
     const scarcitySignal = clamp(1 - (tileEnergy ?? 0), 0, 1);
     const declineSignal = clamp(-(tileEnergyDelta ?? 0), 0, 1);
-    const curiosity = clamp(appetite + Math.max(0, -bias) * 0.5 - Math.max(0, bias) * 0.4, 0, 1);
+    const curiosity = clamp(
+      appetite + Math.max(0, -bias) * 0.5 - Math.max(0, bias) * 0.4,
+      0,
+      1,
+    );
     const caution = clamp(1 - fertilityFrac, 0, 1);
     const environment = clamp(
       0.5 * densitySignal + 0.3 * scarcitySignal + 0.2 * declineSignal,
       0,
-      1
+      1,
     );
     const drive = curiosity * (0.55 + 0.45 * caution);
 
@@ -230,21 +242,24 @@ export default class GridManager {
   }
 
   static #notify(callback, ...args) {
-    if (typeof callback === 'function') callback(...args);
+    if (typeof callback === "function") callback(...args);
   }
 
   static #updateCellPosition(cell, row, col) {
-    if (!cell || typeof cell !== 'object') return;
-    if ('row' in cell) cell.row = row;
-    if ('col' in cell) cell.col = col;
+    if (!cell || typeof cell !== "object") return;
+    if ("row" in cell) cell.row = row;
+    if ("col" in cell) cell.col = col;
   }
 
   static #applyMovementEnergyCost(cell) {
-    if (!cell || typeof cell !== 'object' || cell.energy == null || !cell.dna) return;
+    if (!cell || typeof cell !== "object" || cell.energy == null || !cell.dna) return;
 
-    const baseCost = typeof cell.dna.moveCost === 'function' ? cell.dna.moveCost() : 0.005;
+    const baseCost =
+      typeof cell.dna.moveCost === "function" ? cell.dna.moveCost() : 0.005;
     const ageScale =
-      typeof cell.ageEnergyMultiplier === 'function' ? cell.ageEnergyMultiplier(0.6) : 1;
+      typeof cell.ageEnergyMultiplier === "function"
+        ? cell.ageEnergyMultiplier(0.6)
+        : 1;
     const cost = baseCost * ageScale;
 
     cell.energy = Math.max(0, cell.energy - cost);
@@ -268,7 +283,7 @@ export default class GridManager {
     });
     GridManager.#notify(onCellMoved, moving, fromRow, fromCol, toRow, toCol);
 
-    if (moving && activeCells && typeof activeCells.add === 'function') {
+    if (moving && activeCells && typeof activeCells.add === "function") {
       activeCells.add(moving);
     }
   }
@@ -290,14 +305,14 @@ export default class GridManager {
       if (normalizedOptions.penalizeOnBounds) {
         GridManager.#applyWallPenalty(moving, normalizedOptions.lingerPenalty, {
           cell: moving,
-          reason: 'bounds',
+          reason: "bounds",
           attemptedRow: attempt.toRow,
           attemptedCol: attempt.toCol,
         });
       }
 
       GridManager.#notify(normalizedOptions.onBlocked, {
-        reason: 'bounds',
+        reason: "bounds",
         row: sr,
         col: sc,
         nextRow: attempt.toRow,
@@ -308,16 +323,18 @@ export default class GridManager {
       return false;
     }
 
-    if (GridManager.#isObstacle(normalizedOptions.obstacles, attempt.toRow, attempt.toCol)) {
+    if (
+      GridManager.#isObstacle(normalizedOptions.obstacles, attempt.toRow, attempt.toCol)
+    ) {
       GridManager.#applyWallPenalty(moving, normalizedOptions.lingerPenalty, {
         cell: moving,
-        reason: 'obstacle',
+        reason: "obstacle",
         attemptedRow: attempt.toRow,
         attemptedCol: attempt.toCol,
       });
 
       GridManager.#notify(normalizedOptions.onBlocked, {
-        reason: 'obstacle',
+        reason: "obstacle",
         row: sr,
         col: sc,
         nextRow: attempt.toRow,
@@ -344,7 +361,16 @@ export default class GridManager {
     return true;
   }
 
-  static moveToTarget(gridArr, row, col, targetRow, targetCol, rows, cols, options = {}) {
+  static moveToTarget(
+    gridArr,
+    row,
+    col,
+    targetRow,
+    targetCol,
+    rows,
+    cols,
+    options = {},
+  ) {
     const dRow = targetRow - row;
     const dCol = targetCol - col;
     let dr = 0,
@@ -356,7 +382,16 @@ export default class GridManager {
     return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
   }
 
-  static moveAwayFromTarget(gridArr, row, col, targetRow, targetCol, rows, cols, options = {}) {
+  static moveAwayFromTarget(
+    gridArr,
+    row,
+    col,
+    targetRow,
+    targetCol,
+    rows,
+    cols,
+    options = {},
+  ) {
     const dRow = targetRow - row;
     const dCol = targetCol - col;
     let dr = 0,
@@ -385,22 +420,22 @@ export default class GridManager {
       stats,
       maxTileEnergy,
       selectionManager,
-      initialObstaclePreset = 'none',
+      initialObstaclePreset = "none",
       initialObstaclePresetOptions = {},
       randomizeInitialObstacles = false,
       randomObstaclePresetPool = null,
       rng,
       brainSnapshotCollector,
-    } = {}
+    } = {},
   ) {
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
     this.maxTileEnergy =
-      typeof maxTileEnergy === 'number' ? maxTileEnergy : GridManager.maxTileEnergy;
+      typeof maxTileEnergy === "number" ? maxTileEnergy : GridManager.maxTileEnergy;
     this.activeCells = new Set();
     this.energyGrid = Array.from({ length: rows }, () =>
-      Array.from({ length: cols }, () => this.maxTileEnergy / 2)
+      Array.from({ length: cols }, () => this.maxTileEnergy / 2),
     );
     this.energyNext = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.energyDeltaGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
@@ -411,7 +446,7 @@ export default class GridManager {
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
     this.reproductionZones = new ReproductionZonePolicy();
-    Object.defineProperty(this, 'selectionManager', {
+    Object.defineProperty(this, "selectionManager", {
       configurable: true,
       enumerable: true,
       get: () => this.reproductionZones.getSelectionManager(),
@@ -421,7 +456,7 @@ export default class GridManager {
     });
     this.selectionManager = selectionManager || null;
     const initialThreshold =
-      typeof stats?.matingDiversityThreshold === 'number'
+      typeof stats?.matingDiversityThreshold === "number"
         ? clamp(stats.matingDiversityThreshold, 0, 1)
         : 0.45;
 
@@ -435,12 +470,14 @@ export default class GridManager {
     this.densityDirtyTiles = new Set();
     this.lastSnapshot = null;
     this.lingerPenalty = 0;
-    this.currentObstaclePreset = 'none';
+    this.currentObstaclePreset = "none";
     this.tickCount = 0;
-    this.rng = typeof rng === 'function' ? rng : Math.random;
+    this.rng = typeof rng === "function" ? rng : Math.random;
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
     this.interactionAdapter = new GridInteractionAdapter({ gridManager: this });
-    this.interactionSystem = new InteractionSystem({ adapter: this.interactionAdapter });
+    this.interactionSystem = new InteractionSystem({
+      adapter: this.interactionAdapter,
+    });
     this.brainSnapshotCollector = toBrainSnapshotCollector(brainSnapshotCollector);
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
       GridManager.tryMove(gridArr, sr, sc, dr, dc, rows, cols, this.#movementOptions());
@@ -453,9 +490,17 @@ export default class GridManager {
         targetCol,
         rows,
         cols,
-        this.#movementOptions()
+        this.#movementOptions(),
       );
-    this.boundMoveAwayFromTarget = (gridArr, row, col, targetRow, targetCol, rows, cols) =>
+    this.boundMoveAwayFromTarget = (
+      gridArr,
+      row,
+      col,
+      targetRow,
+      targetCol,
+      rows,
+      cols,
+    ) =>
       GridManager.moveAwayFromTarget(
         gridArr,
         row,
@@ -464,20 +509,28 @@ export default class GridManager {
         targetCol,
         rows,
         cols,
-        this.#movementOptions()
+        this.#movementOptions(),
       );
     this.boundMoveRandomly = (gridArr, row, col, cell, rows, cols) =>
-      GridManager.moveRandomly(gridArr, row, col, cell, rows, cols, this.#movementOptions());
+      GridManager.moveRandomly(
+        gridArr,
+        row,
+        col,
+        cell,
+        rows,
+        cols,
+        this.#movementOptions(),
+      );
     const resolvedPresetId = this.#resolveInitialObstaclePreset({
       initialPreset: initialObstaclePreset,
       randomize: randomizeInitialObstacles,
       pool: randomObstaclePresetPool,
     });
 
-    if (resolvedPresetId && resolvedPresetId !== 'none') {
+    if (resolvedPresetId && resolvedPresetId !== "none") {
       const presetOptions = this.#resolvePresetOptions(
         resolvedPresetId,
-        initialObstaclePresetOptions
+        initialObstaclePresetOptions,
       );
 
       this.applyObstaclePreset(resolvedPresetId, {
@@ -508,11 +561,11 @@ export default class GridManager {
   }
 
   #random() {
-    return typeof this.rng === 'function' ? this.rng() : Math.random();
+    return typeof this.rng === "function" ? this.rng() : Math.random();
   }
 
   #getPresetById(id) {
-    if (typeof id !== 'string') return null;
+    if (typeof id !== "string") return null;
 
     return OBSTACLE_PRESETS.find((preset) => preset.id === id) ?? null;
   }
@@ -532,12 +585,16 @@ export default class GridManager {
     return candidates[index]?.id ?? null;
   }
 
-  #resolveInitialObstaclePreset({ initialPreset, randomize = false, pool = null } = {}) {
-    if (randomize || initialPreset === 'random') {
+  #resolveInitialObstaclePreset({
+    initialPreset,
+    randomize = false,
+    pool = null,
+  } = {}) {
+    if (randomize || initialPreset === "random") {
       return this.#pickRandomObstaclePresetId(pool);
     }
 
-    if (typeof initialPreset === 'string') {
+    if (typeof initialPreset === "string") {
       const match = this.#getPresetById(initialPreset);
 
       return match ? match.id : null;
@@ -548,21 +605,21 @@ export default class GridManager {
 
   #resolvePresetOptions(presetId, presetOptionsInput) {
     if (!presetId) return {};
-    if (typeof presetOptionsInput === 'function') {
+    if (typeof presetOptionsInput === "function") {
       const result = presetOptionsInput(presetId);
 
-      return result && typeof result === 'object' ? result : {};
+      return result && typeof result === "object" ? result : {};
     }
 
     if (
       presetOptionsInput &&
-      typeof presetOptionsInput === 'object' &&
+      typeof presetOptionsInput === "object" &&
       !Array.isArray(presetOptionsInput)
     ) {
       if (Object.prototype.hasOwnProperty.call(presetOptionsInput, presetId)) {
         const scoped = presetOptionsInput[presetId];
 
-        return scoped && typeof scoped === 'object' ? scoped : {};
+        return scoped && typeof scoped === "object" ? scoped : {};
       }
 
       return presetOptionsInput;
@@ -600,7 +657,7 @@ export default class GridManager {
       if (Number.isFinite(numeric)) {
         this.matingDiversityThreshold = clamp(numeric, 0, 1);
       }
-    } else if (typeof this.stats?.matingDiversityThreshold === 'number') {
+    } else if (typeof this.stats?.matingDiversityThreshold === "number") {
       this.matingDiversityThreshold = clamp(this.stats.matingDiversityThreshold, 0, 1);
     }
 
@@ -639,7 +696,7 @@ export default class GridManager {
         this.obstacles[r][c] = false;
       }
     }
-    this.currentObstaclePreset = 'none';
+    this.currentObstaclePreset = "none";
   }
 
   setObstacle(row, col, blocked = true, { evict = true } = {}) {
@@ -676,14 +733,14 @@ export default class GridManager {
     index,
     {
       spanStart = 0,
-      spanEnd = axis === 'vertical' ? this.rows - 1 : this.cols - 1,
+      spanEnd = axis === "vertical" ? this.rows - 1 : this.cols - 1,
       gapEvery = 0,
       gapOffset = 0,
       thickness = 1,
       evict = true,
-    } = {}
+    } = {},
   ) {
-    const isVertical = axis === 'vertical';
+    const isVertical = axis === "vertical";
     const primaryLimit = isVertical ? this.rows : this.cols;
     const secondaryLimit = isVertical ? this.cols : this.rows;
     const normalizedStart = Math.max(0, Math.floor(spanStart));
@@ -719,9 +776,9 @@ export default class GridManager {
       gapOffset = 0,
       thickness = 1,
       evict = true,
-    } = {}
+    } = {},
   ) {
-    this._paintWallLine('vertical', col, {
+    this._paintWallLine("vertical", col, {
       spanStart: startRow,
       spanEnd: endRow,
       gapEvery,
@@ -740,9 +797,9 @@ export default class GridManager {
       gapOffset = 0,
       thickness = 1,
       evict = true,
-    } = {}
+    } = {},
   ) {
-    this._paintWallLine('horizontal', row, {
+    this._paintWallLine("horizontal", row, {
       spanStart: startCol,
       spanEnd: endCol,
       gapEvery,
@@ -786,16 +843,16 @@ export default class GridManager {
 
   applyObstaclePreset(
     presetId,
-    { clearExisting = true, append = false, presetOptions = {}, evict = true } = {}
+    { clearExisting = true, append = false, presetOptions = {}, evict = true } = {},
   ) {
     if (clearExisting && !append) this.clearObstacles();
     const options = presetOptions || {};
 
     switch (presetId) {
-      case 'none':
+      case "none":
         if (clearExisting) this.clearObstacles();
         break;
-      case 'midline': {
+      case "midline": {
         const col = Math.floor(this.cols / 2);
         const gapEvery = Math.max(0, Math.floor(options.gapEvery ?? 10));
         const gapOffset = Math.floor(options.gapOffset ?? gapEvery / 2);
@@ -804,7 +861,7 @@ export default class GridManager {
         this.paintVerticalWall(col, { gapEvery, gapOffset, thickness, evict });
         break;
       }
-      case 'corridor': {
+      case "corridor": {
         const gapEvery = Math.max(0, Math.floor(options.gapEvery ?? 12));
         const thickness = Math.max(1, Math.floor(options.thickness ?? 1));
         const first = Math.max(1, Math.floor(this.cols / 3));
@@ -819,7 +876,7 @@ export default class GridManager {
         });
         break;
       }
-      case 'checkerboard': {
+      case "checkerboard": {
         const tileSize = Math.max(1, Math.floor(options.tileSize ?? 2));
         const offsetRow = Math.floor(options.offsetRow ?? 0);
         const offsetCol = Math.floor(options.offsetCol ?? 0);
@@ -828,13 +885,13 @@ export default class GridManager {
         this.paintCheckerboard({ tileSize, offsetRow, offsetCol, blockParity, evict });
         break;
       }
-      case 'perimeter': {
+      case "perimeter": {
         const thickness = Math.max(1, Math.floor(options.thickness ?? 1));
 
         this.paintPerimeter({ thickness, evict });
         break;
       }
-      case 'sealed-quadrants': {
+      case "sealed-quadrants": {
         const thickness = Math.max(1, Math.floor(options.thickness ?? 2));
         const halfThickness = Math.floor(thickness / 2);
         const centerCol = Math.max(0, Math.floor(this.cols / 2) - halfThickness);
@@ -857,7 +914,7 @@ export default class GridManager {
         }
         break;
       }
-      case 'sealed-chambers': {
+      case "sealed-chambers": {
         const rows = Math.max(2, Math.floor(options.rows ?? 3));
         const cols = Math.max(2, Math.floor(options.cols ?? 3));
         const thickness = Math.max(1, Math.floor(options.thickness ?? 1));
@@ -877,13 +934,16 @@ export default class GridManager {
         }
 
         if (options.perimeter !== false) {
-          const perimeterThickness = Math.max(1, Math.floor(options.perimeter ?? thickness));
+          const perimeterThickness = Math.max(
+            1,
+            Math.floor(options.perimeter ?? thickness),
+          );
 
           this.paintPerimeter({ thickness: perimeterThickness, evict });
         }
         break;
       }
-      case 'corner-islands': {
+      case "corner-islands": {
         const moat = Math.max(1, Math.floor(options.moat ?? 3));
         const gapRows = Math.max(moat, Math.floor(options.gapRows ?? moat));
         const gapCols = Math.max(moat, Math.floor(options.gapCols ?? moat));
@@ -891,11 +951,11 @@ export default class GridManager {
         const maxIslandCols = Math.max(3, this.cols - 3 * gapCols);
         const islandRows = Math.max(
           3,
-          Math.min(Math.floor(options.islandRows ?? maxIslandRows / 2), maxIslandRows)
+          Math.min(Math.floor(options.islandRows ?? maxIslandRows / 2), maxIslandRows),
         );
         const islandCols = Math.max(
           3,
-          Math.min(Math.floor(options.islandCols ?? maxIslandCols / 2), maxIslandCols)
+          Math.min(Math.floor(options.islandCols ?? maxIslandCols / 2), maxIslandCols),
         );
         const carve = (startRow, startCol) => {
           const endRow = Math.min(this.rows - 1, startRow + islandRows - 1);
@@ -972,17 +1032,27 @@ export default class GridManager {
     }
   }
 
-  consumeEnergy(cell, row, col, densityGrid = this.densityGrid, densityEffectMultiplier = 1) {
+  consumeEnergy(
+    cell,
+    row,
+    col,
+    densityGrid = this.densityGrid,
+    densityEffectMultiplier = 1,
+  ) {
     const available = this.energyGrid[row][col];
     // DNA-driven harvest with density penalty
-    const baseRate = typeof cell.dna.forageRate === 'function' ? cell.dna.forageRate() : 0.4;
+    const baseRate =
+      typeof cell.dna.forageRate === "function" ? cell.dna.forageRate() : 0.4;
     const base = clamp(baseRate, 0.05, 1);
     const density =
-      densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
+      densityGrid?.[row]?.[col] ??
+      this.localDensity(row, col, GridManager.DENSITY_RADIUS);
     const effDensity = clamp((density ?? 0) * densityEffectMultiplier, 0, 1);
     const crowdPenalty = Math.max(0, 1 - CONSUMPTION_DENSITY_PENALTY * effDensity);
-    const minCap = typeof cell.dna.harvestCapMin === 'function' ? cell.dna.harvestCapMin() : 0.1;
-    const maxCapRaw = typeof cell.dna.harvestCapMax === 'function' ? cell.dna.harvestCapMax() : 0.5;
+    const minCap =
+      typeof cell.dna.harvestCapMin === "function" ? cell.dna.harvestCapMin() : 0.1;
+    const maxCapRaw =
+      typeof cell.dna.harvestCapMax === "function" ? cell.dna.harvestCapMax() : 0.5;
     const maxCap = Math.max(minCap, clamp(maxCapRaw, minCap, 1));
     const cap = clamp(base * crowdPenalty, minCap, maxCap);
     const take = Math.min(cap, available);
@@ -997,7 +1067,7 @@ export default class GridManager {
     R = GridManager.energyRegenRate,
     D = GridManager.energyDiffusionRate,
     densityGrid = null,
-    densityEffectMultiplier = 1
+    densityEffectMultiplier = 1,
   ) {
     const rows = this.rows;
     const cols = this.cols;
@@ -1007,7 +1077,8 @@ export default class GridManager {
     const energyGrid = this.energyGrid;
     const next = this.energyNext;
     const obstacles = this.obstacles;
-    const { isEventAffecting, getEventEffect } = this.eventContext ?? defaultEventContext;
+    const { isEventAffecting, getEventEffect } =
+      this.eventContext ?? defaultEventContext;
     const sharedConfig = {
       maxTileEnergy: this.maxTileEnergy,
       regenRate: R,
@@ -1155,9 +1226,9 @@ export default class GridManager {
     if (current) this.removeCell(row, col);
 
     this.grid[row][col] = cell;
-    if (cell && typeof cell === 'object') {
-      if ('row' in cell) cell.row = row;
-      if ('col' in cell) cell.col = col;
+    if (cell && typeof cell === "object") {
+      if ("row" in cell) cell.row = row;
+      if ("col" in cell) cell.col = col;
     }
     this.activeCells.add(cell);
     this.#applyDensityDelta(row, col, 1);
@@ -1186,9 +1257,9 @@ export default class GridManager {
 
     this.grid[toRow][toCol] = moving;
     this.grid[fromRow][fromCol] = null;
-    if (moving && typeof moving === 'object') {
-      if ('row' in moving) moving.row = toRow;
-      if ('col' in moving) moving.col = toCol;
+    if (moving && typeof moving === "object") {
+      if ("row" in moving) moving.row = toRow;
+      if ("col" in moving) moving.col = toCol;
     }
     this.#applyDensityDelta(fromRow, fromCol, -1);
     this.#applyDensityDelta(toRow, toCol, 1);
@@ -1253,7 +1324,9 @@ export default class GridManager {
 
   #buildDensityTotals(radius = this.densityRadius) {
     return Array.from({ length: this.rows }, (_, r) =>
-      Array.from({ length: this.cols }, (_, c) => this.#computeNeighborTotal(r, c, radius))
+      Array.from({ length: this.cols }, (_, c) =>
+        this.#computeNeighborTotal(r, c, radius),
+      ),
     );
   }
 
@@ -1269,7 +1342,9 @@ export default class GridManager {
     if (!liveGrid) return;
 
     if (!this.densityGrid || this.densityGrid.length !== this.rows) {
-      this.densityGrid = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+      this.densityGrid = Array.from({ length: this.rows }, () =>
+        Array(this.cols).fill(0),
+      );
     }
 
     if (force) {
@@ -1302,15 +1377,21 @@ export default class GridManager {
     const targetRadius = normalizedRadius > 0 ? normalizedRadius : this.densityRadius;
 
     if (!this.densityCounts) {
-      this.densityCounts = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+      this.densityCounts = Array.from({ length: this.rows }, () =>
+        Array(this.cols).fill(0),
+      );
     }
 
     if (!this.densityLiveGrid) {
-      this.densityLiveGrid = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+      this.densityLiveGrid = Array.from({ length: this.rows }, () =>
+        Array(this.cols).fill(0),
+      );
     }
 
     if (!this.densityGrid) {
-      this.densityGrid = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+      this.densityGrid = Array.from({ length: this.rows }, () =>
+        Array(this.cols).fill(0),
+      );
     }
 
     if (!this.densityDirtyTiles) {
@@ -1354,7 +1435,10 @@ export default class GridManager {
 
   spawnCell(row, col, { dna = DNA.random(), spawnEnergy, recordBirth = false } = {}) {
     if (this.isObstacle(row, col)) return null;
-    const energy = Math.min(this.maxTileEnergy, spawnEnergy ?? this.energyGrid[row][col]);
+    const energy = Math.min(
+      this.maxTileEnergy,
+      spawnEnergy ?? this.energyGrid[row][col],
+    );
     const cell = new Cell(row, col, dna, energy);
 
     this.setCell(row, col, cell);
@@ -1443,19 +1527,24 @@ export default class GridManager {
     // Clear full canvas once
     ctx.clearRect(0, 0, this.cols * cellSize, this.rows * cellSize);
     if (this.obstacles) {
-      ctx.fillStyle = 'rgba(40,40,55,0.9)';
+      ctx.fillStyle = "rgba(40,40,55,0.9)";
       for (let row = 0; row < this.rows; row++) {
         for (let col = 0; col < this.cols; col++) {
           if (!this.obstacles[row][col]) continue;
           ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
         }
       }
-      ctx.strokeStyle = 'rgba(200,200,255,0.25)';
+      ctx.strokeStyle = "rgba(200,200,255,0.25)";
       ctx.lineWidth = Math.max(1, cellSize * 0.1);
       for (let row = 0; row < this.rows; row++) {
         for (let col = 0; col < this.cols; col++) {
           if (!this.obstacles[row][col]) continue;
-          ctx.strokeRect(col * cellSize + 0.5, row * cellSize + 0.5, cellSize - 1, cellSize - 1);
+          ctx.strokeRect(
+            col * cellSize + 0.5,
+            row * cellSize + 0.5,
+            cellSize - 1,
+            cellSize - 1,
+          );
         }
       }
     }
@@ -1488,7 +1577,7 @@ export default class GridManager {
       energyRegenRate,
       energyDiffusionRate,
       densityGrid,
-      densityEffectMultiplier
+      densityEffectMultiplier,
     );
 
     return { densityGrid };
@@ -1508,7 +1597,7 @@ export default class GridManager {
       eventStrengthMultiplier,
       mutationMultiplier,
       combatEdgeSharpness,
-    }
+    },
   ) {
     const cell = this.grid[row][col];
 
@@ -1544,7 +1633,8 @@ export default class GridManager {
       return;
     }
 
-    const act = typeof cell.dna.activityRate === 'function' ? cell.dna.activityRate() : 1;
+    const act =
+      typeof cell.dna.activityRate === "function" ? cell.dna.activityRate() : 1;
 
     if (this.#random() > act) {
       return;
@@ -1619,13 +1709,13 @@ export default class GridManager {
         0.3 * clamp(1 - (tileEnergy ?? 0), 0, 1) +
         0.2 * clamp(-(tileEnergyDelta ?? 0), 0, 1),
       0,
-      1
+      1,
     );
     const probabilitySlack = clamp(1 - (baseProbability ?? 0), 0, 1);
     const kinPreference = clamp(
       ((parentA?.matePreferenceBias ?? 0) + (parentB?.matePreferenceBias ?? 0)) / 2,
       -1,
-      1
+      1,
     );
     const kinComfort = clamp(0.5 + 0.5 * kinPreference, 0, 1);
 
@@ -1646,7 +1736,7 @@ export default class GridManager {
     col,
     cell,
     { mates, society },
-    { stats, densityGrid, densityEffectMultiplier, mutationMultiplier }
+    { stats, densityGrid, densityEffectMultiplier, mutationMultiplier },
   ) {
     // findTargets sorts potential partners into neutral mates and allies; fall back
     // to the allied list so strongly kin-seeking genomes still have options.
@@ -1654,10 +1744,12 @@ export default class GridManager {
 
     if (matePool.length === 0) return false;
 
-    const selection = cell.selectMateWeighted ? cell.selectMateWeighted(matePool) : null;
+    const selection = cell.selectMateWeighted
+      ? cell.selectMateWeighted(matePool)
+      : null;
     const selectedMate = selection?.chosen ?? null;
     const evaluated = Array.isArray(selection?.evaluated) ? selection.evaluated : [];
-    const selectionMode = selection?.mode ?? 'preference';
+    const selectionMode = selection?.mode ?? "preference";
 
     let bestMate = selectedMate;
 
@@ -1668,19 +1760,24 @@ export default class GridManager {
     }
 
     const similarity =
-      typeof bestMate.similarity === 'number'
+      typeof bestMate.similarity === "number"
         ? bestMate.similarity
         : cell.similarityTo(bestMate.target);
-    const diversity = typeof bestMate.diversity === 'number' ? bestMate.diversity : 1 - similarity;
+    const diversity =
+      typeof bestMate.diversity === "number" ? bestMate.diversity : 1 - similarity;
     const diversityThreshold =
-      typeof this.matingDiversityThreshold === 'number' ? this.matingDiversityThreshold : 0;
+      typeof this.matingDiversityThreshold === "number"
+        ? this.matingDiversityThreshold
+        : 0;
     const diversityPressure = clamp(
-      typeof stats?.getDiversityPressure === 'function' ? stats.getDiversityPressure() : 0,
+      typeof stats?.getDiversityPressure === "function"
+        ? stats.getDiversityPressure()
+        : 0,
       0,
-      1
+      1,
     );
     const penaltyFloor =
-      typeof this.lowDiversityReproMultiplier === 'number'
+      typeof this.lowDiversityReproMultiplier === "number"
         ? clamp(this.lowDiversityReproMultiplier, 0, 1)
         : 0;
     let penaltyMultiplier = 1;
@@ -1695,7 +1792,7 @@ export default class GridManager {
       bestMate.row,
       bestMate.col,
       this.rows,
-      this.cols
+      this.cols,
     );
     const parentRow = cell.row;
     const parentCol = cell.col;
@@ -1750,7 +1847,7 @@ export default class GridManager {
       const normalizedExcess = clamp(
         (diversity - diversityThreshold) / (1 - diversityThreshold),
         0,
-        1
+        1,
       );
 
       if (normalizedExcess > 0) {
@@ -1761,11 +1858,11 @@ export default class GridManager {
     }
 
     const thrFracA =
-      typeof cell.dna.reproductionThresholdFrac === 'function'
+      typeof cell.dna.reproductionThresholdFrac === "function"
         ? cell.dna.reproductionThresholdFrac()
         : 0.4;
     const thrFracB =
-      typeof bestMate.target.dna.reproductionThresholdFrac === 'function'
+      typeof bestMate.target.dna.reproductionThresholdFrac === "function"
         ? bestMate.target.dna.reproductionThresholdFrac()
         : 0.4;
     const thrA = thrFracA * this.maxTileEnergy;
@@ -1773,7 +1870,8 @@ export default class GridManager {
     const appetite = cell.diversityAppetite ?? 0;
     const bias = cell.matePreferenceBias ?? 0;
     const selectionListSize = evaluated.length > 0 ? evaluated.length : matePool.length;
-    const selectionKind = selectedMate && selectedMate.target ? selectionMode : 'legacy';
+    const selectionKind =
+      selectedMate && selectedMate.target ? selectionMode : "legacy";
 
     let reproduced = false;
     const zoneParents = this.reproductionZones.validateArea({
@@ -1826,7 +1924,9 @@ export default class GridManager {
       addNeighbors(parentRow, parentCol);
       addNeighbors(mateRow, mateCol);
 
-      const freeSlots = candidates.filter(({ r, c }) => !this.grid[r][c] && !this.isObstacle(r, c));
+      const freeSlots = candidates.filter(
+        ({ r, c }) => !this.grid[r][c] && !this.isObstacle(r, c),
+      );
       const restrictedSlots = this.reproductionZones.filterSpawnCandidates(freeSlots);
       const slotPool = restrictedSlots.length > 0 ? restrictedSlots : freeSlots;
 
@@ -1887,12 +1987,12 @@ export default class GridManager {
     col,
     cell,
     { enemies, society = [] },
-    { stats, densityEffectMultiplier, densityGrid, combatEdgeSharpness }
+    { stats, densityEffectMultiplier, densityGrid, combatEdgeSharpness },
   ) {
     if (!Array.isArray(enemies) || enemies.length === 0) return false;
 
     const targetEnemy =
-      typeof cell.chooseEnemyTarget === 'function'
+      typeof cell.chooseEnemyTarget === "function"
         ? cell.chooseEnemyTarget(enemies, { maxTileEnergy: this.maxTileEnergy })
         : enemies[Math.floor(randomRange(0, enemies.length))];
     const localDensity = densityGrid?.[row]?.[col] ?? this.getDensityAt(row, col);
@@ -1909,7 +2009,7 @@ export default class GridManager {
       tileEnergyDelta,
     });
 
-    if (action === 'avoid') {
+    if (action === "avoid") {
       this.boundMoveAwayFromTarget(
         this.grid,
         row,
@@ -1917,15 +2017,18 @@ export default class GridManager {
         targetEnemy.row,
         targetEnemy.col,
         this.rows,
-        this.cols
+        this.cols,
       );
 
       return true;
     }
 
-    const dist = Math.max(Math.abs(targetEnemy.row - row), Math.abs(targetEnemy.col - col));
+    const dist = Math.max(
+      Math.abs(targetEnemy.row - row),
+      Math.abs(targetEnemy.col - col),
+    );
 
-    if (action === 'fight') {
+    if (action === "fight") {
       if (dist <= 1) {
         const intent = cell.createFightIntent({
           attackerRow: row,
@@ -1949,7 +2052,7 @@ export default class GridManager {
           targetEnemy.row,
           targetEnemy.col,
           this.rows,
-          this.cols
+          this.cols,
         );
       }
 
@@ -1978,7 +2081,7 @@ export default class GridManager {
         targetEnemy.row,
         targetEnemy.col,
         this.rows,
-        this.cols
+        this.cols,
       );
 
     return true;
@@ -1989,7 +2092,7 @@ export default class GridManager {
     col,
     cell,
     { mates, enemies, society },
-    { densityGrid, densityEffectMultiplier }
+    { densityGrid, densityEffectMultiplier },
   ) {
     const localDensity = densityGrid[row][col];
     const energyDenominator = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
@@ -2090,7 +2193,7 @@ export default class GridManager {
   }
 
   buildSnapshot(maxTileEnergy) {
-    const cap = typeof maxTileEnergy === 'number' ? maxTileEnergy : this.maxTileEnergy;
+    const cap = typeof maxTileEnergy === "number" ? maxTileEnergy : this.maxTileEnergy;
     const snapshot = {
       rows: this.rows,
       cols: this.cols,
@@ -2103,7 +2206,7 @@ export default class GridManager {
     };
     const topBrainEntries = createRankedBuffer(
       BRAIN_SNAPSHOT_LIMIT,
-      (a, b) => (b?.fitness ?? -Infinity) - (a?.fitness ?? -Infinity)
+      (a, b) => (b?.fitness ?? -Infinity) - (a?.fitness ?? -Infinity),
     );
 
     for (let row = 0; row < this.rows; row++) {
@@ -2113,7 +2216,9 @@ export default class GridManager {
         if (!cell) continue;
 
         const fitness = computeFitness(cell, cap);
-        const previous = Number.isFinite(cell.fitnessScore) ? cell.fitnessScore : fitness;
+        const previous = Number.isFinite(cell.fitnessScore)
+          ? cell.fitnessScore
+          : fitness;
         const smoothed = previous * 0.8 + fitness * 0.2;
 
         cell.fitnessScore = smoothed;
@@ -2133,8 +2238,11 @@ export default class GridManager {
     }
 
     const ranked = topBrainEntries.getItems();
-    const collector = this.brainSnapshotCollector ?? toBrainSnapshotCollector(GLOBAL.BrainDebugger);
-    const collected = collector ? collector(ranked, { limit: BRAIN_SNAPSHOT_LIMIT }) : [];
+    const collector =
+      this.brainSnapshotCollector ?? toBrainSnapshotCollector(GLOBAL.BrainDebugger);
+    const collected = collector
+      ? collector(ranked, { limit: BRAIN_SNAPSHOT_LIMIT })
+      : [];
 
     snapshot.brainSnapshots = Array.isArray(collected) ? collected : [];
 
@@ -2167,23 +2275,34 @@ export default class GridManager {
     row,
     col,
     cell,
-    { densityEffectMultiplier = 1, societySimilarity = 1, enemySimilarity = 0 } = {}
+    { densityEffectMultiplier = 1, societySimilarity = 1, enemySimilarity = 0 } = {},
   ) {
     const mates = [];
     const enemies = [];
     const society = [];
     const d =
-      this.densityGrid?.[row]?.[col] ?? this.localDensity(row, col, GridManager.DENSITY_RADIUS);
+      this.densityGrid?.[row]?.[col] ??
+      this.localDensity(row, col, GridManager.DENSITY_RADIUS);
     const effD = clamp(d * densityEffectMultiplier, 0, 1);
     let enemyBias = lerp(cell.density.enemyBias.min, cell.density.enemyBias.max, effD);
-    // Modulate random enemy bias by DNA risk tolerance
-    const risk = typeof cell.dna.riskTolerance === 'function' ? cell.dna.riskTolerance() : 0.5;
+    // Modulate random enemy bias by dynamic risk tolerance
+    const riskSource =
+      typeof cell?.getRiskTolerance === "function"
+        ? cell.getRiskTolerance()
+        : typeof cell?.dna?.riskTolerance === "function"
+          ? cell.dna.riskTolerance()
+          : 0.5;
+    const risk = clamp(Number.isFinite(riskSource) ? riskSource : 0.5, 0, 1);
 
     enemyBias = Math.max(0, enemyBias * (0.4 + 0.8 * risk));
     const allyT =
-      typeof cell.dna.allyThreshold === 'function' ? cell.dna.allyThreshold() : societySimilarity;
+      typeof cell.dna.allyThreshold === "function"
+        ? cell.dna.allyThreshold()
+        : societySimilarity;
     const enemyT =
-      typeof cell.dna.enemyThreshold === 'function' ? cell.dna.enemyThreshold() : enemySimilarity;
+      typeof cell.dna.enemyThreshold === "function"
+        ? cell.dna.enemyThreshold()
+        : enemySimilarity;
 
     const grid = this.grid;
     const rows = this.rows;
@@ -2215,7 +2334,7 @@ export default class GridManager {
             row: newRow,
             col: newCol,
             target,
-            classification: 'society',
+            classification: "society",
             precomputedSimilarity: similarity,
           });
         } else if (similarity <= enemyT || randomPercent(enemyBias)) {
@@ -2225,7 +2344,7 @@ export default class GridManager {
             row: newRow,
             col: newCol,
             target,
-            classification: 'mate',
+            classification: "mate",
             precomputedSimilarity: similarity,
           });
         }

@@ -39,6 +39,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - **Genome** (`src/genome.js`) encodes organism traits and generates neural wiring instructions.
 - **Brain** interprets those instructions, constructing sensor/activation maps that output intents for movement, interaction, reproduction, and targeting.
 - Brains adapt sensor gains and baselines over time using DNA-provided modulation ranges.
+- DNA also provides a `neuralFatigueProfile` that cells use to accumulate neural fatigue from energy budgets and activation loads; the resulting fatigue dynamically shapes risk tolerance sensors so behaviour cools off when cognition is overtaxed and sharpens again when rested.
 - Decision telemetry is available through `cell.getDecisionTelemetry`, which the debugger captures for UI display.
 
 ### InteractionSystem
