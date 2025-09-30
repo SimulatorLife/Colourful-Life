@@ -6,6 +6,82 @@ import { resolveSimulationDefaults } from './config.js';
 
 const GLOBAL = typeof globalThis !== 'undefined' ? globalThis : {};
 
+function resolveHeadlessCanvasSize(config = {}) {
+  const cellSize = Number.isFinite(config?.cellSize) ? config.cellSize : 5;
+  const rowsFallback = Number.isFinite(config?.rows) ? config.rows : 120;
+  const colsFallback = Number.isFinite(config?.cols) ? config.cols : 120;
+  const widthCandidates = [
+    config?.width,
+    config?.canvasWidth,
+    config?.canvasSize?.width,
+    Number.isFinite(config?.cols) ? config.cols * cellSize : null,
+  ];
+  const heightCandidates = [
+    config?.height,
+    config?.canvasHeight,
+    config?.canvasSize?.height,
+    Number.isFinite(config?.rows) ? config.rows * cellSize : null,
+  ];
+  const fallbackWidth = colsFallback * cellSize;
+  const fallbackHeight = rowsFallback * cellSize;
+  const pickCandidate = (candidates, fallback) => {
+    for (let i = 0; i < candidates.length; i++) {
+      const value = candidates[i];
+
+      if (Number.isFinite(value)) {
+        return value;
+      }
+    }
+
+    return fallback;
+  };
+
+  return {
+    width: pickCandidate(widthCandidates, fallbackWidth),
+    height: pickCandidate(heightCandidates, fallbackHeight),
+  };
+}
+
+function createHeadlessCanvas(config = {}) {
+  const { width, height } = resolveHeadlessCanvasSize(config);
+  const context = {
+    canvas: null,
+    fillStyle: '#000',
+    strokeStyle: '#000',
+    lineWidth: 1,
+    font: '',
+    textBaseline: 'top',
+    textAlign: 'left',
+    clearRect() {},
+    fillRect() {},
+    strokeRect() {},
+    save() {},
+    restore() {},
+    beginPath() {},
+    stroke() {},
+    createLinearGradient() {
+      return {
+        addColorStop() {},
+      };
+    },
+    fillText() {},
+    strokeText() {},
+  };
+  const canvas = {
+    width,
+    height,
+    getContext(type) {
+      if (type !== '2d') return null;
+
+      return context;
+    },
+  };
+
+  context.canvas = canvas;
+
+  return canvas;
+}
+
 /**
  * Creates a lightweight {@link UIManager}-compatible adapter for environments
  * where no DOM-backed UI is available (e.g. tests, server-side rendering, or
@@ -230,8 +306,14 @@ export function createSimulation({
     GLOBAL.BrainDebugger = BrainDebugger;
   }
 
+  let resolvedCanvas = canvas;
+
+  if (headless && !resolvedCanvas) {
+    resolvedCanvas = createHeadlessCanvas(config);
+  }
+
   const engine = new SimulationEngine({
-    canvas,
+    canvas: resolvedCanvas,
     config,
     rng,
     requestAnimationFrame: injectedRaf,
