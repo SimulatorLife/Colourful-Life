@@ -84,4 +84,25 @@ test("computeFitness falls back to config default max energy when no manager is 
   assert.is(result, expected);
 });
 
+test("computeFitness rewards diverse mating and penalizes similarity pressure", async () => {
+  const { computeFitness } = await computeFitnessModulePromise;
+  const cell = {
+    fightsWon: 0,
+    fightsLost: 0,
+    offspring: 0,
+    energy: 0,
+    age: 0,
+    lifespan: 100,
+    matingAttempts: 4,
+    matingSuccesses: 2,
+    diverseMateScore: 1.2,
+    similarityPenalty: 1,
+  };
+
+  const result = computeFitness(cell, 10);
+  const expected = 0.6 * 1.2 + 0.5 * 0.4 - 0.25 * 0.6;
+
+  assert.ok(Math.abs(result - expected) < 1e-9);
+});
+
 test.run();

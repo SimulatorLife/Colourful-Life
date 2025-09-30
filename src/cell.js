@@ -190,6 +190,10 @@ export default class Cell {
     this.offspring = 0;
     this.fightsWon = 0;
     this.fightsLost = 0;
+    this.matingAttempts = 0;
+    this.matingSuccesses = 0;
+    this.diverseMateScore = 0;
+    this.similarityPenalty = 0;
   }
 
   static breed(parentA, parentB, mutationMultiplier = 1, options = {}) {
@@ -505,6 +509,27 @@ export default class Cell {
     }
 
     return this.#selectHighestPreferenceMate(scored);
+  }
+
+  recordMatingOutcome({
+    diversity = 0,
+    success = false,
+    penalized = false,
+    penaltyMultiplier = 1,
+  } = {}) {
+    this.matingAttempts = (this.matingAttempts || 0) + 1;
+
+    if (success) {
+      this.matingSuccesses = (this.matingSuccesses || 0) + 1;
+      this.diverseMateScore =
+        (this.diverseMateScore || 0) + clamp(diversity ?? 0, 0, 1);
+    }
+
+    if (penalized) {
+      const penalty = clamp(1 - (penaltyMultiplier ?? 1), 0, 1);
+
+      this.similarityPenalty = (this.similarityPenalty || 0) + penalty;
+    }
   }
 
   // Internal: nearest target utility

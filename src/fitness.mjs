@@ -21,10 +21,39 @@ export function computeFitness(cell, maxTileEnergy) {
       ? gridManager.maxTileEnergy
       : MAX_TILE_ENERGY);
 
+  const fights = (cell.fightsWon - cell.fightsLost) * 0.5;
+  const offspring = (cell.offspring || 0) * 1.5;
+  const energyShare = maxEnergy > 0 ? cell.energy / maxEnergy : 0;
+  const survival = cell.lifespan ? cell.age / cell.lifespan : 0;
+
+  const attempts = Number.isFinite(cell.matingAttempts)
+    ? Math.max(0, cell.matingAttempts)
+    : 0;
+  const successes = Number.isFinite(cell.matingSuccesses)
+    ? Math.max(0, cell.matingSuccesses)
+    : 0;
+  const diversitySum = Number.isFinite(cell.diverseMateScore)
+    ? Math.max(0, cell.diverseMateScore)
+    : 0;
+  const penaltySum = Number.isFinite(cell.similarityPenalty)
+    ? Math.max(0, cell.similarityPenalty)
+    : 0;
+
+  const successRate = attempts > 0 ? successes / attempts : 0;
+  const diversityRate = successes > 0 ? diversitySum / successes : 0;
+  const penaltyRate = attempts > 0 ? Math.min(1, penaltySum / attempts) : 0;
+
+  const diversityBonus = diversityRate * 1.2;
+  const adaptabilityBonus = successRate * 0.4;
+  const similarityDrag = penaltyRate * 0.6;
+
   return (
-    (cell.fightsWon - cell.fightsLost) * 0.5 +
-    (cell.offspring || 0) * 1.5 +
-    cell.energy / maxEnergy +
-    (cell.lifespan ? cell.age / cell.lifespan : 0)
+    fights +
+    offspring +
+    energyShare +
+    survival +
+    diversityBonus +
+    adaptabilityBonus -
+    similarityDrag
   );
 }

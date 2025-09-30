@@ -1971,6 +1971,20 @@ export default class GridManager {
       });
     }
 
+    const recordOutcome = (organism) => {
+      if (typeof organism?.recordMatingOutcome === "function") {
+        organism.recordMatingOutcome({
+          diversity,
+          success: reproduced,
+          penalized: penalizedForSimilarity,
+          penaltyMultiplier,
+        });
+      }
+    };
+
+    recordOutcome(cell);
+    recordOutcome(bestMate.target);
+
     return reproduced;
   }
 
