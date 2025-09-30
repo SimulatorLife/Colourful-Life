@@ -202,6 +202,94 @@ export default class GridManager {
     return clamp(drive * 0.7 + environment * 0.3, 0, 1);
   }
 
+  #scoreSpawnCandidate(candidate, context = {}) {
+    if (!candidate) return 0;
+
+    const { r, c } = candidate;
+
+    if (r == null || c == null) return 0;
+
+    const {
+      parentA = null,
+      parentB = null,
+      densityGrid = null,
+      densityEffectMultiplier = 1,
+    } = context;
+    const maxTileEnergy = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
+    const tileEnergyRaw = this.energyGrid?.[r]?.[c] ?? 0;
+    const tileEnergy = clamp(tileEnergyRaw / maxTileEnergy, 0, 1);
+    const tileDelta = clamp(((this.energyDeltaGrid?.[r]?.[c] ?? 0) + 1) / 2, 0, 1);
+    const densitySource = densityGrid?.[r]?.[c] ?? this.getDensityAt(r, c);
+    const density = clamp((densitySource ?? 0) * (densityEffectMultiplier ?? 1), 0, 1);
+    const crowdA = clamp(parentA?.baseCrowdingTolerance ?? 0.5, 0, 1);
+    const crowdB = clamp(parentB?.baseCrowdingTolerance ?? 0.5, 0, 1);
+    const crowdComfort = clamp((crowdA + crowdB) / 2, 0, 1);
+    const crowdAffinity = clamp(1 - Math.abs(density - crowdComfort), 0, 1);
+    const resourceA = clamp(parentA?.resourceTrendAdaptation ?? 0.35, 0, 1);
+    const resourceB = clamp(parentB?.resourceTrendAdaptation ?? 0.35, 0, 1);
+    const resourceDrive = clamp((resourceA + resourceB) / 2, 0, 1);
+    const rawRiskA =
+      typeof parentA?.getRiskTolerance === "function"
+        ? parentA.getRiskTolerance()
+        : (parentA?.baseRiskTolerance ?? 0.5);
+    const rawRiskB =
+      typeof parentB?.getRiskTolerance === "function"
+        ? parentB.getRiskTolerance()
+        : (parentB?.baseRiskTolerance ?? 0.5);
+    const riskA = clamp(Number.isFinite(rawRiskA) ? rawRiskA : 0.5, 0, 1);
+    const riskB = clamp(Number.isFinite(rawRiskB) ? rawRiskB : 0.5, 0, 1);
+    const riskPreference = (riskA + riskB) / 2;
+    const energyWeight = 0.45 + resourceDrive * 0.35; // 0.45..0.8
+    const densityWeight = 0.35 + (1 - resourceDrive) * 0.25; // 0.35..0.6
+    const trendWeight = 0.2 + resourceDrive * 0.3; // 0.2..0.5
+    const crowdRiskPenalty =
+      density > crowdComfort
+        ? (density - crowdComfort) * Math.max(0, riskPreference) * 0.6
+        : 0;
+    const score =
+      tileEnergy * energyWeight +
+      crowdAffinity * densityWeight +
+      tileDelta * trendWeight -
+      crowdRiskPenalty;
+
+    return Math.max(0, score);
+  }
+
+  #chooseSpawnCandidate(candidates, context = {}) {
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      return null;
+    }
+
+    const weights = new Array(candidates.length);
+    let totalWeight = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const weight = this.#scoreSpawnCandidate(candidates[i], context);
+
+      weights[i] = weight;
+      totalWeight += weight;
+    }
+
+    if (!(totalWeight > 0)) {
+      const fallbackIndex = Math.floor(this.#random() * candidates.length);
+
+      return candidates[fallbackIndex] ?? null;
+    }
+
+    const roll = this.#random() * totalWeight;
+    let acc = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      acc += weights[i];
+
+      if (roll <= acc) {
+        return candidates[i];
+      }
+    }
+
+    return candidates[candidates.length - 1] ?? null;
+  }
+
   static #notify(callback, ...args) {
     if (typeof callback === "function") callback(...args);
   }
@@ -1922,31 +2010,39 @@ export default class GridManager {
       const slotPool = restrictedSlots.length > 0 ? restrictedSlots : freeSlots;
 
       if (slotPool.length > 0) {
-        const spawn = slotPool[Math.floor(randomRange(0, slotPool.length))];
-        const zoneCheck = this.reproductionZones.validateArea({
-          parentA: { row: parentRow, col: parentCol },
-          parentB: { row: mateRow, col: mateCol },
-          spawn: { row: spawn.r, col: spawn.c },
+        const spawn = this.#chooseSpawnCandidate(slotPool, {
+          parentA: cell,
+          parentB: bestMate.target,
+          densityGrid,
+          densityEffectMultiplier,
         });
 
-        if (!zoneCheck.allowed) {
-          blockedInfo = {
-            reason: zoneCheck.reason,
+        if (spawn) {
+          const zoneCheck = this.reproductionZones.validateArea({
             parentA: { row: parentRow, col: parentCol },
             parentB: { row: mateRow, col: mateCol },
             spawn: { row: spawn.r, col: spawn.c },
-          };
-        } else {
-          const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
-            maxTileEnergy: this.maxTileEnergy,
           });
 
-          if (offspring) {
-            offspring.row = spawn.r;
-            offspring.col = spawn.c;
-            this.setCell(spawn.r, spawn.c, offspring);
-            stats.onBirth();
-            reproduced = true;
+          if (!zoneCheck.allowed) {
+            blockedInfo = {
+              reason: zoneCheck.reason,
+              parentA: { row: parentRow, col: parentCol },
+              parentB: { row: mateRow, col: mateCol },
+              spawn: { row: spawn.r, col: spawn.c },
+            };
+          } else {
+            const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
+              maxTileEnergy: this.maxTileEnergy,
+            });
+
+            if (offspring) {
+              offspring.row = spawn.r;
+              offspring.col = spawn.c;
+              this.setCell(spawn.r, spawn.c, offspring);
+              stats.onBirth();
+              reproduced = true;
+            }
           }
         }
       }
