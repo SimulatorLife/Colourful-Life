@@ -1524,33 +1524,108 @@ export default class UIManager {
       this.leaderPanel = panel;
       this.leaderBody = body;
     }
+
+    const entries = Array.isArray(top) ? top.filter(Boolean) : [];
+
     this.leaderBody.innerHTML = "";
-    top.forEach((entry, index) => {
-      const label = `#${index + 1}`;
+
+    if (entries.length === 0) {
+      const empty = document.createElement("div");
+
+      empty.className = "leaderboard-empty-state";
+      empty.textContent = "Run the simulation to populate the leaderboard.";
+      this.leaderBody.appendChild(empty);
+
+      return;
+    }
+
+    const formatFloat = (value) => (Number.isFinite(value) ? value.toFixed(2) : "—");
+    const formatCount = (value) =>
+      Number.isFinite(value) ? value.toLocaleString() : "—";
+
+    entries.forEach((entry, index) => {
       const smoothedFitness = Number.isFinite(entry.smoothedFitness)
         ? entry.smoothedFitness
         : undefined;
-      const fitnessValue = Number.isFinite(smoothedFitness)
+      const summaryFitness = Number.isFinite(smoothedFitness)
         ? smoothedFitness
         : entry.fitness;
       const brain = entry.brain ?? {};
+      const card = document.createElement("article");
+
+      card.className = "leaderboard-entry";
+      card.setAttribute("role", "group");
+      card.setAttribute("aria-label", `Rank ${index + 1} organism performance`);
+
+      const swatchColor =
+        typeof entry.color === "string" && entry.color.trim().length > 0
+          ? entry.color
+          : null;
+
+      if (swatchColor) {
+        card.style.setProperty("--leaderboard-entry-color", swatchColor);
+      }
+
+      const header = document.createElement("div");
+
+      header.className = "leaderboard-entry-header";
+
+      const rank = document.createElement("span");
+
+      rank.className = "leaderboard-rank";
+      rank.textContent = `#${index + 1}`;
+      header.appendChild(rank);
+
+      if (swatchColor) {
+        const colorDot = document.createElement("span");
+
+        colorDot.className = "leaderboard-color";
+        colorDot.style.background = swatchColor;
+        colorDot.setAttribute("aria-hidden", "true");
+        header.appendChild(colorDot);
+      }
+
+      const summary = document.createElement("div");
+
+      summary.className = "leaderboard-summary";
+
+      const summaryLabel = document.createElement("span");
+
+      summaryLabel.className = "leaderboard-summary-label";
+      summaryLabel.textContent = Number.isFinite(smoothedFitness)
+        ? "Smoothed Fitness"
+        : "Fitness";
+      summary.appendChild(summaryLabel);
+
+      const summaryValue = document.createElement("span");
+
+      summaryValue.className = "leaderboard-summary-value";
+      summaryValue.textContent = formatFloat(summaryFitness);
+      summary.appendChild(summaryValue);
+
+      header.appendChild(summary);
+      card.appendChild(header);
 
       const statsContainer = document.createElement("div");
 
       statsContainer.className = "leaderboard-stats";
 
-      const formatFloat = (value) => (Number.isFinite(value) ? value.toFixed(2) : "—");
-      const formatCount = (value) =>
-        Number.isFinite(value) ? value.toLocaleString() : "—";
+      const detailRows = [];
 
-      const statRows = [
-        { label: "Fitness", value: formatFloat(fitnessValue) },
+      if (Number.isFinite(entry.fitness) && Number.isFinite(smoothedFitness)) {
+        detailRows.push({ label: "Raw Fitness", value: formatFloat(entry.fitness) });
+      }
+
+      detailRows.push(
+        { label: "Brain Fitness", value: formatFloat(brain.fitness) },
         { label: "Neurons", value: formatCount(brain.neuronCount) },
-        { label: "Brain", value: formatFloat(brain.fitness) },
         { label: "Connections", value: formatCount(brain.connectionCount) },
-      ];
+        { label: "Offspring", value: formatCount(entry.offspring) },
+        { label: "Fights Won", value: formatCount(entry.fightsWon) },
+        { label: "Age", value: formatCount(entry.age) },
+      );
 
-      statRows.forEach(({ label: statLabel, value }) => {
+      detailRows.forEach(({ label, value }) => {
         const statRow = document.createElement("div");
 
         statRow.className = "leaderboard-stat";
@@ -1558,7 +1633,7 @@ export default class UIManager {
         const statLabelEl = document.createElement("span");
 
         statLabelEl.className = "leaderboard-stat-label";
-        statLabelEl.textContent = statLabel;
+        statLabelEl.textContent = label;
 
         const statValueEl = document.createElement("span");
 
@@ -1570,12 +1645,23 @@ export default class UIManager {
         statsContainer.appendChild(statRow);
       });
 
-      this.#appendControlRow(this.leaderBody, {
-        label,
-        value: statsContainer,
-        title: `Fitness ${statRows[0].value} | Neurons ${statRows[1].value} | Brain ${statRows[2].value} | Connections ${statRows[3].value}`,
-        color: entry.color,
-      });
+      const tooltipParts = [
+        `${summaryLabel.textContent} ${formatFloat(summaryFitness)}`,
+        `Brain ${formatFloat(brain.fitness)}`,
+        `Neurons ${formatCount(brain.neuronCount)}`,
+        `Connections ${formatCount(brain.connectionCount)}`,
+        `Offspring ${formatCount(entry.offspring)}`,
+        `Fights ${formatCount(entry.fightsWon)}`,
+        `Age ${formatCount(entry.age)}`,
+      ];
+
+      if (Number.isFinite(entry.fitness) && Number.isFinite(smoothedFitness)) {
+        tooltipParts.splice(1, 0, `Raw Fitness ${formatFloat(entry.fitness)}`);
+      }
+
+      card.title = tooltipParts.join(" | ");
+      card.appendChild(statsContainer);
+      this.leaderBody.appendChild(card);
     });
   }
 }
