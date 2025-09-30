@@ -119,7 +119,7 @@ jobs:
             const body = [
               `@codex ${instruction} ${process.env.PROMPT} Ensure changes are self-contained, tested, and documented as needed, with no reduction in test coverage.`,
               "",
-              `Once done, ensure all changes are pushed to remote branch **${branch}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact command(s) to guarantee your changes are pushed (if the push fails, refer to the troubleshooting steps in AGENTS.md):`,
+              `Once done, ensure all changes are pushed to remote branch **${branch}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact command(s) to guarantee your changes are pushed:`,
               "",
               "```bash",
               `git config user.name  "codex-bot"`,
