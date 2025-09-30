@@ -35,6 +35,7 @@ test('numeric setters sanitize input, clamp values, and flag slow UI updates', a
 
     engine.pendingSlowUiUpdate = false;
     const previousEventFrequency = engine.state.eventFrequencyMultiplier;
+
     engine.setEventFrequencyMultiplier('not-a-number');
 
     assert.is(engine.state.eventFrequencyMultiplier, previousEventFrequency);

@@ -54,6 +54,7 @@ for (let i = 0; i < warmup; i++) {
 }
 
 const start = performance.now();
+
 for (let i = 0; i < iterations; i++) {
   runTick();
   eventManager.updateEvent();
