@@ -1,4 +1,5 @@
 import { UI_SLIDER_CONFIG, resolveSimulationDefaults } from './config.js';
+import { warnOnce } from './utils.js';
 import {
   createControlButtonRow,
   createControlGrid,
@@ -153,6 +154,26 @@ export default class UIManager {
     return null;
   }
 
+  #setPointerCapture(target, pointerId) {
+    if (!target || typeof target.setPointerCapture !== 'function') return;
+
+    try {
+      target.setPointerCapture(pointerId);
+    } catch (error) {
+      warnOnce('Failed to set pointer capture for selection drawing.', error);
+    }
+  }
+
+  #releasePointerCapture(target, pointerId) {
+    if (!target || typeof target.releasePointerCapture !== 'function') return;
+
+    try {
+      target.releasePointerCapture(pointerId);
+    } catch (error) {
+      warnOnce('Failed to release pointer capture after selection drawing.', error);
+    }
+  }
+
   #scheduleUpdate() {
     if (typeof this.simulationCallbacks?.requestFrame === 'function') {
       this.simulationCallbacks.requestFrame();
@@ -261,7 +282,7 @@ export default class UIManager {
       this.selectionDrawingActive = true;
       this.selectionDragStart = start;
       this.selectionDragEnd = start;
-      if (typeof canvas.setPointerCapture === 'function') canvas.setPointerCapture(event.pointerId);
+      this.#setPointerCapture(canvas, event.pointerId);
     };
 
     const handlePointerMove = (event) => {
@@ -275,13 +296,7 @@ export default class UIManager {
       if (!this.selectionDrawingActive) return;
 
       event.preventDefault();
-      if (typeof canvas.releasePointerCapture === 'function') {
-        try {
-          canvas.releasePointerCapture(event.pointerId);
-        } catch (err) {
-          // ignore release errors
-        }
-      }
+      this.#releasePointerCapture(canvas, event.pointerId);
 
       const end = this.#canvasToGrid(event) || this.selectionDragEnd;
       const start = this.selectionDragStart;
@@ -308,13 +323,7 @@ export default class UIManager {
 
     const cancelDrawing = (event) => {
       if (!this.selectionDrawingActive) return;
-      if (typeof canvas.releasePointerCapture === 'function') {
-        try {
-          canvas.releasePointerCapture(event.pointerId);
-        } catch (err) {
-          // ignore release errors
-        }
-      }
+      this.#releasePointerCapture(canvas, event.pointerId);
 
       this.selectionDrawingActive = false;
       this.selectionDragStart = null;
