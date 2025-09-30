@@ -99,6 +99,7 @@ export default class Cell {
     this._neuralFatigue = baselineFatigue;
     this._neuralEnergyReserve = initialResourceLevel;
     this._neuralFatigueSnapshot = null;
+    this._pendingRestRecovery = 0;
     const interactionProfile =
       typeof this.dna.interactionPlasticity === "function"
         ? this.dna.interactionPlasticity()
@@ -398,7 +399,14 @@ export default class Cell {
     if (!context) return;
 
     if (outcome && typeof outcome === "object" && !Array.isArray(outcome)) {
-      context.outcome = { ...outcome };
+      const existing =
+        context.outcome &&
+        typeof context.outcome === "object" &&
+        !Array.isArray(context.outcome)
+          ? context.outcome
+          : {};
+
+      context.outcome = { ...existing, ...outcome };
     } else {
       context.outcome = outcome ?? null;
     }
@@ -480,6 +488,22 @@ export default class Cell {
                   : null,
                 recoveryApplied: Number.isFinite(neuralFatigueSnapshot.recoveryApplied)
                   ? neuralFatigueSnapshot.recoveryApplied
+                  : null,
+                restBaseRecovery: Number.isFinite(
+                  neuralFatigueSnapshot.restBaseRecovery,
+                )
+                  ? neuralFatigueSnapshot.restBaseRecovery
+                  : null,
+                restBonusApplied: Number.isFinite(
+                  neuralFatigueSnapshot.restBonusApplied,
+                )
+                  ? neuralFatigueSnapshot.restBonusApplied
+                  : null,
+                restBoostCarry: Number.isFinite(neuralFatigueSnapshot.restBoostCarry)
+                  ? neuralFatigueSnapshot.restBoostCarry
+                  : null,
+                restSupport: Number.isFinite(neuralFatigueSnapshot.restSupport)
+                  ? neuralFatigueSnapshot.restSupport
                   : null,
                 energyReserveBefore: Number.isFinite(
                   neuralFatigueSnapshot.energyReserveBefore,
@@ -587,6 +611,18 @@ export default class Cell {
       0,
       1,
     );
+    const restEfficiency = clamp(
+      Number.isFinite(profile.restEfficiency) ? profile.restEfficiency : 0.45,
+      0,
+      1.5,
+    );
+    const pendingRestBoost = clamp(
+      Number.isFinite(this._pendingRestRecovery) ? this._pendingRestRecovery : 0,
+      0,
+      3,
+    );
+
+    this._pendingRestRecovery = 0;
 
     const maxEnergy = Number.isFinite(maxTileEnergy)
       ? Math.max(0.1, maxTileEnergy)
@@ -628,9 +664,30 @@ export default class Cell {
     const stressDelta = combinedStress * stressGain;
     const previous = this.#currentNeuralFatigue();
     const restful = energyAfterFrac >= restThreshold;
-    const recoveryApplied = restful
-      ? recoveryRate * (0.35 + (energyAfterFrac - restThreshold) * 0.8)
+    const restSupport = restful
+      ? clamp(
+          (energyAfterFrac - restThreshold) / Math.max(0.001, 1 - restThreshold),
+          0,
+          1,
+        )
+      : 0;
+    const fatigueAboveBaseline =
+      previous > baseline
+        ? clamp((previous - baseline) / Math.max(0.001, 1 - baseline), 0, 1)
+        : 0;
+    const baseRecovery = restful
+      ? recoveryRate * (0.35 + restSupport * 0.8)
       : recoveryRate * 0.2;
+    const restBonus = pendingRestBoost
+      ? clamp(
+          pendingRestBoost *
+            restEfficiency *
+            (0.4 + restSupport * 0.4 + fatigueAboveBaseline * 0.4),
+          0,
+          1.2,
+        )
+      : 0;
+    const recoveryApplied = clamp(baseRecovery + restBonus, 0, 1.5);
     const increased = clamp(previous + stressDelta, 0, 1);
     const recovered = clamp(increased - recoveryApplied * increased, 0, 1);
     const next = clamp(lerp(recovered, baseline, 0.04), 0, 1);
@@ -646,6 +703,10 @@ export default class Cell {
       combinedStress,
       stressDelta,
       recoveryApplied,
+      restBaseRecovery: baseRecovery,
+      restBonusApplied: restBonus,
+      restBoostCarry: pendingRestBoost,
+      restSupport,
       energyReserveBefore: energyBeforeFrac,
       energyReserveAfter: energyAfterFrac,
     };
@@ -1055,6 +1116,62 @@ export default class Cell {
       resourceTrend,
       neuralFatigue,
     };
+  }
+
+  #queueRestRecovery({ localDensity = 0, densityEffectMultiplier = 1 } = {}) {
+    const profile = this.neuralFatigueProfile || {};
+    const baseline = clamp(
+      Number.isFinite(profile.baseline) ? profile.baseline : 0.35,
+      0,
+      1,
+    );
+    const restThreshold = clamp(
+      Number.isFinite(profile.restThreshold) ? profile.restThreshold : 0.45,
+      0,
+      1,
+    );
+    const restEfficiency = clamp(
+      Number.isFinite(profile.restEfficiency) ? profile.restEfficiency : 0.45,
+      0.1,
+      1.5,
+    );
+    const fatigue = this.#currentNeuralFatigue();
+    const energyReserve = this.#currentNeuralEnergyReserve();
+    const restNeed =
+      fatigue > baseline
+        ? clamp((fatigue - baseline) / Math.max(0.001, 1 - baseline), 0, 1)
+        : 0;
+    const restSupport =
+      energyReserve > restThreshold
+        ? clamp(
+            (energyReserve - restThreshold) / Math.max(0.001, 1 - restThreshold),
+            0,
+            1,
+          )
+        : 0;
+    const densityPenalty = clamp(localDensity * densityEffectMultiplier, 0, 1);
+    const densityRelief = clamp(0.35 + (1 - densityPenalty) * 0.65, 0.2, 1);
+    const baseBoost =
+      restEfficiency * densityRelief * (0.3 + restNeed * 0.5 + restSupport * 0.35);
+    const boost = clamp(baseBoost, 0, 1.2);
+    const carry = clamp(
+      (Number.isFinite(this._pendingRestRecovery) ? this._pendingRestRecovery : 0) +
+        boost,
+      0,
+      3,
+    );
+
+    this._pendingRestRecovery = carry;
+
+    this.#assignDecisionOutcome("movement", {
+      restBoost: boost,
+      restCarry: carry,
+      restNeed,
+      restSupport,
+      restDensityRelief: densityRelief,
+    });
+
+    return boost;
   }
 
   #interactionSensors({
@@ -1784,6 +1901,8 @@ export default class Cell {
 
     switch (chosen) {
       case "rest":
+        this.#queueRestRecovery({ localDensity, densityEffectMultiplier });
+
         return;
       case "pursue": {
         const target = nearestEnemy || nearestMate || nearestAlly;

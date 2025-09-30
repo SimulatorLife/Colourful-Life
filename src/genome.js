@@ -931,6 +931,12 @@ export class DNA {
       jitter: 0.12,
     });
 
+    updateModulation("neuralFatigue", {
+      gain: clamp(0.75 + 0.35 * (1 - recovery) + 0.25 * (1 - neural), 0.55, 1.6),
+      target: toSigned(fatigueBaseline, 0.45, 1),
+      jitter: 0.06,
+    });
+
     updateModulation("targetWeakness", {
       gain: 0.78 + 0.35 * (1 - combat) + 0.25 * strategy,
       target: toSigned(strategy, 0.5, 0.8),
@@ -1082,6 +1088,11 @@ export class DNA {
       0,
       0.6,
     );
+    const restEfficiency = clamp(
+      0.3 + 0.5 * recovery + 0.2 * strategy - 0.25 * activity + 0.15 * parental,
+      0.1,
+      1.3,
+    );
 
     return {
       baseline,
@@ -1092,6 +1103,7 @@ export class DNA {
       restThreshold,
       fatigueRiskWeight,
       restRiskBonus,
+      restEfficiency,
     };
   }
 

@@ -1,76 +1,78 @@
-import { clamp, cloneTracePayload } from './utils.js';
+import { clamp, cloneTracePayload } from "./utils.js";
 
 export const NEURAL_GENE_BYTES = 4;
 
 export const SENSOR_KEYS = Object.freeze([
-  'bias',
-  'energy',
-  'effectiveDensity',
-  'allyFraction',
-  'enemyFraction',
-  'mateFraction',
-  'allySimilarity',
-  'enemySimilarity',
-  'mateSimilarity',
-  'ageFraction',
-  'interactionMomentum',
-  'eventPressure',
-  'partnerEnergy',
-  'partnerAgeFraction',
-  'partnerSimilarity',
-  'baseReproductionProbability',
-  'riskTolerance',
-  'selfSenescence',
-  'partnerSenescence',
-  'resourceTrend',
-  'targetWeakness',
-  'targetThreat',
-  'targetProximity',
-  'targetAttrition',
+  "bias",
+  "energy",
+  "effectiveDensity",
+  "allyFraction",
+  "enemyFraction",
+  "mateFraction",
+  "allySimilarity",
+  "enemySimilarity",
+  "mateSimilarity",
+  "ageFraction",
+  "interactionMomentum",
+  "eventPressure",
+  "partnerEnergy",
+  "partnerAgeFraction",
+  "partnerSimilarity",
+  "baseReproductionProbability",
+  "riskTolerance",
+  "selfSenescence",
+  "partnerSenescence",
+  "resourceTrend",
+  "targetWeakness",
+  "targetThreat",
+  "targetProximity",
+  "targetAttrition",
+  "neuralFatigue",
 ]);
 
 const SENSOR_LOOKUP = new Map(SENSOR_KEYS.map((key, index) => [key, index]));
 const SENSOR_COUNT = SENSOR_KEYS.length;
 
-const createOutputGroup = (entries) => entries.map(([id, key, label]) => ({ id, key, label }));
+const createOutputGroup = (entries) =>
+  entries.map(([id, key, label]) => ({ id, key, label }));
 
 export const OUTPUT_GROUPS = Object.freeze({
   movement: createOutputGroup([
-    [192, 'rest', 'Rest / wait'],
-    [193, 'pursue', 'Pursue target'],
-    [194, 'avoid', 'Retreat from threat'],
-    [195, 'cohere', 'Cohere with allies'],
-    [196, 'explore', 'Explore / forage'],
+    [192, "rest", "Rest / wait"],
+    [193, "pursue", "Pursue target"],
+    [194, "avoid", "Retreat from threat"],
+    [195, "cohere", "Cohere with allies"],
+    [196, "explore", "Explore / forage"],
   ]),
   interaction: createOutputGroup([
-    [200, 'avoid', 'Avoid contact'],
-    [201, 'fight', 'Engage in combat'],
-    [202, 'cooperate', 'Cooperate / share'],
+    [200, "avoid", "Avoid contact"],
+    [201, "fight", "Engage in combat"],
+    [202, "cooperate", "Cooperate / share"],
   ]),
   reproduction: createOutputGroup([
-    [208, 'decline', 'Decline mating'],
-    [209, 'accept', 'Accept mating'],
+    [208, "decline", "Decline mating"],
+    [209, "accept", "Accept mating"],
   ]),
   targeting: createOutputGroup([
-    [216, 'focusWeak', 'Focus on weaker enemies'],
-    [217, 'focusStrong', 'Challenge strong enemies'],
-    [218, 'focusProximity', 'Prioritize nearby enemies'],
-    [219, 'focusAttrition', 'Exploit attrition'],
+    [216, "focusWeak", "Focus on weaker enemies"],
+    [217, "focusStrong", "Challenge strong enemies"],
+    [218, "focusProximity", "Prioritize nearby enemies"],
+    [219, "focusAttrition", "Exploit attrition"],
   ]),
 });
 
 const ACTIVATION_FUNCS = {
-  0: { name: 'identity', fn: (x) => x },
+  0: { name: "identity", fn: (x) => x },
   1: {
-    name: 'sigmoid',
+    name: "sigmoid",
     fn: (x) => 1 / (1 + Math.exp(-clamp(x, -20, 20))),
   },
-  2: { name: 'tanh', fn: (x) => Math.tanh(clamp(x, -8, 8)) },
-  3: { name: 'relu', fn: (x) => (x > 0 ? x : 0) },
-  4: { name: 'step', fn: (x) => (x >= 0 ? 1 : 0) },
-  5: { name: 'sin', fn: (x) => Math.sin(x) },
-  6: { name: 'gaussian', fn: (x) => Math.exp(-x * x) },
-  7: { name: 'abs', fn: (x) => Math.abs(x) },
+  2: { name: "tanh", fn: (x) => Math.tanh(clamp(x, -8, 8)) },
+  3: { name: "relu", fn: (x) => (x > 0 ? x : 0) },
+  4: { name: "step", fn: (x) => (x >= 0 ? 1 : 0) },
+  5: { name: "sin", fn: (x) => Math.sin(x) },
+  6: { name: "gaussian", fn: (x) => Math.exp(-x * x) },
+  7: { name: "abs", fn: (x) => Math.abs(x) },
 };
 
 const DEFAULT_ACTIVATION = 2; // tanh
@@ -93,24 +95,26 @@ export default class Brain {
   static SENSOR_COUNT = SENSOR_COUNT;
 
   static sensorIndex(key) {
-    if (typeof key !== 'string') return undefined;
+    if (typeof key !== "string") return undefined;
 
     return SENSOR_LOOKUP.get(key);
   }
 
   static fromDNA(dna) {
-    if (!dna || typeof dna.neuralGenes !== 'function') return null;
+    if (!dna || typeof dna.neuralGenes !== "function") return null;
 
     const genes = dna.neuralGenes();
 
     if (!Array.isArray(genes) || genes.length === 0) return null;
 
     const sensorModulation =
-      typeof dna.neuralSensorModulation === 'function' ? dna.neuralSensorModulation() : null;
+      typeof dna.neuralSensorModulation === "function"
+        ? dna.neuralSensorModulation()
+        : null;
 
     const brain = new Brain({ genes, sensorModulation });
 
-    if (typeof dna.updateBrainMetrics === 'function') {
+    if (typeof dna.updateBrainMetrics === "function") {
       dna.updateBrainMetrics({
         neuronCount: brain.neuronCount,
         connectionCount: brain.connectionCount,
@@ -210,7 +214,7 @@ export default class Brain {
 
     sensors[0] = 1; // bias constant
 
-    if (sensorObject && typeof sensorObject === 'object') {
+    if (sensorObject && typeof sensorObject === "object") {
       for (const [key, value] of Object.entries(sensorObject)) {
         const idx = SENSOR_LOOKUP.get(key);
 
@@ -246,7 +250,7 @@ export default class Brain {
         if (traceEnabled && !traceCache.has(nodeId)) {
           traceCache.set(nodeId, {
             id: nodeId,
-            type: 'sensor',
+            type: "sensor",
             key: SENSOR_KEYS[nodeId] ?? `sensor_${nodeId}`,
             value: sensorValue,
           });
@@ -307,7 +311,7 @@ export default class Brain {
       if (traceEnabled) {
         const traceEntry = {
           id: nodeId,
-          type: 'neuron',
+          type: "neuron",
           activationType,
           activationName: activationInfo.name,
           sum,
@@ -381,17 +385,23 @@ export default class Brain {
     return {
       neuronCount: this.neuronCount,
       connectionCount: this.connectionCount,
-      connections: this.connections.map(({ source, target, weight, activationType }) => ({
-        source,
-        target,
-        weight,
-        activationType,
-      })),
-      activationByNode: Array.from(this.activationMap.entries()).map(([node, type]) => ({
-        node,
-        activationType: type,
-        activationName: (ACTIVATION_FUNCS[type] || ACTIVATION_FUNCS[DEFAULT_ACTIVATION]).name,
-      })),
+      connections: this.connections.map(
+        ({ source, target, weight, activationType }) => ({
+          source,
+          target,
+          weight,
+          activationType,
+        }),
+      ),
+      activationByNode: Array.from(this.activationMap.entries()).map(
+        ([node, type]) => ({
+          node,
+          activationType: type,
+          activationName: (
+            ACTIVATION_FUNCS[type] || ACTIVATION_FUNCS[DEFAULT_ACTIVATION]
+          ).name,
+        }),
+      ),
       sensors: this.lastSensors ? [...this.lastSensors] : null,
       lastOutputs: Object.fromEntries(this.lastOutputs.entries()),
       lastActivationCount: this.lastActivationCount,
@@ -399,8 +409,12 @@ export default class Brain {
         ? {
             group: this.lastEvaluation.group,
             activationCount: this.lastEvaluation.activationCount,
-            sensors: this.lastEvaluation.sensors ? [...this.lastEvaluation.sensors] : null,
-            outputs: this.lastEvaluation.outputs ? { ...this.lastEvaluation.outputs } : null,
+            sensors: this.lastEvaluation.sensors
+              ? [...this.lastEvaluation.sensors]
+              : null,
+            outputs: this.lastEvaluation.outputs
+              ? { ...this.lastEvaluation.outputs }
+              : null,
             trace: cloneTracePayload(this.lastEvaluation.trace),
           }
         : null,
@@ -425,16 +439,26 @@ export default class Brain {
     reversionRate,
     gainLimits,
   } = {}) {
-    const minLimit = Number.isFinite(gainLimits?.min) ? Math.max(0.05, gainLimits.min) : 0.5;
+    const minLimit = Number.isFinite(gainLimits?.min)
+      ? Math.max(0.05, gainLimits.min)
+      : 0.5;
     const maxLimit = Number.isFinite(gainLimits?.max)
       ? Math.max(minLimit + 0.05, gainLimits.max)
       : 1.8;
 
     this.sensorGainLimits = { min: minLimit, max: Math.max(minLimit + 0.05, maxLimit) };
-    this.sensorBaselines = this.#initSensorArray(baselineGains, 1, this.sensorGainLimits);
+    this.sensorBaselines = this.#initSensorArray(
+      baselineGains,
+      1,
+      this.sensorGainLimits,
+    );
     this.sensorGains = new Float32Array(this.sensorBaselines);
     this.sensorTargets = this.#initSensorArray(targets, Number.NaN);
-    this.sensorAdaptationRate = clamp(Number.isFinite(adaptationRate) ? adaptationRate : 0, 0, 0.6);
+    this.sensorAdaptationRate = clamp(
+      Number.isFinite(adaptationRate) ? adaptationRate : 0,
+      0,
+      0.6,
+    );
 
     const suggestedReversion = Number.isFinite(reversionRate)
       ? reversionRate
@@ -492,7 +516,7 @@ export default class Brain {
       this.sensorGains[i] = clamp(
         Number.isFinite(this.sensorGains[i]) ? this.sensorGains[i] : baseline,
         min,
-        max
+        max,
       );
     }
 
@@ -524,7 +548,9 @@ export default class Brain {
       if (!Number.isFinite(gain)) gain = this.sensorBaselines[i];
 
       const target =
-        this.sensorTargets && i < this.sensorTargets.length ? this.sensorTargets[i] : Number.NaN;
+        this.sensorTargets && i < this.sensorTargets.length
+          ? this.sensorTargets[i]
+          : Number.NaN;
 
       if (
         Number.isFinite(this.sensorAdaptationRate) &&
@@ -614,7 +640,7 @@ export default class Brain {
       if (!reachable.has(target)) continue;
 
       const filteredSources = sources.filter(
-        ({ source }) => this.#isSensor(source) || reachable.has(source)
+        ({ source }) => this.#isSensor(source) || reachable.has(source),
       );
 
       if (filteredSources.length > 0) {
@@ -625,7 +651,7 @@ export default class Brain {
     this.incoming = filteredIncoming;
     this.connections = this.connections.filter(
       ({ source, target }) =>
-        reachable.has(target) && (this.#isSensor(source) || reachable.has(source))
+        reachable.has(target) && (this.#isSensor(source) || reachable.has(source)),
     );
 
     for (const key of Array.from(this.activationMap.keys())) {

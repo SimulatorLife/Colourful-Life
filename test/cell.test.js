@@ -1,5 +1,5 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
 let Cell;
 let DNA;
@@ -38,29 +38,38 @@ function withMockedRandom(sequence, fn) {
   }
 }
 
-function expectClose(actual, expected, tolerance = 1e-12, message = 'values differ') {
-  assert.ok(Math.abs(actual - expected) <= tolerance, `${message}: ${actual} !== ${expected}`);
+function expectClose(actual, expected, tolerance = 1e-12, message = "values differ") {
+  assert.ok(
+    Math.abs(actual - expected) <= tolerance,
+    `${message}: ${actual} !== ${expected}`,
+  );
 }
 
 test.before(async () => {
-  ({ default: Cell } = await import('../src/cell.js'));
-  ({ DNA, GENE_LOCI } = await import('../src/genome.js'));
-  ({ clamp, lerp, randomRange, createRNG } = await import('../src/utils.js'));
-  ({ default: InteractionSystem } = await import('../src/interactionSystem.js'));
-  ({ default: Brain, OUTPUT_GROUPS } = await import('../src/brain.js'));
-  if (typeof global.window === 'undefined') global.window = globalThis;
+  ({ default: Cell } = await import("../src/cell.js"));
+  ({ DNA, GENE_LOCI } = await import("../src/genome.js"));
+  ({ clamp, lerp, randomRange, createRNG } = await import("../src/utils.js"));
+  ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
+  ({ default: Brain, OUTPUT_GROUPS } = await import("../src/brain.js"));
+  if (typeof global.window === "undefined") global.window = globalThis;
   if (!window.GridManager) window.GridManager = {};
-  if (typeof window.GridManager.maxTileEnergy !== 'number') {
+  if (typeof window.GridManager.maxTileEnergy !== "number") {
     window.GridManager.maxTileEnergy = 12;
   }
 });
 
-function predictDeterministicOffspring(dnaA, dnaB, mutationChance, mutationRange, entropyRoll = 0) {
+function predictDeterministicOffspring(
+  dnaA,
+  dnaB,
+  mutationChance,
+  mutationRange,
+  entropyRoll = 0,
+) {
   const parentSeed = (dnaA.seed() ^ dnaB.seed()) >>> 0;
   const entropy = Math.floor(entropyRoll * 0xffffffff) >>> 0;
   const rng = createRNG((parentSeed ^ entropy) >>> 0);
-  const blendA = typeof dnaA.crossoverMix === 'function' ? dnaA.crossoverMix() : 0.5;
-  const blendB = typeof dnaB.crossoverMix === 'function' ? dnaB.crossoverMix() : 0.5;
+  const blendA = typeof dnaA.crossoverMix === "function" ? dnaA.crossoverMix() : 0.5;
+  const blendB = typeof dnaB.crossoverMix === "function" ? dnaB.crossoverMix() : 0.5;
   const blendProbability = clamp((blendA + blendB) / 2, 0, 1);
   const range = Math.max(0, mutationRange | 0);
   const geneCount = Math.max(dnaA.length ?? 0, dnaB.length ?? 0);
@@ -92,21 +101,28 @@ function predictDeterministicOffspring(dnaA, dnaB, mutationChance, mutationRange
   return genes;
 }
 
-test('manageEnergy applies DNA-driven metabolism and starvation rules', () => {
+test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   const dna = new DNA(30, 200, 100);
   const initialEnergy = 5;
   const maxTileEnergy = 12;
   const cell = new Cell(2, 3, dna, initialEnergy);
   const context = { localDensity: 0.3, densityEffectMultiplier: 2, maxTileEnergy: 12 };
-  const effDensity = clamp(context.localDensity * context.densityEffectMultiplier, 0, 1);
+  const effDensity = clamp(
+    context.localDensity * context.densityEffectMultiplier,
+    0,
+    1,
+  );
   const densityResponse = dna.densityResponses().energyLoss;
   const energyDensityMult = lerp(densityResponse.min, densityResponse.max, effDensity);
   const metabolism = cell.metabolism;
-  const sen = typeof dna.senescenceRate === 'function' ? dna.senescenceRate() : 0;
+  const sen = typeof dna.senescenceRate === "function" ? dna.senescenceRate() : 0;
   const baseLoss = dna.energyLossBase();
   const ageFrac = cell.lifespan > 0 ? cell.age / cell.lifespan : 0;
   const lossScale =
-    dna.baseEnergyLossScale() * (1 + metabolism) * (1 + sen * ageFrac) * energyDensityMult;
+    dna.baseEnergyLossScale() *
+    (1 + metabolism) *
+    (1 + sen * ageFrac) *
+    energyDensityMult;
   const energyLoss = clamp(baseLoss * lossScale, 0.004, 0.35);
   const cognitiveLoss = dna.cognitiveCost(cell.neurons, cell.sight, effDensity);
 
@@ -114,12 +130,12 @@ test('manageEnergy applies DNA-driven metabolism and starvation rules', () => {
   const expectedEnergy = initialEnergy - (energyLoss + cognitiveLoss);
   const starvationThreshold = dna.starvationThresholdFrac() * context.maxTileEnergy;
 
-  expectClose(cell.energy, expectedEnergy, 1e-12, 'energy after management');
-  assert.ok(cell.energy < initialEnergy, 'energy should decrease');
+  expectClose(cell.energy, expectedEnergy, 1e-12, "energy after management");
+  assert.ok(cell.energy < initialEnergy, "energy should decrease");
   assert.is(starving, expectedEnergy <= starvationThreshold);
 });
 
-test('movement sensors update DNA-tuned resource trend signal', () => {
+test("movement sensors update DNA-tuned resource trend signal", () => {
   const dna = new DNA(120, 160, 200);
 
   dna.genes[GENE_LOCI.SENSE] = 200;
@@ -149,12 +165,86 @@ test('movement sensors update DNA-tuned resource trend signal', () => {
     tileEnergyDelta,
   });
 
-  expectClose(cell._resourceDelta, expectedDelta, 1e-12, 'resource delta smoothing');
-  expectClose(cell._resourceBaseline, expectedBaseline, 1e-12, 'resource baseline smoothing');
-  expectClose(cell._resourceSignal, expectedSignal, 1e-12, 'resource trend signal');
+  expectClose(cell._resourceDelta, expectedDelta, 1e-12, "resource delta smoothing");
+  expectClose(
+    cell._resourceBaseline,
+    expectedBaseline,
+    1e-12,
+    "resource baseline smoothing",
+  );
+  expectClose(cell._resourceSignal, expectedSignal, 1e-12, "resource trend signal");
 });
 
-test('breed spends parental investment energy without creating extra energy', () => {
+test("neural rest action queues DNA-driven fatigue recovery bonus", () => {
+  const dna = new DNA(180, 90, 60);
+
+  dna.genes[GENE_LOCI.RECOVERY] = 240;
+  dna.genes[GENE_LOCI.NEURAL] = 220;
+  dna.genes[GENE_LOCI.ACTIVITY] = 40;
+  dna.genes[GENE_LOCI.PARENTAL] = 180;
+  const initialEnergy = 8;
+  const cell = new Cell(0, 0, dna, initialEnergy);
+
+  cell.brain = {
+    connectionCount: 1,
+    evaluateGroup() {
+      return {
+        values: { rest: 5, pursue: 0, avoid: 0, cohere: 0, explore: 0 },
+        activationCount: 1,
+        sensors: new Array(Brain.SENSOR_COUNT).fill(0),
+      };
+    },
+  };
+
+  cell._neuralFatigue = 0.72;
+  const fatigueBefore = cell.getNeuralFatigue();
+
+  const grid = [[cell]];
+
+  cell.executeMovementStrategy(grid, 0, 0, [], [], [], {
+    rows: 1,
+    cols: 1,
+    localDensity: 0.1,
+    densityEffectMultiplier: 0.6,
+    moveToTarget: () => {},
+    moveAwayFromTarget: () => {},
+    moveRandomly: () => {},
+    getEnergyAt: () => 0,
+    tryMove: () => false,
+    isTileBlocked: () => false,
+  });
+
+  assert.ok(cell._pendingRestRecovery > 0, "rest should queue recovery boost");
+  const queued = cell._pendingRestRecovery;
+
+  const context = {
+    localDensity: 0.1,
+    densityEffectMultiplier: 0.6,
+    maxTileEnergy: 12,
+  };
+
+  cell.manageEnergy(cell.row, cell.col, context);
+
+  assert.is(
+    cell._pendingRestRecovery,
+    0,
+    "rest boost should be consumed during energy management",
+  );
+  const snapshot = cell._neuralFatigueSnapshot;
+
+  assert.ok(snapshot, "fatigue snapshot should exist after manageEnergy");
+  assert.ok(
+    snapshot.restBonusApplied > 0,
+    `rest bonus should apply when queued (queued=${queued})`,
+  );
+  assert.ok(snapshot.recoveryApplied > snapshot.restBaseRecovery - 1e-9);
+  assert.ok(
+    cell.getNeuralFatigue() < fatigueBefore + 1e-9,
+    "rest cycle should not increase fatigue when well supplied",
+  );
+});
+
+test("breed spends parental investment energy without creating extra energy", () => {
   const dnaA = new DNA(10, 120, 200);
   const dnaB = new DNA(200, 80, 40);
   const parentA = new Cell(4, 5, dnaA, 8);
@@ -170,29 +260,31 @@ test('breed spends parental investment energy without creating extra energy', ()
   const investB = investmentFor(energyBeforeB, investFracB, starvationB);
   const totalInvestment = investA + investB;
 
-  const child = withMockedRandom([0.9, 0.9, 0.9, 0.5], () => Cell.breed(parentA, parentB));
+  const child = withMockedRandom([0.9, 0.9, 0.9, 0.5], () =>
+    Cell.breed(parentA, parentB),
+  );
 
   const expectedEnergy = totalInvestment;
 
-  assert.ok(child instanceof Cell, 'breed should return a Cell');
+  assert.ok(child instanceof Cell, "breed should return a Cell");
   assert.is(child.row, parentA.row);
   assert.is(child.col, parentA.col);
-  expectClose(child.energy, expectedEnergy, 1e-12, 'offspring energy');
-  expectClose(parentA.energy, energyBeforeA - investA, 1e-12, 'parent A energy');
-  expectClose(parentB.energy, energyBeforeB - investB, 1e-12, 'parent B energy');
+  expectClose(child.energy, expectedEnergy, 1e-12, "offspring energy");
+  expectClose(parentA.energy, energyBeforeA - investA, 1e-12, "parent A energy");
+  expectClose(parentB.energy, energyBeforeB - investB, 1e-12, "parent B energy");
   expectClose(
     totalInvestment,
     energyBeforeA - parentA.energy + (energyBeforeB - parentB.energy),
     1e-12,
-    'investments match energy spent'
+    "investments match energy spent",
   );
   assert.is(parentA.offspring, 1);
   assert.is(parentB.offspring, 1);
-  assert.ok(parentA.energy >= starvationA, 'parent A respects starvation floor');
-  assert.ok(parentB.energy >= starvationB, 'parent B respects starvation floor');
+  assert.ok(parentA.energy >= starvationA, "parent A respects starvation floor");
+  assert.ok(parentB.energy >= starvationB, "parent B respects starvation floor");
 });
 
-test('interaction momentum responds to conflicts and cooperation history', () => {
+test("interaction momentum responds to conflicts and cooperation history", () => {
   const dna = new DNA(180, 200, 80);
 
   dna.genes[GENE_LOCI.COOPERATION] = 230;
@@ -205,33 +297,36 @@ test('interaction momentum responds to conflicts and cooperation history', () =>
   const cell = new Cell(2, 2, dna, 6);
   const baseline = cell.getInteractionMomentum();
 
-  assert.ok(baseline > -0.2 && baseline <= 1, 'baseline mood should be cooperative leaning');
+  assert.ok(
+    baseline > -0.2 && baseline <= 1,
+    "baseline mood should be cooperative leaning",
+  );
 
   const rival = { dna: new DNA(40, 60, 210) };
   const afterLoss = cell.experienceInteraction({
-    type: 'fight',
-    outcome: 'loss',
+    type: "fight",
+    outcome: "loss",
     partner: rival,
     energyDelta: -1.5,
   });
 
-  assert.ok(afterLoss < baseline, 'losing a fight should depress social momentum');
+  assert.ok(afterLoss < baseline, "losing a fight should depress social momentum");
   expectClose(
     cell.getInteractionMomentum(),
     afterLoss,
     1e-12,
-    'momentum snapshot matches recorded value'
+    "momentum snapshot matches recorded value",
   );
 
   const partner = { dna: new DNA(210, 170, 90) };
   const afterCoop = cell.experienceInteraction({
-    type: 'cooperate',
-    outcome: 'receive',
+    type: "cooperate",
+    outcome: "receive",
     partner,
     energyDelta: 2.2,
   });
 
-  assert.ok(afterCoop > afterLoss, 'receiving cooperation should raise momentum');
+  assert.ok(afterCoop > afterLoss, "receiving cooperation should raise momentum");
 
   cell.age += 1;
   cell.chooseInteractionAction({
@@ -244,10 +339,10 @@ test('interaction momentum responds to conflicts and cooperation history', () =>
 
   const decayed = cell.getInteractionMomentum();
 
-  assert.ok(decayed > afterLoss, 'decay pulls momentum back toward baseline');
+  assert.ok(decayed > afterLoss, "decay pulls momentum back toward baseline");
 });
 
-test('breed returns null when either parent lacks investable energy', () => {
+test("breed returns null when either parent lacks investable energy", () => {
   const dnaA = new DNA(240, 10, 10);
   const dnaB = new DNA(240, 10, 10);
   const parentA = new Cell(3, 4, dnaA, 0);
@@ -259,22 +354,22 @@ test('breed returns null when either parent lacks investable energy', () => {
 
   const offspring = Cell.breed(parentA, parentB);
 
-  assert.is(offspring, null, 'offspring should be null when investments are zero');
-  expectClose(parentA.energy, energyBeforeA, 1e-12, 'parent A energy unchanged');
-  expectClose(parentB.energy, energyBeforeB, 1e-12, 'parent B energy unchanged');
+  assert.is(offspring, null, "offspring should be null when investments are zero");
+  expectClose(parentA.energy, energyBeforeA, 1e-12, "parent A energy unchanged");
+  expectClose(parentB.energy, energyBeforeB, 1e-12, "parent B energy unchanged");
   assert.is(parentA.offspring, 0);
   assert.is(parentB.offspring, 0);
   assert.ok(
     parentA.energy <= starvationA,
-    'parent A stays at or below starvation floor when energy is insufficient'
+    "parent A stays at or below starvation floor when energy is insufficient",
   );
   assert.ok(
     parentB.energy <= starvationB,
-    'parent B stays at or below starvation floor when energy is insufficient'
+    "parent B stays at or below starvation floor when energy is insufficient",
   );
 });
 
-test('breed clamps investment so parents stop at starvation threshold', () => {
+test("breed clamps investment so parents stop at starvation threshold", () => {
   const dnaA = new DNA(30, 240, 220);
   const dnaB = new DNA(200, 220, 60);
   const parentA = new Cell(5, 6, dnaA, 6);
@@ -284,38 +379,54 @@ test('breed clamps investment so parents stop at starvation threshold', () => {
   const starvationB = parentB.starvationThreshold(maxTileEnergy);
   const energyBeforeA = parentA.energy;
   const energyBeforeB = parentB.energy;
-  const expectedInvestA = investmentFor(energyBeforeA, dnaA.parentalInvestmentFrac(), starvationA);
-  const expectedInvestB = investmentFor(energyBeforeB, dnaB.parentalInvestmentFrac(), starvationB);
+  const expectedInvestA = investmentFor(
+    energyBeforeA,
+    dnaA.parentalInvestmentFrac(),
+    starvationA,
+  );
+  const expectedInvestB = investmentFor(
+    energyBeforeB,
+    dnaB.parentalInvestmentFrac(),
+    starvationB,
+  );
 
-  assert.ok(starvationA > 0, 'starvation threshold should be positive');
-  assert.ok(starvationB > 0, 'starvation threshold should be positive');
+  assert.ok(starvationA > 0, "starvation threshold should be positive");
+  assert.ok(starvationB > 0, "starvation threshold should be positive");
 
-  const child = withMockedRandom([0.6, 0.6, 0.6, 0.5], () => Cell.breed(parentA, parentB));
+  const child = withMockedRandom([0.6, 0.6, 0.6, 0.5], () =>
+    Cell.breed(parentA, parentB),
+  );
 
-  assert.ok(child instanceof Cell, 'offspring should be produced when both can invest');
-  assert.ok(parentA.energy >= starvationA, 'parent A energy stays above starvation floor');
-  assert.ok(parentB.energy >= starvationB, 'parent B energy stays above starvation floor');
+  assert.ok(child instanceof Cell, "offspring should be produced when both can invest");
+  assert.ok(
+    parentA.energy >= starvationA,
+    "parent A energy stays above starvation floor",
+  );
+  assert.ok(
+    parentB.energy >= starvationB,
+    "parent B energy stays above starvation floor",
+  );
   expectClose(
     parentA.energy,
     energyBeforeA - expectedInvestA,
     1e-12,
-    'parent A investment matches clamp'
+    "parent A investment matches clamp",
   );
   expectClose(
     parentB.energy,
     energyBeforeB - expectedInvestB,
     1e-12,
-    'parent B investment matches clamp'
+    "parent B investment matches clamp",
   );
   expectClose(
     child.energy,
     expectedInvestA + expectedInvestB,
     1e-12,
-    'child energy equals combined investments'
+    "child energy equals combined investments",
   );
 });
 
-test('breed applies deterministic crossover and honors forced mutation', () => {
+test("breed applies deterministic crossover and honors forced mutation", () => {
   const dnaA = new DNA(100, 150, 200);
   const dnaB = new DNA(140, 160, 210);
   const parentA = new Cell(7, 8, dnaA, 6);
@@ -331,17 +442,30 @@ test('breed applies deterministic crossover and honors forced mutation', () => {
   const chance = 1;
   const range = 12;
   const entropyRoll = 0.25;
-  const expectedGenes = predictDeterministicOffspring(dnaA, dnaB, chance, range, entropyRoll);
-  const child = withMockedRandom([entropyRoll, 0.5], () => Cell.breed(parentA, parentB));
+  const expectedGenes = predictDeterministicOffspring(
+    dnaA,
+    dnaB,
+    chance,
+    range,
+    entropyRoll,
+  );
+  const child = withMockedRandom([entropyRoll, 0.5], () =>
+    Cell.breed(parentA, parentB),
+  );
 
   assert.is(child.dna.length, expectedGenes.length);
   for (let i = 0; i < expectedGenes.length; i++) {
     assert.is(child.dna.geneAt(i), expectedGenes[i]);
   }
-  expectClose(child.strategy, avgStrategy, 1e-12, 'strategy averages when mutation delta is zero');
+  expectClose(
+    child.strategy,
+    avgStrategy,
+    1e-12,
+    "strategy averages when mutation delta is zero",
+  );
 });
 
-test('interaction intents resolve fights via interaction system', () => {
+test("interaction intents resolve fights via interaction system", () => {
   const attackerDNA = new DNA(10, 20, 30);
   const defenderDNA = new DNA(15, 25, 35);
 
@@ -443,19 +567,23 @@ test('interaction intents resolve fights via interaction system', () => {
 
   withMockedRandom([0], () => interactionSystem.resolveIntent(intent, { stats }));
 
-  assert.is(manager.grid[0][1], attacker, 'attacker occupies the target tile after winning');
-  assert.is(manager.grid[0][0], null, 'original attacker tile is emptied');
-  assert.is(attacker.row, 0, 'attacker row updates to target row');
-  assert.is(attacker.col, 1, 'attacker col updates to target col');
-  assert.is(attacker.fightsWon, 1, 'attacker records win');
-  assert.is(defender.fightsLost, 1, 'defender records loss');
-  assert.is(consumeCalls.length, 1, 'energy consumption triggered once');
+  assert.is(
+    manager.grid[0][1],
+    attacker,
+    "attacker occupies the target tile after winning",
+  );
+  assert.is(manager.grid[0][0], null, "original attacker tile is emptied");
+  assert.is(attacker.row, 0, "attacker row updates to target row");
+  assert.is(attacker.col, 1, "attacker col updates to target col");
+  assert.is(attacker.fightsWon, 1, "attacker records win");
+  assert.is(defender.fightsLost, 1, "defender records loss");
+  assert.is(consumeCalls.length, 1, "energy consumption triggered once");
   assert.equal(consumeCalls[0], { cell: attacker, row: 0, col: 1 });
-  assert.is(fights, 1, 'fight stat increments once');
-  assert.is(deaths, 1, 'death stat increments once');
+  assert.is(fights, 1, "fight stat increments once");
+  assert.is(deaths, 1, "death stat increments once");
 });
 
-test('movement and interaction genes reflect DNA-coded tendencies', () => {
+test("movement and interaction genes reflect DNA-coded tendencies", () => {
   const fastDNA = new DNA(120, 80, 40);
 
   fastDNA.genes[GENE_LOCI.MOVEMENT] = 240;
@@ -475,9 +603,18 @@ test('movement and interaction genes reflect DNA-coded tendencies', () => {
   const fastMovement = fastDNA.movementGenes();
   const cautiousMovement = cautiousDNA.movementGenes();
 
-  assert.ok(fastMovement.pursuit > cautiousMovement.pursuit, 'fast genome pursues more');
-  assert.ok(cautiousMovement.cautious > fastMovement.cautious, 'cautious genome rests more');
-  assert.ok(cautiousMovement.wandering > fastMovement.wandering, 'explorers wander more');
+  assert.ok(
+    fastMovement.pursuit > cautiousMovement.pursuit,
+    "fast genome pursues more",
+  );
+  assert.ok(
+    cautiousMovement.cautious > fastMovement.cautious,
+    "cautious genome rests more",
+  );
+  assert.ok(
+    cautiousMovement.wandering > fastMovement.wandering,
+    "explorers wander more",
+  );
 
   const aggressiveDNA = new DNA(220, 40, 40);
 
@@ -497,12 +634,21 @@ test('movement and interaction genes reflect DNA-coded tendencies', () => {
   const aggressiveInteraction = aggressiveDNA.interactionGenes();
   const altruistInteraction = altruistDNA.interactionGenes();
 
-  assert.ok(aggressiveInteraction.fight > altruistInteraction.fight, 'aggressive genome fights');
-  assert.ok(altruistInteraction.cooperate > aggressiveInteraction.cooperate, 'helpers cooperate');
-  assert.ok(altruistInteraction.avoid > aggressiveInteraction.avoid, 'cautious genomes avoid');
+  assert.ok(
+    aggressiveInteraction.fight > altruistInteraction.fight,
+    "aggressive genome fights",
+  );
+  assert.ok(
+    altruistInteraction.cooperate > aggressiveInteraction.cooperate,
+    "helpers cooperate",
+  );
+  assert.ok(
+    altruistInteraction.avoid > aggressiveInteraction.avoid,
+    "cautious genomes avoid",
+  );
 });
 
-test('chooseEnemyTarget uses conflict focus derived from DNA', () => {
+test("chooseEnemyTarget uses conflict focus derived from DNA", () => {
   const cautiousDNA = new DNA(80, 180, 200);
 
   cautiousDNA.genes[GENE_LOCI.RISK] = 20;
@@ -537,11 +683,11 @@ test('chooseEnemyTarget uses conflict focus derived from DNA', () => {
   const cautiousTarget = cautiousCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
   const boldTarget = boldCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
 
-  assert.is(cautiousTarget.target, weakEnemy, 'cautious genome prefers weaker enemy');
-  assert.is(boldTarget.target, strongEnemy, 'bold genome prefers strong enemy');
+  assert.is(cautiousTarget.target, weakEnemy, "cautious genome prefers weaker enemy");
+  assert.is(boldTarget.target, strongEnemy, "bold genome prefers strong enemy");
 });
 
-test('neural targeting can override conflict focus weighting', () => {
+test("neural targeting can override conflict focus weighting", () => {
   const strategicDNA = new DNA(160, 140, 180);
 
   strategicDNA.conflictFocus = () => ({
@@ -556,11 +702,13 @@ test('neural targeting can override conflict focus weighting', () => {
   neuralCell.age = 10;
   neuralCell.lifespan = 100;
 
-  const attritionOutput = OUTPUT_GROUPS.targeting.find((entry) => entry.key === 'focusAttrition');
+  const attritionOutput = OUTPUT_GROUPS.targeting.find(
+    (entry) => entry.key === "focusAttrition",
+  );
 
-  assert.ok(attritionOutput, 'targeting output for attrition exists');
+  assert.ok(attritionOutput, "targeting output for attrition exists");
   const attritionGene = {
-    sourceId: Brain.sensorIndex('bias'),
+    sourceId: Brain.sensorIndex("bias"),
     targetId: attritionOutput?.id ?? 0,
     weight: 6,
     activationType: 0,
@@ -596,7 +744,7 @@ test('neural targeting can override conflict focus weighting', () => {
   assert.is(
     fallbackChoice.target,
     strongEnemy,
-    'DNA-focused cell challenges the stronger opponent'
+    "DNA-focused cell challenges the stronger opponent",
   );
 
   const neuralChoice = neuralCell.chooseEnemyTarget(enemies, { maxTileEnergy: 12 });
@@ -604,11 +752,11 @@ test('neural targeting can override conflict focus weighting', () => {
   assert.is(
     neuralChoice.target,
     weakEnemy,
-    'Neural targeting pivots toward attrition despite DNA bias'
+    "Neural targeting pivots toward attrition despite DNA bias",
   );
 });
 
-test('cooperateShareFrac adapts to ally deficits and kinship', () => {
+test("cooperateShareFrac adapts to ally deficits and kinship", () => {
   const dna = new DNA(80, 200, 140);
 
   dna.genes[GENE_LOCI.COOPERATION] = 230;
@@ -620,9 +768,9 @@ test('cooperateShareFrac adapts to ally deficits and kinship', () => {
   const assistWeakKin = dna.cooperateShareFrac({ energyDelta: -0.6, kinship: 0.9 });
   const holdBack = dna.cooperateShareFrac({ energyDelta: 0.6, kinship: 0.1 });
 
-  assert.ok(assistWeakKin > baseline, 'shares more with weaker kin');
-  assert.ok(holdBack < baseline, 'shares less with stronger partners');
-  assert.ok(assistWeakKin > holdBack, 'overall preference favors helping the weak');
+  assert.ok(assistWeakKin > baseline, "shares more with weaker kin");
+  assert.ok(holdBack < baseline, "shares less with stronger partners");
+  assert.ok(assistWeakKin > holdBack, "overall preference favors helping the weak");
 });
 
 test.run();
