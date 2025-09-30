@@ -1,12 +1,12 @@
-import { UI_SLIDER_CONFIG, resolveSimulationDefaults } from './config.js';
-import { warnOnce } from './utils.js';
+import { UI_SLIDER_CONFIG, resolveSimulationDefaults } from "./config.js";
+import { warnOnce } from "./utils.js";
 import {
   createControlButtonRow,
   createControlGrid,
   createSectionHeading,
   createSelectRow,
   createSliderRow,
-} from './ui/controlBuilders.js';
+} from "./ui/controlBuilders.js";
 
 /**
  * Constructs and manages the browser-based control surface. The UI manager
@@ -15,7 +15,12 @@ import {
  * slow-updating metrics to dashboards and coordinates selection drawing.
  */
 export default class UIManager {
-  constructor(simulationCallbacks = {}, mountSelector = '#app', actions = {}, layoutOptions = {}) {
+  constructor(
+    simulationCallbacks = {},
+    mountSelector = "#app",
+    actions = {},
+    layoutOptions = {},
+  ) {
     const { obstaclePresets = [], ...actionFns } = actions || {};
 
     const defaults = resolveSimulationDefaults();
@@ -26,7 +31,9 @@ export default class UIManager {
     this.paused = Boolean(defaults.paused);
     this.selectionManager = actions.selectionManager || null;
     this.getCellSize =
-      typeof actions.getCellSize === 'function' ? actions.getCellSize.bind(actions) : () => 1;
+      typeof actions.getCellSize === "function"
+        ? actions.getCellSize.bind(actions)
+        : () => 1;
     this.selectionDrawingEnabled = false;
     this.selectionDragStart = null;
     this.canvasElement = null;
@@ -60,21 +67,21 @@ export default class UIManager {
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
-    this.obstaclePreset = this.obstaclePresets[0]?.id ?? 'none';
+    this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
     this.lingerPenalty = defaults.lingerPenalty;
     this.autoPauseCheckbox = null;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
 
     // Layout container with canvas on the left and sidebar on the right
-    this.mainRow = document.createElement('div');
-    this.mainRow.className = 'main-row';
-    this.canvasContainer = document.createElement('div');
-    this.canvasContainer.className = 'canvas-container';
-    this.sidebar = document.createElement('div');
-    this.sidebar.className = 'sidebar';
-    this.dashboardGrid = document.createElement('div');
-    this.dashboardGrid.className = 'dashboard-grid';
+    this.mainRow = document.createElement("div");
+    this.mainRow.className = "main-row";
+    this.canvasContainer = document.createElement("div");
+    this.canvasContainer.className = "canvas-container";
+    this.sidebar = document.createElement("div");
+    this.sidebar.className = "sidebar";
+    this.dashboardGrid = document.createElement("div");
+    this.dashboardGrid.className = "dashboard-grid";
     this.sidebar.appendChild(this.dashboardGrid);
     this.mainRow.appendChild(this.canvasContainer);
     this.mainRow.appendChild(this.sidebar);
@@ -82,9 +89,11 @@ export default class UIManager {
     // Allow callers to customize which keys toggle the pause state.
     this.pauseHotkeySet = this.#resolveHotkeySet(layoutOptions.pauseHotkeys);
 
-    const canvasEl = layoutOptions.canvasElement || this.#resolveNode(layoutOptions.canvasSelector);
+    const canvasEl =
+      layoutOptions.canvasElement || this.#resolveNode(layoutOptions.canvasSelector);
     const anchorNode =
-      this.#resolveNode(layoutOptions.before) || this.#resolveNode(layoutOptions.insertBefore);
+      this.#resolveNode(layoutOptions.before) ||
+      this.#resolveNode(layoutOptions.insertBefore);
 
     if (canvasEl) {
       this.attachCanvas(canvasEl, { before: anchorNode });
@@ -97,7 +106,7 @@ export default class UIManager {
     this.dashboardGrid.appendChild(this.insightsPanel);
 
     // Keyboard toggle
-    document.addEventListener('keydown', (e) => {
+    document.addEventListener("keydown", (e) => {
       if (!e?.key) return;
 
       const key = e.key.toLowerCase();
@@ -109,16 +118,16 @@ export default class UIManager {
   }
 
   #resolveHotkeySet(candidate) {
-    const fallback = ['p'];
+    const fallback = ["p"];
 
     const values = Array.isArray(candidate)
       ? candidate
-      : typeof candidate === 'string' && candidate.length > 0
+      : typeof candidate === "string" && candidate.length > 0
         ? [candidate]
         : fallback;
 
     const normalized = values
-      .map((value) => (typeof value === 'string' ? value.trim().toLowerCase() : ''))
+      .map((value) => (typeof value === "string" ? value.trim().toLowerCase() : ""))
       .filter((value) => value.length > 0);
 
     return new Set(normalized.length > 0 ? normalized : fallback);
@@ -130,7 +139,9 @@ export default class UIManager {
     if (!(targetCanvas instanceof HTMLElement)) return;
     this.canvasElement = targetCanvas;
     const anchor =
-      this.#resolveNode(options.before) || this.#resolveNode(options.insertBefore) || targetCanvas;
+      this.#resolveNode(options.before) ||
+      this.#resolveNode(options.insertBefore) ||
+      targetCanvas;
 
     this.#ensureMainRowMounted(anchor);
     this.canvasContainer.appendChild(targetCanvas);
@@ -150,7 +161,7 @@ export default class UIManager {
   #resolveNode(candidate) {
     if (!candidate) return null;
     if (candidate instanceof Node) return candidate;
-    if (typeof candidate === 'string') {
+    if (typeof candidate === "string") {
       return this.root.querySelector(candidate) || document.querySelector(candidate);
     }
 
@@ -158,39 +169,42 @@ export default class UIManager {
   }
 
   #setPointerCapture(target, pointerId) {
-    if (!target || typeof target.setPointerCapture !== 'function') return;
+    if (!target || typeof target.setPointerCapture !== "function") return;
 
     try {
       target.setPointerCapture(pointerId);
     } catch (error) {
-      warnOnce('Failed to set pointer capture for selection drawing.', error);
+      warnOnce("Failed to set pointer capture for selection drawing.", error);
     }
   }
 
   #releasePointerCapture(target, pointerId) {
-    if (!target || typeof target.releasePointerCapture !== 'function') return;
+    if (!target || typeof target.releasePointerCapture !== "function") return;
 
     try {
       target.releasePointerCapture(pointerId);
     } catch (error) {
-      warnOnce('Failed to release pointer capture after selection drawing.', error);
+      warnOnce("Failed to release pointer capture after selection drawing.", error);
     }
   }
 
   #scheduleUpdate() {
-    if (typeof this.simulationCallbacks?.requestFrame === 'function') {
+    if (typeof this.simulationCallbacks?.requestFrame === "function") {
       this.simulationCallbacks.requestFrame();
 
       return;
     }
 
-    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    if (
+      typeof window !== "undefined" &&
+      typeof window.requestAnimationFrame === "function"
+    ) {
       window.requestAnimationFrame(() => {});
     }
   }
 
   #notifySettingChange(key, value) {
-    if (typeof this.simulationCallbacks?.onSettingChange === 'function') {
+    if (typeof this.simulationCallbacks?.onSettingChange === "function") {
       this.simulationCallbacks.onSettingChange(key, value);
     }
   }
@@ -205,12 +219,14 @@ export default class UIManager {
     const isActive = this.selectionDrawingEnabled;
 
     if (this.drawZoneButton) {
-      this.drawZoneButton.classList.toggle('active', isActive);
-      this.drawZoneButton.textContent = isActive ? 'Cancel Drawing' : 'Draw Custom Zone';
-      this.drawZoneButton.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      this.drawZoneButton.classList.toggle("active", isActive);
+      this.drawZoneButton.textContent = isActive
+        ? "Cancel Drawing"
+        : "Draw Custom Zone";
+      this.drawZoneButton.setAttribute("aria-pressed", isActive ? "true" : "false");
       this.drawZoneButton.title = isActive
-        ? 'Cancel drawing mode and keep the current reproductive zones.'
-        : 'Enable drawing mode to sketch a custom reproductive zone on the canvas.';
+        ? "Cancel drawing mode and keep the current reproductive zones."
+        : "Enable drawing mode to sketch a custom reproductive zone on the canvas.";
     }
 
     if (!isActive) {
@@ -221,7 +237,8 @@ export default class UIManager {
   }
 
   #toggleRegionDrawing(nextState) {
-    const state = typeof nextState === 'boolean' ? nextState : !this.selectionDrawingEnabled;
+    const state =
+      typeof nextState === "boolean" ? nextState : !this.selectionDrawingEnabled;
 
     this.#setDrawingEnabled(state);
   }
@@ -230,7 +247,7 @@ export default class UIManager {
     if (!this.zoneSummaryEl) return;
     const summary = this.selectionManager
       ? this.selectionManager.describeActiveZones()
-      : 'All tiles eligible';
+      : "All tiles eligible";
 
     this.zoneSummaryEl.textContent = summary;
     this.#updateCustomZoneButtons();
@@ -241,14 +258,14 @@ export default class UIManager {
 
     const hasZones = Boolean(
       this.selectionManager &&
-        typeof this.selectionManager.hasCustomZones === 'function' &&
-        this.selectionManager.hasCustomZones()
+        typeof this.selectionManager.hasCustomZones === "function" &&
+        this.selectionManager.hasCustomZones(),
     );
 
     this.clearZonesButton.disabled = !hasZones;
     this.clearZonesButton.title = hasZones
-      ? 'Remove all custom reproductive zones.'
-      : 'No custom reproductive zones to clear.';
+      ? "Remove all custom reproductive zones."
+      : "No custom reproductive zones to clear.";
   }
 
   #canvasToGrid(event) {
@@ -269,7 +286,12 @@ export default class UIManager {
   }
 
   #installRegionDrawing() {
-    if (!this.canvasElement || !this.selectionManager || this._selectionListenersInstalled) return;
+    if (
+      !this.canvasElement ||
+      !this.selectionManager ||
+      this._selectionListenersInstalled
+    )
+      return;
 
     this.selectionDrawingActive = false;
     this.selectionDragEnd = null;
@@ -309,7 +331,7 @@ export default class UIManager {
           start.row,
           start.col,
           end.row,
-          end.col
+          end.col,
         );
 
         if (zone) {
@@ -334,35 +356,35 @@ export default class UIManager {
       this.#setDrawingEnabled(false);
     };
 
-    canvas.addEventListener('pointerdown', handlePointerDown);
-    canvas.addEventListener('pointermove', handlePointerMove);
-    canvas.addEventListener('pointerup', finalizeDrawing);
-    canvas.addEventListener('pointerleave', finalizeDrawing);
-    canvas.addEventListener('pointercancel', cancelDrawing);
+    canvas.addEventListener("pointerdown", handlePointerDown);
+    canvas.addEventListener("pointermove", handlePointerMove);
+    canvas.addEventListener("pointerup", finalizeDrawing);
+    canvas.addEventListener("pointerleave", finalizeDrawing);
+    canvas.addEventListener("pointercancel", cancelDrawing);
 
     this._selectionListenersInstalled = true;
   }
 
   // Reusable checkbox row helper
   #addCheckbox(body, label, title, initial, onChange) {
-    const row = document.createElement('label');
+    const row = document.createElement("label");
 
-    row.className = 'control-row';
+    row.className = "control-row";
     if (title) row.title = title;
-    const line = document.createElement('div');
+    const line = document.createElement("div");
 
-    line.className = 'control-line control-line--checkbox';
-    const input = document.createElement('input');
+    line.className = "control-line control-line--checkbox";
+    const input = document.createElement("input");
 
-    input.type = 'checkbox';
+    input.type = "checkbox";
     input.checked = Boolean(initial);
-    if (typeof onChange === 'function') {
-      input.addEventListener('input', () => onChange(input.checked));
+    if (typeof onChange === "function") {
+      input.addEventListener("input", () => onChange(input.checked));
     }
-    const name = document.createElement('div');
+    const name = document.createElement("div");
 
-    name.className = 'control-name';
-    name.textContent = label ?? '';
+    name.className = "control-name";
+    name.textContent = label ?? "";
     line.appendChild(input);
     line.appendChild(name);
     row.appendChild(line);
@@ -372,29 +394,29 @@ export default class UIManager {
   }
 
   #appendControlRow(container, { label, value, title, color, valueClass }) {
-    const row = document.createElement('div');
+    const row = document.createElement("div");
 
-    row.className = 'control-line';
+    row.className = "control-line";
     if (title) row.title = title;
 
-    const nameEl = document.createElement('div');
+    const nameEl = document.createElement("div");
 
-    nameEl.className = 'control-name';
+    nameEl.className = "control-name";
     if (color) {
-      const swatch = document.createElement('span');
+      const swatch = document.createElement("span");
 
-      swatch.className = 'control-swatch';
+      swatch.className = "control-swatch";
       swatch.style.background = color;
       nameEl.appendChild(swatch);
     }
-    const labelEl = document.createElement('span');
+    const labelEl = document.createElement("span");
 
     labelEl.textContent = label;
     nameEl.appendChild(labelEl);
 
-    const valueEl = document.createElement('div');
+    const valueEl = document.createElement("div");
 
-    valueEl.className = valueClass ? `control-value ${valueClass}` : 'control-value';
+    valueEl.className = valueClass ? `control-value ${valueClass}` : "control-value";
 
     if (value instanceof Node) {
       valueEl.appendChild(value);
@@ -412,40 +434,52 @@ export default class UIManager {
   // Utility to create a collapsible panel with a header
   #createPanel(title, options = {}) {
     const { collapsed = false } = options;
-    const panel = document.createElement('div');
 
-    panel.className = 'panel';
-    const header = document.createElement('div');
+    this._panelIdSequence = (this._panelIdSequence ?? 0) + 1;
+    const headingId = `panel-${this._panelIdSequence}-title`;
+    const bodyId = `panel-${this._panelIdSequence}-body`;
+    const panel = document.createElement("div");
 
-    header.className = 'panel-header';
-    const heading = document.createElement('h3');
+    panel.className = "panel";
+    const header = document.createElement("div");
 
+    header.className = "panel-header";
+    const heading = document.createElement("h3");
+
+    heading.id = headingId;
     heading.textContent = title;
-    const toggle = document.createElement('button');
+    const toggle = document.createElement("button");
 
-    toggle.textContent = '–';
-    toggle.className = 'panel-toggle';
+    toggle.type = "button";
+    toggle.textContent = "–";
+    toggle.className = "panel-toggle";
+    toggle.setAttribute("aria-label", `Toggle ${title} panel`);
+    toggle.setAttribute("aria-controls", bodyId);
     header.appendChild(heading);
     header.appendChild(toggle);
     panel.appendChild(header);
-    const body = document.createElement('div');
+    const body = document.createElement("div");
 
-    body.className = 'panel-body';
+    body.className = "panel-body";
+    body.id = bodyId;
+    body.setAttribute("role", "region");
+    body.setAttribute("aria-labelledby", headingId);
     panel.appendChild(body);
 
     const setCollapsed = (shouldCollapse) => {
-      panel.classList.toggle('collapsed', shouldCollapse);
-      toggle.textContent = shouldCollapse ? '+' : '–';
+      panel.classList.toggle("collapsed", shouldCollapse);
+      toggle.textContent = shouldCollapse ? "+" : "–";
+      toggle.setAttribute("aria-expanded", shouldCollapse ? "false" : "true");
     };
 
     const toggleCollapsed = () => {
-      setCollapsed(!panel.classList.contains('collapsed'));
+      setCollapsed(!panel.classList.contains("collapsed"));
     };
 
-    header.addEventListener('click', () => {
+    header.addEventListener("click", () => {
       toggleCollapsed();
     });
-    toggle.addEventListener('click', (e) => {
+    toggle.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleCollapsed();
     });
@@ -456,10 +490,12 @@ export default class UIManager {
   }
 
   #buildControlsPanel() {
-    const { panel, body } = this.#createPanel('Simulation Controls', { collapsed: true });
+    const { panel, body } = this.#createPanel("Simulation Controls", {
+      collapsed: true,
+    });
 
-    panel.id = 'controls';
-    panel.classList.add('controls-panel');
+    panel.id = "controls";
+    panel.classList.add("controls-panel");
 
     this.#buildControlButtons(body);
 
@@ -480,42 +516,42 @@ export default class UIManager {
     const buttonRow = createControlButtonRow(body);
 
     const addControlButton = ({ id, label, title, onClick }) => {
-      const button = document.createElement('button');
+      const button = document.createElement("button");
 
       button.id = id;
       button.textContent = label;
       button.title = title;
-      button.addEventListener('click', onClick);
+      button.addEventListener("click", onClick);
       buttonRow.appendChild(button);
 
       return button;
     };
 
     this.pauseButton = addControlButton({
-      id: 'pauseButton',
-      label: 'Pause',
-      title: 'Pause/resume the simulation (shortcut: P)',
+      id: "pauseButton",
+      label: "Pause",
+      title: "Pause/resume the simulation (shortcut: P)",
       onClick: () => this.togglePause(),
     });
 
     this.stepButton = addControlButton({
-      id: 'stepButton',
-      label: 'Step',
-      title: 'Advance one tick while paused to inspect changes frame-by-frame.',
+      id: "stepButton",
+      label: "Step",
+      title: "Advance one tick while paused to inspect changes frame-by-frame.",
       onClick: () => {
-        if (typeof this.simulationCallbacks?.step === 'function') {
+        if (typeof this.simulationCallbacks?.step === "function") {
           this.simulationCallbacks.step();
         }
       },
     });
 
     addControlButton({
-      id: 'burstButton',
-      label: 'Burst New Cells',
-      title: 'Spawn a cluster of new cells at a random spot',
+      id: "burstButton",
+      label: "Burst New Cells",
+      title: "Spawn a cluster of new cells at a random spot",
       onClick: () => {
-        if (typeof this.actions.burst === 'function') this.actions.burst();
-        else if (window.grid && typeof window.grid.burstRandomCells === 'function')
+        if (typeof this.actions.burst === "function") this.actions.burst();
+        else if (window.grid && typeof window.grid.burstRandomCells === "function")
           window.grid.burstRandomCells();
       },
     });
@@ -525,10 +561,10 @@ export default class UIManager {
     const sliderConfig = UI_SLIDER_CONFIG || {};
 
     const getSliderValue = (cfg) =>
-      typeof cfg.getValue === 'function' ? cfg.getValue() : this[cfg.prop];
+      typeof cfg.getValue === "function" ? cfg.getValue() : this[cfg.prop];
 
     const getSliderSetter = (cfg) => {
-      if (typeof cfg.setValue === 'function') return cfg.setValue;
+      if (typeof cfg.setValue === "function") return cfg.setValue;
       if (cfg.prop)
         return (value) => {
           this[cfg.prop] = value;
@@ -574,214 +610,221 @@ export default class UIManager {
       });
 
     const thresholdConfigs = [
-      withSliderConfig('societySimilarity', {
-        label: 'Ally Similarity ≥',
+      withSliderConfig("societySimilarity", {
+        label: "Ally Similarity ≥",
         min: 0,
         max: 1,
         step: 0.01,
-        title: 'Minimum genetic similarity to consider another cell an ally (0..1)',
+        title: "Minimum genetic similarity to consider another cell an ally (0..1)",
         format: (v) => v.toFixed(2),
         getValue: () => this.societySimilarity,
-        setValue: (v) => this.#updateSetting('societySimilarity', v),
+        setValue: (v) => this.#updateSetting("societySimilarity", v),
       }),
-      withSliderConfig('enemySimilarity', {
-        label: 'Enemy Similarity ≤',
+      withSliderConfig("enemySimilarity", {
+        label: "Enemy Similarity ≤",
         min: 0,
         max: 1,
         step: 0.01,
-        title: 'Maximum genetic similarity to consider another cell an enemy (0..1)',
+        title: "Maximum genetic similarity to consider another cell an enemy (0..1)",
         format: (v) => v.toFixed(2),
         getValue: () => this.enemySimilarity,
-        setValue: (v) => this.#updateSetting('enemySimilarity', v),
+        setValue: (v) => this.#updateSetting("enemySimilarity", v),
       }),
-      withSliderConfig('matingDiversityThreshold', {
-        label: 'Min Diversity ≥',
+      withSliderConfig("matingDiversityThreshold", {
+        label: "Min Diversity ≥",
         min: 0,
         max: 1,
         step: 0.01,
-        title: 'Required genetic diversity before mating avoids penalties (0..1)',
+        title: "Required genetic diversity before mating avoids penalties (0..1)",
         format: (v) => v.toFixed(2),
         getValue: () => this.matingDiversityThreshold,
-        setValue: (v) => this.#updateSetting('matingDiversityThreshold', v),
+        setValue: (v) => this.#updateSetting("matingDiversityThreshold", v),
       }),
     ];
 
     const eventConfigs = [
-      withSliderConfig('eventStrengthMultiplier', {
-        label: 'Event Strength ×',
+      withSliderConfig("eventStrengthMultiplier", {
+        label: "Event Strength ×",
         min: 0,
         max: 3,
         step: 0.05,
-        title: 'Scales the impact of environmental events (0..3)',
+        title: "Scales the impact of environmental events (0..3)",
         format: (v) => v.toFixed(2),
         getValue: () => this.eventStrengthMultiplier,
-        setValue: (v) => this.#updateSetting('eventStrengthMultiplier', v),
+        setValue: (v) => this.#updateSetting("eventStrengthMultiplier", v),
       }),
-      withSliderConfig('eventFrequencyMultiplier', {
-        label: 'Event Frequency ×',
+      withSliderConfig("eventFrequencyMultiplier", {
+        label: "Event Frequency ×",
         min: 0,
         max: 3,
         step: 0.1,
-        title: 'How often events spawn (0 disables new events)',
+        title: "How often events spawn (0 disables new events)",
         format: (v) => v.toFixed(1),
         getValue: () => this.eventFrequencyMultiplier,
-        setValue: (v) => this.#updateSetting('eventFrequencyMultiplier', v),
+        setValue: (v) => this.#updateSetting("eventFrequencyMultiplier", v),
       }),
     ];
 
     const energyConfigs = [
-      withSliderConfig('densityEffectMultiplier', {
-        label: 'Density Effect ×',
+      withSliderConfig("densityEffectMultiplier", {
+        label: "Density Effect ×",
         min: 0,
         max: 2,
         step: 0.05,
         title:
-          'Scales how strongly population density affects energy, aggression, and breeding (0..2)',
+          "Scales how strongly population density affects energy, aggression, and breeding (0..2)",
         format: (v) => v.toFixed(2),
         getValue: () => this.densityEffectMultiplier,
-        setValue: (v) => this.#updateSetting('densityEffectMultiplier', v),
+        setValue: (v) => this.#updateSetting("densityEffectMultiplier", v),
       }),
-      withSliderConfig('energyRegenRate', {
-        label: 'Energy Regen Rate',
+      withSliderConfig("energyRegenRate", {
+        label: "Energy Regen Rate",
         min: 0,
         max: 0.2,
         step: 0.005,
-        title: 'Base logistic regeneration rate toward max energy (0..0.2)',
+        title: "Base logistic regeneration rate toward max energy (0..0.2)",
         format: (v) => v.toFixed(3),
         getValue: () => this.energyRegenRate,
-        setValue: (v) => this.#updateSetting('energyRegenRate', v),
+        setValue: (v) => this.#updateSetting("energyRegenRate", v),
       }),
-      withSliderConfig('energyDiffusionRate', {
-        label: 'Energy Diffusion Rate',
+      withSliderConfig("energyDiffusionRate", {
+        label: "Energy Diffusion Rate",
         min: 0,
         max: 0.5,
         step: 0.01,
-        title: 'How quickly energy smooths between tiles (0..0.5)',
+        title: "How quickly energy smooths between tiles (0..0.5)",
         format: (v) => v.toFixed(2),
         getValue: () => this.energyDiffusionRate,
-        setValue: (v) => this.#updateSetting('energyDiffusionRate', v),
+        setValue: (v) => this.#updateSetting("energyDiffusionRate", v),
       }),
     ];
 
     const generalConfigs = [
-      withSliderConfig('mutationMultiplier', {
-        label: 'Mutation Rate ×',
+      withSliderConfig("mutationMultiplier", {
+        label: "Mutation Rate ×",
         min: 0,
         max: 3,
         step: 0.05,
         title:
-          'Scales averaged parental mutation chance and range for offspring (0 disables mutation)',
+          "Scales averaged parental mutation chance and range for offspring (0 disables mutation)",
         format: (v) => v.toFixed(2),
         getValue: () => this.mutationMultiplier,
-        setValue: (v) => this.#updateSetting('mutationMultiplier', v),
-        position: 'beforeOverlays',
+        setValue: (v) => this.#updateSetting("mutationMultiplier", v),
+        position: "beforeOverlays",
       }),
-      withSliderConfig('combatEdgeSharpness', {
-        label: 'Combat Edge Sharpness',
+      withSliderConfig("combatEdgeSharpness", {
+        label: "Combat Edge Sharpness",
         min: 0.5,
         max: 6,
         step: 0.1,
-        title: 'Controls how sharply combat power differences translate into win odds (0.5..6)',
+        title:
+          "Controls how sharply combat power differences translate into win odds (0.5..6)",
         format: (v) => v.toFixed(2),
         getValue: () => this.combatEdgeSharpness,
-        setValue: (v) => this.#updateSetting('combatEdgeSharpness', v),
-        position: 'beforeOverlays',
+        setValue: (v) => this.#updateSetting("combatEdgeSharpness", v),
+        position: "beforeOverlays",
       }),
-      withSliderConfig('lowDiversityReproMultiplier', {
-        label: 'Low Diversity Penalty ×',
+      withSliderConfig("lowDiversityReproMultiplier", {
+        label: "Low Diversity Penalty ×",
         min: 0,
         max: 1,
         step: 0.05,
         title:
-          'Multiplier applied to reproduction chance when diversity is below the threshold (0 disables births)',
+          "Multiplier applied to reproduction chance when diversity is below the threshold (0 disables births)",
         format: (v) => v.toFixed(2),
         getValue: () => this.lowDiversityReproMultiplier,
-        setValue: (v) => this.#updateSetting('lowDiversityReproMultiplier', v),
-        position: 'beforeOverlays',
+        setValue: (v) => this.#updateSetting("lowDiversityReproMultiplier", v),
+        position: "beforeOverlays",
       }),
-      withSliderConfig('speedMultiplier', {
-        label: 'Speed ×',
+      withSliderConfig("speedMultiplier", {
+        label: "Speed ×",
         min: 0.5,
         max: 100,
         step: 0.5,
-        title: 'Speed multiplier relative to 60 updates/sec (0.5x..100x)',
+        title: "Speed multiplier relative to 60 updates/sec (0.5x..100x)",
         format: (v) => `${v.toFixed(1)}x`,
         getValue: () => this.speedMultiplier,
-        setValue: (v) => this.#updateSetting('speedMultiplier', v),
-        position: 'beforeOverlays',
+        setValue: (v) => this.#updateSetting("speedMultiplier", v),
+        position: "beforeOverlays",
       }),
-      withSliderConfig('leaderboardIntervalMs', {
-        label: 'Leaderboard Interval',
+      withSliderConfig("leaderboardIntervalMs", {
+        label: "Leaderboard Interval",
         min: 100,
         max: 3000,
         step: 50,
-        title: 'Delay between leaderboard refreshes in milliseconds (100..3000)',
+        title: "Delay between leaderboard refreshes in milliseconds (100..3000)",
         format: (v) => `${Math.round(v)} ms`,
         getValue: () => this.leaderboardIntervalMs,
-        setValue: (v) => this.#updateSetting('leaderboardIntervalMs', v),
-        position: 'afterEnergy',
+        setValue: (v) => this.#updateSetting("leaderboardIntervalMs", v),
+        position: "afterEnergy",
       }),
     ];
 
-    createSectionHeading(body, 'Similarity Thresholds');
+    createSectionHeading(body, "Similarity Thresholds");
     const thresholdsGroup = createControlGrid(body);
 
     thresholdConfigs.forEach((cfg) => renderSlider(cfg, thresholdsGroup));
 
-    createSectionHeading(body, 'Environmental Events');
+    createSectionHeading(body, "Environmental Events");
     const eventsGroup = createControlGrid(body);
 
     eventConfigs.forEach((cfg) => renderSlider(cfg, eventsGroup));
 
-    createSectionHeading(body, 'General Settings');
+    createSectionHeading(body, "General Settings");
     const generalGroup = createControlGrid(body);
 
     generalConfigs
-      .filter((cfg) => cfg.position === 'beforeOverlays')
+      .filter((cfg) => cfg.position === "beforeOverlays")
       .forEach((cfg) => renderSlider(cfg, generalGroup));
 
     this.autoPauseCheckbox = this.#addCheckbox(
       generalGroup,
-      'Pause When Hidden',
-      'Automatically pause when the tab or window loses focus, resuming on return.',
+      "Pause When Hidden",
+      "Automatically pause when the tab or window loses focus, resuming on return.",
       this.autoPauseOnBlur,
       (checked) => {
         this.setAutoPauseOnBlur(checked);
-        this.#updateSetting('autoPauseOnBlur', checked);
-      }
+        this.#updateSetting("autoPauseOnBlur", checked);
+      },
     );
 
-    return { renderSlider, withSliderConfig, energyConfigs, generalConfigs, generalGroup };
+    return {
+      renderSlider,
+      withSliderConfig,
+      energyConfigs,
+      generalConfigs,
+      generalGroup,
+    };
   }
 
   #buildOverlayToggles(body) {
-    createSectionHeading(body, 'Overlays', { className: 'overlay-header' });
+    createSectionHeading(body, "Overlays", { className: "overlay-header" });
 
-    const overlayGrid = createControlGrid(body, 'control-grid--compact');
+    const overlayGrid = createControlGrid(body, "control-grid--compact");
 
     const overlayConfigs = [
       {
-        key: 'showObstacles',
-        label: 'Show Obstacles',
-        title: 'Highlight impassable tiles such as walls and barriers',
+        key: "showObstacles",
+        label: "Show Obstacles",
+        title: "Highlight impassable tiles such as walls and barriers",
         initial: this.showObstacles,
       },
       {
-        key: 'showDensity',
-        label: 'Show Density Heatmap',
-        title: 'Overlay local population density as a heatmap',
+        key: "showDensity",
+        label: "Show Density Heatmap",
+        title: "Overlay local population density as a heatmap",
         initial: this.showDensity,
       },
       {
-        key: 'showEnergy',
-        label: 'Show Energy Heatmap',
-        title: 'Overlay tile energy levels as a heatmap',
+        key: "showEnergy",
+        label: "Show Energy Heatmap",
+        title: "Overlay tile energy levels as a heatmap",
         initial: this.showEnergy,
       },
       {
-        key: 'showFitness',
-        label: 'Show Fitness Heatmap',
-        title: 'Overlay cell fitness as a heatmap',
+        key: "showFitness",
+        label: "Show Fitness Heatmap",
+        title: "Overlay cell fitness as a heatmap",
         initial: this.showFitness,
       },
     ];
@@ -796,14 +839,14 @@ export default class UIManager {
   #buildObstacleControls(body, sliderContext) {
     if (this.obstaclePresets.length <= 0) return;
 
-    createSectionHeading(body, 'Obstacles', { className: 'overlay-header' });
+    createSectionHeading(body, "Obstacles", { className: "overlay-header" });
 
-    const obstacleGrid = createControlGrid(body, 'control-grid--compact');
+    const obstacleGrid = createControlGrid(body, "control-grid--compact");
 
     if (this.obstaclePresets.length > 0) {
       const presetSelect = createSelectRow(obstacleGrid, {
-        label: 'Layout Preset',
-        title: 'Choose a static obstacle layout to apply immediately.',
+        label: "Layout Preset",
+        title: "Choose a static obstacle layout to apply immediately.",
         value: this.obstaclePreset,
         options: this.obstaclePresets.map((preset) => ({
           value: preset.id,
@@ -821,48 +864,52 @@ export default class UIManager {
         });
       }
 
-      const presetButtons = document.createElement('div');
+      const presetButtons = document.createElement("div");
 
-      presetButtons.className = 'control-line';
-      const applyLayoutButton = document.createElement('button');
+      presetButtons.className = "control-line";
+      const applyLayoutButton = document.createElement("button");
 
-      applyLayoutButton.textContent = 'Apply Layout';
-      applyLayoutButton.title = 'Replace the current obstacle mask with the selected preset.';
-      applyLayoutButton.addEventListener('click', () => {
+      applyLayoutButton.textContent = "Apply Layout";
+      applyLayoutButton.title =
+        "Replace the current obstacle mask with the selected preset.";
+      applyLayoutButton.addEventListener("click", () => {
         const args = [this.obstaclePreset, { clearExisting: true }];
 
-        if (typeof this.actions.applyObstaclePreset === 'function')
+        if (typeof this.actions.applyObstaclePreset === "function")
           this.actions.applyObstaclePreset(...args);
-        else if (window.grid?.applyObstaclePreset) window.grid.applyObstaclePreset(...args);
+        else if (window.grid?.applyObstaclePreset)
+          window.grid.applyObstaclePreset(...args);
       });
-      const clearButton = document.createElement('button');
+      const clearButton = document.createElement("button");
 
-      clearButton.textContent = 'Clear Obstacles';
-      clearButton.title = 'Remove all obstacles from the grid.';
-      clearButton.addEventListener('click', () => {
-        const args = ['none', { clearExisting: true }];
+      clearButton.textContent = "Clear Obstacles";
+      clearButton.title = "Remove all obstacles from the grid.";
+      clearButton.addEventListener("click", () => {
+        const args = ["none", { clearExisting: true }];
 
-        if (typeof this.actions.applyObstaclePreset === 'function')
+        if (typeof this.actions.applyObstaclePreset === "function")
           this.actions.applyObstaclePreset(...args);
-        else if (window.grid?.applyObstaclePreset) window.grid.applyObstaclePreset(...args);
+        else if (window.grid?.applyObstaclePreset)
+          window.grid.applyObstaclePreset(...args);
       });
       presetButtons.appendChild(applyLayoutButton);
       presetButtons.appendChild(clearButton);
       obstacleGrid.appendChild(presetButtons);
     }
 
-    const lingerSlider = sliderContext.withSliderConfig('lingerPenalty', {
-      label: 'Wall Linger Penalty',
+    const lingerSlider = sliderContext.withSliderConfig("lingerPenalty", {
+      label: "Wall Linger Penalty",
       min: 0,
       max: 0.05,
       step: 0.001,
       title:
-        'Energy drained each tick a cell pushes against an obstacle (scales with repeated attempts).',
+        "Energy drained each tick a cell pushes against an obstacle (scales with repeated attempts).",
       format: (v) => v.toFixed(3),
       getValue: () => this.lingerPenalty,
       setValue: (v) => {
-        this.#updateSetting('lingerPenalty', v);
-        if (typeof this.actions.setLingerPenalty === 'function') this.actions.setLingerPenalty(v);
+        this.#updateSetting("lingerPenalty", v);
+        if (typeof this.actions.setLingerPenalty === "function")
+          this.actions.setLingerPenalty(v);
         else if (window.grid?.setLingerPenalty) window.grid.setLingerPenalty(v);
       },
     });
@@ -873,22 +920,22 @@ export default class UIManager {
   #buildReproductiveZoneTools(body) {
     if (!this.selectionManager) return;
 
-    createSectionHeading(body, 'Reproductive Zones', { className: 'overlay-header' });
+    createSectionHeading(body, "Reproductive Zones", { className: "overlay-header" });
 
-    const zoneGrid = createControlGrid(body, 'control-grid--compact');
+    const zoneGrid = createControlGrid(body, "control-grid--compact");
     const patterns = this.selectionManager.getPatterns();
 
     patterns.forEach((pattern) => {
       const checkbox = this.#addCheckbox(
         zoneGrid,
         pattern.name,
-        pattern.description || '',
+        pattern.description || "",
         pattern.active,
         (checked) => {
           this.selectionManager.togglePattern(pattern.id, checked);
           this.#updateZoneSummary();
           this.#scheduleUpdate();
-        }
+        },
       );
 
       this.patternCheckboxes[pattern.id] = checkbox;
@@ -896,26 +943,26 @@ export default class UIManager {
 
     const zoneButtons = createControlButtonRow(body);
 
-    zoneButtons.setAttribute('role', 'group');
-    zoneButtons.setAttribute('aria-label', 'Custom reproductive zone controls');
+    zoneButtons.setAttribute("role", "group");
+    zoneButtons.setAttribute("aria-label", "Custom reproductive zone controls");
 
-    this.drawZoneButton = document.createElement('button');
-    this.drawZoneButton.textContent = 'Draw Custom Zone';
-    this.drawZoneButton.type = 'button';
+    this.drawZoneButton = document.createElement("button");
+    this.drawZoneButton.textContent = "Draw Custom Zone";
+    this.drawZoneButton.type = "button";
     this.drawZoneButton.title =
-      'Enable drawing mode to sketch a custom reproductive zone on the canvas.';
-    this.drawZoneButton.setAttribute('aria-pressed', 'false');
-    this.drawZoneButton.addEventListener('click', () => {
+      "Enable drawing mode to sketch a custom reproductive zone on the canvas.";
+    this.drawZoneButton.setAttribute("aria-pressed", "false");
+    this.drawZoneButton.addEventListener("click", () => {
       this.#toggleRegionDrawing(!this.selectionDrawingEnabled);
     });
     zoneButtons.appendChild(this.drawZoneButton);
 
-    const clearButton = document.createElement('button');
+    const clearButton = document.createElement("button");
 
-    clearButton.textContent = 'Clear Custom Zones';
-    clearButton.type = 'button';
-    clearButton.title = 'No custom reproductive zones to clear.';
-    clearButton.addEventListener('click', () => {
+    clearButton.textContent = "Clear Custom Zones";
+    clearButton.type = "button";
+    clearButton.title = "No custom reproductive zones to clear.";
+    clearButton.addEventListener("click", () => {
       this.selectionManager.clearCustomZones();
       this.#setDrawingEnabled(false);
       this.#updateZoneSummary();
@@ -926,52 +973,56 @@ export default class UIManager {
     this.clearZonesButton = clearButton;
 
     const summaryRow = this.#appendControlRow(body, {
-      label: 'Active Zones',
+      label: "Active Zones",
       value: this.selectionManager.describeActiveZones(),
-      valueClass: 'control-value--left control-hint',
+      valueClass: "control-value--left control-hint",
     });
 
-    this.zoneSummaryEl = summaryRow.querySelector('.control-value');
+    this.zoneSummaryEl = summaryRow.querySelector(".control-value");
     if (this.zoneSummaryEl) {
-      this.zoneSummaryEl.id = 'zone-summary';
-      this.zoneSummaryEl.setAttribute('role', 'status');
-      this.zoneSummaryEl.setAttribute('aria-live', 'polite');
+      this.zoneSummaryEl.id = "zone-summary";
+      this.zoneSummaryEl.setAttribute("role", "status");
+      this.zoneSummaryEl.setAttribute("aria-live", "polite");
     }
     if (this.zoneSummaryEl) {
-      zoneButtons.setAttribute('aria-describedby', 'zone-summary');
+      zoneButtons.setAttribute("aria-describedby", "zone-summary");
       if (this.drawZoneButton) {
-        this.drawZoneButton.setAttribute('aria-controls', 'zone-summary');
+        this.drawZoneButton.setAttribute("aria-controls", "zone-summary");
       }
-      clearButton.setAttribute('aria-controls', 'zone-summary');
+      clearButton.setAttribute("aria-controls", "zone-summary");
     }
 
     this.#updateZoneSummary();
   }
 
   #buildEnergyAndGeneralTail(body, sliderContext) {
-    createSectionHeading(body, 'Energy Dynamics');
+    createSectionHeading(body, "Energy Dynamics");
     const energyGroup = createControlGrid(body);
 
-    sliderContext.energyConfigs.forEach((cfg) => sliderContext.renderSlider(cfg, energyGroup));
+    sliderContext.energyConfigs.forEach((cfg) =>
+      sliderContext.renderSlider(cfg, energyGroup),
+    );
 
     sliderContext.generalConfigs
-      .filter((cfg) => cfg.position === 'afterEnergy')
+      .filter((cfg) => cfg.position === "afterEnergy")
       .forEach((cfg) => sliderContext.renderSlider(cfg, sliderContext.generalGroup));
   }
 
   #buildInsightsPanel() {
-    const { panel, body } = this.#createPanel('Evolution Insights', { collapsed: true });
+    const { panel, body } = this.#createPanel("Evolution Insights", {
+      collapsed: true,
+    });
 
-    this.metricsBox = document.createElement('div');
-    this.metricsBox.className = 'metrics-box';
+    this.metricsBox = document.createElement("div");
+    this.metricsBox.className = "metrics-box";
     body.appendChild(this.metricsBox);
 
     // Sparklines canvases
     const traitDescriptors = [
-      { key: 'cooperation', name: 'Cooperation' },
-      { key: 'fighting', name: 'Fighting' },
-      { key: 'breeding', name: 'Breeding' },
-      { key: 'sight', name: 'Sight' },
+      { key: "cooperation", name: "Cooperation" },
+      { key: "fighting", name: "Fighting" },
+      { key: "breeding", name: "Breeding" },
+      { key: "sight", name: "Sight" },
     ];
 
     const traitSparkDescriptors = traitDescriptors.flatMap(({ key, name }) => [
@@ -979,63 +1030,67 @@ export default class UIManager {
         label: `${name} Activity (presence %)`,
         property: `sparkTrait${name}Presence`,
         traitKey: key,
-        traitType: 'presence',
-        color: '#f39c12',
+        traitType: "presence",
+        color: "#f39c12",
       },
       {
         label: `${name} Intensity (avg level)`,
         property: `sparkTrait${name}Average`,
         traitKey: key,
-        traitType: 'average',
-        color: '#3498db',
+        traitType: "average",
+        color: "#3498db",
       },
     ]);
 
     const sparkDescriptors = [
-      { label: 'Population', property: 'sparkPop', color: '#88d' },
-      { label: 'Diversity', property: 'sparkDiv2Canvas', color: '#d88' },
-      { label: 'Mean Energy', property: 'sparkEnergy', color: '#8d8' },
-      { label: 'Growth', property: 'sparkGrowth', color: '#dd8' },
-      { label: 'Event Strength', property: 'sparkEvent', color: '#b85' },
-      { label: 'Mutation Multiplier', property: 'sparkMutation', color: '#6c5ce7' },
-      { label: 'Diverse Pairing Rate', property: 'sparkDiversePairing', color: '#9b59b6' },
+      { label: "Population", property: "sparkPop", color: "#88d" },
+      { label: "Diversity", property: "sparkDiv2Canvas", color: "#d88" },
+      { label: "Mean Energy", property: "sparkEnergy", color: "#8d8" },
+      { label: "Growth", property: "sparkGrowth", color: "#dd8" },
+      { label: "Event Strength", property: "sparkEvent", color: "#b85" },
+      { label: "Mutation Multiplier", property: "sparkMutation", color: "#6c5ce7" },
       {
-        label: 'Mean Diversity Appetite',
-        property: 'sparkDiversityAppetite',
-        color: '#1abc9c',
+        label: "Diverse Pairing Rate",
+        property: "sparkDiversePairing",
+        color: "#9b59b6",
+      },
+      {
+        label: "Mean Diversity Appetite",
+        property: "sparkDiversityAppetite",
+        color: "#1abc9c",
       },
       ...traitSparkDescriptors,
     ];
 
     this.traitSparkDescriptors = traitSparkDescriptors;
 
-    const sparkGrid = document.createElement('div');
+    const sparkGrid = document.createElement("div");
 
-    sparkGrid.className = 'sparkline-grid';
+    sparkGrid.className = "sparkline-grid";
     body.appendChild(sparkGrid);
 
     sparkDescriptors.forEach(({ label, property, color }) => {
-      const card = document.createElement('div');
-      const caption = document.createElement('div');
-      const colorDot = document.createElement('span');
-      const captionText = document.createElement('span');
+      const card = document.createElement("div");
+      const caption = document.createElement("div");
+      const colorDot = document.createElement("span");
+      const captionText = document.createElement("span");
 
-      card.className = 'sparkline-card';
-      caption.className = 'sparkline-caption';
-      colorDot.className = 'sparkline-color-dot';
+      card.className = "sparkline-card";
+      caption.className = "sparkline-caption";
+      colorDot.className = "sparkline-color-dot";
       if (color) colorDot.style.background = color;
-      captionText.className = 'sparkline-caption-text';
+      captionText.className = "sparkline-caption-text";
       captionText.textContent = label;
       caption.appendChild(colorDot);
       caption.appendChild(captionText);
 
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
 
-      canvas.className = 'sparkline';
+      canvas.className = "sparkline";
       canvas.width = 220;
       canvas.height = 40;
-      canvas.setAttribute('role', 'img');
-      canvas.setAttribute('aria-label', `${label} trend over time`);
+      canvas.setAttribute("role", "img");
+      canvas.setAttribute("aria-label", `${label} trend over time`);
 
       card.appendChild(caption);
       card.appendChild(canvas);
@@ -1049,7 +1104,7 @@ export default class UIManager {
 
   togglePause() {
     const toggler = this.simulationCallbacks?.togglePause;
-    const nextPaused = typeof toggler === 'function' ? toggler() : !this.paused;
+    const nextPaused = typeof toggler === "function" ? toggler() : !this.paused;
 
     this.setPauseState(nextPaused);
     if (!nextPaused) this.#scheduleUpdate();
@@ -1062,13 +1117,13 @@ export default class UIManager {
   setPauseState(paused) {
     this.paused = Boolean(paused);
     if (this.pauseButton) {
-      this.pauseButton.textContent = this.paused ? 'Resume' : 'Pause';
+      this.pauseButton.textContent = this.paused ? "Resume" : "Pause";
     }
     if (this.stepButton) {
       this.stepButton.disabled = !this.paused;
       this.stepButton.title = this.paused
-        ? 'Advance one tick while paused to inspect changes frame-by-frame.'
-        : 'Pause the simulation to enable single-step playback.';
+        ? "Advance one tick while paused to inspect changes frame-by-frame."
+        : "Pause the simulation to enable single-step playback.";
     }
   }
 
@@ -1140,12 +1195,15 @@ export default class UIManager {
 
   renderMetrics(stats, snapshot) {
     if (!this.metricsBox) return;
-    this.metricsBox.innerHTML = '';
+    this.metricsBox.innerHTML = "";
     const s = snapshot || {};
     const totals = (stats && stats.totals) || {};
     const lastTotals = this._lastInteractionTotals || { fights: 0, cooperations: 0 };
     const fightDelta = Math.max(0, (totals.fights ?? 0) - (lastTotals.fights ?? 0));
-    const coopDelta = Math.max(0, (totals.cooperations ?? 0) - (lastTotals.cooperations ?? 0));
+    const coopDelta = Math.max(
+      0,
+      (totals.cooperations ?? 0) - (lastTotals.cooperations ?? 0),
+    );
     const interactionTotal = fightDelta + coopDelta;
 
     const appendMetricRow = (container, { label, value, title, valueClass }) => {
@@ -1154,18 +1212,18 @@ export default class UIManager {
 
     const createSection = (title, options = {}) => {
       const { wide = false } = options;
-      const section = document.createElement('section');
+      const section = document.createElement("section");
 
-      section.className = 'metrics-section';
-      if (wide) section.classList.add('metrics-section--wide');
-      const heading = document.createElement('h4');
+      section.className = "metrics-section";
+      if (wide) section.classList.add("metrics-section--wide");
+      const heading = document.createElement("h4");
 
-      heading.className = 'metrics-section-title';
+      heading.className = "metrics-section-title";
       heading.textContent = title;
       section.appendChild(heading);
-      const body = document.createElement('div');
+      const body = document.createElement("div");
 
-      body.className = 'metrics-section-body';
+      body.className = "metrics-section-body";
       section.appendChild(body);
       this.metricsBox.appendChild(section);
 
@@ -1173,192 +1231,208 @@ export default class UIManager {
     };
 
     const finiteOrDash = (value, formatter = String) =>
-      Number.isFinite(value) ? formatter(value) : '—';
-    const percentOrDash = (value) => finiteOrDash(value, (v) => `${(v * 100).toFixed(0)}%`);
+      Number.isFinite(value) ? formatter(value) : "—";
+    const percentOrDash = (value) =>
+      finiteOrDash(value, (v) => `${(v * 100).toFixed(0)}%`);
     const countOrDash = (value) => finiteOrDash(value);
-    const fixedOrDash = (value, digits) => finiteOrDash(value, (v) => v.toFixed(digits));
+    const fixedOrDash = (value, digits) =>
+      finiteOrDash(value, (v) => v.toFixed(digits));
 
     this._lastInteractionTotals = {
       fights: totals.fights ?? lastTotals.fights ?? 0,
       cooperations: totals.cooperations ?? lastTotals.cooperations ?? 0,
     };
 
-    const populationSection = createSection('Population Snapshot');
+    const populationSection = createSection("Population Snapshot");
 
     appendMetricRow(populationSection, {
-      label: 'Population',
+      label: "Population",
       value: countOrDash(s.population),
-      title: 'Total living cells',
+      title: "Total living cells",
     });
     appendMetricRow(populationSection, {
-      label: 'Births',
+      label: "Births",
       value: countOrDash(s.births),
-      title: 'Births in the last tick',
+      title: "Births in the last tick",
     });
     appendMetricRow(populationSection, {
-      label: 'Deaths',
+      label: "Deaths",
       value: countOrDash(s.deaths),
-      title: 'Deaths in the last tick',
+      title: "Deaths in the last tick",
     });
     appendMetricRow(populationSection, {
-      label: 'Growth',
+      label: "Growth",
       value: countOrDash(s.growth),
-      title: 'Births - Deaths',
+      title: "Births - Deaths",
     });
-    if (typeof s.mutationMultiplier === 'number') {
+    if (typeof s.mutationMultiplier === "number") {
       const formatted = s.mutationMultiplier.toFixed(2);
-      const suffix = s.mutationMultiplier <= 0 ? '× (off)' : '×';
+      const suffix = s.mutationMultiplier <= 0 ? "× (off)" : "×";
 
       appendMetricRow(populationSection, {
-        label: 'Mutation Multiplier',
+        label: "Mutation Multiplier",
         value: `${formatted}${suffix}`,
-        title: 'Global multiplier applied to mutation chance and range for offspring',
+        title: "Global multiplier applied to mutation chance and range for offspring",
       });
     }
-    const interactionSection = createSection('Interaction Pulse');
+    const interactionSection = createSection("Interaction Pulse");
 
     appendMetricRow(interactionSection, {
-      label: 'Skirmishes',
+      label: "Skirmishes",
       value: countOrDash(fightDelta),
-      title: 'Skirmishes resolved since the last dashboard update',
+      title: "Skirmishes resolved since the last dashboard update",
     });
     appendMetricRow(interactionSection, {
-      label: 'Cooperations',
+      label: "Cooperations",
       value: countOrDash(coopDelta),
-      title: 'Mutual aid events completed since the last dashboard update',
+      title: "Mutual aid events completed since the last dashboard update",
     });
     appendMetricRow(interactionSection, {
-      label: 'Cooperation Share',
-      value: interactionTotal ? percentOrDash(coopDelta / interactionTotal) : '—',
-      title: 'Share of cooperative interactions vs total interactions recorded for this update',
+      label: "Cooperation Share",
+      value: interactionTotal ? percentOrDash(coopDelta / interactionTotal) : "—",
+      title:
+        "Share of cooperative interactions vs total interactions recorded for this update",
     });
 
-    const vitalitySection = createSection('Vitality Signals');
+    const vitalitySection = createSection("Vitality Signals");
 
     appendMetricRow(vitalitySection, {
-      label: 'Mean Energy',
+      label: "Mean Energy",
       value: fixedOrDash(s.meanEnergy, 2),
-      title: 'Average energy per cell',
+      title: "Average energy per cell",
     });
     appendMetricRow(vitalitySection, {
-      label: 'Mean Age',
+      label: "Mean Age",
       value: fixedOrDash(s.meanAge, 1),
-      title: 'Average age of living cells',
+      title: "Average age of living cells",
     });
     appendMetricRow(vitalitySection, {
-      label: 'Diversity',
+      label: "Diversity",
       value: fixedOrDash(s.diversity, 3),
-      title: 'Estimated mean pairwise genetic distance',
+      title: "Estimated mean pairwise genetic distance",
     });
 
-    const reproductionSection = createSection('Reproduction Trends');
+    const reproductionSection = createSection("Reproduction Trends");
 
-    if (typeof s.blockedMatings === 'number') {
+    if (typeof s.blockedMatings === "number") {
       appendMetricRow(reproductionSection, {
-        label: 'Blocked Matings',
+        label: "Blocked Matings",
         value: countOrDash(s.blockedMatings),
-        title: 'Matings prevented by reproductive zones this tick',
+        title: "Matings prevented by reproductive zones this tick",
       });
     }
 
     if (s.lastBlockedReproduction?.reason) {
       appendMetricRow(reproductionSection, {
-        label: 'Last Blocked Reason',
+        label: "Last Blocked Reason",
         value: s.lastBlockedReproduction.reason,
-        title: 'Most recent reason reproduction was denied',
-        valueClass: 'control-value--left',
+        title: "Most recent reason reproduction was denied",
+        valueClass: "control-value--left",
       });
     }
 
     const reproductionMetrics = [
       {
-        label: 'Mate Choices',
+        label: "Mate Choices",
         value: countOrDash(s.mateChoices),
-        title: 'Potential mates evaluated by the population this tick',
+        title: "Potential mates evaluated by the population this tick",
       },
       {
-        label: 'Successful Matings',
+        label: "Successful Matings",
         value: countOrDash(s.successfulMatings),
-        title: 'Pairs that successfully reproduced this tick',
+        title: "Pairs that successfully reproduced this tick",
       },
       {
-        label: 'Diverse Choice Rate',
+        label: "Diverse Choice Rate",
         value: percentOrDash(s.diverseChoiceRate),
-        title: 'Share of mate choices favoring genetically diverse partners this tick',
+        title: "Share of mate choices favoring genetically diverse partners this tick",
       },
       {
-        label: 'Diverse Mating Rate',
+        label: "Diverse Mating Rate",
         value: percentOrDash(s.diverseMatingRate),
-        title: 'Share of completed matings rated as genetically diverse this tick',
+        title: "Share of completed matings rated as genetically diverse this tick",
       },
       {
-        label: 'Mean Diversity Appetite',
+        label: "Mean Diversity Appetite",
         value: fixedOrDash(s.meanDiversityAppetite, 2),
-        title: 'Average preferred genetic difference when selecting a mate',
+        title: "Average preferred genetic difference when selecting a mate",
       },
       {
-        label: 'Curiosity Selections',
+        label: "Curiosity Selections",
         value: countOrDash(s.curiositySelections),
-        title: 'Mate selections driven by curiosity-driven exploration this tick',
+        title: "Mate selections driven by curiosity-driven exploration this tick",
       },
     ];
 
     reproductionMetrics.forEach(({ label, value, title }) =>
-      appendMetricRow(reproductionSection, { label, value, title })
+      appendMetricRow(reproductionSection, { label, value, title }),
     );
 
     const traitPresence = stats?.traitPresence;
 
     if (traitPresence) {
-      const traitSection = createSection('Trait Presence', { wide: true });
-      const traitGroup = document.createElement('div');
+      const traitSection = createSection("Trait Presence", { wide: true });
+      const traitGroup = document.createElement("div");
 
-      traitGroup.className = 'metrics-group';
+      traitGroup.className = "metrics-group";
 
-      const traitHeading = document.createElement('div');
+      const traitHeading = document.createElement("div");
 
-      traitHeading.className = 'metrics-group-title';
-      traitHeading.textContent = 'Traits';
+      traitHeading.className = "metrics-group-title";
+      traitHeading.textContent = "Traits";
       traitGroup.appendChild(traitHeading);
 
-      const traitRows = document.createElement('div');
+      const traitRows = document.createElement("div");
 
-      traitRows.className = 'metrics-group-rows';
+      traitRows.className = "metrics-group-rows";
       traitGroup.appendChild(traitRows);
 
       const hasPopulation = traitPresence.population > 0;
       const traitConfigs = [
-        { key: 'cooperation', label: 'Cooperation' },
-        { key: 'fighting', label: 'Fighting' },
-        { key: 'breeding', label: 'Breeding' },
-        { key: 'sight', label: 'Sight' },
+        { key: "cooperation", label: "Cooperation" },
+        { key: "fighting", label: "Fighting" },
+        { key: "breeding", label: "Breeding" },
+        { key: "sight", label: "Sight" },
       ];
 
       for (let i = 0; i < traitConfigs.length; i++) {
         const trait = traitConfigs[i];
         const count = traitPresence.counts?.[trait.key] ?? 0;
         const fraction = traitPresence.fractions?.[trait.key] ?? 0;
-        const value = hasPopulation ? `${count} (${(fraction * 100).toFixed(0)}%)` : '—';
-        const tooltipBase = 'Active cells have a normalized value ≥ 60% for this trait.';
+        const value = hasPopulation
+          ? `${count} (${(fraction * 100).toFixed(0)}%)`
+          : "—";
+        const tooltipBase =
+          "Active cells have a normalized value ≥ 60% for this trait.";
 
         this.#appendControlRow(traitRows, {
           label: trait.label,
           value,
-          title: hasPopulation ? tooltipBase : `${tooltipBase} No living cells in population.`,
+          title: hasPopulation
+            ? tooltipBase
+            : `${tooltipBase} No living cells in population.`,
         });
       }
 
       traitSection.appendChild(traitGroup);
     }
 
-    this.drawSpark(this.sparkPop, stats.history.population, '#88d');
-    this.drawSpark(this.sparkDiv2Canvas, stats.history.diversity, '#d88');
-    this.drawSpark(this.sparkEnergy, stats.history.energy, '#8d8');
-    this.drawSpark(this.sparkGrowth, stats.history.growth, '#dd8');
-    this.drawSpark(this.sparkEvent, stats.history.eventStrength, '#b85');
-    this.drawSpark(this.sparkMutation, stats.history.mutationMultiplier, '#6c5ce7');
-    this.drawSpark(this.sparkDiversePairing, stats.history.diversePairingRate, '#9b59b6');
-    this.drawSpark(this.sparkDiversityAppetite, stats.history.meanDiversityAppetite, '#1abc9c');
+    this.drawSpark(this.sparkPop, stats.history.population, "#88d");
+    this.drawSpark(this.sparkDiv2Canvas, stats.history.diversity, "#d88");
+    this.drawSpark(this.sparkEnergy, stats.history.energy, "#8d8");
+    this.drawSpark(this.sparkGrowth, stats.history.growth, "#dd8");
+    this.drawSpark(this.sparkEvent, stats.history.eventStrength, "#b85");
+    this.drawSpark(this.sparkMutation, stats.history.mutationMultiplier, "#6c5ce7");
+    this.drawSpark(
+      this.sparkDiversePairing,
+      stats.history.diversePairingRate,
+      "#9b59b6",
+    );
+    this.drawSpark(
+      this.sparkDiversityAppetite,
+      stats.history.meanDiversityAppetite,
+      "#1abc9c",
+    );
 
     if (Array.isArray(this.traitSparkDescriptors)) {
       this.traitSparkDescriptors.forEach(({ property, traitKey, traitType, color }) => {
@@ -1370,10 +1444,10 @@ export default class UIManager {
     }
   }
 
-  drawSpark(canvas, data, color = '#88d') {
+  drawSpark(canvas, data, color = "#88d") {
     if (!canvas) return;
     const series = Array.isArray(data) ? data : [];
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     const w = canvas.width;
     const h = canvas.height;
 
@@ -1398,49 +1472,52 @@ export default class UIManager {
 
   renderLeaderboard(top) {
     if (!this.leaderPanel) {
-      const { panel, body } = this.#createPanel('Leaderboard', { collapsed: true });
+      const { panel, body } = this.#createPanel("Leaderboard", { collapsed: true });
 
-      panel.classList.add('leaderboard-panel');
+      panel.classList.add("leaderboard-panel");
       this.dashboardGrid?.appendChild(panel);
       this.leaderPanel = panel;
       this.leaderBody = body;
     }
-    this.leaderBody.innerHTML = '';
+    this.leaderBody.innerHTML = "";
     top.forEach((entry, index) => {
       const label = `#${index + 1}`;
       const smoothedFitness = Number.isFinite(entry.smoothedFitness)
         ? entry.smoothedFitness
         : undefined;
-      const fitnessValue = Number.isFinite(smoothedFitness) ? smoothedFitness : entry.fitness;
+      const fitnessValue = Number.isFinite(smoothedFitness)
+        ? smoothedFitness
+        : entry.fitness;
       const brain = entry.brain ?? {};
 
-      const statsContainer = document.createElement('div');
+      const statsContainer = document.createElement("div");
 
-      statsContainer.className = 'leaderboard-stats';
+      statsContainer.className = "leaderboard-stats";
 
-      const formatFloat = (value) => (Number.isFinite(value) ? value.toFixed(2) : '—');
-      const formatCount = (value) => (Number.isFinite(value) ? value.toLocaleString() : '—');
+      const formatFloat = (value) => (Number.isFinite(value) ? value.toFixed(2) : "—");
+      const formatCount = (value) =>
+        Number.isFinite(value) ? value.toLocaleString() : "—";
 
       const statRows = [
-        { label: 'Fitness', value: formatFloat(fitnessValue) },
-        { label: 'Neurons', value: formatCount(brain.neuronCount) },
-        { label: 'Brain', value: formatFloat(brain.fitness) },
-        { label: 'Connections', value: formatCount(brain.connectionCount) },
+        { label: "Fitness", value: formatFloat(fitnessValue) },
+        { label: "Neurons", value: formatCount(brain.neuronCount) },
+        { label: "Brain", value: formatFloat(brain.fitness) },
+        { label: "Connections", value: formatCount(brain.connectionCount) },
       ];
 
       statRows.forEach(({ label: statLabel, value }) => {
-        const statRow = document.createElement('div');
+        const statRow = document.createElement("div");
 
-        statRow.className = 'leaderboard-stat';
+        statRow.className = "leaderboard-stat";
 
-        const statLabelEl = document.createElement('span');
+        const statLabelEl = document.createElement("span");
 
-        statLabelEl.className = 'leaderboard-stat-label';
+        statLabelEl.className = "leaderboard-stat-label";
         statLabelEl.textContent = statLabel;
 
-        const statValueEl = document.createElement('span');
+        const statValueEl = document.createElement("span");
 
-        statValueEl.className = 'leaderboard-stat-value';
+        statValueEl.className = "leaderboard-stat-value";
         statValueEl.textContent = value;
 
         statRow.appendChild(statLabelEl);
