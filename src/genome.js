@@ -1,5 +1,5 @@
-import { clamp, createRNG, randomRange } from './utils.js';
-import Brain, { NEURAL_GENE_BYTES } from './brain.js';
+import { clamp, createRNG, randomRange } from "./utils.js";
+import Brain, { NEURAL_GENE_BYTES } from "./brain.js";
 
 /**
  * Gene loci mapping. The first three indices are reserved for RGB rendering,
@@ -40,7 +40,8 @@ export const GENE_LOCI = Object.freeze({
 
 const BASE_GENE_COUNT = Math.max(...Object.values(GENE_LOCI)) + 1;
 const DEFAULT_NEURAL_CONNECTIONS = 16;
-const DEFAULT_TOTAL_GENE_COUNT = BASE_GENE_COUNT + DEFAULT_NEURAL_CONNECTIONS * NEURAL_GENE_BYTES;
+const DEFAULT_TOTAL_GENE_COUNT =
+  BASE_GENE_COUNT + DEFAULT_NEURAL_CONNECTIONS * NEURAL_GENE_BYTES;
 
 const clampGene = (value) => {
   if (Number.isNaN(value)) return 0;
@@ -56,7 +57,7 @@ export class DNA {
     if (Array.isArray(rOrGenes) || rOrGenes instanceof Uint8Array) {
       genesInput = rOrGenes;
     } else if (
-      typeof rOrGenes === 'object' &&
+      typeof rOrGenes === "object" &&
       rOrGenes !== null &&
       !(rOrGenes instanceof Uint8Array)
     ) {
@@ -258,7 +259,7 @@ export class DNA {
 
   // Expand genome to a 6x5 weight matrix in [-1,1]
   weights() {
-    const rnd = this.prngFor('weights');
+    const rnd = this.prngFor("weights");
     const rows = [];
 
     for (let a = 0; a < 6; a++) {
@@ -272,7 +273,7 @@ export class DNA {
   }
 
   movementGenes() {
-    const rng = this.prngFor('movementGenes');
+    const rng = this.prngFor("movementGenes");
     const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
     const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
     const cohesion = this.geneFraction(GENE_LOCI.COHESION);
@@ -289,12 +290,17 @@ export class DNA {
         0.15 * (1 - density) +
         jitter(),
       0.05,
-      1.8
+      1.8,
     );
     const pursuit = clamp(
-      0.35 + 0.6 * movement + 0.3 * risk + 0.25 * strategy - 0.1 * (1 - cohesion) + jitter(),
+      0.35 +
+        0.6 * movement +
+        0.3 * risk +
+        0.25 * strategy -
+        0.1 * (1 - cohesion) +
+        jitter(),
       0.05,
-      1.8
+      1.8,
     );
     const cautious = clamp(
       0.35 +
@@ -304,14 +310,14 @@ export class DNA {
         0.1 * density +
         jitter(),
       0.05,
-      1.8
+      1.8,
     );
 
     return { wandering, pursuit, cautious };
   }
 
   interactionGenes() {
-    const rng = this.prngFor('interactionGenes');
+    const rng = this.prngFor("interactionGenes");
     const risk = this.geneFraction(GENE_LOCI.RISK);
     const combat = this.geneFraction(GENE_LOCI.COMBAT);
     const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
@@ -322,19 +328,34 @@ export class DNA {
     const jitter = () => (rng() - 0.5) * 0.2;
 
     const avoid = clamp(
-      0.3 + 0.6 * (1 - risk) + 0.3 * (1 - combat) + 0.2 * density + 0.1 * (1 - strategy) + jitter(),
+      0.3 +
+        0.6 * (1 - risk) +
+        0.3 * (1 - combat) +
+        0.2 * density +
+        0.1 * (1 - strategy) +
+        jitter(),
       0.05,
-      1.8
+      1.8,
     );
     const fight = clamp(
-      0.3 + 0.6 * risk + 0.5 * combat - 0.15 * cooperation + 0.1 * (1 - recovery) + jitter(),
+      0.3 +
+        0.6 * risk +
+        0.5 * combat -
+        0.15 * cooperation +
+        0.1 * (1 - recovery) +
+        jitter(),
       0.05,
-      1.8
+      1.8,
     );
     const cooperate = clamp(
-      0.25 + 0.7 * cooperation + 0.25 * parental + 0.2 * recovery - 0.1 * risk + jitter(),
+      0.25 +
+        0.7 * cooperation +
+        0.25 * parental +
+        0.2 * recovery -
+        0.1 * risk +
+        jitter(),
       0.05,
-      1.8
+      1.8,
     );
 
     return { avoid, fight, cooperate };
@@ -389,7 +410,7 @@ export class DNA {
   }
 
   reproductionProb() {
-    const rnd = this.prngFor('reproductionProb');
+    const rnd = this.prngFor("reproductionProb");
     const risk = this.geneFraction(GENE_LOCI.RISK);
     const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
     const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
@@ -398,7 +419,7 @@ export class DNA {
     const synergy = clamp(
       0.35 * cooperation + 0.35 * efficiency + 0.3 * (1 - Math.abs(risk - fertility)),
       0,
-      1
+      1,
     );
     const base = 0.18 + 0.6 * boldness; // 0.18..0.78
     const synergyAdj = 0.75 + 0.35 * synergy; // 0.75..1.10
@@ -409,7 +430,7 @@ export class DNA {
 
   // Target mate similarity and tolerance derived from genome
   mateSimilarityPreference() {
-    const rnd = this.prngFor('mateSimilarityPreference');
+    const rnd = this.prngFor("mateSimilarityPreference");
     const kinPull = this.b / 255; // blue pushes toward kin recognition
     const noveltyPush = this.r / 255; // red rewards novelty and dispersal
     const balance = this.g / 255; // green stabilizes the response
@@ -434,7 +455,7 @@ export class DNA {
   }
 
   lifespan(maxAge = 1000, minAge = 100) {
-    const rnd = this.prngFor('lifespan');
+    const rnd = this.prngFor("lifespan");
     const longevity = this.geneFraction(GENE_LOCI.SENESCENCE);
     const resilience = this.geneFraction(GENE_LOCI.RESIST_COLD);
     const base = 0.45 + 0.55 * ((longevity + resilience) / 2); // 0.45..1.0
@@ -459,7 +480,7 @@ export class DNA {
 
   // Probability (0..1) to blend alleles during crossover instead of inheriting a pure channel
   crossoverMix() {
-    const rnd = this.prngFor('crossoverMix');
+    const rnd = this.prngFor("crossoverMix");
     const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
     const cohesion = this.geneFraction(GENE_LOCI.COHESION);
     const risk = this.geneFraction(GENE_LOCI.RISK);
@@ -471,7 +492,7 @@ export class DNA {
   }
 
   mutationChance() {
-    const rnd = this.prngFor('mutationChance');
+    const rnd = this.prngFor("mutationChance");
     const rate = this.geneFraction(GENE_LOCI.MUTATION_RATE);
     const base = 0.04 + rate * 0.22;
     const jitter = (rnd() - 0.5) * 0.05;
@@ -480,7 +501,7 @@ export class DNA {
   }
 
   mutationRange() {
-    const rnd = this.prngFor('mutationRange');
+    const rnd = this.prngFor("mutationRange");
     const span = this.geneFraction(GENE_LOCI.MUTATION_RANGE);
 
     return 4 + Math.floor(span * 24 + rnd() * 4); // ~4..32
@@ -523,14 +544,14 @@ export class DNA {
       return Math.max(1, nodes.size || 1);
     }
 
-    const rnd = this.prngFor('neurons');
+    const rnd = this.prngFor("neurons");
     const neuro = this.geneFraction(GENE_LOCI.NEURAL);
 
     return Math.max(1, Math.floor(neuro * 4 + rnd() * 2) + 1);
   }
 
   sight() {
-    const rnd = this.prngFor('sight');
+    const rnd = this.prngFor("sight");
     const sense = this.geneFraction(GENE_LOCI.SENSE);
 
     return Math.max(1, Math.floor(sense * 4 + rnd() * 2) + 1);
@@ -544,7 +565,7 @@ export class DNA {
 
   // Lifespan derived solely from DNA, without external clamps
   lifespanDNA() {
-    const rnd = this.prngFor('lifespan');
+    const rnd = this.prngFor("lifespan");
     const longevity = this.geneFraction(GENE_LOCI.SENESCENCE);
     const resilience = this.geneFraction(GENE_LOCI.RESIST_COLD);
     const base = 300 + ((longevity + resilience) / 2) * 900; // 300..1200
@@ -611,12 +632,18 @@ export class DNA {
     const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
 
     const baseline = clamp(
-      (cooperation - combat) * 1.1 + (parental - risk) * 0.6 + (exploration - 0.5) * 0.3,
+      (cooperation - combat) * 1.1 +
+        (parental - risk) * 0.6 +
+        (exploration - 0.5) * 0.3,
       -1,
-      1
+      1,
     );
     const learningRate = clamp(0.18 + 0.45 * sense + 0.25 * cooperation, 0.08, 0.85);
-    const volatility = clamp(0.35 + 0.4 * risk + 0.3 * combat - 0.25 * cooperation, 0.1, 1.2);
+    const volatility = clamp(
+      0.35 + 0.4 * risk + 0.3 * combat - 0.25 * cooperation,
+      0.1,
+      1.2,
+    );
     const decay = clamp(0.05 + 0.4 * density + 0.25 * (1 - activity), 0.02, 0.55);
 
     return { baseline, learningRate, volatility, decay };
@@ -632,24 +659,40 @@ export class DNA {
     const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
     const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
 
-    const aggression = clamp(0.35 + 0.5 * combat + 0.35 * risk - 0.25 * cooperation, 0, 1.2);
-    const empathy = clamp(0.25 + 0.5 * cooperation + 0.25 * parental - 0.25 * risk, 0, 1);
+    const aggression = clamp(
+      0.35 + 0.5 * combat + 0.35 * risk - 0.25 * cooperation,
+      0,
+      1.2,
+    );
+    const empathy = clamp(
+      0.25 + 0.5 * cooperation + 0.25 * parental - 0.25 * risk,
+      0,
+      1,
+    );
     const kinFavor = clamp(0.2 + 0.45 * ally - 0.25 * enemy + 0.25 * parental, 0, 1);
     const prudence = clamp(0.3 + 0.5 * strategy + 0.25 * recovery - 0.2 * risk, 0, 1);
 
     const fightWinBase = clamp(-0.25 - aggression * 0.9 + prudence * 0.3, -1.4, -0.05);
     const fightWinKin = clamp(-0.15 - empathy * 0.7, -1, 0);
-    const fightLossBase = clamp(fightWinBase - 0.25 - (1 - recovery) * 0.4, -1.7, -0.15);
+    const fightLossBase = clamp(
+      fightWinBase - 0.25 - (1 - recovery) * 0.4,
+      -1.7,
+      -0.15,
+    );
     const fightLossKin = clamp(fightWinKin - 0.2 - (1 - recovery) * 0.3, -1.2, 0);
     const coopReceiveBase = clamp(0.3 + empathy * 0.9 + kinFavor * 0.2, 0.05, 1.4);
     const coopGiveBase = clamp(
       coopReceiveBase - 0.15 + cooperation * 0.1 - aggression * 0.2,
       0.02,
-      1.2
+      1.2,
     );
     const coopReceiveKin = clamp(0.2 + kinFavor * 0.6, 0, 1);
     const coopGiveKin = clamp(coopReceiveKin - 0.05 + kinFavor * 0.1, 0, 0.9);
-    const reproduceBase = clamp(0.25 + parental * 0.6 + cooperation * 0.25 - risk * 0.15, 0.05, 1);
+    const reproduceBase = clamp(
+      0.25 + parental * 0.6 + cooperation * 0.25 - risk * 0.15,
+      0.05,
+      1,
+    );
     const reproduceKin = clamp(0.15 + kinFavor * 0.5, 0, 0.8);
     const genericPositive = clamp(0.1 + empathy * 0.5 - aggression * 0.2, -0.1, 0.6);
     const genericNegative = clamp(-0.15 - aggression * 0.6 + prudence * 0.2, -1, 0.1);
@@ -657,7 +700,7 @@ export class DNA {
     const intensityWeight = clamp(
       0.5 + aggression * 0.4 + prudence * 0.2 - empathy * 0.2,
       0.2,
-      1.5
+      1.5,
     );
 
     return {
@@ -696,7 +739,7 @@ export class DNA {
 
     if (sensorCount === 0) return null;
 
-    const rng = this.prngFor('neuralSensorModulation');
+    const rng = this.prngFor("neuralSensorModulation");
     const baseline = new Float32Array(sensorCount);
     const targets = new Float32Array(sensorCount);
 
@@ -725,11 +768,23 @@ export class DNA {
     const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
     const senescence = this.geneFraction(GENE_LOCI.SENESCENCE);
     const foraging = this.geneFraction(GENE_LOCI.FORAGING);
+    const fatigueProfile = this.neuralFatigueProfile();
+    const fatigueBaseline = clamp(fatigueProfile?.baseline ?? 0.35, 0, 1);
+    const fatigueRiskWeight = clamp(
+      fatigueProfile?.fatigueRiskWeight ?? 0.4,
+      0.05,
+      0.9,
+    );
+    const restRiskBonus = clamp(fatigueProfile?.restRiskBonus ?? 0.2, 0, 0.6);
 
     const minGain = 0.45 + 0.25 * recovery; // 0.45..0.7
     const maxGain = Math.max(minGain + 0.05, 1.45 + 0.45 * movement); // 1.45..1.95
     const adaptationRate = clamp(0.02 + 0.15 * sense + 0.05 * neural, 0.015, 0.22);
-    const reversionRate = clamp(0.04 + 0.1 * (1 - strategy) + 0.08 * (1 - activity), 0.01, 0.35);
+    const reversionRate = clamp(
+      0.04 + 0.1 * (1 - strategy) + 0.08 * (1 - activity),
+      0.01,
+      0.35,
+    );
 
     const toSigned = (fraction, midpoint = 0.5, amplitude = 1) => {
       const centered = fraction - midpoint;
@@ -737,7 +792,10 @@ export class DNA {
       return clamp(centered * 2 * amplitude, -1, 1);
     };
 
-    const updateModulation = (key, { gain, target = Number.NaN, jitter = 0.1 } = {}) => {
+    const updateModulation = (
+      key,
+      { gain, target = Number.NaN, jitter = 0.1 } = {},
+    ) => {
       const index = Brain?.sensorIndex?.(key);
 
       if (!Number.isFinite(index) || index < 0 || index >= sensorCount) return;
@@ -752,138 +810,152 @@ export class DNA {
       }
     };
 
-    updateModulation('energy', {
+    updateModulation("energy", {
       gain: 0.8 + 0.6 * efficiency,
       target: toSigned(capacity, 0.45, 0.9),
       jitter: 0.12,
     });
 
-    updateModulation('effectiveDensity', {
+    updateModulation("effectiveDensity", {
       gain: 0.85 + 0.4 * density + 0.2 * cooperation,
       target: toSigned(density, 0.45, 0.9),
       jitter: 0.1,
     });
 
-    updateModulation('allyFraction', {
+    updateModulation("allyFraction", {
       gain: 0.75 + 0.5 * cooperation,
       target: toSigned(0.25 + 0.55 * cooperation, 0.5, 1),
       jitter: 0.1,
     });
 
-    updateModulation('enemyFraction', {
+    updateModulation("enemyFraction", {
       gain: 0.7 + 0.4 * ((risk + combat) / 2),
       target: toSigned(0.12 + 0.25 * (1 - risk), 0.5, 1),
       jitter: 0.08,
     });
 
-    updateModulation('mateFraction', {
+    updateModulation("mateFraction", {
       gain: 0.65 + 0.45 * fertility,
       target: toSigned(0.25 + 0.45 * fertility + 0.1 * cooperation, 0.5, 1),
       jitter: 0.1,
     });
 
-    updateModulation('allySimilarity', {
+    updateModulation("allySimilarity", {
       gain: 0.7 + 0.35 * cooperation,
       target: toSigned(0.5 + 0.25 * cooperation - 0.2 * exploration, 0.5, 1),
       jitter: 0.08,
     });
 
-    updateModulation('enemySimilarity', {
+    updateModulation("enemySimilarity", {
       gain: 0.75 + 0.35 * risk,
       target: toSigned(0.3 + 0.25 * risk - 0.15 * cooperation, 0.5, 1),
       jitter: 0.07,
     });
 
-    updateModulation('mateSimilarity', {
+    updateModulation("mateSimilarity", {
       gain: 0.65 + 0.4 * fertility,
       target: toSigned(0.45 + 0.25 * fertility - 0.3 * exploration, 0.5, 1),
       jitter: 0.09,
     });
 
-    updateModulation('ageFraction', {
+    updateModulation("ageFraction", {
       gain: 0.65 + 0.35 * senescence,
       target: toSigned(0.4 + 0.4 * senescence, 0.5, 1),
       jitter: 0.07,
     });
 
-    updateModulation('eventPressure', {
+    updateModulation("eventPressure", {
       gain: 0.7 + 0.3 * recovery + 0.2 * (1 - exploration),
       target: toSigned(0.1 + 0.35 * (1 - recovery), 0.5, 1),
       jitter: 0.08,
     });
 
-    updateModulation('partnerEnergy', {
+    updateModulation("partnerEnergy", {
       gain: 0.65 + 0.35 * parental,
       target: toSigned(0.35 + 0.45 * parental, 0.5, 1),
       jitter: 0.09,
     });
 
-    updateModulation('partnerAgeFraction', {
+    updateModulation("partnerAgeFraction", {
       gain: 0.6 + 0.3 * parental,
       target: toSigned(0.35 + 0.3 * parental - 0.2 * risk, 0.5, 1),
       jitter: 0.08,
     });
 
-    updateModulation('partnerSimilarity', {
+    updateModulation("partnerSimilarity", {
       gain: 0.6 + 0.35 * parental,
       target: toSigned(0.45 + 0.25 * parental - 0.25 * exploration, 0.5, 1),
       jitter: 0.08,
     });
 
-    updateModulation('baseReproductionProbability', {
+    updateModulation("baseReproductionProbability", {
       gain: 0.65 + 0.35 * fertility + 0.2 * cooperation,
       target: toSigned(0.35 + 0.45 * fertility + 0.15 * cooperation, 0.5, 1),
       jitter: 0.1,
     });
 
-    updateModulation('riskTolerance', {
-      gain: 0.65 + 0.45 * risk,
-      target: toSigned(0.35 + 0.45 * risk - 0.15 * cooperation, 0.5, 1),
-      jitter: 0.08,
+    updateModulation("riskTolerance", {
+      gain: 0.6 + 0.4 * risk + 0.2 * neural - 0.25 * recovery,
+      target: toSigned(
+        0.32 +
+          0.42 * risk -
+          0.18 * cooperation -
+          0.28 * fatigueBaseline +
+          restRiskBonus * 0.2,
+        0.5,
+        1,
+      ),
+      jitter: 0.07 + fatigueRiskWeight * 0.06,
     });
-    updateModulation('interactionMomentum', {
+    updateModulation("interactionMomentum", {
       gain: 0.7 + 0.35 * cooperation + 0.25 * sense,
       target: toSigned(0.4 + 0.45 * cooperation - 0.35 * combat, 0.5, 1),
       jitter: 0.1,
     });
 
-    updateModulation('selfSenescence', {
+    updateModulation("selfSenescence", {
       gain: 0.6 + 0.35 * senescence,
       target: toSigned(0.45 + 0.35 * senescence - 0.2 * activity, 0.5, 1),
       jitter: 0.08,
     });
 
-    updateModulation('partnerSenescence', {
+    updateModulation("partnerSenescence", {
       gain: 0.6 + 0.3 * parental,
       target: toSigned(0.4 + 0.3 * parental - 0.15 * activity, 0.5, 1),
       jitter: 0.08,
     });
 
-    updateModulation('resourceTrend', {
+    updateModulation("resourceTrend", {
       gain: 0.7 + 0.3 * sense + 0.3 * exploration + 0.2 * foraging,
       target: toSigned(0.45 + 0.35 * exploration - 0.25 * recovery, 0.5, 1),
       jitter: 0.12,
     });
 
-    updateModulation('targetWeakness', {
+    updateModulation("neuralFatigue", {
+      gain: clamp(0.75 + 0.35 * (1 - recovery) + 0.25 * (1 - neural), 0.55, 1.6),
+      target: toSigned(fatigueBaseline, 0.45, 1),
+      jitter: 0.06,
+    });
+
+    updateModulation("targetWeakness", {
       gain: 0.78 + 0.35 * (1 - combat) + 0.25 * strategy,
       target: toSigned(strategy, 0.5, 0.8),
       jitter: 0.1,
     });
 
-    updateModulation('targetThreat', {
+    updateModulation("targetThreat", {
       gain: 0.72 + 0.4 * combat + 0.3 * risk,
       target: toSigned(risk, 0.5, 0.9),
       jitter: 0.12,
     });
 
-    updateModulation('targetProximity', {
+    updateModulation("targetProximity", {
       gain: 0.7 + 0.35 * movement + 0.2 * exploration,
       target: toSigned(1 - movement, 0.5, 0.9),
       jitter: 0.12,
     });
 
-    updateModulation('targetAttrition', {
+    updateModulation("targetAttrition", {
       gain: 0.68 + 0.3 * movement + 0.25 * (1 - cooperation),
       target: toSigned(strategy, 0.5, 0.85),
       jitter: 0.1,
@@ -921,18 +993,20 @@ export class DNA {
     const baseMultiplier = clamp(
       0.6 + 0.6 * movement + 0.3 * risk - 0.5 * strategy - 0.3 * sense,
       0.2,
-      1.8
+      1.8,
     );
     const contactGrowth = clamp(
       0.18 + 0.32 * risk + 0.25 * movement - 0.28 * strategy - 0.1 * sense,
       0.05,
-      0.6
+      0.6,
     );
-    const maxMemory = Math.round(clamp(3 + 6 * (1 - strategy) + 3 * risk - 2 * sense, 1, 10));
+    const maxMemory = Math.round(
+      clamp(3 + 6 * (1 - strategy) + 3 * risk - 2 * sense, 1, 10),
+    );
     const lingerMultiplier = clamp(
       0.45 + 0.45 * density + 0.2 * movement - 0.35 * recovery,
       0.2,
-      1.4
+      1.4,
     );
 
     return { baseMultiplier, contactGrowth, maxMemory, lingerMultiplier };
@@ -949,7 +1023,8 @@ export class DNA {
     const base = 0.0004 + 0.0008 * (1 - efficiency);
     const densityFactor = 0.5 + 0.5 * Math.max(0, effDensity);
     const normalizedSight = Math.max(0, sight);
-    const baseline = base * (Math.max(0, baselineNeurons) + 0.5 * normalizedSight) * densityFactor;
+    const baseline =
+      base * (Math.max(0, baselineNeurons) + 0.5 * normalizedSight) * densityFactor;
     const usageScale = 0.6 + 0.8 * activity; // 0.6..1.4
     const dynamic = base * Math.max(0, dynamicNeurons) * usageScale * densityFactor;
     const total = baseline + dynamic;
@@ -976,18 +1051,75 @@ export class DNA {
     return total;
   }
 
+  neuralFatigueProfile() {
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const activity = this.geneFraction(GENE_LOCI.ACTIVITY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+
+    const baseline = clamp(
+      0.22 + 0.28 * (1 - recovery) + 0.18 * (1 - neural),
+      0.05,
+      0.75,
+    );
+    const loadCapacity = clamp(
+      0.6 + 0.8 * neural + 0.3 * activity - 0.25 * (1 - recovery),
+      0.35,
+      1.75,
+    );
+    const stressGain = clamp(0.18 + 0.5 * risk + 0.35 * (1 - recovery), 0.05, 0.95);
+    const recoveryRate = clamp(
+      0.14 + 0.55 * recovery + 0.2 * strategy - 0.18 * risk,
+      0.05,
+      0.8,
+    );
+    const densitySensitivity = clamp(
+      0.15 + 0.45 * density - 0.15 * recovery,
+      0.05,
+      0.7,
+    );
+    const restThreshold = clamp(0.3 + 0.35 * (1 - activity) + 0.2 * parental, 0.1, 0.9);
+    const fatigueRiskWeight = clamp(0.32 + 0.45 * risk - 0.25 * recovery, 0.15, 0.9);
+    const restRiskBonus = clamp(
+      0.12 + 0.3 * activity + 0.25 * strategy - 0.18 * risk,
+      0,
+      0.6,
+    );
+    const restEfficiency = clamp(
+      0.3 + 0.5 * recovery + 0.2 * strategy - 0.25 * activity + 0.15 * parental,
+      0.1,
+      1.3,
+    );
+
+    return {
+      baseline,
+      loadCapacity,
+      stressGain,
+      recoveryRate,
+      densitySensitivity,
+      restThreshold,
+      fatigueRiskWeight,
+      restRiskBonus,
+      restEfficiency,
+    };
+  }
+
   // Reproduction energy threshold as a fraction of max tile energy
   reproductionThresholdFrac() {
     const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
     const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
     const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
-    let threshold = 0.28 + 0.3 * (1 - efficiency) + 0.18 * fertility - 0.08 * cooperation;
+    let threshold =
+      0.28 + 0.3 * (1 - efficiency) + 0.18 * fertility - 0.08 * cooperation;
 
     return clamp(threshold, 0.22, 0.7);
   }
 
   conflictFocus() {
-    const rng = this.prngFor('conflictFocus');
+    const rng = this.prngFor("conflictFocus");
     const risk = this.geneFraction(GENE_LOCI.RISK);
     const combat = this.geneFraction(GENE_LOCI.COMBAT);
     const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
@@ -995,16 +1127,32 @@ export class DNA {
     const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
     const jitter = () => (rng() - 0.5) * 0.2;
 
-    const weak = clamp(0.4 + 0.6 * (1 - risk) + 0.3 * strategy - 0.2 * combat + jitter(), 0.1, 1.6);
-    const strong = clamp(0.3 + 0.7 * risk + 0.4 * combat - 0.2 * strategy + jitter(), 0.1, 1.6);
-    const proximity = clamp(0.35 + 0.5 * (1 - movement) + 0.2 * cooperation + jitter(), 0.1, 1.6);
-    const attrition = clamp(0.3 + 0.5 * movement + 0.2 * (1 - cooperation) + jitter(), 0.1, 1.6);
+    const weak = clamp(
+      0.4 + 0.6 * (1 - risk) + 0.3 * strategy - 0.2 * combat + jitter(),
+      0.1,
+      1.6,
+    );
+    const strong = clamp(
+      0.3 + 0.7 * risk + 0.4 * combat - 0.2 * strategy + jitter(),
+      0.1,
+      1.6,
+    );
+    const proximity = clamp(
+      0.35 + 0.5 * (1 - movement) + 0.2 * cooperation + jitter(),
+      0.1,
+      1.6,
+    );
+    const attrition = clamp(
+      0.3 + 0.5 * movement + 0.2 * (1 - cooperation) + jitter(),
+      0.1,
+      1.6,
+    );
 
     return { weak, strong, proximity, attrition };
   }
 
   cooperationProfile() {
-    const rng = this.prngFor('cooperationProfile');
+    const rng = this.prngFor("cooperationProfile");
     const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
     const parental = this.geneFraction(GENE_LOCI.PARENTAL);
     const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
@@ -1016,10 +1164,14 @@ export class DNA {
     const base = clamp(
       0.18 + 0.45 * cooperation + 0.2 * parental - 0.12 * risk + jitter,
       0.08,
-      0.75
+      0.75,
     );
     const min = clamp(base * (0.35 + 0.25 * efficiency), 0.02, base);
-    const max = clamp(base + 0.25 * cooperation + 0.2 * efficiency + 0.1 * recovery, base, 0.95);
+    const max = clamp(
+      base + 0.25 * cooperation + 0.2 * efficiency + 0.1 * recovery,
+      base,
+      0.95,
+    );
     const energyBias = clamp(0.3 + 0.4 * parental + 0.2 * (1 - efficiency), 0, 1);
     const kinBias = clamp(0.2 + 0.5 * cohesion + 0.2 * cooperation - 0.2 * risk, 0, 1);
 
@@ -1037,14 +1189,15 @@ export class DNA {
     const { energyDelta = 0, kinship = 0 } = context || {};
     const deficitSignal = clamp(-energyDelta, -1, 1);
     const kinSignal = clamp(kinship, 0, 1);
-    const adjustment = deficitSignal * profile.energyBias * 0.5 + kinSignal * profile.kinBias * 0.3;
+    const adjustment =
+      deficitSignal * profile.energyBias * 0.5 + kinSignal * profile.kinBias * 0.3;
     const share = profile.base + adjustment;
 
     return clamp(share, profile.min, profile.max);
   }
 
   strategy() {
-    const rnd = this.prngFor('strategy');
+    const rnd = this.prngFor("strategy");
     const anchor = this.geneFraction(GENE_LOCI.STRATEGY);
 
     return clamp(anchor * 0.7 + rnd() * 0.3, 0, 1); // 0..1
@@ -1052,7 +1205,7 @@ export class DNA {
 
   // Preference (-1..1) for genetic similarity in mates. Positive -> likes similar, negative -> seeks diversity.
   mateSimilarityBias() {
-    const rnd = this.prngFor('mateSimilarityBias');
+    const rnd = this.prngFor("mateSimilarityBias");
     const r = this.r / 255;
     const g = this.g / 255;
     const b = this.b / 255;
@@ -1065,7 +1218,7 @@ export class DNA {
 
   // Curiosity/outbreeding appetite (0..1). Higher encourages sampling dissimilar mates.
   diversityAppetite() {
-    const rnd = this.prngFor('diversityAppetite');
+    const rnd = this.prngFor("diversityAppetite");
     const g = this.g / 255;
     const b = this.b / 255;
     const bias = this.mateSimilarityBias();
@@ -1122,11 +1275,16 @@ export class DNA {
     const parentSeed = (this.seed() ^ (other?.seed?.() ?? 0)) >>> 0;
     const entropy = Math.floor(Math.random() * 0xffffffff) >>> 0;
     const rng = createRNG((parentSeed ^ entropy) >>> 0);
-    const blendA = typeof this.crossoverMix === 'function' ? this.crossoverMix() : 0.5;
-    const blendB = typeof other?.crossoverMix === 'function' ? other.crossoverMix() : 0.5;
+    const blendA = typeof this.crossoverMix === "function" ? this.crossoverMix() : 0.5;
+    const blendB =
+      typeof other?.crossoverMix === "function" ? other.crossoverMix() : 0.5;
     const blendProbability = clamp((blendA + blendB) / 2, 0, 1);
     const range = Math.max(0, mutationRange | 0);
-    const geneCount = Math.max(this.length, other?.length ?? 0, DEFAULT_TOTAL_GENE_COUNT);
+    const geneCount = Math.max(
+      this.length,
+      other?.length ?? 0,
+      DEFAULT_TOTAL_GENE_COUNT,
+    );
 
     const mixGene = (a, b) => {
       let v;
