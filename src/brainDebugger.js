@@ -12,6 +12,11 @@ function publishToWindow(list) {
   }
 }
 
+/**
+ * Captures recent brain snapshots for inspection in the browser console or
+ * debug UI panels. The debugger stores a bounded list of entries and mirrors
+ * them to `window.__colourfulLifeBrains` when running in the browser.
+ */
 const BrainDebugger = {
   update(snapshots = []) {
     state.snapshots = Array.isArray(snapshots) ? cloneSnapshotList(snapshots) : [];

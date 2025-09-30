@@ -224,6 +224,12 @@ function prepareFightParticipants({ adapter, initiator, target }) {
   return { attacker, defender, attackerRow, attackerCol, targetRow, targetCol };
 }
 
+/**
+ * Resolves social interactions between organisms by interpreting neural
+ * intents alongside environmental context. The system handles combat odds,
+ * cooperation transfers, reproduction gating, and the bookkeeping required to
+ * keep stats and DNA-driven memories up to date.
+ */
 export default class InteractionSystem {
   constructor({ adapter, gridManager } = {}) {
     if (adapter) {

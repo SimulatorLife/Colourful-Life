@@ -1,5 +1,10 @@
 import { performance } from 'node:perf_hooks';
 
+/**
+ * Benchmarks the grid energy preparation loop in a headless Node environment.
+ * Use the PERF_* environment variables to tune grid size, warmup, and iteration
+ * counts when profiling changes to the energy system.
+ */
 if (typeof globalThis.window === 'undefined') {
   globalThis.window = {};
 }

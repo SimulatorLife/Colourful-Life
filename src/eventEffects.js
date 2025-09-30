@@ -1,3 +1,8 @@
+/**
+ * Lookup table describing how each environmental event alters tile energy and
+ * per-cell behaviour. Grid logic consumes these values to scale regeneration,
+ * apply drains, and determine which DNA resistance gene mitigates the effect.
+ */
 export const EVENT_EFFECTS = {
   flood: {
     regenAdd: 0.25,
@@ -39,6 +44,13 @@ export const EVENT_EFFECTS = {
 
 export const EVENT_TYPES = Object.freeze(Object.keys(EVENT_EFFECTS));
 
+/**
+ * Retrieves the effect descriptor for a given event type.
+ *
+ * @param {string} eventType - Event identifier such as `flood` or `drought`.
+ * @returns {typeof EVENT_EFFECTS[string]|null} Matching effect or `null` when
+ *   the event is unknown.
+ */
 export function getEventEffect(eventType) {
   return EVENT_EFFECTS[eventType] || null;
 }
