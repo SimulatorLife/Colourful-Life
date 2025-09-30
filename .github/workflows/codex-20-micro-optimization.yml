@@ -17,12 +17,4 @@ jobs:
       pr_title: "Codex: Targeted Micro-Optimization"
       pr_body: "Seed PR for Codex to implement a localized, measurable micro-optimization atop current master."
       prompt: >
-        Identify a single, frequently executed micro-hot path (tight loop, inner render/update step, small utility on hot code paths)
-        and implement a minimal, behavior-preserving micro-optimization that yields a measurable improvement. Keep the blast radius tiny:
-        no architectural rewrites, no interface changes, and no new heavy dependencies. Prefer straightforward changes such as: reducing
-        allocations, tightening iteration, precomputing invariants, using simpler data shapes, avoiding needless cloning/stringification,
-        hoisting constants, replacing polymorphic branches with predictable paths, or short-circuiting common cases. Add a very small
-        before/after measurement (micro-benchmark, timing probe, or deterministic counter) in the PR body to demonstrate improvement,
-        and include guardrails/tests for correctness. If no safe micro-hot path is found, add a minimal benchmark harness around a likely
-        hotspot to enable future passes rather than making speculative changes. Keep the diff small, readable, and well-commented; ensure
-        lint/tests pass and that readability is not sacrificed for cleverness.
+        Identify and optimize one specific micro-hot path (a tight loop, inner render/update step, or small utility on a critical code path) and deliver at least one measurable, behavior-preserving micro-optimization. You may not respond with “no issues found”—if no obvious optimization exists, choose the most plausible hotspot and apply a singular, safe, minimal improvement. Keep the blast radius tiny: no architectural rewrites, no API/interface changes, no new dependencies. Prefer straightforward optimizations such as reducing allocations, tightening iteration, avoiding repeated lookups inside loops, hoisting constants, caching small computed values, replacing polymorphic branches with predictable ones, simplifying data shapes, reducing string concatenations/JSON operations, collapsing nested conditionals into guard clauses, or short-circuiting common cases. In your commit message, include a small before/after measurement (micro-benchmark, timing probe, or deterministic counter) to show impact. Ensure the diff is small, readable, and well-commented; never sacrifice clarity for cleverness.
