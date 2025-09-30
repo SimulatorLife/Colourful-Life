@@ -1,19 +1,56 @@
+/**
+ * Generates a random floating-point number between `min` (inclusive) and
+ * `max` (exclusive) using the provided RNG.
+ *
+ * @param {number} min - Lower bound.
+ * @param {number} max - Upper bound.
+ * @param {() => number} [rng=Math.random] - Random source returning [0, 1).
+ * @returns {number} Randomized value within the range.
+ */
 export function randomRange(min, max, rng = Math.random) {
   return rng() * (max - min) + min;
 }
 
+/**
+ * Performs a linear interpolation between `a` and `b` clamping `t` to [0, 1].
+ *
+ * @param {number} a - Start value.
+ * @param {number} b - End value.
+ * @param {number} t - Interpolation factor.
+ * @returns {number} Interpolated result.
+ */
 export function lerp(a, b, t) {
   return a + (b - a) * clamp(t, 0, 1);
 }
 
+/**
+ * Returns `true` with the provided probability using `Math.random`.
+ *
+ * @param {number} chance - Probability between 0 and 1.
+ * @returns {boolean} Whether the random draw succeeded.
+ */
 export function randomPercent(chance) {
   return Math.random() < chance;
 }
 
+/**
+ * Clamps `value` to the `[min, max]` interval.
+ *
+ * @param {number} value - Candidate value.
+ * @param {number} min - Lower bound.
+ * @param {number} max - Upper bound.
+ * @returns {number} Clamped value.
+ */
 export function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+/**
+ * Clamps values to the [0, 1] range, treating non-finite inputs as 0.
+ *
+ * @param {number} value - Candidate value.
+ * @returns {number} Clamped 0–1 result.
+ */
 export function clamp01(value) {
   const numeric = Number(value);
 
@@ -22,6 +59,13 @@ export function clamp01(value) {
   return clamp(numeric, 0, 1);
 }
 
+/**
+ * Deep clones the sensor/node trace payloads used by the brain debugger so the
+ * UI can mutate copies without affecting simulation state.
+ *
+ * @param {Object} trace - Snapshot returned by `brain.snapshot()`.
+ * @returns {Object|null} Cloned trace.
+ */
 export function cloneTracePayload(trace) {
   if (!trace) return null;
 
@@ -36,6 +80,15 @@ export function cloneTracePayload(trace) {
   };
 }
 
+/**
+ * Maintains a sorted, size-limited buffer using the provided comparator. Used
+ * for leaderboard selection and other ranked lists.
+ *
+ * @param {number} limit - Maximum number of entries to retain.
+ * @param {(a:any,b:any)=>number} compare - Comparison function returning
+ *   negative when `a` ranks ahead of `b`.
+ * @returns {{add:Function,getItems:Function}} Ranked buffer helpers.
+ */
 export function createRankedBuffer(limit, compare) {
   const maxSize = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
   const comparator = typeof compare === 'function' ? compare : () => 0;
@@ -90,6 +143,13 @@ function mulberry32(seed) {
   };
 }
 
+/**
+ * Returns a deterministic RNG seeded with the provided integer using the
+ * Mulberry32 algorithm. Useful for reproducible tests.
+ *
+ * @param {number} seed - 32-bit seed value.
+ * @returns {() => number} RNG that returns values in [0, 1).
+ */
 export function createRNG(seed) {
   return mulberry32(seed);
 }

@@ -7,6 +7,12 @@ import {
   createSliderRow,
 } from './ui/controlBuilders.js';
 
+/**
+ * Constructs and manages the browser-based control surface. The UI manager
+ * renders the canvas layout, exposes slider/button controls, and synchronizes
+ * user interactions back to the {@link SimulationEngine}. It also forwards
+ * slow-updating metrics to dashboards and coordinates selection drawing.
+ */
 export default class UIManager {
   constructor(simulationCallbacks = {}, mountSelector = '#app', actions = {}, layoutOptions = {}) {
     const { obstaclePresets = [], ...actionFns } = actions || {};

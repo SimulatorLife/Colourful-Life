@@ -83,6 +83,12 @@ const clampSensorValue = (value) => {
   return clamp(value, -1, 1);
 };
 
+/**
+ * Neural controller constructed from DNA-provided genes. Each Brain maintains
+ * sensor modulation targets, neuron connections, and activation histories. It
+ * evaluates sensors every tick to emit intents for movement, interaction,
+ * reproduction, and targeting behaviours.
+ */
 export default class Brain {
   static SENSOR_COUNT = SENSOR_COUNT;
 
