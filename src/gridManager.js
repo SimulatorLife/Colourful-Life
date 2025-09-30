@@ -6,6 +6,7 @@ import { createEventContext, defaultEventContext } from './events/eventContext.j
 import { computeTileEnergyUpdate } from './energySystem.js';
 import InteractionSystem from './interactionSystem.js';
 import GridInteractionAdapter from './grid/gridAdapter.js';
+import ReproductionZonePolicy from './grid/reproductionZonePolicy.js';
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -379,6 +380,15 @@ export default class GridManager {
     this.ctx = ctx || window.ctx;
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
+    this.reproductionZones = new ReproductionZonePolicy();
+    Object.defineProperty(this, 'selectionManager', {
+      configurable: true,
+      enumerable: true,
+      get: () => this.reproductionZones.getSelectionManager(),
+      set: (manager) => {
+        this.reproductionZones.setSelectionManager(manager);
+      },
+    });
     this.selectionManager = selectionManager || null;
     const initialThreshold =
       typeof stats?.matingDiversityThreshold === 'number'
@@ -532,7 +542,7 @@ export default class GridManager {
   }
 
   setSelectionManager(selectionManager) {
-    this.selectionManager = selectionManager || null;
+    this.reproductionZones.setSelectionManager(selectionManager);
   }
 
   setBrainSnapshotCollector(collector) {
@@ -1675,12 +1685,10 @@ export default class GridManager {
     const selectionKind = selectedMate && selectedMate.target ? selectionMode : 'legacy';
 
     let reproduced = false;
-    const zoneParents = this.selectionManager
-      ? this.selectionManager.validateReproductionArea({
-          parentA: { row: parentRow, col: parentCol },
-          parentB: { row: mateRow, col: mateCol },
-        })
-      : { allowed: true };
+    const zoneParents = this.reproductionZones.validateArea({
+      parentA: { row: parentRow, col: parentCol },
+      parentB: { row: mateRow, col: mateCol },
+    });
 
     let blockedInfo = null;
 
@@ -1728,21 +1736,16 @@ export default class GridManager {
       addNeighbors(mateRow, mateCol);
 
       const freeSlots = candidates.filter(({ r, c }) => !this.grid[r][c] && !this.isObstacle(r, c));
-      const eligibleSlots =
-        this.selectionManager && freeSlots.length > 0 && this.selectionManager.hasActiveZones()
-          ? freeSlots.filter(({ r, c }) => this.selectionManager.isInActiveZone(r, c))
-          : freeSlots;
-      const slotPool = eligibleSlots.length > 0 ? eligibleSlots : freeSlots;
+      const restrictedSlots = this.reproductionZones.filterSpawnCandidates(freeSlots);
+      const slotPool = restrictedSlots.length > 0 ? restrictedSlots : freeSlots;
 
       if (slotPool.length > 0) {
         const spawn = slotPool[Math.floor(randomRange(0, slotPool.length))];
-        const zoneCheck = this.selectionManager
-          ? this.selectionManager.validateReproductionArea({
-              parentA: { row: parentRow, col: parentCol },
-              parentB: { row: mateRow, col: mateCol },
-              spawn: { row: spawn.r, col: spawn.c },
-            })
-          : { allowed: true };
+        const zoneCheck = this.reproductionZones.validateArea({
+          parentA: { row: parentRow, col: parentCol },
+          parentB: { row: mateRow, col: mateCol },
+          spawn: { row: spawn.r, col: spawn.c },
+        });
 
         if (!zoneCheck.allowed) {
           blockedInfo = {
