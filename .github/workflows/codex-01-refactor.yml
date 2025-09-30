@@ -8,9 +8,6 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
-  discussions: read
-  actions: write
-  repository-projects: read
 
 jobs:
   run:
@@ -20,11 +17,10 @@ jobs:
       pr_title: "Codex: Implement refactor on latest master"
       pr_body: "Seed PR for Codex to implement the intended refactor atop current master."
       prompt: >
-        Review the entire codebase with the long-term goal of raising overall quality and 
-        maintainability (DRY, clarity, consistency, modern APIs, minimal abstraction). 
-        Identify one high-impact area (a module, file, or pattern) that will 
-        materially improve readability or reduce duplication, and briefly justify your 
+        The long-term goal is to raise the overall quality and 
+        maintainability of the codebase (DRY, clarity, consistency, modern APIs, minimal abstraction). 
+        Identify one high-impact area (a module, file, or pattern) that can be 
+        materially improved to enhance readability or reduce duplication, and briefly justify your 
         choice. Then implement a minimal, focused refactor that improves clarity and 
         consistency while keeping behavior identical, avoiding unnecessary abstraction or 
-        repo-wide churn. Ensure changes are self-contained, tested, and documented as 
-        needed, with no reduction in test coverage and all CI checks passing.
+        repo-wide churn.
