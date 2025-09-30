@@ -1034,6 +1034,86 @@ export class DNA {
     };
   }
 
+  neuralReinforcementProfile() {
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const combat = this.geneFraction(GENE_LOCI.COMBAT);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const activity = this.geneFraction(GENE_LOCI.ACTIVITY);
+    const cohesion = this.geneFraction(GENE_LOCI.COHESION);
+
+    const movement = this.movementGenes();
+    const moveTotal = Math.max(
+      0.0001,
+      (movement?.wandering || 0) + (movement?.pursuit || 0) + (movement?.cautious || 0),
+    );
+    const interaction = this.interactionGenes();
+    const interactionTotal = Math.max(
+      0.0001,
+      (interaction?.avoid || 0) +
+        (interaction?.fight || 0) +
+        (interaction?.cooperate || 0),
+    );
+    const conflict = this.conflictFocus();
+    const conflictTotal = Math.max(
+      0.0001,
+      (conflict?.weak || 0) +
+        (conflict?.strong || 0) +
+        (conflict?.proximity || 0) +
+        (conflict?.attrition || 0),
+    );
+
+    return {
+      energyDeltaWeight: clamp(0.35 + 0.45 * efficiency + 0.2 * recovery, 0.1, 1.25),
+      cognitiveCostWeight: clamp(
+        0.25 + 0.4 * (1 - efficiency) + 0.15 * activity,
+        0.08,
+        1.15,
+      ),
+      fatigueReliefWeight: clamp(0.3 + 0.45 * recovery + 0.2 * parental, 0.1, 1.2),
+      restBoostWeight: clamp(0.25 + 0.35 * recovery + 0.25 * (1 - activity), 0.05, 1.1),
+      movementAlignmentWeight: clamp(0.2 + 0.4 * (1 - risk) + 0.3 * strategy, 0.05, 1),
+      interactionAlignmentWeight: clamp(
+        0.2 + 0.35 * cooperation + 0.3 * combat + 0.2 * risk,
+        0.05,
+        1.05,
+      ),
+      reproductionWeight: clamp(0.2 + 0.45 * fertility + 0.35 * parental, 0.05, 1.1),
+      targetingAlignmentWeight: clamp(
+        0.25 + 0.35 * strategy + 0.25 * combat,
+        0.05,
+        1.1,
+      ),
+      movementActions: {
+        rest: clamp((movement?.cautious || 0) / moveTotal, 0, 1),
+        pursue: clamp((movement?.pursuit || 0) / moveTotal, 0, 1),
+        avoid: clamp(
+          ((movement?.cautious || 0) + (interaction?.avoid || 0)) /
+            Math.max(0.0001, moveTotal + interactionTotal),
+          0,
+          1,
+        ),
+        cohere: clamp(0.2 + 0.6 * cohesion, 0, 1),
+        explore: clamp((movement?.wandering || 0) / moveTotal, 0, 1),
+      },
+      interactionActions: {
+        avoid: clamp((interaction?.avoid || 0) / interactionTotal, 0, 1),
+        fight: clamp((interaction?.fight || 0) / interactionTotal, 0, 1),
+        cooperate: clamp((interaction?.cooperate || 0) / interactionTotal, 0, 1),
+      },
+      targetingFocus: {
+        weak: clamp((conflict?.weak || 0) / conflictTotal, 0, 1),
+        strong: clamp((conflict?.strong || 0) / conflictTotal, 0, 1),
+        proximity: clamp((conflict?.proximity || 0) / conflictTotal, 0, 1),
+        attrition: clamp((conflict?.attrition || 0) / conflictTotal, 0, 1),
+      },
+    };
+  }
+
   // Energy cost characteristics for actions
   moveCost() {
     const movement = this.geneFraction(GENE_LOCI.MOVEMENT);

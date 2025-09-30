@@ -116,6 +116,10 @@ export default class Cell {
       typeof this.dna.neuralPlasticityProfile === "function"
         ? this.dna.neuralPlasticityProfile()
         : null;
+    this.neuralReinforcementProfile =
+      typeof this.dna.neuralReinforcementProfile === "function"
+        ? this.dna.neuralReinforcementProfile()
+        : null;
     this.fitnessScore = null;
     this.matePreferenceBias =
       typeof this.dna.mateSimilarityBias === "function"
@@ -579,6 +583,138 @@ export default class Cell {
     }
   }
 
+  #resolveDecisionReward(
+    decision,
+    {
+      energyBefore = this.energy,
+      energyAfter = this.energy,
+      maxTileEnergy = MAX_TILE_ENERGY,
+    } = {},
+  ) {
+    const profile = this.neuralReinforcementProfile;
+
+    if (!profile || !decision || typeof decision !== "object") return null;
+
+    const outcome = decision.outcome;
+
+    if (!outcome || typeof outcome !== "object") return null;
+
+    const capacity = Math.max(
+      1e-4,
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
+    );
+    const normalizedEnergyDelta = clamp(
+      ((Number.isFinite(energyAfter) ? energyAfter : 0) -
+        (Number.isFinite(energyBefore) ? energyBefore : 0)) /
+        capacity,
+      -1,
+      1,
+    );
+    const cognitiveCost = clamp(
+      Number.isFinite(decision.energyImpact?.cognitive)
+        ? decision.energyImpact.cognitive / capacity
+        : 0,
+      0,
+      2,
+    );
+    const fatigueBefore = decision.neuralFatigue?.before;
+    const fatigueAfter = decision.neuralFatigue?.after;
+    const fatigueDelta = clamp(
+      Number.isFinite(fatigueBefore) && Number.isFinite(fatigueAfter)
+        ? fatigueBefore - fatigueAfter
+        : 0,
+      -1,
+      1,
+    );
+
+    let reward =
+      normalizedEnergyDelta * (profile.energyDeltaWeight ?? 0) -
+      cognitiveCost * (profile.cognitiveCostWeight ?? 0) +
+      fatigueDelta * (profile.fatigueReliefWeight ?? 0);
+
+    const sensors = decision.sensors || {};
+    const group = decision.group;
+
+    if (group === "movement") {
+      const action = outcome.action;
+
+      if (action && profile.movementActions) {
+        const pref = profile.movementActions[action];
+
+        if (Number.isFinite(pref)) {
+          reward += (pref - 0.2) * (profile.movementAlignmentWeight ?? 0);
+        }
+      }
+
+      if (Number.isFinite(outcome.restBoost)) {
+        reward += outcome.restBoost * (profile.restBoostWeight ?? 0);
+      }
+    } else if (group === "interaction") {
+      const action = outcome.action;
+
+      if (action && profile.interactionActions) {
+        const pref = profile.interactionActions[action];
+
+        if (Number.isFinite(pref)) {
+          reward += (pref - 1 / 3) * (profile.interactionAlignmentWeight ?? 0);
+        }
+      }
+    } else if (group === "reproduction") {
+      const probability = clamp(outcome.probability ?? 0, 0, 1);
+      const baseProbability = clamp(
+        outcome.baseProbability ?? sensors.baseReproductionProbability ?? 0,
+        0,
+        1,
+      );
+
+      reward += (probability - baseProbability) * (profile.reproductionWeight ?? 0);
+    } else if (group === "targeting") {
+      const chosen = outcome.chosen;
+
+      if (chosen && profile.targetingFocus) {
+        const baseline = 0.25;
+        const ourEnergy = Number.isFinite(energyBefore)
+          ? energyBefore
+          : (this.energy ?? 0);
+        const enemyEnergy = Number.isFinite(chosen.energy) ? chosen.energy : ourEnergy;
+        const weakSignal = clamp((ourEnergy - enemyEnergy) / capacity, -1, 1);
+        const strongSignal = -weakSignal;
+        const proximitySignal =
+          chosen.distance != null && Number.isFinite(chosen.distance)
+            ? clamp(1 - Math.min(chosen.distance, 6) / 6, 0, 1) * 2 - 1
+            : 0;
+        const attritionSignal =
+          chosen.attrition != null && Number.isFinite(chosen.attrition)
+            ? clamp(chosen.attrition * 2 - 1, -1, 1)
+            : 0;
+        const alignment = profile.targetingAlignmentWeight ?? 0;
+
+        reward +=
+          (clamp(profile.targetingFocus.weak ?? baseline, 0, 1) - baseline) *
+          weakSignal *
+          alignment;
+        reward +=
+          (clamp(profile.targetingFocus.strong ?? baseline, 0, 1) - baseline) *
+          strongSignal *
+          alignment;
+        reward +=
+          (clamp(profile.targetingFocus.proximity ?? baseline, 0, 1) - baseline) *
+          proximitySignal *
+          alignment;
+        reward +=
+          (clamp(profile.targetingFocus.attrition ?? baseline, 0, 1) - baseline) *
+          attritionSignal *
+          alignment;
+      }
+    }
+
+    if (!Number.isFinite(reward)) return null;
+
+    return clamp(reward, -1.25, 1.25);
+  }
+
   #finalizeDecisionContexts({
     energyBefore = this.energy,
     energyAfter = this.energy,
@@ -687,6 +823,24 @@ export default class Cell {
             : null,
       };
     });
+
+    const rewardContext = {
+      energyBefore,
+      energyAfter,
+      maxTileEnergy,
+    };
+
+    for (let i = 0; i < decisions.length; i++) {
+      const decision = decisions[i];
+
+      if (!decision?.outcome || typeof decision.outcome !== "object") continue;
+
+      const rewardSignal = this.#resolveDecisionReward(decision, rewardContext);
+
+      if (Number.isFinite(rewardSignal)) {
+        decision.outcome.rewardSignal = clamp(rewardSignal, -1, 1);
+      }
+    }
 
     if (this.brain && typeof this.brain.applySensorFeedback === "function") {
       for (let i = 0; i < decisions.length; i++) {
