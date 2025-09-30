@@ -1693,6 +1693,7 @@ export default class GridManager {
     tileEnergyDelta = 0,
     baseProbability = 1,
     floor = 0,
+    diversityPressure = 0,
   } = {}) {
     const sliderFloor = clamp(Number.isFinite(floor) ? floor : 0, 0, 1);
 
@@ -1728,6 +1729,11 @@ export default class GridManager {
     );
     const kinComfort = clamp(0.5 + 0.5 * kinPreference, 0, 1);
 
+    const pressure = clamp(
+      Number.isFinite(diversityPressure) ? diversityPressure : 0,
+      0,
+      1,
+    );
     let severity =
       closeness * 0.35 +
       closeness * combinedDrive * (0.4 + 0.2 * probabilitySlack) +
@@ -1735,6 +1741,7 @@ export default class GridManager {
       closeness * probabilitySlack * 0.1;
 
     severity *= clamp(1 - kinComfort * 0.45, 0.3, 1);
+    severity *= 1 + pressure * 0.75;
     severity = clamp(severity, 0, 1);
 
     return clamp(1 - severity, sliderFloor, 1);
@@ -1778,13 +1785,13 @@ export default class GridManager {
       typeof this.matingDiversityThreshold === "number"
         ? this.matingDiversityThreshold
         : 0;
-    const diversityPressure = clamp(
+    const diversityPressureSource =
       typeof stats?.getDiversityPressure === "function"
         ? stats.getDiversityPressure()
-        : 0,
-      0,
-      1,
-    );
+        : Number.isFinite(stats?.diversityPressure)
+          ? stats.diversityPressure
+          : 0;
+    const diversityPressure = clamp(diversityPressureSource, 0, 1);
     const penaltyFloor =
       typeof this.lowDiversityReproMultiplier === "number"
         ? clamp(this.lowDiversityReproMultiplier, 0, 1)
@@ -1845,6 +1852,7 @@ export default class GridManager {
         tileEnergyDelta,
         baseProbability: effectiveReproProb,
         floor: penaltyFloor,
+        diversityPressure,
       });
 
       if (penaltyMultiplier <= 0) {
@@ -1860,7 +1868,8 @@ export default class GridManager {
       );
 
       if (normalizedExcess > 0) {
-        const bonus = 1 + normalizedExcess * diversityPressure * 0.3;
+        const bonusScale = 0.3 + diversityPressure * 0.3;
+        const bonus = 1 + normalizedExcess * bonusScale;
 
         effectiveReproProb = clamp(effectiveReproProb * bonus, 0, 1);
       }
