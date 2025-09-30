@@ -32,7 +32,7 @@ This document captures how the Colourful Life simulation composes its core syste
 
 - **EventManager** spawns periodic floods, droughts, heatwaves, and coldwaves. Events carry strength, duration, and a rectangular affected area.
 - **eventEffects** maps event types to regeneration/drain modifiers and per-cell effects (energy loss, resistance genes).
-- Overlay rendering uses `EventManager.getEventColor` to shade the canvas and exposes `activeEvents` for analytics.
+- Overlay rendering uses `EventManager.getColor` to shade the canvas and exposes `activeEvents` for analytics.
 
 ### Genetics and Brains
 
