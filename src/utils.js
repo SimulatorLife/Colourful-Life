@@ -70,11 +70,15 @@ export function cloneTracePayload(trace) {
   if (!trace) return null;
 
   return {
-    sensors: Array.isArray(trace.sensors) ? trace.sensors.map((entry) => ({ ...entry })) : [],
+    sensors: Array.isArray(trace.sensors)
+      ? trace.sensors.map((entry) => ({ ...entry }))
+      : [],
     nodes: Array.isArray(trace.nodes)
       ? trace.nodes.map((entry) => ({
           ...entry,
-          inputs: Array.isArray(entry.inputs) ? entry.inputs.map((input) => ({ ...input })) : [],
+          inputs: Array.isArray(entry.inputs)
+            ? entry.inputs.map((input) => ({ ...input }))
+            : [],
         }))
       : [],
   };
@@ -91,7 +95,7 @@ export function cloneTracePayload(trace) {
  */
 export function createRankedBuffer(limit, compare) {
   const maxSize = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
-  const comparator = typeof compare === 'function' ? compare : () => 0;
+  const comparator = typeof compare === "function" ? compare : () => 0;
   const buffer = [];
 
   return {
@@ -165,14 +169,15 @@ const warnedMessages = new Set();
  * @param {Error} [error] - Optional error object for context.
  */
 export function warnOnce(message, error) {
-  if (typeof message !== 'string' || message.length === 0) return;
+  if (typeof message !== "string" || message.length === 0) return;
 
-  const descriptor = `${message}::$${error?.name ?? ''}::$${error?.message ?? ''}`;
+  // Compose a stable key so repeated warnings collapse regardless of object identity.
+  const warningKey = `${message}::$${error?.name ?? ""}::$${error?.message ?? ""}`;
 
-  if (warnedMessages.has(descriptor)) return;
-  warnedMessages.add(descriptor);
+  if (warnedMessages.has(warningKey)) return;
+  warnedMessages.add(warningKey);
 
-  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+  if (typeof console !== "undefined" && typeof console.warn === "function") {
     if (error) {
       console.warn(message, error);
     } else {
