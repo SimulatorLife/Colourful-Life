@@ -34,6 +34,7 @@ function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }
  * @param {number} [options.eventStrengthMultiplier=1] - Global multiplier applied to each event strength.
  * @param {Function} options.isEventAffecting - Predicate that determines if an event affects the tile.
  * @param {Function} options.getEventEffect - Retrieves the effect configuration for an event type.
+ * @param {Map} [options.effectCache] - Optional cache reused across invocations to avoid repeated effect lookups.
  * @returns {{regenMultiplier:number, regenAdd:number, drainAdd:number, appliedEvents:Array}}
  */
 export function accumulateEventModifiers({
@@ -43,6 +44,7 @@ export function accumulateEventModifiers({
   eventStrengthMultiplier = 1,
   isEventAffecting,
   getEventEffect,
+  effectCache: providedEffectCache,
 }) {
   let regenMultiplier = 1;
   let regenAdd = 0;
@@ -62,8 +64,16 @@ export function accumulateEventModifiers({
   const resolveEffect = typeof getEventEffect === "function" ? getEventEffect : null;
   // Cache event effect lookups so tiles affected by the same event type do not
   // repeatedly resolve identical configuration objects during tight update
-  // loops.
-  const effectCache = resolveEffect ? new Map() : null;
+  // loops. When a cache is provided, reuse it across invocations to avoid
+  // repeatedly allocating identical maps.
+  const effectCache =
+    resolveEffect &&
+    providedEffectCache &&
+    typeof providedEffectCache.get === "function"
+      ? providedEffectCache
+      : resolveEffect
+        ? new Map()
+        : null;
   const strengthMultiplier = Number(eventStrengthMultiplier || 1);
 
   for (const ev of events) {
@@ -80,7 +90,7 @@ export function accumulateEventModifiers({
           effect = effectCache.get(type);
         } else {
           effect = resolveEffect(type);
-          effectCache.set(type, effect);
+          effectCache.set(type, effect ?? null);
         }
       } else {
         effect = resolveEffect(type);
@@ -143,6 +153,7 @@ export function accumulateEventModifiers({
  * @param {number} [options.config.eventStrengthMultiplier=1] - Global event strength multiplier.
  * @param {Function} options.config.isEventAffecting - Predicate to determine if an event affects the tile.
  * @param {Function} options.config.getEventEffect - Retrieves effect configuration for an event.
+ * @param {Map} [options.config.effectCache] - Cache reused across tiles for resolved event effects.
  * @returns {{nextEnergy:number, drain:number, appliedEvents:Array}}
  */
 export function computeTileEnergyUpdate({
@@ -165,6 +176,7 @@ export function computeTileEnergyUpdate({
     eventStrengthMultiplier = 1,
     isEventAffecting,
     getEventEffect,
+    effectCache,
   } = config || {};
 
   if (!Number.isFinite(maxTileEnergy)) {
@@ -184,6 +196,7 @@ export function computeTileEnergyUpdate({
     eventStrengthMultiplier,
     isEventAffecting,
     getEventEffect,
+    effectCache,
   });
 
   regen *= modifiers.regenMultiplier;
