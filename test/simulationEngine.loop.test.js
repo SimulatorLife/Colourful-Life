@@ -1,13 +1,13 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
 import {
   MockCanvas,
   loadSimulationModules,
   patchSimulationPrototypes,
-} from './helpers/simulationEngine.js';
+} from "./helpers/simulationEngine.js";
 
-test('start schedules a frame and ticking through RAF uses sanitized defaults', async () => {
+test("start schedules a frame and ticking through RAF uses sanitized defaults", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
   const { restore, calls, snapshot } = patchSimulationPrototypes(modules);
@@ -29,18 +29,18 @@ test('start schedules a frame and ticking through RAF uses sanitized defaults', 
       cancelAnimationFrame: () => {},
     });
 
-    assert.is(rafCallback, null, 'no frame scheduled before start');
+    assert.is(rafCallback, null, "no frame scheduled before start");
 
     engine.start();
 
-    assert.type(rafCallback, 'function', 'start schedules the next frame');
+    assert.type(rafCallback, "function", "start schedules the next frame");
 
     const updateCallsBefore = calls.grid.update.length;
 
     rafCallback(1000);
     assert.ok(
       calls.grid.update.length > updateCallsBefore,
-      'grid.update invoked after RAF callback'
+      "grid.update invoked after RAF callback",
     );
 
     const updateArgs = calls.grid.update.at(-1)[0];
@@ -58,12 +58,12 @@ test('start schedules a frame and ticking through RAF uses sanitized defaults', 
       combatEdgeSharpness: 3.2,
     });
 
-    assert.is(engine.lastSnapshot, snapshot, 'snapshot from update stored on engine');
-    assert.ok(calls.stats.resetTick.length > 0, 'stats.resetTick invoked during tick');
+    assert.is(engine.lastSnapshot, snapshot, "snapshot from update stored on engine");
+    assert.ok(calls.stats.resetTick.length > 0, "stats.resetTick invoked during tick");
 
     const manualTickResult = engine.tick(2000);
 
-    assert.ok(manualTickResult, 'manual tick returns true when interval satisfied');
+    assert.ok(manualTickResult, "manual tick returns true when interval satisfied");
 
     engine.stop();
   } finally {
@@ -71,7 +71,7 @@ test('start schedules a frame and ticking through RAF uses sanitized defaults', 
   }
 });
 
-test('tick emits events and clears pending slow UI updates after throttle interval', async () => {
+test("tick emits events and clears pending slow UI updates after throttle interval", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
   const { restore, snapshot, metrics } = patchSimulationPrototypes(modules);
@@ -90,24 +90,28 @@ test('tick emits events and clears pending slow UI updates after throttle interv
     const metricsEvents = [];
     const leaderboardEvents = [];
 
-    engine.on('tick', (payload) => tickEvents.push(payload));
-    engine.on('metrics', (payload) => metricsEvents.push(payload));
-    engine.on('leaderboard', (payload) => leaderboardEvents.push(payload));
+    engine.on("tick", (payload) => tickEvents.push(payload));
+    engine.on("metrics", (payload) => metricsEvents.push(payload));
+    engine.on("leaderboard", (payload) => leaderboardEvents.push(payload));
 
     now = 1000;
     const result = engine.tick(now);
 
-    assert.ok(result, 'tick returns true when enough time has elapsed');
-    assert.is(tickEvents.length, 1, 'tick event emitted once');
-    assert.is(tickEvents[0].snapshot, snapshot, 'tick event includes snapshot');
-    assert.is(tickEvents[0].metrics, metrics, 'tick event includes metrics');
-    assert.is(tickEvents[0].timestamp, now, 'tick event includes timestamp');
+    assert.ok(result, "tick returns true when enough time has elapsed");
+    assert.is(tickEvents.length, 1, "tick event emitted once");
+    assert.is(tickEvents[0].snapshot, snapshot, "tick event includes snapshot");
+    assert.is(tickEvents[0].metrics, metrics, "tick event includes metrics");
+    assert.is(tickEvents[0].timestamp, now, "tick event includes timestamp");
 
-    assert.is(metricsEvents.length, 1, 'metrics event emitted once');
-    assert.is(metricsEvents[0].metrics, metrics, 'metrics event payload matches');
-    assert.is(metricsEvents[0].stats, engine.stats, 'metrics event returns stats instance');
+    assert.is(metricsEvents.length, 1, "metrics event emitted once");
+    assert.is(metricsEvents[0].metrics, metrics, "metrics event payload matches");
+    assert.is(
+      metricsEvents[0].stats,
+      engine.stats,
+      "metrics event returns stats instance",
+    );
 
-    assert.is(leaderboardEvents.length, 1, 'leaderboard event emitted once');
+    assert.is(leaderboardEvents.length, 1, "leaderboard event emitted once");
     assert.equal(leaderboardEvents[0].entries, [
       {
         fitness: 1,
@@ -115,17 +119,21 @@ test('tick emits events and clears pending slow UI updates after throttle interv
         offspring: 3,
         fightsWon: 4,
         age: 5,
-        color: '#123456',
+        color: "#123456",
       },
     ]);
 
-    assert.is(engine.pendingSlowUiUpdate, false, 'pendingSlowUiUpdate cleared after emissions');
+    assert.is(
+      engine.pendingSlowUiUpdate,
+      false,
+      "pendingSlowUiUpdate cleared after emissions",
+    );
   } finally {
     restore();
   }
 });
 
-test('updateSetting speedMultiplier and setLingerPenalty propagate changes', async () => {
+test("updateSetting speedMultiplier and setLingerPenalty propagate changes", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
   const { restore, calls } = patchSimulationPrototypes(modules);
@@ -139,27 +147,42 @@ test('updateSetting speedMultiplier and setLingerPenalty propagate changes', asy
       cancelAnimationFrame: () => {},
     });
 
-    engine.updateSetting('speedMultiplier', 2);
-    assert.is(engine.state.updatesPerSecond, 120, 'speedMultiplier adjusts updatesPerSecond');
-    assert.ok(engine.pendingSlowUiUpdate, 'speedMultiplier marks pendingSlowUiUpdate');
+    engine.updateSetting("speedMultiplier", 2);
+    assert.is(
+      engine.state.updatesPerSecond,
+      120,
+      "speedMultiplier adjusts updatesPerSecond",
+    );
+    assert.ok(engine.pendingSlowUiUpdate, "speedMultiplier marks pendingSlowUiUpdate");
 
     const stateEvents = [];
 
-    engine.on('state', (payload) => stateEvents.push(payload));
+    engine.on("state", (payload) => stateEvents.push(payload));
 
     engine.setLingerPenalty(3.5);
 
     const lingerCalls = calls.grid.setLingerPenalty;
 
-    assert.ok(lingerCalls.length >= 2, 'setLingerPenalty called at least twice (initial + manual)');
-    assert.equal(lingerCalls.at(-1), [3.5], 'grid receives sanitized linger penalty');
+    assert.ok(
+      lingerCalls.length >= 2,
+      "setLingerPenalty called at least twice (initial + manual)",
+    );
+    assert.equal(lingerCalls.at(-1), [3.5], "grid receives sanitized linger penalty");
 
-    assert.ok(stateEvents.length >= 1, 'state event emitted');
+    assert.ok(stateEvents.length >= 1, "state event emitted");
     const lastEvent = stateEvents.at(-1);
 
-    assert.is(lastEvent.changes.lingerPenalty, 3.5, 'state change includes lingerPenalty');
-    assert.is(lastEvent.state.lingerPenalty, 3.5, 'state snapshot reflects lingerPenalty');
-    assert.is(engine.lingerPenalty, 3.5, 'engine stores new lingerPenalty');
+    assert.is(
+      lastEvent.changes.lingerPenalty,
+      3.5,
+      "state change includes lingerPenalty",
+    );
+    assert.is(
+      lastEvent.state.lingerPenalty,
+      3.5,
+      "state snapshot reflects lingerPenalty",
+    );
+    assert.is(engine.lingerPenalty, 3.5, "engine stores new lingerPenalty");
   } finally {
     restore();
   }

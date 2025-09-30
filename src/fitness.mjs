@@ -13,7 +13,8 @@ import { MAX_TILE_ENERGY } from "./config.js";
  * @returns {number} Fitness score used by the leaderboard.
  */
 export function computeFitness(cell, maxTileEnergy) {
-  const gridManager = typeof globalThis !== 'undefined' ? globalThis.GridManager : undefined;
+  const gridManager =
+    typeof globalThis !== "undefined" ? globalThis.GridManager : undefined;
   const maxEnergy =
     maxTileEnergy ??
     (gridManager && gridManager.maxTileEnergy != null

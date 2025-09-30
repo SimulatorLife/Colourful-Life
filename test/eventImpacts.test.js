@@ -1,13 +1,13 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
-import { approxEqual } from './helpers/assertions.js';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
+import { approxEqual } from "./helpers/assertions.js";
 
-if (typeof globalThis.window === 'undefined') {
+if (typeof globalThis.window === "undefined") {
   globalThis.window = {};
 }
 
-test('GridManager.regenerateEnergyGrid applies event effect modifiers', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
+test("GridManager.regenerateEnergyGrid applies event effect modifiers", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -23,9 +23,13 @@ test('GridManager.regenerateEnergyGrid applies event effect modifiers', async ()
 
   floodManager.energyGrid = [[1]];
   floodManager.energyNext = [[0]];
-  floodManager.regenerateEnergyGrid([{ eventType: 'flood', strength: 1, affectedArea }], 1, 1, 0, [
-    [0],
-  ]);
+  floodManager.regenerateEnergyGrid(
+    [{ eventType: "flood", strength: 1, affectedArea }],
+    1,
+    1,
+    0,
+    [[0]],
+  );
 
   approxEqual(floodManager.energyGrid[0][0], 2.05);
 
@@ -38,21 +42,21 @@ test('GridManager.regenerateEnergyGrid applies event effect modifiers', async ()
   droughtManager.energyGrid = [[1]];
   droughtManager.energyNext = [[0]];
   droughtManager.regenerateEnergyGrid(
-    [{ eventType: 'drought', strength: 1, affectedArea }],
+    [{ eventType: "drought", strength: 1, affectedArea }],
     1,
     1,
     0,
-    [[0]]
+    [[0]],
   );
 
   approxEqual(droughtManager.energyGrid[0][0], 1.14);
 });
 
-test('Cell.applyEventEffects uses event mapping and DNA resistance', async () => {
-  const { default: Cell } = await import('../src/cell.js');
+test("Cell.applyEventEffects uses event mapping and DNA resistance", async () => {
+  const { default: Cell } = await import("../src/cell.js");
 
   const event = {
-    eventType: 'heatwave',
+    eventType: "heatwave",
     strength: 1,
     affectedArea: { x: 0, y: 0, width: 2, height: 2 },
   };

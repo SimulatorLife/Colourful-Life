@@ -1,14 +1,14 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
-import GridInteractionAdapter from '../src/grid/gridAdapter.js';
+import GridInteractionAdapter from "../src/grid/gridAdapter.js";
 
 const createGrid = (rows, cols) =>
   Array.from({ length: rows }, () => Array.from({ length: cols }, () => null));
 
 const createCell = (row, col, energy = 0) => ({ row, col, energy });
 
-test('getCell and setCell fall back to grid mutation when manager lacks methods', () => {
+test("getCell and setCell fall back to grid mutation when manager lacks methods", () => {
   const grid = createGrid(2, 2);
   const adapter = new GridInteractionAdapter({ gridManager: { grid } });
   const cell = createCell(0, 0, 3);
@@ -21,7 +21,7 @@ test('getCell and setCell fall back to grid mutation when manager lacks methods'
   assert.is(cell.col, 0);
 });
 
-test('setCell with null delegates to removeCell', () => {
+test("setCell with null delegates to removeCell", () => {
   const grid = createGrid(1, 1);
   const adapter = new GridInteractionAdapter({ gridManager: { grid } });
   const cell = createCell(0, 0, 2);
@@ -33,7 +33,7 @@ test('setCell with null delegates to removeCell', () => {
   assert.is(adapter.getCell(0, 0), null);
 });
 
-test('removeCell returns the existing occupant when no manager hook exists', () => {
+test("removeCell returns the existing occupant when no manager hook exists", () => {
   const grid = createGrid(1, 2);
   const adapter = new GridInteractionAdapter({ gridManager: { grid } });
   const cell = createCell(0, 1, 4);
@@ -46,7 +46,7 @@ test('removeCell returns the existing occupant when no manager hook exists', () 
   assert.is(adapter.getCell(0, 1), null);
 });
 
-test('relocateCell moves occupants only when destination empty', () => {
+test("relocateCell moves occupants only when destination empty", () => {
   const grid = createGrid(2, 2);
   const adapter = new GridInteractionAdapter({ gridManager: { grid } });
   const mover = createCell(0, 0, 5);
@@ -54,13 +54,13 @@ test('relocateCell moves occupants only when destination empty', () => {
   adapter.setCell(0, 0, mover);
   adapter.setCell(1, 1, createCell(1, 1));
 
-  assert.is(adapter.relocateCell(0, 0, 1, 1), false, 'destination occupied');
-  assert.is(adapter.relocateCell(0, 0, 1, 0), true, 'destination open');
+  assert.is(adapter.relocateCell(0, 0, 1, 1), false, "destination occupied");
+  assert.is(adapter.relocateCell(0, 0, 1, 0), true, "destination open");
   assert.is(adapter.getCell(1, 0), mover);
   assert.is(adapter.getCell(0, 0), null);
 });
 
-test('consumeTileEnergy defers to manager consumeEnergy when available', () => {
+test("consumeTileEnergy defers to manager consumeEnergy when available", () => {
   const calls = [];
   const manager = {
     consumeEnergy(cell, row, col, densityGrid, densityEffectMultiplier) {
@@ -90,7 +90,7 @@ test('consumeTileEnergy defers to manager consumeEnergy when available', () => {
   ]);
 });
 
-test('transferEnergy respects donor availability and recipient capacity', () => {
+test("transferEnergy respects donor availability and recipient capacity", () => {
   const adapter = new GridInteractionAdapter({
     gridManager: { maxTileEnergy: 10 },
   });
@@ -99,12 +99,12 @@ test('transferEnergy respects donor availability and recipient capacity', () => 
 
   const transferred = adapter.transferEnergy({ from: donor, to: recipient, amount: 6 });
 
-  assert.is(transferred, 3, 'recipient can only accept remaining capacity');
+  assert.is(transferred, 3, "recipient can only accept remaining capacity");
   assert.is(donor.energy, 5);
   assert.is(recipient.energy, 10);
 });
 
-test('transferEnergy handles missing recipient and clamps to donor energy', () => {
+test("transferEnergy handles missing recipient and clamps to donor energy", () => {
   const adapter = new GridInteractionAdapter({
     gridManager: { maxTileEnergy: 6 },
   });
@@ -116,7 +116,7 @@ test('transferEnergy handles missing recipient and clamps to donor energy', () =
   assert.is(donor.energy, 0);
 });
 
-test('maxTileEnergy falls back to global GridManager constant when available', () => {
+test("maxTileEnergy falls back to global GridManager constant when available", () => {
   globalThis.GridManager = { maxTileEnergy: 42 };
   const adapter = new GridInteractionAdapter({ gridManager: {} });
 
@@ -124,7 +124,7 @@ test('maxTileEnergy falls back to global GridManager constant when available', (
   delete globalThis.GridManager;
 });
 
-test('densityAt prefers provided density grid over manager helper', () => {
+test("densityAt prefers provided density grid over manager helper", () => {
   const manager = {
     getDensityAt(row, col) {
       return row === 0 && col === 0 ? 0.9 : 0.1;
@@ -137,8 +137,12 @@ test('densityAt prefers provided density grid over manager helper', () => {
     [0.2, 0.1],
   ];
 
-  assert.is(adapter.densityAt(0, 0, { densityGrid }), 0.5, 'inline density grid wins');
-  assert.is(adapter.densityAt(1, 1, { densityGrid: null }), 0.1, 'manager fallback used');
+  assert.is(adapter.densityAt(0, 0, { densityGrid }), 0.5, "inline density grid wins");
+  assert.is(
+    adapter.densityAt(1, 1, { densityGrid: null }),
+    0.1,
+    "manager fallback used",
+  );
 });
 
 test.run();

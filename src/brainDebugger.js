@@ -7,7 +7,7 @@ function cloneSnapshotList(list) {
 }
 
 function publishToWindow(list) {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     window.__colourfulLifeBrains = cloneSnapshotList(list);
   }
 }
@@ -40,19 +40,24 @@ const BrainDebugger = {
       const cell = entry?.cell;
       const brain = cell?.brain;
 
-      if (!brain || typeof brain.snapshot !== 'function') continue;
+      if (!brain || typeof brain.snapshot !== "function") continue;
       const detail = brain.snapshot();
       const telemetry =
-        typeof cell?.getDecisionTelemetry === 'function' ? cell.getDecisionTelemetry(3) : [];
+        typeof cell?.getDecisionTelemetry === "function"
+          ? cell.getDecisionTelemetry(3)
+          : [];
 
-      const reportedNeuronCount = Number.isFinite(brain?.neuronCount) ? brain.neuronCount : 0;
+      const reportedNeuronCount = Number.isFinite(brain?.neuronCount)
+        ? brain.neuronCount
+        : 0;
       const fallbackNeuronCount =
         Number.isFinite(cell?.neurons) && cell.neurons > 0
           ? cell.neurons
-          : typeof cell?.dna?.neurons === 'function'
+          : typeof cell?.dna?.neurons === "function"
             ? Number(cell.dna.neurons())
             : 0;
-      const neuronCount = reportedNeuronCount > 0 ? reportedNeuronCount : fallbackNeuronCount;
+      const neuronCount =
+        reportedNeuronCount > 0 ? reportedNeuronCount : fallbackNeuronCount;
       const reportedConnectionCount = Number.isFinite(brain?.connectionCount)
         ? brain.connectionCount
         : 0;
@@ -60,7 +65,10 @@ const BrainDebugger = {
         ? detail.connections.length
         : 0;
 
-      if (fallbackConnectionCount <= 0 && typeof cell?.dna?.neuralGenes === 'function') {
+      if (
+        fallbackConnectionCount <= 0 &&
+        typeof cell?.dna?.neuralGenes === "function"
+      ) {
         const genes = cell.dna.neuralGenes();
 
         if (Array.isArray(genes) && genes.length > 0) {

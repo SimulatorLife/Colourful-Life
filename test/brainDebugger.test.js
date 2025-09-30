@@ -1,9 +1,9 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
-test('captureFromEntries falls back to cell neuron count when brain reports zero', async () => {
-  const { default: BrainDebugger } = await import('../src/brainDebugger.js');
-  const telemetry = ['decision'];
+test("captureFromEntries falls back to cell neuron count when brain reports zero", async () => {
+  const { default: BrainDebugger } = await import("../src/brainDebugger.js");
+  const telemetry = ["decision"];
   const snapshots = BrainDebugger.captureFromEntries(
     [
       {
@@ -11,13 +11,13 @@ test('captureFromEntries falls back to cell neuron count when brain reports zero
         col: 2,
         fitness: 42,
         cell: {
-          color: '#abc',
+          color: "#abc",
           neurons: 7,
           brain: {
             neuronCount: 0,
             connectionCount: 3,
             snapshot() {
-              return { foo: 'bar' };
+              return { foo: "bar" };
             },
           },
           getDecisionTelemetry() {
@@ -26,7 +26,7 @@ test('captureFromEntries falls back to cell neuron count when brain reports zero
         },
       },
     ],
-    { limit: 1 }
+    { limit: 1 },
   );
 
   assert.is(snapshots.length, 1);
@@ -36,8 +36,8 @@ test('captureFromEntries falls back to cell neuron count when brain reports zero
   BrainDebugger.update([]);
 });
 
-test('captureFromEntries falls back to DNA connection count when brain reports zero', async () => {
-  const { default: BrainDebugger } = await import('../src/brainDebugger.js');
+test("captureFromEntries falls back to DNA connection count when brain reports zero", async () => {
+  const { default: BrainDebugger } = await import("../src/brainDebugger.js");
   const genes = [{ enabled: true }, { enabled: false }, { enabled: true }];
   const snapshots = BrainDebugger.captureFromEntries(
     [
@@ -46,7 +46,7 @@ test('captureFromEntries falls back to DNA connection count when brain reports z
         col: 4,
         fitness: 99,
         cell: {
-          color: '#def',
+          color: "#def",
           dna: {
             neuralGenes() {
               return genes;
@@ -62,7 +62,7 @@ test('captureFromEntries falls back to DNA connection count when brain reports z
         },
       },
     ],
-    { limit: 1 }
+    { limit: 1 },
   );
 
   assert.is(snapshots.length, 1);

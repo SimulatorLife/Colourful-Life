@@ -27,7 +27,7 @@ export class MockCanvas {
   }
 
   getContext(type) {
-    if (type !== '2d') return null;
+    if (type !== "2d") return null;
 
     return this._context;
   }
@@ -35,10 +35,10 @@ export class MockCanvas {
 
 export async function loadSimulationModules() {
   const [simulationModule, gridModule, statsModule, eventModule] = await Promise.all([
-    import('../../src/simulationEngine.js'),
-    import('../../src/gridManager.js'),
-    import('../../src/stats.js'),
-    import('../../src/eventManager.js'),
+    import("../../src/simulationEngine.js"),
+    import("../../src/gridManager.js"),
+    import("../../src/stats.js"),
+    import("../../src/eventManager.js"),
   ]);
 
   return {
@@ -62,7 +62,7 @@ export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) 
           offspring: 3,
           fightsWon: 4,
           age: 5,
-          color: '#123456',
+          color: "#123456",
         },
       },
     ],
@@ -70,7 +70,7 @@ export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) 
   };
   const metrics = { averageEnergy: 0.5 };
   const fixedEventTemplate = {
-    eventType: 'flood',
+    eventType: "flood",
     duration: 10,
     remaining: 10,
     strength: 0.75,
@@ -78,17 +78,22 @@ export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) 
   };
 
   const gridMethods = [
-    'init',
-    'recalculateDensityCounts',
-    'rebuildActiveCells',
-    'update',
-    'draw',
-    'getLastSnapshot',
-    'setLingerPenalty',
-    'setMatingDiversityOptions',
-    'setBrainSnapshotCollector',
+    "init",
+    "recalculateDensityCounts",
+    "rebuildActiveCells",
+    "update",
+    "draw",
+    "getLastSnapshot",
+    "setLingerPenalty",
+    "setMatingDiversityOptions",
+    "setBrainSnapshotCollector",
   ];
-  const statsMethods = ['resetTick', 'logEvent', 'updateFromSnapshot', 'setMutationMultiplier'];
+  const statsMethods = [
+    "resetTick",
+    "logEvent",
+    "updateFromSnapshot",
+    "setMutationMultiplier",
+  ];
 
   const originals = {
     grid: {},
@@ -106,11 +111,11 @@ export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) 
     GridManager.prototype[name] = function stubbedGridMethod(...args) {
       calls.grid[name].push(args);
 
-      if (name === 'update') {
+      if (name === "update") {
         return snapshot;
       }
 
-      if (name === 'getLastSnapshot') {
+      if (name === "getLastSnapshot") {
         return snapshot;
       }
     };
@@ -121,7 +126,7 @@ export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) 
     Stats.prototype[name] = function stubbedStatsMethod(...args) {
       calls.stats[name].push(args);
 
-      if (name === 'updateFromSnapshot') {
+      if (name === "updateFromSnapshot") {
         return metrics;
       }
 
@@ -129,7 +134,9 @@ export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) 
     };
   });
 
-  EventManager.prototype.generateRandomEvent = function stubbedGenerateRandomEvent(...args) {
+  EventManager.prototype.generateRandomEvent = function stubbedGenerateRandomEvent(
+    ...args
+  ) {
     calls.events.generateRandomEvent.push(args);
 
     return {

@@ -1,8 +1,8 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
-const gridManagerModulePromise = import('../src/gridManager.js');
-const leaderboardModulePromise = import('../src/leaderboard.js');
+const gridManagerModulePromise = import("../src/gridManager.js");
+const leaderboardModulePromise = import("../src/leaderboard.js");
 
 function createStubCell(data) {
   return {
@@ -10,12 +10,12 @@ function createStubCell(data) {
     fightsLost: 0,
     offspring: 0,
     lifespan: 10,
-    color: '#000',
+    color: "#000",
     ...data,
   };
 }
 
-test('buildSnapshot aggregates living cells for downstream consumers', async () => {
+test("buildSnapshot aggregates living cells for downstream consumers", async () => {
   const { default: GridManager } = await gridManagerModulePromise;
   const { computeLeaderboard } = await leaderboardModulePromise;
   const originalInit = GridManager.prototype.init;
@@ -30,8 +30,17 @@ test('buildSnapshot aggregates living cells for downstream consumers', async () 
     });
 
     gm.grid = [
-      [createStubCell({ energy: 4, age: 2, fightsWon: 1, offspring: 1, color: '#111' }), null],
-      [null, createStubCell({ energy: 2, age: 5, fightsLost: 1, color: '#222' })],
+      [
+        createStubCell({
+          energy: 4,
+          age: 2,
+          fightsWon: 1,
+          offspring: 1,
+          color: "#111",
+        }),
+        null,
+      ],
+      [null, createStubCell({ energy: 2, age: 5, fightsLost: 1, color: "#222" })],
     ];
     gm.rebuildActiveCells();
 
@@ -43,7 +52,10 @@ test('buildSnapshot aggregates living cells for downstream consumers', async () 
     assert.is(snapshot.cells.length, 2);
     assert.is(snapshot.entries.length, 2);
     assert.ok(snapshot.maxFitness > 0);
-    assert.equal(snapshot.entries.map(({ row, col }) => `${row},${col}`).sort(), ['0,0', '1,1']);
+    assert.equal(snapshot.entries.map(({ row, col }) => `${row},${col}`).sort(), [
+      "0,0",
+      "1,1",
+    ]);
 
     const leaderboard = computeLeaderboard(snapshot, 2);
 
@@ -54,7 +66,7 @@ test('buildSnapshot aggregates living cells for downstream consumers', async () 
   }
 });
 
-test('buildSnapshot feeds sorted top entries to the brain snapshot collector', async () => {
+test("buildSnapshot feeds sorted top entries to the brain snapshot collector", async () => {
   const { default: GridManager } = await gridManagerModulePromise;
   const originalInit = GridManager.prototype.init;
 
@@ -63,7 +75,9 @@ test('buildSnapshot feeds sorted top entries to the brain snapshot collector', a
     let captureOptions = null;
 
     const collector = (entries, options) => {
-      capturedEntries = Array.isArray(entries) ? entries.map((entry) => ({ ...entry })) : entries;
+      capturedEntries = Array.isArray(entries)
+        ? entries.map((entry) => ({ ...entry }))
+        : entries;
       captureOptions = options;
 
       return [];
@@ -122,7 +136,7 @@ test('buildSnapshot feeds sorted top entries to the brain snapshot collector', a
   }
 });
 
-test('computeLeaderboard returns top entries in descending fitness order', async () => {
+test("computeLeaderboard returns top entries in descending fitness order", async () => {
   const { computeLeaderboard } = await leaderboardModulePromise;
 
   const snapshot = {
@@ -135,7 +149,7 @@ test('computeLeaderboard returns top entries in descending fitness order', async
           offspring: 5,
           fightsWon: 3,
           age: 7,
-          color: '#aa0',
+          color: "#aa0",
         }),
       },
       {
@@ -146,7 +160,7 @@ test('computeLeaderboard returns top entries in descending fitness order', async
           offspring: 4,
           fightsWon: 1,
           age: 6,
-          color: '#bb1',
+          color: "#bb1",
         }),
       },
       {
@@ -157,7 +171,7 @@ test('computeLeaderboard returns top entries in descending fitness order', async
           offspring: 2,
           fightsWon: 4,
           age: 4,
-          color: '#cc2',
+          color: "#cc2",
         }),
       },
       {
@@ -167,7 +181,7 @@ test('computeLeaderboard returns top entries in descending fitness order', async
           offspring: 6,
           fightsWon: 5,
           age: 8,
-          color: '#dd3',
+          color: "#dd3",
         }),
       },
       {
@@ -176,7 +190,7 @@ test('computeLeaderboard returns top entries in descending fitness order', async
           offspring: 1,
           fightsWon: 0,
           age: 5,
-          color: '#ee4',
+          color: "#ee4",
         }),
       },
       {
@@ -185,7 +199,7 @@ test('computeLeaderboard returns top entries in descending fitness order', async
           offspring: 0,
           fightsWon: 0,
           age: 3,
-          color: '#ff5',
+          color: "#ff5",
         }),
       },
     ],
@@ -196,7 +210,7 @@ test('computeLeaderboard returns top entries in descending fitness order', async
   assert.is(leaderboard.length, 3);
   assert.equal(
     leaderboard.map(({ color }) => color),
-    ['#dd3', '#aa0', '#cc2']
+    ["#dd3", "#aa0", "#cc2"],
   );
   assert.equal(leaderboard[0], {
     fitness: 9,
@@ -204,7 +218,7 @@ test('computeLeaderboard returns top entries in descending fitness order', async
     offspring: 6,
     fightsWon: 5,
     age: 8,
-    color: '#dd3',
+    color: "#dd3",
   });
   assert.equal(leaderboard[1], {
     fitness: 10,
@@ -212,7 +226,7 @@ test('computeLeaderboard returns top entries in descending fitness order', async
     offspring: 5,
     fightsWon: 3,
     age: 7,
-    color: '#aa0',
+    color: "#aa0",
   });
   assert.equal(leaderboard[2], {
     fitness: 15,
@@ -220,28 +234,28 @@ test('computeLeaderboard returns top entries in descending fitness order', async
     offspring: 2,
     fightsWon: 4,
     age: 4,
-    color: '#cc2',
+    color: "#cc2",
   });
 });
 
-test('computeLeaderboard sanitizes topN before slicing', async () => {
+test("computeLeaderboard sanitizes topN before slicing", async () => {
   const { computeLeaderboard } = await leaderboardModulePromise;
   const snapshot = {
     entries: [
       {
         fitness: 10,
         smoothedFitness: 10,
-        cell: createStubCell({ fitnessScore: 10, color: '#000' }),
+        cell: createStubCell({ fitnessScore: 10, color: "#000" }),
       },
       {
         fitness: 8,
         smoothedFitness: 8,
-        cell: createStubCell({ fitnessScore: 8, color: '#111' }),
+        cell: createStubCell({ fitnessScore: 8, color: "#111" }),
       },
       {
         fitness: 6,
         smoothedFitness: 6,
-        cell: createStubCell({ fitnessScore: 6, color: '#222' }),
+        cell: createStubCell({ fitnessScore: 6, color: "#222" }),
       },
     ],
   };
@@ -249,10 +263,10 @@ test('computeLeaderboard sanitizes topN before slicing', async () => {
   assert.is(computeLeaderboard(snapshot, 0).length, 0);
   assert.is(computeLeaderboard(snapshot, -5).length, 0);
   assert.is(computeLeaderboard(snapshot, 1.8).length, 1);
-  assert.is(computeLeaderboard(snapshot, '2').length, 2);
+  assert.is(computeLeaderboard(snapshot, "2").length, 2);
 });
 
-test('computeLeaderboard tolerates entries missing cell data', async () => {
+test("computeLeaderboard tolerates entries missing cell data", async () => {
   const { computeLeaderboard } = await leaderboardModulePromise;
 
   const snapshot = {
@@ -272,13 +286,16 @@ test('computeLeaderboard tolerates entries missing cell data', async () => {
   });
 });
 
-test('computeLeaderboard skips entries with non-finite fitness', async () => {
+test("computeLeaderboard skips entries with non-finite fitness", async () => {
   const { computeLeaderboard } = await leaderboardModulePromise;
 
   const snapshot = {
     entries: [
       { cell: { offspring: 2, fightsWon: 3, age: 4 }, fitness: Number.NaN },
-      { cell: { offspring: 1, fightsWon: 1, age: 1 }, fitness: Number.POSITIVE_INFINITY },
+      {
+        cell: { offspring: 1, fightsWon: 1, age: 1 },
+        fitness: Number.POSITIVE_INFINITY,
+      },
       { cell: { offspring: 0, fightsWon: 0, age: 2 }, fitness: 7, smoothedFitness: 6 },
     ],
   };

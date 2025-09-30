@@ -1,8 +1,8 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
-test('GridManager removes cells that report starvation', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
+test("GridManager removes cells that report starvation", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -39,13 +39,17 @@ test('GridManager removes cells that report starvation', async () => {
 
   gm.update();
 
-  assert.is(gm.grid[0][0], null, 'starved cell should be removed from the grid');
-  assert.is(stats.deaths, 1, 'starvation should be reported to stats');
-  assert.is(gm.activeCells.size, 0, 'starved cell should be removed from active tracking');
+  assert.is(gm.grid[0][0], null, "starved cell should be removed from the grid");
+  assert.is(stats.deaths, 1, "starvation should be reported to stats");
+  assert.is(
+    gm.activeCells.size,
+    0,
+    "starved cell should be removed from active tracking",
+  );
 });
 
-test('GridManager respects dynamic max tile energy', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
+test("GridManager respects dynamic max tile energy", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
 
   class HarvestTestGridManager extends GridManager {
     init() {}
@@ -64,7 +68,7 @@ test('GridManager respects dynamic max tile energy', async () => {
       cellSize: 1,
     });
 
-    assert.is(gm.maxTileEnergy, customMax, 'instance should adopt overridden max');
+    assert.is(gm.maxTileEnergy, customMax, "instance should adopt overridden max");
 
     gm.energyGrid[0][0] = gm.maxTileEnergy;
     const cell = {
@@ -77,15 +81,18 @@ test('GridManager respects dynamic max tile energy', async () => {
     };
 
     gm.consumeEnergy(cell, 0, 0, [[0]]);
-    assert.is(cell.energy, gm.maxTileEnergy, 'harvesting should clamp to custom max');
-    assert.ok(gm.energyGrid[0][0] <= gm.maxTileEnergy, 'tile energy should not exceed max');
+    assert.is(cell.energy, gm.maxTileEnergy, "harvesting should clamp to custom max");
+    assert.ok(
+      gm.energyGrid[0][0] <= gm.maxTileEnergy,
+      "tile energy should not exceed max",
+    );
 
     gm.energyGrid[0][0] = 0;
     gm.regenerateEnergyGrid([], 1, gm.maxTileEnergy * 10, 0, [[0]]);
     assert.is(
       gm.energyGrid[0][0],
       gm.maxTileEnergy,
-      'regeneration should clamp to the custom ceiling'
+      "regeneration should clamp to the custom ceiling",
     );
   } finally {
     GridManager.maxTileEnergy = originalMax;

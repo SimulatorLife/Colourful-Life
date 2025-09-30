@@ -1,10 +1,10 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
-const configModulePromise = import('../src/config.js');
-const uiManagerModulePromise = import('../src/uiManager.js');
-const simulationEngineModulePromise = import('../src/simulationEngine.js');
-const mainModulePromise = import('../src/main.js');
+const configModulePromise = import("../src/config.js");
+const uiManagerModulePromise = import("../src/uiManager.js");
+const simulationEngineModulePromise = import("../src/simulationEngine.js");
+const mainModulePromise = import("../src/main.js");
 
 class MockGradient {
   addColorStop() {}
@@ -35,22 +35,22 @@ class MockCanvas {
   }
 
   getContext(type) {
-    if (type !== '2d') return null;
+    if (type !== "2d") return null;
 
     return this._context;
   }
 }
 
 class MockElement {
-  constructor(tagName = 'div') {
+  constructor(tagName = "div") {
     this.tagName = tagName.toUpperCase();
     this.children = [];
     this.parentElement = null;
-    this.className = '';
-    this.textContent = '';
-    this.id = '';
-    this.value = '';
-    this.title = '';
+    this.className = "";
+    this.textContent = "";
+    this.id = "";
+    this.value = "";
+    this.title = "";
     this.listeners = {};
     this.style = {};
     this.classList = {
@@ -114,15 +114,15 @@ class MockElement {
 
 class MockDocument {
   constructor() {
-    this.body = new MockElement('body');
-    this.appRoot = new MockElement('div');
-    this.appRoot.id = 'app';
+    this.body = new MockElement("body");
+    this.appRoot = new MockElement("div");
+    this.appRoot.id = "app";
     this.body.appendChild(this.appRoot);
     this.listeners = {};
   }
 
   querySelector(selector) {
-    if (selector === '#app') return this.appRoot;
+    if (selector === "#app") return this.appRoot;
 
     return null;
   }
@@ -136,7 +136,7 @@ class MockDocument {
   }
 }
 
-test('resolveSimulationDefaults returns expected baseline configuration', async () => {
+test("resolveSimulationDefaults returns expected baseline configuration", async () => {
   const {
     resolveSimulationDefaults,
     UI_SLIDER_CONFIG,
@@ -163,8 +163,10 @@ test('resolveSimulationDefaults returns expected baseline configuration', async 
     showDensity: false,
     showFitness: false,
     leaderboardIntervalMs: UI_SLIDER_CONFIG.leaderboardIntervalMs?.default ?? 750,
-    matingDiversityThreshold: UI_SLIDER_CONFIG.matingDiversityThreshold?.default ?? 0.45,
-    lowDiversityReproMultiplier: UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ?? 0.1,
+    matingDiversityThreshold:
+      UI_SLIDER_CONFIG.matingDiversityThreshold?.default ?? 0.45,
+    lowDiversityReproMultiplier:
+      UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ?? 0.1,
     speedMultiplier: UI_SLIDER_CONFIG.speedMultiplier?.default ?? 1,
     lingerPenalty: 0,
     autoPauseOnBlur: defaults.autoPauseOnBlur,
@@ -173,7 +175,7 @@ test('resolveSimulationDefaults returns expected baseline configuration', async 
   assert.equal(defaults, expected);
 });
 
-test('UIManager constructor seeds settings from resolveSimulationDefaults', async () => {
+test("UIManager constructor seeds settings from resolveSimulationDefaults", async () => {
   const originalDocument = global.document;
   const originalNode = global.Node;
   const originalHTMLElement = global.HTMLElement;
@@ -190,7 +192,7 @@ test('UIManager constructor seeds settings from resolveSimulationDefaults', asyn
   const defaults = resolveSimulationDefaults();
   const { default: UIManager } = await uiManagerModulePromise;
 
-  const uiManager = new UIManager({}, '#app', {}, {});
+  const uiManager = new UIManager({}, "#app", {}, {});
 
   assert.is(uiManager.societySimilarity, defaults.societySimilarity);
   assert.is(uiManager.enemySimilarity, defaults.enemySimilarity);
@@ -201,7 +203,10 @@ test('UIManager constructor seeds settings from resolveSimulationDefaults', asyn
   assert.is(uiManager.mutationMultiplier, defaults.mutationMultiplier);
   assert.is(uiManager.combatEdgeSharpness, defaults.combatEdgeSharpness);
   assert.is(uiManager.matingDiversityThreshold, defaults.matingDiversityThreshold);
-  assert.is(uiManager.lowDiversityReproMultiplier, defaults.lowDiversityReproMultiplier);
+  assert.is(
+    uiManager.lowDiversityReproMultiplier,
+    defaults.lowDiversityReproMultiplier,
+  );
   assert.is(uiManager.energyRegenRate, defaults.energyRegenRate);
   assert.is(uiManager.energyDiffusionRate, defaults.energyDiffusionRate);
   assert.is(uiManager.leaderboardIntervalMs, defaults.leaderboardIntervalMs);
@@ -222,7 +227,7 @@ test('UIManager constructor seeds settings from resolveSimulationDefaults', asyn
   else global.window = originalWindow;
 });
 
-test('SimulationEngine state initialization mirrors resolveSimulationDefaults', async () => {
+test("SimulationEngine state initialization mirrors resolveSimulationDefaults", async () => {
   const { resolveSimulationDefaults } = await configModulePromise;
   const defaults = resolveSimulationDefaults();
   const { default: SimulationEngine } = await simulationEngineModulePromise;
@@ -256,7 +261,7 @@ test('SimulationEngine state initialization mirrors resolveSimulationDefaults', 
   assert.is(engine.lingerPenalty, defaults.lingerPenalty);
 });
 
-test('createHeadlessUiManager exposes resolveSimulationDefaults-derived values', async () => {
+test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values", async () => {
   const { resolveSimulationDefaults } = await configModulePromise;
   const defaults = resolveSimulationDefaults();
   const { createHeadlessUiManager } = await mainModulePromise;

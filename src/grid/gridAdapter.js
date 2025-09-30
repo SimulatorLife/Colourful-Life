@@ -11,11 +11,11 @@ export default class GridInteractionAdapter {
   #managerHas(method) {
     const manager = this.gridManager;
 
-    return manager && typeof manager[method] === 'function';
+    return manager && typeof manager[method] === "function";
   }
 
   getCell(row, col) {
-    if (this.#managerHas('getCell')) {
+    if (this.#managerHas("getCell")) {
       return this.gridManager.getCell(row, col);
     }
 
@@ -23,7 +23,7 @@ export default class GridInteractionAdapter {
   }
 
   setCell(row, col, cell) {
-    if (this.#managerHas('setCell')) {
+    if (this.#managerHas("setCell")) {
       return this.gridManager.setCell(row, col, cell);
     }
 
@@ -37,16 +37,16 @@ export default class GridInteractionAdapter {
 
     this.gridManager.grid[row][col] = cell;
 
-    if (cell && typeof cell === 'object') {
-      if ('row' in cell) cell.row = row;
-      if ('col' in cell) cell.col = col;
+    if (cell && typeof cell === "object") {
+      if ("row" in cell) cell.row = row;
+      if ("col" in cell) cell.col = col;
     }
 
     return cell;
   }
 
   removeCell(row, col) {
-    if (this.#managerHas('removeCell')) {
+    if (this.#managerHas("removeCell")) {
       return this.gridManager.removeCell(row, col);
     }
 
@@ -60,7 +60,7 @@ export default class GridInteractionAdapter {
   }
 
   relocateCell(fromRow, fromCol, toRow, toCol) {
-    if (this.#managerHas('relocateCell')) {
+    if (this.#managerHas("relocateCell")) {
       return this.gridManager.relocateCell(fromRow, fromCol, toRow, toCol);
     }
 
@@ -77,8 +77,14 @@ export default class GridInteractionAdapter {
   consumeTileEnergy({ cell, row, col, densityGrid, densityEffectMultiplier } = {}) {
     if (!cell || row == null || col == null) return 0;
 
-    if (this.#managerHas('consumeEnergy')) {
-      this.gridManager.consumeEnergy(cell, row, col, densityGrid, densityEffectMultiplier);
+    if (this.#managerHas("consumeEnergy")) {
+      this.gridManager.consumeEnergy(
+        cell,
+        row,
+        col,
+        densityGrid,
+        densityEffectMultiplier,
+      );
 
       return 1;
     }
@@ -91,14 +97,14 @@ export default class GridInteractionAdapter {
     const recipient = to ?? null;
     const requested = Math.max(0, amount ?? 0);
 
-    if (!donor || requested <= 0 || typeof donor.energy !== 'number') return 0;
+    if (!donor || requested <= 0 || typeof donor.energy !== "number") return 0;
 
     const available = Math.max(0, Math.min(requested, donor.energy));
     const maxEnergy = this.maxTileEnergy();
     let accepted = available;
 
     if (recipient) {
-      const current = typeof recipient.energy === 'number' ? recipient.energy : 0;
+      const current = typeof recipient.energy === "number" ? recipient.energy : 0;
       const capacity = Math.max(0, maxEnergy - current);
 
       accepted = Math.max(0, Math.min(available, capacity));
@@ -111,11 +117,11 @@ export default class GridInteractionAdapter {
   }
 
   maxTileEnergy() {
-    if (typeof this.gridManager?.maxTileEnergy === 'number') {
+    if (typeof this.gridManager?.maxTileEnergy === "number") {
       return this.gridManager.maxTileEnergy;
     }
 
-    if (typeof globalThis?.GridManager?.maxTileEnergy === 'number') {
+    if (typeof globalThis?.GridManager?.maxTileEnergy === "number") {
       return globalThis.GridManager.maxTileEnergy;
     }
 
@@ -127,7 +133,7 @@ export default class GridInteractionAdapter {
       return densityGrid[row][col];
     }
 
-    if (this.#managerHas('getDensityAt')) {
+    if (this.#managerHas("getDensityAt")) {
       return this.gridManager.getDensityAt(row, col);
     }
 

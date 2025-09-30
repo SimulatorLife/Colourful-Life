@@ -1,10 +1,10 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
-const computeFitnessModulePromise = import('../src/fitness.mjs');
-const configModulePromise = import('../src/config.js');
+const computeFitnessModulePromise = import("../src/fitness.mjs");
+const configModulePromise = import("../src/config.js");
 
-test('computeFitness defaults to GridManager maxTileEnergy', async () => {
+test("computeFitness defaults to GridManager maxTileEnergy", async () => {
   global.GridManager = { maxTileEnergy: 8 };
   const { computeFitness } = await computeFitnessModulePromise;
   const cell = {
@@ -27,7 +27,7 @@ test('computeFitness defaults to GridManager maxTileEnergy', async () => {
   delete global.GridManager;
 });
 
-test('computeFitness uses provided maxTileEnergy parameter', async () => {
+test("computeFitness uses provided maxTileEnergy parameter", async () => {
   global.GridManager = { maxTileEnergy: 2 };
   const { computeFitness } = await computeFitnessModulePromise;
   const cell = {
@@ -46,7 +46,7 @@ test('computeFitness uses provided maxTileEnergy parameter', async () => {
   delete global.GridManager;
 });
 
-test('computeFitness handles minimal stats with explicit max energy', async () => {
+test("computeFitness handles minimal stats with explicit max energy", async () => {
   const { computeFitness } = await computeFitnessModulePromise;
   const cell = {
     fightsWon: 0,
@@ -62,7 +62,7 @@ test('computeFitness handles minimal stats with explicit max energy', async () =
   assert.is(result, 0);
 });
 
-test('computeFitness falls back to config default max energy when no manager is available', async () => {
+test("computeFitness falls back to config default max energy when no manager is available", async () => {
   delete global.GridManager;
   const [{ computeFitness }, { MAX_TILE_ENERGY }] = await Promise.all([
     computeFitnessModulePromise,

@@ -1,7 +1,7 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
-const simulationModulePromise = import('../src/main.js');
+const simulationModulePromise = import("../src/main.js");
 
 class MockGradient {
   addColorStop() {}
@@ -32,13 +32,13 @@ class MockCanvas {
   }
 
   getContext(type) {
-    if (type !== '2d') return null;
+    if (type !== "2d") return null;
 
     return this._context;
   }
 }
 
-test('createSimulation runs in a headless Node environment', async () => {
+test("createSimulation runs in a headless Node environment", async () => {
   const { createSimulation } = await simulationModulePromise;
   const canvas = new MockCanvas(100, 100);
   const calls = [];
@@ -50,7 +50,7 @@ test('createSimulation runs in a headless Node environment', async () => {
     performanceNow: () => 0,
     requestAnimationFrame: (cb) => {
       const id = setTimeout(() => {
-        calls.push('raf');
+        calls.push("raf");
         cb(0);
       }, 0);
 
@@ -59,18 +59,18 @@ test('createSimulation runs in a headless Node environment', async () => {
     cancelAnimationFrame: (id) => clearTimeout(id),
   });
 
-  assert.ok(simulation.grid, 'grid is returned');
-  assert.ok(simulation.uiManager, 'uiManager is returned');
+  assert.ok(simulation.grid, "grid is returned");
+  assert.ok(simulation.uiManager, "uiManager is returned");
 
   const result = simulation.step();
 
-  assert.type(result, 'boolean', 'step returns whether a tick occurred');
+  assert.type(result, "boolean", "step returns whether a tick occurred");
 
   simulation.stop();
   assert.ok(Array.isArray(calls));
 });
 
-test('createSimulation headless mode infers a canvas when omitted', async () => {
+test("createSimulation headless mode infers a canvas when omitted", async () => {
   const { createSimulation } = await simulationModulePromise;
 
   const simulation = createSimulation({
@@ -80,7 +80,7 @@ test('createSimulation headless mode infers a canvas when omitted', async () => 
     config: { rows: 8, cols: 12, cellSize: 5 },
   });
 
-  assert.ok(simulation.engine.canvas, 'engine exposes a fallback canvas');
+  assert.ok(simulation.engine.canvas, "engine exposes a fallback canvas");
   assert.is(simulation.engine.canvas.width, 60);
   assert.is(simulation.engine.canvas.height, 40);
 

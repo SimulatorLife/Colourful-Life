@@ -1,4 +1,4 @@
-import * as assert from 'uvu/assert';
+import * as assert from "uvu/assert";
 
 /**
  * Asserts that two numeric values are approximately equal within the provided
@@ -15,6 +15,7 @@ export function approxEqual(actual, expected, tolerance = 1e-6, message) {
 
   assert.ok(
     difference <= tolerance,
-    message ?? `Expected ${expected} ±${tolerance}, received ${actual} (|Δ|=${difference})`
+    message ??
+      `Expected ${expected} ±${tolerance}, received ${actual} (|Δ|=${difference})`,
   );
 }

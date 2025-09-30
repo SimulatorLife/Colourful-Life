@@ -1,9 +1,9 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
-import { computeLeaderboard } from '../src/leaderboard.js';
+import { computeLeaderboard } from "../src/leaderboard.js";
 
-test('computeLeaderboard ranks entries with sanitized inputs and brain snapshots', () => {
+test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots", () => {
   const snapshot = {
     entries: [
       {
@@ -16,7 +16,7 @@ test('computeLeaderboard ranks entries with sanitized inputs and brain snapshots
           offspring: 3,
           fightsWon: 4,
           age: 5,
-          color: '#101010',
+          color: "#101010",
         },
       },
       {
@@ -26,10 +26,10 @@ test('computeLeaderboard ranks entries with sanitized inputs and brain snapshots
         smoothedFitness: Number.NaN,
         cell: {
           fitnessScore: 13,
-          offspring: '2',
+          offspring: "2",
           fightsWon: null,
           age: undefined,
-          color: '#202020',
+          color: "#202020",
         },
       },
       {
@@ -41,7 +41,7 @@ test('computeLeaderboard ranks entries with sanitized inputs and brain snapshots
           offspring: 1,
           fightsWon: 0,
           age: 7,
-          color: '#303030',
+          color: "#303030",
         },
       },
       {
@@ -59,13 +59,13 @@ test('computeLeaderboard ranks entries with sanitized inputs and brain snapshots
       },
     ],
     brainSnapshots: [
-      { row: 1, col: 1, brain: 'primary' },
-      { row: 1, col: 1, brain: 'secondary' },
-      { row: 2, col: 2, brain: 'tertiary' },
+      { row: 1, col: 1, brain: "primary" },
+      { row: 1, col: 1, brain: "secondary" },
+      { row: 2, col: 2, brain: "tertiary" },
     ],
   };
 
-  const result = computeLeaderboard(snapshot, '3.9');
+  const result = computeLeaderboard(snapshot, "3.9");
 
   assert.equal(result, [
     {
@@ -74,7 +74,7 @@ test('computeLeaderboard ranks entries with sanitized inputs and brain snapshots
       offspring: 3,
       fightsWon: 4,
       age: 5,
-      color: '#101010',
+      color: "#101010",
     },
     {
       fitness: 10,
@@ -82,8 +82,8 @@ test('computeLeaderboard ranks entries with sanitized inputs and brain snapshots
       offspring: 0,
       fightsWon: 0,
       age: 0,
-      color: '#202020',
-      brain: { row: 1, col: 1, brain: 'primary' },
+      color: "#202020",
+      brain: { row: 1, col: 1, brain: "primary" },
     },
     {
       fitness: 8,
@@ -91,13 +91,13 @@ test('computeLeaderboard ranks entries with sanitized inputs and brain snapshots
       offspring: 1,
       fightsWon: 0,
       age: 7,
-      color: '#303030',
-      brain: { row: 2, col: 2, brain: 'tertiary' },
+      color: "#303030",
+      brain: { row: 2, col: 2, brain: "tertiary" },
     },
   ]);
 });
 
-test('computeLeaderboard returns empty arrays when topN is zero or invalid snapshot', () => {
+test("computeLeaderboard returns empty arrays when topN is zero or invalid snapshot", () => {
   assert.equal(computeLeaderboard(null, 5), []);
   assert.equal(computeLeaderboard({}, 0), []);
   assert.equal(computeLeaderboard({ entries: [] }, -2), []);

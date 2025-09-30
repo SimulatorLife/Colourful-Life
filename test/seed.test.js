@@ -1,5 +1,5 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
 function createRNG(seed) {
   seed = seed >>> 0;
@@ -28,7 +28,7 @@ class Cell {
   }
 }
 
-const cellColors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'];
+const cellColors = ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"];
 
 function seedCell(seedValue) {
   const rng = createRNG(seedValue);
@@ -43,14 +43,14 @@ function seedCell(seedValue) {
   return { genes, preferences, neurons, sight, color };
 }
 
-test('cells from identical seeds are identical', () => {
+test("cells from identical seeds are identical", () => {
   const a = seedCell(12345);
   const b = seedCell(12345);
 
   assert.equal(a, b);
 });
 
-test('cells from different seeds differ', () => {
+test("cells from different seeds differ", () => {
   const a = seedCell(12345);
   const b = seedCell(54321);
 

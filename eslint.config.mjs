@@ -1,9 +1,15 @@
-import js from '@eslint/js';
-import htmlPlugin from 'eslint-plugin-html';
-import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
-import globals from 'globals';
+import js from "@eslint/js";
+import htmlPlugin from "eslint-plugin-html";
+import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
+import globals from "globals";
 
-const IGNORE_PATTERNS = ['node_modules/', 'dist/', '.parcel-cache/', 'coverage/', '*.min.js'];
+const IGNORE_PATTERNS = [
+  "node_modules/",
+  "dist/",
+  ".parcel-cache/",
+  "coverage/",
+  "*.min.js",
+];
 
 export default [
   {
@@ -11,11 +17,11 @@ export default [
   },
   {
     ...js.configs.recommended,
-    files: ['**/*.{js,mjs,cjs}'],
+    files: ["**/*.{js,mjs,cjs}"],
     languageOptions: {
       ...js.configs.recommended.languageOptions,
       ecmaVersion: 2022,
-      sourceType: 'module',
+      sourceType: "module",
       globals: {
         ...globals.browser,
         ...globals.node,
@@ -27,19 +33,23 @@ export default [
     },
     rules: {
       ...js.configs.recommended.rules,
-      'no-unused-vars': 'off',
-      'padding-line-between-statements': [
-        'error',
-        { blankLine: 'always', prev: '*', next: 'return' },
-        { blankLine: 'always', prev: '*', next: ['function', 'class'] },
-        { blankLine: 'always', prev: ['function', 'class'], next: '*' },
-        { blankLine: 'always', prev: ['const', 'let', 'var'], next: '*' },
-        { blankLine: 'any', prev: ['const', 'let', 'var'], next: ['const', 'let', 'var'] },
+      "no-unused-vars": "off",
+      "padding-line-between-statements": [
+        "error",
+        { blankLine: "always", prev: "*", next: "return" },
+        { blankLine: "always", prev: "*", next: ["function", "class"] },
+        { blankLine: "always", prev: ["function", "class"], next: "*" },
+        { blankLine: "always", prev: ["const", "let", "var"], next: "*" },
+        {
+          blankLine: "any",
+          prev: ["const", "let", "var"],
+          next: ["const", "let", "var"],
+        },
       ],
     },
   },
   {
-    files: ['**/*.html'],
+    files: ["**/*.html"],
     plugins: {
       html: htmlPlugin,
     },

@@ -1,5 +1,5 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
 let InteractionSystem;
 
@@ -69,14 +69,14 @@ class FakeAdapter {
     const recipient = to ?? null;
     const requested = Math.max(0, amount ?? 0);
 
-    if (!donor || typeof donor.energy !== 'number' || requested <= 0) return 0;
+    if (!donor || typeof donor.energy !== "number" || requested <= 0) return 0;
 
     const available = Math.min(requested, donor.energy);
     const maxEnergy = this.maxTileEnergy();
     let accepted = available;
 
     if (recipient) {
-      const current = typeof recipient.energy === 'number' ? recipient.energy : 0;
+      const current = typeof recipient.energy === "number" ? recipient.energy : 0;
       const capacity = Math.max(0, maxEnergy - current);
 
       accepted = Math.max(0, Math.min(available, capacity));
@@ -103,7 +103,7 @@ class FakeAdapter {
 
 function withFixedRandom(value, fn) {
   const original = Math.random;
-  const generator = typeof value === 'function' ? value : () => value;
+  const generator = typeof value === "function" ? value : () => value;
 
   Math.random = generator;
 
@@ -115,10 +115,10 @@ function withFixedRandom(value, fn) {
 }
 
 test.before(async () => {
-  ({ default: InteractionSystem } = await import('../src/interactionSystem.js'));
+  ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
 });
 
-test('fight victory removes defender, relocates attacker, and consumes tile energy', () => {
+test("fight victory removes defender, relocates attacker, and consumes tile energy", () => {
   const adapter = new FakeAdapter();
   const interaction = new InteractionSystem({ adapter });
   const attacker = {
@@ -149,7 +149,7 @@ test('fight victory removes defender, relocates attacker, and consumes tile ener
     onDeath: () => deaths++,
   };
   const intent = {
-    type: 'fight',
+    type: "fight",
     initiator: { cell: attacker, row: 0, col: 0 },
     target: { row: 0, col: 1 },
   };
@@ -159,19 +159,19 @@ test('fight victory removes defender, relocates attacker, and consumes tile ener
       stats,
       densityGrid,
       densityEffectMultiplier: 1,
-    })
+    }),
   );
 
-  assert.ok(resolved, 'fight intent resolves');
-  assert.is(adapter.getCell(0, 1), attacker, 'attacker moves to defender tile');
-  assert.is(adapter.getCell(0, 0), null, 'origin tile emptied');
+  assert.ok(resolved, "fight intent resolves");
+  assert.is(adapter.getCell(0, 1), attacker, "attacker moves to defender tile");
+  assert.is(adapter.getCell(0, 0), null, "origin tile emptied");
   assert.is(attacker.row, 0);
   assert.is(attacker.col, 1);
   assert.is(attacker.fightsWon, 1);
   assert.is(defender.fightsLost, 1);
-  assert.is(fights, 1, 'fight stat incremented');
-  assert.is(deaths, 1, 'death stat incremented');
-  assert.is(adapter.consumeCalls.length, 1, 'tile energy consumed once');
+  assert.is(fights, 1, "fight stat incremented");
+  assert.is(deaths, 1, "death stat incremented");
+  assert.is(adapter.consumeCalls.length, 1, "tile energy consumed once");
   assert.equal(adapter.consumeCalls[0], {
     cell: attacker,
     row: 0,
@@ -181,7 +181,7 @@ test('fight victory removes defender, relocates attacker, and consumes tile ener
   });
 });
 
-test('fight defeat removes attacker but leaves defender intact', () => {
+test("fight defeat removes attacker but leaves defender intact", () => {
   const adapter = new FakeAdapter();
   const interaction = new InteractionSystem({ adapter });
   const attacker = {
@@ -211,23 +211,25 @@ test('fight defeat removes attacker but leaves defender intact', () => {
     onDeath: () => deaths++,
   };
   const intent = {
-    type: 'fight',
+    type: "fight",
     initiator: { cell: attacker, row: 0, col: 0 },
     target: { row: 0, col: 1 },
   };
 
-  const resolved = withFixedRandom(0.999, () => interaction.resolveIntent(intent, { stats }));
+  const resolved = withFixedRandom(0.999, () =>
+    interaction.resolveIntent(intent, { stats }),
+  );
 
-  assert.ok(resolved, 'fight defeat still resolves');
-  assert.is(adapter.getCell(0, 1), defender, 'defender remains on tile');
-  assert.is(adapter.getCell(0, 0), null, 'attacker tile cleared');
-  assert.is(defender.fightsWon, 1, 'defender records win');
-  assert.is(attacker.fightsLost, 1, 'attacker records loss');
-  assert.is(fights, 1, 'fight stat incremented once');
-  assert.is(deaths, 1, 'death stat incremented once');
+  assert.ok(resolved, "fight defeat still resolves");
+  assert.is(adapter.getCell(0, 1), defender, "defender remains on tile");
+  assert.is(adapter.getCell(0, 0), null, "attacker tile cleared");
+  assert.is(defender.fightsWon, 1, "defender records win");
+  assert.is(attacker.fightsLost, 1, "attacker records loss");
+  assert.is(fights, 1, "fight stat incremented once");
+  assert.is(deaths, 1, "death stat incremented once");
 });
 
-test('cooperation transfers bounded energy to partner via adapter', () => {
+test("cooperation transfers bounded energy to partner via adapter", () => {
   const adapter = new FakeAdapter({ maxTileEnergy: 15 });
   const interaction = new InteractionSystem({ adapter });
   const actor = { energy: 12 };
@@ -241,7 +243,7 @@ test('cooperation transfers bounded energy to partner via adapter', () => {
     onCooperate: () => cooperations++,
   };
   const intent = {
-    type: 'cooperate',
+    type: "cooperate",
     initiator: { cell: actor, row: 0, col: 0 },
     target: { row: 0, col: 1 },
     metadata: { shareFraction: 0.5 },
@@ -249,10 +251,14 @@ test('cooperation transfers bounded energy to partner via adapter', () => {
 
   const resolved = interaction.resolveIntent(intent, { stats });
 
-  assert.ok(resolved, 'cooperation intent resolves');
-  assert.is(cooperations, 1, 'cooperation stat increments');
-  assert.is(actor.energy, 6, 'actor spends half of energy');
-  assert.is(partner.energy, 11, 'partner receives transferred energy capped by max energy');
+  assert.ok(resolved, "cooperation intent resolves");
+  assert.is(cooperations, 1, "cooperation stat increments");
+  assert.is(actor.energy, 6, "actor spends half of energy");
+  assert.is(
+    partner.energy,
+    11,
+    "partner receives transferred energy capped by max energy",
+  );
 });
 
 test.run();

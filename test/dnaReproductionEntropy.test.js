@@ -1,8 +1,8 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
-test('reproduceWith uses runtime entropy for crossover RNG', async () => {
-  const { default: DNA } = await import('../src/genome.js');
+test("reproduceWith uses runtime entropy for crossover RNG", async () => {
+  const { default: DNA } = await import("../src/genome.js");
 
   const baseGenes = Uint8Array.from({ length: 10 }, (_, idx) => (idx * 25) % 256);
   const parentA = new DNA({ genes: baseGenes, geneCount: baseGenes.length });
@@ -19,11 +19,13 @@ test('reproduceWith uses runtime entropy for crossover RNG', async () => {
 
   try {
     const offspring = Array.from({ length: 5 }, () => parentA.reproduceWith(parentB));
-    const uniqueGeneSignatures = new Set(offspring.map((dna) => Array.from(dna.genes).join(',')));
+    const uniqueGeneSignatures = new Set(
+      offspring.map((dna) => Array.from(dna.genes).join(",")),
+    );
 
     assert.ok(
       uniqueGeneSignatures.size > 1,
-      'Expected runtime entropy to yield divergent offspring gene mixes'
+      "Expected runtime entropy to yield divergent offspring gene mixes",
     );
   } finally {
     Math.random = originalRandom;

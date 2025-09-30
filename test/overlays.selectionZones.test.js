@@ -1,7 +1,7 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
-import { drawSelectionZones } from '../src/overlays.js';
-import SelectionManager from '../src/selectionManager.js';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
+import { drawSelectionZones } from "../src/overlays.js";
+import SelectionManager from "../src/selectionManager.js";
 
 function createMockContext() {
   const operations = [];
@@ -73,11 +73,11 @@ function sortedSetValues(set) {
   return Array.from(set).sort();
 }
 
-test('drawSelectionZones matches tile coverage for predefined patterns', () => {
+test("drawSelectionZones matches tile coverage for predefined patterns", () => {
   const manager = new SelectionManager(10, 10);
 
-  manager.togglePattern('eastHalf', true);
-  manager.togglePattern('cornerPatches', true);
+  manager.togglePattern("eastHalf", true);
+  manager.togglePattern("cornerPatches", true);
 
   const ctx = createMockContext();
 
@@ -89,7 +89,7 @@ test('drawSelectionZones matches tile coverage for predefined patterns', () => {
   assert.equal(sortedSetValues(drawnCells), sortedSetValues(expectedCells));
 });
 
-test('drawSelectionZones matches tile coverage for custom rectangles', () => {
+test("drawSelectionZones matches tile coverage for custom rectangles", () => {
   const manager = new SelectionManager(12, 12);
 
   manager.addCustomRectangle(2, 3, 6, 7);
@@ -105,9 +105,9 @@ test('drawSelectionZones matches tile coverage for custom rectangles', () => {
   assert.equal(sortedSetValues(drawnCells), sortedSetValues(expectedCells));
 });
 
-test('pattern geometry is cached after activation', () => {
+test("pattern geometry is cached after activation", () => {
   const manager = new SelectionManager(10, 10);
-  const pattern = manager.patterns.get('alternatingBands');
+  const pattern = manager.patterns.get("alternatingBands");
 
   let containsCalls = 0;
   const originalContains = pattern.contains;
@@ -118,15 +118,15 @@ test('pattern geometry is cached after activation', () => {
     return originalContains(row, col);
   };
 
-  manager.togglePattern('alternatingBands', true);
-  assert.ok(containsCalls > 0, 'toggling should compute initial geometry');
+  manager.togglePattern("alternatingBands", true);
+  assert.ok(containsCalls > 0, "toggling should compute initial geometry");
 
   containsCalls = 0;
   manager.getActiveZoneRenderData();
-  assert.is(containsCalls, 0, 'first render data call should reuse cached geometry');
+  assert.is(containsCalls, 0, "first render data call should reuse cached geometry");
 
   manager.getActiveZoneRenderData();
-  assert.is(containsCalls, 0, 'subsequent calls should not trigger recomputation');
+  assert.is(containsCalls, 0, "subsequent calls should not trigger recomputation");
 });
 
 test.run();
