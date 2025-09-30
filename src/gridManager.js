@@ -1,7 +1,7 @@
 import { randomRange, randomPercent, clamp, lerp, createRankedBuffer } from './utils.js';
 import DNA from './genome.js';
 import Cell from './cell.js';
-import { computeFitness } from './fitness.js';
+import { computeFitness } from './fitness.mjs';
 import { isEventAffecting } from './eventManager.js';
 import { getEventEffect } from './eventEffects.js';
 import { computeTileEnergyUpdate } from './energySystem.js';
