@@ -135,6 +135,66 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   assert.is(starving, expectedEnergy <= starvationThreshold);
 });
 
+test("harvest crowding penalty blends DNA tolerance and environment signals", () => {
+  const tolerantDNA = new DNA(0, 0, 0);
+
+  tolerantDNA.genes[GENE_LOCI.DENSITY] = 255;
+  tolerantDNA.genes[GENE_LOCI.EXPLORATION] = 220;
+  tolerantDNA.genes[GENE_LOCI.COOPERATION] = 180;
+  tolerantDNA.genes[GENE_LOCI.RISK] = 80;
+  tolerantDNA.genes[GENE_LOCI.FORAGING] = 200;
+  tolerantDNA.genes[GENE_LOCI.ENERGY_CAPACITY] = 200;
+
+  const skittishDNA = new DNA(0, 0, 0);
+
+  skittishDNA.genes[GENE_LOCI.DENSITY] = 10;
+  skittishDNA.genes[GENE_LOCI.EXPLORATION] = 0;
+  skittishDNA.genes[GENE_LOCI.COOPERATION] = 180;
+  skittishDNA.genes[GENE_LOCI.RISK] = 80;
+  skittishDNA.genes[GENE_LOCI.FORAGING] = 200;
+  skittishDNA.genes[GENE_LOCI.ENERGY_CAPACITY] = 200;
+
+  const tolerant = new Cell(0, 0, tolerantDNA, 2);
+  const skittish = new Cell(0, 0, skittishDNA, 2);
+  const crowdedContext = {
+    density: 0.85,
+    tileEnergy: 0.3,
+    tileEnergyDelta: -0.4,
+    baseRate: 0.45,
+    availableEnergy: 0.8,
+    maxTileEnergy: 5,
+  };
+
+  const tolerantPenalty = tolerant.resolveHarvestCrowdingPenalty(crowdedContext);
+  const skittishPenalty = skittish.resolveHarvestCrowdingPenalty(crowdedContext);
+
+  assert.ok(
+    tolerantPenalty > skittishPenalty,
+    "high density DNA should sustain more harvesting under crowding",
+  );
+
+  const tightenedPenalty = skittish.resolveHarvestCrowdingPenalty(crowdedContext);
+
+  assert.ok(
+    tightenedPenalty <= skittishPenalty + 1e-9,
+    "repeated scarcity should not loosen skittish tolerance",
+  );
+
+  const reliefPenalty = skittish.resolveHarvestCrowdingPenalty({
+    density: 0.1,
+    tileEnergy: 0.9,
+    tileEnergyDelta: 0.25,
+    baseRate: 0.45,
+    availableEnergy: 1,
+    maxTileEnergy: 5,
+  });
+
+  assert.ok(
+    reliefPenalty >= tightenedPenalty,
+    "abundant, uncrowded tiles should restore harvesting capacity",
+  );
+});
+
 test("movement sensors update DNA-tuned resource trend signal", () => {
   const dna = new DNA(120, 160, 200);
 

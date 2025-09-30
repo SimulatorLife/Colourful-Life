@@ -1,5 +1,5 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
 
 const baseOptions = {
   eventManager: { activeEvents: [] },
@@ -8,8 +8,8 @@ const baseOptions = {
   cellSize: 1,
 };
 
-test('obstacles block regeneration and diffusion', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
+test("obstacles block regeneration and diffusion", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
 
   class ObstacleGrid extends GridManager {
     init() {}
@@ -25,16 +25,16 @@ test('obstacles block regeneration and diffusion', async () => {
 
   gm.regenerateEnergyGrid([], 1, 0, 1, [[0, 0, 0]], 1);
 
-  assert.is(gm.energyGrid[0][0], 0, 'obstacle tile should remain at zero energy');
+  assert.is(gm.energyGrid[0][0], 0, "obstacle tile should remain at zero energy");
   assert.is(
     gm.energyGrid[0][1],
     0,
-    'adjacent tiles should not receive energy from blocked neighbors'
+    "adjacent tiles should not receive energy from blocked neighbors",
   );
 });
 
-test('GridManager supports custom max tile energy for harvesting and regen', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
+test("GridManager supports custom max tile energy for harvesting and regen", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
 
   class TestGridManager extends GridManager {
     init() {}
@@ -56,21 +56,28 @@ test('GridManager supports custom max tile energy for harvesting and regen', asy
   gm.consumeEnergy(harvester, 0, 0, [[0]]);
   assert.ok(
     harvester.energy > 5,
-    'cell energy should exceed the default cap when custom max is larger'
+    "cell energy should exceed the default cap when custom max is larger",
   );
-  assert.ok(harvester.energy <= customMax, 'cell energy should respect the configured max');
+  assert.ok(
+    harvester.energy <= customMax,
+    "cell energy should respect the configured max",
+  );
 
   gm.energyGrid[0][0] = customMax / 2;
   gm.regenerateEnergyGrid([], 1, customMax, 0, [[0]]);
   assert.ok(
     gm.energyGrid[0][0] > 5,
-    'regeneration should allow tiles to climb above the default cap when permitted'
+    "regeneration should allow tiles to climb above the default cap when permitted",
   );
-  assert.is(gm.energyGrid[0][0], customMax, 'regeneration should still clamp to the custom max');
+  assert.is(
+    gm.energyGrid[0][0],
+    customMax,
+    "regeneration should still clamp to the custom max",
+  );
 });
 
-test('processCell forwards custom max tile energy to cell energy management', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
+test("processCell forwards custom max tile energy to cell energy management", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
 
   class ContextGrid extends GridManager {
     init() {}
@@ -122,8 +129,8 @@ test('processCell forwards custom max tile energy to cell energy management', as
   });
 });
 
-test('GridManager passes custom max tile energy to combat and movement helpers', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
+test("GridManager passes custom max tile energy to combat and movement helpers", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
 
   class HooksGrid extends GridManager {
     init() {}
@@ -135,14 +142,14 @@ test('GridManager passes custom max tile energy to combat and movement helpers',
   const fighter = {
     chooseInteractionAction(context) {
       assert.is(context.maxTileEnergy, customMax);
-      actionLog.push('choose');
+      actionLog.push("choose");
 
-      return 'avoid';
+      return "avoid";
     },
   };
 
   gm.boundMoveAwayFromTarget = () => {
-    actionLog.push('moveAway');
+    actionLog.push("moveAway");
 
     return true;
   };
@@ -156,9 +163,9 @@ test('GridManager passes custom max tile energy to combat and movement helpers',
     {
       stats: {},
       densityEffectMultiplier: 1,
-    }
+    },
   );
-  assert.ok(actionLog.includes('choose'));
+  assert.ok(actionLog.includes("choose"));
 
   let receivedContext = null;
   const mover = {
@@ -183,16 +190,20 @@ test('GridManager passes custom max tile energy to combat and movement helpers',
         [0, 0],
       ],
       densityEffectMultiplier: 1,
-    }
+    },
   );
 
-  assert.ok(receivedContext, 'movement should call into the cell with a context');
+  assert.ok(receivedContext, "movement should call into the cell with a context");
   assert.is(receivedContext.maxTileEnergy, customMax);
-  assert.is(receivedContext.getEnergyAt(0, 0), 1, 'energy accessor should normalize by the max');
+  assert.is(
+    receivedContext.getEnergyAt(0, 0),
+    1,
+    "energy accessor should normalize by the max",
+  );
 });
 
-test('density effect multiplier scales harvesting and regeneration penalties', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
+test("density effect multiplier scales harvesting and regeneration penalties", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
 
   class DensityGrid extends GridManager {
     init() {}
@@ -217,7 +228,10 @@ test('density effect multiplier scales harvesting and regeneration penalties', a
   gm.consumeEnergy(harvester, 0, 0, [[0.5]], 2);
   const gainHigh = harvester.energy;
 
-  assert.ok(gainHigh < gainNormal, 'higher density scaling should reduce harvesting gains');
+  assert.ok(
+    gainHigh < gainNormal,
+    "higher density scaling should reduce harvesting gains",
+  );
 
   gm.energyGrid[0][0] = 0;
   gm.regenerateEnergyGrid([], 1, 1, 0, [[0.5]], 1);
@@ -227,12 +241,63 @@ test('density effect multiplier scales harvesting and regeneration penalties', a
   gm.regenerateEnergyGrid([], 1, 1, 0, [[0.5]], 2);
   const regenHigh = gm.energyGrid[0][0];
 
-  assert.ok(regenHigh < regenNormal, 'higher density scaling should dampen regeneration');
+  assert.ok(
+    regenHigh < regenNormal,
+    "higher density scaling should dampen regeneration",
+  );
 });
 
-test('handleReproduction threads custom max tile energy through cell decisions', async () => {
-  const { default: GridManager } = await import('../src/gridManager.js');
-  const { default: Cell } = await import('../src/cell.js');
+test("DNA-driven crowd tolerance shapes harvesting under pressure", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { DNA, GENE_LOCI } = await import("../src/genome.js");
+
+  class CrowdGrid extends GridManager {
+    init() {}
+  }
+
+  const gm = new CrowdGrid(1, 1, baseOptions);
+  const baseGenes = () => {
+    const dna = new DNA(0, 0, 0);
+
+    dna.genes[GENE_LOCI.FORAGING] = 200;
+    dna.genes[GENE_LOCI.ENERGY_CAPACITY] = 200;
+    dna.genes[GENE_LOCI.COOPERATION] = 180;
+    dna.genes[GENE_LOCI.RISK] = 80;
+
+    return dna;
+  };
+
+  const tolerantDNA = baseGenes();
+
+  tolerantDNA.genes[GENE_LOCI.DENSITY] = 255;
+  tolerantDNA.genes[GENE_LOCI.EXPLORATION] = 220;
+
+  const skittishDNA = baseGenes();
+
+  skittishDNA.genes[GENE_LOCI.DENSITY] = 10;
+  skittishDNA.genes[GENE_LOCI.EXPLORATION] = 0;
+
+  const tolerant = new Cell(0, 0, tolerantDNA, 0);
+  const skittish = new Cell(0, 0, skittishDNA, 0);
+
+  gm.energyGrid[0][0] = 1;
+  gm.consumeEnergy(tolerant, 0, 0, [[0.9]], 1);
+  const tolerantGain = tolerant.energy;
+
+  gm.energyGrid[0][0] = 1;
+  gm.consumeEnergy(skittish, 0, 0, [[0.9]], 1);
+  const skittishGain = skittish.energy;
+
+  assert.ok(
+    tolerantGain > skittishGain,
+    "crowd-tolerant genomes should harvest more when tiles are congested",
+  );
+});
+
+test("handleReproduction threads custom max tile energy through cell decisions", async () => {
+  const { default: GridManager } = await import("../src/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
 
   class ReproGrid extends GridManager {
     init() {}
@@ -282,7 +347,7 @@ test('handleReproduction threads custom max tile energy through cell decisions',
       return {
         chosen: { target: mate, row: mate.row, col: mate.col },
         evaluated: [],
-        mode: 'weighted',
+        mode: "weighted",
       };
     },
     findBestMate() {
@@ -328,13 +393,13 @@ test('handleReproduction threads custom max tile energy through cell decisions',
         densityGrid,
         densityEffectMultiplier: 1,
         mutationMultiplier: 1,
-      }
+      },
     );
 
-    assert.ok(reproduced, 'reproduction should succeed under deterministic conditions');
-    assert.ok(capturedDecisionContext, 'decideReproduction should receive context');
+    assert.ok(reproduced, "reproduction should succeed under deterministic conditions");
+    assert.ok(capturedDecisionContext, "decideReproduction should receive context");
     assert.is(capturedDecisionContext.maxTileEnergy, customMax);
-    assert.ok(capturedBreedOptions, 'Cell.breed should be called with options');
+    assert.ok(capturedBreedOptions, "Cell.breed should be called with options");
     assert.is(capturedBreedOptions.maxTileEnergy, customMax);
   } finally {
     Cell.breed = originalBreed;

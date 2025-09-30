@@ -54,6 +54,14 @@ export default class Cell {
     this.movementGenes = this.dna.movementGenes();
     this.interactionGenes = this.dna.interactionGenes();
     this.density = this.dna.densityResponses();
+    this.baseCrowdingTolerance = clamp(
+      typeof this.dna.forageCrowdingTolerance === "function"
+        ? this.dna.forageCrowdingTolerance()
+        : 0.5,
+      0,
+      1,
+    );
+    this._crowdingTolerance = this.baseCrowdingTolerance;
     this.baseRiskTolerance = clamp(
       typeof this.dna.riskTolerance === "function" ? this.dna.riskTolerance() : 0.5,
       0,
@@ -1698,6 +1706,81 @@ export default class Cell {
     this._neuralLoad = 0;
 
     return this.energy <= this.starvationThreshold(maxTileEnergy);
+  }
+
+  resolveHarvestCrowdingPenalty({
+    density = 0,
+    tileEnergy = 0.5,
+    tileEnergyDelta = 0,
+    baseRate = 0,
+    availableEnergy = 0,
+    maxTileEnergy = MAX_TILE_ENERGY,
+  } = {}) {
+    const tolerance = clamp(this.baseCrowdingTolerance ?? 0.5, 0, 1);
+    const adaptation = clamp(this._crowdingTolerance ?? tolerance, 0, 1);
+    const crowd = clamp(Number.isFinite(density) ? density : 0, 0, 1);
+    const normalizedEnergy =
+      maxTileEnergy > 0 ? clamp((this.energy ?? 0) / maxTileEnergy, 0, 1) : 0;
+    const scarcity = clamp(1 - normalizedEnergy, 0, 1);
+    const tileAbundance = clamp(tileEnergy ?? 0, 0, 1);
+    const tileScarcity = clamp(1 - tileAbundance, 0, 1);
+    const declinePressure = clamp(-(tileEnergyDelta ?? 0), 0, 1);
+    const resourceSignal = clamp(this._resourceSignal ?? 0, -1, 1);
+    const expectation = clamp(Number.isFinite(baseRate) ? baseRate : 0, 0, 1.5);
+    const availableNorm =
+      maxTileEnergy > 0
+        ? clamp(
+            Number.isFinite(availableEnergy) ? availableEnergy / maxTileEnergy : 0,
+            0,
+            1,
+          )
+        : 0;
+    const scarcityDrive = clamp(
+      scarcity * 0.6 + tileScarcity * 0.45 + declinePressure * 0.6,
+      0,
+      1.6,
+    );
+    const opportunism = clamp(expectation * 0.5 + availableNorm * 0.5, 0, 1);
+    const adaptability = clamp(
+      adaptation + (resourceSignal < 0 ? Math.abs(resourceSignal) * 0.35 : 0),
+      0,
+      1,
+    );
+    const sensitivityBase = 0.35 + (1 - tolerance) * 0.9;
+    const crowdSensitivity = clamp(
+      sensitivityBase *
+        (1 + scarcityDrive * (0.65 + opportunism * 0.55)) *
+        (1 - adaptability * 0.45),
+      0.05,
+      1.45,
+    );
+    const penalty = Math.max(0, 1 - crowdSensitivity * crowd);
+    const pressureSignal = crowd > tolerance ? crowd - tolerance : 0;
+    const reliefSignal = crowd < tolerance ? tolerance - crowd : 0;
+    const scarcityWeight = clamp(0.2 + scarcity * 0.5 + tileScarcity * 0.3, 0.1, 1);
+    const learningRate = clamp(
+      0.08 + crowd * 0.25 + scarcityWeight * 0.3 + opportunism * 0.2,
+      0.05,
+      0.65,
+    );
+    let target = adaptation;
+
+    if (pressureSignal > 0 && penalty < 0.75) {
+      target = Math.max(0, adaptation - pressureSignal * (0.2 + scarcityWeight * 0.4));
+    } else if (reliefSignal > 0) {
+      target = Math.min(
+        1,
+        adaptation + reliefSignal * (0.18 + (1 - scarcityWeight) * 0.25),
+      );
+    }
+
+    if (resourceSignal > 0 && crowd < tolerance) {
+      target = Math.min(1, target + resourceSignal * 0.2);
+    }
+
+    this._crowdingTolerance = clamp(lerp(adaptation, target, learningRate), 0, 1);
+
+    return clamp(penalty, 0, 1);
   }
 
   getDecisionTelemetry(limit = 5) {

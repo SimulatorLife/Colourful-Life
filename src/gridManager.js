@@ -1057,7 +1057,20 @@ export default class GridManager {
       densityGrid?.[row]?.[col] ??
       this.localDensity(row, col, GridManager.DENSITY_RADIUS);
     const effDensity = clamp((density ?? 0) * densityEffectMultiplier, 0, 1);
-    const crowdPenalty = Math.max(0, 1 - CONSUMPTION_DENSITY_PENALTY * effDensity);
+    const tileEnergyDelta = this.energyDeltaGrid?.[row]?.[col] ?? 0;
+    const normalizedTileEnergy =
+      this.maxTileEnergy > 0 ? clamp(available / this.maxTileEnergy, 0, 1) : 0;
+    const crowdPenalty =
+      typeof cell?.resolveHarvestCrowdingPenalty === "function"
+        ? cell.resolveHarvestCrowdingPenalty({
+            density: effDensity,
+            tileEnergy: normalizedTileEnergy,
+            tileEnergyDelta,
+            baseRate: base,
+            availableEnergy: available,
+            maxTileEnergy: this.maxTileEnergy,
+          })
+        : Math.max(0, 1 - CONSUMPTION_DENSITY_PENALTY * effDensity);
     const minCap =
       typeof cell.dna.harvestCapMin === "function" ? cell.dna.harvestCapMin() : 0.1;
     const maxCapRaw =
