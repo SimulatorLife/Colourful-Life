@@ -1,21 +1,25 @@
-import { test } from 'uvu';
-import * as assert from 'uvu/assert';
-import { approxEqual } from './helpers/assertions.js';
+import { test } from "uvu";
+import * as assert from "uvu/assert";
+import { approxEqual } from "./helpers/assertions.js";
 
 const baseArea = { x: 0, y: 0, width: 5, height: 5 };
 
-test('accumulateEventModifiers combines overlapping event effects', async () => {
+test("accumulateEventModifiers combines overlapping event effects", async () => {
   const [{ accumulateEventModifiers }, { getEventEffect }, { isEventAffecting }] =
     await Promise.all([
-      import('../src/energySystem.js'),
-      import('../src/eventEffects.js'),
-      import('../src/eventManager.js'),
+      import("../src/energySystem.js"),
+      import("../src/eventEffects.js"),
+      import("../src/eventManager.js"),
     ]);
 
   const events = [
-    { eventType: 'drought', strength: 0.5, affectedArea: baseArea },
-    { eventType: 'flood', strength: 0.6, affectedArea: baseArea },
-    { eventType: 'heatwave', strength: 1, affectedArea: { x: 10, y: 10, width: 3, height: 3 } },
+    { eventType: "drought", strength: 0.5, affectedArea: baseArea },
+    { eventType: "flood", strength: 0.6, affectedArea: baseArea },
+    {
+      eventType: "heatwave",
+      strength: 1,
+      affectedArea: { x: 10, y: 10, width: 3, height: 3 },
+    },
   ];
 
   const result = accumulateEventModifiers({
@@ -33,26 +37,61 @@ test('accumulateEventModifiers combines overlapping event effects', async () => 
   assert.is(result.appliedEvents.length, 2);
   assert.equal(
     result.appliedEvents.map(({ effect }) => effect.cell?.resistanceGene),
-    ['droughtResist', 'floodResist']
+    ["droughtResist", "floodResist"],
   );
 });
 
-test('computeTileEnergyUpdate applies density penalties and diffusion', async () => {
+test("accumulateEventModifiers reuses provided effect cache", async () => {
+  const [{ accumulateEventModifiers }] = await Promise.all([
+    import("../src/energySystem.js"),
+  ]);
+
+  const effectCache = new Map();
+  let resolveCount = 0;
+  const getEventEffect = (type) => {
+    resolveCount += 1;
+
+    if (type === "ignored") return null;
+
+    return { regenAdd: 0.1, drainAdd: 0.05 };
+  };
+
+  const events = [
+    { eventType: "boost", strength: 1, affectedArea: baseArea },
+    { eventType: "boost", strength: 0.5, affectedArea: baseArea },
+    { eventType: "ignored", strength: 1, affectedArea: baseArea },
+  ];
+
+  const baseOptions = {
+    events,
+    row: 2,
+    col: 2,
+    effectCache,
+    getEventEffect,
+  };
+
+  accumulateEventModifiers(baseOptions);
+  accumulateEventModifiers(baseOptions);
+
+  assert.is(resolveCount, 2);
+});
+
+test("computeTileEnergyUpdate applies density penalties and diffusion", async () => {
   const [
     { computeTileEnergyUpdate },
     { getEventEffect },
     { isEventAffecting },
     { REGEN_DENSITY_PENALTY },
   ] = await Promise.all([
-    import('../src/energySystem.js'),
-    import('../src/eventEffects.js'),
-    import('../src/eventManager.js'),
-    import('../src/config.js'),
+    import("../src/energySystem.js"),
+    import("../src/eventEffects.js"),
+    import("../src/eventManager.js"),
+    import("../src/config.js"),
   ]);
 
   const events = [
-    { eventType: 'drought', strength: 0.5, affectedArea: baseArea },
-    { eventType: 'flood', strength: 0.6, affectedArea: baseArea },
+    { eventType: "drought", strength: 0.5, affectedArea: baseArea },
+    { eventType: "flood", strength: 0.6, affectedArea: baseArea },
   ];
 
   const baseOptions = {

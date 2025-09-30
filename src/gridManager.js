@@ -451,6 +451,7 @@ export default class GridManager {
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
     this.eventManager = eventManager || window.eventManager;
     this.eventContext = createEventContext(eventContext);
+    this.eventEffectCache = new Map();
     this.ctx = ctx || window.ctx;
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
@@ -647,6 +648,7 @@ export default class GridManager {
 
   setEventContext(eventContext) {
     this.eventContext = createEventContext(eventContext);
+    this.eventEffectCache?.clear();
   }
 
   getEventContext() {
@@ -1110,6 +1112,7 @@ export default class GridManager {
       eventStrengthMultiplier,
       isEventAffecting,
       getEventEffect,
+      effectCache: getEventEffect ? this.eventEffectCache : null,
     };
     const computeOptions = {
       currentEnergy: 0,
