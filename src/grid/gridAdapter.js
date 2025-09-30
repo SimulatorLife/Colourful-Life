@@ -1,3 +1,8 @@
+/**
+ * Thin adapter exposing a stable API for systems that need to query or mutate
+ * the grid without depending on the full {@link GridManager} surface. Used by
+ * {@link InteractionSystem} and tests to swap in mock managers.
+ */
 export default class GridInteractionAdapter {
   constructor({ gridManager } = {}) {
     this.gridManager = gridManager ?? null;

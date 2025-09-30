@@ -5,6 +5,11 @@ const DEFAULT_COLORS = [
   'rgba(220, 120, 220, 0.24)',
 ];
 
+/**
+ * Tracks reproductive zone definitions. SelectionManager provides built-in
+ * geometric patterns and supports user-drawn rectangles so the simulation can
+ * restrict mating and spawning to curated areas of the map.
+ */
 export default class SelectionManager {
   constructor(rows, cols) {
     this.rows = rows;
