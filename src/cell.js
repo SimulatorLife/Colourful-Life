@@ -58,12 +58,13 @@ function softmax(logits = []) {
   return expValues;
 }
 
-function sampleFromDistribution(probabilities = [], labels = []) {
+function sampleFromDistribution(probabilities = [], labels = [], rng = Math.random) {
   if (!Array.isArray(probabilities) || probabilities.length === 0) return null;
   const total = probabilities.reduce((acc, v) => acc + v, 0);
 
   if (!Number.isFinite(total) || total <= EPSILON) return null;
-  const r = Math.random() * total;
+  const randomSource = typeof rng === "function" ? rng : Math.random;
+  const r = randomSource() * total;
   let acc = 0;
 
   for (let i = 0; i < probabilities.length; i++) {
@@ -133,10 +134,9 @@ export default class Cell {
       typeof this.dna.mateSamplingProfile === "function"
         ? this.dna.mateSamplingProfile()
         : null;
-    this._mateSelectionNoiseRng =
-      typeof this.dna.prngFor === "function"
-        ? this.dna.prngFor("mateSelectionNoise")
-        : null;
+    this._rngCache = new Map();
+    this._sharedRngCache = new Map();
+    this._mateSelectionNoiseRng = this.resolveRng("mateSelectionNoise");
     this._neuralLoad = 0;
     this.lastEventPressure = 0;
     this._usedNeuralMovement = false;
@@ -206,7 +206,16 @@ export default class Cell {
     const effectiveMultiplier = Math.max(0, safeMultiplier);
     const chance = Math.max(0, avgChance * effectiveMultiplier);
     const range = Math.max(0, Math.round(avgRange * effectiveMultiplier));
-    const childDNA = parentA.dna.reproduceWith(parentB.dna, chance, range);
+    const crossoverRng =
+      typeof parentA.resolveSharedRng === "function"
+        ? parentA.resolveSharedRng(parentB, "offspringGenome")
+        : null;
+    const childDNA = parentA.dna.reproduceWith(
+      parentB.dna,
+      chance,
+      range,
+      crossoverRng,
+    );
     const resolvedMaxTileEnergy =
       typeof maxTileEnergy === "number"
         ? maxTileEnergy
@@ -310,7 +319,7 @@ export default class Cell {
     const randomSource =
       typeof this._mateSelectionNoiseRng === "function"
         ? this._mateSelectionNoiseRng
-        : Math.random;
+        : this.resolveRng("mateSelectionNoise");
     const jitter = jitterAmplitude > 0 ? (randomSource() - 0.5) * jitterAmplitude : 0;
     const weighted = preferenceScore * weightScale + diversity * noveltyWeight + jitter;
     const selectionWeight = Math.max(0.0001, weighted);
@@ -359,10 +368,11 @@ export default class Cell {
 
     const appetite = clamp(this.diversityAppetite ?? 0, 0, 1);
     const samplingProfile = this.mateSamplingProfile || {};
-    const randomSample =
-      typeof this._mateSelectionNoiseRng === "function"
-        ? this._mateSelectionNoiseRng
-        : Math.random;
+
+    if (typeof this._mateSelectionNoiseRng !== "function") {
+      this._mateSelectionNoiseRng = this.resolveRng("mateSelectionNoise");
+    }
+    const randomSample = this._mateSelectionNoiseRng;
     let mode = "preference";
     let chosen = null;
 
@@ -444,9 +454,8 @@ export default class Cell {
     const noiseSource =
       typeof this._mateSelectionNoiseRng === "function"
         ? this._mateSelectionNoiseRng
-        : typeof this.dna?.prngFor === "function"
-          ? this.dna.prngFor("mateChoice")
-          : null;
+        : this.resolveRng("mateChoice");
+    const fallbackNoise = this.resolveRng("fallbackMateNoise");
 
     let fallbackMate = null;
     let bestScore = -Infinity;
@@ -469,7 +478,7 @@ export default class Cell {
       score += (1 - similarity) * noveltyBias;
 
       if (noiseAmplitude > 0) {
-        const noiseFn = typeof noiseSource === "function" ? noiseSource : Math.random;
+        const noiseFn = typeof noiseSource === "function" ? noiseSource : fallbackNoise;
 
         score += (noiseFn() - 0.5) * noiseAmplitude;
       }
@@ -1821,6 +1830,58 @@ export default class Cell {
     return clamp(this.age / this.lifespan, 0, 1);
   }
 
+  resolveRng(tag, fallback = Math.random) {
+    const key = typeof tag === "string" && tag.length > 0 ? tag : "default";
+
+    if (!this._rngCache) this._rngCache = new Map();
+    if (this._rngCache.has(key)) return this._rngCache.get(key);
+
+    const source =
+      typeof this.dna?.prngFor === "function" ? this.dna.prngFor(key) : null;
+    const rng = typeof source === "function" ? source : fallback;
+    const resolved = typeof rng === "function" ? rng : Math.random;
+
+    this._rngCache.set(key, resolved);
+
+    return resolved;
+  }
+
+  resolveSharedRng(other, tag, fallback = Math.random) {
+    const key = typeof tag === "string" && tag.length > 0 ? tag : "shared";
+
+    if (!other) {
+      return this.resolveRng(`${key}:solo`, fallback);
+    }
+
+    if (!this._sharedRngCache) this._sharedRngCache = new Map();
+
+    let map = this._sharedRngCache.get(key);
+
+    if (!map) {
+      map = new WeakMap();
+      this._sharedRngCache.set(key, map);
+    }
+
+    if (map.has(other)) {
+      return map.get(other);
+    }
+
+    const otherDNA = other?.dna ?? other ?? null;
+    let rng = null;
+
+    if (typeof this.dna?.sharedRng === "function") {
+      rng = this.dna.sharedRng(otherDNA, key);
+    }
+
+    if (typeof rng !== "function") {
+      rng = this.resolveRng(`${key}:${otherDNA?.seed?.() ?? "none"}`, fallback);
+    }
+
+    map.set(other, rng);
+
+    return rng;
+  }
+
   ageEnergyMultiplier(load = 1) {
     const ageFrac = this.getAgeFraction();
 
@@ -1851,7 +1912,8 @@ export default class Cell {
     const logits = entries.map(({ key }) => values[key] ?? 0);
     const labels = entries.map(({ key }) => key);
     const probs = softmax(logits);
-    const action = sampleFromDistribution(probs, labels);
+    const decisionRng = this.resolveRng("movementDecision");
+    const action = sampleFromDistribution(probs, labels, decisionRng);
     const probabilitiesByKey = {};
     const logitsByKey = {};
 
@@ -1894,10 +1956,11 @@ export default class Cell {
     const c = Math.max(0, g.cautious);
     const total = w + p + c || 1;
     const pStay = Math.max(0, Math.min(0.9, 0.15 + 0.7 * (c / total)));
+    const rng = this.resolveRng("movementRandom");
 
-    if (Math.random() < pStay) return { dr: 0, dc: 0 };
+    if (rng() < pStay) return { dr: 0, dc: 0 };
     // Otherwise pick one of 4 directions uniformly
-    switch ((Math.random() * 4) | 0) {
+    switch ((rng() * 4) | 0) {
       case 0:
         return { dr: -1, dc: 0 };
       case 1:
@@ -2143,7 +2206,8 @@ export default class Cell {
     const pursuitScaled = Math.max(0, pursuit * pursuitMul);
     const wanderingScaled = Math.max(0, wandering);
     const total = wanderingScaled + pursuitScaled + cautiousScaled || 1;
-    const r = randomRange(0, total);
+    const rng = this.resolveRng("legacyMovementChoice");
+    const r = randomRange(0, total, rng);
 
     if (r < wanderingScaled) return "wandering";
     if (r < wanderingScaled + pursuitScaled) return "pursuit";
@@ -2242,8 +2306,9 @@ export default class Cell {
     // wandering: try cohesion toward allies first
     if (Array.isArray(society) && society.length > 0) {
       const coh = typeof this.dna.cohesion === "function" ? this.dna.cohesion() : 0;
+      const cohesionRng = this.resolveRng("legacyMovementCohesion");
 
-      if (Math.random() < coh) {
+      if (cohesionRng() < coh) {
         const target = this.#nearest(society, row, col);
 
         if (target)
@@ -2290,8 +2355,9 @@ export default class Cell {
           0.3 + 0.4 * (Math.max(0, g.wandering) / total) + 0.3 * dnaExploit,
         ),
       );
+      const exploitRng = this.resolveRng("legacyMovementExploit");
 
-      if (best && Math.random() < pExploit) {
+      if (best && exploitRng() < pExploit) {
         if (typeof tryMove === "function")
           return tryMove(gridArr, row, col, best.dr, best.dc, rows, cols);
 
@@ -2516,7 +2582,8 @@ export default class Cell {
     const coopW = Math.max(0.0001, cooperate * coopMul);
     const avoidW = Math.max(0.0001, avoid);
     const total = avoidW + fightW + coopW;
-    const roll = randomRange(0, total);
+    const rng = this.resolveRng("legacyInteractionChoice");
+    const roll = randomRange(0, total, rng);
 
     if (roll < avoidW) return "avoid";
     if (roll < avoidW + fightW) return "fight";
@@ -2551,7 +2618,8 @@ export default class Cell {
       const logits = entries.map(({ key }) => values[key] ?? 0);
       const labels = entries.map(({ key }) => key);
       const probs = softmax(logits);
-      const choice = sampleFromDistribution(probs, labels);
+      const decisionRng = this.resolveRng("interactionDecision");
+      const choice = sampleFromDistribution(probs, labels, decisionRng);
       const probabilitiesByKey = {};
 
       for (let i = 0; i < labels.length; i++) {
@@ -2739,7 +2807,10 @@ export default class Cell {
     }
 
     if (!best && enemies.length > 0) {
-      best = enemies[Math.floor(Math.random() * enemies.length)];
+      const fallbackRng = this.resolveRng("targetingFallback");
+      const fallbackIndex = Math.floor(fallbackRng() * enemies.length);
+
+      best = enemies[fallbackIndex];
 
       if (best?.target) {
         const row = best.row ?? best.target.row ?? this.row;
@@ -2814,18 +2885,23 @@ export default class Cell {
       return;
     }
 
-    const recoveryFactor = 1 - 0.5 * (this.dna.recoveryRate?.() ?? 0);
+    const responseProfile =
+      typeof this.dna.eventResponseProfile === "function"
+        ? this.dna.eventResponseProfile()
+        : null;
+    const baseRecovery = clamp(this.dna.recoveryRate?.() ?? 0, 0, 1);
+    const vigilance = clamp(responseProfile?.vigilance ?? 0.6, 0.2, 1.2);
+    const mitigation = clamp(responseProfile?.drainMitigation ?? 0.4, 0, 0.95);
+    const retention = clamp(responseProfile?.pressureRetention ?? 0.6, 0.05, 0.95);
+    const rebound = clamp(responseProfile?.rebound ?? 0.15, 0, 0.8);
+    const strengthScale = clamp(1 - baseRecovery * 0.35, 0.25, 1);
+    let pressurePeak = 0;
 
     for (const { effect, strength } of appliedEvents) {
       if (!effect?.cell) continue;
 
-      const cellStrength = strength * recoveryFactor;
-
-      this.lastEventPressure = Math.max(
-        this.lastEventPressure || 0,
-        clamp(cellStrength, 0, 1),
-      );
-
+      const effectiveStrength = clamp(strength * vigilance, 0, 1.5);
+      const cellStrength = clamp(effectiveStrength * strengthScale, 0, 1.2);
       const { energyLoss = 0, resistanceGene } = effect.cell;
       const resistance = clamp(
         typeof resistanceGene === "string" &&
@@ -2835,10 +2911,23 @@ export default class Cell {
         0,
         1,
       );
+      const mitigatedImpact = energyLoss * cellStrength * (1 - resistance);
 
-      this.energy -= energyLoss * cellStrength * (1 - resistance);
+      this.energy -= mitigatedImpact * (1 - mitigation);
+
+      const pressureContribution = clamp(
+        cellStrength * retention * (1 - mitigation * 0.5) * (1 - resistance * 0.3),
+        0,
+        1,
+      );
+
+      pressurePeak = Math.max(pressurePeak, pressureContribution);
     }
 
+    const previousPressure = clamp(this.lastEventPressure || 0, 0, 1);
+    const dampenedPrevious = previousPressure * (1 - rebound);
+
+    this.lastEventPressure = Math.max(dampenedPrevious, pressurePeak);
     this.energy = Math.max(0, Math.min(maxTileEnergy, this.energy));
   }
 

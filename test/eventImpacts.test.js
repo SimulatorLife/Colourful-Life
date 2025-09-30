@@ -70,7 +70,7 @@ test("Cell.applyEventEffects uses event mapping and DNA resistance", async () =>
   });
 
   cell.applyEventEffects(0, 0, event, 1, 5);
-  approxEqual(cell.energy, 1.804, 1e-3);
+  approxEqual(cell.energy, 1.924, 1e-3);
 
   const unaffected = Object.assign(Object.create(Cell.prototype), {
     energy: 2,

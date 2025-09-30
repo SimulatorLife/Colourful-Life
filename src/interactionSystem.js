@@ -387,7 +387,11 @@ export default class InteractionSystem {
       densityEffectMultiplier,
       combatEdgeSharpness,
     });
-    const attackerWins = Math.random() < odds.attackerWinChance;
+    const fightRng =
+      typeof attacker?.resolveSharedRng === "function"
+        ? attacker.resolveSharedRng(defender, "fightOutcome")
+        : Math.random;
+    const attackerWins = fightRng() < odds.attackerWinChance;
     const intensity = clamp(
       0.5 + Math.abs(odds.edge) * 0.9 + Math.abs(odds.attackerWinChance - 0.5),
       0,
