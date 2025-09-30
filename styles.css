@@ -284,49 +284,110 @@ canvas {
 
 /* Leaderboard panel */
 .leaderboard-panel h3 {
-  margin: 0 0 var(--space-md);
+  margin: 0;
   font-size: 16px;
   color: var(--color-text);
 }
 
-.leaderboard-panel .control-line {
-  align-items: flex-start;
+.leaderboard-panel .panel-body {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.leaderboard-entry {
+  --leaderboard-entry-color: transparent;
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-accent);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--leaderboard-entry-color);
+  border-radius: var(--radius-sm);
+}
+
+.leaderboard-entry-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  justify-content: space-between;
+}
+
+.leaderboard-rank {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.leaderboard-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.leaderboard-summary {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
   gap: var(--space-sm);
 }
 
-.leaderboard-panel .control-value {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  text-align: right;
-  white-space: normal;
+.leaderboard-summary-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-subtle);
+}
+
+.leaderboard-summary-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
 }
 
 .leaderboard-stats {
   display: grid;
-  gap: 4px;
+  gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
 .leaderboard-stat {
-  display: grid;
-  grid-template-columns: auto auto;
-  gap: var(--space-xs, 6px);
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  min-width: 0;
 }
 
 .leaderboard-stat-label {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .leaderboard-stat-value {
-  min-width: 5ch;
-  text-align: right;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
   font-variant-numeric: tabular-nums;
+}
+
+.leaderboard-empty-state {
+  padding: var(--space-md);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  color: var(--color-text-subtle);
+  font-size: 13px;
 }
 
 /* Metrics and leaderboard boxes */
