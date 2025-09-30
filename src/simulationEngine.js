@@ -8,6 +8,7 @@ import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
   UI_SLIDER_CONFIG,
+  COMBAT_EDGE_SHARPNESS_DEFAULT,
   resolveSimulationDefaults,
 } from './config.js';
 
@@ -207,6 +208,10 @@ export default class SimulationEngine {
 
     const defaults = resolveSimulationDefaults(config);
 
+    this.autoPauseOnBlur = Boolean(defaults.autoPauseOnBlur);
+    this._autoPauseResumePending = false;
+    this._autoPauseCleanup = null;
+
     this.state = {
       paused: Boolean(defaults.paused),
       updatesPerSecond: Math.max(1, Math.round(defaults.updatesPerSecond)),
@@ -218,6 +223,7 @@ export default class SimulationEngine {
       eventStrengthMultiplier: defaults.eventStrengthMultiplier,
       energyRegenRate: defaults.energyRegenRate,
       energyDiffusionRate: defaults.energyDiffusionRate,
+      combatEdgeSharpness: defaults.combatEdgeSharpness,
       showObstacles: defaults.showObstacles,
       showEnergy: defaults.showEnergy,
       showDensity: defaults.showDensity,
@@ -225,6 +231,7 @@ export default class SimulationEngine {
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
+      autoPauseOnBlur: this.autoPauseOnBlur,
     };
     this.lingerPenalty = defaults.lingerPenalty;
 
@@ -252,6 +259,8 @@ export default class SimulationEngine {
     this.frameHandle = null;
 
     this.listeners = new Map();
+
+    this._autoPauseCleanup = this.#installAutoPauseHandlers(win, doc);
 
     if (autoStart) {
       this.start();
@@ -343,6 +352,69 @@ export default class SimulationEngine {
     return changed;
   }
 
+  #handleAutoPauseTrigger() {
+    if (!this.autoPauseOnBlur) return;
+    if (this._autoPauseResumePending) return;
+    if (!this.running) return;
+    if (this.isPaused()) return;
+
+    this.pause();
+
+    if (this.isPaused()) {
+      this._autoPauseResumePending = true;
+    }
+  }
+
+  #handleAutoPauseResume() {
+    if (!this._autoPauseResumePending) return;
+
+    this.resume();
+    this._autoPauseResumePending = false;
+  }
+
+  #installAutoPauseHandlers(win, doc) {
+    if (!win || typeof win.addEventListener !== 'function') return () => {};
+
+    const visibilityHandler = () => {
+      if (!this.autoPauseOnBlur) return;
+
+      const hidden = doc?.visibilityState === 'hidden' || doc?.hidden === true;
+
+      if (hidden) {
+        this.#handleAutoPauseTrigger();
+      } else {
+        this.#handleAutoPauseResume();
+      }
+    };
+
+    const blurHandler = () => {
+      if (!this.autoPauseOnBlur) return;
+      if (doc && doc.visibilityState === 'hidden') return;
+
+      this.#handleAutoPauseTrigger();
+    };
+
+    const focusHandler = () => {
+      this.#handleAutoPauseResume();
+    };
+
+    const pageShowHandler = () => {
+      this.#handleAutoPauseResume();
+    };
+
+    doc?.addEventListener('visibilitychange', visibilityHandler);
+    win.addEventListener('blur', blurHandler);
+    win.addEventListener('focus', focusHandler);
+    win.addEventListener('pageshow', pageShowHandler);
+
+    return () => {
+      doc?.removeEventListener('visibilitychange', visibilityHandler);
+      win.removeEventListener('blur', blurHandler);
+      win.removeEventListener('focus', focusHandler);
+      win.removeEventListener('pageshow', pageShowHandler);
+    };
+  }
+
   #scheduleNextFrame() {
     if (!this.running || this.frameHandle != null) return;
 
@@ -414,6 +486,7 @@ export default class SimulationEngine {
         lowDiversityReproMultiplier:
           this.state.lowDiversityReproMultiplier ??
           UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default,
+        combatEdgeSharpness: this.state.combatEdgeSharpness ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
       });
 
       this.lastSnapshot = snapshot;
@@ -489,6 +562,10 @@ export default class SimulationEngine {
     const paused = Boolean(value);
     const changed = this.#updateState({ paused });
 
+    if (!paused) {
+      this._autoPauseResumePending = false;
+    }
+
     if (!paused && this.running) {
       this.#scheduleNextFrame();
     }
@@ -524,6 +601,15 @@ export default class SimulationEngine {
       this.caf(this.frameHandle);
       this.frameHandle = null;
     }
+  }
+
+  destroy() {
+    if (typeof this._autoPauseCleanup === 'function') {
+      this._autoPauseCleanup();
+      this._autoPauseCleanup = null;
+    }
+
+    this.stop();
   }
 
   /**
@@ -579,6 +665,15 @@ export default class SimulationEngine {
     });
 
     this.#updateStateAndFlag({ mutationMultiplier: sanitized });
+  }
+
+  setCombatEdgeSharpness(value) {
+    const sanitized = sanitizeNumeric(value, {
+      fallback: this.state.combatEdgeSharpness,
+      min: 0.1,
+    });
+
+    this.#updateStateAndFlag({ combatEdgeSharpness: sanitized });
   }
 
   setDensityEffectMultiplier(value) {
@@ -682,6 +777,20 @@ export default class SimulationEngine {
     this.emit('state', { state: this.getStateSnapshot(), changes: { lingerPenalty: sanitized } });
   }
 
+  setAutoPauseOnBlur(value) {
+    const enabled = Boolean(value);
+
+    if (this.autoPauseOnBlur === enabled) return;
+
+    this.autoPauseOnBlur = enabled;
+
+    if (!enabled) {
+      this._autoPauseResumePending = false;
+    }
+
+    this.#updateState({ autoPauseOnBlur: enabled });
+  }
+
   updateSetting(key, value) {
     switch (key) {
       case 'societySimilarity':
@@ -695,6 +804,9 @@ export default class SimulationEngine {
         break;
       case 'eventFrequencyMultiplier':
         this.setEventFrequencyMultiplier(value);
+        break;
+      case 'combatEdgeSharpness':
+        this.setCombatEdgeSharpness(value);
         break;
       case 'densityEffectMultiplier':
         this.setDensityEffectMultiplier(value);
@@ -732,6 +844,9 @@ export default class SimulationEngine {
         break;
       case 'lingerPenalty':
         this.setLingerPenalty(value);
+        break;
+      case 'autoPauseOnBlur':
+        this.setAutoPauseOnBlur(value);
         break;
       default:
         break;

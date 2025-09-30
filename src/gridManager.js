@@ -11,6 +11,7 @@ import {
   ENERGY_REGEN_RATE_DEFAULT,
   ENERGY_DIFFUSION_RATE_DEFAULT,
   DENSITY_RADIUS_DEFAULT,
+  COMBAT_EDGE_SHARPNESS_DEFAULT,
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
 } from './config.js';
@@ -80,6 +81,7 @@ export default class GridManager {
   static energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT;
   static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
   static maxTileEnergy = MAX_TILE_ENERGY;
+  static combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -1433,6 +1435,7 @@ export default class GridManager {
       enemySimilarity,
       eventStrengthMultiplier,
       mutationMultiplier,
+      combatEdgeSharpness,
     }
   ) {
     const cell = this.grid[row][col];
@@ -1497,6 +1500,7 @@ export default class GridManager {
         stats,
         densityEffectMultiplier,
         densityGrid,
+        combatEdgeSharpness,
       })
     ) {
       return;
@@ -1596,16 +1600,18 @@ export default class GridManager {
 
     if (diversity < diversityThreshold) {
       penalizedForSimilarity = true;
-      if (penaltyBase > 0) {
+      if (penaltyBase <= 0) {
+        penaltyMultiplier = 0;
+        effectiveReproProb = 0;
+      } else if (penaltyBase > 0) {
         const penaltyIntensity = clamp(0.4 + diversityPressure * 0.6, 0, 1);
 
         penaltyMultiplier = lerp(1, penaltyBase, penaltyIntensity);
         effectiveReproProb =
           penaltyMultiplier <= 0 ? 0 : clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
-      } else if (diversityPressure > 0) {
-        const reduction = clamp(1 - (diversityThreshold - diversity) * diversityPressure, 0, 1);
-
-        effectiveReproProb = clamp(effectiveReproProb * reduction, 0, 1);
+      } else {
+        penaltyMultiplier = penaltyBase;
+        effectiveReproProb = 0;
       }
     } else if (diversityPressure > 0 && diversityThreshold < 1) {
       const normalizedExcess = clamp(
@@ -1755,7 +1761,7 @@ export default class GridManager {
     col,
     cell,
     { enemies, society = [] },
-    { stats, densityEffectMultiplier, densityGrid }
+    { stats, densityEffectMultiplier, densityGrid, combatEdgeSharpness }
   ) {
     if (!Array.isArray(enemies) || enemies.length === 0) return false;
 
@@ -1807,6 +1813,7 @@ export default class GridManager {
             stats,
             densityGrid,
             densityEffectMultiplier,
+            combatEdgeSharpness,
           });
       } else {
         this.boundMoveToTarget(
@@ -1889,9 +1896,13 @@ export default class GridManager {
     mutationMultiplier = 1,
     matingDiversityThreshold,
     lowDiversityReproMultiplier,
+    combatEdgeSharpness = GridManager.combatEdgeSharpness,
   } = {}) {
     const stats = this.stats;
     const eventManager = this.eventManager;
+    const combatSharpness = Number.isFinite(combatEdgeSharpness)
+      ? combatEdgeSharpness
+      : GridManager.combatEdgeSharpness;
 
     this.setMatingDiversityOptions({
       threshold:
@@ -1943,6 +1954,7 @@ export default class GridManager {
         enemySimilarity,
         eventStrengthMultiplier,
         mutationMultiplier,
+        combatEdgeSharpness: combatSharpness,
       });
     }
 

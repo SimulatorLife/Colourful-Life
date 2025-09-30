@@ -47,6 +47,7 @@ export default class UIManager {
     this.speedMultiplier = defaults.speedMultiplier;
     this.densityEffectMultiplier = defaults.densityEffectMultiplier;
     this.mutationMultiplier = defaults.mutationMultiplier;
+    this.combatEdgeSharpness = defaults.combatEdgeSharpness;
     this.matingDiversityThreshold = defaults.matingDiversityThreshold;
     this.lowDiversityReproMultiplier = defaults.lowDiversityReproMultiplier;
     this.energyRegenRate = defaults.energyRegenRate; // base logistic regen rate (0..0.2)
@@ -58,8 +59,10 @@ export default class UIManager {
     this.showEnergy = defaults.showEnergy;
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
+    this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? 'none';
     this.lingerPenalty = defaults.lingerPenalty;
+    this.autoPauseCheckbox = null;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
 
@@ -673,6 +676,17 @@ export default class UIManager {
         setValue: (v) => this.#updateSetting('mutationMultiplier', v),
         position: 'beforeOverlays',
       }),
+      withSliderConfig('combatEdgeSharpness', {
+        label: 'Combat Edge Sharpness',
+        min: 0.5,
+        max: 6,
+        step: 0.1,
+        title: 'Controls how sharply combat power differences translate into win odds (0.5..6)',
+        format: (v) => v.toFixed(2),
+        getValue: () => this.combatEdgeSharpness,
+        setValue: (v) => this.#updateSetting('combatEdgeSharpness', v),
+        position: 'beforeOverlays',
+      }),
       withSliderConfig('lowDiversityReproMultiplier', {
         label: 'Low Diversity Penalty ×',
         min: 0,
@@ -725,6 +739,17 @@ export default class UIManager {
     generalConfigs
       .filter((cfg) => cfg.position === 'beforeOverlays')
       .forEach((cfg) => renderSlider(cfg, generalGroup));
+
+    this.autoPauseCheckbox = this.#addCheckbox(
+      generalGroup,
+      'Pause When Hidden',
+      'Automatically pause when the tab or window loses focus, resuming on return.',
+      this.autoPauseOnBlur,
+      (checked) => {
+        this.setAutoPauseOnBlur(checked);
+        this.#updateSetting('autoPauseOnBlur', checked);
+      }
+    );
 
     return { renderSlider, withSliderConfig, energyConfigs, generalConfigs, generalGroup };
   }
@@ -1044,6 +1069,13 @@ export default class UIManager {
       this.stepButton.title = this.paused
         ? 'Advance one tick while paused to inspect changes frame-by-frame.'
         : 'Pause the simulation to enable single-step playback.';
+    }
+  }
+
+  setAutoPauseOnBlur(enabled) {
+    this.autoPauseOnBlur = Boolean(enabled);
+    if (this.autoPauseCheckbox) {
+      this.autoPauseCheckbox.checked = this.autoPauseOnBlur;
     }
   }
 
