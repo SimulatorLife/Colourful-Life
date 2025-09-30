@@ -44,7 +44,7 @@ export function accumulateEventModifiers({
   eventStrengthMultiplier = 1,
   isEventAffecting,
   getEventEffect,
-  effectCache: providedEffectCache,
+  effectCache: sharedEffectCache,
 }) {
   let regenMultiplier = 1;
   let regenAdd = 0;
@@ -66,14 +66,13 @@ export function accumulateEventModifiers({
   // repeatedly resolve identical configuration objects during tight update
   // loops. When a cache is provided, reuse it across invocations to avoid
   // repeatedly allocating identical maps.
-  const effectCache =
-    resolveEffect &&
-    providedEffectCache &&
-    typeof providedEffectCache.get === "function"
-      ? providedEffectCache
-      : resolveEffect
-        ? new Map()
-        : null;
+  // Reuse a shared cache when callers supply one so neighbouring tiles can
+  // piggyback on the same resolved effect objects during a tick.
+  const reusableEffectCache =
+    resolveEffect && sharedEffectCache && typeof sharedEffectCache.get === "function"
+      ? sharedEffectCache
+      : null;
+  const effectCache = reusableEffectCache ?? (resolveEffect ? new Map() : null);
   const strengthMultiplier = Number(eventStrengthMultiplier || 1);
 
   for (const ev of events) {
