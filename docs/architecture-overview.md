@@ -32,6 +32,7 @@ This document captures how the Colourful Life simulation composes its core syste
 
 - **EventManager** spawns periodic floods, droughts, heatwaves, and coldwaves. Events carry strength, duration, and a rectangular affected area.
 - **eventEffects** maps event types to regeneration/drain modifiers and per-cell effects (energy loss, resistance genes).
+- **eventContext** (`src/events/eventContext.js`) exposes helpers used by the grid and energy systems to determine whether an event affects a tile. Headless consumers can reuse it to keep behaviour consistent without depending on DOM state.
 - Overlay rendering uses `EventManager.getColor` to shade the canvas and exposes `activeEvents` for analytics.
 
 ### Genetics and Brains
@@ -48,11 +49,18 @@ This document captures how the Colourful Life simulation composes its core syste
 - Updates stats counters, applies energy costs, and notifies participating cells about interaction outcomes.
 - Works through a `GridInteractionAdapter` to avoid tightly coupling to `GridManager` internals—useful for testing or custom grids.
 
+### Stats and telemetry
+
+- **Stats** (`src/stats.js`) accumulates per-tick metrics, maintains rolling history for charts, and reports aggregate counters (births, deaths, fights, cooperations).
+- **Leaderboard** (`src/leaderboard.js`) combines `computeFitness` output with brain snapshots to surface top-performing organisms.
+- **BrainDebugger** (`src/brainDebugger.js`) mirrors neuron traces into the browser console for inspection. `SimulationEngine` forwards snapshots each tick when the debugger is available.
+
 ### UI and overlays
 
 - `UIManager` uses builders in `src/ui/controlBuilders.js` to generate consistent control rows and slider behaviour.
 - Overlays (`src/overlays.js`) render density, energy, fitness, and obstacle layers on top of the main canvas.
 - Selection tooling (`src/selectionManager.js`) exposes reusable mating zones and user-drawn rectangles that gate reproduction.
+- `ReproductionZonePolicy` (`src/grid/reproductionZonePolicy.js`) keeps `GridManager`'s reproduction flow decoupled from the selection implementation by translating zone checks into simple allow/deny results.
 
 ## Headless and scripted usage
 
@@ -78,5 +86,6 @@ When running outside the browser:
 ## Related scripts
 
 - `scripts/profile-energy.mjs` benchmarks the grid preparation loop. Tune dimensions via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, and `PERF_ITERATIONS`.
+- Additional helpers in `scripts/` showcase headless usage patterns. Each script is documented inline with configuration tips.
 
 For further guidance, browse the inline JSDoc across `src/` and the tests under `test/` to see concrete usage patterns.
