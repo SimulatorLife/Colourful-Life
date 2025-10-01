@@ -636,6 +636,7 @@ export default class Stats {
     const pop = snapshot?.population || 0;
     const cells = snapshot?.cells || [];
     const meanEnergy = pop ? snapshot.totalEnergy / pop : 0;
+    // Age is tracked in simulation ticks; convert with the active tick rate if seconds are needed.
     const meanAge = pop ? snapshot.totalAge / pop : 0;
     const diversity = this.estimateDiversity(cells);
 
