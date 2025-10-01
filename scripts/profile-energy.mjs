@@ -1,79 +1,88 @@
 import { performance } from "node:perf_hooks";
 
-/**
- * Benchmarks the grid energy preparation loop in a headless Node environment.
- * Use the PERF_* environment variables to tune grid size, warmup, and iteration
- * counts when profiling changes to the energy system.
- */
-if (typeof globalThis.window === "undefined") {
-  globalThis.window = {};
-}
+const startGlobal = performance.now();
+// Delay dynamic imports until after headless globals configured
 
-const rows = Number.parseInt(process.env.PERF_ROWS ?? "", 10) || 120;
-const cols = Number.parseInt(process.env.PERF_COLS ?? "", 10) || 120;
-const warmup = Number.parseInt(process.env.PERF_WARMUP ?? "", 10) || 10;
-const iterations = Number.parseInt(process.env.PERF_ITERATIONS ?? "", 10) || 60;
+// minimal canvas context stub
+const ctxStub = {
+  clearRect() {},
+  fillRect() {},
+  strokeRect() {},
+};
 
-const [
-  { default: GridManager },
-  { default: EventManager },
-  { ENERGY_REGEN_RATE_DEFAULT, ENERGY_DIFFUSION_RATE_DEFAULT },
-  { default: Stats },
-] = await Promise.all([
+const statsStub = {
+  onBirth() {},
+  onDeath() {},
+};
+
+globalThis.window = {
+  eventManager: null,
+  ctx: ctxStub,
+  cellSize: 5,
+  stats: statsStub,
+};
+
+globalThis.document = {};
+
+globalThis.performance = globalThis.performance ?? {
+  now: () => Date.now(),
+};
+
+const [{ default: GridManager }, { default: EventManager }] = await Promise.all([
   import("../src/grid/gridManager.js"),
   import("../src/events/eventManager.js"),
-  import("../src/config.js"),
-  import("../src/stats.js"),
 ]);
 
-const eventManager = new EventManager(rows, cols, Math.random);
-const stats = new Stats();
+const rows = 60;
+const cols = 60;
+const eventManager = new EventManager(rows, cols, Math.random, {
+  startWithEvent: true,
+});
+
 const grid = new GridManager(rows, cols, {
   eventManager,
-  stats,
-  ctx: null,
-  cellSize: 5,
+  ctx: ctxStub,
+  stats: statsStub,
   rng: Math.random,
 });
 
-const tickOptions = {
-  eventManager,
-  eventStrengthMultiplier: 1,
-  energyRegenRate: ENERGY_REGEN_RATE_DEFAULT,
-  energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
-  densityEffectMultiplier: 1,
-};
-
-const runTick = () => {
-  grid.prepareTick(tickOptions);
-};
+const warmup = 20;
+const iterations = 200;
 
 for (let i = 0; i < warmup; i++) {
-  runTick();
-  eventManager.updateEvent();
+  grid.prepareTick({
+    eventManager,
+    eventStrengthMultiplier: 1,
+    energyRegenRate: grid.constructor.energyRegenRate,
+    energyDiffusionRate: grid.constructor.energyDiffusionRate,
+    densityEffectMultiplier: 1,
+  });
 }
 
 const start = performance.now();
 
 for (let i = 0; i < iterations; i++) {
-  runTick();
-  eventManager.updateEvent();
+  grid.prepareTick({
+    eventManager,
+    eventStrengthMultiplier: 1,
+    energyRegenRate: grid.constructor.energyRegenRate,
+    energyDiffusionRate: grid.constructor.energyDiffusionRate,
+    densityEffectMultiplier: 1,
+  });
 }
-const totalMs = performance.now() - start;
+const end = performance.now();
 
-const averageMsPerTick = totalMs / iterations;
+const durationMs = end - start;
 
 console.log(
   JSON.stringify(
     {
       rows,
       cols,
-      warmup,
       iterations,
-      totalMs,
-      averageMsPerTick,
-      activeEvents: eventManager.activeEvents.length,
-      population: grid.activeCells.size,
+      durationMs,
+      msPerTick: durationMs / iterations,
+      totalRuntimeMs: end - startGlobal,
     },
     null,
     2,

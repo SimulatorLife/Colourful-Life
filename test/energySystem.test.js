@@ -130,4 +130,47 @@ test("computeTileEnergyUpdate applies density penalties and diffusion", async ()
   approxEqual(arrayResult.drain, scalarResult.drain, 1e-6);
 });
 
+test("computeTileEnergyUpdate populates provided output object", async () => {
+  const [
+    { computeTileEnergyUpdate },
+    { getEventEffect },
+    { isEventAffecting },
+    { REGEN_DENSITY_PENALTY },
+  ] = await Promise.all([
+    import("../src/energySystem.js"),
+    import("../src/events/eventEffects.js"),
+    import("../src/events/eventManager.js"),
+    import("../src/config.js"),
+  ]);
+
+  const events = [{ eventType: "drought", strength: 0.75, affectedArea: baseArea }];
+  const options = {
+    currentEnergy: 1.5,
+    density: 0.2,
+    events,
+    row: 0,
+    col: 0,
+    neighborSum: 4,
+    neighborCount: 2,
+    config: {
+      maxTileEnergy: 5,
+      regenRate: 0.35,
+      diffusionRate: 0.1,
+      densityEffectMultiplier: 1,
+      regenDensityPenalty: REGEN_DENSITY_PENALTY,
+      isEventAffecting,
+      getEventEffect,
+    },
+  };
+
+  const baseline = computeTileEnergyUpdate(options);
+  const reusable = { nextEnergy: 0, drain: 0, appliedEvents: [] };
+  const reused = computeTileEnergyUpdate(options, reusable);
+
+  assert.is(reused, reusable);
+  approxEqual(reused.nextEnergy, baseline.nextEnergy, 1e-6);
+  approxEqual(reused.drain, baseline.drain, 1e-6);
+  assert.equal(reused.appliedEvents, baseline.appliedEvents);
+});
+
 test.run();

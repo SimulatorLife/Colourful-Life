@@ -1194,6 +1194,11 @@ export default class GridManager {
       col: 0,
       config: sharedConfig,
     };
+    const energyComputation = {
+      nextEnergy: 0,
+      drain: 0,
+      appliedEvents: [],
+    };
 
     let eventsByRow = null;
 
@@ -1273,7 +1278,10 @@ export default class GridManager {
         computeOptions.row = r;
         computeOptions.col = c;
 
-        const { nextEnergy } = computeTileEnergyUpdate(computeOptions);
+        const { nextEnergy } = computeTileEnergyUpdate(
+          computeOptions,
+          energyComputation,
+        );
 
         nextRow[c] = nextEnergy;
         if (deltaRow) {
