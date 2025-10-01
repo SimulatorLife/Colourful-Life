@@ -154,11 +154,59 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   autoPauseOnBlur: true,
 });
 
+const BOOLEAN_DEFAULT_KEYS = Object.freeze([
+  "paused",
+  "showObstacles",
+  "showEnergy",
+  "showDensity",
+  "showFitness",
+  "showCelebrationAuras",
+  "autoPauseOnBlur",
+]);
+
+function coerceBoolean(candidate, fallback) {
+  if (typeof candidate === "boolean") {
+    return candidate;
+  }
+
+  if (candidate == null) {
+    return fallback;
+  }
+
+  if (typeof candidate === "number") {
+    return Number.isFinite(candidate) ? candidate !== 0 : fallback;
+  }
+
+  if (typeof candidate === "string") {
+    const normalized = candidate.trim().toLowerCase();
+
+    if (normalized.length === 0) return fallback;
+    if (normalized === "true" || normalized === "yes" || normalized === "on") {
+      return true;
+    }
+    if (normalized === "false" || normalized === "no" || normalized === "off") {
+      return false;
+    }
+
+    const numeric = Number(normalized);
+
+    if (!Number.isNaN(numeric)) {
+      return numeric !== 0;
+    }
+
+    return fallback;
+  }
+
+  return Boolean(candidate);
+}
+
 /**
  * Resolves simulation defaults while allowing selective overrides.
  *
  * The helper keeps UI builders and headless adapters in sync by ensuring any
  * omitted setting falls back to the canonical baseline defined above.
+ * Boolean overrides are coerced so persisted string values such as "false"
+ * do not accidentally flip toggles on when simulations are rehydrated.
  *
  * @param {Partial<typeof SIMULATION_DEFAULTS>} [overrides] - Custom values
  *   to merge into the defaults.
@@ -171,5 +219,11 @@ export function resolveSimulationDefaults(overrides = {}) {
     return { ...defaults };
   }
 
-  return { ...defaults, ...overrides };
+  const merged = { ...defaults, ...overrides };
+
+  for (const key of BOOLEAN_DEFAULT_KEYS) {
+    merged[key] = coerceBoolean(merged[key], defaults[key]);
+  }
+
+  return merged;
 }

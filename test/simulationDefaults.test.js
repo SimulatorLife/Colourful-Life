@@ -143,6 +143,30 @@ test("resolveSimulationDefaults returns expected baseline configuration", async 
   );
 });
 
+test("resolveSimulationDefaults coerces string boolean overrides", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+  const defaults = resolveSimulationDefaults({
+    paused: "false",
+    showObstacles: "false",
+    showEnergy: "true",
+    showDensity: "0",
+    showFitness: "1",
+    showCelebrationAuras: "yes",
+    autoPauseOnBlur: "off",
+  });
+
+  assert.is(defaults.paused, false);
+  assert.is(defaults.showObstacles, false);
+  assert.is(defaults.showEnergy, true);
+  assert.is(defaults.showDensity, false);
+  assert.is(defaults.showFitness, true);
+  assert.is(defaults.showCelebrationAuras, true);
+  assert.is(defaults.autoPauseOnBlur, false);
+
+  // Non-boolean defaults remain untouched when not overridden.
+  assert.is(defaults.updatesPerSecond, SIMULATION_DEFAULTS.updatesPerSecond);
+});
+
 test("UIManager constructor seeds settings from resolveSimulationDefaults", async () => {
   const originalDocument = global.document;
   const originalNode = global.Node;

@@ -5,6 +5,7 @@ import SelectionManager from "./ui/selectionManager.js";
 import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
 import { createHeadlessUiManager } from "./ui/headlessUiManager.js";
+import { resolveSimulationDefaults } from "./config.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
@@ -207,6 +208,8 @@ export function createSimulation({
       ? config.drawOverlays
       : defaultDrawOverlays;
 
+  const sanitizedDefaults = resolveSimulationDefaults(config);
+
   const engine = new SimulationEngine({
     canvas: resolvedCanvas,
     config,
@@ -325,7 +328,7 @@ export function createSimulation({
     );
   }
 
-  const startPaused = Boolean(config.paused ?? false);
+  const startPaused = Boolean(sanitizedDefaults.paused);
 
   if (autoStart) {
     engine.start();
