@@ -120,6 +120,24 @@ test("headless UI forwards setting changes to the engine", async () => {
   simulation.destroy();
 });
 
+test("headless UI clamps diversity controls to the 0..1 range", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({ headless: true, autoStart: false });
+
+  simulation.uiManager.setMatingDiversityThreshold(2);
+  simulation.uiManager.setLowDiversityReproMultiplier(-0.25);
+
+  const state = simulation.engine.getStateSnapshot();
+
+  assert.is(simulation.uiManager.getMatingDiversityThreshold(), 1);
+  assert.is(state.matingDiversityThreshold, 1);
+  assert.is(simulation.uiManager.getLowDiversityReproMultiplier(), 0);
+  assert.is(state.lowDiversityReproMultiplier, 0);
+
+  simulation.destroy();
+});
+
 test("headless UI clamps update frequency like the engine", async () => {
   const { createSimulation } = await simulationModulePromise;
 
