@@ -27,6 +27,16 @@ function createFitnessPalette(steps, hue) {
   return palette;
 }
 
+/**
+ * Paints translucent rectangles for each active environmental event. Colour
+ * resolution is delegated to the supplied callback so custom palettes can be
+ * injected by UI extensions.
+ *
+ * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
+ * @param {number} cellSize - Width/height of a single grid cell in pixels.
+ * @param {Array} activeEvents - Events with `affectedArea` rectangles to render.
+ * @param {(event: object) => string} [getColor] - Optional colour resolver invoked per event.
+ */
 export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
   if (!ctx || !Array.isArray(activeEvents) || activeEvents.length === 0) return;
 
@@ -222,6 +232,16 @@ function drawEnergyLegend(ctx, cellSize, cols, rows, stats, maxTileEnergy) {
   ctx.restore();
 }
 
+/**
+ * Resolves the local density value for a given tile by consulting whichever
+ * API the grid exposes. GridManager provides `getDensityAt`, but tests and
+ * headless consumers may only surface `densityGrid` or `localDensity`.
+ *
+ * @param {object} grid - Grid-like object returned by `GridManager`.
+ * @param {number} r - Row index to inspect.
+ * @param {number} c - Column index to inspect.
+ * @returns {number} Normalized density value for the tile.
+ */
 export function getDensityAt(grid, r, c) {
   if (typeof grid.getDensityAt === "function") return grid.getDensityAt(r, c);
   if (Array.isArray(grid.densityGrid)) return grid.densityGrid[r]?.[c] ?? 0;
@@ -230,6 +250,14 @@ export function getDensityAt(grid, r, c) {
   return 0;
 }
 
+/**
+ * Maps a normalized density value (0..1) to an RGBA colour along a perceptually
+ * smooth gradient used by the density heatmap and legend.
+ *
+ * @param {number} normalizedValue - Density value in the 0..1 range.
+ * @param {{opaque?: boolean}} [options] - When `opaque` is true the alpha channel is set to 1.
+ * @returns {string} CSS rgba() string representing the density colour.
+ */
 export function densityToRgba(normalizedValue, { opaque = false } = {}) {
   const clampedValue = Number.isFinite(normalizedValue) ? normalizedValue : 0;
   const t = clamp01(clampedValue);
@@ -344,6 +372,15 @@ function getSelectionZoneEntries(selectionManager) {
   }
 }
 
+/**
+ * Fills active reproduction zones using cached geometry supplied by the
+ * selection manager. Zones are rendered on top of the canvas to mirror UI state
+ * in the visual overlays.
+ *
+ * @param {import('../ui/selectionManager.js').default|undefined} selectionManager - Active selection manager.
+ * @param {CanvasRenderingContext2D} ctx - Canvas context used for drawing.
+ * @param {number} cellSize - Size of a single grid cell in pixels.
+ */
 function drawSelectionZones(selectionManager, ctx, cellSize) {
   if (!hasActiveSelectionZones(selectionManager)) return;
 
@@ -391,6 +428,16 @@ function drawSelectionZones(selectionManager, ctx, cellSize) {
 
 export { drawSelectionZones };
 
+/**
+ * Master overlay renderer invoked by {@link SimulationEngine}. It orchestrates
+ * event shading, reproduction zones, obstacle masks, and heatmaps depending on
+ * the flags provided by UI controls.
+ *
+ * @param {object} grid - Grid manager exposing obstacle, energy, and density data.
+ * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
+ * @param {number} cellSize - Width/height of each cell in pixels.
+ * @param {object} [opts] - Overlay options and data dependencies.
+ */
 export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   const {
     showEnergy,
@@ -425,6 +472,15 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   }
 }
 
+/**
+ * Renders a green energy heatmap layer plus summary legend showing minimum,
+ * maximum, and mean tile energy.
+ *
+ * @param {object} grid - Grid-like object exposing `energyGrid`, `rows`, and `cols`.
+ * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
+ * @param {number} cellSize - Width/height of each cell in pixels.
+ * @param {number} [maxTileEnergy=MAX_TILE_ENERGY] - Energy cap used to normalize colours.
+ */
 export function drawEnergyHeatmap(
   grid,
   ctx,
@@ -461,6 +517,14 @@ function ensureDensityScratchSize(size) {
   return densityScratchBuffer;
 }
 
+/**
+ * Visualizes population density across the grid using a blue→red gradient and
+ * accompanying legend so observers can contextualize numeric extremes.
+ *
+ * @param {object} grid - Grid-like object exposing `rows`, `cols`, and density helpers.
+ * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
+ * @param {number} cellSize - Width/height of each cell in pixels.
+ */
 export function drawDensityHeatmap(grid, ctx, cellSize) {
   const rows = grid.rows;
   const cols = grid.cols;
@@ -520,6 +584,15 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
   drawDensityLegend(ctx, cellSize, cols, rows, originalMin, originalMax);
 }
 
+/**
+ * Highlights the top performers from a leaderboard snapshot by tinting their
+ * grid cells using a warm palette. Lower performers are ignored to keep the
+ * overlay legible.
+ *
+ * @param {{rows:number, cols:number, entries:Array, maxFitness:number}} snapshot - Latest leaderboard snapshot.
+ * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
+ * @param {number} cellSize - Width/height of a single grid cell in pixels.
+ */
 export function drawFitnessHeatmap(snapshot, ctx, cellSize) {
   if (!snapshot || snapshot.maxFitness <= 0) return;
 

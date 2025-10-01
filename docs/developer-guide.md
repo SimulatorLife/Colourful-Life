@@ -50,6 +50,18 @@ Always run the formatter and linter before committing. Execute `npm test` when
 changing simulation logic, utilities, UI behaviour, or configuration that can
 affect runtime outcomes.
 
+## Configuration overrides
+
+- `COLOURFUL_LIFE_MAX_TILE_ENERGY` adjusts the per-tile energy ceiling. Set it
+  before running tests or headless scripts to explore higher or lower caps
+  without modifying `src/config.js`.
+- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` tunes how strongly local population
+  density suppresses regeneration (0 disables the penalty, 1 preserves the
+  default). Non-finite or out-of-range values are ignored and fall back to the
+  defaults resolved in [`src/config.js`](../src/config.js).
+- Both variables feed into the energy heatmap legends so overlays stay aligned
+  with the active configuration.
+
 ## Documentation conventions
 
 - Keep the README and architecture documents aligned with the current module
@@ -60,6 +72,13 @@ affect runtime outcomes.
 - Use JSDoc for exported functions and classes. Include parameter types,
   default values, return shapes, and noteworthy side effects. Internal helper
   functions should still carry brief comments when behaviour is non-obvious.
+- When adding a new module or exported helper, mirror the existing JSDoc style
+  and ensure every export (function, class, constant map) carries a concise
+  description so contributors can consume it without scanning implementation
+  details.
+- Periodically audit for missing docstrings by searching for `export function`
+  / `export default` declarations. Add coverage before shipping changes so the
+  codebase remains self-explanatory.
 - When deprecating behaviour, call it out explicitly in the relevant docs and
   add TODOs that reference follow-up issues where appropriate.
 - Inline comments should explain **why** code exists, not rephrase what it
