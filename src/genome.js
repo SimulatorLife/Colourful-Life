@@ -406,6 +406,31 @@ export class DNA {
     return 0.2 + 0.5 * this.geneFraction(GENE_LOCI.PARENTAL);
   }
 
+  // Minimum fraction of tile energy this genome expects per offspring
+  offspringEnergyDemandFrac() {
+    const rng = this.prngFor("offspringEnergyDemandFrac");
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const nurture = 0.22 + 0.58 * parental; // 0.22..0.80
+    const brood = 0.1 + 0.5 * fertility; // 0.10..0.60
+    const thrift = 0.2 + 0.6 * efficiency; // 0.20..0.80
+    const stamina = 0.14 + 0.46 * capacity; // 0.14..0.60
+    const boldness = 0.1 + 0.35 * risk; // 0.10..0.45
+    const base =
+      0.14 +
+      nurture * 0.45 +
+      brood * 0.28 +
+      boldness * 0.22 +
+      stamina * 0.25 -
+      thrift * 0.38;
+    const jitter = (rng() - 0.5) * 0.08; // deterministic per-genome wobble
+
+    return clamp(base + jitter, 0.08, 0.55);
+  }
+
   // How strongly aging increases maintenance costs and reduces fertility
   senescenceRate() {
     return 0.1 + 0.4 * (1 - this.geneFraction(GENE_LOCI.SENESCENCE));

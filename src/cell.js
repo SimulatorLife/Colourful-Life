@@ -270,25 +270,52 @@ export default class Cell {
         : typeof window !== "undefined" && window.GridManager?.maxTileEnergy != null
           ? window.GridManager.maxTileEnergy
           : MAX_TILE_ENERGY;
-    const calculateInvestment = (parent, starvation) => {
+    const demandFracA = clamp(
+      typeof parentA.dna?.offspringEnergyDemandFrac === "function"
+        ? parentA.dna.offspringEnergyDemandFrac()
+        : 0.22,
+      0.05,
+      0.85,
+    );
+    const demandFracB = clamp(
+      typeof parentB.dna?.offspringEnergyDemandFrac === "function"
+        ? parentB.dna.offspringEnergyDemandFrac()
+        : 0.22,
+      0.05,
+      0.85,
+    );
+    const calculateInvestment = (parent, starvation, demandFrac) => {
       const fracFn = parent.dna?.parentalInvestmentFrac;
       const investFrac = typeof fracFn === "function" ? fracFn.call(parent.dna) : 0.4;
-      const desired = Math.max(0, Math.min(parent.energy, parent.energy * investFrac));
+      const desiredBase = Math.max(
+        0,
+        Math.min(parent.energy, parent.energy * investFrac),
+      );
+      const targetEnergy =
+        resolvedMaxTileEnergy *
+        clamp(Number.isFinite(demandFrac) ? demandFrac : 0.22, 0, 1);
+      const desired = Math.max(desiredBase, targetEnergy);
       const maxSpend = Math.max(0, parent.energy - starvation);
 
       return Math.min(desired, maxSpend);
     };
     const starvationA = parentA.starvationThreshold(resolvedMaxTileEnergy);
     const starvationB = parentB.starvationThreshold(resolvedMaxTileEnergy);
-    const investA = calculateInvestment(parentA, starvationA);
-    const investB = calculateInvestment(parentB, starvationB);
+    const investA = calculateInvestment(parentA, starvationA, demandFracA);
+    const investB = calculateInvestment(parentB, starvationB, demandFracB);
 
     if (investA <= 0 || investB <= 0) return null;
 
+    const offspringEnergy = investA + investB;
+    const viabilityThreshold =
+      resolvedMaxTileEnergy * Math.max(demandFracA, demandFracB); // honor the pickier parent's viability floor
+
+    if (offspringEnergy + EPSILON < viabilityThreshold) {
+      return null;
+    }
+
     parentA.energy = Math.max(0, parentA.energy - investA);
     parentB.energy = Math.max(0, parentB.energy - investB);
-
-    const offspringEnergy = investA + investB;
     const offspring = new Cell(row, col, childDNA, offspringEnergy);
     const parentStrategies = [];
 
