@@ -859,6 +859,17 @@ export default class UIManager {
           window.grid.burstRandomCells();
       },
     });
+
+    this.autoPauseCheckbox = this.#addCheckbox(
+      body,
+      "Pause When Hidden",
+      "Automatically pause when the tab or window loses focus, resuming on return.",
+      this.autoPauseOnBlur,
+      (checked) => {
+        this.setAutoPauseOnBlur(checked);
+        this.#updateSetting("autoPauseOnBlur", checked);
+      },
+    );
   }
 
   #buildSliderGroups(body) {
@@ -1083,17 +1094,6 @@ export default class UIManager {
     generalConfigs
       .filter((cfg) => cfg.position === "beforeOverlays")
       .forEach((cfg) => renderSlider(cfg, generalGroup));
-
-    this.autoPauseCheckbox = this.#addCheckbox(
-      generalGroup,
-      "Pause When Hidden",
-      "Automatically pause when the tab or window loses focus, resuming on return.",
-      this.autoPauseOnBlur,
-      (checked) => {
-        this.setAutoPauseOnBlur(checked);
-        this.#updateSetting("autoPauseOnBlur", checked);
-      },
-    );
 
     return {
       renderSlider,
