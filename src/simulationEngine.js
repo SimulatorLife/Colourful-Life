@@ -241,7 +241,6 @@ export default class SimulationEngine {
       showObstacles: defaults.showObstacles,
       showEnergy: defaults.showEnergy,
       showDensity: defaults.showDensity,
-      showFitness: defaults.showFitness,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
@@ -532,7 +531,6 @@ export default class SimulationEngine {
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
       showDensity: this.state.showDensity ?? false,
-      showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
       maxTileEnergy: GridManager.maxTileEnergy,
       snapshot: this.lastSnapshot,
@@ -775,12 +773,11 @@ export default class SimulationEngine {
     this.#updateState({ leaderboardIntervalMs: sanitized });
   }
 
-  setOverlayVisibility({ showObstacles, showEnergy, showDensity, showFitness }) {
+  setOverlayVisibility({ showObstacles, showEnergy, showDensity }) {
     const entries = Object.entries({
       showObstacles,
       showEnergy,
       showDensity,
-      showFitness,
     })
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => [key, Boolean(value)]);
@@ -873,7 +870,6 @@ export default class SimulationEngine {
       case "showObstacles":
       case "showEnergy":
       case "showDensity":
-      case "showFitness":
         this.setOverlayVisibility({ [key]: value });
         break;
       case "lingerPenalty":

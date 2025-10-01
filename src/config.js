@@ -111,7 +111,6 @@ const BASE_SIMULATION_DEFAULTS = {
   showObstacles: true,
   showEnergy: false,
   showDensity: false,
-  showFitness: false,
   leaderboardIntervalMs: SLIDER_DEFAULTS.leaderboardIntervalMs,
   matingDiversityThreshold: SLIDER_DEFAULTS.matingDiversityThreshold,
   lowDiversityReproMultiplier: SLIDER_DEFAULTS.lowDiversityReproMultiplier,
