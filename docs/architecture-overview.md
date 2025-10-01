@@ -108,7 +108,7 @@ When running outside the browser:
 
 ## Related scripts
 
-- `scripts/profile-energy.mjs` benchmarks the grid preparation loop. Tune dimensions via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, and `PERF_ITERATIONS`.
+- `scripts/profile-energy.mjs` benchmarks the grid preparation loop. Tune dimensions via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and adjust the stub cell size with `PERF_CELL_SIZE`.
 - `scripts/clean-parcel.js` clears `dist/` and `.parcel-cache/` and underpins the `npm run clean:parcel` command for recovering from stubborn Parcel state.
 - Additional helpers in `scripts/` showcase headless usage patterns. Each script is documented inline with configuration tips.
 
