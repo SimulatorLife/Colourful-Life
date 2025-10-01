@@ -433,6 +433,119 @@ test("breed returns null when either parent lacks investable energy", () => {
   );
 });
 
+test("neural cooperation decisions modulate share fractions", () => {
+  const dna = new DNA(120, 80, 210);
+
+  dna.cooperateShareFrac = ({ energyDelta = 0, kinship = 0 } = {}) =>
+    clamp(0.25 + Math.max(0, -energyDelta) * 0.2 + kinship * 0.1, 0, 0.9);
+  const cell = new Cell(2, 2, dna, 6);
+
+  cell.energy = 6;
+  cell.brain = {
+    connectionCount: 4,
+    evaluateGroup(group, sensors) {
+      if (group !== "interaction") {
+        return { values: null, activationCount: 0, sensors: null, trace: null };
+      }
+
+      return {
+        values: { avoid: -3, fight: -2, cooperate: 4 },
+        activationCount: 3,
+        sensors: sensors ? Object.values(sensors) : null,
+        trace: null,
+      };
+    },
+    applySensorFeedback() {},
+  };
+  cell.interactionGenes = { avoid: 0.2, fight: 0.1, cooperate: 0.7 };
+  cell._rngCache = new Map([["interactionDecision", () => 0.99]]);
+
+  const partnerDna = new DNA(40, 220, 60);
+  const partner = { dna: partnerDna, energy: 1 };
+  const action = cell.chooseInteractionAction({
+    localDensity: 0.15,
+    densityEffectMultiplier: 1,
+    enemies: [],
+    allies: [{ target: partner }],
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+    tileEnergy: 0.4,
+    tileEnergyDelta: -0.1,
+  });
+
+  assert.is(action, "cooperate");
+
+  const maxEnergy = window.GridManager.maxTileEnergy;
+  const selfNorm = clamp(cell.energy / maxEnergy, 0, 1);
+  const partnerNorm = clamp(partner.energy / maxEnergy, 0, 1);
+  const kinship = clamp(cell.similarityTo(partner), 0, 1);
+  const baselineShare = dna.cooperateShareFrac({
+    energyDelta: partnerNorm - selfNorm,
+    kinship,
+  });
+  const intent = cell.createCooperationIntent({
+    row: cell.row,
+    col: cell.col,
+    targetRow: cell.row,
+    targetCol: cell.col + 1,
+    targetCell: partner,
+    maxTileEnergy: maxEnergy,
+  });
+
+  assert.ok(intent, "cooperation intent is produced");
+  const neuralShare = intent.metadata.shareFraction;
+
+  assert.ok(neuralShare > baselineShare, "neural intent boosts cooperation generosity");
+  assert.ok(neuralShare <= 1, "share fraction remains clamped");
+});
+
+test("legacy interaction keeps cooperation share at baseline", () => {
+  const dna = new DNA(40, 200, 60);
+
+  dna.cooperateShareFrac = ({ energyDelta = 0, kinship = 0 } = {}) =>
+    clamp(0.22 + Math.max(0, -energyDelta) * 0.18 + kinship * 0.08, 0, 0.85);
+  const cell = new Cell(1, 1, dna, 4);
+
+  cell.energy = 4;
+  cell.brain = { connectionCount: 0 };
+  cell.interactionGenes = { avoid: 0, fight: 0, cooperate: 1 };
+  cell._rngCache = new Map([["legacyInteractionChoice", () => 0.5]]);
+
+  const partnerDna = new DNA(60, 40, 90);
+  const partner = { dna: partnerDna, energy: 1 };
+  const action = cell.chooseInteractionAction({
+    localDensity: 0.25,
+    densityEffectMultiplier: 1,
+    enemies: [],
+    allies: [{ target: partner }],
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+  });
+
+  assert.is(action, "cooperate");
+
+  const maxEnergy = window.GridManager.maxTileEnergy;
+  const selfNorm = clamp(cell.energy / maxEnergy, 0, 1);
+  const partnerNorm = clamp(partner.energy / maxEnergy, 0, 1);
+  const kinship = clamp(cell.similarityTo(partner), 0, 1);
+  const baselineShare = dna.cooperateShareFrac({
+    energyDelta: partnerNorm - selfNorm,
+    kinship,
+  });
+  const intent = cell.createCooperationIntent({
+    row: cell.row,
+    col: cell.col,
+    targetRow: cell.row,
+    targetCol: cell.col + 1,
+    targetCell: partner,
+    maxTileEnergy: maxEnergy,
+  });
+
+  assert.ok(intent, "cooperation intent is produced without neural support");
+  assert.ok(
+    Math.abs(intent.metadata.shareFraction - baselineShare) <= 1e-12,
+    "fallback keeps share at baseline",
+  );
+});
+
 test("breed clamps investment so parents stop at starvation threshold", () => {
   const dnaA = new DNA(30, 240, 220);
   const dnaB = new DNA(200, 220, 60);

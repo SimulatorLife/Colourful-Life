@@ -617,6 +617,22 @@ export default class Cell {
     }
   }
 
+  #getDecisionOutcome(group) {
+    if (!this._decisionContextIndex?.has(group)) return null;
+
+    const context = this._decisionContextIndex.get(group);
+
+    if (!context) return null;
+
+    const { outcome } = context;
+
+    if (!outcome || typeof outcome !== "object" || Array.isArray(outcome)) {
+      return null;
+    }
+
+    return outcome;
+  }
+
   #resolveDecisionReward(
     decision,
     {
@@ -2979,13 +2995,30 @@ export default class Cell {
       0,
       1,
     );
-    const shareFraction =
+    const baseShare =
       typeof this.dna.cooperateShareFrac === "function"
         ? this.dna.cooperateShareFrac({
             energyDelta: partnerNorm - selfEnergyNorm,
             kinship,
           })
         : 0;
+    const shareResolution = this.#resolveCooperationShareFraction({
+      baseline: baseShare,
+      selfEnergy: selfEnergyNorm,
+      partnerEnergy: partnerNorm,
+      kinship,
+    });
+    const shareFraction = shareResolution.share;
+
+    this.#assignDecisionOutcome("interaction", {
+      shareFraction,
+      shareBaseline: shareResolution.baseShare,
+      shareNeuralTarget:
+        shareResolution.neuralTarget != null ? shareResolution.neuralTarget : null,
+      shareNeuralMix: shareResolution.neuralMix ?? 0,
+      shareNeuralSignal:
+        shareResolution.neuralSignal != null ? shareResolution.neuralSignal : null,
+    });
 
     return {
       type: "cooperate",
@@ -3001,6 +3034,79 @@ export default class Cell {
       metadata: {
         shareFraction,
       },
+    };
+  }
+
+  #resolveCooperationShareFraction({
+    baseline = 0,
+    selfEnergy = 0,
+    partnerEnergy = 0,
+    kinship = 0,
+  } = {}) {
+    const baseShare = clamp(Number.isFinite(baseline) ? baseline : 0, 0, 1);
+    const outcome = this.#getDecisionOutcome("interaction");
+
+    if (!outcome || outcome.usedNetwork !== true || outcome.action !== "cooperate") {
+      return {
+        share: baseShare,
+        baseShare,
+        neuralTarget: null,
+        neuralMix: 0,
+        neuralSignal: null,
+      };
+    }
+
+    const probabilities =
+      outcome.probabilities && typeof outcome.probabilities === "object"
+        ? outcome.probabilities
+        : null;
+    const coopProbRaw = probabilities?.cooperate;
+    const fightProbRaw = probabilities?.fight;
+    const avoidProbRaw = probabilities?.avoid;
+    let neuralSignal = Number.isFinite(coopProbRaw) ? clamp(coopProbRaw, 0, 1) : null;
+
+    if (neuralSignal == null) {
+      const logits =
+        outcome.logits && typeof outcome.logits === "object" ? outcome.logits : null;
+      const coopLogit = logits?.cooperate;
+
+      if (Number.isFinite(coopLogit)) {
+        const clamped = clamp(coopLogit, -12, 12);
+
+        neuralSignal = 1 / (1 + Math.exp(-clamped));
+      }
+    }
+
+    if (neuralSignal == null) {
+      return {
+        share: baseShare,
+        baseShare,
+        neuralTarget: null,
+        neuralMix: 0,
+        neuralSignal: null,
+      };
+    }
+
+    const fightProb = Number.isFinite(fightProbRaw) ? clamp(fightProbRaw, 0, 1) : 0;
+    const avoidProb = Number.isFinite(avoidProbRaw) ? clamp(avoidProbRaw, 0, 1) : 0;
+    const competitorMax = Math.max(fightProb, avoidProb);
+    const mix = clamp(0.35 + Math.max(0, neuralSignal - competitorMax) * 0.6, 0, 1);
+    const kin = clamp(Number.isFinite(kinship) ? kinship : 0, 0, 1);
+    const self = clamp(Number.isFinite(selfEnergy) ? selfEnergy : 0, 0, 1);
+    const partner = clamp(Number.isFinite(partnerEnergy) ? partnerEnergy : 0, 0, 1);
+    const energyDelta = clamp(partner - self, -1, 1);
+    const needBoost = Math.max(0, energyDelta);
+    const cautionDrag = Math.max(0, -energyDelta);
+    const generosity = neuralSignal * (0.55 + kin * 0.35 + needBoost * 0.45);
+    const target = clamp(generosity - cautionDrag * (1 - neuralSignal) * 0.25, 0, 1);
+    const share = clamp(lerp(baseShare, target, mix), 0, 1);
+
+    return {
+      share,
+      baseShare,
+      neuralTarget: target,
+      neuralMix: mix,
+      neuralSignal,
     };
   }
 }
