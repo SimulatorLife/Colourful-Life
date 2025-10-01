@@ -1,7 +1,36 @@
+import { warnOnce } from "../utils.js";
+
 const DEBUG_PROPERTY = "__colourfulLifeBrains";
 const state = {
   snapshots: [],
 };
+
+const WARNINGS = Object.freeze({
+  snapshot: "Brain debugger failed to capture snapshot; skipping entry.",
+  telemetry:
+    "Brain debugger failed to capture decision telemetry; continuing without telemetry.",
+  neuronCount: "Brain debugger failed to resolve neuron count; defaulting to zero.",
+  neuralGenes:
+    "Brain debugger failed to read neural genes; skipping connection fallback.",
+});
+
+function safeInvoke(fn, warningKey, fallback) {
+  if (typeof fn !== "function") {
+    return fallback;
+  }
+
+  try {
+    return fn();
+  } catch (error) {
+    const message = WARNINGS[warningKey];
+
+    if (message) {
+      warnOnce(message, error);
+    }
+
+    return fallback;
+  }
+}
 
 function getGlobalScope() {
   if (typeof globalThis !== "undefined") return globalThis;
@@ -52,11 +81,24 @@ const BrainDebugger = {
       const brain = cell?.brain;
 
       if (!brain || typeof brain.snapshot !== "function") continue;
-      const snapshot = brain.snapshot();
+
+      let snapshot;
+
+      try {
+        snapshot = brain.snapshot();
+      } catch (error) {
+        warnOnce(WARNINGS.snapshot, error);
+
+        continue;
+      }
+
       const decisionTelemetry =
         typeof cell?.getDecisionTelemetry === "function"
-          ? cell.getDecisionTelemetry(3)
+          ? safeInvoke(() => cell.getDecisionTelemetry(3), "telemetry", [])
           : [];
+      const normalizedTelemetry = Array.isArray(decisionTelemetry)
+        ? decisionTelemetry
+        : [];
 
       const reportedNeuronCount = Number.isFinite(brain?.neuronCount)
         ? brain.neuronCount
@@ -64,9 +106,14 @@ const BrainDebugger = {
       const fallbackNeuronCount =
         Number.isFinite(cell?.neurons) && cell.neurons > 0
           ? cell.neurons
-          : typeof cell?.dna?.neurons === "function"
-            ? Number(cell.dna.neurons())
-            : 0;
+          : safeInvoke(
+              () =>
+                typeof cell?.dna?.neurons === "function"
+                  ? Number(cell.dna.neurons())
+                  : 0,
+              "neuronCount",
+              0,
+            );
       const neuronCount =
         reportedNeuronCount > 0 ? reportedNeuronCount : fallbackNeuronCount;
       const reportedConnectionCount = Number.isFinite(brain?.connectionCount)
@@ -80,7 +127,7 @@ const BrainDebugger = {
         fallbackConnectionCount <= 0 &&
         typeof cell?.dna?.neuralGenes === "function"
       ) {
-        const genes = cell.dna.neuralGenes();
+        const genes = safeInvoke(() => cell.dna.neuralGenes(), "neuralGenes", []);
 
         if (Array.isArray(genes) && genes.length > 0) {
           let enabled = 0;
@@ -107,7 +154,7 @@ const BrainDebugger = {
         connectionCount:
           Number.isFinite(connectionCount) && connectionCount > 0 ? connectionCount : 0,
         brain: snapshot,
-        decisions: decisionTelemetry,
+        decisions: normalizedTelemetry,
       });
     }
 
