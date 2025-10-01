@@ -9,6 +9,12 @@ import { createRankedBuffer } from "./utils.js";
  * @param {number} [topN=5] - Maximum number of entries to return.
  * @returns {Array<Object>} Ranked list sorted by smoothed then raw fitness.
  */
+function sanitizeCoordinate(value) {
+  const numeric = Number(value);
+
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
 export function computeLeaderboard(snapshot, topN = 5) {
   const numericTopN = Number(topN);
   const sanitizedTopN = Number.isFinite(numericTopN)
@@ -70,6 +76,11 @@ export function computeLeaderboard(snapshot, topN = 5) {
       age: Number.isFinite(cell?.age) ? cell.age : 0,
       color: cell?.color,
     };
+    const row = sanitizeCoordinate(entry?.row);
+    const col = sanitizeCoordinate(entry?.col);
+
+    if (row !== null) item.row = row;
+    if (col !== null) item.col = col;
     const key = `${entry.row},${entry.col}`;
     const brain = brainLookup.get(key);
 
