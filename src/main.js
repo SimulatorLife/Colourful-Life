@@ -145,9 +145,11 @@ function createHeadlessUiManager(options = {}) {
 
   let lastSlowUiRender = Number.NEGATIVE_INFINITY;
   const updateIfFinite = (key, value) => {
-    if (!Number.isFinite(value)) return false;
+    const numeric = Number(value);
 
-    settings[key] = value;
+    if (!Number.isFinite(numeric)) return false;
+
+    settings[key] = numeric;
 
     return true;
   };
