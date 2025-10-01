@@ -2698,6 +2698,3 @@ export default class GridManager {
     return this.burstAt(r, c, opts);
   }
 }
-
-GridManager.OBSTACLE_PRESETS = OBSTACLE_PRESETS;
-export { OBSTACLE_PRESETS };
