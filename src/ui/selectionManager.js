@@ -187,22 +187,12 @@ export default class SelectionManager {
   }
 
   #validatePointList(zones, points) {
-    for (let i = 0; i < points.length; i++) {
-      const point = points[i];
-
+    for (const point of points) {
       if (!point) continue;
+
       const { row, col, role } = point;
-      let inside = false;
 
-      for (let z = 0; z < zones.length; z++) {
-        if (zones[z].contains(row, col)) {
-          inside = true;
-
-          break;
-        }
-      }
-
-      if (!inside) {
+      if (!zones.some((zone) => zone.contains(row, col))) {
         return {
           allowed: false,
           role,
