@@ -1138,8 +1138,6 @@ export default class UIManager {
   }
 
   #buildObstacleControls(body, sliderContext) {
-    if (this.obstaclePresets.length <= 0) return;
-
     createSectionHeading(body, "Obstacles", { className: "overlay-header" });
 
     const obstacleGrid = createControlGrid(body, "control-grid--compact");
