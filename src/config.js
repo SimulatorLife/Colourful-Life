@@ -2,6 +2,7 @@
 const DEFAULT_MAX_TILE_ENERGY = 5;
 const DEFAULT_REGEN_DENSITY_PENALTY = 0.5;
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.5;
+const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
@@ -94,6 +95,39 @@ export function resolveConsumptionDensityPenalty(env = RUNTIME_ENV) {
  * overrides from destabilizing tests or overlays.
  */
 export const CONSUMPTION_DENSITY_PENALTY = resolveConsumptionDensityPenalty(); // 1 - penalty * density
+
+/**
+ * Resolves the minimum normalized trait value required for stats to count an
+ * organism as "active" in a category. Defaults to {@link
+ * DEFAULT_TRAIT_ACTIVATION_THRESHOLD} but allows deployments to tune the
+ * sensitivity via an environment variable so trait presence charts can be
+ * calibrated without touching code.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Sanitized activation threshold in the 0..1 range.
+ */
+export function resolveTraitActivationThreshold(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD;
+  const parsed = Number.parseFloat(raw);
+
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_TRAIT_ACTIVATION_THRESHOLD;
+  }
+
+  if (parsed <= 0) {
+    return 0;
+  }
+
+  if (parsed >= 1) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+export const TRAIT_ACTIVATION_THRESHOLD = resolveTraitActivationThreshold();
 
 export const SIMULATION_DEFAULTS = Object.freeze({
   paused: false,

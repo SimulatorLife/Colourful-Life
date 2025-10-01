@@ -73,4 +73,46 @@ test("resolveConsumptionDensityPenalty falls back when override is invalid", asy
   );
 });
 
+test("TRAIT_ACTIVATION_THRESHOLD exposes the environment-aware default", async () => {
+  const { TRAIT_ACTIVATION_THRESHOLD } = await configModulePromise;
+
+  assert.is(TRAIT_ACTIVATION_THRESHOLD, 0.6);
+});
+
+test("resolveTraitActivationThreshold respects overrides", async () => {
+  const { resolveTraitActivationThreshold } = await configModulePromise;
+
+  assert.is(
+    resolveTraitActivationThreshold({
+      COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD: "0.72",
+    }),
+    0.72,
+  );
+});
+
+test("resolveTraitActivationThreshold clamps invalid overrides", async () => {
+  const { resolveTraitActivationThreshold } = await configModulePromise;
+
+  assert.is(
+    resolveTraitActivationThreshold({
+      COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD: "1.4",
+    }),
+    1,
+  );
+
+  assert.is(
+    resolveTraitActivationThreshold({
+      COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD: "-0.2",
+    }),
+    0,
+  );
+
+  assert.is(
+    resolveTraitActivationThreshold({
+      COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD: "NaN",
+    }),
+    0.6,
+  );
+});
+
 test.run();
