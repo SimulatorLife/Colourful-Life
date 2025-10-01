@@ -440,6 +440,114 @@ canvas {
   gap: var(--space-sm);
 }
 
+.life-events-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.life-event-empty {
+  padding: var(--space-sm);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+
+.life-event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.life-event {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.life-event--birth {
+  border-color: rgba(76, 175, 80, 0.35);
+}
+
+.life-event--death {
+  border-color: rgba(231, 76, 60, 0.35);
+}
+
+.life-event-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.life-event-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-text-subtle);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.life-event-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.life-event-meta {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-subtle);
+}
+
+.life-event-details {
+  display: grid;
+  gap: calc(var(--space-sm) * 0.75);
+  font-size: 12px;
+}
+
+.life-event-detail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.life-event-detail-label {
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.life-event-detail-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text);
+}
+
+.life-event-color-group {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.life-event-color-chip {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
 .metrics-section .control-line {
   align-items: flex-start;
   flex-wrap: wrap;

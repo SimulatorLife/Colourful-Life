@@ -769,7 +769,12 @@ export default class GridManager {
         const removed = this.removeCell(row, col);
 
         if (removed && this.stats?.onDeath) {
-          this.stats.onDeath();
+          this.stats.onDeath({
+            cell: removed,
+            row,
+            col,
+            cause: "obstacle",
+          });
         }
       }
     }
@@ -1509,7 +1514,14 @@ export default class GridManager {
     this.setCell(row, col, cell);
     this.energyGrid[row][col] = 0;
 
-    if (recordBirth) this.stats?.onBirth?.(cell);
+    if (recordBirth) {
+      this.stats?.onBirth?.(cell, {
+        row,
+        col,
+        energy,
+        cause: "seed",
+      });
+    }
 
     return cell;
   }
@@ -1671,7 +1683,7 @@ export default class GridManager {
     cell.age++;
     if (cell.age >= cell.lifespan) {
       this.removeCell(row, col);
-      stats.onDeath();
+      stats.onDeath(cell, { row, col, cause: "senescence" });
 
       return;
     }
@@ -1693,7 +1705,11 @@ export default class GridManager {
 
     if (starved || cell.energy <= 0) {
       this.removeCell(row, col);
-      stats.onDeath();
+      stats.onDeath(cell, {
+        row,
+        col,
+        cause: starved ? "starvation" : "energy-collapse",
+      });
 
       return;
     }
@@ -2040,7 +2056,23 @@ export default class GridManager {
               offspring.row = spawn.r;
               offspring.col = spawn.c;
               this.setCell(spawn.r, spawn.c, offspring);
-              stats.onBirth();
+              const parentColors = [];
+
+              if (typeof cell?.dna?.toColor === "function") {
+                parentColors.push(cell.dna.toColor());
+              }
+              if (typeof bestMate.target?.dna?.toColor === "function") {
+                parentColors.push(bestMate.target.dna.toColor());
+              }
+
+              stats.onBirth(offspring, {
+                row: spawn.r,
+                col: spawn.c,
+                energy: offspring.energy,
+                cause: "reproduction",
+                mutationMultiplier,
+                parents: parentColors,
+              });
               reproduced = true;
             }
           }

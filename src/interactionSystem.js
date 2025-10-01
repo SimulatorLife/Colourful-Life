@@ -195,7 +195,34 @@ function applyFightCost(cell) {
 
 function recordFight(stats, winner, loser, context = {}) {
   stats?.onFight?.();
-  stats?.onDeath?.();
+  if (stats?.onDeath) {
+    const opponentColor =
+      typeof winner?.dna?.toColor === "function"
+        ? winner.dna.toColor()
+        : typeof winner?.color === "string"
+          ? winner.color
+          : null;
+    const row = Number.isFinite(context.loserRow)
+      ? context.loserRow
+      : Number.isFinite(loser?.row)
+        ? loser.row
+        : null;
+    const col = Number.isFinite(context.loserCol)
+      ? context.loserCol
+      : Number.isFinite(loser?.col)
+        ? loser.col
+        : null;
+
+    stats.onDeath({
+      cell: loser,
+      row,
+      col,
+      cause: "combat",
+      intensity: context.intensity,
+      opponentColor,
+      winChance: context.winChance,
+    });
+  }
 
   if (winner) {
     winner.fightsWon = (winner.fightsWon || 0) + 1;
@@ -420,6 +447,8 @@ export default class InteractionSystem {
         loserCost: defenderCost,
         intensity,
         winChance: odds.attackerWinChance,
+        loserRow: targetRow,
+        loserCol: targetCol,
       });
 
       return true;
@@ -435,6 +464,8 @@ export default class InteractionSystem {
       loserCost: attackerCost,
       intensity,
       winChance: 1 - odds.attackerWinChance,
+      loserRow: attackerRow,
+      loserCol: attackerCol,
     });
 
     return true;
