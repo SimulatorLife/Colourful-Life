@@ -1,6 +1,12 @@
 import { clamp } from "./utils.js";
 
 const EMPTY_APPLIED_EVENTS = Object.freeze([]);
+const NO_EVENT_MODIFIERS = Object.freeze({
+  regenMultiplier: 1,
+  regenAdd: 0,
+  drainAdd: 0,
+  appliedEvents: EMPTY_APPLIED_EVENTS,
+});
 
 function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }) {
   if (
@@ -197,15 +203,18 @@ export function computeTileEnergyUpdate(
 
   regen *= Math.max(0, 1 - (regenDensityPenalty ?? 0) * effectiveDensity);
 
-  const modifiers = accumulateEventModifiers({
-    events,
-    row,
-    col,
-    eventStrengthMultiplier,
-    isEventAffecting,
-    getEventEffect,
-    effectCache,
-  });
+  const modifiers =
+    Array.isArray(events) && events.length > 0
+      ? accumulateEventModifiers({
+          events,
+          row,
+          col,
+          eventStrengthMultiplier,
+          isEventAffecting,
+          getEventEffect,
+          effectCache,
+        })
+      : NO_EVENT_MODIFIERS;
 
   regen *= modifiers.regenMultiplier;
   regen += modifiers.regenAdd;
