@@ -28,7 +28,7 @@ jobs:
         presented together (e.g. merging scattered statistics into a concise chart, or
         removing redundant displays). If, after careful analysis, you find that a UI
         element is confusing, redundant, or detracts from usability, you may simplify,
-        remove, or replace it — but only where doing so clearly improves the user’s
+        remove, or replace it — but only where doing so clearly improves the user's
         experience. The goal is a cleaner, more consistent, intuitive, and discoverable
         UI that integrates seamlessly with the existing style. Keep the scope focused,
         avoid broad overhauls or introducing new design systems, and ensure changes are

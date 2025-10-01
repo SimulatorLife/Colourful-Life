@@ -1,0 +1,33 @@
+name: Codex 34 – Test Hardening
+
+on:
+  schedule:
+    - cron: "29 2 * * *" # daily at 02:29 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Test Hardening"
+      pr_body: "Seed PR for Codex to refine a single existing unit test to better reflect real behaviour."
+      prompt: >
+        Read through the existing unit and component test files themselves to spot a single test whose
+        structure or assertions weaken its value—look for flaky ordering, excessive mocking, shallow
+        expectations, redundant coverage, unclear naming, or fragile implementation coupling. Assess each
+        candidate against good-test criteria: behaviour-focused assertions that reflect real user flows,
+        deterministic execution without timing reliance, clear Arrange/Act/Assert (or equivalent) phases,
+        meaningful failure messages, minimal yet intentional mocking, and accessibility checks when relevant.
+        Once you identify the weakest test under that rubric, study the production code and neighbouring tests
+        so you understand the intended behaviour. Refactor or relocate only that test to raise its signal: tighten
+        assertions, restructure setup, reuse shared helpers, rename for clarity, or move it beside the code it
+        guards. Keep the scope surgical—limit changes to that specific test and any supporting fixtures/utilities it
+        touches. Ensure the updated test runs quickly, remains deterministic, and exemplifies disciplined testing
+        principles. Run the affected test suite, update documentation or comments only if they aid maintainability,
+        and describe the before/after improvement in the PR body.
