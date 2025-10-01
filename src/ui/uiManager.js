@@ -769,6 +769,7 @@ export default class UIManager {
 
     const setCollapsed = (shouldCollapse) => {
       panel.classList.toggle("collapsed", shouldCollapse);
+      panel.classList.toggle("expanded", !shouldCollapse);
       toggle.textContent = shouldCollapse ? "+" : "–";
       toggle.setAttribute("aria-expanded", shouldCollapse ? "false" : "true");
     };
