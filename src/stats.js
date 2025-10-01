@@ -606,25 +606,74 @@ export default class Stats {
 
   // Sample mean pairwise distance between up to maxPairSamples random pairs.
   estimateDiversity(cells, maxPairSamples = 200) {
-    const populationSize = cells.length;
+    const populationSize = Array.isArray(cells) ? cells.length : 0;
 
     if (populationSize < 2) return 0;
-    const possiblePairs = (populationSize * (populationSize - 1)) / 2;
-    let sampleCount = Math.min(maxPairSamples, possiblePairs);
-    let sum = 0;
 
-    for (let i = 0; i < sampleCount; i++) {
+    const possiblePairs = (populationSize * (populationSize - 1)) / 2;
+
+    if (possiblePairs <= 0) {
+      return 0;
+    }
+
+    if (possiblePairs <= maxPairSamples) {
+      let sum = 0;
+      let count = 0;
+
+      for (let i = 0; i < populationSize - 1; i++) {
+        const a = cells[i];
+
+        if (!a || typeof a.dna?.similarity !== "function") {
+          continue;
+        }
+
+        for (let j = i + 1; j < populationSize; j++) {
+          const b = cells[j];
+
+          if (!b || typeof b.dna?.similarity !== "function") {
+            continue;
+          }
+
+          sum += 1 - a.dna.similarity(b.dna);
+          count++;
+        }
+      }
+
+      return count > 0 ? sum / count : 0;
+    }
+
+    const sampleGoal = Math.min(maxPairSamples, possiblePairs);
+    const maxAttempts = sampleGoal * 8;
+    let collected = 0;
+    let sum = 0;
+    let attempts = 0;
+
+    while (collected < sampleGoal && attempts < maxAttempts) {
       const a = cells[(Math.random() * populationSize) | 0];
       const b = cells[(Math.random() * populationSize) | 0];
 
-      if (a === b) {
-        i--;
+      attempts++;
+
+      if (!a || !b || a === b) {
         continue;
       }
-      sum += 1 - a.dna.similarity(b.dna); // distance in [0,1]
+
+      if (
+        typeof a.dna?.similarity !== "function" ||
+        typeof b.dna?.similarity !== "function"
+      ) {
+        continue;
+      }
+
+      sum += 1 - a.dna.similarity(b.dna);
+      collected++;
     }
 
-    return sum / sampleCount;
+    if (collected === 0) {
+      return 0;
+    }
+
+    return sum / collected;
   }
 
   /**
