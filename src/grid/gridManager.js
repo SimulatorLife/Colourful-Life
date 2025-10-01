@@ -463,8 +463,17 @@ export default class GridManager {
     return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
   }
 
-  static moveRandomly(gridArr, row, col, cell, rows, cols, options = {}) {
-    const { dr, dc } = cell.decideRandomMove();
+  static moveRandomly(
+    gridArr,
+    row,
+    col,
+    cell,
+    rows,
+    cols,
+    options = {},
+    movementContext = null,
+  ) {
+    const { dr, dc } = cell.decideRandomMove(movementContext);
 
     return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
   }
@@ -586,7 +595,7 @@ export default class GridManager {
         cols,
         this.#movementOptions(),
       );
-    this.boundMoveRandomly = (gridArr, row, col, cell, rows, cols) =>
+    this.boundMoveRandomly = (gridArr, row, col, cell, rows, cols, movementContext) =>
       GridManager.moveRandomly(
         gridArr,
         row,
@@ -595,6 +604,7 @@ export default class GridManager {
         rows,
         cols,
         this.#movementOptions(),
+        movementContext,
       );
     const resolvedPresetId = this.#resolveInitialObstaclePreset({
       initialPreset: initialObstaclePreset,
