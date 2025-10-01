@@ -911,6 +911,9 @@ export default class SimulationEngine {
       case "combatEdgeSharpness":
         this.setCombatEdgeSharpness(value);
         break;
+      case "updatesPerSecond":
+        this.setUpdatesPerSecond(value);
+        break;
       case "densityEffectMultiplier":
         this.setDensityEffectMultiplier(value);
         break;
