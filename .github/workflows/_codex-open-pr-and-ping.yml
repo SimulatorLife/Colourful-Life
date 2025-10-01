@@ -67,20 +67,63 @@ jobs:
         env:
           PR_TITLE: ${{ inputs.pr_title }}
           PR_BODY: ${{ inputs.pr_body }}
+          PROMPT: ${{ inputs.prompt }}
           BASE_BRANCH: ${{ inputs.base_branch }}
           BRANCH_NAME: ${{ env.BRANCH_NAME }}
         with:
           github-token: ${{ secrets.GH_USER_TOKEN }}
           script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const branch = process.env.BRANCH_NAME;
+            const base = process.env.BASE_BRANCH;
+
             const { data: pr } = await github.rest.pulls.create({
-              owner: context.repo.owner,
-              repo:  context.repo.repo,
+              owner,
+              repo,
               title: process.env.PR_TITLE,
-              head:  process.env.BRANCH_NAME,
-              base:  process.env.BASE_BRANCH,
-              body:  process.env.PR_BODY || undefined,
+              head: branch,
+              base,
+              body: process.env.PR_BODY || undefined,
               maintainer_can_modify: true,
             });
+
+            const instruction = "Begin by surveying the entire codebase before narrowing to this task.";
+            const sections = [];
+
+            if (process.env.PR_BODY && process.env.PR_BODY.trim().length > 0) {
+              sections.push(process.env.PR_BODY.trim(), "");
+            }
+
+            sections.push(
+              `@codex ${instruction} ${process.env.PROMPT} Ensure changes are self-contained, tested, and documented as needed, with no reduction in test coverage.`,
+              "",
+              `Once done, ensure all changes are pushed to remote branch **${branch}** on base **${base}** and keep all commits tied to PR #${pr.number}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact command(s) to guarantee your changes are pushed:`,
+              "",
+              "```bash",
+              `git config user.name  "codex-bot"`,
+              `git config user.email "codex@example.com"`,
+              `git -c credential.helper= \\`,
+              `    -c 'credential.helper=store --file .git/codex-cred' \\`,
+              `    push "https://henrylkirk@github.com/${owner}/${repo}.git" "HEAD:${branch}"`,
+              "```",
+              "Here is some additional context for your task:",
+              "```yaml",
+              "codex_task:",
+              `  branch: "${branch}"`,
+              `  pr_number: ${pr.number}`,
+              `  base: "${base}"`,
+              `  head_sha: "${pr.head.sha}"`,
+              "```"
+            );
+
+            await github.rest.pulls.update({
+              owner,
+              repo,
+              pull_number: pr.number,
+              body: sections.join("\n")
+            });
+
             core.setOutput('number', pr.number.toString());
             core.setOutput('head_sha', pr.head.sha);
 
@@ -98,46 +141,3 @@ jobs:
             } catch (e) {
               core.info('Label add skipped: ' + e.message);
             }
-
-      - name: Comment to trigger Codex (instruction-first, with push reminder)
-        uses: actions/github-script@v7
-        env:
-          BASE_BRANCH: ${{ inputs.base_branch }}
-          PROMPT: ${{ inputs.prompt }}
-          BRANCH_NAME: ${{ env.BRANCH_NAME }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
-          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
-        with:
-          github-token: ${{ secrets.GH_USER_TOKEN }}
-          script: |
-            const prNumber = Number(process.env.PR_NUMBER);
-            const owner  = context.repo.owner;
-            const repo   = context.repo.repo;
-            const branch = process.env.BRANCH_NAME;
-
-            const instruction = "Begin by surveying the entire codebase before narrowing to this task.";
-            const body = [
-              `@codex ${instruction} ${process.env.PROMPT} Ensure changes are self-contained, tested, and documented as needed, with no reduction in test coverage.`,
-              "",
-              `Once done, ensure all changes are pushed to remote branch **${branch}** on base **${process.env.BASE_BRANCH}** and keep all commits tied to PR #${prNumber}; do not open new branches or PRs. As the final step (even after running 'make_pr'), run the following exact command(s) to guarantee your changes are pushed:`,
-              "",
-              "```bash",
-              `git config user.name  "codex-bot"`,
-              `git config user.email "codex@example.com"`,
-              `git -c credential.helper= \\`,
-              `    -c 'credential.helper=store --file .git/codex-cred' \\`,
-              `    push "https://henrylkirk@github.com/${owner}/${repo}.git" "HEAD:${branch}"`,
-              "```",
-              "Here is some additional context for your task:",
-              "```yaml",
-              "codex_task:",
-              `  branch: "${branch}"`,
-              `  pr_number: ${prNumber}`,
-              `  base: "${process.env.BASE_BRANCH}"`,
-              `  head_sha: "${process.env.HEAD_SHA}"`,
-              "```"
-            ].join("\n");
-
-            await github.rest.issues.createComment({
-              owner, repo, issue_number: prNumber, body
-            });
