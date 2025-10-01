@@ -282,12 +282,22 @@ export default class UIManager {
   #canvasToGrid(event) {
     if (!this.canvasElement) return null;
 
-    const rect = this.canvasElement.getBoundingClientRect();
+    const rect = this.canvasElement.getBoundingClientRect?.();
     const cellSize = Math.max(1, this.getCellSize());
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    const col = Math.floor(x / cellSize);
-    const row = Math.floor(y / cellSize);
+    const offsetX = event.clientX - (rect?.left ?? 0);
+    const offsetY = event.clientY - (rect?.top ?? 0);
+    const scaleX =
+      rect && Number.isFinite(rect.width) && rect.width > 0
+        ? this.canvasElement.width / rect.width
+        : 1;
+    const scaleY =
+      rect && Number.isFinite(rect.height) && rect.height > 0
+        ? this.canvasElement.height / rect.height
+        : 1;
+    const canvasX = offsetX * (Number.isFinite(scaleX) && scaleX > 0 ? scaleX : 1);
+    const canvasY = offsetY * (Number.isFinite(scaleY) && scaleY > 0 ? scaleY : 1);
+    const col = Math.floor(canvasX / cellSize);
+    const row = Math.floor(canvasY / cellSize);
     const maxCols = Math.floor(this.canvasElement.width / cellSize);
     const maxRows = Math.floor(this.canvasElement.height / cellSize);
 
