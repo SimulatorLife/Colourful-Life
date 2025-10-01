@@ -127,6 +127,7 @@ test("resolveSimulationDefaults returns expected baseline configuration", async 
     showObstacles: true,
     showEnergy: false,
     showDensity: false,
+    showFitness: false,
     leaderboardIntervalMs: UI_SLIDER_CONFIG.leaderboardIntervalMs?.default ?? 750,
     matingDiversityThreshold:
       UI_SLIDER_CONFIG.matingDiversityThreshold?.default ?? 0.45,
@@ -178,6 +179,7 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.showObstacles, defaults.showObstacles);
   assert.is(uiManager.showEnergy, defaults.showEnergy);
   assert.is(uiManager.showDensity, defaults.showDensity);
+  assert.is(uiManager.showFitness, defaults.showFitness);
   assert.is(uiManager.lingerPenalty, defaults.lingerPenalty);
   assert.is(uiManager.autoPauseOnBlur, defaults.autoPauseOnBlur);
 
@@ -214,6 +216,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     showObstacles: defaults.showObstacles,
     showEnergy: defaults.showEnergy,
     showDensity: defaults.showDensity,
+    showFitness: defaults.showFitness,
     leaderboardIntervalMs: defaults.leaderboardIntervalMs,
     matingDiversityThreshold: defaults.matingDiversityThreshold,
     lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
@@ -249,6 +252,7 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.is(ui.getShowObstacles(), defaults.showObstacles);
   assert.is(ui.getShowEnergy(), defaults.showEnergy);
   assert.is(ui.getShowDensity(), defaults.showDensity);
+  assert.is(ui.getShowFitness(), defaults.showFitness);
   assert.is(ui.getLingerPenalty(), defaults.lingerPenalty);
   assert.is(ui.getAutoPauseOnBlur(), defaults.autoPauseOnBlur);
   assert.ok(ui.shouldRenderSlowUi(0));
