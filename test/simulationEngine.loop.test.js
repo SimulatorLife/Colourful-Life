@@ -110,6 +110,48 @@ test("tick emits events and clears pending slow UI updates after throttle interv
       engine.stats,
       "metrics event returns stats instance",
     );
+    assert.ok(
+      metricsEvents[0].environment,
+      "metrics event includes environment summary",
+    );
+    assert.is(
+      metricsEvents[0].environment.updatesPerSecond,
+      60,
+      "environment reports tick rate",
+    );
+    assert.is(
+      metricsEvents[0].environment.eventStrengthMultiplier,
+      1,
+      "environment reports strength multiplier",
+    );
+    assert.ok(
+      Array.isArray(metricsEvents[0].environment.activeEvents),
+      "environment summary provides active events list",
+    );
+    assert.ok(
+      metricsEvents[0].environment.activeEvents.length >= 1,
+      "environment summary includes at least one active event",
+    );
+    const eventSummary = metricsEvents[0].environment.activeEvents[0];
+
+    assert.is(eventSummary.type, "flood", "active event type captured");
+    assert.ok(eventSummary.remainingTicks > 0, "remaining ticks preserved as positive");
+    assert.ok(
+      eventSummary.durationTicks >= eventSummary.remainingTicks,
+      "duration ticks capture full span",
+    );
+    assert.is(eventSummary.coverageTiles, 12, "coverage tiles computed");
+    const expectedCoverageRatio = 12 / (engine.rows * engine.cols);
+
+    assert.ok(
+      Math.abs(eventSummary.coverageRatio - expectedCoverageRatio) < 1e-6,
+      "coverage ratio normalized by grid size",
+    );
+    assert.ok(
+      Number.isFinite(eventSummary.remainingSeconds) &&
+        eventSummary.remainingSeconds > 0,
+      "remaining seconds derived from tick rate",
+    );
 
     assert.is(leaderboardEvents.length, 1, "leaderboard event emitted once");
     assert.equal(leaderboardEvents[0].entries, [

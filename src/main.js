@@ -376,9 +376,9 @@ export function createSimulation({
 
   if (!headless && uiManager) {
     unsubscribers.push(
-      engine.on("metrics", ({ stats, metrics }) => {
+      engine.on("metrics", ({ stats, metrics, environment }) => {
         if (typeof uiManager.renderMetrics === "function") {
-          uiManager.renderMetrics(stats, metrics);
+          uiManager.renderMetrics(stats, metrics, environment);
         }
       }),
     );
