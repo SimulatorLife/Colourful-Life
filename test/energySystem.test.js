@@ -41,6 +41,38 @@ test("accumulateEventModifiers combines overlapping event effects", async () => 
   );
 });
 
+test("accumulateEventModifiers respects zero strength multiplier", async () => {
+  const [{ accumulateEventModifiers }] = await Promise.all([
+    import("../src/energySystem.js"),
+  ]);
+
+  const result = accumulateEventModifiers({
+    events: [
+      {
+        eventType: "storm",
+        strength: 1,
+        affectedArea: baseArea,
+      },
+    ],
+    row: 0,
+    col: 0,
+    eventStrengthMultiplier: 0,
+    isEventAffecting: () => true,
+    getEventEffect: () => ({
+      regenScale: { base: 1, change: 1, min: 0 },
+      regenAdd: 0.5,
+      drainAdd: 0.25,
+    }),
+  });
+
+  assert.equal(result, {
+    regenMultiplier: 1,
+    regenAdd: 0,
+    drainAdd: 0,
+    appliedEvents: [],
+  });
+});
+
 test("accumulateEventModifiers reuses provided effect cache", async () => {
   const [{ accumulateEventModifiers }] = await Promise.all([
     import("../src/energySystem.js"),
