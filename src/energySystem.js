@@ -80,38 +80,46 @@ export function accumulateEventModifiers({
     ? numericStrengthMultiplier
     : 1;
 
-  for (let i = 0, len = events.length; i < len; i++) {
-    const ev = events[i];
+  for (
+    let eventIndex = 0, eventCount = events.length;
+    eventIndex < eventCount;
+    eventIndex++
+  ) {
+    const eventInstance = events[eventIndex];
 
-    if (!ev) continue;
-    if (eventApplies && !eventApplies(ev, row, col)) continue;
+    if (!eventInstance) continue;
+    if (eventApplies && !eventApplies(eventInstance, row, col)) continue;
 
-    let effect = null;
+    let eventEffect = null;
 
     if (resolveEffect) {
-      const type = ev.eventType;
+      const type = eventInstance.eventType;
 
       if (effectCache) {
         const cached = effectCache.get(type);
 
         if (cached !== undefined) {
-          effect = cached;
+          eventEffect = cached;
         } else {
-          effect = resolveEffect(type) ?? null;
-          effectCache.set(type, effect);
+          eventEffect = resolveEffect(type) ?? null;
+          effectCache.set(type, eventEffect);
         }
       } else {
-        effect = resolveEffect(type);
+        eventEffect = resolveEffect(type);
       }
     }
 
-    if (!effect) continue;
+    if (!eventEffect) continue;
 
-    const strength = Number(ev.strength ?? 0) * strengthMultiplier;
+    const strength = Number(eventInstance.strength ?? 0) * strengthMultiplier;
 
     if (!Number.isFinite(strength) || strength === 0) continue;
 
-    const { regenScale, regenAdd: effectRegenAdd, drainAdd: effectDrainAdd } = effect;
+    const {
+      regenScale,
+      regenAdd: effectRegenAdd,
+      drainAdd: effectDrainAdd,
+    } = eventEffect;
 
     if (regenScale) {
       const { base = 1, change = 0, min = 0 } = regenScale;
@@ -128,7 +136,11 @@ export function accumulateEventModifiers({
       drainAdd += effectDrainAdd * strength;
     }
 
-    (appliedEvents ??= []).push({ event: ev, effect, strength });
+    (appliedEvents ??= []).push({
+      event: eventInstance,
+      effect: eventEffect,
+      strength,
+    });
   }
 
   return {
