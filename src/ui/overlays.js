@@ -1,5 +1,5 @@
 import { MAX_TILE_ENERGY } from "../config.js";
-import { clamp, clamp01, lerp, warnOnce } from "../utils.js";
+import { clamp, clamp01, lerp, warnOnce, createRankedBuffer } from "../utils.js";
 
 const FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
@@ -28,39 +28,19 @@ function selectCelebrationHighlights(entries, limit = MAX_CELEBRATION_HIGHLIGHTS
 
   if (capped === 0) return [];
 
-  const highlights = [];
+  const ranked = createRankedBuffer(capped, (a, b) => b.score - a.score);
 
   for (const entry of entries) {
     if (!entry) continue;
 
-    const value = Number.isFinite(entry.fitness)
-      ? entry.fitness
-      : Number.NEGATIVE_INFINITY;
+    const score = Number(entry.fitness);
 
-    if (!Number.isFinite(value)) continue;
+    if (!Number.isFinite(score)) continue;
 
-    const candidate = { entry, score: value };
-    let inserted = false;
-
-    for (let i = 0; i < highlights.length; i++) {
-      if (value > highlights[i].score) {
-        highlights.splice(i, 0, candidate);
-        inserted = true;
-        break;
-      }
-    }
-
-    if (!inserted && highlights.length < capped) {
-      highlights.push(candidate);
-      inserted = true;
-    }
-
-    if (inserted && highlights.length > capped) {
-      highlights.length = capped;
-    }
+    ranked.add({ entry, score });
   }
 
-  return highlights.map((item) => item.entry);
+  return ranked.getItems().map((item) => item.entry);
 }
 
 export function drawCelebrationAuras(snapshot, ctx, cellSize, options = {}) {
