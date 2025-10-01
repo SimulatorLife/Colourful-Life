@@ -4,6 +4,159 @@ import { clamp, clamp01, lerp, warnOnce } from "../utils.js";
 const FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
 const FITNESS_BASE_HUE = 52;
+const DEFAULT_CELEBRATION_PALETTE = Object.freeze([
+  { rgb: [255, 214, 137] },
+  { rgb: [172, 210, 255] },
+  { rgb: [255, 176, 208] },
+  { rgb: [198, 255, 214] },
+]);
+const MAX_CELEBRATION_HIGHLIGHTS = 4;
+
+function toCelebrationColor(rgb, alpha) {
+  if (!Array.isArray(rgb) || rgb.length < 3) return "rgba(255,255,255,0)";
+
+  const [r, g, b] = rgb;
+  const clamped = clamp01(Number.isFinite(alpha) ? alpha : 0);
+
+  return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${clamped.toFixed(3)})`;
+}
+
+function selectCelebrationHighlights(entries, limit = MAX_CELEBRATION_HIGHLIGHTS) {
+  if (!Array.isArray(entries) || entries.length === 0) return [];
+
+  const capped = Math.max(0, Math.min(limit, MAX_CELEBRATION_HIGHLIGHTS));
+
+  if (capped === 0) return [];
+
+  const highlights = [];
+
+  for (const entry of entries) {
+    if (!entry) continue;
+
+    const value = Number.isFinite(entry.smoothedFitness)
+      ? entry.smoothedFitness
+      : Number.isFinite(entry.fitness)
+        ? entry.fitness
+        : Number.NEGATIVE_INFINITY;
+
+    if (!Number.isFinite(value)) continue;
+
+    const candidate = { entry, score: value };
+    let inserted = false;
+
+    for (let i = 0; i < highlights.length; i++) {
+      if (value > highlights[i].score) {
+        highlights.splice(i, 0, candidate);
+        inserted = true;
+        break;
+      }
+    }
+
+    if (!inserted && highlights.length < capped) {
+      highlights.push(candidate);
+      inserted = true;
+    }
+
+    if (inserted && highlights.length > capped) {
+      highlights.length = capped;
+    }
+  }
+
+  return highlights.map((item) => item.entry);
+}
+
+export function drawCelebrationAuras(snapshot, ctx, cellSize, options = {}) {
+  if (!snapshot || !ctx || typeof ctx.createRadialGradient !== "function") return;
+  if (!(cellSize > 0)) return;
+
+  const entries = Array.isArray(snapshot.entries)
+    ? snapshot.entries
+    : Array.isArray(snapshot.cells)
+      ? snapshot.cells
+      : null;
+
+  if (!entries || entries.length === 0) return;
+
+  const palette =
+    Array.isArray(options.palette) && options.palette.length > 0
+      ? options.palette
+      : DEFAULT_CELEBRATION_PALETTE;
+  const limit = Math.max(
+    0,
+    Math.min(
+      Number.isFinite(options.maxHighlights) ? options.maxHighlights : palette.length,
+      palette.length,
+      MAX_CELEBRATION_HIGHLIGHTS,
+    ),
+  );
+
+  if (limit === 0) return;
+
+  const highlights = selectCelebrationHighlights(entries, limit);
+
+  if (highlights.length === 0) return;
+
+  let maxFitness = Number.isFinite(snapshot.maxFitness) ? snapshot.maxFitness : 0;
+
+  if (!(maxFitness > 0)) {
+    for (const entry of highlights) {
+      const candidate = Number.isFinite(entry?.smoothedFitness)
+        ? entry.smoothedFitness
+        : Number.isFinite(entry?.fitness)
+          ? entry.fitness
+          : 0;
+
+      if (candidate > maxFitness) maxFitness = candidate;
+    }
+  }
+
+  maxFitness = maxFitness > 0 ? maxFitness : 1;
+
+  ctx.save();
+
+  for (let i = 0; i < highlights.length; i++) {
+    const entry = highlights[i];
+
+    if (!entry) continue;
+
+    const { row, col } = entry;
+
+    if (!Number.isFinite(row) || !Number.isFinite(col)) continue;
+
+    const x = (col + 0.5) * cellSize;
+    const y = (row + 0.5) * cellSize;
+    const rawScore = Number.isFinite(entry.smoothedFitness)
+      ? entry.smoothedFitness
+      : Number.isFinite(entry.fitness)
+        ? entry.fitness
+        : 0;
+    const normalized = clamp01(rawScore / maxFitness);
+    const paletteEntry = palette[i % palette.length];
+    const rgb = Array.isArray(paletteEntry?.rgb)
+      ? paletteEntry.rgb
+      : Array.isArray(paletteEntry)
+        ? paletteEntry
+        : null;
+
+    if (!rgb) continue;
+
+    const outerRadius = Math.min(cellSize * (2.2 + normalized * 3.4), cellSize * 6.5);
+    const innerRadius = Math.max(cellSize * 0.4, outerRadius * 0.2);
+    const gradient = ctx.createRadialGradient(x, y, innerRadius, x, y, outerRadius);
+    const baseAlpha = 0.22 + normalized * 0.4;
+
+    gradient.addColorStop(0, toCelebrationColor(rgb, Math.min(0.8, baseAlpha + 0.18)));
+    gradient.addColorStop(0.5, toCelebrationColor(rgb, Math.min(0.55, baseAlpha)));
+    gradient.addColorStop(1, toCelebrationColor(rgb, 0));
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, outerRadius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
 
 function createFitnessPalette(steps, hue) {
   const palette = [];
@@ -441,12 +594,14 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showEnergy,
     showDensity,
     showFitness,
+    showCelebrationAuras,
     showObstacles = true,
     maxTileEnergy = MAX_TILE_ENERGY,
     activeEvents,
     getEventColor,
     snapshot: providedSnapshot,
     selectionManager: explicitSelection,
+    celebrationAurasOptions,
   } = opts;
   let snapshot = providedSnapshot;
   const selectionManager = explicitSelection || grid?.selectionManager;
@@ -462,11 +617,16 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
 
   if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);
   if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
-  if (showFitness) {
+  if (showFitness || showCelebrationAuras) {
     if (!snapshot && typeof grid?.getLastSnapshot === "function") {
       snapshot = grid.getLastSnapshot();
     }
+  }
+  if (showFitness) {
     drawFitnessHeatmap(snapshot, ctx, cellSize);
+  }
+  if (showCelebrationAuras) {
+    drawCelebrationAuras(snapshot, ctx, cellSize, celebrationAurasOptions);
   }
 }
 
