@@ -1815,12 +1815,15 @@ export default class UIManager {
     );
 
     const traitPresence = stats?.traitPresence;
+    const behaviorEvenness = Number.isFinite(s.behaviorEvenness)
+      ? clamp01(s.behaviorEvenness)
+      : null;
 
     if (traitPresence) {
       const traitSection = createSection("Trait Presence", { wide: true });
       const traitGroup = document.createElement("div");
 
-      traitGroup.className = "metrics-group";
+      traitGroup.className = "metrics-group trait-metrics";
 
       const traitHeading = document.createElement("div");
 
@@ -1828,36 +1831,197 @@ export default class UIManager {
       traitHeading.textContent = "Traits";
       traitGroup.appendChild(traitHeading);
 
-      const traitRows = document.createElement("div");
+      const traitBody = document.createElement("div");
 
-      traitRows.className = "metrics-group-rows";
-      traitGroup.appendChild(traitRows);
+      traitBody.className = "trait-metrics-body";
+      traitGroup.appendChild(traitBody);
 
       const hasPopulation = traitPresence.population > 0;
-      const traitConfigs = [
-        { key: "cooperation", label: "Cooperation" },
-        { key: "fighting", label: "Fighting" },
-        { key: "breeding", label: "Breeding" },
-        { key: "sight", label: "Sight" },
-      ];
+      const describeEvenness = (value) => {
+        if (!Number.isFinite(value)) {
+          return {
+            label: "Unknown",
+            description:
+              "Run the simulation to measure how evenly traits are expressed.",
+            color: "rgba(255,255,255,0.25)",
+          };
+        }
 
-      for (let i = 0; i < traitConfigs.length; i++) {
-        const trait = traitConfigs[i];
-        const count = traitPresence.counts?.[trait.key] ?? 0;
-        const fraction = traitPresence.fractions?.[trait.key] ?? 0;
-        const value = hasPopulation
-          ? `${count} (${(fraction * 100).toFixed(0)}%)`
-          : "—";
-        const tooltipBase =
-          "Active cells have a normalized value ≥ 60% for this trait.";
+        if (value >= 0.8) {
+          return {
+            label: "Balanced",
+            description: "Traits are evenly expressed across the population this tick.",
+            color: "#2ecc71",
+          };
+        }
 
-        this.#appendControlRow(traitRows, {
-          label: trait.label,
-          value,
-          title: hasPopulation
-            ? tooltipBase
-            : `${tooltipBase} No living cells in population.`,
-        });
+        if (value >= 0.55) {
+          return {
+            label: "Mixed",
+            description:
+              "Multiple strategies are active with a slight behavioral tilt.",
+            color: "#f1c40f",
+          };
+        }
+
+        return {
+          label: "Dominant",
+          description: "One or two strategies dominate the population this tick.",
+          color: "#e74c3c",
+        };
+      };
+
+      if (behaviorEvenness != null || hasPopulation) {
+        const evennessValue =
+          hasPopulation && behaviorEvenness != null ? behaviorEvenness : 0;
+        const evennessMeta = describeEvenness(
+          hasPopulation ? behaviorEvenness : Number.NaN,
+        );
+        const balanceCard = document.createElement("div");
+
+        balanceCard.className = "trait-balance";
+        if (!hasPopulation) {
+          balanceCard.classList.add("trait-balance--empty");
+        }
+        balanceCard.title = `${evennessMeta.description} Normalized evenness ${(evennessValue * 100).toFixed(0)}%.`;
+
+        const balanceHeader = document.createElement("div");
+
+        balanceHeader.className = "trait-balance-header";
+        const balanceLabel = document.createElement("span");
+
+        balanceLabel.className = "trait-balance-label";
+        balanceLabel.textContent = "Behavior Balance";
+        balanceHeader.appendChild(balanceLabel);
+
+        const balanceValue = document.createElement("span");
+
+        balanceValue.className = "trait-balance-value";
+        balanceValue.textContent = hasPopulation
+          ? `${(evennessValue * 100).toFixed(0)}% ${evennessMeta.label}`
+          : "No living cells";
+        balanceHeader.appendChild(balanceValue);
+        balanceCard.appendChild(balanceHeader);
+
+        const balanceMeter = document.createElement("div");
+
+        balanceMeter.className = "trait-balance-meter";
+        balanceMeter.setAttribute("role", "meter");
+        balanceMeter.setAttribute("aria-label", "Behavior balance across traits");
+        balanceMeter.setAttribute("aria-valuemin", "0");
+        balanceMeter.setAttribute("aria-valuemax", "1");
+        balanceMeter.setAttribute(
+          "aria-valuenow",
+          hasPopulation ? evennessValue.toFixed(2) : "0",
+        );
+        balanceMeter.setAttribute(
+          "aria-valuetext",
+          hasPopulation
+            ? `${(evennessValue * 100).toFixed(0)}% of behaviors are evenly distributed`
+            : "No living cells to sample",
+        );
+        const balanceFill = document.createElement("div");
+
+        balanceFill.className = "trait-balance-fill";
+        balanceFill.style.width = `${(evennessValue * 100).toFixed(0)}%`;
+        balanceFill.style.background = hasPopulation
+          ? evennessMeta.color
+          : "rgba(255,255,255,0.25)";
+        balanceMeter.appendChild(balanceFill);
+        balanceCard.appendChild(balanceMeter);
+
+        const balanceSummary = document.createElement("p");
+
+        balanceSummary.className = "trait-balance-summary";
+        balanceSummary.textContent = hasPopulation
+          ? evennessMeta.description
+          : "Run the simulation to measure how evenly traits are expressed.";
+        balanceCard.appendChild(balanceSummary);
+
+        traitBody.appendChild(balanceCard);
+      }
+
+      if (hasPopulation) {
+        const traitPalette = {
+          cooperation: "#74b9ff",
+          fighting: "#ff7675",
+          breeding: "#f39c12",
+          sight: "#55efc4",
+        };
+        const traitConfigs = [
+          { key: "cooperation", label: "Cooperation" },
+          { key: "fighting", label: "Fighting" },
+          { key: "breeding", label: "Breeding" },
+          { key: "sight", label: "Sight" },
+        ];
+        const traitList = document.createElement("ul");
+
+        traitList.className = "trait-bar-list";
+        traitList.setAttribute("role", "list");
+
+        for (let i = 0; i < traitConfigs.length; i++) {
+          const trait = traitConfigs[i];
+          const countRaw = traitPresence.counts?.[trait.key] ?? 0;
+          const fractionRaw = traitPresence.fractions?.[trait.key] ?? 0;
+          const count = Number.isFinite(countRaw) ? countRaw : 0;
+          const fraction = clamp01(Number.isFinite(fractionRaw) ? fractionRaw : 0);
+          const percentText = `${(fraction * 100).toFixed(0)}%`;
+          const countText = count.toLocaleString();
+          const tooltipBase =
+            "Active cells have a normalized value ≥ 60% for this trait.";
+          const item = document.createElement("li");
+
+          item.className = "trait-bar-item";
+
+          const header = document.createElement("div");
+
+          header.className = "trait-bar-header";
+          const labelEl = document.createElement("span");
+
+          labelEl.className = "trait-bar-label";
+          labelEl.textContent = trait.label;
+          header.appendChild(labelEl);
+
+          const valueEl = document.createElement("span");
+
+          valueEl.className = "trait-bar-value";
+          valueEl.textContent = `${countText} cells (${percentText})`;
+          header.appendChild(valueEl);
+
+          item.appendChild(header);
+
+          const meter = document.createElement("div");
+
+          meter.className = "trait-bar-meter";
+          meter.setAttribute("role", "meter");
+          meter.setAttribute("aria-label", `${trait.label} presence`);
+          meter.setAttribute("aria-valuemin", "0");
+          meter.setAttribute("aria-valuemax", "1");
+          meter.setAttribute("aria-valuenow", fraction.toFixed(2));
+          meter.setAttribute(
+            "aria-valuetext",
+            `${percentText} of living cells show high ${trait.label.toLowerCase()}`,
+          );
+          meter.title = `${tooltipBase} ${percentText} of the population exceeds the threshold.`;
+
+          const fill = document.createElement("div");
+
+          fill.className = "trait-bar-fill";
+          fill.style.width = `${(fraction * 100).toFixed(0)}%`;
+          fill.style.background = traitPalette[trait.key] || "#74b9ff";
+          meter.appendChild(fill);
+
+          item.appendChild(meter);
+          traitList.appendChild(item);
+        }
+
+        traitBody.appendChild(traitList);
+      } else {
+        const emptyState = document.createElement("p");
+
+        emptyState.className = "trait-empty-state";
+        emptyState.textContent = "No living cells to sample for trait presence yet.";
+        traitBody.appendChild(emptyState);
       }
 
       traitSection.appendChild(traitGroup);
