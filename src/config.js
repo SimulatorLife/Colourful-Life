@@ -1,6 +1,7 @@
 // Centralized simulation config defaults
 const DEFAULT_MAX_TILE_ENERGY = 5;
 const DEFAULT_REGEN_DENSITY_PENALTY = 0.5;
+const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.5;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
@@ -56,7 +57,31 @@ export function resolveRegenDensityPenalty(env = RUNTIME_ENV) {
 
 // Penalties (scale 0..1) used in energy model
 export const REGEN_DENSITY_PENALTY = resolveRegenDensityPenalty(); // 1 - penalty * density
-export const CONSUMPTION_DENSITY_PENALTY = 0.5; // 1 - penalty * density
+
+/**
+ * Resolves the density penalty applied during energy consumption. Like the
+ * regeneration penalty resolver, the helper keeps overrides constrained to the
+ * 0..1 range while allowing environments to dial in how harshly crowding
+ * suppresses harvesting. This makes it easy to experiment with sparser or more
+ * competitive ecosystems without code changes.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Sanitized density penalty coefficient in the 0..1 range.
+ */
+export function resolveConsumptionDensityPenalty(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY;
+  const parsed = Number.parseFloat(raw);
+
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+    return DEFAULT_CONSUMPTION_DENSITY_PENALTY;
+  }
+
+  return parsed;
+}
+
+export const CONSUMPTION_DENSITY_PENALTY = resolveConsumptionDensityPenalty(); // 1 - penalty * density
 
 export const SIMULATION_DEFAULTS = Object.freeze({
   paused: false,

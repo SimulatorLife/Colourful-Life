@@ -45,4 +45,32 @@ test("resolveRegenDensityPenalty falls back when override is invalid", async () 
   );
 });
 
+test("CONSUMPTION_DENSITY_PENALTY exposes the environment-aware default", async () => {
+  const { CONSUMPTION_DENSITY_PENALTY } = await configModulePromise;
+
+  assert.is(CONSUMPTION_DENSITY_PENALTY, 0.5);
+});
+
+test("resolveConsumptionDensityPenalty respects overrides", async () => {
+  const { resolveConsumptionDensityPenalty } = await configModulePromise;
+
+  assert.is(
+    resolveConsumptionDensityPenalty({
+      COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY: "0.35",
+    }),
+    0.35,
+  );
+});
+
+test("resolveConsumptionDensityPenalty falls back when override is invalid", async () => {
+  const { resolveConsumptionDensityPenalty } = await configModulePromise;
+
+  assert.is(
+    resolveConsumptionDensityPenalty({
+      COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY: "-0.1",
+    }),
+    0.5,
+  );
+});
+
 test.run();
