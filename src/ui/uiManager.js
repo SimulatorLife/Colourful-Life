@@ -118,8 +118,10 @@ export default class UIManager {
     }
     this.controlsPanel = this.#buildControlsPanel();
     this.insightsPanel = this.#buildInsightsPanel();
+    this.lifeEventsPanel = this.#buildLifeEventsPanel();
     this.dashboardGrid.appendChild(this.controlsPanel);
     this.dashboardGrid.appendChild(this.insightsPanel);
+    this.dashboardGrid.appendChild(this.lifeEventsPanel);
 
     // Keyboard toggle
     document.addEventListener("keydown", (e) => {
@@ -1402,32 +1404,12 @@ export default class UIManager {
     this.#showMetricsPlaceholder("Run the simulation to populate these metrics.");
     body.appendChild(this.metricsBox);
 
-    const lifeEventsSection = document.createElement("section");
+    const sparkGrid = document.createElement("div");
 
-    lifeEventsSection.className = "metrics-section life-events";
-
-    const lifeHeading = document.createElement("h4");
-
-    lifeHeading.className = "metrics-section-title";
-    lifeHeading.textContent = "Life Event Log";
-    lifeEventsSection.appendChild(lifeHeading);
-    const lifeBody = document.createElement("div");
-
-    lifeBody.className = "metrics-section-body life-events-body";
-
-    this.lifeEventsEmptyState = document.createElement("div");
-    this.lifeEventsEmptyState.className = "life-event-empty";
-    this.lifeEventsEmptyState.textContent =
-      "Recent births and deaths will appear once the simulation runs.";
-    lifeBody.appendChild(this.lifeEventsEmptyState);
-
-    this.lifeEventList = document.createElement("ul");
-    this.lifeEventList.className = "life-event-list";
-    this.lifeEventList.setAttribute("role", "list");
-    this.lifeEventList.hidden = true;
-    lifeBody.appendChild(this.lifeEventList);
-    lifeEventsSection.appendChild(lifeBody);
-    body.appendChild(lifeEventsSection);
+    sparkGrid.className = "sparkline-grid";
+    sparkGrid.setAttribute("role", "group");
+    sparkGrid.setAttribute("aria-label", "Historical trend sparklines");
+    body.appendChild(sparkGrid);
 
     // Sparklines canvases
     const traitDescriptors = [
@@ -1476,13 +1458,6 @@ export default class UIManager {
 
     this.traitSparkDescriptors = traitSparkDescriptors;
 
-    const sparkGrid = document.createElement("div");
-
-    sparkGrid.className = "sparkline-grid";
-    sparkGrid.setAttribute("role", "group");
-    sparkGrid.setAttribute("aria-label", "Historical trend sparklines");
-    body.appendChild(sparkGrid);
-
     sparkDescriptors.forEach(({ label, property, color }) => {
       const card = document.createElement("div");
       const caption = document.createElement("div");
@@ -1512,6 +1487,43 @@ export default class UIManager {
 
       this[property] = canvas;
     });
+
+    return panel;
+  }
+
+  #buildLifeEventsPanel() {
+    const { panel, body } = this.#createPanel("Life Event Log", {
+      collapsed: true,
+    });
+
+    const lifeEventsSection = document.createElement("section");
+
+    lifeEventsSection.className = "metrics-section life-events";
+
+    const lifeHeading = document.createElement("h4");
+
+    lifeHeading.className = "metrics-section-title";
+    lifeHeading.textContent = "Recent Activity";
+    lifeEventsSection.appendChild(lifeHeading);
+
+    const lifeBody = document.createElement("div");
+
+    lifeBody.className = "metrics-section-body life-events-body";
+
+    this.lifeEventsEmptyState = document.createElement("div");
+    this.lifeEventsEmptyState.className = "life-event-empty";
+    this.lifeEventsEmptyState.textContent =
+      "Recent births and deaths will appear once the simulation runs.";
+    lifeBody.appendChild(this.lifeEventsEmptyState);
+
+    this.lifeEventList = document.createElement("ul");
+    this.lifeEventList.className = "life-event-list";
+    this.lifeEventList.setAttribute("role", "list");
+    this.lifeEventList.hidden = true;
+    lifeBody.appendChild(this.lifeEventList);
+
+    lifeEventsSection.appendChild(lifeBody);
+    body.appendChild(lifeEventsSection);
 
     return panel;
   }
