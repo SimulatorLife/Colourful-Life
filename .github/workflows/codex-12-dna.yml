@@ -17,8 +17,4 @@ jobs:
       pr_title: "Codex: DNA Encoding Improvements"
       pr_body: "Seed PR for Codex to enrich DNA encoding capabilities atop current master."
       prompt: >
-        Examine how DNA is represented and used throughout the simulation. Expand its
-        ability to encode meaningful organism traits and behaviors, replacing ad-hoc or
-        hardcoded logic with DNA-driven values where appropriate. Keep the system
-        extensible, realistic, and evolvable without introducing unnecessary complexity,
-        so the encoding fosters richer emergent outcomes.
+        Examine how DNA is represented and used throughout the simulation, and target one specific area where it can be improved to better encode meaningful organism traits and behaviors. Expand the DNA system’s ability to influence outcomes by replacing ad-hoc or hardcoded logic with DNA-driven values where appropriate. Possible improvements include making a physiological parameter heritable (e.g., energy use, decay rate, reproduction cost), tying a behavioral tendency to DNA instead of static code, extending DNA to encode structural traits, or refining how mutations introduce variability. Keep the change realistic, evolvable, and extensible without introducing unnecessary complexity or abstraction. Always deliver at least one tangible improvement, however small, that moves the system toward richer emergent behavior, and update any related docs/tests accordingly.
