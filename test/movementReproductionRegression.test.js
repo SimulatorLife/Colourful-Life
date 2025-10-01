@@ -603,6 +603,103 @@ test("handleReproduction strengthens low-diversity penalties when global pressur
   assert.ok(highPressure < 1, "penalty multiplier should remain a dampening factor");
 });
 
+test("behavioral evenness amplifies low-diversity penalties", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const runScenario = async (behaviorEvenness) => {
+    const records = [];
+    const stats = {
+      onBirth() {},
+      onDeath() {},
+      recordMateChoice(data) {
+        records.push(data);
+      },
+      matingDiversityThreshold: 0.45,
+      getDiversityPressure: () => 0.3,
+      getBehavioralEvenness: () => behaviorEvenness,
+    };
+
+    const gm = new TestGridManager(1, 3, {
+      eventManager: { activeEvents: [] },
+      stats,
+    });
+
+    gm.setMatingDiversityOptions({ threshold: 0.45, lowDiversityMultiplier: 0.6 });
+
+    const parent = new Cell(0, 0, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+    const mate = new Cell(0, 1, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+
+    parent.dna.reproductionThresholdFrac = () => 0;
+    mate.dna.reproductionThresholdFrac = () => 0;
+    parent.computeReproductionProbability = () => 1;
+    parent.decideReproduction = () => ({ probability: 1 });
+
+    const mateEntry = parent.evaluateMateCandidate({
+      row: mate.row,
+      col: mate.col,
+      target: mate,
+    }) || {
+      target: mate,
+      row: mate.row,
+      col: mate.col,
+      similarity: 1,
+      diversity: 0,
+      selectionWeight: 1,
+      preferenceScore: 1,
+    };
+
+    mateEntry.diversity = 0.05;
+    mateEntry.similarity = 0.95;
+
+    parent.selectMateWeighted = () => ({
+      chosen: mateEntry,
+      evaluated: [mateEntry],
+      mode: "preference",
+    });
+    parent.findBestMate = () => mateEntry;
+
+    gm.setCell(0, 0, parent);
+    gm.setCell(0, 1, mate);
+    gm.densityGrid = [[0, 0, 0]];
+
+    const originalRandom = Math.random;
+
+    Math.random = () => 0.99;
+
+    try {
+      gm.handleReproduction(
+        0,
+        0,
+        parent,
+        { mates: [mateEntry], society: [] },
+        {
+          stats,
+          densityGrid: gm.densityGrid,
+          densityEffectMultiplier: 1,
+          mutationMultiplier: 1,
+        },
+      );
+    } finally {
+      Math.random = originalRandom;
+    }
+
+    return records[0]?.penaltyMultiplier ?? 1;
+  };
+
+  const balanced = await runScenario(0.85);
+  const collapsed = await runScenario(0.1);
+
+  assert.ok(collapsed < balanced, "lower evenness should intensify penalties");
+  assert.ok(collapsed < 1, "penalty multiplier should remain below neutral");
+});
+
 test("low-diversity penalties respond to mate preferences and environment", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
