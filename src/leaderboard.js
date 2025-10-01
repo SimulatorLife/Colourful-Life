@@ -2,12 +2,12 @@ import { createRankedBuffer } from "./utils.js";
 
 /**
  * Generates a ranked leaderboard from the latest grid snapshot. The helper
- * combines raw fitness metrics with smoothed scores and optional brain
- * telemetry so UI panels can highlight the most successful organisms.
+ * ranks entries by their raw fitness and attaches optional brain telemetry so
+ * UI panels can highlight the most successful organisms.
  *
  * @param {{entries:Array,brainSnapshots:Array}} snapshot - Data collected by {@link GridManager}.
  * @param {number} [topN=5] - Maximum number of entries to return.
- * @returns {Array<Object>} Ranked list sorted by smoothed then raw fitness.
+ * @returns {Array<Object>} Ranked list sorted by raw fitness.
  */
 function sanitizeCoordinate(value) {
   const numeric = Number(value);
@@ -30,13 +30,6 @@ export function computeLeaderboard(snapshot, topN = 5) {
     ? snapshot.brainSnapshots
     : [];
   const compareItems = (a, b) => {
-    const smoothedDiff =
-      (b?.smoothedFitness ?? Number.NaN) - (a?.smoothedFitness ?? Number.NaN);
-
-    if (!Number.isNaN(smoothedDiff) && smoothedDiff !== 0) {
-      return smoothedDiff;
-    }
-
     const fitnessDiff = (b?.fitness ?? Number.NaN) - (a?.fitness ?? Number.NaN);
 
     return Number.isNaN(fitnessDiff) ? 0 : fitnessDiff;
@@ -57,20 +50,14 @@ export function computeLeaderboard(snapshot, topN = 5) {
   const topItems = createRankedBuffer(sanitizedTopN, compareItems);
 
   for (const entry of entries) {
-    const { cell, fitness, smoothedFitness } = entry || {};
+    const { cell, fitness } = entry || {};
 
     if (!cell || !Number.isFinite(fitness)) {
       continue;
     }
 
-    const smoothed =
-      (Number.isFinite(smoothedFitness) ? smoothedFitness : undefined) ??
-      (Number.isFinite(cell?.fitnessScore) ? cell.fitnessScore : undefined) ??
-      fitness;
-
     const item = {
       fitness,
-      smoothedFitness: smoothed,
       offspring: Number.isFinite(cell?.offspring) ? cell.offspring : 0,
       fightsWon: Number.isFinite(cell?.fightsWon) ? cell.fightsWon : 0,
       age: Number.isFinite(cell?.age) ? cell.age : 0,

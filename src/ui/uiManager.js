@@ -2204,12 +2204,9 @@ export default class UIManager {
       Number.isFinite(value) ? value.toLocaleString() : "—";
 
     entries.forEach((entry, index) => {
-      const smoothedFitness = Number.isFinite(entry.smoothedFitness)
-        ? entry.smoothedFitness
-        : undefined;
-      const summaryFitness = Number.isFinite(smoothedFitness)
-        ? smoothedFitness
-        : entry.fitness;
+      const summaryFitness = Number.isFinite(entry.fitness)
+        ? entry.fitness
+        : Number.NaN;
       const brain = entry.brain ?? {};
       const card = document.createElement("article");
 
@@ -2252,9 +2249,7 @@ export default class UIManager {
       const summaryLabel = document.createElement("span");
 
       summaryLabel.className = "leaderboard-summary-label";
-      summaryLabel.textContent = Number.isFinite(smoothedFitness)
-        ? "Smoothed Fitness"
-        : "Fitness";
+      summaryLabel.textContent = "Fitness";
       summary.appendChild(summaryLabel);
 
       const summaryValue = document.createElement("span");
@@ -2271,10 +2266,6 @@ export default class UIManager {
       statsContainer.className = "leaderboard-stats";
 
       const detailRows = [];
-
-      if (Number.isFinite(entry.fitness) && Number.isFinite(smoothedFitness)) {
-        detailRows.push({ label: "Raw Fitness", value: formatFloat(entry.fitness) });
-      }
 
       detailRows.push(
         { label: "Brain Fitness", value: formatFloat(brain.fitness) },
@@ -2314,10 +2305,6 @@ export default class UIManager {
         `Fights ${formatCount(entry.fightsWon)}`,
         `Age ${formatCount(entry.age)}`,
       ];
-
-      if (Number.isFinite(entry.fitness) && Number.isFinite(smoothedFitness)) {
-        tooltipParts.splice(1, 0, `Raw Fitness ${formatFloat(entry.fitness)}`);
-      }
 
       card.title = tooltipParts.join(" | ");
       card.appendChild(statsContainer);

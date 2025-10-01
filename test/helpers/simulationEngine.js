@@ -56,9 +56,7 @@ export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) 
         row: 0,
         col: 0,
         fitness: 1,
-        smoothedFitness: 2,
         cell: {
-          fitnessScore: 1,
           offspring: 3,
           fightsWon: 4,
           age: 5,

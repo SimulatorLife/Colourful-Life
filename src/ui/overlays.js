@@ -33,11 +33,9 @@ function selectCelebrationHighlights(entries, limit = MAX_CELEBRATION_HIGHLIGHTS
   for (const entry of entries) {
     if (!entry) continue;
 
-    const value = Number.isFinite(entry.smoothedFitness)
-      ? entry.smoothedFitness
-      : Number.isFinite(entry.fitness)
-        ? entry.fitness
-        : Number.NEGATIVE_INFINITY;
+    const value = Number.isFinite(entry.fitness)
+      ? entry.fitness
+      : Number.NEGATIVE_INFINITY;
 
     if (!Number.isFinite(value)) continue;
 
@@ -100,11 +98,7 @@ export function drawCelebrationAuras(snapshot, ctx, cellSize, options = {}) {
 
   if (!(maxFitness > 0)) {
     for (const entry of highlights) {
-      const candidate = Number.isFinite(entry?.smoothedFitness)
-        ? entry.smoothedFitness
-        : Number.isFinite(entry?.fitness)
-          ? entry.fitness
-          : 0;
+      const candidate = Number.isFinite(entry?.fitness) ? entry.fitness : 0;
 
       if (candidate > maxFitness) maxFitness = candidate;
     }
@@ -125,11 +119,7 @@ export function drawCelebrationAuras(snapshot, ctx, cellSize, options = {}) {
 
     const x = (col + 0.5) * cellSize;
     const y = (row + 0.5) * cellSize;
-    const rawScore = Number.isFinite(entry.smoothedFitness)
-      ? entry.smoothedFitness
-      : Number.isFinite(entry.fitness)
-        ? entry.fitness
-        : 0;
+    const rawScore = Number.isFinite(entry.fitness) ? entry.fitness : 0;
     const normalized = clamp01(rawScore / maxFitness);
     const paletteEntry = palette[i % palette.length];
     const rgb = Array.isArray(paletteEntry?.rgb)

@@ -121,7 +121,6 @@ export default class Cell {
       typeof this.dna.neuralReinforcementProfile === "function"
         ? this.dna.neuralReinforcementProfile()
         : null;
-    this.fitnessScore = null;
     this.matePreferenceBias =
       typeof this.dna.mateSimilarityBias === "function"
         ? this.dna.mateSimilarityBias()
