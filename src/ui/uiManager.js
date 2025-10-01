@@ -77,6 +77,11 @@ export default class UIManager {
     this.showObstacles = defaults.showObstacles;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
+    const initialObstaclePreset = this.#resolveInitialObstaclePreset(actionFns);
+
+    if (initialObstaclePreset) {
+      this.obstaclePreset = initialObstaclePreset;
+    }
     this.lingerPenalty = defaults.lingerPenalty;
     this.autoPauseCheckbox = null;
     // Build UI
@@ -141,6 +146,39 @@ export default class UIManager {
       .filter((value) => value.length > 0);
 
     return new Set(normalized.length > 0 ? normalized : fallback);
+  }
+
+  #resolveInitialObstaclePreset(actionFns = {}) {
+    let candidate = null;
+
+    const getter = actionFns?.getCurrentObstaclePreset;
+
+    if (typeof getter === "function") {
+      try {
+        candidate = getter();
+      } catch (error) {
+        warnOnce("Failed to read current obstacle preset from actions.", error);
+      }
+    }
+
+    if (
+      (!candidate || typeof candidate !== "string" || candidate.length === 0) &&
+      typeof window !== "undefined"
+    ) {
+      const fromWindow = window.grid?.currentObstaclePreset;
+
+      if (typeof fromWindow === "string" && fromWindow.length > 0) {
+        candidate = fromWindow;
+      }
+    }
+
+    if (typeof candidate !== "string" || candidate.length === 0) {
+      return null;
+    }
+
+    const match = this.obstaclePresets.find((preset) => preset?.id === candidate);
+
+    return match ? match.id : null;
   }
 
   attachCanvas(canvasElement, options = {}) {
@@ -1164,7 +1202,7 @@ export default class UIManager {
         },
       });
 
-      if (presetSelect) {
+      if (presetSelect?.options) {
         Array.from(presetSelect.options).forEach((opt) => {
           if (!opt.title && opt.textContent) opt.title = opt.textContent;
         });

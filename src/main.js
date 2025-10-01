@@ -228,6 +228,7 @@ export function createSimulation({
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
     setLingerPenalty: (value) => engine.setLingerPenalty(value),
     obstaclePresets: OBSTACLE_PRESETS,
+    getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
     selectionManager: engine.selectionManager,
     getCellSize: () => engine.cellSize,
     ...(uiOptions.actions || {}),
