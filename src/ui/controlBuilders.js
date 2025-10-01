@@ -15,6 +15,18 @@ export function createControlGrid(parent, className = "") {
 }
 
 /**
+ * Safely normalizes optional configuration arguments passed to the control
+ * builders. Many call sites pass `undefined` or primitive sentinel values so we
+ * coerce to an object before destructuring.
+ *
+ * @param {*} candidate - Potential options bag from the caller.
+ * @returns {Object} Options object guaranteed to be safe for destructuring.
+ */
+function normalizeOptions(candidate) {
+  return candidate && typeof candidate === "object" ? candidate : {};
+}
+
+/**
  * Renders a section heading to group related controls.
  *
  * @param {HTMLElement} parent - Node the heading is appended to.
@@ -22,12 +34,9 @@ export function createControlGrid(parent, className = "") {
  * @param {{className?: string}} [options] - Styling overrides.
  * @returns {HTMLHeadingElement} Created heading element.
  */
-function toOptionsObject(candidate) {
-  return candidate && typeof candidate === "object" ? candidate : {};
-}
 
 export function createSectionHeading(parent, text, options = {}) {
-  const { className = "control-section-title" } = toOptionsObject(options);
+  const { className = "control-section-title" } = normalizeOptions(options);
   const heading = document.createElement("h4");
 
   heading.className = className;
@@ -45,7 +54,7 @@ export function createSectionHeading(parent, text, options = {}) {
  * @returns {HTMLDivElement} Wrapper element for buttons.
  */
 export function createControlButtonRow(parent, options = {}) {
-  const { className = "control-button-row" } = toOptionsObject(options);
+  const { className = "control-button-row" } = normalizeOptions(options);
   const row = document.createElement("div");
 
   row.className = className;
@@ -66,7 +75,7 @@ export function createControlButtonRow(parent, options = {}) {
  *   The created row wrapper elements.
  */
 function createLabeledControlRow(parent, labelText, options = {}) {
-  const { title, lineClass } = toOptionsObject(options);
+  const { title, lineClass } = normalizeOptions(options);
   const row = document.createElement("label");
 
   row.className = "control-row";
@@ -110,7 +119,7 @@ export function createSliderRow(parent, opts = {}) {
     title,
     onInput,
     format = (v) => String(v),
-  } = toOptionsObject(opts);
+  } = normalizeOptions(opts);
   const { line } = createLabeledControlRow(parent, label, { title });
   const valSpan = document.createElement("span");
 
@@ -161,7 +170,7 @@ export function createSliderRow(parent, opts = {}) {
  * @returns {HTMLSelectElement} The generated select element.
  */
 export function createSelectRow(parent, opts = {}) {
-  const { label, title, value, options = [], onChange } = toOptionsObject(opts);
+  const { label, title, value, options = [], onChange } = normalizeOptions(opts);
   const { line } = createLabeledControlRow(parent, label, { title });
   const select = document.createElement("select");
 
