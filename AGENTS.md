@@ -10,8 +10,8 @@ This document captures the guardrails and shared context for any automation or A
 
 ## Hard Rules
 
-- **Don't modify files inside `.github/` unless explicitly asked to** Treat workflow definitions, agent prompts, and CI config as read-only.
-- Ignore `node_modules/`, lockfiles caches, and other generated artifacts when scanning, searching, or linting. Focus on checked-in source (`src/`, `ui/`, `test/`, `demo/`, etc.). Ignore build outputs in `dist/` and `build/`. Ignore hidden files and folders unless explicitly relevant. Ignore file `codex-setup-env-script.sh`.
+- **Don't modify files inside `.github/` unless explicitly asked to.** Workflow definitions, agent prompts, and CI config are read-only by default. When an explicit request arrives, adjust only the targeted files and preserve naming conventions (`codex-XX-description.yml`).
+- Ignore `node_modules/`, lockfile caches, and other generated artifacts when scanning, searching, or linting. Focus on checked-in source (`src/`, `ui/`, `test/`, `demo/`, etc.). Ignore build outputs in `dist/` and `build/`, hidden files/folders unless explicitly relevant, and the helper script `codex-setup-env-script.sh`.
 - Do not delete or downgrade existing tests. Add coverage when behavior changes or risk increases.
 - Keep the working tree clean. Stage only relevant files and ensure commits represent minimal, logical changes.
 
