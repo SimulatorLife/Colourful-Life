@@ -1805,9 +1805,9 @@ export default class UIManager {
       title: "Average energy per cell",
     });
     appendMetricRow(vitalitySection, {
-      label: "Mean Age",
+      label: "Mean Age (ticks)",
       value: fixedOrDash(s.meanAge, 1),
-      title: "Average age of living cells",
+      title: "Average age of living cells measured in simulation ticks.",
     });
     appendMetricRow(vitalitySection, {
       label: "Diversity",
@@ -2273,7 +2273,7 @@ export default class UIManager {
         { label: "Connections", value: formatCount(brain.connectionCount) },
         { label: "Offspring", value: formatCount(entry.offspring) },
         { label: "Fights Won", value: formatCount(entry.fightsWon) },
-        { label: "Age", value: formatCount(entry.age) },
+        { label: "Age (ticks)", value: formatCount(entry.age) },
       );
 
       detailRows.forEach(({ label, value }) => {
@@ -2303,7 +2303,7 @@ export default class UIManager {
         `Connections ${formatCount(brain.connectionCount)}`,
         `Offspring ${formatCount(entry.offspring)}`,
         `Fights ${formatCount(entry.fightsWon)}`,
-        `Age ${formatCount(entry.age)}`,
+        `Age ${formatCount(entry.age)} ticks`,
       ];
 
       card.title = tooltipParts.join(" | ");
