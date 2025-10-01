@@ -29,6 +29,11 @@ where practical.
   higher baseline, improving ecosystem stability without removing scarcity
   pressure.
 
+### Removed
+
+- Removed the unused `scripts/profile-grid.js` profiling helper to eliminate
+  dead code and reduce maintenance overhead.
+
 ## [0.1.0]
 
 ### Added
