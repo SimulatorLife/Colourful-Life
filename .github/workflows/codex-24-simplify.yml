@@ -1,8 +1,12 @@
-name: Codex 24 – Simplify Code Paths
+name: Codex 24 – Simplify
 
 on:
   schedule:
-    - cron: "40 3,9,15,21 * * *" # four times daily at 03:40, 09:40, 15:40, 21:40 UTC
+    - cron: "35 0 * * *" # early run at 00:35 UTC (fills 00:20–00:50 gap)
+    - cron: "40 3,9,15,21 * * *" # existing runs at 03:40, 09:40, 15:40, 21:40 UTC
+    - cron: "50 6 * * *" # morning run at 06:50 UTC (fills 06:40–07:00 gap)
+    - cron: "45 11 * * *" # midday run at 11:45 UTC (fills 11:15–12:00 gap)
+    - cron: "50 18 * * *" # evening run at 18:50 UTC (fills 18:40–19:00 gap)
   workflow_dispatch:
 
 permissions:
