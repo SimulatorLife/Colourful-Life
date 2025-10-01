@@ -23,36 +23,32 @@ function resolveHeadlessCanvasSize(config = {}) {
   };
 
   const cellSize = toFinite(config?.cellSize) ?? 5;
-  const rowsFallback = toFinite(config?.rows) ?? 120;
-  const colsFallback = toFinite(config?.cols) ?? 120;
-  const widthCandidates = [
-    toFinite(config?.width),
-    toFinite(config?.canvasWidth),
-    toFinite(config?.canvasSize?.width),
-    (() => {
-      const cols = toFinite(config?.cols);
-
-      return cols != null ? cols * cellSize : null;
-    })(),
-  ];
-  const heightCandidates = [
-    toFinite(config?.height),
-    toFinite(config?.canvasHeight),
-    toFinite(config?.canvasSize?.height),
-    (() => {
-      const rows = toFinite(config?.rows);
-
-      return rows != null ? rows * cellSize : null;
-    })(),
-  ];
-  const fallbackWidth = colsFallback * cellSize;
-  const fallbackHeight = rowsFallback * cellSize;
+  const rows = toFinite(config?.rows);
+  const cols = toFinite(config?.cols);
+  const fallbackWidth = (cols ?? 120) * cellSize;
+  const fallbackHeight = (rows ?? 120) * cellSize;
   const pickCandidate = (candidates, fallback) =>
-    candidates.find((value) => Number.isFinite(value)) ?? fallback;
+    candidates.find(Number.isFinite) ?? fallback;
 
   return {
-    width: pickCandidate(widthCandidates, fallbackWidth),
-    height: pickCandidate(heightCandidates, fallbackHeight),
+    width: pickCandidate(
+      [
+        toFinite(config?.width),
+        toFinite(config?.canvasWidth),
+        toFinite(config?.canvasSize?.width),
+        cols != null ? cols * cellSize : null,
+      ],
+      fallbackWidth,
+    ),
+    height: pickCandidate(
+      [
+        toFinite(config?.height),
+        toFinite(config?.canvasHeight),
+        toFinite(config?.canvasSize?.height),
+        rows != null ? rows * cellSize : null,
+      ],
+      fallbackHeight,
+    ),
   };
 }
 
