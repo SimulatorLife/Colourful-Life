@@ -1,4 +1,4 @@
-import { clamp } from "./utils.js";
+import { clamp } from "../utils.js";
 
 const DEFAULT_COLORS = [
   "rgba(80, 160, 255, 0.22)",
