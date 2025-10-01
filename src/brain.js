@@ -28,6 +28,8 @@ export const SENSOR_KEYS = Object.freeze([
   "targetProximity",
   "targetAttrition",
   "neuralFatigue",
+  "scarcityMemory",
+  "confidenceMemory",
 ]);
 
 const SENSOR_LOOKUP = new Map(SENSOR_KEYS.map((key, index) => [key, index]));

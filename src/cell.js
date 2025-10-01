@@ -1465,6 +1465,27 @@ export default class Cell {
     }
   }
 
+  #riskMemorySensorValues() {
+    const memory = this._riskMemory;
+
+    if (!memory) {
+      return { scarcityMemory: 0, confidenceMemory: 0 };
+    }
+
+    const scarcityMemory = clamp(
+      Number.isFinite(memory.resource) ? -memory.resource : 0,
+      -1,
+      1,
+    );
+    const confidenceMemory = clamp(
+      Number.isFinite(memory.confidence) ? memory.confidence : 0,
+      -1,
+      1,
+    );
+
+    return { scarcityMemory, confidenceMemory };
+  }
+
   resolveTrait(traitName) {
     if (traitName === "riskTolerance") {
       return this.#resolveRiskTolerance();
@@ -1799,6 +1820,7 @@ export default class Cell {
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
     const interactionMomentum = this.#resolveInteractionMomentum();
     const neuralFatigue = this.#currentNeuralFatigue();
+    const { scarcityMemory, confidenceMemory } = this.#riskMemorySensorValues();
 
     return {
       energy: energyFrac,
@@ -1815,6 +1837,8 @@ export default class Cell {
       eventPressure,
       resourceTrend,
       neuralFatigue,
+      scarcityMemory,
+      confidenceMemory,
     };
   }
 
@@ -1974,6 +1998,7 @@ export default class Cell {
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
     const interactionMomentum = this.#resolveInteractionMomentum();
     const neuralFatigue = this.#currentNeuralFatigue();
+    const { scarcityMemory, confidenceMemory } = this.#riskMemorySensorValues();
 
     return {
       energy: energyFrac,
@@ -1989,6 +2014,8 @@ export default class Cell {
       eventPressure,
       resourceTrend,
       neuralFatigue,
+      scarcityMemory,
+      confidenceMemory,
     };
   }
 
@@ -2060,6 +2087,7 @@ export default class Cell {
     const neuralFatigue = this.#currentNeuralFatigue();
     const interactionMomentum = this.#resolveInteractionMomentum();
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
+    const { scarcityMemory, confidenceMemory } = this.#riskMemorySensorValues();
 
     return {
       energy: clamp((this.energy ?? 0) / energyCap, 0, 1),
@@ -2072,6 +2100,8 @@ export default class Cell {
       riskTolerance,
       resourceTrend,
       neuralFatigue,
+      scarcityMemory,
+      confidenceMemory,
       targetWeakness: weaknessSignal,
       targetThreat: threatSignal,
       targetProximity: proximitySignal,
