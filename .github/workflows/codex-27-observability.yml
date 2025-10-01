@@ -17,21 +17,15 @@ jobs:
       pr_title: "Codex: Observability Enhancements"
       pr_body: "Seed PR for Codex to elevate visual observability across the ecosystem simulation."
       prompt: >
-        Conduct a deep pass on simulation observability and land tangible improvements
-        in this run. Pick a specific surface (overlay system, metrics dashboard, brain
-        inspection tools, or event feedback) and ship a meaningful enhancement that
-        materially increases a player's ability to see what organisms, genes, and events
-        are doing. The pull request must include at least one code change that either:
-        (a) adds a new visualisation (e.g. event log panel, birth/death markers, neuron
-        activity display, mini timeline, sparkline graphs), (b) upgrades an existing
-        tool with clearer signals (colour cues, legends, threshold indicators, dynamic
-        summaries), or (c) introduces diagnostic hooks (structured event history, brain
-        snapshots, filterable stats) that visualize or expose hidden state. If you truly cannot deliver
-        a large feature, add a smaller win, for example adding a visual cue when
-        mutation rate sliders change. 
+        Improve simulation 'observability' by delivering at least one tangible change/feature.
+        Focus on one area (e.g. overlays, metrics, logs, dashboards, brain inspectors, or feedback cues)
+        and make it easier for players to understand what organisms, genes, and events are doing.
+        Possible directions include adding new visualizations (logs, markers, graphs, timelines),
+        upgrading signals in existing tools (color, legends, thresholds, summaries), introducing
+        diagnostic hooks (event history, brain snapshots, filterable stats), or making smaller wins
+        like clearer labels, icons, or animations. You may also consolidate or remove elements if they
+        are noisy, duplicative, or detract from clarity.
 
-        Do not respond with "found no major issues" or similar—produce SOMETHING. Be sure to update
-        documentation/tests when behaviour changes as appropriate. Maintain architectural boundaries (simulation logic vs
-        rendering vs UI), ensure additions are performant (no unnecessary per-frame
-        allocations), keep visuals accessible, and avoid heavyweight dependencies. If a
-        new configuration toggle is needed, add sensible defaults and document them.
+        Do not skip changes—always ship something. Keep scope focused, avoid architectural churn,
+        ensure performance and accessibility, and add no heavyweight dependencies. Provide sensible
+        defaults for any new options and update docs/tests as needed.
