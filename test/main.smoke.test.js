@@ -120,6 +120,26 @@ test("headless UI forwards setting changes to the engine", async () => {
   simulation.destroy();
 });
 
+test("headless UI clamps update frequency like the engine", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({ headless: true, autoStart: false });
+
+  simulation.uiManager.setUpdatesPerSecond(0);
+  assert.is(simulation.uiManager.getUpdatesPerSecond(), 1);
+  assert.is(simulation.engine.getStateSnapshot().updatesPerSecond, 1);
+
+  simulation.uiManager.setUpdatesPerSecond(59.4);
+  assert.is(simulation.uiManager.getUpdatesPerSecond(), 59);
+  assert.is(simulation.engine.getStateSnapshot().updatesPerSecond, 59);
+
+  simulation.uiManager.setUpdatesPerSecond(59.6);
+  assert.is(simulation.uiManager.getUpdatesPerSecond(), 60);
+  assert.is(simulation.engine.getStateSnapshot().updatesPerSecond, 60);
+
+  simulation.destroy();
+});
+
 test("createSimulation controller step delegates to engine.step", async () => {
   const { createSimulation } = await simulationModulePromise;
   const simulation = createSimulation({
