@@ -75,7 +75,10 @@ export function accumulateEventModifiers({
       ? sharedEffectCache
       : null;
   const effectCache = reusableEffectCache ?? (resolveEffect ? new Map() : null);
-  const strengthMultiplier = Number(eventStrengthMultiplier || 1);
+  const numericStrengthMultiplier = Number(eventStrengthMultiplier);
+  const strengthMultiplier = Number.isFinite(numericStrengthMultiplier)
+    ? numericStrengthMultiplier
+    : 1;
 
   for (let i = 0, len = events.length; i < len; i++) {
     const ev = events[i];
