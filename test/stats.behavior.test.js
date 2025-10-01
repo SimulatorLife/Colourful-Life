@@ -408,6 +408,36 @@ test("traitDefinitions option extends and overrides tracked trait metrics", asyn
   assert.is(stats.traitHistory.average.exploration.length, 1);
 });
 
+test("updateFromSnapshot tolerates missing or invalid totals", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(3);
+  const cells = [createCell(), createCell(), createCell()];
+
+  const firstSummary = stats.updateFromSnapshot({
+    population: "3",
+    totalEnergy: undefined,
+    totalAge: "not-a-number",
+    cells,
+  });
+
+  assert.is(firstSummary.meanEnergy, 0);
+  assert.is(firstSummary.meanAge, 0);
+  assert.equal(stats.history.energy, [0]);
+  assert.equal(stats.history.population, [3]);
+
+  const secondSummary = stats.updateFromSnapshot({
+    population: 2,
+    totalEnergy: Number.POSITIVE_INFINITY,
+    totalAge: Number.NaN,
+    cells: [],
+  });
+
+  assert.is(secondSummary.meanEnergy, 0);
+  assert.is(secondSummary.meanAge, 0);
+  assert.equal(stats.history.energy, [0, 0]);
+  assert.equal(stats.history.population, [3, 2]);
+});
+
 test("diversity pressure increases when diversity stays below target", async () => {
   const { default: Stats } = await statsModulePromise;
 
