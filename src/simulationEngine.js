@@ -359,6 +359,22 @@ export default class SimulationEngine {
     return OBSTACLE_PRESETS;
   }
 
+  /**
+   * Returns the identifier of the obstacle preset currently applied to the
+   * grid. UI surfaces rely on this to mirror the active layout selection.
+   *
+   * @returns {string} Active obstacle preset identifier or "none" when unset.
+   */
+  getCurrentObstaclePreset() {
+    const preset = this.grid?.currentObstaclePreset;
+
+    if (typeof preset === "string" && preset.length > 0) {
+      return preset;
+    }
+
+    return "none";
+  }
+
   get isRunning() {
     return this.running;
   }
