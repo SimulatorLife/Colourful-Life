@@ -1,0 +1,31 @@
+name: Codex 32 – Contextual Layout
+
+on:
+  schedule:
+    - cron: "37 12 * * *" # daily at 12:37 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Contextual Layout"
+      pr_body: "Seed PR for Codex to relocate one UI element for better contextual clarity while keeping the interface coherent."
+      prompt: >
+        Launch the Colourful Life simulation, observe the UI while interacting with live cells, panels,
+        and controls, and audit the source code to understand how pieces are wired together. Identify a
+        single element, input, panel, or widget that currently feels out of place, redundant, or less
+        discoverable where it lives. Relocate it to a more contextual home that improves overall
+        organization—this may involve moving it within an existing panel, into a brand new panel, a
+        different area on screen, into a related sidebar section, or closer to the data it influences. 
+        Update layout logic, styling, and state wiring accordingly so the element remains functional, 
+        accessible, and responsive. Avoid broad redesigns: keep the relocation focused, ensure nearby UI 
+        still behaves correctly, and adjust copy or affordances as needed so users understand the new 
+        placement. Re-run the simulation to verify the move in practice, add or adjust tests when logic 
+        changes, and document the new location in release notes or UI docs if user-facing behaviour shifts.

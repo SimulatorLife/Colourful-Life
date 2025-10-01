@@ -23,7 +23,7 @@ jobs:
         visual or interactive UI defect. Capture the specific UI surface, reproduction steps, and 
         expected behaviour, then implement one targeted fix that resolves the issue without redesigning
         adjacent systems or regressing performance/accessibility. Validate the change by rerunning the 
-        simulation and re-testing the affected controls, add or update testswhen logic is touched, and revise documentation or release notes if user-facing behaviour shifts.
+        simulation and re-testing the affected controls, add or update tests when logic is touched, and revise documentation or release notes if user-facing behaviour shifts.
         If you cannot find a blocking defect after a thorough hunt, identify the highest-risk inconsistency
         you observed, explain the investigation, and still ship an incremental tweak that hardens the UI 
         against that scenario.
