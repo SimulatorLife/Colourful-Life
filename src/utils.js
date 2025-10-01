@@ -24,16 +24,6 @@ export function lerp(a, b, t) {
 }
 
 /**
- * Returns `true` with the provided probability using `Math.random`.
- *
- * @param {number} chance - Probability between 0 and 1.
- * @returns {boolean} Whether the random draw succeeded.
- */
-export function randomPercent(chance) {
-  return Math.random() < chance;
-}
-
-/**
  * Clamps `value` to the `[min, max]` interval.
  *
  * @param {number} value - Candidate value.
