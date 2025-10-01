@@ -53,6 +53,21 @@ test("createSimulation headless mode infers a canvas when omitted", async () => 
   simulation.destroy();
 });
 
+test("headless canvas respects numeric strings for dimensions", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    config: { canvasWidth: "800", canvasHeight: "400", cellSize: "5" },
+  });
+
+  assert.is(simulation.engine.canvas.width, 800);
+  assert.is(simulation.engine.canvas.height, 400);
+
+  simulation.destroy();
+});
+
 test("createSimulation respects lingerPenalty overrides in headless mode", async () => {
   const { createSimulation } = await simulationModulePromise;
   const configuredPenalty = 0.024;

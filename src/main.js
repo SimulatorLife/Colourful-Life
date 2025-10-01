@@ -7,25 +7,54 @@ import { createHeadlessUiManager } from "./ui/headlessUiManager.js";
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
 function resolveHeadlessCanvasSize(config = {}) {
-  const cellSize = Number.isFinite(config?.cellSize) ? config.cellSize : 5;
-  const rowsFallback = Number.isFinite(config?.rows) ? config.rows : 120;
-  const colsFallback = Number.isFinite(config?.cols) ? config.cols : 120;
+  const toFinite = (value) => {
+    if (value == null) return null;
+    const numeric =
+      typeof value === "number"
+        ? value
+        : typeof value === "string" && value.trim().length > 0
+          ? Number.parseFloat(value)
+          : Number(value);
+
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  const cellSize = toFinite(config?.cellSize) ?? 5;
+  const rowsFallback = toFinite(config?.rows) ?? 120;
+  const colsFallback = toFinite(config?.cols) ?? 120;
   const widthCandidates = [
-    config?.width,
-    config?.canvasWidth,
-    config?.canvasSize?.width,
-    Number.isFinite(config?.cols) ? config.cols * cellSize : null,
+    toFinite(config?.width),
+    toFinite(config?.canvasWidth),
+    toFinite(config?.canvasSize?.width),
+    (() => {
+      const cols = toFinite(config?.cols);
+
+      return cols != null ? cols * cellSize : null;
+    })(),
   ];
   const heightCandidates = [
-    config?.height,
-    config?.canvasHeight,
-    config?.canvasSize?.height,
-    Number.isFinite(config?.rows) ? config.rows * cellSize : null,
+    toFinite(config?.height),
+    toFinite(config?.canvasHeight),
+    toFinite(config?.canvasSize?.height),
+    (() => {
+      const rows = toFinite(config?.rows);
+
+      return rows != null ? rows * cellSize : null;
+    })(),
   ];
   const fallbackWidth = colsFallback * cellSize;
   const fallbackHeight = rowsFallback * cellSize;
-  const pickCandidate = (candidates, fallback) =>
-    candidates.find((value) => Number.isFinite(value)) ?? fallback;
+  const pickCandidate = (candidates, fallback) => {
+    for (let i = 0; i < candidates.length; i += 1) {
+      const value = candidates[i];
+
+      if (Number.isFinite(value)) {
+        return value;
+      }
+    }
+
+    return fallback;
+  };
 
   return {
     width: pickCandidate(widthCandidates, fallbackWidth),
