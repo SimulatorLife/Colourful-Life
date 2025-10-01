@@ -266,6 +266,7 @@ export default class Stats {
     this.lastBlockedReproduction = null;
     this.diversityTarget = DIVERSITY_TARGET_DEFAULT;
     this.diversityPressure = 0;
+    this.behavioralEvenness = 0;
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
     this.lifeEventSequence = 0;
 
@@ -329,6 +330,14 @@ export default class Stats {
     return this.diversityPressure;
   }
 
+  getBehavioralEvenness() {
+    const value = Number.isFinite(this.behavioralEvenness)
+      ? this.behavioralEvenness
+      : 0;
+
+    return clamp01(value);
+  }
+
   #updateDiversityPressure(observedDiversity = 0) {
     const target = clamp01(this.diversityTarget ?? DIVERSITY_TARGET_DEFAULT);
 
@@ -345,6 +354,50 @@ export default class Stats {
       normalizedShortfall * (1 - DIVERSITY_PRESSURE_SMOOTHING);
 
     this.diversityPressure = clamp01(next);
+  }
+
+  #computeBehavioralEvenness(traitPresence) {
+    const fractions = traitPresence?.fractions;
+
+    if (!fractions || typeof fractions !== "object") {
+      return 0;
+    }
+
+    const values = [];
+
+    for (const raw of Object.values(fractions)) {
+      if (!Number.isFinite(raw) || raw <= 0) continue;
+
+      values.push(clamp01(raw));
+    }
+
+    if (values.length === 0) return 0;
+    if (values.length === 1) return 0;
+
+    const sum = values.reduce((acc, value) => acc + value, 0);
+
+    if (!(sum > 0)) {
+      return 0;
+    }
+
+    const invSum = 1 / sum;
+    let entropy = 0;
+
+    for (const value of values) {
+      const probability = value * invSum;
+
+      if (!(probability > 0)) continue;
+
+      entropy -= probability * Math.log(probability);
+    }
+
+    const maxEntropy = Math.log(values.length);
+
+    if (!(maxEntropy > 0) || !Number.isFinite(entropy)) {
+      return 0;
+    }
+
+    return clamp01(entropy / maxEntropy);
   }
 
   #resolveLifeEventArgs(primary, secondary) {
@@ -581,6 +634,7 @@ export default class Stats {
 
     this.#updateDiversityPressure(diversity);
     const traitPresence = this.computeTraitPresence(cells);
+    const behaviorEvenness = this.#computeBehavioralEvenness(traitPresence);
     const mateStats = this.mating || createEmptyMatingSnapshot();
     const choiceCount = mateStats.choices || 0;
     const successCount = mateStats.successes || 0;
@@ -602,6 +656,7 @@ export default class Stats {
     }
 
     this.traitPresence = traitPresence;
+    this.behavioralEvenness = behaviorEvenness;
     for (const { key } of this.traitDefinitions) {
       this.pushTraitHistory("presence", key, traitPresence.fractions[key] ?? 0);
       this.pushTraitHistory("average", key, traitPresence.averages[key] ?? 0);
@@ -625,6 +680,7 @@ export default class Stats {
       diverseChoiceRate,
       diverseMatingRate: diverseSuccessRate,
       meanDiversityAppetite: meanAppetite,
+      behaviorEvenness,
       curiositySelections: mateStats.selectionModes.curiosity,
       lastMating: this.lastMatingDebug,
       mutationMultiplier: this.mutationMultiplier,

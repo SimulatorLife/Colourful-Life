@@ -1799,6 +1799,7 @@ export default class GridManager {
     baseProbability = 1,
     floor = 0,
     diversityPressure = 0,
+    behaviorEvenness = 0,
   } = {}) {
     const sliderFloor = clamp(Number.isFinite(floor) ? floor : 0, 0, 1);
 
@@ -1833,6 +1834,12 @@ export default class GridManager {
       1,
     );
     const kinComfort = clamp(0.5 + 0.5 * kinPreference, 0, 1);
+    const evenness = clamp(
+      Number.isFinite(behaviorEvenness) ? behaviorEvenness : 0,
+      0,
+      1,
+    );
+    const evennessDrag = clamp(1 - evenness, 0, 1);
 
     const pressure = clamp(
       Number.isFinite(diversityPressure) ? diversityPressure : 0,
@@ -1847,6 +1854,7 @@ export default class GridManager {
 
     severity *= clamp(1 - kinComfort * 0.45, 0.3, 1);
     severity *= 1 + pressure * 0.75;
+    severity *= 1 + evennessDrag * (0.35 + 0.25 * combinedDrive);
     severity = clamp(severity, 0, 1);
 
     return clamp(1 - severity, sliderFloor, 1);
@@ -1897,6 +1905,13 @@ export default class GridManager {
           ? stats.diversityPressure
           : 0;
     const diversityPressure = clamp(diversityPressureSource, 0, 1);
+    const behaviorEvennessSource =
+      typeof stats?.getBehavioralEvenness === "function"
+        ? stats.getBehavioralEvenness()
+        : Number.isFinite(stats?.behavioralEvenness)
+          ? stats.behavioralEvenness
+          : 0;
+    const behaviorEvenness = clamp(behaviorEvennessSource, 0, 1);
     const penaltyFloor =
       typeof this.lowDiversityReproMultiplier === "number"
         ? clamp(this.lowDiversityReproMultiplier, 0, 1)
@@ -1958,6 +1973,7 @@ export default class GridManager {
         baseProbability: effectiveReproProb,
         floor: penaltyFloor,
         diversityPressure,
+        behaviorEvenness,
       });
 
       if (penaltyMultiplier <= 0) {

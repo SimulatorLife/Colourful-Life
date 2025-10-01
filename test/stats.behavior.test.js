@@ -8,6 +8,7 @@ const createCell = (overrides = {}) => ({
   interactionGenes: { cooperate: 0, fight: 0, ...overrides.interactionGenes },
   dna: {
     reproductionProb: () => 0,
+    similarity: () => 0,
     ...(overrides.dna || {}),
   },
   sight: 0,
@@ -191,11 +192,14 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(result.diverseChoiceRate, 0.5);
   assert.is(result.diverseMatingRate, 1);
   assert.is(result.meanDiversityAppetite, 0.6);
+  approxEqual(result.behaviorEvenness, 1, 1e-9);
   assert.is(result.curiositySelections, 1);
   assert.equal(result.lastMating, stats.lastMatingDebug);
   assert.is(result.mutationMultiplier, 2);
   assert.is(result.blockedMatings, 1);
   assert.equal(result.lastBlockedReproduction.reason, "Still recent");
+
+  approxEqual(stats.getBehavioralEvenness(), 1, 1e-9);
 
   assert.is(stats.history.population.length, 1);
   assert.is(stats.history.diversity.length, 1);
@@ -247,6 +251,29 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.equal(stats.history.diversity, [0.1, 0.2, 0.3]);
   assert.equal(stats.getHistorySeries("population"), [1, 1, 1]);
   assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.5, 0.5, 0.5]);
+});
+
+test("behavioral evenness drops when one trait dominates", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(2);
+
+  const cells = [
+    createCell({ interactionGenes: { cooperate: 0.95, fight: 0.1 }, sight: 0.2 }),
+    createCell({ interactionGenes: { cooperate: 0.92, fight: 0.05 }, sight: 0.1 }),
+    createCell({ interactionGenes: { cooperate: 0.88, fight: 0.05 }, sight: 0.1 }),
+  ];
+
+  stats.updateFromSnapshot({
+    population: cells.length,
+    totalEnergy: 0,
+    totalAge: 0,
+    cells,
+  });
+
+  const evenness = stats.getBehavioralEvenness();
+
+  assert.ok(evenness < 0.2, "dominant behavior should collapse evenness");
+  approxEqual(stats.behavioralEvenness, evenness, 1e-12);
 });
 
 test("traitDefinitions option extends and overrides tracked trait metrics", async () => {
