@@ -1,4 +1,4 @@
-import { randomRange, clamp, lerp, createRankedBuffer } from "../utils.js";
+import { randomRange, clamp, lerp, createRankedBuffer, warnOnce } from "../utils.js";
 import DNA from "../genome.js";
 import Cell from "../cell.js";
 import { computeFitness } from "../fitness.mjs";
@@ -936,10 +936,29 @@ export default class GridManager {
     presetId,
     { clearExisting = true, append = false, presetOptions = {}, evict = true } = {},
   ) {
+    const normalizedId =
+      typeof presetId === "string"
+        ? presetId.trim()
+        : presetId === "none"
+          ? "none"
+          : "";
+    const isClearPreset = normalizedId === "none";
+    const isKnownPreset =
+      isClearPreset ||
+      OBSTACLE_PRESETS.some(
+        (preset) => typeof preset?.id === "string" && preset.id === normalizedId,
+      );
+
+    if (!isKnownPreset) {
+      warnOnce(`Unknown obstacle preset "${presetId}"; ignoring request.`);
+
+      return;
+    }
+
     if (clearExisting && !append) this.clearObstacles();
     const options = presetOptions || {};
 
-    switch (presetId) {
+    switch (normalizedId) {
       case "none":
         if (clearExisting) this.clearObstacles();
         break;
