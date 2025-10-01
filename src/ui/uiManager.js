@@ -47,7 +47,6 @@ export default class UIManager {
     this.selectionDragEnd = null;
     this.drawZoneButton = null;
     this.zoneSummaryEl = null;
-    this.patternCheckboxes = {};
     this._selectionListenersInstalled = false;
     this.stepButton = null;
     this.clearZonesButton = null;
@@ -1239,8 +1238,6 @@ export default class UIManager {
           this.#scheduleUpdate();
         },
       );
-
-      this.patternCheckboxes[pattern.id] = checkbox;
     });
 
     const zoneButtons = createControlButtonRow(body);
