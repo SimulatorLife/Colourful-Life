@@ -139,7 +139,7 @@ function createHeadlessCanvas(config = {}) {
  * }} Headless UI facade that keeps simulation code agnostic to environment.
  */
 function createHeadlessUiManager(options = {}) {
-  const { selectionManager, ...overrides } = options || {};
+  const { selectionManager, onSettingChange, ...overrides } = options || {};
   const defaults = resolveSimulationDefaults(overrides);
   const settings = { ...defaults };
 
@@ -153,6 +153,11 @@ function createHeadlessUiManager(options = {}) {
 
     return true;
   };
+  const notify = (key, value) => {
+    if (typeof onSettingChange === "function") {
+      onSettingChange(key, value);
+    }
+  };
 
   return {
     isPaused: () => settings.paused,
@@ -161,7 +166,9 @@ function createHeadlessUiManager(options = {}) {
     },
     getUpdatesPerSecond: () => settings.updatesPerSecond,
     setUpdatesPerSecond: (value) => {
-      updateIfFinite("updatesPerSecond", value);
+      if (updateIfFinite("updatesPerSecond", value)) {
+        notify("updatesPerSecond", settings.updatesPerSecond);
+      }
     },
     getEventFrequencyMultiplier: () => settings.eventFrequencyMultiplier,
     getMutationMultiplier: () => settings.mutationMultiplier,
@@ -174,14 +181,20 @@ function createHeadlessUiManager(options = {}) {
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
     getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
     setMatingDiversityThreshold: (value) => {
-      updateIfFinite("matingDiversityThreshold", value);
+      if (updateIfFinite("matingDiversityThreshold", value)) {
+        notify("matingDiversityThreshold", settings.matingDiversityThreshold);
+      }
     },
     getLowDiversityReproMultiplier: () => settings.lowDiversityReproMultiplier,
     setLowDiversityReproMultiplier: (value) => {
-      updateIfFinite("lowDiversityReproMultiplier", value);
+      if (updateIfFinite("lowDiversityReproMultiplier", value)) {
+        notify("lowDiversityReproMultiplier", settings.lowDiversityReproMultiplier);
+      }
     },
     setCombatEdgeSharpness: (value) => {
-      updateIfFinite("combatEdgeSharpness", value);
+      if (updateIfFinite("combatEdgeSharpness", value)) {
+        notify("combatEdgeSharpness", settings.combatEdgeSharpness);
+      }
     },
     getShowObstacles: () => settings.showObstacles,
     getShowEnergy: () => settings.showEnergy,
@@ -201,11 +214,14 @@ function createHeadlessUiManager(options = {}) {
     renderLeaderboard: () => {},
     getLingerPenalty: () => settings.lingerPenalty,
     setLingerPenalty: (value) => {
-      updateIfFinite("lingerPenalty", value);
+      if (updateIfFinite("lingerPenalty", value)) {
+        notify("lingerPenalty", settings.lingerPenalty);
+      }
     },
     getAutoPauseOnBlur: () => settings.autoPauseOnBlur,
     setAutoPauseOnBlur: (value) => {
       settings.autoPauseOnBlur = Boolean(value);
+      notify("autoPauseOnBlur", settings.autoPauseOnBlur);
     },
     selectionManager: selectionManager ?? null,
   };
@@ -345,11 +361,29 @@ export function createSimulation({
     onSettingChange: (key, value) => engine.updateSetting(key, value),
   };
 
+  let headlessOptions = null;
+
+  if (headless) {
+    headlessOptions = {
+      ...uiOptions,
+      selectionManager: engine.selectionManager,
+    };
+    const userOnSettingChange = headlessOptions.onSettingChange;
+
+    headlessOptions.onSettingChange = (key, value) => {
+      if (key === "updatesPerSecond") {
+        engine.setUpdatesPerSecond(value);
+      } else if (typeof simulationCallbacks.onSettingChange === "function") {
+        simulationCallbacks.onSettingChange(key, value);
+      }
+      if (typeof userOnSettingChange === "function") {
+        userOnSettingChange(key, value);
+      }
+    };
+  }
+
   const uiManager = headless
-    ? createHeadlessUiManager({
-        ...uiOptions,
-        selectionManager: engine.selectionManager,
-      })
+    ? createHeadlessUiManager(headlessOptions)
     : new UIManager(
         simulationCallbacks,
         uiOptions.mountSelector ?? "#app",

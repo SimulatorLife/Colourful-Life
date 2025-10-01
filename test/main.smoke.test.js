@@ -85,6 +85,26 @@ test("headless UI setters coerce numeric string inputs", async () => {
   simulation.destroy();
 });
 
+test("headless UI forwards setting changes to the engine", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({ headless: true, autoStart: false });
+
+  simulation.uiManager.setUpdatesPerSecond(42);
+  simulation.uiManager.setMatingDiversityThreshold(0.55);
+  simulation.uiManager.setLingerPenalty(0.02);
+  simulation.uiManager.setAutoPauseOnBlur(false);
+
+  const state = simulation.engine.getStateSnapshot();
+
+  assert.is(state.updatesPerSecond, 42);
+  assert.is(state.matingDiversityThreshold, 0.55);
+  assert.is(state.lingerPenalty, 0.02);
+  assert.is(simulation.engine.autoPauseOnBlur, false);
+
+  simulation.destroy();
+});
+
 test("step control calls engine.step when using createSimulation", async () => {
   const { createSimulation } = await simulationModulePromise;
 
