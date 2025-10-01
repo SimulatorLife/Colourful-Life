@@ -51,6 +51,36 @@ export function createControlButtonRow(parent, options = {}) {
 }
 
 /**
+ * Shared factory that renders the labelled row shell used by sliders and
+ * select dropdowns.
+ *
+ * @param {HTMLElement} parent - Node receiving the rendered row.
+ * @param {string} labelText - Text content shown in the left column.
+ * @param {{title?: string, lineClass?: string}} [options] - Optional
+ *   configuration for the row.
+ * @returns {{row: HTMLLabelElement, name: HTMLDivElement, line: HTMLDivElement}}
+ *   The created row wrapper elements.
+ */
+function createLabeledControlRow(parent, labelText, { title, lineClass } = {}) {
+  const row = document.createElement("label");
+
+  row.className = "control-row";
+  if (title) row.title = title;
+  const name = document.createElement("div");
+
+  name.className = "control-name";
+  name.textContent = labelText != null ? String(labelText) : "";
+  const line = document.createElement("div");
+
+  line.className = lineClass || "control-line";
+  row.appendChild(name);
+  row.appendChild(line);
+  parent.appendChild(row);
+
+  return { row, name, line };
+}
+
+/**
  * Creates a labelled slider row with live value feedback.
  *
  * @param {HTMLElement} parent - Container node.
@@ -76,14 +106,7 @@ export function createSliderRow(parent, opts = {}) {
     onInput,
     format = (v) => String(v),
   } = opts;
-  const row = document.createElement("label");
-
-  row.className = "control-row";
-  if (title) row.title = title;
-  const name = document.createElement("div");
-
-  name.className = "control-name";
-  name.textContent = label;
+  const { line } = createLabeledControlRow(parent, label, { title });
   const valSpan = document.createElement("span");
 
   valSpan.className = "control-value";
@@ -101,14 +124,8 @@ export function createSliderRow(parent, opts = {}) {
     valSpan.textContent = format(numericValue);
     if (typeof onInput === "function") onInput(numericValue);
   });
-  const line = document.createElement("div");
-
-  line.className = "control-line";
   line.appendChild(input);
   line.appendChild(valSpan);
-  row.appendChild(name);
-  row.appendChild(line);
-  parent.appendChild(row);
 
   return input;
 }
@@ -129,17 +146,7 @@ export function createSliderRow(parent, opts = {}) {
  */
 export function createSelectRow(parent, opts = {}) {
   const { label, title, value, options = [], onChange } = opts;
-  const row = document.createElement("label");
-
-  row.className = "control-row";
-  if (title) row.title = title;
-  const name = document.createElement("div");
-
-  name.className = "control-name";
-  name.textContent = label;
-  const line = document.createElement("div");
-
-  line.className = "control-line";
+  const { line } = createLabeledControlRow(parent, label, { title });
   const select = document.createElement("select");
 
   options.forEach((option) => {
@@ -156,9 +163,6 @@ export function createSelectRow(parent, opts = {}) {
     if (typeof onChange === "function") onChange(select.value);
   });
   line.appendChild(select);
-  row.appendChild(name);
-  row.appendChild(line);
-  parent.appendChild(row);
 
   return select;
 }
