@@ -9,6 +9,7 @@ import {
   cloneTracePayload,
   createRankedBuffer,
   createRNG,
+  warnOnce,
 } from "../src/utils.js";
 
 function* cycle(values) {
@@ -105,6 +106,65 @@ test("createRNG yields deterministic pseudo-random sequences", () => {
 
   assert.equal(seqA, seqB, "same seed yields identical sequences");
   assert.ok(seqA.some((value, index) => value !== seqC[index]));
+});
+
+test("warnOnce logs each unique message/error combination only once", () => {
+  const originalWarn = console.warn;
+  const calls = [];
+  let detailedError;
+  let fallbackError;
+
+  console.warn = (...args) => {
+    calls.push(args);
+  };
+
+  try {
+    warnOnce("alpha-message");
+    warnOnce("alpha-message");
+
+    detailedError = new Error("boom");
+
+    warnOnce("alpha-message", detailedError);
+    warnOnce("alpha-message", new Error("boom"));
+
+    fallbackError = new Error("uh-oh");
+
+    warnOnce("beta-message", fallbackError);
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.is(calls.length, 3);
+  assert.equal(
+    calls.map(([message]) => message),
+    ["alpha-message", "alpha-message", "beta-message"],
+  );
+  assert.is(calls[1][1], detailedError);
+  assert.is(calls[2][1], fallbackError);
+});
+
+test("warnOnce ignores non-string or empty messages", () => {
+  const originalWarn = console.warn;
+  const calls = [];
+
+  console.warn = (...args) => {
+    calls.push(args);
+  };
+
+  try {
+    warnOnce(null);
+    warnOnce(42);
+    warnOnce(0);
+    warnOnce("");
+    warnOnce(undefined, new Error("skipped"));
+    warnOnce("gamma-message");
+    warnOnce("gamma-message");
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.is(calls.length, 1);
+  assert.equal(calls[0], ["gamma-message"]);
 });
 
 test.run();
