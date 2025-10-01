@@ -1,5 +1,6 @@
 import { test } from "uvu";
 import * as assert from "uvu/assert";
+import { approxEqual } from "./helpers/assertions.js";
 
 const computeFitnessModulePromise = import("../src/fitness.mjs");
 const configModulePromise = import("../src/config.js");
@@ -102,7 +103,7 @@ test("computeFitness rewards diverse mating and penalizes similarity pressure", 
   const result = computeFitness(cell, 10);
   const expected = 0.6 * 1.2 + 0.5 * 0.4 - 0.25 * 0.6;
 
-  assert.ok(Math.abs(result - expected) < 1e-9);
+  approxEqual(result, expected, 1e-9);
 });
 
 test.run();
