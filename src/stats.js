@@ -727,13 +727,16 @@ export default class Stats {
     penalized = false,
     penaltyMultiplier = 1,
     behaviorComplementarity = 0,
+    threshold,
   } = {}) {
     if (!this.mating) {
       this.mating = createEmptyMatingSnapshot();
     }
 
-    const threshold = this.matingDiversityThreshold;
-    const isDiverse = diversity >= threshold;
+    const resolvedThreshold = clamp01(
+      Number.isFinite(threshold) ? threshold : this.matingDiversityThreshold,
+    );
+    const isDiverse = diversity >= resolvedThreshold;
     const complementarity = clamp01(behaviorComplementarity);
 
     this.mating.choices++;
@@ -758,7 +761,7 @@ export default class Stats {
       selectionMode,
       poolSize,
       success,
-      threshold,
+      threshold: resolvedThreshold,
       penalized,
       penaltyMultiplier,
       behaviorComplementarity: complementarity,

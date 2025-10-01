@@ -254,6 +254,70 @@ export default class GridManager {
     return clamp(drive * 0.7 + environment * 0.3, 0, 1);
   }
 
+  static #computePairDiversityThreshold({
+    parentA,
+    parentB,
+    baseThreshold,
+    localDensity = 0,
+    tileEnergy = 0.5,
+    tileEnergyDelta = 0,
+    diversityPressure = 0,
+  } = {}) {
+    const baseline = clamp(Number.isFinite(baseThreshold) ? baseThreshold : 0, 0, 1);
+    const appetiteNeutral = 0.35;
+    const appetiteA = clamp(parentA?.diversityAppetite ?? 0, 0, 1);
+    const appetiteB = clamp(parentB?.diversityAppetite ?? 0, 0, 1);
+    const appetiteAverage = (appetiteA + appetiteB) / 2;
+    const appetiteDelta = appetiteAverage - appetiteNeutral;
+    const biasA = clamp(parentA?.matePreferenceBias ?? 0, -1, 1);
+    const biasB = clamp(parentB?.matePreferenceBias ?? 0, -1, 1);
+    const biasAverage = clamp((biasA + biasB) / 2, -1, 1);
+    const noveltyBias = Math.max(0, -biasAverage);
+    const kinBias = Math.max(0, biasAverage);
+    const fertilityFracA = clamp(
+      typeof parentA?.dna?.reproductionThresholdFrac === "function"
+        ? parentA.dna.reproductionThresholdFrac()
+        : 0.4,
+      0,
+      1,
+    );
+    const fertilityFracB = clamp(
+      typeof parentB?.dna?.reproductionThresholdFrac === "function"
+        ? parentB.dna.reproductionThresholdFrac()
+        : 0.4,
+      0,
+      1,
+    );
+    const cautionAverage = clamp(1 - (fertilityFracA + fertilityFracB) / 2, 0, 1);
+    const cautionDelta = cautionAverage - 0.5;
+    const densitySignal = clamp(localDensity ?? 0, 0, 1);
+    const scarcitySignal = clamp(1 - (tileEnergy ?? 0), 0, 1);
+    const declineSignal = clamp(-(tileEnergyDelta ?? 0), 0, 1);
+    const environmentUrgency = clamp(
+      densitySignal * 0.45 + scarcitySignal * 0.35 + declineSignal * 0.2,
+      0,
+      1,
+    );
+    const pressure = clamp(
+      Number.isFinite(diversityPressure) ? diversityPressure : 0,
+      0,
+      1,
+    );
+    const appetiteShift =
+      appetiteDelta * (0.3 + environmentUrgency * 0.3 + pressure * 0.2);
+    const cautionShift = cautionDelta * (0.18 + environmentUrgency * 0.22);
+    const noveltyShift =
+      noveltyBias * (0.15 + environmentUrgency * 0.25 + pressure * 0.2);
+    const kinShift = kinBias * (0.2 - environmentUrgency * 0.1 - pressure * 0.05);
+    const pressureShift = pressure * 0.08;
+    const delta =
+      appetiteShift + cautionShift + noveltyShift + pressureShift - kinShift;
+    const rawThreshold = clamp(baseline + delta, 0, 1);
+    const smoothing = clamp(0.25 + environmentUrgency * 0.35 + pressure * 0.25, 0, 1);
+
+    return clamp(baseline * (1 - smoothing) + rawThreshold * smoothing, 0, 1);
+  }
+
   #scoreSpawnCandidate(candidate, context = {}) {
     if (!candidate) return 0;
 
@@ -1980,7 +2044,7 @@ export default class GridManager {
         : cell.similarityTo(bestMate.target);
     const diversity =
       typeof bestMate.diversity === "number" ? bestMate.diversity : 1 - similarity;
-    const diversityThreshold =
+    const diversityThresholdBaseline =
       typeof this.matingDiversityThreshold === "number"
         ? this.matingDiversityThreshold
         : 0;
@@ -2048,15 +2112,25 @@ export default class GridManager {
       tileEnergyDelta,
     });
 
+    const pairDiversityThreshold = GridManager.#computePairDiversityThreshold({
+      parentA: cell,
+      parentB: bestMate.target,
+      baseThreshold: diversityThresholdBaseline,
+      localDensity,
+      tileEnergy,
+      tileEnergyDelta,
+      diversityPressure,
+    });
+
     let effectiveReproProb = clamp(reproProb ?? 0, 0, 1);
 
-    if (diversity < diversityThreshold) {
+    if (diversity < pairDiversityThreshold) {
       penalizedForSimilarity = true;
       penaltyMultiplier = this.#computeLowDiversityPenaltyMultiplier({
         parentA: cell,
         parentB: bestMate.target,
         diversity,
-        diversityThreshold,
+        diversityThreshold: pairDiversityThreshold,
         localDensity,
         tileEnergy,
         tileEnergyDelta,
@@ -2072,9 +2146,9 @@ export default class GridManager {
       } else {
         effectiveReproProb = clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
       }
-    } else if (diversityPressure > 0 && diversityThreshold < 1) {
+    } else if (diversityPressure > 0 && pairDiversityThreshold < 1) {
       const normalizedExcess = clamp(
-        (diversity - diversityThreshold) / (1 - diversityThreshold),
+        (diversity - pairDiversityThreshold) / (1 - pairDiversityThreshold),
         0,
         1,
       );
@@ -2250,6 +2324,7 @@ export default class GridManager {
         penalized: penalizedForSimilarity,
         penaltyMultiplier,
         behaviorComplementarity,
+        threshold: pairDiversityThreshold,
       });
     }
 

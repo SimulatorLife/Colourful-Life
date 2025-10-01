@@ -128,6 +128,25 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   assert.equal(stats.lastBlockedReproduction.reason, "Blocked by reproductive zone");
 });
 
+test("mating threshold overrides are respected", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(2);
+
+  stats.setMatingDiversityThreshold(0.5);
+
+  stats.recordMateChoice({ diversity: 0.25, threshold: 0.2 });
+
+  assert.is(stats.mating.choices, 1);
+  assert.is(stats.mating.diverseChoices, 1);
+  assert.is(stats.lastMatingDebug.threshold, 0.2);
+
+  stats.recordMateChoice({ diversity: 0.1, threshold: 0.8 });
+
+  assert.is(stats.mating.choices, 2);
+  assert.is(stats.mating.diverseChoices, 1);
+  assert.is(stats.lastMatingDebug.threshold, 0.8);
+});
+
 test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   const { default: Stats } = await statsModulePromise;
 
