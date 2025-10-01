@@ -1,5 +1,6 @@
 import { test } from "uvu";
 import * as assert from "uvu/assert";
+import { approxEqual } from "./helpers/assertions.js";
 
 let Cell;
 let DNA;
@@ -36,13 +37,6 @@ function withMockedRandom(sequence, fn) {
   } finally {
     Math.random = original;
   }
-}
-
-function expectClose(actual, expected, tolerance = 1e-12, message = "values differ") {
-  assert.ok(
-    Math.abs(actual - expected) <= tolerance,
-    `${message}: ${actual} !== ${expected}`,
-  );
 }
 
 test.before(async () => {
@@ -134,7 +128,7 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   const expectedEnergy = initialEnergy - (energyLoss + cognitiveLoss);
   const starvationThreshold = dna.starvationThresholdFrac() * context.maxTileEnergy;
 
-  expectClose(cell.energy, expectedEnergy, 1e-12, "energy after management");
+  approxEqual(cell.energy, expectedEnergy, 1e-12, "energy after management");
   assert.ok(cell.energy < initialEnergy, "energy should decrease");
   assert.is(starving, expectedEnergy <= starvationThreshold);
 });
@@ -229,14 +223,14 @@ test("movement sensors update DNA-tuned resource trend signal", () => {
     tileEnergyDelta,
   });
 
-  expectClose(cell._resourceDelta, expectedDelta, 1e-12, "resource delta smoothing");
-  expectClose(
+  approxEqual(cell._resourceDelta, expectedDelta, 1e-12, "resource delta smoothing");
+  approxEqual(
     cell._resourceBaseline,
     expectedBaseline,
     1e-12,
     "resource baseline smoothing",
   );
-  expectClose(cell._resourceSignal, expectedSignal, 1e-12, "resource trend signal");
+  approxEqual(cell._resourceSignal, expectedSignal, 1e-12, "resource trend signal");
 });
 
 test("neural rest action queues DNA-driven fatigue recovery bonus", () => {
@@ -333,10 +327,10 @@ test("breed spends parental investment energy without creating extra energy", ()
   assert.ok(child instanceof Cell, "breed should return a Cell");
   assert.is(child.row, parentA.row);
   assert.is(child.col, parentA.col);
-  expectClose(child.energy, expectedEnergy, 1e-12, "offspring energy");
-  expectClose(parentA.energy, energyBeforeA - investA, 1e-12, "parent A energy");
-  expectClose(parentB.energy, energyBeforeB - investB, 1e-12, "parent B energy");
-  expectClose(
+  approxEqual(child.energy, expectedEnergy, 1e-12, "offspring energy");
+  approxEqual(parentA.energy, energyBeforeA - investA, 1e-12, "parent A energy");
+  approxEqual(parentB.energy, energyBeforeB - investB, 1e-12, "parent B energy");
+  approxEqual(
     totalInvestment,
     energyBeforeA - parentA.energy + (energyBeforeB - parentB.energy),
     1e-12,
@@ -375,7 +369,7 @@ test("interaction momentum responds to conflicts and cooperation history", () =>
   });
 
   assert.ok(afterLoss < baseline, "losing a fight should depress social momentum");
-  expectClose(
+  approxEqual(
     cell.getInteractionMomentum(),
     afterLoss,
     1e-12,
@@ -419,8 +413,8 @@ test("breed returns null when either parent lacks investable energy", () => {
   const offspring = Cell.breed(parentA, parentB);
 
   assert.is(offspring, null, "offspring should be null when investments are zero");
-  expectClose(parentA.energy, energyBeforeA, 1e-12, "parent A energy unchanged");
-  expectClose(parentB.energy, energyBeforeB, 1e-12, "parent B energy unchanged");
+  approxEqual(parentA.energy, energyBeforeA, 1e-12, "parent A energy unchanged");
+  approxEqual(parentB.energy, energyBeforeB, 1e-12, "parent B energy unchanged");
   assert.is(parentA.offspring, 0);
   assert.is(parentB.offspring, 0);
   assert.ok(
@@ -583,19 +577,19 @@ test("breed clamps investment so parents stop at starvation threshold", () => {
     parentB.energy >= starvationB,
     "parent B energy stays above starvation floor",
   );
-  expectClose(
+  approxEqual(
     parentA.energy,
     energyBeforeA - expectedInvestA,
     1e-12,
     "parent A investment matches clamp",
   );
-  expectClose(
+  approxEqual(
     parentB.energy,
     energyBeforeB - expectedInvestB,
     1e-12,
     "parent B investment matches clamp",
   );
-  expectClose(
+  approxEqual(
     child.energy,
     expectedInvestA + expectedInvestB,
     1e-12,
@@ -643,7 +637,7 @@ test("breed applies deterministic crossover and honors forced mutation", () => {
     1,
   );
 
-  expectClose(
+  approxEqual(
     child.strategy,
     expectedStrategy,
     1e-12,
@@ -983,7 +977,7 @@ test("evaluateMateCandidate scales selection weight using mate sampling profile"
     evaluated.diversity * cell.mateSamplingProfile.noveltyWeight;
   const expectedWeight = Math.max(0.0001, expectedBase);
 
-  expectClose(
+  approxEqual(
     evaluated.selectionWeight,
     expectedWeight,
     1e-9,
