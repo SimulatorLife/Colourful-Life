@@ -61,6 +61,10 @@ affect runtime outcomes.
 - `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` controls how much additional
   energy cost organisms pay when harvesting from crowded tiles (0 removes the
   tax, 1 matches the baseline density pressure).
+- `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` shifts the normalized cutoff the
+  stats system uses when counting organisms as "active" for a trait. Lower
+  values loosen the requirement so charts show broader participation, while
+  higher values focus on strongly expressed behaviours.
 - Non-finite or out-of-range values are ignored and fall back to the defaults
   resolved in [`src/config.js`](../src/config.js). The energy overlays pull the
   sanitized values so UI telemetry reflects the active configuration.

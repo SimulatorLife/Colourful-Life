@@ -36,12 +36,13 @@ This document captures how the Colourful Life simulation composes its core syste
   experimenting with alternative baselines.
 
 - Environment overrides such as `COLOURFUL_LIFE_MAX_TILE_ENERGY`,
-  `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`, and
-  `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` flow through
+  `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`,
+  `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY`, and
+  `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` flow through
   [`src/config.js`](../src/config.js), letting experiments tweak caps, regeneration
-  suppression, and harvesting taxes without patching source. The sanitized values
-  are consumed by both the energy computations and overlays so telemetry stays in
-  sync.
+  suppression, harvesting taxes, and trait activity sensitivity without patching
+  source. The sanitized values are consumed by both the energy computations and
+  overlays so telemetry stays in sync.
 
 ### Events
 

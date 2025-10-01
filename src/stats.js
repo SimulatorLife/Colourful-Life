@@ -1,7 +1,8 @@
+import { TRAIT_ACTIVATION_THRESHOLD } from "./config.js";
 import { clamp01, warnOnce } from "./utils.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
-const TRAIT_THRESHOLD = 0.6;
+const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;
 const MAX_REPRODUCTION_PROB = 0.8;
 const MAX_SIGHT_RANGE = 5;
 
