@@ -27,7 +27,9 @@ where practical.
   200-tick headless run showed populations crashing to ~60 survivors (avg tile
   energy ~0.88) versus roughly 300 organisms and ~1.08 average energy with the
   higher baseline, improving ecosystem stability without removing scarcity
-  pressure.
+  pressure, and nudged it again to `0.0082` after tile-only probes settled
+  closer to 3.0 energy versus 2.86 under moderate density, reducing early
+  starvation cascades without saturating the map.
 
 ## [0.1.0]
 

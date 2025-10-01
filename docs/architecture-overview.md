@@ -28,9 +28,12 @@ This document captures how the Colourful Life simulation composes its core syste
 - `computeTileEnergyUpdate` is called for each tile while the grid is preparing a tick.
 - Blends base regeneration with density penalties, diffusion from neighbouring tiles, and modifiers contributed by active environmental events.
 - Returns both the next energy value and any event metadata so overlays can highlight affected regions.
-- The default regeneration coefficient (`0.0075`) keeps headless test runs from crashing into starvation after the opening
-  events while preserving scarcity pressure; adjust via `resolveSimulationDefaults` when experimenting with alternative
-  baselines.
+- The default regeneration coefficient (`0.0082`) keeps headless test runs from
+  crashing into starvation after the opening events while preserving scarcity
+  pressure. A quick tile-only probe (600 ticks, density 0.35, no diffusion)
+  nudged the equilibrium energy from ~2.86 to ~3.00, reducing early collapses
+  without flooding the map; adjust via `resolveSimulationDefaults` when
+  experimenting with alternative baselines.
 
 - Environment overrides such as `COLOURFUL_LIFE_MAX_TILE_ENERGY` and `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` flow through
   [`src/config.js`](../src/config.js), letting experiments tweak caps and density penalties without patching source. The values
