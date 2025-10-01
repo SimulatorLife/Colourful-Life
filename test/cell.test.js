@@ -113,15 +113,15 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   const densityResponse = dna.densityResponses().energyLoss;
   const energyDensityMult = lerp(densityResponse.min, densityResponse.max, effDensity);
   const metabolism = cell.metabolism;
-  const sen = typeof dna.senescenceRate === "function" ? dna.senescenceRate() : 0;
+  const crowdPenalty = 1 + effDensity * (cell.metabolicCrowdingTax ?? 0);
   const baseLoss = dna.energyLossBase();
-  const ageFrac = cell.lifespan > 0 ? cell.age / cell.lifespan : 0;
-  const lossScale =
+  const energyLoss =
+    baseLoss *
     dna.baseEnergyLossScale() *
     (1 + metabolism) *
-    (1 + sen * ageFrac) *
-    energyDensityMult;
-  const energyLoss = clamp(baseLoss * lossScale, 0.004, 0.35);
+    energyDensityMult *
+    crowdPenalty *
+    cell.ageEnergyMultiplier();
   const cognitiveLoss = dna.cognitiveCost(cell.neurons, cell.sight, effDensity);
 
   const starving = cell.manageEnergy(cell.row, cell.col, context);
@@ -131,6 +131,53 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   approxEqual(cell.energy, expectedEnergy, 1e-12, "energy after management");
   assert.ok(cell.energy < initialEnergy, "energy should decrease");
   assert.is(starving, expectedEnergy <= starvationThreshold);
+});
+
+test("DNA metabolic profile reduces crowd losses for crowd-tolerant genomes", () => {
+  const tolerantDNA = new DNA(0, 0, 0);
+
+  tolerantDNA.genes[GENE_LOCI.DENSITY] = 240;
+  tolerantDNA.genes[GENE_LOCI.ENERGY_EFFICIENCY] = 200;
+
+  const lonerDNA = new DNA(0, 0, 0);
+
+  lonerDNA.genes[GENE_LOCI.DENSITY] = 10;
+  lonerDNA.genes[GENE_LOCI.RISK] = 220;
+
+  const tolerant = new Cell(0, 0, tolerantDNA, 6);
+  const loner = new Cell(0, 0, lonerDNA, 6);
+  const zeroCognitive = () => ({
+    baseline: 0,
+    dynamic: 0,
+    total: 0,
+    usageScale: 0,
+    densityFactor: 1,
+    base: 0,
+  });
+
+  tolerant.dna.cognitiveCostComponents = zeroCognitive;
+  tolerant.dna.cognitiveCost = () => 0;
+  loner.dna.cognitiveCostComponents = zeroCognitive;
+  loner.dna.cognitiveCost = () => 0;
+
+  const context = { localDensity: 0.85, densityEffectMultiplier: 1, maxTileEnergy: 10 };
+  const tolerantBefore = tolerant.energy;
+  const lonerBefore = loner.energy;
+
+  tolerant.manageEnergy(0, 0, context);
+  loner.manageEnergy(0, 0, context);
+
+  const tolerantLoss = tolerantBefore - tolerant.energy;
+  const lonerLoss = lonerBefore - loner.energy;
+
+  assert.ok(
+    tolerant.metabolicCrowdingTax < loner.metabolicCrowdingTax,
+    "crowd-tuned DNA should reduce the crowding tax",
+  );
+  assert.ok(
+    tolerantLoss <= lonerLoss + 1e-9,
+    "crowd-tuned DNA should lose less energy under crowding",
+  );
 });
 
 test("harvest crowding penalty blends DNA tolerance and environment signals", () => {
