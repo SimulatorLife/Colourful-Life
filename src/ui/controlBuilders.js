@@ -22,8 +22,12 @@ export function createControlGrid(parent, className = "") {
  * @param {{className?: string}} [options] - Styling overrides.
  * @returns {HTMLHeadingElement} Created heading element.
  */
+function toOptionsObject(candidate) {
+  return candidate && typeof candidate === "object" ? candidate : {};
+}
+
 export function createSectionHeading(parent, text, options = {}) {
-  const { className = "control-section-title" } = options || {};
+  const { className = "control-section-title" } = toOptionsObject(options);
   const heading = document.createElement("h4");
 
   heading.className = className;
@@ -41,7 +45,7 @@ export function createSectionHeading(parent, text, options = {}) {
  * @returns {HTMLDivElement} Wrapper element for buttons.
  */
 export function createControlButtonRow(parent, options = {}) {
-  const { className = "control-button-row" } = options || {};
+  const { className = "control-button-row" } = toOptionsObject(options);
   const row = document.createElement("div");
 
   row.className = className;
@@ -61,7 +65,8 @@ export function createControlButtonRow(parent, options = {}) {
  * @returns {{row: HTMLLabelElement, name: HTMLDivElement, line: HTMLDivElement}}
  *   The created row wrapper elements.
  */
-function createLabeledControlRow(parent, labelText, { title, lineClass } = {}) {
+function createLabeledControlRow(parent, labelText, options = {}) {
+  const { title, lineClass } = toOptionsObject(options);
   const row = document.createElement("label");
 
   row.className = "control-row";
@@ -105,7 +110,7 @@ export function createSliderRow(parent, opts = {}) {
     title,
     onInput,
     format = (v) => String(v),
-  } = opts;
+  } = toOptionsObject(opts);
   const { line } = createLabeledControlRow(parent, label, { title });
   const valSpan = document.createElement("span");
 
@@ -145,7 +150,7 @@ export function createSliderRow(parent, opts = {}) {
  * @returns {HTMLSelectElement} The generated select element.
  */
 export function createSelectRow(parent, opts = {}) {
-  const { label, title, value, options = [], onChange } = opts;
+  const { label, title, value, options = [], onChange } = toOptionsObject(opts);
   const { line } = createLabeledControlRow(parent, label, { title });
   const select = document.createElement("select");
 
