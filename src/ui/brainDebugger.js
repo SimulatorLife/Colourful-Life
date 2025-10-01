@@ -41,8 +41,8 @@ const BrainDebugger = {
       const brain = cell?.brain;
 
       if (!brain || typeof brain.snapshot !== "function") continue;
-      const detail = brain.snapshot();
-      const telemetry =
+      const snapshot = brain.snapshot();
+      const decisionTelemetry =
         typeof cell?.getDecisionTelemetry === "function"
           ? cell.getDecisionTelemetry(3)
           : [];
@@ -61,8 +61,8 @@ const BrainDebugger = {
       const reportedConnectionCount = Number.isFinite(brain?.connectionCount)
         ? brain.connectionCount
         : 0;
-      let fallbackConnectionCount = Array.isArray(detail?.connections)
-        ? detail.connections.length
+      let fallbackConnectionCount = Array.isArray(snapshot?.connections)
+        ? snapshot.connections.length
         : 0;
 
       if (
@@ -95,8 +95,8 @@ const BrainDebugger = {
         neuronCount: Number.isFinite(neuronCount) && neuronCount > 0 ? neuronCount : 0,
         connectionCount:
           Number.isFinite(connectionCount) && connectionCount > 0 ? connectionCount : 0,
-        brain: detail,
-        decisions: telemetry,
+        brain: snapshot,
+        decisions: decisionTelemetry,
       });
     }
 
