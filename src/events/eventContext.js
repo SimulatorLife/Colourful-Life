@@ -1,4 +1,5 @@
 import { getEventEffect } from "./eventEffects.js";
+import { toPlainObject } from "../utils.js";
 
 /**
  * Determines whether the supplied event overlaps the provided grid
@@ -32,7 +33,7 @@ function toFunction(candidate, fallback) {
  * @returns {{isEventAffecting: Function, getEventEffect: Function}}
  */
 export function createEventContext(overrides = {}) {
-  const context = overrides && typeof overrides === "object" ? overrides : {};
+  const context = toPlainObject(overrides);
   const isEventAffecting = toFunction(
     context.isEventAffecting,
     defaultIsEventAffecting,

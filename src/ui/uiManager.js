@@ -1,6 +1,6 @@
 import { resolveSimulationDefaults } from "../config.js";
 import { UI_SLIDER_CONFIG } from "./sliderConfig.js";
-import { clamp01, warnOnce } from "../utils.js";
+import { clamp01, warnOnce, toPlainObject } from "../utils.js";
 import {
   createControlButtonRow,
   createControlGrid,
@@ -15,8 +15,6 @@ import {
  * user interactions back to the {@link SimulationEngine}. It also forwards
  * slow-updating metrics to dashboards and coordinates selection drawing.
  */
-const toPlainObject = (value) => (value && typeof value === "object" ? value : {});
-
 export default class UIManager {
   constructor(
     simulationCallbacks = {},
