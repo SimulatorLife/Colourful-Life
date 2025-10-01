@@ -62,8 +62,10 @@ canvas {
 
 #gameCanvas {
   flex: 0 0 auto;
-  width: 600px;
-  height: 600px;
+  width: min(100%, 600px);
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
 }
 
 /* Sidebar stacks panels vertically */
