@@ -114,11 +114,11 @@ test("overlay visibility toggles mutate only requested flags", async () => {
     engine.setOverlayVisibility({
       showObstacles: false,
       showDensity: undefined,
-      showFitness: true,
+      showEnergy: true,
     });
 
     assert.is(engine.state.showObstacles, false);
-    assert.is(engine.state.showFitness, true);
+    assert.is(engine.state.showEnergy, true);
     assert.is(
       engine.state.showDensity,
       false,

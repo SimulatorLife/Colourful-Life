@@ -67,7 +67,6 @@ export default class UIManager {
     this._lastInteractionTotals = { fights: 0, cooperations: 0 };
     this.showDensity = defaults.showDensity;
     this.showEnergy = defaults.showEnergy;
-    this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
@@ -1052,12 +1051,6 @@ export default class UIManager {
         title: "Overlay tile energy levels as a heatmap",
         initial: this.showEnergy,
       },
-      {
-        key: "showFitness",
-        label: "Show Fitness Heatmap",
-        title: "Overlay cell fitness as a heatmap",
-        initial: this.showFitness,
-      },
     ];
 
     overlayConfigs.forEach(({ key, label, title, initial }) => {
@@ -1452,9 +1445,6 @@ export default class UIManager {
   }
   getShowEnergy() {
     return this.showEnergy;
-  }
-  getShowFitness() {
-    return this.showFitness;
   }
   getShowObstacles() {
     return this.showObstacles;

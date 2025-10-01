@@ -19,6 +19,11 @@ where practical.
 - Expanded inline documentation for maintenance scripts to clarify intent and
   usage.
 
+### Removed
+
+- Retired the fitness heatmap overlay and UI toggle because the leaderboard
+  already surfaces richer fitness insights without obscuring the canvas.
+
 ## [0.1.0]
 
 ### Added

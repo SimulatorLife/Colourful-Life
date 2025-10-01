@@ -1,32 +1,6 @@
 import { MAX_TILE_ENERGY } from "../config.js";
 import { lerp, warnOnce } from "../utils.js";
 
-const FITNESS_TOP_PERCENT = 0.1;
-const FITNESS_GRADIENT_STEPS = 5;
-const FITNESS_BASE_HUE = 52;
-
-function createFitnessPalette(steps, hue) {
-  const palette = [];
-  const minLightness = 32;
-  const maxLightness = 82;
-  const saturation = 88;
-
-  if (steps <= 1) {
-    const midLightness = (minLightness + maxLightness) / 2;
-
-    return [`hsl(${hue}, ${saturation}%, ${midLightness.toFixed(1)}%)`];
-  }
-
-  for (let i = 0; i < steps; i++) {
-    const t = i / (steps - 1);
-    const lightness = maxLightness - (maxLightness - minLightness) * t;
-
-    palette.push(`hsl(${hue}, ${saturation}%, ${lightness.toFixed(1)}%)`);
-  }
-
-  return palette;
-}
-
 export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
   if (!ctx || !Array.isArray(activeEvents) || activeEvents.length === 0) return;
 
@@ -286,15 +260,12 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   const {
     showEnergy,
     showDensity,
-    showFitness,
     showObstacles = true,
     maxTileEnergy = MAX_TILE_ENERGY,
     activeEvents,
     getEventColor,
-    snapshot: providedSnapshot,
     selectionManager: explicitSelection,
   } = opts;
-  let snapshot = providedSnapshot;
   const selectionManager = explicitSelection || grid?.selectionManager;
 
   if (Array.isArray(activeEvents) && activeEvents.length > 0) {
@@ -308,12 +279,6 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
 
   if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);
   if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
-  if (showFitness) {
-    if (!snapshot && typeof grid?.getLastSnapshot === "function") {
-      snapshot = grid.getLastSnapshot();
-    }
-    drawFitnessHeatmap(snapshot, ctx, cellSize);
-  }
 }
 
 export function drawEnergyHeatmap(
@@ -402,29 +367,4 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
   }
 
   drawDensityLegend(ctx, cellSize, cols, rows, originalMin, originalMax);
-}
-
-export function drawFitnessHeatmap(snapshot, ctx, cellSize) {
-  if (!snapshot || snapshot.maxFitness <= 0) return;
-
-  const { rows, cols } = snapshot;
-  const entries = Array.isArray(snapshot.entries) ? snapshot.entries : [];
-
-  if (!entries.length) return;
-
-  const sortedEntries = [...entries].sort((a, b) => b.fitness - a.fitness);
-  const keepCount = Math.max(1, Math.floor(sortedEntries.length * FITNESS_TOP_PERCENT));
-  const topEntries = sortedEntries.slice(0, keepCount);
-  const palette = createFitnessPalette(FITNESS_GRADIENT_STEPS, FITNESS_BASE_HUE);
-  const tierSize = Math.max(1, Math.ceil(topEntries.length / palette.length));
-
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
-  ctx.fillRect(0, 0, cols * cellSize, rows * cellSize);
-
-  topEntries.forEach(({ row, col }, index) => {
-    const paletteIndex = Math.min(palette.length - 1, Math.floor(index / tierSize));
-
-    ctx.fillStyle = palette[paletteIndex];
-    ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-  });
 }
