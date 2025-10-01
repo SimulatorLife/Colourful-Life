@@ -32,6 +32,10 @@ This document captures how the Colourful Life simulation composes its core syste
   events while preserving scarcity pressure; adjust via `resolveSimulationDefaults` when experimenting with alternative
   baselines.
 
+- Environment overrides such as `COLOURFUL_LIFE_MAX_TILE_ENERGY` and `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` flow through
+  [`src/config.js`](../src/config.js), letting experiments tweak caps and density penalties without patching source. The values
+  are consumed by both the energy computations and the overlays so telemetry stays in sync.
+
 ### Events
 
 - **EventManager** (`src/events/eventManager.js`) spawns periodic floods, droughts, heatwaves, and coldwaves. Events carry strength, duration, and a rectangular affected area. The manager exposes a colour resolver consumed by overlays and can be configured with custom event pools.
@@ -70,6 +74,12 @@ This document captures how the Colourful Life simulation composes its core syste
 - `ReproductionZonePolicy` (`src/grid/reproductionZonePolicy.js`) keeps `GridManager`'s reproduction flow decoupled from the selection implementation by translating zone checks into simple allow/deny results.
 - `config.js` consolidates slider bounds, simulation defaults, and runtime-tunable constants such as diffusion and regeneration rates so UI and headless contexts remain in sync.
 - `utils.js` houses deterministic helpers (`createRNG`, `createRankedBuffer`, `cloneTracePayload`, etc.) reused across the simulation, UI, and tests.
+
+- The overlay pipeline is orchestrated by `drawOverlays`, which delegates to granular helpers (`drawEventOverlays`,
+  `drawEnergyHeatmap`, `drawDensityHeatmap`, `drawFitnessHeatmap`) and reuses colour ramps such as `densityToRgba`. Each helper
+  exposes legends or palette selection so UI extensions can stay consistent without reimplementing scaling logic.
+- `drawSelectionZones` renders active reproduction zones using cached geometry from the selection manager, ensuring the mating UI
+  and reproduction policy share exactly the same coordinates.
 
 ## Headless and scripted usage
 

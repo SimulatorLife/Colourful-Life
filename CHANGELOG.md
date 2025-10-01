@@ -10,14 +10,19 @@ where practical.
 ### Added
 
 - Documentation audit covering the README, developer guide, and architecture
-  overview to highlight headless usage, cache-reset tooling, and supporting
-  modules.
+  overview to highlight headless usage, cache-reset tooling, supporting
+  modules, and the overlay rendering pipeline.
+- Environment override documentation in the README and developer guide for
+  `COLOURFUL_LIFE_MAX_TILE_ENERGY` and `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` so
+  experiments can adjust regeneration behaviour without editing source.
 - Changelog tracking ongoing project evolution.
 
 ### Changed
 
 - Expanded inline documentation for maintenance scripts to clarify intent and
   usage.
+- Added JSDoc coverage for overlay helpers to keep exported drawing utilities
+  self-documenting.
 - Raised the default energy regeneration rate from `0.007` to `0.0075` after a
   200-tick headless run showed populations crashing to ~60 survivors (avg tile
   energy ~0.88) versus roughly 300 organisms and ~1.08 average energy with the
