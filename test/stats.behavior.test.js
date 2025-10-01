@@ -82,6 +82,7 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
     success: true,
     penalized: true,
     penaltyMultiplier: 0.4,
+    behaviorComplementarity: 0.8,
   });
 
   assert.is(stats.mating.choices, 1);
@@ -92,8 +93,11 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   assert.is(stats.mating.selectionModes.preference, 0);
   approxEqual(stats.mating.appetiteSum, 0.5, 1e-9);
   assert.is(stats.mating.poolSizeSum, 3);
+  approxEqual(stats.mating.complementaritySum, 0.8, 1e-9);
+  approxEqual(stats.mating.complementaritySuccessSum, 0.8, 1e-9);
   assert.equal(stats.lastMatingDebug.blockedReason, "Too similar");
   assert.is(stats.lastMatingDebug.threshold, 0.6);
+  approxEqual(stats.lastMatingDebug.behaviorComplementarity, 0.8, 1e-9);
   assert.is(stats.mating.lastBlockReason, null);
 
   stats.recordMateChoice({
@@ -102,6 +106,7 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
     selectionMode: "preference",
     poolSize: 2,
     success: false,
+    behaviorComplementarity: 0.1,
   });
 
   assert.is(stats.mating.choices, 2);
@@ -110,8 +115,11 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   assert.is(stats.mating.diverseSuccesses, 1);
   assert.is(stats.mating.selectionModes.curiosity, 1);
   assert.is(stats.mating.selectionModes.preference, 1);
+  approxEqual(stats.mating.complementaritySum, 0.9, 1e-9);
+  approxEqual(stats.mating.complementaritySuccessSum, 0.8, 1e-9);
   assert.equal(stats.lastMatingDebug.success, false);
   assert.is(stats.lastMatingDebug.threshold, 0.6);
+  approxEqual(stats.lastMatingDebug.behaviorComplementarity, 0.1, 1e-9);
 
   stats.recordReproductionBlocked({ reason: "Blocked by reproductive zone" });
 
@@ -144,6 +152,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
     appetiteSum: 1.2,
     selectionModes: { curiosity: 1, preference: 0 },
     poolSizeSum: 5,
+    complementaritySum: 0.75,
+    complementaritySuccessSum: 0.6,
     blocks: 1,
     lastBlockReason: "Still recent",
   };
@@ -192,6 +202,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(result.diverseChoiceRate, 0.5);
   assert.is(result.diverseMatingRate, 1);
   assert.is(result.meanDiversityAppetite, 0.6);
+  approxEqual(result.meanBehaviorComplementarity, 0.375, 1e-9);
+  approxEqual(result.successfulBehaviorComplementarity, 0.6, 1e-9);
   approxEqual(result.behaviorEvenness, 1, 1e-9);
   assert.is(result.curiositySelections, 1);
   assert.equal(result.lastMating, stats.lastMatingDebug);

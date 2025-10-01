@@ -22,6 +22,7 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 
 const similarityCache = new WeakMap();
+const INTERACTION_KEYS = ["cooperate", "fight", "avoid"];
 const NEIGHBOR_OFFSETS = [
   [-1, -1],
   [-1, 0],
@@ -61,6 +62,46 @@ function getPairSimilarity(cellA, cellB) {
   cacheB.set(cellA, value);
 
   return value;
+}
+
+function normalizeInteractionGene(genes, key) {
+  if (!genes || typeof genes !== "object") return null;
+
+  const raw = genes[key];
+
+  if (raw == null) return null;
+
+  const value = Number(raw);
+
+  if (!Number.isFinite(value)) return null;
+
+  return clamp(value, 0, 1);
+}
+
+export function computeBehaviorComplementarity(parentA, parentB) {
+  if (!parentA || !parentB) return 0;
+
+  const genesA = parentA.interactionGenes;
+  const genesB = parentB.interactionGenes;
+
+  if (!genesA || !genesB) return 0;
+
+  let sum = 0;
+  let count = 0;
+
+  for (const key of INTERACTION_KEYS) {
+    const valueA = normalizeInteractionGene(genesA, key);
+    const valueB = normalizeInteractionGene(genesB, key);
+
+    if (valueA == null || valueB == null) continue;
+
+    sum += Math.abs(valueA - valueB);
+    count++;
+  }
+
+  if (count === 0) return 0;
+
+  return clamp(sum / count, 0, 1);
 }
 
 function toBrainSnapshotCollector(candidate) {
@@ -1829,6 +1870,7 @@ export default class GridManager {
     floor = 0,
     diversityPressure = 0,
     behaviorEvenness = 0,
+    behaviorComplementarity = 0,
   } = {}) {
     const sliderFloor = clamp(Number.isFinite(floor) ? floor : 0, 0, 1);
 
@@ -1869,6 +1911,11 @@ export default class GridManager {
       1,
     );
     const evennessDrag = clamp(1 - evenness, 0, 1);
+    const complementarity = clamp(
+      Number.isFinite(behaviorComplementarity) ? behaviorComplementarity : 0,
+      0,
+      1,
+    );
 
     const pressure = clamp(
       Number.isFinite(diversityPressure) ? diversityPressure : 0,
@@ -1884,6 +1931,16 @@ export default class GridManager {
     severity *= clamp(1 - kinComfort * 0.45, 0.3, 1);
     severity *= 1 + pressure * 0.75;
     severity *= 1 + evennessDrag * (0.35 + 0.25 * combinedDrive);
+
+    if (complementarity > 0 && evennessDrag > 0) {
+      const reliefScale =
+        0.25 + evennessDrag * 0.4 + combinedDrive * 0.25 + pressure * 0.2;
+      const relief = clamp(complementarity * reliefScale, 0, 0.8);
+
+      severity *= clamp(1 - relief, 0.25, 1);
+      severity -= complementarity * evennessDrag * 0.12;
+    }
+
     severity = clamp(severity, 0, 1);
 
     return clamp(1 - severity, sliderFloor, 1);
@@ -1941,6 +1998,10 @@ export default class GridManager {
           ? stats.behavioralEvenness
           : 0;
     const behaviorEvenness = clamp(behaviorEvennessSource, 0, 1);
+    const behaviorComplementarity = computeBehaviorComplementarity(
+      cell,
+      bestMate.target,
+    );
     const penaltyFloor =
       typeof this.lowDiversityReproMultiplier === "number"
         ? clamp(this.lowDiversityReproMultiplier, 0, 1)
@@ -2003,6 +2064,7 @@ export default class GridManager {
         floor: penaltyFloor,
         diversityPressure,
         behaviorEvenness,
+        behaviorComplementarity,
       });
 
       if (penaltyMultiplier <= 0) {
@@ -2022,6 +2084,20 @@ export default class GridManager {
         const bonus = 1 + normalizedExcess * bonusScale;
 
         effectiveReproProb = clamp(effectiveReproProb * bonus, 0, 1);
+      }
+    }
+
+    if (behaviorComplementarity > 0) {
+      const complementPressure = clamp(1 - behaviorEvenness, 0, 1);
+
+      if (complementPressure > 0) {
+        const complementBonus =
+          1 +
+          behaviorComplementarity *
+            complementPressure *
+            (0.18 + diversityPressure * 0.22);
+
+        effectiveReproProb = clamp(effectiveReproProb * complementBonus, 0, 1);
       }
     }
 
@@ -2173,6 +2249,7 @@ export default class GridManager {
         success: reproduced,
         penalized: penalizedForSimilarity,
         penaltyMultiplier,
+        behaviorComplementarity,
       });
     }
 
