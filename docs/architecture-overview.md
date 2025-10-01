@@ -80,7 +80,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - `UIManager` uses builders in `src/ui/controlBuilders.js` to generate consistent control rows and slider behaviour.
 - Overlays (`src/ui/overlays.js`) render density, energy, fitness, and obstacle layers on top of the main canvas, including
   contextual legends such as the energy overlay's min/mean/max summary so observers can quickly gauge resource availability.
-- Selection tooling (`src/ui/selectionManager.js`) exposes reusable mating zones and user-drawn rectangles that gate reproduction.
+- Selection tooling (`src/grid/selectionManager.js`) exposes reusable mating zones and user-drawn rectangles that gate reproduction.
 - `ReproductionZonePolicy` (`src/grid/reproductionZonePolicy.js`) keeps `GridManager`'s reproduction flow decoupled from the selection implementation by translating zone checks into simple allow/deny results.
 - `config.js` consolidates slider bounds, simulation defaults, and runtime-tunable constants such as diffusion and regeneration rates so UI and headless contexts remain in sync.
 - `utils.js` houses deterministic helpers (`createRNG`, `createRankedBuffer`, `cloneTracePayload`, etc.) reused across the simulation, UI, and tests.

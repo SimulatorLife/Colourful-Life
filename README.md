@@ -55,7 +55,7 @@ The simulation runs on cooperating modules housed in `src/`:
 - **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and colour overlays.
 - **Stats & leaderboard** (`src/stats.js`, `src/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface active environmental event summaries (intensity, coverage, and remaining duration), and select the top-performing organisms. Organism age readings surfaced here and in the UI are measured in simulation ticks so observers can translate them into seconds using the active tick rate.
 - **UI manager** (`src/ui/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/ui/headlessUiManager.js` mirrors the interface for tests and Node scripts.
-- **Selection tooling** (`src/ui/selectionManager.js`, `src/grid/reproductionZonePolicy.js`) — Defines preset and user-drawn mating zones, keeps geometry caches in sync with grid dimensions, and exposes helpers consumed by UI controls and reproduction policies.
+- **Selection tooling** (`src/grid/selectionManager.js`, `src/grid/reproductionZonePolicy.js`) — Defines preset and user-drawn mating zones, keeps geometry caches in sync with grid dimensions, and exposes helpers consumed by UI controls and reproduction policies.
 
 For an architectural deep dive—including subsystem hand-offs, data flow, and extension tips—see [`docs/architecture-overview.md`](docs/architecture-overview.md).
 

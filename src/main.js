@@ -1,7 +1,7 @@
 import UIManager from "./ui/uiManager.js";
 import BrainDebugger from "./ui/brainDebugger.js";
 import SimulationEngine from "./simulationEngine.js";
-import SelectionManager from "./ui/selectionManager.js";
+import SelectionManager from "./grid/selectionManager.js";
 import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
 import { createHeadlessUiManager } from "./ui/headlessUiManager.js";
@@ -162,7 +162,7 @@ function createHeadlessCanvas(config = {}) {
  *   uiManager: ReturnType<typeof UIManager> | ReturnType<typeof createHeadlessUiManager>,
  *   eventManager: import('./events/eventManager.js').default,
  *   stats: import('./stats.js').default,
- *   selectionManager: import('./ui/selectionManager.js').default,
+ *   selectionManager: import('./grid/selectionManager.js').default,
  *   start: () => void,
  *   stop: () => void,
  *   step: (timestamp?: number) => void,
