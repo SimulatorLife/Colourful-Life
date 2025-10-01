@@ -13,8 +13,10 @@ where practical.
   overview to highlight headless usage, cache-reset tooling, supporting
   modules, and the overlay rendering pipeline.
 - Environment override documentation in the README and developer guide for
-  `COLOURFUL_LIFE_MAX_TILE_ENERGY` and `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` so
-  experiments can adjust regeneration behaviour without editing source.
+  `COLOURFUL_LIFE_MAX_TILE_ENERGY`, `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`, and
+  `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` so experiments can adjust
+  regeneration and harvesting behaviour without editing source while keeping
+  overlays accurate.
 - Changelog tracking ongoing project evolution.
 
 ### Changed

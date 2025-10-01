@@ -57,10 +57,13 @@ affect runtime outcomes.
   without modifying `src/config.js`.
 - `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` tunes how strongly local population
   density suppresses regeneration (0 disables the penalty, 1 preserves the
-  default). Non-finite or out-of-range values are ignored and fall back to the
-  defaults resolved in [`src/config.js`](../src/config.js).
-- Both variables feed into the energy heatmap legends so overlays stay aligned
-  with the active configuration.
+  default).
+- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` controls how much additional
+  energy cost organisms pay when harvesting from crowded tiles (0 removes the
+  tax, 1 matches the baseline density pressure).
+- Non-finite or out-of-range values are ignored and fall back to the defaults
+  resolved in [`src/config.js`](../src/config.js). The energy overlays pull the
+  sanitized values so UI telemetry reflects the active configuration.
 
 ## Documentation conventions
 
