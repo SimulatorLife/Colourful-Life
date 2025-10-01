@@ -69,6 +69,22 @@ test("createSimulation respects lingerPenalty overrides in headless mode", async
   simulation.destroy();
 });
 
+test("headless UI setters coerce numeric string inputs", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({ headless: true, autoStart: false });
+
+  simulation.uiManager.setUpdatesPerSecond("120");
+  simulation.uiManager.setMatingDiversityThreshold("0.6");
+  simulation.uiManager.setLingerPenalty("0.015");
+
+  assert.is(simulation.uiManager.getUpdatesPerSecond(), 120);
+  assert.is(simulation.uiManager.getMatingDiversityThreshold(), 0.6);
+  assert.is(simulation.uiManager.getLingerPenalty(), 0.015);
+
+  simulation.destroy();
+});
+
 test("step control calls engine.step when using createSimulation", async () => {
   const { createSimulation } = await simulationModulePromise;
 
