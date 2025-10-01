@@ -46,17 +46,8 @@ function resolveHeadlessCanvasSize(config = {}) {
   ];
   const fallbackWidth = colsFallback * cellSize;
   const fallbackHeight = rowsFallback * cellSize;
-  const pickCandidate = (candidates, fallback) => {
-    for (let i = 0; i < candidates.length; i += 1) {
-      const value = candidates[i];
-
-      if (Number.isFinite(value)) {
-        return value;
-      }
-    }
-
-    return fallback;
-  };
+  const pickCandidate = (candidates, fallback) =>
+    candidates.find((value) => Number.isFinite(value)) ?? fallback;
 
   return {
     width: pickCandidate(widthCandidates, fallbackWidth),
