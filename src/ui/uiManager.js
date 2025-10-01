@@ -1280,7 +1280,7 @@ export default class UIManager {
     const patterns = this.selectionManager.getPatterns();
 
     patterns.forEach((pattern) => {
-      const checkbox = this.#addCheckbox(
+      this.#addCheckbox(
         zoneGrid,
         pattern.name,
         pattern.description || "",
