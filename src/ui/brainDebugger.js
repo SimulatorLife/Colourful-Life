@@ -1,26 +1,37 @@
+const DEBUG_PROPERTY = "__colourfulLifeBrains";
 const state = {
   snapshots: [],
 };
 
-function cloneSnapshotList(list) {
-  return list.map((item) => ({ ...item }));
+function getGlobalScope() {
+  if (typeof globalThis !== "undefined") return globalThis;
+  if (typeof window !== "undefined") return window;
+
+  return undefined;
 }
 
-function publishToWindow(list) {
-  if (typeof window !== "undefined") {
-    window.__colourfulLifeBrains = cloneSnapshotList(list);
-  }
+function cloneSnapshotList(list) {
+  return Array.isArray(list) ? list.map((item) => ({ ...item })) : [];
+}
+
+function publishSnapshots(list) {
+  const scope = getGlobalScope();
+
+  if (!scope) return;
+
+  scope[DEBUG_PROPERTY] = cloneSnapshotList(list);
 }
 
 /**
  * Captures recent brain snapshots for inspection in the browser console or
  * debug UI panels. The debugger stores a bounded list of entries and mirrors
- * them to `window.__colourfulLifeBrains` when running in the browser.
+ * them to the global scope (typically `window.__colourfulLifeBrains`) so both
+ * browser and headless environments expose the latest data consistently.
  */
 const BrainDebugger = {
   update(snapshots = []) {
-    state.snapshots = Array.isArray(snapshots) ? cloneSnapshotList(snapshots) : [];
-    publishToWindow(state.snapshots);
+    state.snapshots = cloneSnapshotList(snapshots);
+    publishSnapshots(state.snapshots);
 
     return state.snapshots;
   },
