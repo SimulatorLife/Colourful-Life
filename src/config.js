@@ -111,6 +111,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showEnergy: false,
   showDensity: false,
   showFitness: false,
+  showCelebrationAuras: false,
   leaderboardIntervalMs: 750,
   matingDiversityThreshold: 0.45,
   lowDiversityReproMultiplier: 0.1,

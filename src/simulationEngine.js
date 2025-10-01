@@ -315,6 +315,7 @@ export default class SimulationEngine {
       showEnergy: defaults.showEnergy,
       showDensity: defaults.showDensity,
       showFitness: defaults.showFitness,
+      showCelebrationAuras: defaults.showCelebrationAuras,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
@@ -657,6 +658,7 @@ export default class SimulationEngine {
       showDensity: this.state.showDensity ?? false,
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
+      showCelebrationAuras: this.state.showCelebrationAuras ?? false,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
@@ -917,12 +919,19 @@ export default class SimulationEngine {
     this.#updateState({ leaderboardIntervalMs: sanitized });
   }
 
-  setOverlayVisibility({ showObstacles, showEnergy, showDensity, showFitness }) {
+  setOverlayVisibility({
+    showObstacles,
+    showEnergy,
+    showDensity,
+    showFitness,
+    showCelebrationAuras,
+  }) {
     const entries = Object.entries({
       showObstacles,
       showEnergy,
       showDensity,
       showFitness,
+      showCelebrationAuras,
     })
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => [key, Boolean(value)]);
@@ -1019,6 +1028,7 @@ export default class SimulationEngine {
       case "showEnergy":
       case "showDensity":
       case "showFitness":
+      case "showCelebrationAuras":
         this.setOverlayVisibility({ [key]: value });
         break;
       case "lingerPenalty":

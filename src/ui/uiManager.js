@@ -75,6 +75,7 @@ export default class UIManager {
     this.showEnergy = defaults.showEnergy;
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
+    this.showCelebrationAuras = defaults.showCelebrationAuras;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
     this.lingerPenalty = defaults.lingerPenalty;
@@ -1135,6 +1136,13 @@ export default class UIManager {
         title: "Overlay cell fitness as a heatmap",
         initial: this.showFitness,
       },
+      {
+        key: "showCelebrationAuras",
+        label: "Celebration Glow",
+        title:
+          "Add a gentle aurora around the top-performing cells as a whimsical overlay",
+        initial: this.showCelebrationAuras,
+      },
     ];
 
     overlayConfigs.forEach(({ key, label, title, initial }) => {
@@ -1569,6 +1577,9 @@ export default class UIManager {
   }
   getShowFitness() {
     return this.showFitness;
+  }
+  getShowCelebrationAuras() {
+    return this.showCelebrationAuras;
   }
   getShowObstacles() {
     return this.showObstacles;

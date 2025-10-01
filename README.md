@@ -39,6 +39,10 @@ Tune baseline energy and density behaviour without editing source by setting env
 
 Values outside their accepted ranges fall back to the defaults defined in [`src/config.js`](src/config.js) so experiments remain predictable across environments and overlays stay aligned with the active configuration.
 
+### Optional celebration glow overlay
+
+Flip on the **Celebration Glow** checkbox in the Overlays panel to surround the most successful organisms with a soft aurora. The highlight quietly layers on top of the existing canvas without changing simulation mechanics, respects motion-sensitive setups (no flashing or animation), and avoids obscuring other overlays by using gentle transparency. Toggle it off at any time to return to the standard presentation.
+
 ## Core systems
 
 The simulation runs on cooperating modules housed in `src/`:
