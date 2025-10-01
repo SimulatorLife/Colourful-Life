@@ -21,4 +21,16 @@ test("canvas container centers the canvas to preserve square aspect", () => {
   );
 });
 
+test("canvas container stays anchored to the top when sidebar grows", () => {
+  const css = loadStyles();
+  const match = css.match(/\.canvas-container\s*\{[^}]*\}/s);
+
+  assert.ok(match, "expected to locate the .canvas-container rule in styles.css");
+  assert.match(
+    match[0],
+    /align-self\s*:\s*flex-start\s*;/,
+    "canvas container should opt out of sidebar stretching to avoid jumping",
+  );
+});
+
 test.run();
