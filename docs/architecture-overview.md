@@ -9,7 +9,7 @@ This document captures how the Colourful Life simulation composes its core syste
    - Prepares the grid for the upcoming tick via `grid.prepareTick`.
    - Advances the grid one step, which updates organism state, tile energy, events, and overlays.
    - Emits lifecycle events (`tick`, `metrics`, `leaderboard`, `state`) consumed by UI panels and analytics.
-2. **UIManager** (`src/ui/uiManager.js`) renders controls, metrics, and overlays. It dispatches user actions (pause, stamping obstacles, slider changes) back to the engine by calling `engine` helpers exposed through `createSimulation`. When the browser UI is unavailable, `createHeadlessUiManager` in `src/main.js` mirrors the same surface area so headless runs share settings and cadence management.
+2. **UIManager** (`src/ui/uiManager.js`) renders controls, metrics, and overlays. It dispatches user actions (pause, stamping obstacles, slider changes) back to the engine by calling `engine` helpers exposed through `createSimulation`. When the browser UI is unavailable, `createHeadlessUiManager` in `src/ui/headlessUiManager.js` mirrors the same surface area so headless runs share settings and cadence management.
 3. **BrainDebugger** (`src/ui/brainDebugger.js`) receives neuron snapshots from the grid and exposes them to the browser console for inspection. The debugger is optional in headless environments and doubles as the default brain snapshot collector for headless runs.
 
 ## Core subsystems
