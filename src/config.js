@@ -77,7 +77,6 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   matingDiversityThreshold: 0.45,
   lowDiversityReproMultiplier: 0.1,
   speedMultiplier: 1,
-  lingerPenalty: 0,
   autoPauseOnBlur: true,
 });
 

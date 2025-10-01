@@ -56,7 +56,6 @@ export default class UIManager {
     this.metricsPlaceholder = null;
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
-    this.lingerPenaltySlider = null;
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -80,7 +79,6 @@ export default class UIManager {
     this.showObstacles = defaults.showObstacles;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
-    this.lingerPenalty = defaults.lingerPenalty;
     this.autoPauseCheckbox = null;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
@@ -1190,25 +1188,6 @@ export default class UIManager {
       presetButtons.appendChild(clearButton);
       obstacleGrid.appendChild(presetButtons);
     }
-
-    const lingerSlider = sliderContext.withSliderConfig("lingerPenalty", {
-      label: "Wall Linger Penalty",
-      min: 0,
-      max: 0.05,
-      step: 0.001,
-      title:
-        "Energy drained each tick a cell pushes against an obstacle (scales with repeated attempts).",
-      format: (v) => v.toFixed(3),
-      getValue: () => this.lingerPenalty,
-      setValue: (v) => {
-        this.#updateSetting("lingerPenalty", v);
-        if (typeof this.actions.setLingerPenalty === "function")
-          this.actions.setLingerPenalty(v);
-        else if (window.grid?.setLingerPenalty) window.grid.setLingerPenalty(v);
-      },
-    });
-
-    this.lingerPenaltySlider = sliderContext.renderSlider(lingerSlider, obstacleGrid);
   }
 
   #buildReproductiveZoneTools(body) {
@@ -1467,22 +1446,6 @@ export default class UIManager {
     }
   }
 
-  setLingerPenalty(value) {
-    const numeric = Number(value);
-
-    if (!Number.isFinite(numeric)) return;
-
-    this.lingerPenalty = numeric;
-
-    if (this.lingerPenaltySlider) {
-      if (typeof this.lingerPenaltySlider.updateDisplay === "function") {
-        this.lingerPenaltySlider.updateDisplay(numeric);
-      } else {
-        this.lingerPenaltySlider.value = String(numeric);
-      }
-    }
-  }
-
   // Getters for simulation
   getSocietySimilarity() {
     return this.societySimilarity;
@@ -1538,10 +1501,6 @@ export default class UIManager {
   getShowObstacles() {
     return this.showObstacles;
   }
-  getLingerPenalty() {
-    return this.lingerPenalty;
-  }
-
   #showMetricsPlaceholder(message) {
     if (!this.metricsBox) return;
     if (!this.metricsPlaceholder) {

@@ -18,6 +18,10 @@ where practical.
 
 - Expanded inline documentation for maintenance scripts to clarify intent and
   usage.
+- Removed the obsolete wall linger penalty control and related plumbing from
+  the simulation engine, headless adapter, and UI to simplify obstacle
+  behaviour; the slider defaulted to zero, lacked documentation, and duplicated
+  the per-step movement cost so it provided little observable value.
 
 ## [0.1.0]
 

@@ -84,7 +84,6 @@ export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) 
     "update",
     "draw",
     "getLastSnapshot",
-    "setLingerPenalty",
     "setMatingDiversityOptions",
     "setBrainSnapshotCollector",
   ];

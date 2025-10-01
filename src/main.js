@@ -106,7 +106,6 @@ function createHeadlessCanvas(config = {}) {
  * @param {boolean} [options.showEnergy] Whether energy overlays are shown.
  * @param {boolean} [options.showDensity] Whether population density overlays are shown.
  * @param {boolean} [options.showFitness] Whether fitness overlays are shown.
- * @param {number} [options.lingerPenalty] Penalty applied to agents that stay still.
  * @param {number} [options.leaderboardIntervalMs] Minimum time between leaderboard updates.
  * @param {Object} [options.selectionManager=null] Shared selection manager instance.
  * @returns {{
@@ -133,8 +132,6 @@ function createHeadlessCanvas(config = {}) {
  *   shouldRenderSlowUi: (timestamp: number) => boolean,
  *   renderMetrics: Function,
  *   renderLeaderboard: Function,
- *   getLingerPenalty: () => number,
- *   setLingerPenalty: (value: number) => void,
  *   selectionManager: Object|null,
  * }} Headless UI facade that keeps simulation code agnostic to environment.
  */
@@ -212,12 +209,6 @@ function createHeadlessUiManager(options = {}) {
     },
     renderMetrics: () => {},
     renderLeaderboard: () => {},
-    getLingerPenalty: () => settings.lingerPenalty,
-    setLingerPenalty: (value) => {
-      if (updateIfFinite("lingerPenalty", value)) {
-        notify("lingerPenalty", settings.lingerPenalty);
-      }
-    },
     getAutoPauseOnBlur: () => settings.autoPauseOnBlur,
     setAutoPauseOnBlur: (value) => {
       settings.autoPauseOnBlur = Boolean(value);
@@ -347,7 +338,6 @@ export function createSimulation({
   const baseActions = {
     burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
-    setLingerPenalty: (value) => engine.setLingerPenalty(value),
     obstaclePresets: OBSTACLE_PRESETS,
     selectionManager: engine.selectionManager,
     getCellSize: () => engine.cellSize,
@@ -402,10 +392,8 @@ export function createSimulation({
     win.uiManager = uiManager;
   }
 
-  if (typeof uiManager?.setLingerPenalty === "function") {
-    uiManager.setLingerPenalty(engine.lingerPenalty);
-  } else if (typeof uiManager?.getLingerPenalty === "function") {
-    engine.setLingerPenalty(uiManager.getLingerPenalty());
+  if (typeof uiManager?.setAutoPauseOnBlur === "function") {
+    uiManager.setAutoPauseOnBlur(engine.autoPauseOnBlur);
   }
 
   const unsubscribers = [];

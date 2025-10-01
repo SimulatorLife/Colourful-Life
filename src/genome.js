@@ -1236,36 +1236,6 @@ export class DNA {
     return 0.01 + 0.03 * combat; // 0.01..0.04
   }
 
-  wallContactProfile() {
-    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
-    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
-    const risk = this.geneFraction(GENE_LOCI.RISK);
-    const density = this.geneFraction(GENE_LOCI.DENSITY);
-    const sense = this.geneFraction(GENE_LOCI.SENSE);
-    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
-
-    const baseMultiplier = clamp(
-      0.6 + 0.6 * movement + 0.3 * risk - 0.5 * strategy - 0.3 * sense,
-      0.2,
-      1.8,
-    );
-    const contactGrowth = clamp(
-      0.18 + 0.32 * risk + 0.25 * movement - 0.28 * strategy - 0.1 * sense,
-      0.05,
-      0.6,
-    );
-    const maxMemory = Math.round(
-      clamp(3 + 6 * (1 - strategy) + 3 * risk - 2 * sense, 1, 10),
-    );
-    const lingerMultiplier = clamp(
-      0.45 + 0.45 * density + 0.2 * movement - 0.35 * recovery,
-      0.2,
-      1.4,
-    );
-
-    return { baseMultiplier, contactGrowth, maxMemory, lingerMultiplier };
-  }
-
   cognitiveCostComponents({
     baselineNeurons = 0,
     dynamicNeurons = 0,
