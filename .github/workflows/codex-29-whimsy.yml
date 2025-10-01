@@ -18,29 +18,4 @@ jobs:
       pr_title: "Codex: Whimsical Enhancements"
       pr_body: "Seed PR for Codex to add an optional creative flourish that delights without breaking observability or performance."
       prompt: >
-        Implement a tangible, user-facing whimsy upgrade in this run. You must deliver a 
-        committed code change; "no major issues found" is not acceptable. Pick one coherent 
-        surface (e.g. event overlays, birth/death celebrations, UI copy, optional themes, 
-        celebratory effects, playful logging, etc.) and ship a concrete enhancement that 
-        adds delight without harming observability.
-
-        Requirements:
-          • The change must introduce or upgrade an actual feature (e.g., celebratory
-            particle bursts, dynamic palettes tied to ecosystem health, event-specific
-            audio/visual cues, a toggleable “creative mode”, mood-based backgrounds,
-            playful tooltips with contextual insights, or similar). Cosmetic copy-only edits
-            are insufficient by themselves—pair them with a functional flourish.
-          • Provide an opt-in control or keep the effect unobtrusive by default so serious
-            analysis workflows remain unaffected.
-          • Ensure performance remains strong (no heavy per-frame allocations) and visuals
-            are accessible (respect colour contrast, motion sensitivity, ARIA labelling).
-          • Update documentation and tests if behaviour changes, and explain how to access
-            the new flourish in the PR body.
-          • Do not remove existing features or reduce observability; the goal is additive
-            creativity.
-
-        If, after a thorough audit, you still cannot ship a playful enhancement, add a
-        committed entry to `CHANGELOG.md` outlining at least three concrete whimsical
-        improvements with implementation notes for future runs. Then exit with that
-        documented plan. The expectation is that most runs ship real code, and fallback to
-        documentation is a last resort.
+        Implement a tangible, user-facing whimsy upgrade in this run (no "no issues found" responses): ship a concrete enhancement on a coherent surface—event overlays, celebratory effects, UI copy, optional themes, playful logging, creative mode toggles, contextual tooltips, mood-based backgrounds—that adds delight without harming observability; ensure the feature is opt-in or unobtrusive by default, preserves performance (minimal per-frame allocations), maintains accessibility (contrast, motion sensitivity, ARIA labelling), updates documentation/tests and explains how to access the flourish in the PR body, and never removes existing functionality; only if you absolutely cannot ship code after a thorough audit, commit a `CHANGELOG.md` entry outlining at least three concrete whimsical ideas with implementation notes for future runs.
