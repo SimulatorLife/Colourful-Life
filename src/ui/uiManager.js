@@ -803,6 +803,8 @@ export default class UIManager {
 
     const sliderContext = this.#buildSliderGroups(body);
 
+    this.sliderContext = sliderContext;
+
     this.#buildOverlayToggles(body);
 
     this.#buildObstacleControls(body, sliderContext);
@@ -1049,16 +1051,19 @@ export default class UIManager {
         setValue: (v) => this.#updateSetting("speedMultiplier", v),
         position: "beforeOverlays",
       }),
+    ];
+
+    const insightConfigs = [
       withSliderConfig("leaderboardIntervalMs", {
-        label: "Leaderboard Interval",
+        label: "Insights Refresh Interval",
         min: 100,
         max: 3000,
         step: 50,
-        title: "Delay between leaderboard refreshes in milliseconds (100..3000)",
+        title:
+          "Delay between updating evolution insights and leaderboard summaries in milliseconds (100..3000)",
         format: (v) => `${Math.round(v)} ms`,
         getValue: () => this.leaderboardIntervalMs,
         setValue: (v) => this.#updateSetting("leaderboardIntervalMs", v),
-        position: "afterEnergy",
       }),
     ];
 
@@ -1096,6 +1101,7 @@ export default class UIManager {
       energyConfigs,
       generalConfigs,
       generalGroup,
+      insightConfigs,
     };
   }
 
@@ -1317,6 +1323,31 @@ export default class UIManager {
     intro.textContent =
       "Track population health, energy, and behavioral trends as the simulation unfolds.";
     body.appendChild(intro);
+
+    const sliderContext = this.sliderContext;
+
+    if (sliderContext?.insightConfigs?.length) {
+      const cadenceSection = document.createElement("section");
+
+      cadenceSection.className = "metrics-section insight-cadence";
+      const cadenceTitle = document.createElement("h4");
+
+      cadenceTitle.className = "metrics-section-title";
+      cadenceTitle.textContent = "Update Cadence";
+      cadenceSection.appendChild(cadenceTitle);
+
+      const cadenceBody = document.createElement("div");
+
+      cadenceBody.className = "metrics-section-body";
+      const cadenceGrid = createControlGrid(cadenceBody, "control-grid--compact");
+
+      sliderContext.insightConfigs.forEach((cfg) => {
+        sliderContext.renderSlider(cfg, cadenceGrid);
+      });
+
+      cadenceSection.appendChild(cadenceBody);
+      body.appendChild(cadenceSection);
+    }
 
     this.metricsBox = document.createElement("div");
     this.metricsBox.className = "metrics-box";
