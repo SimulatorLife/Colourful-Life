@@ -1,0 +1,48 @@
+name: Auto Lint & Format
+
+on:
+  schedule:
+    - cron: "0 * * * *" # hourly
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  lint-and-format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint autofix
+        run: npm run lint:fix
+
+      - name: Run Prettier format
+        run: npm run format
+
+      - name: Create pull request with fixes
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/auto-lint-format
+          commit-message: "chore: apply lint and format fixes"
+          title: "chore: apply lint and format fixes"
+          body: |
+            Automated run of `npm run lint:fix` and `npm run format`.
+            This pull request was created because the workflow detected uncommitted
+            formatting or lint fixes.
+          delete-branch: true
