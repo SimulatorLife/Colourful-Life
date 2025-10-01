@@ -1,6 +1,12 @@
 import { test } from "uvu";
 import * as assert from "uvu/assert";
 
+const DEFAULT_RANDOM_EVENT_CONFIG = {
+  durationRange: { min: 300, max: 900 },
+  strengthRange: { min: 0.25, max: 1 },
+  span: { min: 10, ratio: 1 / 3 },
+};
+
 function makeSequenceRng(sequence) {
   let index = 0;
 
@@ -21,10 +27,104 @@ function makeSequenceRng(sequence) {
   return rng;
 }
 
-function sampleEventSpanFromSequence(size, sample) {
+function sanitizeRange(range, fallback, { min: minBound } = {}) {
+  const candidate = range ?? {};
+  const rawMin = Number.isFinite(candidate.min)
+    ? candidate.min
+    : Array.isArray(candidate) && Number.isFinite(candidate[0])
+      ? candidate[0]
+      : undefined;
+  const rawMax = Number.isFinite(candidate.max)
+    ? candidate.max
+    : Array.isArray(candidate) && Number.isFinite(candidate[1])
+      ? candidate[1]
+      : undefined;
+
+  if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) {
+    return { ...fallback };
+  }
+
+  let min = rawMin;
+  let max = rawMax;
+
+  if (min > max) {
+    [min, max] = [max, min];
+  }
+
+  if (Number.isFinite(minBound)) {
+    min = Math.max(min, minBound);
+  }
+
+  if (max <= min) {
+    return { ...fallback };
+  }
+
+  return { min, max };
+}
+
+function sanitizeSpanConfig(candidate, fallback) {
+  if (!candidate || typeof candidate !== "object") {
+    return { ...fallback };
+  }
+
+  const min = Number(candidate.min);
+  const ratio = Number(candidate.ratio ?? candidate.fraction ?? candidate.maxFraction);
+  const sanitizedMin = Number.isFinite(min)
+    ? Math.max(1, Math.floor(min))
+    : fallback.min;
+  let sanitizedRatio = Number.isFinite(ratio) ? ratio : fallback.ratio;
+
+  if (!Number.isFinite(sanitizedRatio)) {
+    sanitizedRatio = fallback.ratio;
+  }
+
+  sanitizedRatio = Math.min(Math.max(sanitizedRatio, 0), 1);
+
+  return { min: sanitizedMin, ratio: sanitizedRatio };
+}
+
+function normalizeRandomEventConfig(candidate) {
+  if (!candidate || typeof candidate !== "object") {
+    return {
+      durationRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.durationRange },
+      strengthRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.strengthRange },
+      span: { ...DEFAULT_RANDOM_EVENT_CONFIG.span },
+    };
+  }
+
+  return {
+    durationRange: sanitizeRange(
+      candidate.durationRange,
+      DEFAULT_RANDOM_EVENT_CONFIG.durationRange,
+      {
+        min: 1,
+      },
+    ),
+    strengthRange: sanitizeRange(
+      candidate.strengthRange,
+      DEFAULT_RANDOM_EVENT_CONFIG.strengthRange,
+      {
+        min: 0,
+      },
+    ),
+    span: sanitizeSpanConfig(candidate.span, DEFAULT_RANDOM_EVENT_CONFIG.span),
+  };
+}
+
+function sampleEventSpanFromSequence(
+  size,
+  sample,
+  spanConfig = DEFAULT_RANDOM_EVENT_CONFIG.span,
+) {
   const maxSpan = Math.max(1, Math.floor(size));
-  const minSpan = Math.min(10, maxSpan);
-  const spanCandidate = Math.max(minSpan, Math.floor(maxSpan / 3));
+  const minCandidate = Number.isFinite(spanConfig?.min)
+    ? Math.max(1, Math.floor(spanConfig.min))
+    : DEFAULT_RANDOM_EVENT_CONFIG.span.min;
+  const ratio = Number.isFinite(spanConfig?.ratio)
+    ? Math.min(Math.max(spanConfig.ratio, 0), 1)
+    : DEFAULT_RANDOM_EVENT_CONFIG.span.ratio;
+  const minSpan = Math.min(minCandidate, maxSpan);
+  const spanCandidate = Math.max(minSpan, Math.floor(maxSpan * ratio));
   const upperExclusive = spanCandidate === minSpan ? minSpan + 1 : spanCandidate + 1;
   const raw = Math.floor(sample(minSpan, upperExclusive));
 
@@ -41,17 +141,25 @@ function clampEventStart(rawStart, span, limit) {
   return Math.min(maxStart, Math.max(0, rawStart));
 }
 
-function expectedEventFromSequence(sequence, rows, cols, eventTypes) {
+function expectedEventFromSequence(
+  sequence,
+  rows,
+  cols,
+  eventTypes,
+  randomEventConfig,
+) {
   let idx = 0;
 
   const sample = (min, max) => min + sequence[idx++] * (max - min);
+  const config = normalizeRandomEventConfig(randomEventConfig);
+  const { durationRange, strengthRange, span } = config;
   const eventType = eventTypes[Math.floor(sample(0, eventTypes.length))];
-  const duration = Math.floor(sample(300, 900));
-  const strength = sample(0.25, 1);
+  const duration = Math.floor(sample(durationRange.min, durationRange.max));
+  const strength = sample(strengthRange.min, strengthRange.max);
   const rawX = Math.floor(sample(0, cols));
   const rawY = Math.floor(sample(0, rows));
-  const width = sampleEventSpanFromSequence(cols, sample);
-  const height = sampleEventSpanFromSequence(rows, sample);
+  const width = sampleEventSpanFromSequence(cols, sample, span);
+  const height = sampleEventSpanFromSequence(rows, sample, span);
   const x = clampEventStart(rawX, width, cols);
   const y = clampEventStart(rawY, height, rows);
 
@@ -124,6 +232,31 @@ test("EventManager allows overriding event colors via options", async () => {
     managerWithResolver.getColor({ eventType: "drought" }),
     EventManager.EVENT_COLORS.drought,
   );
+});
+
+test("randomEventConfig customizes generated event ranges", async () => {
+  const [{ default: EventManager }, { EVENT_TYPES }] = await Promise.all([
+    import("../src/events/eventManager.js"),
+    import("../src/events/eventEffects.js"),
+  ]);
+  const rows = 12;
+  const cols = 18;
+  const sequence = [0.11, 0.42, 0.37, 0.58, 0.23, 0.71, 0.19];
+  const rng = makeSequenceRng(sequence.slice());
+  const config = {
+    durationRange: { min: 120, max: 240 },
+    strengthRange: { min: 0.4, max: 0.6 },
+    span: { min: 4, ratio: 0.5 },
+  };
+  const manager = new EventManager(rows, cols, rng, {
+    startWithEvent: false,
+    randomEventConfig: config,
+  });
+  const expected = expectedEventFromSequence(sequence, rows, cols, EVENT_TYPES, config);
+  const event = manager.generateRandomEvent();
+
+  assert.equal(event, expected);
+  assert.is(rng.getCalls(), sequence.length);
 });
 
 test("generateRandomEvent keeps affected area within the grid bounds", async () => {
