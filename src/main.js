@@ -309,7 +309,7 @@ export function createSimulation({
     selectionManager: engine.selectionManager,
     start: () => engine.start(),
     stop: () => engine.stop(),
-    step: (timestamp) => engine.tick(timestamp),
+    step: (timestamp) => engine.step(timestamp),
     tick: (timestamp) => engine.tick(timestamp),
     pause: () => engine.pause(),
     resume: () => engine.resume(),
