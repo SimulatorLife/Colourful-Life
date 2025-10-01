@@ -21,11 +21,7 @@ function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }
     return null;
   }
 
-  let sum = 0;
-
-  for (let i = 0; i < neighborEnergies.length; i++) {
-    sum += neighborEnergies[i] || 0;
-  }
+  const sum = neighborEnergies.reduce((total, value) => total + (value || 0), 0);
 
   return sum / neighborEnergies.length;
 }
