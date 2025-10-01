@@ -6,7 +6,13 @@ function asFiniteCoordinate(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function resolveCoordinates(preferred, fallback = null) {
+/**
+ * Picks the first available row/column pair, preferring the `preferred`
+ * location and only falling back when coordinates are missing or non-finite.
+ * The helper keeps intent explicit at call sites so complex movement flows
+ * highlight where we gracefully degrade to historical coordinates.
+ */
+function pickCoordinatesWithFallback(preferred, fallback = null) {
   const primaryRow = asFiniteCoordinate(preferred?.row);
   const primaryCol = asFiniteCoordinate(preferred?.col);
   const fallbackRow = asFiniteCoordinate(fallback?.row);
@@ -39,7 +45,7 @@ function placeAdapterCell(adapter, row, col, cell) {
 function resolveAdapterOccupant(adapter, location, fallback = location?.cell ?? null) {
   if (!adapter) return null;
 
-  const { row, col } = resolveCoordinates(location, fallback);
+  const { row, col } = pickCoordinatesWithFallback(location, fallback);
 
   if (row == null || col == null) {
     return null;
@@ -292,7 +298,7 @@ function prepareFightParticipants({ adapter, initiator, target }) {
   if (!adapter || !initiator?.cell || !target) return null;
 
   const attacker = initiator.cell;
-  const { row: attackerRow, col: attackerCol } = resolveCoordinates(
+  const { row: attackerRow, col: attackerCol } = pickCoordinatesWithFallback(
     initiator,
     attacker,
   );
