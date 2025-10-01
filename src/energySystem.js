@@ -75,7 +75,9 @@ export function accumulateEventModifiers({
   const effectCache = reusableEffectCache ?? (resolveEffect ? new Map() : null);
   const strengthMultiplier = Number(eventStrengthMultiplier || 1);
 
-  for (const ev of events) {
+  for (let i = 0, len = events.length; i < len; i++) {
+    const ev = events[i];
+
     if (!ev) continue;
     if (eventApplies && !eventApplies(ev, row, col)) continue;
 
@@ -85,11 +87,13 @@ export function accumulateEventModifiers({
       const type = ev.eventType;
 
       if (effectCache) {
-        if (effectCache.has(type)) {
-          effect = effectCache.get(type);
+        const cached = effectCache.get(type);
+
+        if (cached !== undefined) {
+          effect = cached;
         } else {
-          effect = resolveEffect(type);
-          effectCache.set(type, effect ?? null);
+          effect = resolveEffect(type) ?? null;
+          effectCache.set(type, effect);
         }
       } else {
         effect = resolveEffect(type);
@@ -98,19 +102,18 @@ export function accumulateEventModifiers({
 
     if (!effect) continue;
 
-    const baseStrength = Number(ev.strength || 0);
-    const strength = baseStrength * strengthMultiplier;
+    const strength = Number(ev.strength ?? 0) * strengthMultiplier;
 
     if (!Number.isFinite(strength) || strength === 0) continue;
 
-    if (effect.regenScale) {
-      const { base = 1, change = 0, min = 0 } = effect.regenScale;
+    const { regenScale, regenAdd: effectRegenAdd, drainAdd: effectDrainAdd } = effect;
+
+    if (regenScale) {
+      const { base = 1, change = 0, min = 0 } = regenScale;
       const scale = Math.max(min, base + change * strength);
 
       regenMultiplier *= scale;
     }
-
-    const { regenAdd: effectRegenAdd, drainAdd: effectDrainAdd } = effect;
 
     if (typeof effectRegenAdd === "number") {
       regenAdd += effectRegenAdd * strength;
