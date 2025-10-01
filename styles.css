@@ -57,6 +57,7 @@ canvas {
 .canvas-container {
   flex: 1 1 0;
   display: flex;
+  align-self: flex-start;
   align-items: center;
   justify-content: center;
 }
@@ -93,6 +94,9 @@ canvas {
   .sidebar {
     width: min(100%, 520px);
     max-width: 100%;
+  }
+  .canvas-container {
+    align-self: auto;
   }
   .dashboard-grid {
     width: 100%;
