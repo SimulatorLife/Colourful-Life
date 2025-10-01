@@ -580,6 +580,10 @@ canvas {
   gap: var(--space-sm);
 }
 
+.trait-metrics {
+  gap: var(--space-md);
+}
+
 .metrics-group-title {
   font-size: 12px;
   font-weight: 600;
@@ -591,6 +595,113 @@ canvas {
 .metrics-group-rows {
   display: grid;
   gap: var(--space-sm);
+}
+
+.trait-metrics-body {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.trait-balance {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+}
+
+.trait-balance-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.trait-balance-label {
+  font-weight: 600;
+}
+
+.trait-balance-value {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.trait-balance-meter {
+  position: relative;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.trait-balance-fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+  background: #2ecc71;
+}
+
+.trait-balance-summary {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  margin: 0;
+}
+
+.trait-balance--empty .trait-balance-fill {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.trait-bar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.trait-bar-item {
+  display: grid;
+  gap: 6px;
+}
+
+.trait-bar-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.trait-bar-label {
+  font-weight: 600;
+}
+
+.trait-bar-value {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+
+.trait-bar-meter {
+  position: relative;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.trait-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+  background: #74b9ff;
+}
+
+.trait-empty-state {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  margin: 0;
 }
 
 .sparkline-grid {
