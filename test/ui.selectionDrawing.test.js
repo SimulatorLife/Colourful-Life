@@ -9,7 +9,7 @@ test("selection drawing respects canvas CSS scaling", async () => {
 
   const [{ default: UIManager }, { default: SelectionManager }] = await Promise.all([
     import("../src/ui/uiManager.js"),
-    import("../src/ui/selectionManager.js"),
+    import("../src/grid/selectionManager.js"),
   ]);
 
   const selectionManager = new SelectionManager(120, 120);

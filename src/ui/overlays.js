@@ -500,7 +500,7 @@ function getSelectionZoneEntries(selectionManager) {
  * selection manager. Zones are rendered on top of the canvas to mirror UI state
  * in the visual overlays.
  *
- * @param {import('../ui/selectionManager.js').default|undefined} selectionManager - Active selection manager.
+ * @param {import('../grid/selectionManager.js').default|undefined} selectionManager - Active selection manager.
  * @param {CanvasRenderingContext2D} ctx - Canvas context used for drawing.
  * @param {number} cellSize - Size of a single grid cell in pixels.
  */

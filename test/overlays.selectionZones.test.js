@@ -1,7 +1,7 @@
 import { test } from "uvu";
 import * as assert from "uvu/assert";
 import { drawSelectionZones } from "../src/ui/overlays.js";
-import SelectionManager from "../src/ui/selectionManager.js";
+import SelectionManager from "../src/grid/selectionManager.js";
 
 function createMockContext() {
   const operations = [];
