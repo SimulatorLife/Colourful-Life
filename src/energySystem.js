@@ -90,6 +90,21 @@ export function accumulateEventModifiers({
     if (!eventInstance) continue;
     if (eventApplies && !eventApplies(eventInstance, row, col)) continue;
 
+    const baseStrength = Number(eventInstance?.strength ?? 0);
+
+    // Guard common zero-strength events before resolving their effect configs.
+    // This avoids repeated cache lookups and map churn in dense event fields
+    // where only a minority of events actually contribute energy modifiers.
+    if (!Number.isFinite(baseStrength) || baseStrength === 0) {
+      continue;
+    }
+
+    const strength = baseStrength * strengthMultiplier;
+
+    if (!Number.isFinite(strength) || strength === 0) {
+      continue;
+    }
+
     let eventEffect = null;
 
     if (resolveEffect) {
@@ -110,10 +125,6 @@ export function accumulateEventModifiers({
     }
 
     if (!eventEffect) continue;
-
-    const strength = Number(eventInstance.strength ?? 0) * strengthMultiplier;
-
-    if (!Number.isFinite(strength) || strength === 0) continue;
 
     const {
       regenScale,
