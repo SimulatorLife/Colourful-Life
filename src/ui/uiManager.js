@@ -469,6 +469,59 @@ export default class UIManager {
     return raw.charAt(0).toUpperCase() + raw.slice(1);
   }
 
+  #formatEventTypeLabel(type) {
+    if (typeof type !== "string" || type.length === 0) {
+      return "Event";
+    }
+
+    const normalized = type.replace(/[_-]+/g, " ").trim();
+
+    if (normalized.length === 0) {
+      return "Event";
+    }
+
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  }
+
+  #describeEventSummary(event, multiplier) {
+    if (!event) return "Environmental event modifier";
+
+    const typeLabel = this.#formatEventTypeLabel(event.type);
+    const pieces = [];
+    const coverage = Number.isFinite(event.coverageRatio)
+      ? `${Math.round(Math.min(Math.max(event.coverageRatio, 0), 1) * 100)}% of the grid`
+      : null;
+    const remaining = Number.isFinite(event.remainingTicks)
+      ? `${event.remainingTicks} ticks remaining`
+      : null;
+    const duration = Number.isFinite(event.durationTicks)
+      ? `${event.durationTicks} ticks total`
+      : null;
+    const baseIntensity = Number.isFinite(event.strength)
+      ? `base intensity ${event.strength.toFixed(2)}×`
+      : null;
+    const effectiveIntensity = Number.isFinite(event.effectiveStrength)
+      ? `effective intensity ${event.effectiveStrength.toFixed(2)}×`
+      : null;
+
+    if (coverage) pieces.push(coverage);
+    if (remaining) pieces.push(remaining);
+    if (duration && duration !== remaining) pieces.push(duration);
+
+    const summary = pieces.length > 0 ? pieces.join(", ") : "influence over the grid";
+    const strengthParts = [baseIntensity, effectiveIntensity]
+      .filter(Boolean)
+      .join(" → ");
+    const multiplierPart = Number.isFinite(multiplier)
+      ? `Global strength multiplier ${multiplier.toFixed(2)}×.`
+      : "";
+
+    return [`${typeLabel} affects ${summary}.`, strengthParts, multiplierPart]
+      .map((part) => part && part.trim())
+      .filter(Boolean)
+      .join(" ");
+  }
+
   #appendLifeEventDetail(container, { label, value, colors }) {
     if (!container) return;
 
@@ -1509,7 +1562,7 @@ export default class UIManager {
     }
   }
 
-  renderMetrics(stats, snapshot) {
+  renderMetrics(stats, snapshot, environment = {}) {
     if (!this.metricsBox) return;
     const hasSnapshotData =
       snapshot &&
@@ -1565,6 +1618,32 @@ export default class UIManager {
     const countOrDash = (value) => finiteOrDash(value);
     const fixedOrDash = (value, digits) =>
       finiteOrDash(value, (v) => v.toFixed(digits));
+    const coverageOrNull = (ratio) => {
+      if (!Number.isFinite(ratio)) return null;
+
+      const clamped = Math.min(Math.max(ratio, 0), 1);
+
+      return `${Math.round(clamped * 100)}% area`;
+    };
+    const secondsOrNull = (seconds) => {
+      if (!Number.isFinite(seconds)) return null;
+
+      const rounded = seconds >= 10 ? Math.round(seconds) : seconds.toFixed(1);
+
+      return `${rounded}s left`;
+    };
+    const intensityOrNull = (value) => {
+      if (!Number.isFinite(value)) return null;
+
+      return `${value.toFixed(2)}× intensity`;
+    };
+
+    const eventMultiplier = Number.isFinite(environment?.eventStrengthMultiplier)
+      ? environment.eventStrengthMultiplier
+      : null;
+    const activeEvents = Array.isArray(environment?.activeEvents)
+      ? environment.activeEvents
+      : [];
 
     this._lastInteractionTotals = {
       fights: totals.fights ?? lastTotals.fights ?? 0,
@@ -1639,6 +1718,42 @@ export default class UIManager {
       value: fixedOrDash(s.diversity, 3),
       title: "Estimated mean pairwise genetic distance",
     });
+
+    const environmentSection = createSection("Environmental Events");
+
+    appendMetricRow(environmentSection, {
+      label: "Global Strength Multiplier",
+      value:
+        eventMultiplier == null
+          ? "—"
+          : `${eventMultiplier.toFixed(2)}×${eventMultiplier <= 0 ? " (off)" : ""}`,
+      title: "Scales the impact of every active environmental event.",
+    });
+
+    if (activeEvents.length === 0) {
+      appendMetricRow(environmentSection, {
+        label: "Active Events",
+        value: "Calm skies",
+        title: "No environmental modifiers are currently affecting the grid.",
+      });
+    } else {
+      activeEvents.forEach((event, index) => {
+        const labelSuffix = activeEvents.length > 1 ? ` #${index + 1}` : "";
+        const label = `${this.#formatEventTypeLabel(event?.type)}${labelSuffix}`;
+        const details = [
+          coverageOrNull(event?.coverageRatio),
+          secondsOrNull(event?.remainingSeconds),
+          intensityOrNull(event?.effectiveStrength ?? event?.strength),
+        ].filter(Boolean);
+
+        appendMetricRow(environmentSection, {
+          label,
+          value: details.length > 0 ? details.join(" · ") : "—",
+          title: this.#describeEventSummary(event, eventMultiplier),
+          valueClass: "control-value--left",
+        });
+      });
+    }
 
     const reproductionSection = createSection("Reproduction Trends");
 

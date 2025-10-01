@@ -429,6 +429,55 @@ export default class SimulationEngine {
     };
   }
 
+  #summarizeActiveEvents() {
+    const events = Array.isArray(this.eventManager?.activeEvents)
+      ? this.eventManager.activeEvents
+      : [];
+
+    if (events.length === 0) {
+      return [];
+    }
+
+    const totalTiles = Math.max(1, this.rows * this.cols);
+    const updatesPerSecond = Math.max(1, Math.round(this.state.updatesPerSecond ?? 60));
+    const strengthMultiplier = Number.isFinite(this.state.eventStrengthMultiplier)
+      ? this.state.eventStrengthMultiplier
+      : 1;
+
+    return events.map((event, index) => {
+      const area = event?.affectedArea ?? {};
+      const rawWidth = Number.isFinite(area.width) ? area.width : 0;
+      const rawHeight = Number.isFinite(area.height) ? area.height : 0;
+      const width = Math.max(0, Math.min(this.cols, Math.round(rawWidth)));
+      const height = Math.max(0, Math.min(this.rows, Math.round(rawHeight)));
+      const coverageTiles = width * height;
+      const coverageRatio = coverageTiles > 0 ? coverageTiles / totalTiles : 0;
+      const remainingTicks = Math.max(0, Math.floor(event?.remaining ?? 0));
+      const durationTicks = Math.max(remainingTicks, Math.floor(event?.duration ?? 0));
+      const remainingSeconds = remainingTicks / updatesPerSecond;
+      const normalizedStrength = Number.isFinite(event?.strength)
+        ? event.strength
+        : null;
+      const effectiveStrength =
+        normalizedStrength == null ? null : normalizedStrength * strengthMultiplier;
+
+      return {
+        id: `${event?.eventType ?? "event"}-${index}-${width}x${height}-${remainingTicks}`,
+        type:
+          typeof event?.eventType === "string" && event.eventType.length > 0
+            ? event.eventType
+            : "event",
+        strength: normalizedStrength,
+        effectiveStrength,
+        coverageTiles,
+        coverageRatio,
+        remainingTicks,
+        remainingSeconds,
+        durationTicks,
+      };
+    });
+  }
+
   #scheduleNextFrame() {
     if (!this.running || this.frameHandle != null) return;
 
@@ -549,7 +598,22 @@ export default class SimulationEngine {
         this.lastSlowUiRender = effectiveTimestamp;
 
         if (this.lastMetrics) {
-          this.emit("metrics", { stats: this.stats, metrics: this.lastMetrics });
+          this.emit("metrics", {
+            stats: this.stats,
+            metrics: this.lastMetrics,
+            environment: {
+              activeEvents: this.#summarizeActiveEvents(),
+              updatesPerSecond: Math.max(
+                1,
+                Math.round(this.state.updatesPerSecond ?? 60),
+              ),
+              eventStrengthMultiplier: Number.isFinite(
+                this.state.eventStrengthMultiplier,
+              )
+                ? this.state.eventStrengthMultiplier
+                : 1,
+            },
+          });
         }
 
         const top = this.lastSnapshot ? computeLeaderboard(this.lastSnapshot, 5) : [];
