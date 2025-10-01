@@ -18,24 +18,29 @@ jobs:
       pr_title: "Codex: Whimsical Enhancements"
       pr_body: "Seed PR for Codex to add an optional creative flourish that delights without breaking observability or performance."
       prompt: >
-        Start a new task to create a code change with the goal of infusing the simulation 
-        with a tasteful dose of whimsy while respecting core functionality and observability. 
-        Choose a contained area (e.g. event overlays, birth/death celebrations, UI microcopy, 
-        optional visual themes) and ship a feels-good enhancement that helps players connect 
-        with the world. Some ideas: celebratory particle bursts after reproduction, colour 
-        palettes, dynamic background gradients tied to ecosystem health, playful tooltips or microcopy,
-        an optional “creative mode” toggle that layers in extra personality, or a "violence" 
-        mode that adds exaggerated effects for combat interactions.
+        Implement a tangible, user-facing whimsy upgrade in this run. You must deliver a 
+        committed code change; "no major issues found" is not acceptable. Pick one coherent 
+        surface (e.g. event overlays, birth/death celebrations, UI copy, optional themes, 
+        celebratory effects, playful logging, etc.) and ship a concrete enhancement that 
+        adds delight without harming observability.
 
         Requirements:
-          • The addition must be opt-in or unobtrusive by default, with config/UI hooks so
-            users can enable/disable it.
-          • Preserve performance—avoid heavy per-frame allocations—and keep visuals
-            accessible (contrast, motion considerations).
-          • Update documentation and tests where behaviour changes; explain how to use the
-            new flourish in the PR body.
-          • Do not remove existing features or compromise observability—the goal is playful
-            creativity that coexists with serious analysis tools.
+          • The change must introduce or upgrade an actual feature (e.g., celebratory
+            particle bursts, dynamic palettes tied to ecosystem health, event-specific
+            audio/visual cues, a toggleable “creative mode”, mood-based backgrounds,
+            playful tooltips with contextual insights, or similar). Cosmetic copy-only edits
+            are insufficient by themselves—pair them with a functional flourish.
+          • Provide an opt-in control or keep the effect unobtrusive by default so serious
+            analysis workflows remain unaffected.
+          • Ensure performance remains strong (no heavy per-frame allocations) and visuals
+            are accessible (respect colour contrast, motion sensitivity, ARIA labelling).
+          • Update documentation and tests if behaviour changes, and explain how to access
+            the new flourish in the PR body.
+          • Do not remove existing features or reduce observability; the goal is additive
+            creativity.
 
-        If you cannot find a delightful idea that meets these constraints, add and commit a 
-        comment to the CHANGELOG.md suggesting future possibilities.
+        If, after a thorough audit, you still cannot ship a playful enhancement, add a
+        committed entry to `CHANGELOG.md` outlining at least three concrete whimsical
+        improvements with implementation notes for future runs. Then exit with that
+        documented plan. The expectation is that most runs ship real code, and fallback to
+        documentation is a last resort.
