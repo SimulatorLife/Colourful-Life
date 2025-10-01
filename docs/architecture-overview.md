@@ -35,9 +35,13 @@ This document captures how the Colourful Life simulation composes its core syste
   without flooding the map; adjust via `resolveSimulationDefaults` when
   experimenting with alternative baselines.
 
-- Environment overrides such as `COLOURFUL_LIFE_MAX_TILE_ENERGY` and `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` flow through
-  [`src/config.js`](../src/config.js), letting experiments tweak caps and density penalties without patching source. The values
-  are consumed by both the energy computations and the overlays so telemetry stays in sync.
+- Environment overrides such as `COLOURFUL_LIFE_MAX_TILE_ENERGY`,
+  `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`, and
+  `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` flow through
+  [`src/config.js`](../src/config.js), letting experiments tweak caps, regeneration
+  suppression, and harvesting taxes without patching source. The sanitized values
+  are consumed by both the energy computations and overlays so telemetry stays in
+  sync.
 
 ### Events
 

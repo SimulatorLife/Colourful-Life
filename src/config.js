@@ -58,7 +58,11 @@ export function resolveRegenDensityPenalty(env = RUNTIME_ENV) {
   return parsed;
 }
 
-// Penalties (scale 0..1) used in energy model
+/**
+ * Density penalty applied during energy regeneration. Values outside the 0..1
+ * interval fall back to {@link DEFAULT_REGEN_DENSITY_PENALTY} so both headless
+ * and browser runs remain deterministic.
+ */
 export const REGEN_DENSITY_PENALTY = resolveRegenDensityPenalty(); // 1 - penalty * density
 
 /**
@@ -84,6 +88,11 @@ export function resolveConsumptionDensityPenalty(env = RUNTIME_ENV) {
   return parsed;
 }
 
+/**
+ * Density penalty applied while organisms harvest energy from a tile. Sanitizes
+ * `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` into the 0..1 range to prevent
+ * overrides from destabilizing tests or overlays.
+ */
 export const CONSUMPTION_DENSITY_PENALTY = resolveConsumptionDensityPenalty(); // 1 - penalty * density
 
 export const SIMULATION_DEFAULTS = Object.freeze({
