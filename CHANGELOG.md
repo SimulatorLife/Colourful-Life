@@ -35,6 +35,8 @@ where practical.
 - Relocated the leaderboard refresh slider into the Evolution Insights panel,
   renaming it "Insights Refresh Interval" so cadence controls live alongside
   the metrics and leaderboard they influence.
+- Moved the "Pause When Hidden" toggle next to the playback controls so
+  auto-pause behaviour is discoverable alongside the Pause and Step actions.
 
 ## [0.1.0]
 
