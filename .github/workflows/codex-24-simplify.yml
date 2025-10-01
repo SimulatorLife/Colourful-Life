@@ -2,7 +2,7 @@ name: Codex 24 – Simplify Code Paths
 
 on:
   schedule:
-    - cron: "45 8,20 * * *" # twice daily at 08:45, 20:45 UTC
+    - cron: "40 3,9,15,21 * * *" # four times daily at 03:40, 09:40, 15:40, 21:40 UTC
   workflow_dispatch:
 
 permissions:
