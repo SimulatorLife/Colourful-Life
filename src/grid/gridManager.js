@@ -22,6 +22,16 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 
 const similarityCache = new WeakMap();
+const NEIGHBOR_OFFSETS = [
+  [-1, -1],
+  [-1, 0],
+  [-1, 1],
+  [0, -1],
+  [0, 1],
+  [1, -1],
+  [1, 0],
+  [1, 1],
+];
 
 function getPairSimilarity(cellA, cellB) {
   if (!cellA || !cellB) return 0;
@@ -82,6 +92,7 @@ export default class GridManager {
   static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
   static maxTileEnergy = MAX_TILE_ENERGY;
   static combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT;
+  #spawnCandidateScratch = null;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -456,6 +467,20 @@ export default class GridManager {
     const { dr, dc } = cell.decideRandomMove();
 
     return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
+  }
+
+  #acquireSpawnScratch() {
+    if (!this.#spawnCandidateScratch) {
+      this.#spawnCandidateScratch = {
+        list: [],
+        set: new Set(),
+      };
+    }
+
+    this.#spawnCandidateScratch.list.length = 0;
+    this.#spawnCandidateScratch.set.clear();
+
+    return this.#spawnCandidateScratch;
   }
 
   constructor(
@@ -1990,25 +2015,25 @@ export default class GridManager {
       cell.energy >= thrA &&
       bestMate.target.energy >= thrB
     ) {
-      const candidates = [];
-      const candidateSet = new Set();
+      const { list: candidates, set: candidateSet } = this.#acquireSpawnScratch();
+      const rowsCount = this.rows;
+      const colsCount = this.cols;
+      const grid = this.grid;
       const addCandidate = (r, c) => {
-        if (r < 0 || r >= this.rows || c < 0 || c >= this.cols) return;
+        if (r < 0 || r >= rowsCount || c < 0 || c >= colsCount) return;
 
-        const key = `${r},${c}`;
+        const key = r * colsCount + c;
 
-        if (!candidateSet.has(key) && !this.isObstacle(r, c)) {
-          candidateSet.add(key);
-          candidates.push({ r, c });
-        }
+        if (candidateSet.has(key)) return;
+        candidateSet.add(key);
+
+        if (grid[r][c] || this.isObstacle(r, c)) return;
+
+        candidates.push({ r, c });
       };
       const addNeighbors = (baseRow, baseCol) => {
-        for (let dr = -1; dr <= 1; dr += 1) {
-          for (let dc = -1; dc <= 1; dc += 1) {
-            if (dr === 0 && dc === 0) continue;
-
-            addCandidate(baseRow + dr, baseCol + dc);
-          }
+        for (const [dr, dc] of NEIGHBOR_OFFSETS) {
+          addCandidate(baseRow + dr, baseCol + dc);
         }
       };
 
@@ -2019,61 +2044,61 @@ export default class GridManager {
       addNeighbors(parentRow, parentCol);
       addNeighbors(mateRow, mateCol);
 
-      const freeSlots = candidates.filter(
-        ({ r, c }) => !this.grid[r][c] && !this.isObstacle(r, c),
-      );
-      const restrictedSlots = this.reproductionZones.filterSpawnCandidates(freeSlots);
-      const slotPool = restrictedSlots.length > 0 ? restrictedSlots : freeSlots;
+      if (candidates.length > 0) {
+        const restrictedSlots =
+          this.reproductionZones.filterSpawnCandidates(candidates);
+        const slotPool = restrictedSlots.length > 0 ? restrictedSlots : candidates;
 
-      if (slotPool.length > 0) {
-        const spawn = this.#chooseSpawnCandidate(slotPool, {
-          parentA: cell,
-          parentB: bestMate.target,
-          densityGrid,
-          densityEffectMultiplier,
-        });
-
-        if (spawn) {
-          const zoneCheck = this.reproductionZones.validateArea({
-            parentA: { row: parentRow, col: parentCol },
-            parentB: { row: mateRow, col: mateCol },
-            spawn: { row: spawn.r, col: spawn.c },
+        if (slotPool.length > 0) {
+          const spawn = this.#chooseSpawnCandidate(slotPool, {
+            parentA: cell,
+            parentB: bestMate.target,
+            densityGrid,
+            densityEffectMultiplier,
           });
 
-          if (!zoneCheck.allowed) {
-            blockedInfo = {
-              reason: zoneCheck.reason,
+          if (spawn) {
+            const zoneCheck = this.reproductionZones.validateArea({
               parentA: { row: parentRow, col: parentCol },
               parentB: { row: mateRow, col: mateCol },
               spawn: { row: spawn.r, col: spawn.c },
-            };
-          } else {
-            const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
-              maxTileEnergy: this.maxTileEnergy,
             });
 
-            if (offspring) {
-              offspring.row = spawn.r;
-              offspring.col = spawn.c;
-              this.setCell(spawn.r, spawn.c, offspring);
-              const parentColors = [];
-
-              if (typeof cell?.dna?.toColor === "function") {
-                parentColors.push(cell.dna.toColor());
-              }
-              if (typeof bestMate.target?.dna?.toColor === "function") {
-                parentColors.push(bestMate.target.dna.toColor());
-              }
-
-              stats.onBirth(offspring, {
-                row: spawn.r,
-                col: spawn.c,
-                energy: offspring.energy,
-                cause: "reproduction",
-                mutationMultiplier,
-                parents: parentColors,
+            if (!zoneCheck.allowed) {
+              blockedInfo = {
+                reason: zoneCheck.reason,
+                parentA: { row: parentRow, col: parentCol },
+                parentB: { row: mateRow, col: mateCol },
+                spawn: { row: spawn.r, col: spawn.c },
+              };
+            } else {
+              const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
+                maxTileEnergy: this.maxTileEnergy,
               });
-              reproduced = true;
+
+              if (offspring) {
+                offspring.row = spawn.r;
+                offspring.col = spawn.c;
+                this.setCell(spawn.r, spawn.c, offspring);
+                const parentColors = [];
+
+                if (typeof cell?.dna?.toColor === "function") {
+                  parentColors.push(cell.dna.toColor());
+                }
+                if (typeof bestMate.target?.dna?.toColor === "function") {
+                  parentColors.push(bestMate.target.dna.toColor());
+                }
+
+                stats.onBirth(offspring, {
+                  row: spawn.r,
+                  col: spawn.c,
+                  energy: offspring.energy,
+                  cause: "reproduction",
+                  mutationMultiplier,
+                  parents: parentColors,
+                });
+                reproduced = true;
+              }
             }
           }
         }
