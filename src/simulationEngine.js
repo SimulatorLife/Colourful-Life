@@ -1,6 +1,6 @@
 import EventManager from "./events/eventManager.js";
 import GridManager from "./grid/gridManager.js";
-import SelectionManager from "./selectionManager.js";
+import SelectionManager from "./ui/selectionManager.js";
 import Stats from "./stats.js";
 import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { computeLeaderboard } from "./leaderboard.js";

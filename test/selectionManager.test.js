@@ -1,6 +1,6 @@
 import { test } from "uvu";
 import * as assert from "uvu/assert";
-import SelectionManager from "../src/selectionManager.js";
+import SelectionManager from "../src/ui/selectionManager.js";
 
 function createManager(rows = 6, cols = 6) {
   return new SelectionManager(rows, cols);

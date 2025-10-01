@@ -275,7 +275,7 @@ function createHeadlessUiManager(options = {}) {
  *   uiManager: ReturnType<typeof UIManager> | ReturnType<typeof createHeadlessUiManager>,
  *   eventManager: import('./events/eventManager.js').default,
  *   stats: import('./stats.js').default,
- *   selectionManager: import('./selectionManager.js').default,
+ *   selectionManager: import('./ui/selectionManager.js').default,
  *   start: () => void,
  *   stop: () => void,
  *   step: (timestamp?: number) => void,
