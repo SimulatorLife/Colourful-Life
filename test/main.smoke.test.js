@@ -53,6 +53,22 @@ test("createSimulation headless mode infers a canvas when omitted", async () => 
   simulation.destroy();
 });
 
+test("createSimulation respects lingerPenalty overrides in headless mode", async () => {
+  const { createSimulation } = await simulationModulePromise;
+  const configuredPenalty = 0.024;
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    config: { lingerPenalty: configuredPenalty },
+  });
+
+  assert.is(simulation.engine.lingerPenalty, configuredPenalty);
+  assert.is(simulation.uiManager.getLingerPenalty(), configuredPenalty);
+
+  simulation.destroy();
+});
+
 test("step control calls engine.step when using createSimulation", async () => {
   const { createSimulation } = await simulationModulePromise;
 

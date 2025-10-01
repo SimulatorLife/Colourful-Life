@@ -139,12 +139,18 @@ controls("createSliderRow wires live formatting and change callbacks", () => {
     assert.is(range.step, "0.5");
     assert.is(range.value, "2.5");
     assert.is(liveValue.textContent, "2.5 J");
+    assert.type(range.updateDisplay, "function");
 
     range.value = "7.5";
     range.trigger("input");
 
     assert.is(liveValue.textContent, "7.5 J");
     assert.is(receivedValue, 7.5);
+
+    range.updateDisplay(3.5);
+
+    assert.is(range.value, "3.5");
+    assert.is(liveValue.textContent, "3.5 J");
   });
 });
 

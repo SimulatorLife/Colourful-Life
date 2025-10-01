@@ -366,7 +366,9 @@ export function createSimulation({
     win.uiManager = uiManager;
   }
 
-  if (typeof uiManager?.getLingerPenalty === "function") {
+  if (typeof uiManager?.setLingerPenalty === "function") {
+    uiManager.setLingerPenalty(engine.lingerPenalty);
+  } else if (typeof uiManager?.getLingerPenalty === "function") {
     engine.setLingerPenalty(uiManager.getLingerPenalty());
   }
 

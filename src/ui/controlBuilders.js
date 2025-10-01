@@ -123,12 +123,23 @@ export function createSliderRow(parent, opts = {}) {
   input.max = String(max);
   input.step = String(step);
   input.value = String(value);
+
+  const updateDisplay = (nextValue) => {
+    const numericValue = Number(nextValue);
+
+    if (Number.isFinite(numericValue)) {
+      input.value = String(numericValue);
+      valSpan.textContent = format(numericValue);
+    }
+  };
+
   input.addEventListener("input", () => {
     const numericValue = parseFloat(input.value);
 
     valSpan.textContent = format(numericValue);
     if (typeof onInput === "function") onInput(numericValue);
   });
+  input.updateDisplay = updateDisplay;
   line.appendChild(input);
   line.appendChild(valSpan);
 
