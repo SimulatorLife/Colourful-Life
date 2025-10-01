@@ -1,4 +1,4 @@
-import { clamp01 } from "./utils.js";
+import { clamp01, warnOnce } from "./utils.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = 0.6;
@@ -29,6 +29,9 @@ const INTERACTION_TRAIT_LABELS = Object.freeze({
   avoid: "Cautious",
 });
 
+const TRAIT_COMPUTE_WARNING =
+  "Trait compute function failed; defaulting to neutral contribution.";
+
 function wrapTraitCompute(fn) {
   if (typeof fn !== "function") {
     return () => 0;
@@ -37,7 +40,9 @@ function wrapTraitCompute(fn) {
   return (cell) => {
     try {
       return clamp01(fn(cell));
-    } catch {
+    } catch (error) {
+      warnOnce(TRAIT_COMPUTE_WARNING, error);
+
       return 0;
     }
   };
