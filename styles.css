@@ -106,6 +106,7 @@ canvas {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: var(--space-md);
+  box-sizing: border-box;
 }
 
 /* Collapsible panels */
