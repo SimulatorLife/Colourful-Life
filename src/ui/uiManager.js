@@ -571,26 +571,25 @@ export default class UIManager {
   }
 
   #appendLifeEventDetail(container, { label, value, colors }) {
-    if (!container) return;
+    if (!(container instanceof HTMLElement)) return null;
 
-    const detailRow = document.createElement("div");
+    const term = document.createElement("dt");
 
-    detailRow.className = "life-event-detail";
-    if (label) {
-      const labelEl = document.createElement("span");
+    term.className = "life-event-detail-label";
+    term.textContent = label ?? "";
+    container.appendChild(term);
 
-      labelEl.className = "life-event-detail-label";
-      labelEl.textContent = label;
-      detailRow.appendChild(labelEl);
-    }
-
-    const valueEl = document.createElement("span");
+    const valueEl = document.createElement("dd");
 
     valueEl.className = "life-event-detail-value";
+    let hasContent = false;
+    let hasTextContent = false;
+
     if (Array.isArray(colors) && colors.length > 0) {
       const chipGroup = document.createElement("span");
 
       chipGroup.className = "life-event-color-group";
+      chipGroup.setAttribute("aria-hidden", "true");
       colors.forEach((color) => {
         if (typeof color !== "string" || color.length === 0) return;
 
@@ -598,29 +597,44 @@ export default class UIManager {
 
         chip.className = "life-event-color-chip";
         chip.style.background = color;
+        chip.title = color;
         chipGroup.appendChild(chip);
       });
 
       if (chipGroup.childElementCount > 0) {
         valueEl.appendChild(chipGroup);
+        hasContent = true;
       }
+    }
 
-      if (typeof value === "string" && value.length > 0) {
-        const text = document.createElement("span");
-
-        text.textContent = value;
-        valueEl.appendChild(text);
-      } else if (chipGroup.childElementCount === 0) {
-        valueEl.textContent = "—";
-      }
+    if (value instanceof Node) {
+      valueEl.appendChild(value);
+      hasContent = true;
+      hasTextContent = true;
     } else if (value != null) {
-      valueEl.textContent = String(value);
-    } else {
+      const text = document.createElement("span");
+
+      text.textContent = String(value);
+      valueEl.appendChild(text);
+      hasContent = true;
+      hasTextContent = true;
+    }
+
+    if (!hasTextContent && hasContent) {
+      const srText = document.createElement("span");
+
+      srText.className = "visually-hidden";
+      srText.textContent = `${label ?? "Value"} color indicator`;
+      valueEl.appendChild(srText);
+    }
+
+    if (!hasContent) {
       valueEl.textContent = "—";
     }
 
-    detailRow.appendChild(valueEl);
-    container.appendChild(detailRow);
+    container.appendChild(valueEl);
+
+    return valueEl;
   }
 
   #renderLifeEvents(stats) {
@@ -651,6 +665,17 @@ export default class UIManager {
       const item = document.createElement("li");
 
       item.className = `life-event life-event--${event.type || "unknown"}`;
+      const typeLabel = event.type === "birth" ? "Birth" : "Death";
+      const summary = this.#formatLifeEventCause(event);
+      const tickValue =
+        Number.isFinite(event.tick) && event.tick >= 0 ? event.tick : "—";
+
+      item.setAttribute(
+        "aria-label",
+        `${typeLabel} at tick ${tickValue} caused by ${summary}`,
+      );
+      item.tabIndex = 0;
+
       const header = document.createElement("div");
 
       header.className = "life-event-header";
@@ -662,24 +687,28 @@ export default class UIManager {
       }
       dot.setAttribute("aria-hidden", "true");
       header.appendChild(dot);
+
+      const typeBadge = document.createElement("span");
+
+      typeBadge.className = `life-event-type life-event-type--${event.type || "unknown"}`;
+      typeBadge.textContent = typeLabel;
+      typeBadge.setAttribute("aria-hidden", "true");
+      header.appendChild(typeBadge);
+
       const title = document.createElement("span");
 
       title.className = "life-event-title";
-      const typeLabel = event.type === "birth" ? "Birth" : "Death";
-
-      title.textContent = `${typeLabel} · ${this.#formatLifeEventCause(event)}`;
+      title.textContent = summary;
       header.appendChild(title);
+
       const tick = document.createElement("span");
 
       tick.className = "life-event-meta";
-      const tickValue =
-        Number.isFinite(event.tick) && event.tick >= 0 ? event.tick : "—";
-
       tick.textContent = `Tick ${tickValue}`;
       header.appendChild(tick);
       item.appendChild(header);
 
-      const details = document.createElement("div");
+      const details = document.createElement("dl");
 
       details.className = "life-event-details";
       const hasRow = Number.isFinite(event.row);
@@ -761,11 +790,10 @@ export default class UIManager {
       }
 
       if (!details.hasChildNodes()) {
-        const fallback = document.createElement("div");
-
-        fallback.className = "life-event-detail";
-        fallback.textContent = "No additional context";
-        details.appendChild(fallback);
+        this.#appendLifeEventDetail(details, {
+          label: "Details",
+          value: "No additional context yet.",
+        });
       }
 
       item.appendChild(details);
@@ -1518,7 +1546,9 @@ export default class UIManager {
 
     this.lifeEventList = document.createElement("ul");
     this.lifeEventList.className = "life-event-list";
-    this.lifeEventList.setAttribute("role", "list");
+    this.lifeEventList.setAttribute("role", "log");
+    this.lifeEventList.setAttribute("aria-live", "polite");
+    this.lifeEventList.setAttribute("aria-relevant", "additions");
     this.lifeEventList.hidden = true;
     lifeBody.appendChild(this.lifeEventList);
 
