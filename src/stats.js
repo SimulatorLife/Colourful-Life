@@ -225,6 +225,8 @@ const createEmptyMatingSnapshot = () => ({
   appetiteSum: 0,
   selectionModes: { curiosity: 0, preference: 0 },
   poolSizeSum: 0,
+  complementaritySum: 0,
+  complementaritySuccessSum: 0,
   blocks: 0,
   lastBlockReason: null,
 });
@@ -648,6 +650,10 @@ export default class Stats {
       ? mateStats.diverseSuccesses / successCount
       : 0;
     const meanAppetite = choiceCount ? mateStats.appetiteSum / choiceCount : 0;
+    const meanComplementarity =
+      choiceCount > 0 ? mateStats.complementaritySum / choiceCount : 0;
+    const successfulComplementarity =
+      successCount > 0 ? mateStats.complementaritySuccessSum / successCount : 0;
 
     this.pushHistory("population", pop);
     this.pushHistory("diversity", diversity);
@@ -662,6 +668,8 @@ export default class Stats {
 
     this.traitPresence = traitPresence;
     this.behavioralEvenness = behaviorEvenness;
+    this.meanBehaviorComplementarity = meanComplementarity;
+    this.successfulBehaviorComplementarity = successfulComplementarity;
     for (const { key } of this.traitDefinitions) {
       this.pushTraitHistory("presence", key, traitPresence.fractions[key] ?? 0);
       this.pushTraitHistory("average", key, traitPresence.averages[key] ?? 0);
@@ -685,6 +693,8 @@ export default class Stats {
       diverseChoiceRate,
       diverseMatingRate: diverseSuccessRate,
       meanDiversityAppetite: meanAppetite,
+      meanBehaviorComplementarity: meanComplementarity,
+      successfulBehaviorComplementarity: successfulComplementarity,
       behaviorEvenness,
       curiositySelections: mateStats.selectionModes.curiosity,
       lastMating: this.lastMatingDebug,
@@ -716,6 +726,7 @@ export default class Stats {
     success = false,
     penalized = false,
     penaltyMultiplier = 1,
+    behaviorComplementarity = 0,
   } = {}) {
     if (!this.mating) {
       this.mating = createEmptyMatingSnapshot();
@@ -723,6 +734,7 @@ export default class Stats {
 
     const threshold = this.matingDiversityThreshold;
     const isDiverse = diversity >= threshold;
+    const complementarity = clamp01(behaviorComplementarity);
 
     this.mating.choices++;
     this.mating.appetiteSum += appetite || 0;
@@ -730,10 +742,12 @@ export default class Stats {
     if (isDiverse) this.mating.diverseChoices++;
     if (selectionMode === "curiosity") this.mating.selectionModes.curiosity++;
     else this.mating.selectionModes.preference++;
+    this.mating.complementaritySum += complementarity;
 
     if (success) {
       this.mating.successes++;
       if (isDiverse) this.mating.diverseSuccesses++;
+      this.mating.complementaritySuccessSum += complementarity;
     }
 
     this.lastMatingDebug = {
@@ -747,6 +761,7 @@ export default class Stats {
       threshold,
       penalized,
       penaltyMultiplier,
+      behaviorComplementarity: complementarity,
       blockedReason: this.mating.lastBlockReason || undefined,
     };
     // Consume the one-time reason so the next mating record does not reuse it.
