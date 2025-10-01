@@ -14,6 +14,8 @@ import {
  * user interactions back to the {@link SimulationEngine}. It also forwards
  * slow-updating metrics to dashboards and coordinates selection drawing.
  */
+const toPlainObject = (value) => (value && typeof value === "object" ? value : {});
+
 export default class UIManager {
   constructor(
     simulationCallbacks = {},
@@ -21,18 +23,23 @@ export default class UIManager {
     actions = {},
     layoutOptions = {},
   ) {
-    const { obstaclePresets = [], ...actionFns } = actions || {};
+    const normalizedCallbacks = toPlainObject(simulationCallbacks);
+    const normalizedActions = toPlainObject(actions);
+    const normalizedLayout = toPlainObject(layoutOptions);
+    const { obstaclePresets = [], ...actionFns } = normalizedActions;
+    const selectionManagerOption = normalizedActions.selectionManager;
+    const getCellSizeFn = normalizedActions.getCellSize;
 
     const defaults = resolveSimulationDefaults();
 
-    this.simulationCallbacks = simulationCallbacks || {};
+    this.simulationCallbacks = normalizedCallbacks;
     this.actions = actionFns;
     this.obstaclePresets = Array.isArray(obstaclePresets) ? obstaclePresets : [];
     this.paused = Boolean(defaults.paused);
-    this.selectionManager = actions.selectionManager || null;
+    this.selectionManager = selectionManagerOption ?? null;
     this.getCellSize =
-      typeof actions.getCellSize === "function"
-        ? actions.getCellSize.bind(actions)
+      typeof getCellSizeFn === "function"
+        ? getCellSizeFn.bind(normalizedActions)
         : () => 1;
     this.selectionDrawingEnabled = false;
     this.selectionDragStart = null;
@@ -90,13 +97,14 @@ export default class UIManager {
     this.mainRow.appendChild(this.sidebar);
 
     // Allow callers to customize which keys toggle the pause state.
-    this.pauseHotkeySet = this.#resolveHotkeySet(layoutOptions.pauseHotkeys);
+    this.pauseHotkeySet = this.#resolveHotkeySet(normalizedLayout.pauseHotkeys);
 
     const canvasEl =
-      layoutOptions.canvasElement || this.#resolveNode(layoutOptions.canvasSelector);
+      normalizedLayout.canvasElement ||
+      this.#resolveNode(normalizedLayout.canvasSelector);
     const anchorNode =
-      this.#resolveNode(layoutOptions.before) ||
-      this.#resolveNode(layoutOptions.insertBefore);
+      this.#resolveNode(normalizedLayout.before) ||
+      this.#resolveNode(normalizedLayout.insertBefore);
 
     if (canvasEl) {
       this.attachCanvas(canvasEl, { before: anchorNode });
