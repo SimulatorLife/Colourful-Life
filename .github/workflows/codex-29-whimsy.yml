@@ -18,7 +18,7 @@ jobs:
       pr_title: "Codex: Whimsical Enhancements"
       pr_body: "Seed PR for Codex to add an optional creative flourish that delights without breaking observability or performance."
       prompt: >
-        Infuse the simulation with a tasteful dose of whimsy while respecting core
+        Create a code change to infuse the simulation with a tasteful dose of whimsy while respecting core
         functionality and observability. Choose a contained area (e.g. event overlays,
         birth/death celebrations, UI microcopy, optional visual themes) and ship a
         feels-good enhancement that helps players connect with the world. Ideas include:
@@ -37,5 +37,5 @@ jobs:
           • Do not remove existing features or compromise observability—the goal is playful
             creativity that coexists with serious analysis tools.
 
-        If you cannot find a delightful idea that meets these constraints, report why and
-        propose actionable next steps rather than submitting a no-op PR.
+        If you cannot find a delightful idea that meets these constraints, add a comment to the
+        CHANGELOG.md noting the missed opportunity and suggesting future possibilities.
