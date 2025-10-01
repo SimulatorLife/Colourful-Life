@@ -38,13 +38,13 @@ extending tests, or polishing docs.
 
 ## Tooling
 
-| Purpose     | Command(s)                                | Notes                                                                                                                            |
-| ----------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Format      | `npm run format` / `npm run format:check` | Apply or verify Prettier formatting across source, documentation, and configuration files.                                       |
-| Lint        | `npm run lint` / `npm run lint:fix`       | Run ESLint with the project ruleset. Use `:fix` to apply safe autofixes after addressing root issues.                            |
-| Tests       | `npm test`                                | Execute UVU suites under an esbuild loader. Focused suites live beside their target modules in `test/`.                          |
-| Profiling   | `node scripts/profile-energy.mjs`         | Benchmark the energy preparation loop. Configure dimensions with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, and `PERF_ITERATIONS`. |
-| Cache reset | `npm run clean:parcel`                    | Delete `dist/` and `.parcel-cache/` when Parcel hot reloads or builds become inconsistent.                                       |
+| Purpose     | Command(s)                                | Notes                                                                                                                                                                   |
+| ----------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Format      | `npm run format` / `npm run format:check` | Apply or verify Prettier formatting across source, documentation, and configuration files.                                                                              |
+| Lint        | `npm run lint` / `npm run lint:fix`       | Run ESLint with the project ruleset. Use `:fix` to apply safe autofixes after addressing root issues.                                                                   |
+| Tests       | `npm test`                                | Execute UVU suites under an esbuild loader. Focused suites live beside their target modules in `test/`.                                                                 |
+| Profiling   | `node scripts/profile-energy.mjs`         | Benchmark the energy preparation loop. Configure dimensions with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and stub `cellSize` with `PERF_CELL_SIZE`. |
+| Cache reset | `npm run clean:parcel`                    | Delete `dist/` and `.parcel-cache/` when Parcel hot reloads or builds become inconsistent.                                                                              |
 
 Always run the formatter and linter before committing. Execute `npm test` when
 changing simulation logic, utilities, UI behaviour, or configuration that can
