@@ -28,7 +28,8 @@ export function resolveMaxTileEnergy(env = RUNTIME_ENV) {
 }
 
 export const MAX_TILE_ENERGY = resolveMaxTileEnergy();
-export const ENERGY_REGEN_RATE_DEFAULT = 0.007; // baseline logistic regen (per tick)
+// Slightly elevated baseline regen (per tick) to soften early starvation cascades
+export const ENERGY_REGEN_RATE_DEFAULT = 0.0075;
 export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.05; // smoothing between tiles (per tick)
 export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;

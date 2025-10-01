@@ -18,6 +18,11 @@ where practical.
 
 - Expanded inline documentation for maintenance scripts to clarify intent and
   usage.
+- Raised the default energy regeneration rate from `0.007` to `0.0075` after a
+  200-tick headless run showed populations crashing to ~60 survivors (avg tile
+  energy ~0.88) versus roughly 300 organisms and ~1.08 average energy with the
+  higher baseline, improving ecosystem stability without removing scarcity
+  pressure.
 
 ## [0.1.0]
 

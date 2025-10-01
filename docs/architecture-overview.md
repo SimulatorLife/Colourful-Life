@@ -28,6 +28,9 @@ This document captures how the Colourful Life simulation composes its core syste
 - `computeTileEnergyUpdate` is called for each tile while the grid is preparing a tick.
 - Blends base regeneration with density penalties, diffusion from neighbouring tiles, and modifiers contributed by active environmental events.
 - Returns both the next energy value and any event metadata so overlays can highlight affected regions.
+- The default regeneration coefficient (`0.0075`) keeps headless test runs from crashing into starvation after the opening
+  events while preserving scarcity pressure; adjust via `resolveSimulationDefaults` when experimenting with alternative
+  baselines.
 
 ### Events
 
