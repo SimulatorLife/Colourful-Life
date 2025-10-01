@@ -1,4 +1,5 @@
-import { UI_SLIDER_CONFIG, resolveSimulationDefaults } from "../config.js";
+import { resolveSimulationDefaults } from "../config.js";
+import { UI_SLIDER_CONFIG } from "./sliderConfig.js";
 import { clamp01, warnOnce } from "../utils.js";
 import {
   createControlButtonRow,

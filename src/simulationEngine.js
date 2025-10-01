@@ -7,8 +7,8 @@ import { computeLeaderboard } from "./leaderboard.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
-  UI_SLIDER_CONFIG,
   COMBAT_EDGE_SHARPNESS_DEFAULT,
+  SIMULATION_DEFAULTS,
   resolveSimulationDefaults,
 } from "./config.js";
 import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
@@ -493,9 +493,9 @@ export default class SimulationEngine {
       const snapshot = this.grid.update({
         densityEffectMultiplier: this.state.densityEffectMultiplier ?? 1,
         societySimilarity:
-          this.state.societySimilarity ?? UI_SLIDER_CONFIG.societySimilarity.default,
+          this.state.societySimilarity ?? SIMULATION_DEFAULTS.societySimilarity,
         enemySimilarity:
-          this.state.enemySimilarity ?? UI_SLIDER_CONFIG.enemySimilarity.default,
+          this.state.enemySimilarity ?? SIMULATION_DEFAULTS.enemySimilarity,
         eventStrengthMultiplier: this.state.eventStrengthMultiplier ?? 1,
         energyRegenRate: this.state.energyRegenRate ?? ENERGY_REGEN_RATE_DEFAULT,
         energyDiffusionRate:
@@ -503,10 +503,10 @@ export default class SimulationEngine {
         mutationMultiplier: this.state.mutationMultiplier ?? 1,
         matingDiversityThreshold:
           this.state.matingDiversityThreshold ??
-          UI_SLIDER_CONFIG.matingDiversityThreshold?.default,
+          SIMULATION_DEFAULTS.matingDiversityThreshold,
         lowDiversityReproMultiplier:
           this.state.lowDiversityReproMultiplier ??
-          UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default,
+          SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
         combatEdgeSharpness:
           this.state.combatEdgeSharpness ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
       });
@@ -906,7 +906,7 @@ export default class SimulationEngine {
       threshold: clamped,
       lowDiversityMultiplier:
         this.state.lowDiversityReproMultiplier ??
-        UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ??
+        SIMULATION_DEFAULTS.lowDiversityReproMultiplier ??
         0.1,
     });
 
@@ -926,7 +926,7 @@ export default class SimulationEngine {
       threshold:
         this.state.matingDiversityThreshold ??
         this.stats?.matingDiversityThreshold ??
-        UI_SLIDER_CONFIG.matingDiversityThreshold?.default ??
+        SIMULATION_DEFAULTS.matingDiversityThreshold ??
         0.45,
       lowDiversityMultiplier: clamped,
     });
