@@ -183,9 +183,25 @@ controls("createSelectRow renders dropdowns and invokes change callbacks", () =>
     assert.is(select.children[0].title, "Balanced seasons");
 
     select.value = "arid";
+    select.trigger("change");
+
+    assert.is(changeCount, 1);
+
+    // Subsequent events with the same value should not double-invoke handlers.
     select.trigger("input");
 
     assert.is(changeCount, 1);
+
+    // Switching back should notify regardless of whether the browser fires
+    // `input`, `change`, or both events.
+    select.value = "temperate";
+    select.trigger("input");
+
+    assert.is(changeCount, 2);
+
+    select.trigger("change");
+
+    assert.is(changeCount, 2);
   });
 });
 

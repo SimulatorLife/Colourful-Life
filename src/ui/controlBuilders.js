@@ -184,9 +184,19 @@ export function createSelectRow(parent, opts = {}) {
     select.appendChild(opt);
   });
   if (value !== undefined) select.value = value;
-  select.addEventListener("input", () => {
-    if (typeof onChange === "function") onChange(select.value);
-  });
+  let lastEmittedValue = select.value;
+  const handleChange = () => {
+    if (typeof onChange !== "function") return;
+    const nextValue = select.value;
+
+    if (nextValue === lastEmittedValue) return;
+
+    lastEmittedValue = nextValue;
+    onChange(nextValue);
+  };
+
+  select.addEventListener("change", handleChange);
+  select.addEventListener("input", handleChange);
   line.appendChild(select);
 
   return select;
