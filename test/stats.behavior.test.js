@@ -1,5 +1,6 @@
 import { test } from "uvu";
 import * as assert from "uvu/assert";
+import { approxEqual } from "./helpers/assertions.js";
 
 const statsModulePromise = import("../src/stats.js");
 
@@ -38,14 +39,14 @@ test("computeTraitPresence clamps trait values and tracks active fractions", asy
   const presence = stats.computeTraitPresence(cells);
 
   assert.is(presence.population, 3);
-  assert.ok(Math.abs(presence.averages.cooperation - 0.7) < 1e-9);
-  assert.ok(Math.abs(presence.averages.fighting - 0.4333333333) < 1e-9);
-  assert.ok(Math.abs(presence.averages.breeding - 0.5) < 1e-9);
-  assert.ok(Math.abs(presence.averages.sight - 0.8) < 1e-9);
-  assert.ok(Math.abs(presence.fractions.cooperation - 2 / 3) < 1e-9);
-  assert.ok(Math.abs(presence.fractions.fighting - 2 / 3) < 1e-9);
-  assert.ok(Math.abs(presence.fractions.breeding - 1 / 3) < 1e-9);
-  assert.ok(Math.abs(presence.fractions.sight - 2 / 3) < 1e-9);
+  approxEqual(presence.averages.cooperation, 0.7, 1e-9);
+  approxEqual(presence.averages.fighting, 0.4333333333, 1e-9);
+  approxEqual(presence.averages.breeding, 0.5, 1e-9);
+  approxEqual(presence.averages.sight, 0.8, 1e-9);
+  approxEqual(presence.fractions.cooperation, 2 / 3, 1e-9);
+  approxEqual(presence.fractions.fighting, 2 / 3, 1e-9);
+  approxEqual(presence.fractions.breeding, 1 / 3, 1e-9);
+  approxEqual(presence.fractions.sight, 2 / 3, 1e-9);
   assert.is(presence.counts.cooperation, 2);
   assert.is(presence.counts.fighting, 2);
   assert.is(presence.counts.breeding, 1);
@@ -88,7 +89,7 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   assert.is(stats.mating.diverseSuccesses, 1);
   assert.is(stats.mating.selectionModes.curiosity, 1);
   assert.is(stats.mating.selectionModes.preference, 0);
-  assert.ok(Math.abs(stats.mating.appetiteSum - 0.5) < 1e-9);
+  approxEqual(stats.mating.appetiteSum, 0.5, 1e-9);
   assert.is(stats.mating.poolSizeSum, 3);
   assert.equal(stats.lastMatingDebug.blockedReason, "Too similar");
   assert.is(stats.lastMatingDebug.threshold, 0.6);
@@ -284,9 +285,7 @@ test("traitDefinitions option extends and overrides tracked trait metrics", asyn
   const expectedExplorationAverage = (0.9 + 0.4 + 0.8) / cells.length;
 
   assert.ok("exploration" in presence.averages);
-  assert.ok(
-    Math.abs(presence.averages.exploration - expectedExplorationAverage) < 1e-9,
-  );
+  approxEqual(presence.averages.exploration, expectedExplorationAverage, 1e-9);
   assert.is(presence.counts.cooperation, 1);
   assert.is(presence.counts.exploration, 2);
 
