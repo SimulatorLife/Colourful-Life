@@ -156,6 +156,8 @@ test("tick emits events and clears pending slow UI updates after throttle interv
     assert.is(leaderboardEvents.length, 1, "leaderboard event emitted once");
     assert.equal(leaderboardEvents[0].entries, [
       {
+        row: 0,
+        col: 0,
         fitness: 1,
         smoothedFitness: 2,
         offspring: 3,
