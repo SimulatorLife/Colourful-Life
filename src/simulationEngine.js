@@ -578,12 +578,15 @@ export default class SimulationEngine {
     }
 
     this.grid.draw({ showObstacles: this.state.showObstacles ?? true });
+
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
       showDensity: this.state.showDensity ?? false,
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
-      maxTileEnergy: GridManager.maxTileEnergy,
+      maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
+        ? this.grid.maxTileEnergy
+        : GridManager.maxTileEnergy,
       snapshot: this.lastSnapshot,
       activeEvents: this.eventManager.activeEvents,
       getEventColor: this.eventManager.getColor?.bind(this.eventManager),
