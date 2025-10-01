@@ -1,8 +1,6 @@
 import EventManager from "./events/eventManager.js";
 import GridManager from "./grid/gridManager.js";
-import SelectionManager from "./ui/selectionManager.js";
 import Stats from "./stats.js";
-import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { computeLeaderboard } from "./leaderboard.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
@@ -12,6 +10,60 @@ import {
   resolveSimulationDefaults,
 } from "./config.js";
 import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
+
+const noop = () => {};
+
+function createSelectionManagerStub(rows, cols) {
+  const state = { rows: Math.max(0, rows ?? 0), cols: Math.max(0, cols ?? 0) };
+
+  const updateDimensions = (r, c) => {
+    state.rows = Math.max(0, r ?? state.rows ?? 0);
+    state.cols = Math.max(0, c ?? state.cols ?? 0);
+  };
+
+  return {
+    setDimensions(rows, cols) {
+      updateDimensions(rows, cols);
+    },
+    getPatterns() {
+      return [];
+    },
+    togglePattern() {
+      return false;
+    },
+    clearCustomZones() {},
+    addCustomRectangle() {
+      return null;
+    },
+    getActiveZones() {
+      return [];
+    },
+    hasCustomZones() {
+      return false;
+    },
+    hasActiveZones() {
+      return false;
+    },
+    isInActiveZone() {
+      return true;
+    },
+    validateReproductionArea() {
+      return { allowed: true };
+    },
+    getActiveZoneRenderData() {
+      return [];
+    },
+    describeActiveZones() {
+      return "All tiles eligible";
+    },
+    get rows() {
+      return state.rows;
+    },
+    get cols() {
+      return state.cols;
+    },
+  };
+}
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
@@ -120,6 +172,9 @@ function ensureCanvasDimensions(canvas, config) {
  * @param {() => number} [options.performanceNow] - High-resolution timer hook, defaults to
  *   `performance.now` with a Date fallback.
  * @param {Function} [options.drawOverlays] - Optional overlay renderer invoked each frame.
+ * @param {Object} [options.selectionManager] - Optional selection manager to reuse.
+ * @param {(rows:number, cols:number) => Object} [options.selectionManagerFactory]
+ *   Factory invoked to create a selection manager when one is not supplied.
  * @param {Window} [options.window] - Optional window reference for SSR/test injection.
  * @param {Document} [options.document] - Optional document reference for SSR/test injection.
  * @param {boolean} [options.autoStart=true] - When true the engine immediately starts ticking.
@@ -134,11 +189,13 @@ export default class SimulationEngine {
     requestAnimationFrame: injectedRaf,
     cancelAnimationFrame: injectedCaf,
     performanceNow: injectedNow,
-    drawOverlays = defaultDrawOverlays,
+    drawOverlays,
     window: injectedWindow,
     document: injectedDocument,
     autoStart = true,
     brainSnapshotCollector,
+    selectionManager,
+    selectionManagerFactory,
   } = {}) {
     const win = injectedWindow ?? (typeof window !== "undefined" ? window : undefined);
     const doc =
@@ -180,7 +237,7 @@ export default class SimulationEngine {
         : win && typeof win.cancelAnimationFrame === "function"
           ? win.cancelAnimationFrame.bind(win)
           : defaultCancelAnimationFrame;
-    this.drawOverlays = drawOverlays;
+    this.drawOverlays = typeof drawOverlays === "function" ? drawOverlays : noop;
 
     const defaults = resolveSimulationDefaults(config);
 
@@ -188,7 +245,23 @@ export default class SimulationEngine {
       startWithEvent: (defaults.eventFrequencyMultiplier ?? 1) > 0,
     });
     this.stats = new Stats();
-    this.selectionManager = new SelectionManager(rows, cols);
+    const resolveSelectionManager = () => {
+      if (selectionManager && typeof selectionManager === "object") {
+        return selectionManager;
+      }
+
+      if (typeof selectionManagerFactory === "function") {
+        const created = selectionManagerFactory(rows, cols);
+
+        if (created && typeof created === "object") {
+          return created;
+        }
+      }
+
+      return createSelectionManagerStub(rows, cols);
+    };
+
+    this.selectionManager = resolveSelectionManager();
     const hasInitialPreset = typeof config.initialObstaclePreset === "string";
     const randomizeInitialObstacles =
       config.randomizeInitialObstacles ??

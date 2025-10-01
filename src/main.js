@@ -1,6 +1,8 @@
 import UIManager from "./ui/uiManager.js";
 import BrainDebugger from "./ui/brainDebugger.js";
 import SimulationEngine from "./simulationEngine.js";
+import SelectionManager from "./ui/selectionManager.js";
+import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
 import { createHeadlessUiManager } from "./ui/headlessUiManager.js";
 
@@ -205,6 +207,15 @@ export function createSimulation({
     resolvedCanvas = createHeadlessCanvas(config);
   }
 
+  const selectionManagerFactory =
+    typeof config.selectionManagerFactory === "function"
+      ? config.selectionManagerFactory
+      : (rows, cols) => new SelectionManager(rows, cols);
+  const overlayRenderer =
+    typeof config.drawOverlays === "function"
+      ? config.drawOverlays
+      : defaultDrawOverlays;
+
   const engine = new SimulationEngine({
     canvas: resolvedCanvas,
     config,
@@ -216,6 +227,8 @@ export function createSimulation({
     document: injectedDocument,
     autoStart: false,
     brainSnapshotCollector: BrainDebugger,
+    drawOverlays: overlayRenderer,
+    selectionManagerFactory,
   });
 
   const uiOptions = config.ui ?? {};
