@@ -1,0 +1,36 @@
+name: Codex 27 – Observability
+on:
+  schedule:
+    - cron: "17 3,15 * * *" # twice daily at 03:17, 15:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Observability Enhancements"
+      pr_body: "Seed PR for Codex to elevate visual observability across the ecosystem simulation."
+      prompt: >
+        Analyze the current simulation experience and implement focused, high-impact
+        enhancements that improve observability — making evolutionary dynamics,
+        organism behaviour, and environmental events easier to perceive and diagnose in
+        real time. Consider layered visual effects (e.g. event-specific overlays,
+        transient birth/death/reproduction markers), richer UI affordances (timelines,
+        event logs, sparkline/graph widgets, selectable history playback, or inline brain
+        inspectors), and refinements to existing panels that clarify system state at a
+        glance. Pick a coherent scope (one dashboard, overlay suite, or diagnostic tool)
+        and deliver a polished upgrade rather than many shallow tweaks. Preserve the
+        modular architecture — keep simulation logic, rendering, and UI concerns
+        separated, and favour reusable utilities in `src/ui/` and `src/grid/` when
+        extending functionality. Ensure new visuals remain performant (avoid per-frame
+        allocations, respect canvas batching), accessible, and consistent with the
+        project's style. Update documentation and tests where behaviour changes, add any
+        necessary configuration defaults, and leave clear instructions for users to
+        access the new observability tools. Do not introduce heavyweight dependencies; if
+        added tooling is required, justify it and align with Parcel + Node 18 support.
