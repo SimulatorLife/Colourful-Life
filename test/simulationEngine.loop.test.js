@@ -230,4 +230,40 @@ test("updateSetting speedMultiplier and setLingerPenalty propagate changes", asy
   }
 });
 
+test("tick forwards instance maxTileEnergy to overlay renderer", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine, GridManager } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+  const originalMax = GridManager.maxTileEnergy;
+
+  try {
+    const recorded = [];
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(16, 16),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      drawOverlays: (...args) => {
+        const [, , , options] = args;
+
+        recorded.push(options?.maxTileEnergy);
+      },
+    });
+
+    const customMax = originalMax * 3;
+
+    engine.grid.maxTileEnergy = customMax;
+    GridManager.maxTileEnergy = originalMax;
+
+    engine.tick(0);
+
+    assert.ok(recorded.length >= 1, "drawOverlays invoked at least once");
+    assert.is(recorded.at(-1), customMax, "overlay receives the grid's maxTileEnergy");
+  } finally {
+    restore();
+    GridManager.maxTileEnergy = originalMax;
+  }
+});
+
 test.run();
