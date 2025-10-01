@@ -100,20 +100,20 @@ export default class GridInteractionAdapter {
     if (!donor || requested <= 0 || typeof donor.energy !== "number") return 0;
 
     const available = Math.max(0, Math.min(requested, donor.energy));
-    const maxEnergy = this.maxTileEnergy();
-    let accepted = available;
+    const tileEnergyCapacity = this.maxTileEnergy();
+    let transferred = available;
 
     if (recipient) {
       const current = typeof recipient.energy === "number" ? recipient.energy : 0;
-      const capacity = Math.max(0, maxEnergy - current);
+      const capacity = Math.max(0, tileEnergyCapacity - current);
 
-      accepted = Math.max(0, Math.min(available, capacity));
-      recipient.energy = current + accepted;
+      transferred = Math.max(0, Math.min(available, capacity));
+      recipient.energy = current + transferred;
     }
 
-    donor.energy = Math.max(0, donor.energy - accepted);
+    donor.energy = Math.max(0, donor.energy - transferred);
 
-    return accepted;
+    return transferred;
   }
 
   maxTileEnergy() {
