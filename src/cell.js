@@ -192,12 +192,49 @@ export default class Cell {
     this._interactionDecay = clamp(interactionProfile?.decay ?? 0.08, 0.001, 0.6);
     this._lastInteractionDecayAge = this.age;
     this._lastInteractionSummary = null;
-    // Cache metabolism from gene row 5 to avoid per-tick recompute
+    // Cache metabolism profile once; combine DNA-driven baseline with neural imprint
     const geneRow = this.genes?.[5];
-
-    this.metabolism = Array.isArray(geneRow)
-      ? geneRow.reduce((s, g) => s + Math.abs(g), 0) / (geneRow.length || 1)
+    const neuralSignature = Array.isArray(geneRow)
+      ? geneRow.reduce((sum, weight) => sum + Math.abs(weight), 0) /
+        (geneRow.length || 1)
       : Math.abs(Number(geneRow) || 0);
+    const dnaMetabolismProfile =
+      typeof this.dna.metabolicProfile === "function"
+        ? this.dna.metabolicProfile()
+        : null;
+    const baselineMetabolism = clamp(
+      Number.isFinite(dnaMetabolismProfile?.baseline)
+        ? dnaMetabolismProfile.baseline
+        : 0.35 + neuralSignature * 0.3,
+      0.05,
+      2.5,
+    );
+    const neuralDrag = clamp(
+      Number.isFinite(dnaMetabolismProfile?.neuralDrag)
+        ? dnaMetabolismProfile.neuralDrag
+        : 0.35,
+      0.05,
+      1.5,
+    );
+
+    this.metabolicCrowdingTax = clamp(
+      Number.isFinite(dnaMetabolismProfile?.crowdingTax)
+        ? dnaMetabolismProfile.crowdingTax
+        : 0.35,
+      0,
+      2,
+    );
+    this.metabolism = clamp(
+      baselineMetabolism + neuralSignature * neuralDrag * 0.5,
+      0.05,
+      3,
+    );
+    this.metabolicProfile = {
+      baseline: baselineMetabolism,
+      neuralDrag,
+      crowdingTax: this.metabolicCrowdingTax,
+      neuralSignature,
+    };
     this.offspring = 0;
     this.fightsWon = 0;
     this.fightsLost = 0;
@@ -2302,8 +2339,14 @@ export default class Cell {
       : minLoss;
     const energyDensityMult = lerp(minLoss, maxLoss, effectiveDensity);
     const baseLoss = this.dna.energyLossBase();
+    const metabolicMultiplier = 1 + Math.max(0, this.metabolism || 0);
+    const crowdPenalty =
+      1 + effectiveDensity * Math.max(0, this.metabolicCrowdingTax || 0);
     const lossScale =
-      this.dna.baseEnergyLossScale() * (1 + this.metabolism) * energyDensityMult;
+      this.dna.baseEnergyLossScale() *
+      metabolicMultiplier *
+      energyDensityMult *
+      crowdPenalty;
     const agingPenalty = this.ageEnergyMultiplier();
 
     return baseLoss * lossScale * agingPenalty;

@@ -601,6 +601,43 @@ export class DNA {
     return clamp(base, 0.012, 0.055);
   }
 
+  metabolicProfile() {
+    const rng = this.prngFor("metabolicProfile");
+    const activity = this.geneFraction(GENE_LOCI.ACTIVITY);
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const jitter = (rng() - 0.5) * 0.08;
+
+    const baseline = clamp(
+      0.25 +
+        0.45 * activity +
+        0.25 * movement +
+        0.2 * risk -
+        0.35 * efficiency -
+        0.2 * recovery +
+        jitter,
+      0.05,
+      1.3,
+    );
+    const crowdingTax = clamp(
+      0.2 + 0.4 * (1 - density) + 0.2 * risk + 0.15 * parental - 0.25 * efficiency,
+      0.05,
+      1.15,
+    );
+    const neuralDrag = clamp(
+      0.15 + 0.45 * neural + 0.2 * activity - 0.2 * recovery,
+      0.05,
+      1,
+    );
+
+    return { baseline, crowdingTax, neuralDrag };
+  }
+
   // How efficiently a cell can harvest tile energy per tick (0.15..0.85)
   forageRate() {
     const gather = this.geneFraction(GENE_LOCI.FORAGING);

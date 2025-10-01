@@ -204,12 +204,14 @@ test("neural evaluation contributes to cognitive maintenance cost", () => {
     effDensity,
   );
   const metabolism = cell.metabolism;
+  const crowdPenalty = 1 + effDensity * (cell.metabolicCrowdingTax ?? 0);
   const passiveAgePenalty = cell.ageEnergyMultiplier();
   const energyLoss =
     dna.energyLossBase() *
     dna.baseEnergyLossScale() *
     (1 + metabolism) *
     energyDensityMult *
+    crowdPenalty *
     passiveAgePenalty;
   const breakdown = dna.cognitiveCostComponents({
     baselineNeurons: cell.neurons,
@@ -400,16 +402,15 @@ test("brains enforce minimum neuron floor while pruning unreachable connections"
     cell.density.energyLoss.max,
     effDensity,
   );
-  const ageFrac = cell.lifespan > 0 ? cell.age / cell.lifespan : 0;
-  const sen =
-    typeof cell.dna.senescenceRate === "function" ? cell.dna.senescenceRate() : 0;
   const baseLoss = cell.dna.energyLossBase();
-  const lossScale =
+  const crowdPenalty = 1 + effDensity * (cell.metabolicCrowdingTax ?? 0);
+  const energyLoss =
+    baseLoss *
     cell.dna.baseEnergyLossScale() *
     (1 + cell.metabolism) *
-    (1 + sen * ageFrac) *
-    energyDensityMult;
-  const energyLoss = baseLoss * lossScale;
+    energyDensityMult *
+    crowdPenalty *
+    cell.ageEnergyMultiplier();
   const expectedCognitive = cell.dna.cognitiveCostComponents({
     baselineNeurons: cell.neurons,
     dynamicNeurons: 0,
