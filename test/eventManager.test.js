@@ -21,6 +21,26 @@ function makeSequenceRng(sequence) {
   return rng;
 }
 
+function sampleEventSpanFromSequence(size, sample) {
+  const maxSpan = Math.max(1, Math.floor(size));
+  const minSpan = Math.min(10, maxSpan);
+  const spanCandidate = Math.max(minSpan, Math.floor(maxSpan / 3));
+  const upperExclusive = spanCandidate === minSpan ? minSpan + 1 : spanCandidate + 1;
+  const raw = Math.floor(sample(minSpan, upperExclusive));
+
+  return Math.max(1, Math.min(maxSpan, raw));
+}
+
+function clampEventStart(rawStart, span, limit) {
+  const maxStart = Math.max(0, Math.floor(limit) - span);
+
+  if (maxStart <= 0) {
+    return 0;
+  }
+
+  return Math.min(maxStart, Math.max(0, rawStart));
+}
+
 function expectedEventFromSequence(sequence, rows, cols, eventTypes) {
   let idx = 0;
 
@@ -28,10 +48,12 @@ function expectedEventFromSequence(sequence, rows, cols, eventTypes) {
   const eventType = eventTypes[Math.floor(sample(0, eventTypes.length))];
   const duration = Math.floor(sample(300, 900));
   const strength = sample(0.25, 1);
-  const x = Math.floor(sample(0, cols));
-  const y = Math.floor(sample(0, rows));
-  const width = Math.max(10, Math.floor(sample(6, cols / 3)));
-  const height = Math.max(10, Math.floor(sample(6, rows / 3)));
+  const rawX = Math.floor(sample(0, cols));
+  const rawY = Math.floor(sample(0, rows));
+  const width = sampleEventSpanFromSequence(cols, sample);
+  const height = sampleEventSpanFromSequence(rows, sample);
+  const x = clampEventStart(rawX, width, cols);
+  const y = clampEventStart(rawY, height, rows);
 
   return {
     eventType,
@@ -102,6 +124,29 @@ test("EventManager allows overriding event colors via options", async () => {
     managerWithResolver.getColor({ eventType: "drought" }),
     EventManager.EVENT_COLORS.drought,
   );
+});
+
+test("generateRandomEvent keeps affected area within the grid bounds", async () => {
+  const { default: EventManager } = await import("../src/events/eventManager.js");
+  const rows = 4;
+  const cols = 6;
+  const manager = new EventManager(rows, cols, Math.random, { startWithEvent: false });
+
+  for (let i = 0; i < 25; i++) {
+    const event = manager.generateRandomEvent();
+    const { x, y, width, height } = event.affectedArea;
+
+    assert.ok(
+      width >= 1 && width <= cols,
+      `width ${width} should fit within cols ${cols}`,
+    );
+    assert.ok(
+      height >= 1 && height <= rows,
+      `height ${height} should fit within rows ${rows}`,
+    );
+    assert.ok(x >= 0 && x + width <= cols, "event width stays inside grid");
+    assert.ok(y >= 0 && y + height <= rows, "event height stays inside grid");
+  }
 });
 
 test("isEventAffecting checks if coordinates fall within event area", async () => {
