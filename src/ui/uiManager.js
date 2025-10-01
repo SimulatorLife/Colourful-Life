@@ -55,6 +55,7 @@ export default class UIManager {
     this.metricsPlaceholder = null;
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
+    this.lingerPenaltySlider = null;
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -1153,7 +1154,7 @@ export default class UIManager {
       },
     });
 
-    sliderContext.renderSlider(lingerSlider, obstacleGrid);
+    this.lingerPenaltySlider = sliderContext.renderSlider(lingerSlider, obstacleGrid);
   }
 
   #buildReproductiveZoneTools(body) {
@@ -1409,6 +1410,22 @@ export default class UIManager {
     this.autoPauseOnBlur = Boolean(enabled);
     if (this.autoPauseCheckbox) {
       this.autoPauseCheckbox.checked = this.autoPauseOnBlur;
+    }
+  }
+
+  setLingerPenalty(value) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return;
+
+    this.lingerPenalty = numeric;
+
+    if (this.lingerPenaltySlider) {
+      if (typeof this.lingerPenaltySlider.updateDisplay === "function") {
+        this.lingerPenaltySlider.updateDisplay(numeric);
+      } else {
+        this.lingerPenaltySlider.value = String(numeric);
+      }
     }
   }
 
