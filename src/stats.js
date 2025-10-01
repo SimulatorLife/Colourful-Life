@@ -21,6 +21,14 @@ const HISTORY_SERIES_KEYS = [
 const DIVERSITY_TARGET_DEFAULT = 0.35;
 const DIVERSITY_PRESSURE_SMOOTHING = 0.85;
 
+const LIFE_EVENT_LOG_CAPACITY = 240;
+
+const INTERACTION_TRAIT_LABELS = Object.freeze({
+  cooperate: "Cooperative",
+  fight: "Combative",
+  avoid: "Cautious",
+});
+
 function wrapTraitCompute(fn) {
   if (typeof fn !== "function") {
     return () => 0;
@@ -216,6 +224,18 @@ const createEmptyMatingSnapshot = () => ({
   lastBlockReason: null,
 });
 
+const isCellLike = (candidate) => {
+  if (!candidate || typeof candidate !== "object") return false;
+
+  return (
+    typeof candidate.dna === "object" ||
+    typeof candidate.color === "string" ||
+    typeof candidate.interactionGenes === "object" ||
+    typeof candidate.genes === "object" ||
+    Number.isFinite(candidate.energy)
+  );
+};
+
 /**
  * Aggregates per-tick simulation metrics and exposes rolling history series
  * for UI components. This class is intentionally stateful so the simulation
@@ -246,6 +266,8 @@ export default class Stats {
     this.lastBlockedReproduction = null;
     this.diversityTarget = DIVERSITY_TARGET_DEFAULT;
     this.diversityPressure = 0;
+    this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
+    this.lifeEventSequence = 0;
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -325,13 +347,193 @@ export default class Stats {
     this.diversityPressure = clamp01(next);
   }
 
-  onBirth() {
+  #resolveLifeEventArgs(primary, secondary) {
+    if (isCellLike(primary)) {
+      const context = secondary && typeof secondary === "object" ? secondary : {};
+
+      return { cell: primary, context };
+    }
+
+    const context =
+      primary && typeof primary === "object"
+        ? primary
+        : secondary && typeof secondary === "object"
+          ? secondary
+          : {};
+    const candidate = context?.cell;
+    const cell = isCellLike(candidate) ? candidate : null;
+
+    return { cell, context };
+  }
+
+  #resolveInteractionHighlight(interactionGenes) {
+    if (!interactionGenes || typeof interactionGenes !== "object") {
+      return null;
+    }
+
+    const entries = [
+      { key: "cooperate", value: Number(interactionGenes.cooperate) },
+      { key: "fight", value: Number(interactionGenes.fight) },
+      { key: "avoid", value: Number(interactionGenes.avoid) },
+    ].filter((entry) => Number.isFinite(entry.value) && entry.value > 0);
+
+    if (!entries.length) {
+      return null;
+    }
+
+    let total = 0;
+    let best = entries[0];
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+
+      total += entry.value;
+      if (entry.value > best.value) {
+        best = entry;
+      }
+    }
+
+    if (best.value <= 0) {
+      return null;
+    }
+
+    const ratio = total > 0 ? clamp01(best.value / total) : 0;
+    const label = INTERACTION_TRAIT_LABELS[best.key] ?? best.key;
+
+    return {
+      key: best.key,
+      label,
+      ratio,
+      value: best.value,
+    };
+  }
+
+  #buildLifeEventPayload(type, cell, context = {}) {
+    if (!type) return null;
+
+    const safeContext = context && typeof context === "object" ? { ...context } : {};
+    const contextCell = safeContext.cell;
+    const resolvedCell = isCellLike(cell)
+      ? cell
+      : isCellLike(contextCell)
+        ? contextCell
+        : null;
+
+    if (safeContext.cell) delete safeContext.cell;
+
+    const row = Number.isFinite(safeContext.row)
+      ? safeContext.row
+      : Number.isFinite(resolvedCell?.row)
+        ? resolvedCell.row
+        : null;
+    const col = Number.isFinite(safeContext.col)
+      ? safeContext.col
+      : Number.isFinite(resolvedCell?.col)
+        ? resolvedCell.col
+        : null;
+    const energy = Number.isFinite(safeContext.energy)
+      ? safeContext.energy
+      : Number.isFinite(resolvedCell?.energy)
+        ? resolvedCell.energy
+        : null;
+    const colorCandidate = safeContext.color;
+    const color =
+      typeof colorCandidate === "string" && colorCandidate.length > 0
+        ? colorCandidate
+        : typeof resolvedCell?.dna?.toColor === "function"
+          ? resolvedCell.dna.toColor()
+          : typeof resolvedCell?.color === "string"
+            ? resolvedCell.color
+            : null;
+    const mutationMultiplier = Number.isFinite(safeContext.mutationMultiplier)
+      ? safeContext.mutationMultiplier
+      : null;
+    const intensity = Number.isFinite(safeContext.intensity)
+      ? safeContext.intensity
+      : null;
+    const winChance = Number.isFinite(safeContext.winChance)
+      ? clamp01(safeContext.winChance)
+      : null;
+    const opponentColor =
+      typeof safeContext.opponentColor === "string" &&
+      safeContext.opponentColor.length > 0
+        ? safeContext.opponentColor
+        : null;
+    const note =
+      typeof safeContext.note === "string" && safeContext.note.length > 0
+        ? safeContext.note
+        : null;
+    const cause =
+      typeof safeContext.cause === "string" && safeContext.cause.length > 0
+        ? safeContext.cause
+        : type;
+    const interactionGenes =
+      safeContext.interactionGenes && typeof safeContext.interactionGenes === "object"
+        ? safeContext.interactionGenes
+        : resolvedCell?.interactionGenes;
+    const highlight = this.#resolveInteractionHighlight(interactionGenes);
+    const parentColors = Array.isArray(safeContext.parents)
+      ? safeContext.parents
+          .map((value) => (typeof value === "string" ? value : null))
+          .filter((value) => value)
+      : null;
+
+    const event = {
+      id: ++this.lifeEventSequence,
+      type,
+      tick: this.totals.ticks,
+      row,
+      col,
+      energy,
+      color,
+      cause,
+    };
+
+    if (highlight) {
+      event.highlight = highlight;
+    }
+    if (mutationMultiplier != null) {
+      event.mutationMultiplier = mutationMultiplier;
+    }
+    if (intensity != null) {
+      event.intensity = intensity;
+    }
+    if (winChance != null) {
+      event.winChance = winChance;
+    }
+    if (opponentColor) {
+      event.opponentColor = opponentColor;
+    }
+    if (note) {
+      event.note = note;
+    }
+    if (parentColors && parentColors.length > 0) {
+      event.parents = parentColors;
+    }
+
+    return event;
+  }
+
+  #recordLifeEvent(type, primary, secondary) {
+    if (!this.lifeEventLog) return;
+
+    const { cell, context } = this.#resolveLifeEventArgs(primary, secondary);
+    const payload = this.#buildLifeEventPayload(type, cell, context);
+
+    if (payload) {
+      this.lifeEventLog.push(payload);
+    }
+  }
+
+  onBirth(primary, secondary) {
     this.births++;
     this.totals.births++;
+    this.#recordLifeEvent("birth", primary, secondary);
   }
-  onDeath() {
+  onDeath(primary, secondary) {
     this.deaths++;
     this.totals.deaths++;
+    this.#recordLifeEvent("death", primary, secondary);
   }
   onFight() {
     this.fights++;
@@ -515,6 +717,21 @@ export default class Stats {
     const s = event ? (event.strength || 0) * multiplier : 0;
 
     this.pushHistory("eventStrength", s);
+  }
+
+  getRecentLifeEvents(limit = 12) {
+    if (!this.lifeEventLog) return [];
+
+    const values = this.lifeEventLog.values();
+
+    if (!Array.isArray(values) || values.length === 0) {
+      return [];
+    }
+
+    const clampedLimit = Math.max(1, Math.floor(limit));
+    const trimmed = values.slice(-clampedLimit);
+
+    return trimmed.reverse();
   }
 
   setMutationMultiplier(multiplier = 1) {

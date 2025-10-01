@@ -1,5 +1,5 @@
 import { UI_SLIDER_CONFIG, resolveSimulationDefaults } from "../config.js";
-import { warnOnce } from "../utils.js";
+import { clamp01, warnOnce } from "../utils.js";
 import {
   createControlButtonRow,
   createControlGrid,
@@ -46,6 +46,8 @@ export default class UIManager {
     this.stepButton = null;
     this.clearZonesButton = null;
     this.metricsPlaceholder = null;
+    this.lifeEventList = null;
+    this.lifeEventsEmptyState = null;
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -430,6 +432,234 @@ export default class UIManager {
     container.appendChild(row);
 
     return row;
+  }
+
+  #formatLifeEventCause(event) {
+    const raw =
+      typeof event?.cause === "string" ? event.cause.trim().toLowerCase() : "";
+    const type = event?.type === "birth" ? "Birth" : "Death";
+    const map = {
+      seed: "Seeded",
+      reproduction: "Reproduction",
+      senescence: "Lifespan Reached",
+      starvation: "Starvation",
+      "energy-collapse": "Energy Collapse",
+      combat: "Combat",
+      obstacle: "Obstacle",
+    };
+
+    if (raw && map[raw]) {
+      return map[raw];
+    }
+
+    if (!raw) {
+      return type;
+    }
+
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+
+  #appendLifeEventDetail(container, { label, value, colors }) {
+    if (!container) return;
+
+    const detailRow = document.createElement("div");
+
+    detailRow.className = "life-event-detail";
+    if (label) {
+      const labelEl = document.createElement("span");
+
+      labelEl.className = "life-event-detail-label";
+      labelEl.textContent = label;
+      detailRow.appendChild(labelEl);
+    }
+
+    const valueEl = document.createElement("span");
+
+    valueEl.className = "life-event-detail-value";
+    if (Array.isArray(colors) && colors.length > 0) {
+      const chipGroup = document.createElement("span");
+
+      chipGroup.className = "life-event-color-group";
+      colors.forEach((color) => {
+        if (typeof color !== "string" || color.length === 0) return;
+
+        const chip = document.createElement("span");
+
+        chip.className = "life-event-color-chip";
+        chip.style.background = color;
+        chipGroup.appendChild(chip);
+      });
+
+      if (chipGroup.childElementCount > 0) {
+        valueEl.appendChild(chipGroup);
+      }
+
+      if (typeof value === "string" && value.length > 0) {
+        const text = document.createElement("span");
+
+        text.textContent = value;
+        valueEl.appendChild(text);
+      } else if (chipGroup.childElementCount === 0) {
+        valueEl.textContent = "—";
+      }
+    } else if (value != null) {
+      valueEl.textContent = String(value);
+    } else {
+      valueEl.textContent = "—";
+    }
+
+    detailRow.appendChild(valueEl);
+    container.appendChild(detailRow);
+  }
+
+  #renderLifeEvents(stats) {
+    if (!this.lifeEventList) return;
+
+    const events =
+      typeof stats?.getRecentLifeEvents === "function"
+        ? stats.getRecentLifeEvents(12)
+        : [];
+
+    this.lifeEventList.innerHTML = "";
+
+    if (!events || events.length === 0) {
+      this.lifeEventList.hidden = true;
+      if (this.lifeEventsEmptyState) {
+        this.lifeEventsEmptyState.hidden = false;
+      }
+
+      return;
+    }
+
+    this.lifeEventList.hidden = false;
+    if (this.lifeEventsEmptyState) {
+      this.lifeEventsEmptyState.hidden = true;
+    }
+
+    events.forEach((event) => {
+      const item = document.createElement("li");
+
+      item.className = `life-event life-event--${event.type || "unknown"}`;
+      const header = document.createElement("div");
+
+      header.className = "life-event-header";
+      const dot = document.createElement("span");
+
+      dot.className = "life-event-dot";
+      if (event.color) {
+        dot.style.background = event.color;
+      }
+      dot.setAttribute("aria-hidden", "true");
+      header.appendChild(dot);
+      const title = document.createElement("span");
+
+      title.className = "life-event-title";
+      const typeLabel = event.type === "birth" ? "Birth" : "Death";
+
+      title.textContent = `${typeLabel} · ${this.#formatLifeEventCause(event)}`;
+      header.appendChild(title);
+      const tick = document.createElement("span");
+
+      tick.className = "life-event-meta";
+      const tickValue =
+        Number.isFinite(event.tick) && event.tick >= 0 ? event.tick : "—";
+
+      tick.textContent = `Tick ${tickValue}`;
+      header.appendChild(tick);
+      item.appendChild(header);
+
+      const details = document.createElement("div");
+
+      details.className = "life-event-details";
+      const hasRow = Number.isFinite(event.row);
+      const hasCol = Number.isFinite(event.col);
+
+      if (hasRow || hasCol) {
+        const locationValue =
+          hasRow && hasCol
+            ? `${event.row}, ${event.col}`
+            : hasRow
+              ? `${event.row}, —`
+              : `—, ${event.col}`;
+
+        this.#appendLifeEventDetail(details, { label: "Tile", value: locationValue });
+      }
+
+      if (Number.isFinite(event.energy)) {
+        this.#appendLifeEventDetail(details, {
+          label: "Energy",
+          value: event.energy.toFixed(1),
+        });
+      }
+
+      if (event.highlight) {
+        const dominance = Math.round(clamp01(event.highlight.ratio ?? 0) * 100);
+
+        this.#appendLifeEventDetail(details, {
+          label: event.highlight.label,
+          value: `${dominance}% dominance`,
+        });
+      }
+
+      if (event.type === "birth" && Number.isFinite(event.mutationMultiplier)) {
+        this.#appendLifeEventDetail(details, {
+          label: "Mutation",
+          value: `${event.mutationMultiplier.toFixed(2)}×`,
+        });
+      }
+
+      if (Array.isArray(event.parents) && event.parents.length > 0) {
+        const parentLabel = event.parents.length > 1 ? "Parents" : "Parent";
+        const parentText = `${event.parents.length}`;
+
+        this.#appendLifeEventDetail(details, {
+          label: parentLabel,
+          value: parentText,
+          colors: event.parents,
+        });
+      }
+
+      if (event.cause === "combat") {
+        if (Number.isFinite(event.winChance)) {
+          this.#appendLifeEventDetail(details, {
+            label: "Victor odds",
+            value: `${Math.round(event.winChance * 100)}%`,
+          });
+        }
+
+        if (Number.isFinite(event.intensity)) {
+          this.#appendLifeEventDetail(details, {
+            label: "Intensity",
+            value: event.intensity.toFixed(2),
+          });
+        }
+
+        if (event.opponentColor) {
+          this.#appendLifeEventDetail(details, {
+            label: "Opponent",
+            colors: [event.opponentColor],
+          });
+        }
+      }
+
+      if (event.note) {
+        this.#appendLifeEventDetail(details, {
+          label: "Note",
+          value: event.note,
+        });
+      }
+
+      if (!details.hasChildNodes()) {
+        const fallback = document.createElement("div");
+
+        fallback.className = "life-event-detail";
+        fallback.textContent = "No additional context";
+        details.appendChild(fallback);
+      }
+
+      item.appendChild(details);
+      this.lifeEventList.appendChild(item);
+    });
   }
 
   // Utility to create a collapsible panel with a header
@@ -1028,6 +1258,33 @@ export default class UIManager {
     this.#showMetricsPlaceholder("Run the simulation to populate these metrics.");
     body.appendChild(this.metricsBox);
 
+    const lifeEventsSection = document.createElement("section");
+
+    lifeEventsSection.className = "metrics-section life-events";
+
+    const lifeHeading = document.createElement("h4");
+
+    lifeHeading.className = "metrics-section-title";
+    lifeHeading.textContent = "Life Event Log";
+    lifeEventsSection.appendChild(lifeHeading);
+    const lifeBody = document.createElement("div");
+
+    lifeBody.className = "metrics-section-body life-events-body";
+
+    this.lifeEventsEmptyState = document.createElement("div");
+    this.lifeEventsEmptyState.className = "life-event-empty";
+    this.lifeEventsEmptyState.textContent =
+      "Recent births and deaths will appear once the simulation runs.";
+    lifeBody.appendChild(this.lifeEventsEmptyState);
+
+    this.lifeEventList = document.createElement("ul");
+    this.lifeEventList.className = "life-event-list";
+    this.lifeEventList.setAttribute("role", "list");
+    this.lifeEventList.hidden = true;
+    lifeBody.appendChild(this.lifeEventList);
+    lifeEventsSection.appendChild(lifeBody);
+    body.appendChild(lifeEventsSection);
+
     // Sparklines canvases
     const traitDescriptors = [
       { key: "cooperation", name: "Cooperation" },
@@ -1461,6 +1718,8 @@ export default class UIManager {
 
       traitSection.appendChild(traitGroup);
     }
+
+    this.#renderLifeEvents(stats);
 
     this.drawSpark(this.sparkPop, stats.history.population, "#88d");
     this.drawSpark(this.sparkDiv2Canvas, stats.history.diversity, "#d88");
