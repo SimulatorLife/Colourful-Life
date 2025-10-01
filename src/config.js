@@ -138,6 +138,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   societySimilarity: 0.7,
   enemySimilarity: 0.4,
   eventStrengthMultiplier: 1,
+  maxConcurrentEvents: 2,
   energyRegenRate: ENERGY_REGEN_RATE_DEFAULT,
   energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
   combatEdgeSharpness: COMBAT_EDGE_SHARPNESS_DEFAULT,
@@ -223,6 +224,14 @@ export function resolveSimulationDefaults(overrides = {}) {
 
   for (const key of BOOLEAN_DEFAULT_KEYS) {
     merged[key] = coerceBoolean(merged[key], defaults[key]);
+  }
+
+  const concurrencyValue = Number(merged.maxConcurrentEvents);
+
+  if (!Number.isFinite(concurrencyValue)) {
+    merged.maxConcurrentEvents = defaults.maxConcurrentEvents;
+  } else {
+    merged.maxConcurrentEvents = Math.max(0, Math.floor(concurrencyValue));
   }
 
   return merged;

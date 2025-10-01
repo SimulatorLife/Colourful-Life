@@ -78,6 +78,11 @@ const defaultNow = () => {
 const defaultRequestAnimationFrame = (cb) => setTimeout(() => cb(defaultNow()), 16);
 const defaultCancelAnimationFrame = (id) => clearTimeout(id);
 
+const MAX_CONCURRENT_EVENTS_FALLBACK = Math.max(
+  0,
+  Math.floor(SIMULATION_DEFAULTS.maxConcurrentEvents ?? 2),
+);
+
 function sanitizeNumeric(
   value,
   {
@@ -103,6 +108,14 @@ function sanitizeNumeric(
   if (Number.isFinite(max)) sanitized = Math.min(max, sanitized);
 
   return sanitized;
+}
+
+function sanitizeMaxConcurrentEvents(value, fallback = MAX_CONCURRENT_EVENTS_FALLBACK) {
+  return sanitizeNumeric(value, {
+    fallback,
+    min: 0,
+    round: (candidate) => Math.floor(candidate),
+  });
 }
 
 function resolveCanvas(canvas, documentRef) {
@@ -280,9 +293,15 @@ export default class SimulationEngine {
     this.drawOverlays = typeof drawOverlays === "function" ? drawOverlays : noop;
 
     const defaults = resolveSimulationDefaults(config);
+    const maxConcurrentEvents = sanitizeMaxConcurrentEvents(
+      defaults.maxConcurrentEvents,
+    );
+
+    defaults.maxConcurrentEvents = maxConcurrentEvents;
 
     this.eventManager = new EventManager(rows, cols, rng, {
-      startWithEvent: (defaults.eventFrequencyMultiplier ?? 1) > 0,
+      startWithEvent:
+        (defaults.eventFrequencyMultiplier ?? 1) > 0 && maxConcurrentEvents > 0,
     });
     this.stats = new Stats();
     const resolveSelectionManager = () => {
@@ -348,6 +367,7 @@ export default class SimulationEngine {
       societySimilarity: defaults.societySimilarity,
       enemySimilarity: defaults.enemySimilarity,
       eventStrengthMultiplier: defaults.eventStrengthMultiplier,
+      maxConcurrentEvents,
       energyRegenRate: defaults.energyRegenRate,
       energyDiffusionRate: defaults.energyDiffusionRate,
       combatEdgeSharpness: defaults.combatEdgeSharpness,
@@ -668,7 +688,10 @@ export default class SimulationEngine {
       this.lastUpdateTime = effectiveTimestamp;
       tickOccurred = true;
       this.stats.resetTick();
-      this.eventManager.updateEvent?.(this.state.eventFrequencyMultiplier ?? 1, 2);
+      this.eventManager.updateEvent?.(
+        this.state.eventFrequencyMultiplier ?? 1,
+        this.state.maxConcurrentEvents ?? MAX_CONCURRENT_EVENTS_FALLBACK,
+      );
       const snapshot = this.grid.update({
         densityEffectMultiplier: this.state.densityEffectMultiplier ?? 1,
         societySimilarity:
@@ -884,6 +907,15 @@ export default class SimulationEngine {
     this.#updateStateAndFlag({ eventFrequencyMultiplier: sanitized });
   }
 
+  setMaxConcurrentEvents(value) {
+    const sanitized = sanitizeMaxConcurrentEvents(
+      value,
+      this.state.maxConcurrentEvents,
+    );
+
+    this.#updateStateAndFlag({ maxConcurrentEvents: sanitized });
+  }
+
   setMutationMultiplier(value) {
     const sanitized = sanitizeNumeric(value, {
       fallback: this.state.mutationMultiplier,
@@ -1045,6 +1077,9 @@ export default class SimulationEngine {
         break;
       case "eventFrequencyMultiplier":
         this.setEventFrequencyMultiplier(value);
+        break;
+      case "maxConcurrentEvents":
+        this.setMaxConcurrentEvents(value);
         break;
       case "combatEdgeSharpness":
         this.setCombatEdgeSharpness(value);

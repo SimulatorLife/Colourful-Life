@@ -117,6 +117,7 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getEventFrequencyMultiplier: () => settings.eventFrequencyMultiplier,
+    getMaxConcurrentEvents: () => settings.maxConcurrentEvents,
     getMutationMultiplier: () => settings.mutationMultiplier,
     getDensityEffectMultiplier: () => settings.densityEffectMultiplier,
     getSocietySimilarity: () => settings.societySimilarity,
@@ -140,6 +141,16 @@ export function createHeadlessUiManager(options = {}) {
     setCombatEdgeSharpness: (value) => {
       if (updateIfFinite("combatEdgeSharpness", value)) {
         notify("combatEdgeSharpness", settings.combatEdgeSharpness);
+      }
+    },
+    setMaxConcurrentEvents: (value) => {
+      if (
+        updateIfFinite("maxConcurrentEvents", value, {
+          min: 0,
+          round: (candidate) => Math.floor(candidate),
+        })
+      ) {
+        notify("maxConcurrentEvents", settings.maxConcurrentEvents);
       }
     },
     getShowObstacles: () => settings.showObstacles,

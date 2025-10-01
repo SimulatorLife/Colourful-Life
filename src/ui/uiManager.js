@@ -60,6 +60,7 @@ export default class UIManager {
     this.enemySimilarity = defaults.enemySimilarity;
     this.eventStrengthMultiplier = defaults.eventStrengthMultiplier;
     this.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
+    this.maxConcurrentEvents = defaults.maxConcurrentEvents;
     this.speedMultiplier = defaults.speedMultiplier;
     this.densityEffectMultiplier = defaults.densityEffectMultiplier;
     this.mutationMultiplier = defaults.mutationMultiplier;

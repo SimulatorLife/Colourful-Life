@@ -123,6 +123,7 @@ test("resolveSimulationDefaults returns expected baseline configuration", async 
   };
 
   assert.equal(defaults, expected);
+  assert.is(defaults.maxConcurrentEvents, SIMULATION_DEFAULTS.maxConcurrentEvents);
 
   // Slider defaults should mirror the canonical simulation defaults so UI wiring stays in sync.
   assert.is(
@@ -190,6 +191,7 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.enemySimilarity, defaults.enemySimilarity);
   assert.is(uiManager.eventStrengthMultiplier, defaults.eventStrengthMultiplier);
   assert.is(uiManager.eventFrequencyMultiplier, defaults.eventFrequencyMultiplier);
+  assert.is(uiManager.maxConcurrentEvents, defaults.maxConcurrentEvents);
   assert.is(uiManager.speedMultiplier, defaults.speedMultiplier);
   assert.is(uiManager.densityEffectMultiplier, defaults.densityEffectMultiplier);
   assert.is(uiManager.mutationMultiplier, defaults.mutationMultiplier);
@@ -237,6 +239,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     societySimilarity: defaults.societySimilarity,
     enemySimilarity: defaults.enemySimilarity,
     eventStrengthMultiplier: defaults.eventStrengthMultiplier,
+    maxConcurrentEvents: defaults.maxConcurrentEvents,
     energyRegenRate: defaults.energyRegenRate,
     energyDiffusionRate: defaults.energyDiffusionRate,
     combatEdgeSharpness: defaults.combatEdgeSharpness,
@@ -265,6 +268,7 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.is(ui.isPaused(), Boolean(defaults.paused));
   assert.is(ui.getUpdatesPerSecond(), defaults.updatesPerSecond);
   assert.is(ui.getEventFrequencyMultiplier(), defaults.eventFrequencyMultiplier);
+  assert.is(ui.getMaxConcurrentEvents(), defaults.maxConcurrentEvents);
   assert.is(ui.getMutationMultiplier(), defaults.mutationMultiplier);
   assert.is(ui.getDensityEffectMultiplier(), defaults.densityEffectMultiplier);
   assert.is(ui.getSocietySimilarity(), defaults.societySimilarity);
@@ -277,6 +281,8 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.is(ui.getLowDiversityReproMultiplier(), defaults.lowDiversityReproMultiplier);
   ui.setCombatEdgeSharpness(4.2);
   assert.is(ui.getCombatEdgeSharpness(), 4.2);
+  ui.setMaxConcurrentEvents(5.6);
+  assert.is(ui.getMaxConcurrentEvents(), 5);
   assert.is(ui.getShowObstacles(), defaults.showObstacles);
   assert.is(ui.getShowEnergy(), defaults.showEnergy);
   assert.is(ui.getShowDensity(), defaults.showDensity);

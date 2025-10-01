@@ -41,6 +41,28 @@ test("SimulationEngine skips initial events when frequency multiplier is zero", 
   }
 });
 
+test("SimulationEngine skips initial events when maxConcurrentEvents is zero", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      config: { maxConcurrentEvents: 0 },
+    });
+
+    assert.is(engine.eventManager.activeEvents.length, 0);
+    assert.is(engine.eventManager.currentEvent, null);
+  } finally {
+    restore();
+  }
+});
+
 test("numeric setters sanitize input, clamp values, and flag slow UI updates", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
@@ -103,6 +125,37 @@ test("numeric setters sanitize input, clamp values, and flag slow UI updates", a
   }
 });
 
+test("setMaxConcurrentEvents floors values and schedules slow UI work", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.pendingSlowUiUpdate = false;
+    engine.setMaxConcurrentEvents(4.7);
+
+    assert.is(engine.state.maxConcurrentEvents, 4);
+    assert.ok(engine.pendingSlowUiUpdate, "changing concurrency flags slow UI updates");
+
+    engine.pendingSlowUiUpdate = false;
+    engine.setMaxConcurrentEvents("oops");
+
+    assert.is(engine.state.maxConcurrentEvents, 4);
+    assert.is(
+      engine.pendingSlowUiUpdate,
+      false,
+      "invalid input retains previous concurrency without scheduling work",
+    );
+
+    engine.setMaxConcurrentEvents(-2);
+
+    assert.is(engine.state.maxConcurrentEvents, 0);
+  } finally {
+    restore();
+  }
+});
+
 test("updateSetting routes updatesPerSecond through the setter", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
@@ -114,6 +167,23 @@ test("updateSetting routes updatesPerSecond through the setter", async () => {
     engine.updateSetting("updatesPerSecond", 180);
 
     assert.is(engine.state.updatesPerSecond, 180);
+    assert.ok(engine.pendingSlowUiUpdate, "setter marks slow UI work pending");
+  } finally {
+    restore();
+  }
+});
+
+test("updateSetting routes maxConcurrentEvents through the setter", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.pendingSlowUiUpdate = false;
+    engine.updateSetting("maxConcurrentEvents", 6.2);
+
+    assert.is(engine.state.maxConcurrentEvents, 6);
     assert.ok(engine.pendingSlowUiUpdate, "setter marks slow UI work pending");
   } finally {
     restore();
