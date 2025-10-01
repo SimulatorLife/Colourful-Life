@@ -381,7 +381,7 @@ function getSelectionZoneEntries(selectionManager) {
  * @param {CanvasRenderingContext2D} ctx - Canvas context used for drawing.
  * @param {number} cellSize - Size of a single grid cell in pixels.
  */
-function drawSelectionZones(selectionManager, ctx, cellSize) {
+export function drawSelectionZones(selectionManager, ctx, cellSize) {
   if (!hasActiveSelectionZones(selectionManager)) return;
 
   const zoneEntries = getSelectionZoneEntries(selectionManager);
@@ -425,8 +425,6 @@ function drawSelectionZones(selectionManager, ctx, cellSize) {
   }
   ctx.restore();
 }
-
-export { drawSelectionZones };
 
 /**
  * Master overlay renderer invoked by {@link SimulationEngine}. It orchestrates
