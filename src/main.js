@@ -339,6 +339,7 @@ export function createSimulation({
   const simulationCallbacks = {
     requestFrame: () => engine.requestFrame(),
     togglePause: () => engine.togglePause(),
+    step: () => engine.step(),
     onSettingChange: (key, value) => engine.updateSetting(key, value),
   };
 
