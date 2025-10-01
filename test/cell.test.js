@@ -13,8 +13,14 @@ let InteractionSystem;
 let Brain;
 let OUTPUT_GROUPS;
 
-function investmentFor(energy, investFrac, starvation) {
-  const desired = Math.max(0, Math.min(energy, energy * investFrac));
+function investmentFor(energy, investFrac, starvation, demandFrac, maxTileEnergy) {
+  const safeMax = Number.isFinite(maxTileEnergy)
+    ? maxTileEnergy
+    : (window.GridManager?.maxTileEnergy ?? 12);
+  const targetEnergy =
+    safeMax * clamp(Number.isFinite(demandFrac) ? demandFrac : 0.22, 0, 1);
+  const desiredBase = Math.max(0, Math.min(energy, energy * investFrac));
+  const desired = Math.max(desiredBase, targetEnergy);
   const maxSpend = Math.max(0, energy - starvation);
 
   return Math.min(desired, maxSpend);
@@ -361,8 +367,22 @@ test("breed spends parental investment energy without creating extra energy", ()
   const maxTileEnergy = window.GridManager.maxTileEnergy;
   const starvationA = parentA.starvationThreshold(maxTileEnergy);
   const starvationB = parentB.starvationThreshold(maxTileEnergy);
-  const investA = investmentFor(energyBeforeA, investFracA, starvationA);
-  const investB = investmentFor(energyBeforeB, investFracB, starvationB);
+  const demandFracA = dnaA.offspringEnergyDemandFrac();
+  const demandFracB = dnaB.offspringEnergyDemandFrac();
+  const investA = investmentFor(
+    energyBeforeA,
+    investFracA,
+    starvationA,
+    demandFracA,
+    maxTileEnergy,
+  );
+  const investB = investmentFor(
+    energyBeforeB,
+    investFracB,
+    starvationB,
+    demandFracB,
+    maxTileEnergy,
+  );
   const totalInvestment = investA + investB;
 
   const child = withMockedRandom([0.9, 0.9, 0.9, 0.5], () =>
@@ -382,6 +402,10 @@ test("breed spends parental investment energy without creating extra energy", ()
     energyBeforeA - parentA.energy + (energyBeforeB - parentB.energy),
     1e-12,
     "investments match energy spent",
+  );
+  assert.ok(
+    child.energy >= maxTileEnergy * Math.max(demandFracA, demandFracB) - 1e-9,
+    "offspring meets viability energy floor",
   );
   assert.is(parentA.offspring, 1);
   assert.is(parentB.offspring, 1);
@@ -592,27 +616,33 @@ test("breed clamps investment so parents stop at starvation threshold", () => {
   const dnaB = new DNA(200, 220, 60);
   const parentA = new Cell(5, 6, dnaA, 6);
   const parentB = new Cell(5, 6, dnaB, 6);
-  const maxTileEnergy = window.GridManager.maxTileEnergy;
-  const starvationA = parentA.starvationThreshold(maxTileEnergy);
-  const starvationB = parentB.starvationThreshold(maxTileEnergy);
+  const reproductionMax = 4;
+  const starvationA = parentA.starvationThreshold(reproductionMax);
+  const starvationB = parentB.starvationThreshold(reproductionMax);
   const energyBeforeA = parentA.energy;
   const energyBeforeB = parentB.energy;
+  const demandFracA = dnaA.offspringEnergyDemandFrac();
+  const demandFracB = dnaB.offspringEnergyDemandFrac();
   const expectedInvestA = investmentFor(
     energyBeforeA,
     dnaA.parentalInvestmentFrac(),
     starvationA,
+    demandFracA,
+    reproductionMax,
   );
   const expectedInvestB = investmentFor(
     energyBeforeB,
     dnaB.parentalInvestmentFrac(),
     starvationB,
+    demandFracB,
+    reproductionMax,
   );
 
   assert.ok(starvationA > 0, "starvation threshold should be positive");
   assert.ok(starvationB > 0, "starvation threshold should be positive");
 
   const child = withMockedRandom([0.6, 0.6, 0.6, 0.5], () =>
-    Cell.breed(parentA, parentB),
+    Cell.breed(parentA, parentB, 1, { maxTileEnergy: reproductionMax }),
   );
 
   assert.ok(child instanceof Cell, "offspring should be produced when both can invest");
@@ -642,6 +672,76 @@ test("breed clamps investment so parents stop at starvation threshold", () => {
     1e-12,
     "child energy equals combined investments",
   );
+  assert.ok(
+    child.energy >= reproductionMax * Math.max(demandFracA, demandFracB) - 1e-9,
+    "offspring energy respects viability requirement",
+  );
+});
+
+test("breed aborts when combined investment misses DNA viability floor", () => {
+  const dnaA = new DNA(0, 0, 0);
+  const dnaB = new DNA(0, 0, 0);
+
+  const imprintHighDemand = (dna) => {
+    dna.genes[GENE_LOCI.PARENTAL] = 255;
+    dna.genes[GENE_LOCI.FERTILITY] = 240;
+    dna.genes[GENE_LOCI.ENERGY_CAPACITY] = 220;
+    dna.genes[GENE_LOCI.RISK] = 160;
+    dna.genes[GENE_LOCI.COOPERATION] = 210;
+    dna.genes[GENE_LOCI.ENERGY_EFFICIENCY] = 60;
+  };
+
+  imprintHighDemand(dnaA);
+  imprintHighDemand(dnaB);
+
+  const parentA = new Cell(2, 3, dnaA, 5);
+  const parentB = new Cell(2, 4, dnaB, 5);
+  const maxTileEnergy = 10;
+  const energyBeforeA = parentA.energy;
+  const energyBeforeB = parentB.energy;
+  const starvationA = parentA.starvationThreshold(maxTileEnergy);
+  const starvationB = parentB.starvationThreshold(maxTileEnergy);
+  const demandFracA = dnaA.offspringEnergyDemandFrac();
+  const demandFracB = dnaB.offspringEnergyDemandFrac();
+  const investA = investmentFor(
+    energyBeforeA,
+    dnaA.parentalInvestmentFrac(),
+    starvationA,
+    demandFracA,
+    maxTileEnergy,
+  );
+  const investB = investmentFor(
+    energyBeforeB,
+    dnaB.parentalInvestmentFrac(),
+    starvationB,
+    demandFracB,
+    maxTileEnergy,
+  );
+  const viabilityFloor = maxTileEnergy * Math.max(demandFracA, demandFracB);
+
+  assert.ok(investA > 0 && investB > 0, "parents contribute energy toward offspring");
+  assert.ok(
+    investA + investB < viabilityFloor,
+    "combined investment stays below DNA viability expectation",
+  );
+
+  const outcome = withMockedRandom([0.2, 0.4, 0.6, 0.8], () =>
+    Cell.breed(parentA, parentB, 1, { maxTileEnergy }),
+  );
+
+  assert.is(outcome, null, "reproduction aborts when viability floor is unmet");
+  approxEqual(
+    parentA.energy,
+    energyBeforeA,
+    1e-12,
+    "parent A keeps energy after abort",
+  );
+  approxEqual(
+    parentB.energy,
+    energyBeforeB,
+    1e-12,
+    "parent B keeps energy after abort",
+  );
 });
 
 test("breed applies deterministic crossover and honors forced mutation", () => {
@@ -670,7 +770,7 @@ test("breed applies deterministic crossover and honors forced mutation", () => {
     0,
     reproductionRng,
   );
-  const child = Cell.breed(parentA, parentB);
+  const child = Cell.breed(parentA, parentB, 1, { maxTileEnergy: 4 });
 
   assert.is(child.dna.length, expectedGenes.length);
   for (let i = 0; i < expectedGenes.length; i++) {
