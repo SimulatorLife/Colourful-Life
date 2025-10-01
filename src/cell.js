@@ -134,6 +134,10 @@ export default class Cell {
       typeof this.dna.mateSamplingProfile === "function"
         ? this.dna.mateSamplingProfile()
         : null;
+    this.riskMemoryProfile =
+      typeof this.dna.riskMemoryProfile === "function"
+        ? this.dna.riskMemoryProfile()
+        : null;
     this._rngCache = new Map();
     this._sharedRngCache = new Map();
     this._mateSelectionNoiseRng = this.resolveRng("mateSelectionNoise");
@@ -143,6 +147,13 @@ export default class Cell {
     this.decisionHistory = [];
     this._pendingDecisionContexts = [];
     this._decisionContextIndex = new Map();
+    this._riskMemory = {
+      resource: 0,
+      event: 0,
+      social: 0,
+      fatigue: 0,
+      confidence: 0,
+    };
     this.resourceTrendAdaptation =
       typeof this.dna.resourceTrendAdaptation === "function"
         ? this.dna.resourceTrendAdaptation()
@@ -1184,6 +1195,60 @@ export default class Cell {
       adjusted += restState * fatigueWeight * 0.4;
     }
 
+    const memoryProfile = this.riskMemoryProfile || {};
+    const memory = this._riskMemory;
+
+    if (memory) {
+      const resourceSignal = clamp(Number(memory.resource) || 0, -1, 1);
+      const eventSignal = clamp(Number(memory.event) || 0, 0, 1);
+      const socialSignal = clamp(Number(memory.social) || 0, -1, 1);
+      const fatigueSignal = clamp(Number(memory.fatigue) || 0, -1, 1);
+      const confidenceSignal = clamp(Number(memory.confidence) || 0, -1, 1);
+      const scarcityDrive = clamp(
+        Number.isFinite(memoryProfile.scarcityDrive)
+          ? memoryProfile.scarcityDrive
+          : 0.35,
+        0,
+        1.5,
+      );
+      const eventWeight = clamp(
+        Number.isFinite(memoryProfile.eventWeight) ? memoryProfile.eventWeight : 0.4,
+        0,
+        1.5,
+      );
+      const socialWeight = clamp(
+        Number.isFinite(memoryProfile.socialWeight) ? memoryProfile.socialWeight : 0.3,
+        0,
+        1.5,
+      );
+      const fatigueMemoryWeight = clamp(
+        Number.isFinite(memoryProfile.fatigueWeight)
+          ? memoryProfile.fatigueWeight
+          : 0.25,
+        0,
+        1.2,
+      );
+      const confidenceWeight = clamp(
+        Number.isFinite(memoryProfile.confidenceWeight)
+          ? memoryProfile.confidenceWeight
+          : 0.3,
+        0,
+        1.2,
+      );
+
+      adjusted += -resourceSignal * scarcityDrive * 0.35;
+      adjusted -= eventSignal * eventWeight * 0.35;
+      adjusted += socialSignal * socialWeight * 0.25;
+
+      if (fatigueSignal > 0) {
+        adjusted -= fatigueSignal * fatigueMemoryWeight * 0.15;
+      } else if (fatigueSignal < 0) {
+        adjusted += -fatigueSignal * fatigueMemoryWeight * 0.08;
+      }
+
+      adjusted += confidenceSignal * confidenceWeight * 0.2;
+    }
+
     return clamp(adjusted, 0, 1);
   }
 
@@ -1193,6 +1258,211 @@ export default class Cell {
 
   getNeuralFatigue() {
     return this.#currentNeuralFatigue();
+  }
+
+  #readSensor(sensorVector, sensors, key, fallback = 0) {
+    let fromVector = false;
+    let value = Number.NaN;
+
+    if (sensorVector && typeof sensorVector.length === "number") {
+      const index = Brain.sensorIndex(key);
+
+      if (
+        Number.isFinite(index) &&
+        index >= 0 &&
+        index < sensorVector.length &&
+        Number.isFinite(sensorVector[index])
+      ) {
+        value = sensorVector[index];
+        fromVector = true;
+      }
+    }
+
+    if (!Number.isFinite(value) && sensors && typeof sensors === "object") {
+      const candidate = sensors[key];
+
+      if (Number.isFinite(candidate)) {
+        value = candidate;
+        fromVector = false;
+      }
+    }
+
+    if (!Number.isFinite(value)) {
+      value = fallback;
+      fromVector = false;
+    }
+
+    return { value, fromVector };
+  }
+
+  #normalizeUnit(value, fromVector) {
+    const numeric = Number.isFinite(value) ? value : 0;
+
+    return clamp(fromVector ? (numeric + 1) * 0.5 : numeric, 0, 1);
+  }
+
+  #normalizeSigned(value, fromVector) {
+    const numeric = Number.isFinite(value) ? value : 0;
+
+    return clamp(numeric, -1, 1);
+  }
+
+  #normalizeBipolar(value, fromVector) {
+    const numeric = Number.isFinite(value) ? value : 0;
+
+    if (fromVector) {
+      return clamp(numeric, -1, 1);
+    }
+
+    return clamp(numeric * 2 - 1, -1, 1);
+  }
+
+  #integrateRiskMemory(group, sensors, sensorVector) {
+    if (!this._riskMemory) return;
+
+    const profile = this.riskMemoryProfile || {};
+    const assimilation = clamp(
+      Number.isFinite(profile.assimilation) ? profile.assimilation : 0.25,
+      0.01,
+      1,
+    );
+    const decay = clamp(
+      Number.isFinite(profile.decay) ? profile.decay : 0.12,
+      0.01,
+      0.6,
+    );
+
+    const resourceInfo = this.#readSensor(
+      sensorVector,
+      sensors,
+      "resourceTrend",
+      this._resourceSignal ?? 0,
+    );
+    const resourceTrend = this.#normalizeSigned(
+      resourceInfo.value,
+      resourceInfo.fromVector,
+    );
+
+    const eventInfo = this.#readSensor(
+      sensorVector,
+      sensors,
+      "eventPressure",
+      clamp(this.lastEventPressure || 0, 0, 1),
+    );
+    const eventPressure = this.#normalizeUnit(eventInfo.value, eventInfo.fromVector);
+
+    const allyInfo = this.#readSensor(
+      sensorVector,
+      sensors,
+      "allyFraction",
+      sensors?.allyFraction ?? 0,
+    );
+    const enemyInfo = this.#readSensor(
+      sensorVector,
+      sensors,
+      "enemyFraction",
+      sensors?.enemyFraction ?? 0,
+    );
+    const mateInfo = this.#readSensor(
+      sensorVector,
+      sensors,
+      "mateFraction",
+      sensors?.mateFraction ?? 0,
+    );
+    const allySupport = this.#normalizeUnit(allyInfo.value, allyInfo.fromVector);
+    const enemyThreat = this.#normalizeUnit(enemyInfo.value, enemyInfo.fromVector);
+    const matePresence = this.#normalizeUnit(mateInfo.value, mateInfo.fromVector);
+
+    const fatigueInfo = this.#readSensor(
+      sensorVector,
+      sensors,
+      "neuralFatigue",
+      this.#currentNeuralFatigue(),
+    );
+    const fatigueSignal = this.#normalizeBipolar(
+      fatigueInfo.value,
+      fatigueInfo.fromVector,
+    );
+
+    const momentumInfo = this.#readSensor(
+      sensorVector,
+      sensors,
+      "interactionMomentum",
+      this._interactionMomentum ?? 0,
+    );
+    const momentumSignal = this.#normalizeSigned(
+      momentumInfo.value,
+      momentumInfo.fromVector,
+    );
+
+    const riskInfo = this.#readSensor(
+      sensorVector,
+      sensors,
+      "riskTolerance",
+      this.baseRiskTolerance ?? 0.5,
+    );
+    const riskUnit = this.#normalizeUnit(riskInfo.value, riskInfo.fromVector);
+    const riskSigned = this.#normalizeBipolar(riskInfo.value, riskInfo.fromVector);
+
+    const socialSupport = clamp(allySupport - enemyThreat + matePresence * 0.35, -1, 1);
+    const confidenceSignal = clamp(
+      riskSigned * 0.5 +
+        momentumSignal * 0.3 +
+        socialSupport * 0.25 -
+        (eventPressure - 0.5) * 0.3,
+      -1,
+      1,
+    );
+
+    this._riskMemory.resource = lerp(this._riskMemory.resource, 0, decay);
+    this._riskMemory.event = lerp(this._riskMemory.event, 0, decay * 0.6);
+    this._riskMemory.social = lerp(this._riskMemory.social, 0, decay);
+    this._riskMemory.fatigue = lerp(this._riskMemory.fatigue, 0, decay * 0.5);
+    this._riskMemory.confidence = lerp(this._riskMemory.confidence, 0, decay);
+
+    const resourceAlpha = clamp(assimilation * (profile.resourceWeight ?? 0.45), 0, 1);
+    const eventAlpha = clamp(assimilation * (profile.eventWeight ?? 0.5), 0, 1);
+    const socialAlpha = clamp(assimilation * (profile.socialWeight ?? 0.4), 0, 1);
+    const fatigueAlpha = clamp(assimilation * (profile.fatigueWeight ?? 0.35), 0, 1);
+    const confidenceAlpha = clamp(
+      assimilation * (profile.confidenceWeight ?? 0.3),
+      0,
+      1,
+    );
+
+    this._riskMemory.resource = lerp(
+      this._riskMemory.resource,
+      resourceTrend,
+      resourceAlpha,
+    );
+    this._riskMemory.event = lerp(this._riskMemory.event, eventPressure, eventAlpha);
+    this._riskMemory.social = lerp(this._riskMemory.social, socialSupport, socialAlpha);
+    this._riskMemory.fatigue = lerp(
+      this._riskMemory.fatigue,
+      fatigueSignal,
+      fatigueAlpha,
+    );
+    this._riskMemory.confidence = lerp(
+      this._riskMemory.confidence,
+      confidenceSignal,
+      confidenceAlpha,
+    );
+
+    if (group === "movement" && riskUnit > 0) {
+      const driftWeight = clamp(
+        Number.isFinite(profile.confidenceWeight)
+          ? profile.confidenceWeight * 0.2
+          : 0.06,
+        0,
+        0.2,
+      );
+
+      this._riskMemory.confidence = lerp(
+        this._riskMemory.confidence,
+        clamp(riskUnit * 2 - 1, -1, 1),
+        driftWeight,
+      );
+    }
   }
 
   resolveTrait(traitName) {
@@ -1810,9 +2080,15 @@ export default class Cell {
   }
 
   #evaluateBrainGroup(group, sensors) {
-    if (!this.#canUseNeuralPolicies()) return null;
+    if (!this.#canUseNeuralPolicies()) {
+      this.#integrateRiskMemory(group, sensors, null);
+
+      return null;
+    }
 
     const result = this.brain.evaluateGroup(group, sensors, { trace: true });
+
+    this.#integrateRiskMemory(group, sensors, result?.sensors ?? null);
 
     if (!result || !result.values) {
       this._decisionContextIndex.delete(group);

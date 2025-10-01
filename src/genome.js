@@ -1161,6 +1161,69 @@ export class DNA {
     };
   }
 
+  riskMemoryProfile() {
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const cohesion = this.geneFraction(GENE_LOCI.COHESION);
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
+    const foraging = this.geneFraction(GENE_LOCI.FORAGING);
+    const combat = this.geneFraction(GENE_LOCI.COMBAT);
+    const activity = this.geneFraction(GENE_LOCI.ACTIVITY);
+
+    const assimilation = clamp(
+      0.16 + 0.28 * neural + 0.18 * sense - 0.12 * risk,
+      0.04,
+      0.6,
+    );
+    const decay = clamp(0.08 + 0.22 * strategy + 0.18 * recovery, 0.02, 0.5);
+    const resourceWeight = clamp(
+      0.25 + 0.35 * foraging + 0.25 * exploration - 0.2 * risk,
+      0.1,
+      0.9,
+    );
+    const scarcityDrive = clamp(
+      0.32 + 0.4 * risk + 0.22 * movement - 0.18 * cooperation,
+      0.1,
+      1.1,
+    );
+    const eventWeight = clamp(
+      0.28 + 0.42 * risk + 0.25 * sense - 0.18 * recovery,
+      0.05,
+      1.2,
+    );
+    const socialWeight = clamp(
+      0.22 + 0.45 * cooperation + 0.3 * cohesion - 0.25 * risk,
+      0.05,
+      1,
+    );
+    const fatigueWeight = clamp(
+      0.2 + 0.35 * recovery + 0.2 * neural - 0.18 * activity,
+      0.05,
+      0.9,
+    );
+    const confidenceWeight = clamp(
+      0.2 + 0.35 * strategy + 0.25 * movement - 0.3 * risk + 0.15 * combat,
+      0,
+      0.9,
+    );
+
+    return {
+      assimilation,
+      decay,
+      resourceWeight,
+      scarcityDrive,
+      eventWeight,
+      socialWeight,
+      fatigueWeight,
+      confidenceWeight,
+    };
+  }
+
   // Energy cost characteristics for actions
   moveCost() {
     const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
