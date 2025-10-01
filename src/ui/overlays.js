@@ -110,6 +110,118 @@ function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = "0,0,0") {
   }
 }
 
+function formatEnergyLegendValue(value, maxTileEnergy) {
+  if (!Number.isFinite(value)) return "N/A";
+
+  const boundedMax =
+    Number.isFinite(maxTileEnergy) && maxTileEnergy > 0 ? maxTileEnergy : 0;
+
+  if (boundedMax <= 0) {
+    return value.toFixed(1);
+  }
+
+  const percent = clamp01(value / boundedMax) * 100;
+
+  return `${value.toFixed(1)} (${percent.toFixed(0)}%)`;
+}
+
+function computeEnergyStats(grid, maxTileEnergy = MAX_TILE_ENERGY) {
+  const rows = grid?.rows;
+  const cols = grid?.cols;
+  const energyGrid = Array.isArray(grid?.energyGrid) ? grid.energyGrid : null;
+
+  if (!energyGrid || !rows || !cols) return null;
+
+  let min = Infinity;
+  let max = -Infinity;
+  let sum = 0;
+  let count = 0;
+
+  for (let r = 0; r < rows; r++) {
+    const energyRow = Array.isArray(energyGrid[r]) ? energyGrid[r] : [];
+
+    for (let c = 0; c < cols; c++) {
+      const rawEnergy = energyRow[c];
+      const value = clamp(Number.isFinite(rawEnergy) ? rawEnergy : 0, 0, maxTileEnergy);
+
+      if (value < min) min = value;
+      if (value > max) max = value;
+      sum += value;
+      count++;
+    }
+  }
+
+  if (count === 0) return null;
+
+  const average = sum / count;
+
+  return { min, max, average };
+}
+
+function drawEnergyLegend(ctx, cellSize, cols, rows, stats, maxTileEnergy) {
+  if (!stats || !Number.isFinite(cols) || !Number.isFinite(rows)) return;
+
+  const { min, max, average } = stats;
+
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return;
+
+  const padding = 10;
+  const gradientHeight = 14;
+  const gradientWidth = clamp(cols * cellSize * 0.25, 120, 160);
+  const textLineHeight = 14;
+  const lines = [
+    { label: "Min", value: min },
+    Number.isFinite(average) ? { label: "Mean", value: average } : null,
+    { label: "Max", value: max },
+  ].filter(Boolean);
+  const blockHeight =
+    gradientHeight + padding * 3 + textLineHeight * Math.max(1, lines.length);
+  const blockWidth = gradientWidth + padding * 2;
+  const x = cols * cellSize - blockWidth - padding;
+  const y = rows * cellSize - blockHeight - padding;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(x, y, blockWidth, blockHeight);
+
+  const gradientX = x + padding;
+  const gradientY = y + padding;
+  const gradient = ctx.createLinearGradient(
+    gradientX,
+    gradientY,
+    gradientX + gradientWidth,
+    gradientY,
+  );
+  const stops = [0, 0.25, 0.5, 0.75, 1];
+
+  for (const stop of stops) {
+    const alpha = clamp01(stop * 0.99);
+
+    gradient.addColorStop(stop, `rgba(0,255,0,${alpha.toFixed(3)})`);
+  }
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(gradientX, gradientY, gradientWidth, gradientHeight);
+
+  ctx.fillStyle = "#fff";
+  ctx.font = "12px sans-serif";
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left";
+
+  let textY = gradientY + gradientHeight + padding;
+
+  for (const { label, value } of lines) {
+    ctx.fillText(
+      `${label}: ${formatEnergyLegendValue(value, maxTileEnergy)}`,
+      gradientX,
+      textY,
+    );
+    textY += textLineHeight;
+  }
+
+  ctx.restore();
+}
+
 export function getDensityAt(grid, r, c) {
   if (typeof grid.getDensityAt === "function") return grid.getDensityAt(r, c);
   if (Array.isArray(grid.densityGrid)) return grid.densityGrid[r]?.[c] ?? 0;
@@ -319,7 +431,10 @@ export function drawEnergyHeatmap(
   cellSize,
   maxTileEnergy = MAX_TILE_ENERGY,
 ) {
+  if (!grid || !Array.isArray(grid.energyGrid) || !grid.rows || !grid.cols) return;
+
   const scale = 0.99;
+  const stats = computeEnergyStats(grid, maxTileEnergy);
 
   drawScalarHeatmap(
     grid,
@@ -328,6 +443,10 @@ export function drawEnergyHeatmap(
     (r, c) => (grid.energyGrid[r][c] / maxTileEnergy) * scale,
     "0,255,0",
   );
+
+  if (stats) {
+    drawEnergyLegend(ctx, cellSize, grid.cols, grid.rows, stats, maxTileEnergy);
+  }
 }
 
 let densityScratchBuffer = null;
