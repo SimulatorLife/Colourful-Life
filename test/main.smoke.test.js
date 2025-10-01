@@ -105,6 +105,37 @@ test("headless UI forwards setting changes to the engine", async () => {
   simulation.destroy();
 });
 
+test("createSimulation controller step delegates to engine.step", async () => {
+  const { createSimulation } = await simulationModulePromise;
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    config: { paused: true },
+  });
+
+  let calls = 0;
+  const delegatedReturn = { delegated: true, args: null };
+  const originalStep = simulation.engine.step;
+
+  try {
+    simulation.engine.step = (...args) => {
+      calls += 1;
+      delegatedReturn.args = args;
+
+      return delegatedReturn;
+    };
+
+    const result = simulation.step("custom-timestamp");
+
+    assert.is(calls, 1, "controller step should call engine.step exactly once");
+    assert.is(result, delegatedReturn, "controller returns engine.step result");
+    assert.equal(delegatedReturn.args, ["custom-timestamp"]);
+  } finally {
+    simulation.engine.step = originalStep;
+    simulation.destroy();
+  }
+});
+
 test("step control calls engine.step when using createSimulation", async () => {
   const { createSimulation } = await simulationModulePromise;
 
