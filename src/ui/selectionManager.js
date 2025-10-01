@@ -162,13 +162,7 @@ export default class SelectionManager {
   isInActiveZone(row, col) {
     const zones = this.getActiveZones();
 
-    if (zones.length === 0) return true;
-
-    for (let i = 0; i < zones.length; i++) {
-      if (zones[i].contains(row, col)) return true;
-    }
-
-    return false;
+    return zones.length === 0 || zones.some((zone) => zone.contains(row, col));
   }
 
   validateReproductionArea({ parentA, parentB, spawn } = {}) {
