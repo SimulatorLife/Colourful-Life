@@ -597,11 +597,6 @@ canvas {
   letter-spacing: 0.04em;
 }
 
-.metrics-group-rows {
-  display: grid;
-  gap: var(--space-sm);
-}
-
 .trait-metrics-body {
   display: grid;
   gap: var(--space-md);
