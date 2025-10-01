@@ -1,3 +1,5 @@
+import { MAX_TILE_ENERGY } from "../config.js";
+
 /**
  * Thin adapter exposing a stable API for systems that need to query or mutate
  * the grid without depending on the full {@link GridManager} surface. Used by
@@ -117,15 +119,19 @@ export default class GridInteractionAdapter {
   }
 
   maxTileEnergy() {
-    if (typeof this.gridManager?.maxTileEnergy === "number") {
-      return this.gridManager.maxTileEnergy;
+    const managerValue = this.gridManager?.maxTileEnergy;
+
+    if (Number.isFinite(managerValue) && managerValue > 0) {
+      return managerValue;
     }
 
-    if (typeof globalThis?.GridManager?.maxTileEnergy === "number") {
-      return globalThis.GridManager.maxTileEnergy;
+    const globalValue = globalThis?.GridManager?.maxTileEnergy;
+
+    if (Number.isFinite(globalValue) && globalValue > 0) {
+      return globalValue;
     }
 
-    return 0;
+    return MAX_TILE_ENERGY;
   }
 
   densityAt(row, col, { densityGrid } = {}) {
