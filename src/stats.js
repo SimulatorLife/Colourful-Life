@@ -683,11 +683,18 @@ export default class Stats {
    */
   updateFromSnapshot(snapshot) {
     this.totals.ticks++;
-    const pop = snapshot?.population || 0;
-    const cells = snapshot?.cells || [];
-    const meanEnergy = pop ? snapshot.totalEnergy / pop : 0;
+    const rawPopulation = Number(snapshot?.population);
+    const pop = Number.isFinite(rawPopulation)
+      ? Math.max(0, Math.floor(rawPopulation))
+      : 0;
+    const cells = Array.isArray(snapshot?.cells) ? snapshot.cells : [];
+    const totalEnergy = Number.isFinite(snapshot?.totalEnergy)
+      ? snapshot.totalEnergy
+      : 0;
+    const totalAge = Number.isFinite(snapshot?.totalAge) ? snapshot.totalAge : 0;
+    const meanEnergy = pop > 0 ? totalEnergy / pop : 0;
     // Age is tracked in simulation ticks; convert with the active tick rate if seconds are needed.
-    const meanAge = pop ? snapshot.totalAge / pop : 0;
+    const meanAge = pop > 0 ? totalAge / pop : 0;
     const diversity = this.estimateDiversity(cells);
 
     this.#updateDiversityPressure(diversity);
