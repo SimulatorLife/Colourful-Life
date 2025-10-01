@@ -54,6 +54,56 @@ test("computeTraitPresence clamps trait values and tracks active fractions", asy
   assert.is(presence.counts.sight, 2);
 });
 
+test("estimateDiversity enumerates unique pairs when sample budget covers population", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+  const similarityMatrix = new Map([
+    ["0|1", 0.1],
+    ["0|2", 0.3],
+    ["1|2", 0.8],
+  ]);
+  const makeCell = (id) =>
+    createCell({
+      dna: {
+        id,
+        reproductionProb: () => 0,
+        similarity(otherDna) {
+          const a = Math.min(id, otherDna.id);
+          const b = Math.max(id, otherDna.id);
+          const key = `${a}|${b}`;
+
+          return similarityMatrix.get(key) ?? 1;
+        },
+      },
+    });
+  const cells = [makeCell(0), makeCell(1), makeCell(2)];
+  const distances = [
+    1 - similarityMatrix.get("0|1"),
+    1 - similarityMatrix.get("0|2"),
+    1 - similarityMatrix.get("1|2"),
+  ];
+  const expected = distances.reduce((sum, value) => sum + value, 0) / distances.length;
+  const originalRandom = Math.random;
+  const sequence = [0.1, 0.5, 0.4, 0.1, 0.2, 0.9];
+  let index = 0;
+
+  Math.random = () => {
+    const value = sequence[index % sequence.length];
+
+    index += 1;
+
+    return value;
+  };
+
+  try {
+    const actual = stats.estimateDiversity(cells, 10);
+
+    approxEqual(actual, expected, 1e-9);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
 test("mating records track diversity-aware outcomes and block reasons", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(3);
