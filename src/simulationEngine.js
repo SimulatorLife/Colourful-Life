@@ -116,30 +116,70 @@ function resolveCanvas(canvas, documentRef) {
 }
 
 function ensureCanvasDimensions(canvas, config) {
-  const candidates = [
+  const toFiniteDimension = (value) => {
+    if (value == null) return null;
+
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : null;
+    }
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+
+      if (trimmed.length === 0) return null;
+
+      const parsed = Number.parseFloat(trimmed);
+
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    if (typeof value === "bigint") {
+      const numeric = Number(value);
+
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    const numeric = Number(value);
+
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  const pickDimension = (candidates) => {
+    for (const candidate of candidates) {
+      const normalized = toFiniteDimension(candidate);
+
+      if (normalized != null) {
+        return normalized;
+      }
+    }
+
+    return null;
+  };
+
+  const width = pickDimension([
     config?.width,
     config?.canvasWidth,
     config?.canvasSize?.width,
     canvas?.width,
-  ];
-  const heightCandidates = [
+  ]);
+  const height = pickDimension([
     config?.height,
     config?.canvasHeight,
     config?.canvasSize?.height,
     canvas?.height,
-  ];
+  ]);
 
-  const width = candidates.find((value) => typeof value === "number");
-  const height = heightCandidates.find((value) => typeof value === "number");
+  if (canvas && width != null) canvas.width = width;
+  if (canvas && height != null) canvas.height = height;
 
-  if (canvas && typeof width === "number") canvas.width = width;
-  if (canvas && typeof height === "number") canvas.height = height;
+  const canvasWidth = toFiniteDimension(canvas?.width);
+  const canvasHeight = toFiniteDimension(canvas?.height);
 
-  if (typeof canvas?.width === "number" && typeof canvas?.height === "number") {
-    return { width: canvas.width, height: canvas.height };
+  if (canvasWidth != null && canvasHeight != null) {
+    return { width: canvasWidth, height: canvasHeight };
   }
 
-  if (typeof width === "number" && typeof height === "number") {
+  if (width != null && height != null) {
     return { width, height };
   }
 
