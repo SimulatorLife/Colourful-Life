@@ -8,6 +8,7 @@ const createCell = (overrides = {}) => ({
   interactionGenes: { cooperate: 0, fight: 0, ...overrides.interactionGenes },
   dna: {
     reproductionProb: () => 0,
+    similarity: () => 0,
     ...(overrides.dna || {}),
   },
   sight: 0,
@@ -53,6 +54,56 @@ test("computeTraitPresence clamps trait values and tracks active fractions", asy
   assert.is(presence.counts.sight, 2);
 });
 
+test("estimateDiversity enumerates unique pairs when sample budget covers population", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+  const similarityMatrix = new Map([
+    ["0|1", 0.1],
+    ["0|2", 0.3],
+    ["1|2", 0.8],
+  ]);
+  const makeCell = (id) =>
+    createCell({
+      dna: {
+        id,
+        reproductionProb: () => 0,
+        similarity(otherDna) {
+          const a = Math.min(id, otherDna.id);
+          const b = Math.max(id, otherDna.id);
+          const key = `${a}|${b}`;
+
+          return similarityMatrix.get(key) ?? 1;
+        },
+      },
+    });
+  const cells = [makeCell(0), makeCell(1), makeCell(2)];
+  const distances = [
+    1 - similarityMatrix.get("0|1"),
+    1 - similarityMatrix.get("0|2"),
+    1 - similarityMatrix.get("1|2"),
+  ];
+  const expected = distances.reduce((sum, value) => sum + value, 0) / distances.length;
+  const originalRandom = Math.random;
+  const sequence = [0.1, 0.5, 0.4, 0.1, 0.2, 0.9];
+  let index = 0;
+
+  Math.random = () => {
+    const value = sequence[index % sequence.length];
+
+    index += 1;
+
+    return value;
+  };
+
+  try {
+    const actual = stats.estimateDiversity(cells, 10);
+
+    approxEqual(actual, expected, 1e-9);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
 test("mating records track diversity-aware outcomes and block reasons", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(3);
@@ -81,6 +132,7 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
     success: true,
     penalized: true,
     penaltyMultiplier: 0.4,
+    behaviorComplementarity: 0.8,
   });
 
   assert.is(stats.mating.choices, 1);
@@ -91,8 +143,11 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   assert.is(stats.mating.selectionModes.preference, 0);
   approxEqual(stats.mating.appetiteSum, 0.5, 1e-9);
   assert.is(stats.mating.poolSizeSum, 3);
+  approxEqual(stats.mating.complementaritySum, 0.8, 1e-9);
+  approxEqual(stats.mating.complementaritySuccessSum, 0.8, 1e-9);
   assert.equal(stats.lastMatingDebug.blockedReason, "Too similar");
   assert.is(stats.lastMatingDebug.threshold, 0.6);
+  approxEqual(stats.lastMatingDebug.behaviorComplementarity, 0.8, 1e-9);
   assert.is(stats.mating.lastBlockReason, null);
 
   stats.recordMateChoice({
@@ -101,6 +156,7 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
     selectionMode: "preference",
     poolSize: 2,
     success: false,
+    behaviorComplementarity: 0.1,
   });
 
   assert.is(stats.mating.choices, 2);
@@ -109,14 +165,36 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   assert.is(stats.mating.diverseSuccesses, 1);
   assert.is(stats.mating.selectionModes.curiosity, 1);
   assert.is(stats.mating.selectionModes.preference, 1);
+  approxEqual(stats.mating.complementaritySum, 0.9, 1e-9);
+  approxEqual(stats.mating.complementaritySuccessSum, 0.8, 1e-9);
   assert.equal(stats.lastMatingDebug.success, false);
   assert.is(stats.lastMatingDebug.threshold, 0.6);
+  approxEqual(stats.lastMatingDebug.behaviorComplementarity, 0.1, 1e-9);
 
   stats.recordReproductionBlocked({ reason: "Blocked by reproductive zone" });
 
   assert.is(stats.mating.blocks, 2);
   assert.is(stats.mating.lastBlockReason, "Blocked by reproductive zone");
   assert.equal(stats.lastBlockedReproduction.reason, "Blocked by reproductive zone");
+});
+
+test("mating threshold overrides are respected", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(2);
+
+  stats.setMatingDiversityThreshold(0.5);
+
+  stats.recordMateChoice({ diversity: 0.25, threshold: 0.2 });
+
+  assert.is(stats.mating.choices, 1);
+  assert.is(stats.mating.diverseChoices, 1);
+  assert.is(stats.lastMatingDebug.threshold, 0.2);
+
+  stats.recordMateChoice({ diversity: 0.1, threshold: 0.8 });
+
+  assert.is(stats.mating.choices, 2);
+  assert.is(stats.mating.diverseChoices, 1);
+  assert.is(stats.lastMatingDebug.threshold, 0.8);
 });
 
 test("updateFromSnapshot aggregates metrics and caps histories", async () => {
@@ -143,6 +221,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
     appetiteSum: 1.2,
     selectionModes: { curiosity: 1, preference: 0 },
     poolSizeSum: 5,
+    complementaritySum: 0.75,
+    complementaritySuccessSum: 0.6,
     blocks: 1,
     lastBlockReason: "Still recent",
   };
@@ -191,11 +271,16 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(result.diverseChoiceRate, 0.5);
   assert.is(result.diverseMatingRate, 1);
   assert.is(result.meanDiversityAppetite, 0.6);
+  approxEqual(result.meanBehaviorComplementarity, 0.375, 1e-9);
+  approxEqual(result.successfulBehaviorComplementarity, 0.6, 1e-9);
+  approxEqual(result.behaviorEvenness, 1, 1e-9);
   assert.is(result.curiositySelections, 1);
   assert.equal(result.lastMating, stats.lastMatingDebug);
   assert.is(result.mutationMultiplier, 2);
   assert.is(result.blockedMatings, 1);
   assert.equal(result.lastBlockedReproduction.reason, "Still recent");
+
+  approxEqual(stats.getBehavioralEvenness(), 1, 1e-9);
 
   assert.is(stats.history.population.length, 1);
   assert.is(stats.history.diversity.length, 1);
@@ -247,6 +332,29 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.equal(stats.history.diversity, [0.1, 0.2, 0.3]);
   assert.equal(stats.getHistorySeries("population"), [1, 1, 1]);
   assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.5, 0.5, 0.5]);
+});
+
+test("behavioral evenness drops when one trait dominates", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(2);
+
+  const cells = [
+    createCell({ interactionGenes: { cooperate: 0.95, fight: 0.1 }, sight: 0.2 }),
+    createCell({ interactionGenes: { cooperate: 0.92, fight: 0.05 }, sight: 0.1 }),
+    createCell({ interactionGenes: { cooperate: 0.88, fight: 0.05 }, sight: 0.1 }),
+  ];
+
+  stats.updateFromSnapshot({
+    population: cells.length,
+    totalEnergy: 0,
+    totalAge: 0,
+    cells,
+  });
+
+  const evenness = stats.getBehavioralEvenness();
+
+  assert.ok(evenness < 0.2, "dominant behavior should collapse evenness");
+  approxEqual(stats.behavioralEvenness, evenness, 1e-12);
 });
 
 test("traitDefinitions option extends and overrides tracked trait metrics", async () => {

@@ -10,14 +10,33 @@ where practical.
 ### Added
 
 - Documentation audit covering the README, developer guide, and architecture
-  overview to highlight headless usage, cache-reset tooling, and supporting
-  modules.
+  overview to highlight headless usage, cache-reset tooling, supporting
+  modules, and the overlay rendering pipeline.
+- Environment override documentation in the README and developer guide for
+  `COLOURFUL_LIFE_MAX_TILE_ENERGY`, `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`, and
+  `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` so experiments can adjust
+  regeneration and harvesting behaviour without editing source while keeping
+  overlays accurate.
 - Changelog tracking ongoing project evolution.
 
 ### Changed
 
 - Expanded inline documentation for maintenance scripts to clarify intent and
   usage.
+- Added JSDoc coverage for overlay helpers to keep exported drawing utilities
+  self-documenting.
+- Raised the default energy regeneration rate from `0.007` to `0.0075` after a
+  200-tick headless run showed populations crashing to ~60 survivors (avg tile
+  energy ~0.88) versus roughly 300 organisms and ~1.08 average energy with the
+  higher baseline, improving ecosystem stability without removing scarcity
+  pressure, and nudged it again to `0.0082` after tile-only probes settled
+  closer to 3.0 energy versus 2.86 under moderate density, reducing early
+  starvation cascades without saturating the map.
+- Relocated the leaderboard refresh slider into the Evolution Insights panel,
+  renaming it "Insights Refresh Interval" so cadence controls live alongside
+  the metrics and leaderboard they influence.
+- Moved the "Pause When Hidden" toggle next to the playback controls so
+  auto-pause behaviour is discoverable alongside the Pause and Step actions.
 - Removed the obsolete wall linger penalty control and related plumbing from
   the simulation engine, headless adapter, and UI to simplify obstacle
   behaviour; the slider defaulted to zero, lacked documentation, and duplicated

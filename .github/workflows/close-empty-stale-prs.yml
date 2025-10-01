@@ -34,7 +34,6 @@ jobs:
             );
 
             let closed = 0;
-            let merged = 0;
             let branchesDeleted = 0;
 
             for (const pr of openPRs) {
@@ -54,92 +53,56 @@ jobs:
                 // Skip drafts
                 if (details.draft) continue;
 
-                let mergedThisPR = false;
+                // Post a brief explanation comment (optional but nice)
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: pr.number,
+                  body:
+                    "Closing automatically: this PR has been open for ≥1 hour and contains no file changes. " +
+                    "If this was opened as a seed or placeholder, please push commits or open a new PR when ready."
+                });
 
-                try {
-                  const mergeResult = await github.rest.pulls.merge({
-                    owner,
-                    repo,
-                    pull_number: pr.number,
-                    merge_method: 'merge',
-                    commit_title: `Auto-merge empty PR #${pr.number}`,
-                    commit_message:
-                      'Auto-merging empty PR detected by PR Janitor to keep the repository tidy.'
-                  });
+                // Close the PR
+                await github.rest.pulls.update({
+                  owner,
+                  repo,
+                  pull_number: pr.number,
+                  state: 'closed'
+                });
 
-                  if (mergeResult?.data?.merged) {
-                    mergedThisPR = true;
-                    merged++;
-                    core.info(`Merged PR #${pr.number} (${pr.title})`);
+                core.info(`Closed PR #${pr.number} (${pr.title})`);
+                closed++;
 
-                    // Delete branch if it belongs to this repository and still exists
-                    const headRepo = details.head?.repo?.full_name;
-                    const headRef = details.head?.ref;
-                    const baseRepoFullName = `${owner}/${repo}`;
+                const headRepo = details.head?.repo?.full_name;
+                const headRef = details.head?.ref;
+                const baseRepoFullName = `${owner}/${repo}`;
 
-                    const protectedBranches = new Set(['master', 'main', 'mainline']);
+                const protectedBranches = new Set(['master', 'main', 'mainline']);
 
-                    if (
-                      headRepo === baseRepoFullName &&
-                      headRef &&
-                      headRef !== details.base?.ref &&
-                      !protectedBranches.has(headRef)
-                    ) {
-                      try {
-                        await github.rest.git.deleteRef({
-                          owner,
-                          repo,
-                          ref: `heads/${headRef}`
-                        });
-                        branchesDeleted++;
-                        core.info(`Deleted branch ${headRef} for PR #${pr.number}`);
-                      } catch (deleteErr) {
-                        core.warning(`Failed to delete branch ${headRef} for PR #${pr.number}: ${deleteErr.message}`);
-                      }
-                    } else if (protectedBranches.has(headRef)) {
-                      core.info(`Skipping deletion of protected branch ${headRef} for PR #${pr.number}.`);
-                    }
-
-                    await github.rest.issues.createComment({
+                if (
+                  headRepo === baseRepoFullName &&
+                  headRef &&
+                  headRef !== details.base?.ref &&
+                  !protectedBranches.has(headRef)
+                ) {
+                  try {
+                    await github.rest.git.deleteRef({
                       owner,
                       repo,
-                      issue_number: pr.number,
-                      body:
-                        "Merged automatically: this PR had no file changes and was older than an hour. " +
-                        "The source branch has been cleaned up where possible."
+                      ref: `heads/${headRef}`
                     });
-
-                    continue;
+                    branchesDeleted++;
+                    core.info(`Deleted branch ${headRef} for PR #${pr.number}`);
+                  } catch (deleteErr) {
+                    core.warning(`Failed to delete branch ${headRef} for PR #${pr.number}: ${deleteErr.message}`);
                   }
-                } catch (mergeErr) {
-                  core.info(`Unable to merge PR #${pr.number}: ${mergeErr.message}. Falling back to closing.`);
-                }
-
-                if (!mergedThisPR) {
-                  // Post a brief explanation comment (optional but nice)
-                  await github.rest.issues.createComment({
-                    owner,
-                    repo,
-                    issue_number: pr.number,
-                    body:
-                      "Closing automatically: this PR has been open for ≥1 hour and contains no file changes. " +
-                      "If this was opened as a seed or placeholder, please push commits or open a new PR when ready."
-                  });
-
-                  // Close the PR
-                  await github.rest.pulls.update({
-                    owner,
-                    repo,
-                    pull_number: pr.number,
-                    state: 'closed'
-                  });
-
-                  core.info(`Closed PR #${pr.number} (${pr.title})`);
-                  closed++;
+                } else if (protectedBranches.has(headRef)) {
+                  core.info(`Skipping deletion of protected branch ${headRef} for PR #${pr.number}.`);
                 }
               } catch (err) {
                 core.warning(`Failed to process PR #${pr.number}: ${err.message}`);
               }
             }
 
-            core.notice(`PR Janitor complete. Merged ${merged} PR(s), closed ${closed} PR(s), deleted ${branchesDeleted} branch(es).`);
+            core.notice(`PR Janitor complete. Closed ${closed} PR(s), deleted ${branchesDeleted} branch(es).`);

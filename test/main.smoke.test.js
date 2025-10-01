@@ -53,6 +53,21 @@ test("createSimulation headless mode infers a canvas when omitted", async () => 
   simulation.destroy();
 });
 
+test("headless canvas respects numeric strings for dimensions", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    config: { canvasWidth: "800", canvasHeight: "400", cellSize: "5" },
+  });
+
+  assert.is(simulation.engine.canvas.width, 800);
+  assert.is(simulation.engine.canvas.height, 400);
+
+  simulation.destroy();
+});
+
 test("headless UI setters coerce numeric string inputs", async () => {
   const { createSimulation } = await simulationModulePromise;
 
@@ -76,8 +91,8 @@ test("headless UI forwards setting changes to the engine", async () => {
 
   simulation.uiManager.setUpdatesPerSecond(42);
   simulation.uiManager.setMatingDiversityThreshold(0.55);
-  simulation.uiManager.setAutoPauseOnBlur(false);
   simulation.uiManager.setLowDiversityReproMultiplier(0.28);
+  simulation.uiManager.setAutoPauseOnBlur(false);
 
   const state = simulation.engine.getStateSnapshot();
 
@@ -87,6 +102,75 @@ test("headless UI forwards setting changes to the engine", async () => {
   assert.is(simulation.engine.autoPauseOnBlur, false);
 
   simulation.destroy();
+});
+
+test("headless UI clamps diversity controls to the 0..1 range", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({ headless: true, autoStart: false });
+
+  simulation.uiManager.setMatingDiversityThreshold(2);
+  simulation.uiManager.setLowDiversityReproMultiplier(-0.25);
+
+  const state = simulation.engine.getStateSnapshot();
+
+  assert.is(simulation.uiManager.getMatingDiversityThreshold(), 1);
+  assert.is(state.matingDiversityThreshold, 1);
+  assert.is(simulation.uiManager.getLowDiversityReproMultiplier(), 0);
+  assert.is(state.lowDiversityReproMultiplier, 0);
+
+  simulation.destroy();
+});
+
+test("headless UI clamps update frequency like the engine", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({ headless: true, autoStart: false });
+
+  simulation.uiManager.setUpdatesPerSecond(0);
+  assert.is(simulation.uiManager.getUpdatesPerSecond(), 1);
+  assert.is(simulation.engine.getStateSnapshot().updatesPerSecond, 1);
+
+  simulation.uiManager.setUpdatesPerSecond(59.4);
+  assert.is(simulation.uiManager.getUpdatesPerSecond(), 59);
+  assert.is(simulation.engine.getStateSnapshot().updatesPerSecond, 59);
+
+  simulation.uiManager.setUpdatesPerSecond(59.6);
+  assert.is(simulation.uiManager.getUpdatesPerSecond(), 60);
+  assert.is(simulation.engine.getStateSnapshot().updatesPerSecond, 60);
+
+  simulation.destroy();
+});
+
+test("createSimulation controller step delegates to engine.step", async () => {
+  const { createSimulation } = await simulationModulePromise;
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    config: { paused: true },
+  });
+
+  let calls = 0;
+  const delegatedReturn = { delegated: true, args: null };
+  const originalStep = simulation.engine.step;
+
+  try {
+    simulation.engine.step = (...args) => {
+      calls += 1;
+      delegatedReturn.args = args;
+
+      return delegatedReturn;
+    };
+
+    const result = simulation.step("custom-timestamp");
+
+    assert.is(calls, 1, "controller step should call engine.step exactly once");
+    assert.is(result, delegatedReturn, "controller returns engine.step result");
+    assert.equal(delegatedReturn.args, ["custom-timestamp"]);
+  } finally {
+    simulation.engine.step = originalStep;
+    simulation.destroy();
+  }
 });
 
 test("step control calls engine.step when using createSimulation", async () => {

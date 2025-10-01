@@ -10,9 +10,7 @@ test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots
         row: 0,
         col: 0,
         fitness: 12,
-        smoothedFitness: 14,
         cell: {
-          fitnessScore: 11,
           offspring: 3,
           fightsWon: 4,
           age: 5,
@@ -23,9 +21,7 @@ test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots
         row: 1,
         col: 1,
         fitness: 10,
-        smoothedFitness: Number.NaN,
         cell: {
-          fitnessScore: 13,
           offspring: "2",
           fightsWon: null,
           age: undefined,
@@ -37,7 +33,6 @@ test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots
         col: 2,
         fitness: 8,
         cell: {
-          fitnessScore: undefined,
           offspring: 1,
           fightsWon: 0,
           age: 7,
@@ -69,16 +64,18 @@ test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots
 
   assert.equal(result, [
     {
+      row: 0,
+      col: 0,
       fitness: 12,
-      smoothedFitness: 14,
       offspring: 3,
       fightsWon: 4,
       age: 5,
       color: "#101010",
     },
     {
+      row: 1,
+      col: 1,
       fitness: 10,
-      smoothedFitness: 13,
       offspring: 0,
       fightsWon: 0,
       age: 0,
@@ -86,8 +83,9 @@ test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots
       brain: { row: 1, col: 1, brain: "primary" },
     },
     {
+      row: 2,
+      col: 2,
       fitness: 8,
-      smoothedFitness: 8,
       offspring: 1,
       fightsWon: 0,
       age: 7,
@@ -95,6 +93,20 @@ test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots
       brain: { row: 2, col: 2, brain: "tertiary" },
     },
   ]);
+});
+
+test("computeLeaderboard preserves entry coordinates for overlay highlights", () => {
+  const snapshot = {
+    entries: [
+      { row: "3", col: 4.2, fitness: 5, cell: {} },
+      { row: 1, col: 2, fitness: 4, cell: {} },
+    ],
+  };
+
+  const [top] = computeLeaderboard(snapshot, 1);
+
+  assert.is(top.row, 3);
+  assert.is(top.col, 4.2);
 });
 
 test("computeLeaderboard returns empty arrays when topN is zero or invalid snapshot", () => {

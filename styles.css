@@ -57,6 +57,8 @@ canvas {
 .canvas-container {
   flex: 1 1 0;
   display: flex;
+  align-self: flex-start;
+  align-items: center;
   justify-content: center;
 }
 
@@ -93,6 +95,9 @@ canvas {
     width: min(100%, 520px);
     max-width: 100%;
   }
+  .canvas-container {
+    align-self: auto;
+  }
   .dashboard-grid {
     width: 100%;
   }
@@ -106,6 +111,7 @@ canvas {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: var(--space-md);
+  box-sizing: border-box;
 }
 
 /* Collapsible panels */
@@ -150,6 +156,11 @@ canvas {
   overflow: auto;
   grid-column: 1 / -1;
   align-self: start;
+}
+.controls-panel.expanded {
+  position: static;
+  max-height: none;
+  overflow: visible;
 }
 .controls-panel h3 {
   margin: 0 0 var(--space-md);
@@ -580,6 +591,10 @@ canvas {
   gap: var(--space-sm);
 }
 
+.trait-metrics {
+  gap: var(--space-md);
+}
+
 .metrics-group-title {
   font-size: 12px;
   font-weight: 600;
@@ -588,9 +603,111 @@ canvas {
   letter-spacing: 0.04em;
 }
 
-.metrics-group-rows {
+.trait-metrics-body {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.trait-balance {
   display: grid;
   gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+}
+
+.trait-balance-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.trait-balance-label {
+  font-weight: 600;
+}
+
+.trait-balance-value {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.trait-balance-meter {
+  position: relative;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.trait-balance-fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+  background: #2ecc71;
+}
+
+.trait-balance-summary {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  margin: 0;
+}
+
+.trait-balance--empty .trait-balance-fill {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.trait-bar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.trait-bar-item {
+  display: grid;
+  gap: 6px;
+}
+
+.trait-bar-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.trait-bar-label {
+  font-weight: 600;
+}
+
+.trait-bar-value {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+
+.trait-bar-meter {
+  position: relative;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.trait-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+  background: #74b9ff;
+}
+
+.trait-empty-state {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  margin: 0;
 }
 
 .sparkline-grid {

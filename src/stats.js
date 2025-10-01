@@ -1,4 +1,4 @@
-import { clamp01 } from "./utils.js";
+import { clamp01, warnOnce } from "./utils.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = 0.6;
@@ -29,6 +29,9 @@ const INTERACTION_TRAIT_LABELS = Object.freeze({
   avoid: "Cautious",
 });
 
+const TRAIT_COMPUTE_WARNING =
+  "Trait compute function failed; defaulting to neutral contribution.";
+
 function wrapTraitCompute(fn) {
   if (typeof fn !== "function") {
     return () => 0;
@@ -37,7 +40,9 @@ function wrapTraitCompute(fn) {
   return (cell) => {
     try {
       return clamp01(fn(cell));
-    } catch {
+    } catch (error) {
+      warnOnce(TRAIT_COMPUTE_WARNING, error);
+
       return 0;
     }
   };
@@ -220,6 +225,8 @@ const createEmptyMatingSnapshot = () => ({
   appetiteSum: 0,
   selectionModes: { curiosity: 0, preference: 0 },
   poolSizeSum: 0,
+  complementaritySum: 0,
+  complementaritySuccessSum: 0,
   blocks: 0,
   lastBlockReason: null,
 });
@@ -266,6 +273,7 @@ export default class Stats {
     this.lastBlockedReproduction = null;
     this.diversityTarget = DIVERSITY_TARGET_DEFAULT;
     this.diversityPressure = 0;
+    this.behavioralEvenness = 0;
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
     this.lifeEventSequence = 0;
 
@@ -329,6 +337,14 @@ export default class Stats {
     return this.diversityPressure;
   }
 
+  getBehavioralEvenness() {
+    const value = Number.isFinite(this.behavioralEvenness)
+      ? this.behavioralEvenness
+      : 0;
+
+    return clamp01(value);
+  }
+
   #updateDiversityPressure(observedDiversity = 0) {
     const target = clamp01(this.diversityTarget ?? DIVERSITY_TARGET_DEFAULT);
 
@@ -345,6 +361,50 @@ export default class Stats {
       normalizedShortfall * (1 - DIVERSITY_PRESSURE_SMOOTHING);
 
     this.diversityPressure = clamp01(next);
+  }
+
+  #computeBehavioralEvenness(traitPresence) {
+    const fractions = traitPresence?.fractions;
+
+    if (!fractions || typeof fractions !== "object") {
+      return 0;
+    }
+
+    const values = [];
+
+    for (const raw of Object.values(fractions)) {
+      if (!Number.isFinite(raw) || raw <= 0) continue;
+
+      values.push(clamp01(raw));
+    }
+
+    if (values.length === 0) return 0;
+    if (values.length === 1) return 0;
+
+    const sum = values.reduce((acc, value) => acc + value, 0);
+
+    if (!(sum > 0)) {
+      return 0;
+    }
+
+    const invSum = 1 / sum;
+    let entropy = 0;
+
+    for (const value of values) {
+      const probability = value * invSum;
+
+      if (!(probability > 0)) continue;
+
+      entropy -= probability * Math.log(probability);
+    }
+
+    const maxEntropy = Math.log(values.length);
+
+    if (!(maxEntropy > 0) || !Number.isFinite(entropy)) {
+      return 0;
+    }
+
+    return clamp01(entropy / maxEntropy);
   }
 
   #resolveLifeEventArgs(primary, secondary) {
@@ -546,25 +606,74 @@ export default class Stats {
 
   // Sample mean pairwise distance between up to maxPairSamples random pairs.
   estimateDiversity(cells, maxPairSamples = 200) {
-    const populationSize = cells.length;
+    const populationSize = Array.isArray(cells) ? cells.length : 0;
 
     if (populationSize < 2) return 0;
-    const possiblePairs = (populationSize * (populationSize - 1)) / 2;
-    let sampleCount = Math.min(maxPairSamples, possiblePairs);
-    let sum = 0;
 
-    for (let i = 0; i < sampleCount; i++) {
+    const possiblePairs = (populationSize * (populationSize - 1)) / 2;
+
+    if (possiblePairs <= 0) {
+      return 0;
+    }
+
+    if (possiblePairs <= maxPairSamples) {
+      let sum = 0;
+      let count = 0;
+
+      for (let i = 0; i < populationSize - 1; i++) {
+        const a = cells[i];
+
+        if (!a || typeof a.dna?.similarity !== "function") {
+          continue;
+        }
+
+        for (let j = i + 1; j < populationSize; j++) {
+          const b = cells[j];
+
+          if (!b || typeof b.dna?.similarity !== "function") {
+            continue;
+          }
+
+          sum += 1 - a.dna.similarity(b.dna);
+          count++;
+        }
+      }
+
+      return count > 0 ? sum / count : 0;
+    }
+
+    const sampleGoal = Math.min(maxPairSamples, possiblePairs);
+    const maxAttempts = sampleGoal * 8;
+    let collected = 0;
+    let sum = 0;
+    let attempts = 0;
+
+    while (collected < sampleGoal && attempts < maxAttempts) {
       const a = cells[(Math.random() * populationSize) | 0];
       const b = cells[(Math.random() * populationSize) | 0];
 
-      if (a === b) {
-        i--;
+      attempts++;
+
+      if (!a || !b || a === b) {
         continue;
       }
-      sum += 1 - a.dna.similarity(b.dna); // distance in [0,1]
+
+      if (
+        typeof a.dna?.similarity !== "function" ||
+        typeof b.dna?.similarity !== "function"
+      ) {
+        continue;
+      }
+
+      sum += 1 - a.dna.similarity(b.dna);
+      collected++;
     }
 
-    return sum / sampleCount;
+    if (collected === 0) {
+      return 0;
+    }
+
+    return sum / collected;
   }
 
   /**
@@ -576,11 +685,13 @@ export default class Stats {
     const pop = snapshot?.population || 0;
     const cells = snapshot?.cells || [];
     const meanEnergy = pop ? snapshot.totalEnergy / pop : 0;
+    // Age is tracked in simulation ticks; convert with the active tick rate if seconds are needed.
     const meanAge = pop ? snapshot.totalAge / pop : 0;
     const diversity = this.estimateDiversity(cells);
 
     this.#updateDiversityPressure(diversity);
     const traitPresence = this.computeTraitPresence(cells);
+    const behaviorEvenness = this.#computeBehavioralEvenness(traitPresence);
     const mateStats = this.mating || createEmptyMatingSnapshot();
     const choiceCount = mateStats.choices || 0;
     const successCount = mateStats.successes || 0;
@@ -589,6 +700,10 @@ export default class Stats {
       ? mateStats.diverseSuccesses / successCount
       : 0;
     const meanAppetite = choiceCount ? mateStats.appetiteSum / choiceCount : 0;
+    const meanComplementarity =
+      choiceCount > 0 ? mateStats.complementaritySum / choiceCount : 0;
+    const successfulComplementarity =
+      successCount > 0 ? mateStats.complementaritySuccessSum / successCount : 0;
 
     this.pushHistory("population", pop);
     this.pushHistory("diversity", diversity);
@@ -602,6 +717,9 @@ export default class Stats {
     }
 
     this.traitPresence = traitPresence;
+    this.behavioralEvenness = behaviorEvenness;
+    this.meanBehaviorComplementarity = meanComplementarity;
+    this.successfulBehaviorComplementarity = successfulComplementarity;
     for (const { key } of this.traitDefinitions) {
       this.pushTraitHistory("presence", key, traitPresence.fractions[key] ?? 0);
       this.pushTraitHistory("average", key, traitPresence.averages[key] ?? 0);
@@ -625,6 +743,9 @@ export default class Stats {
       diverseChoiceRate,
       diverseMatingRate: diverseSuccessRate,
       meanDiversityAppetite: meanAppetite,
+      meanBehaviorComplementarity: meanComplementarity,
+      successfulBehaviorComplementarity: successfulComplementarity,
+      behaviorEvenness,
       curiositySelections: mateStats.selectionModes.curiosity,
       lastMating: this.lastMatingDebug,
       mutationMultiplier: this.mutationMultiplier,
@@ -655,13 +776,18 @@ export default class Stats {
     success = false,
     penalized = false,
     penaltyMultiplier = 1,
+    behaviorComplementarity = 0,
+    threshold,
   } = {}) {
     if (!this.mating) {
       this.mating = createEmptyMatingSnapshot();
     }
 
-    const threshold = this.matingDiversityThreshold;
-    const isDiverse = diversity >= threshold;
+    const resolvedThreshold = clamp01(
+      Number.isFinite(threshold) ? threshold : this.matingDiversityThreshold,
+    );
+    const isDiverse = diversity >= resolvedThreshold;
+    const complementarity = clamp01(behaviorComplementarity);
 
     this.mating.choices++;
     this.mating.appetiteSum += appetite || 0;
@@ -669,10 +795,12 @@ export default class Stats {
     if (isDiverse) this.mating.diverseChoices++;
     if (selectionMode === "curiosity") this.mating.selectionModes.curiosity++;
     else this.mating.selectionModes.preference++;
+    this.mating.complementaritySum += complementarity;
 
     if (success) {
       this.mating.successes++;
       if (isDiverse) this.mating.diverseSuccesses++;
+      this.mating.complementaritySuccessSum += complementarity;
     }
 
     this.lastMatingDebug = {
@@ -683,9 +811,10 @@ export default class Stats {
       selectionMode,
       poolSize,
       success,
-      threshold,
+      threshold: resolvedThreshold,
       penalized,
       penaltyMultiplier,
+      behaviorComplementarity: complementarity,
       blockedReason: this.mating.lastBlockReason || undefined,
     };
     // Consume the one-time reason so the next mating record does not reuse it.

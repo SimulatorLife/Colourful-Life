@@ -29,6 +29,20 @@ npm run lint:fix # ESLint with autofix enabled
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
+### Configuration overrides
+
+Tune baseline energy and density behaviour without editing source by setting environment variables before starting the dev server or running headless scripts:
+
+- `COLOURFUL_LIFE_MAX_TILE_ENERGY` — Raises or lowers the per-tile energy cap used by the energy system and heatmap legends.
+- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` — Adjusts how strongly local population density suppresses energy regeneration (0 disables the penalty, 1 matches the default cap).
+- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` — Tunes the harvesting penalty applied when crowded organisms attempt to consume energy from a tile, allowing experiments with more competitive or laissez-faire ecosystems.
+
+Values outside their accepted ranges fall back to the defaults defined in [`src/config.js`](src/config.js) so experiments remain predictable across environments and overlays stay aligned with the active configuration.
+
+### Optional celebration glow overlay
+
+Flip on the **Celebration Glow** checkbox in the Overlays panel to surround the most successful organisms with a soft aurora. The highlight quietly layers on top of the existing canvas without changing simulation mechanics, respects motion-sensitive setups (no flashing or animation), and avoids obscuring other overlays by using gentle transparency. Toggle it off at any time to return to the standard presentation.
+
 ## Core systems
 
 The simulation runs on cooperating modules housed in `src/`:
@@ -39,8 +53,9 @@ The simulation runs on cooperating modules housed in `src/`:
 - **Genetics and brains** (`src/genome.js`, `src/brain.js`) — DNA factories encode traits ranging from combat appetite to neural wiring. Brains interpret sensor inputs, adapt gains over time, and emit movement/interaction intents.
 - **Interaction system** (`src/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
 - **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and colour overlays.
-- **Stats & leaderboard** (`src/stats.js`, `src/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface active environmental event summaries (intensity, coverage, and remaining duration), and select the top-performing organisms.
-- **UI manager** (`src/ui/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/main.js` mirrors the interface for tests and Node scripts.
+- **Stats & leaderboard** (`src/stats.js`, `src/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface active environmental event summaries (intensity, coverage, and remaining duration), and select the top-performing organisms. Organism age readings surfaced here and in the UI are measured in simulation ticks so observers can translate them into seconds using the active tick rate.
+- **UI manager** (`src/ui/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/ui/headlessUiManager.js` mirrors the interface for tests and Node scripts.
+- **Selection tooling** (`src/ui/selectionManager.js`, `src/grid/reproductionZonePolicy.js`) — Defines preset and user-drawn mating zones, keeps geometry caches in sync with grid dimensions, and exposes helpers consumed by UI controls and reproduction policies.
 
 For an architectural deep dive—including subsystem hand-offs, data flow, and extension tips—see [`docs/architecture-overview.md`](docs/architecture-overview.md).
 
@@ -49,8 +64,8 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 - **Formatting** — Run `npm run format` before committing or rely on the included Prettier integration. `npm run format:check` verifies without writing.
 - **Linting** — `npm run lint` enforces the ESLint + Prettier ruleset across JavaScript and inline HTML. Use `npm run lint:fix` to auto-resolve minor issues.
 - **Testing** — `npm test` executes UVU suites under an esbuild loader. Tests cover grid utilities, selection logic, and regression harnesses. Add cases when behaviours change.
-- **Profiling** — `node scripts/profile-energy.mjs` benchmarks the energy preparation loop. Adjust rows/cols via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, and `PERF_ITERATIONS` environment variables.
-- **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap for headless runs and automated experiments without modifying source defaults.
+- **Profiling** — `node scripts/profile-energy.mjs` benchmarks the energy preparation loop. Adjust rows/cols via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and the stub `cellSize` with `PERF_CELL_SIZE` environment variables.
+- **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap and use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures without modifying source defaults.
 - **Headless usage** — `createSimulation` accepts `{ headless: true }` to return a controller without mounting DOM controls. Inject `requestAnimationFrame`, `performanceNow`, or RNG hooks for deterministic automation.
 - **Documentation** — Follow the conventions in [`docs/developer-guide.md`](docs/developer-guide.md) when updating code comments, tests, or user-facing docs.
 
@@ -84,6 +99,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 - [`docs/architecture-overview.md`](docs/architecture-overview.md) — Component responsibilities and data flow diagrams.
 - [`docs/developer-guide.md`](docs/developer-guide.md) — Conventions for contributors, testing expectations, and documentation tips.
 - Inline JSDoc and comments throughout `src/` describing exported functions, complex routines, and configuration helpers.
+- Environment variable reference in [`src/config.js`](src/config.js) for tuning energy caps and regeneration penalties without patching source.
 
 ## Documentation map
 

@@ -1,6 +1,6 @@
 import { resolveSimulationDefaults } from "../config.js";
 import { UI_SLIDER_CONFIG } from "./sliderConfig.js";
-import { clamp01, warnOnce } from "../utils.js";
+import { clamp01, warnOnce, toPlainObject } from "../utils.js";
 import {
   createControlButtonRow,
   createControlGrid,
@@ -15,8 +15,6 @@ import {
  * user interactions back to the {@link SimulationEngine}. It also forwards
  * slow-updating metrics to dashboards and coordinates selection drawing.
  */
-const toPlainObject = (value) => (value && typeof value === "object" ? value : {});
-
 export default class UIManager {
   constructor(
     simulationCallbacks = {},
@@ -49,7 +47,6 @@ export default class UIManager {
     this.selectionDragEnd = null;
     this.drawZoneButton = null;
     this.zoneSummaryEl = null;
-    this.patternCheckboxes = {};
     this._selectionListenersInstalled = false;
     this.stepButton = null;
     this.clearZonesButton = null;
@@ -77,8 +74,14 @@ export default class UIManager {
     this.showEnergy = defaults.showEnergy;
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
+    this.showCelebrationAuras = defaults.showCelebrationAuras;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
+    const initialObstaclePreset = this.#resolveInitialObstaclePreset(actionFns);
+
+    if (initialObstaclePreset) {
+      this.obstaclePreset = initialObstaclePreset;
+    }
     this.autoPauseCheckbox = null;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
@@ -113,8 +116,10 @@ export default class UIManager {
     }
     this.controlsPanel = this.#buildControlsPanel();
     this.insightsPanel = this.#buildInsightsPanel();
+    this.lifeEventsPanel = this.#buildLifeEventsPanel();
     this.dashboardGrid.appendChild(this.controlsPanel);
     this.dashboardGrid.appendChild(this.insightsPanel);
+    this.dashboardGrid.appendChild(this.lifeEventsPanel);
 
     // Keyboard toggle
     document.addEventListener("keydown", (e) => {
@@ -142,6 +147,39 @@ export default class UIManager {
       .filter((value) => value.length > 0);
 
     return new Set(normalized.length > 0 ? normalized : fallback);
+  }
+
+  #resolveInitialObstaclePreset(actionFns = {}) {
+    let candidate = null;
+
+    const getter = actionFns?.getCurrentObstaclePreset;
+
+    if (typeof getter === "function") {
+      try {
+        candidate = getter();
+      } catch (error) {
+        warnOnce("Failed to read current obstacle preset from actions.", error);
+      }
+    }
+
+    if (
+      (!candidate || typeof candidate !== "string" || candidate.length === 0) &&
+      typeof window !== "undefined"
+    ) {
+      const fromWindow = window.grid?.currentObstaclePreset;
+
+      if (typeof fromWindow === "string" && fromWindow.length > 0) {
+        candidate = fromWindow;
+      }
+    }
+
+    if (typeof candidate !== "string" || candidate.length === 0) {
+      return null;
+    }
+
+    const match = this.obstaclePresets.find((preset) => preset?.id === candidate);
+
+    return match ? match.id : null;
   }
 
   attachCanvas(canvasElement, options = {}) {
@@ -282,12 +320,22 @@ export default class UIManager {
   #canvasToGrid(event) {
     if (!this.canvasElement) return null;
 
-    const rect = this.canvasElement.getBoundingClientRect();
+    const rect = this.canvasElement.getBoundingClientRect?.();
     const cellSize = Math.max(1, this.getCellSize());
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    const col = Math.floor(x / cellSize);
-    const row = Math.floor(y / cellSize);
+    const offsetX = event.clientX - (rect?.left ?? 0);
+    const offsetY = event.clientY - (rect?.top ?? 0);
+    const scaleX =
+      rect && Number.isFinite(rect.width) && rect.width > 0
+        ? this.canvasElement.width / rect.width
+        : 1;
+    const scaleY =
+      rect && Number.isFinite(rect.height) && rect.height > 0
+        ? this.canvasElement.height / rect.height
+        : 1;
+    const canvasX = offsetX * (Number.isFinite(scaleX) && scaleX > 0 ? scaleX : 1);
+    const canvasY = offsetY * (Number.isFinite(scaleY) && scaleY > 0 ? scaleY : 1);
+    const col = Math.floor(canvasX / cellSize);
+    const row = Math.floor(canvasY / cellSize);
     const maxCols = Math.floor(this.canvasElement.width / cellSize);
     const maxRows = Math.floor(this.canvasElement.height / cellSize);
 
@@ -760,6 +808,7 @@ export default class UIManager {
 
     const setCollapsed = (shouldCollapse) => {
       panel.classList.toggle("collapsed", shouldCollapse);
+      panel.classList.toggle("expanded", !shouldCollapse);
       toggle.textContent = shouldCollapse ? "+" : "–";
       toggle.setAttribute("aria-expanded", shouldCollapse ? "false" : "true");
     };
@@ -792,6 +841,8 @@ export default class UIManager {
     this.#buildControlButtons(body);
 
     const sliderContext = this.#buildSliderGroups(body);
+
+    this.sliderContext = sliderContext;
 
     this.#buildOverlayToggles(body);
 
@@ -847,6 +898,17 @@ export default class UIManager {
           window.grid.burstRandomCells();
       },
     });
+
+    this.autoPauseCheckbox = this.#addCheckbox(
+      body,
+      "Pause When Hidden",
+      "Automatically pause when the tab or window loses focus, resuming on return.",
+      this.autoPauseOnBlur,
+      (checked) => {
+        this.setAutoPauseOnBlur(checked);
+        this.#updateSetting("autoPauseOnBlur", checked);
+      },
+    );
   }
 
   #buildSliderGroups(body) {
@@ -1039,16 +1101,19 @@ export default class UIManager {
         setValue: (v) => this.#updateSetting("speedMultiplier", v),
         position: "beforeOverlays",
       }),
+    ];
+
+    const insightConfigs = [
       withSliderConfig("leaderboardIntervalMs", {
-        label: "Leaderboard Interval",
+        label: "Insights Refresh Interval",
         min: 100,
         max: 3000,
         step: 50,
-        title: "Delay between leaderboard refreshes in milliseconds (100..3000)",
+        title:
+          "Delay between updating evolution insights and leaderboard summaries in milliseconds (100..3000)",
         format: (v) => `${Math.round(v)} ms`,
         getValue: () => this.leaderboardIntervalMs,
         setValue: (v) => this.#updateSetting("leaderboardIntervalMs", v),
-        position: "afterEnergy",
       }),
     ];
 
@@ -1069,23 +1134,13 @@ export default class UIManager {
       .filter((cfg) => cfg.position === "beforeOverlays")
       .forEach((cfg) => renderSlider(cfg, generalGroup));
 
-    this.autoPauseCheckbox = this.#addCheckbox(
-      generalGroup,
-      "Pause When Hidden",
-      "Automatically pause when the tab or window loses focus, resuming on return.",
-      this.autoPauseOnBlur,
-      (checked) => {
-        this.setAutoPauseOnBlur(checked);
-        this.#updateSetting("autoPauseOnBlur", checked);
-      },
-    );
-
     return {
       renderSlider,
       withSliderConfig,
       energyConfigs,
       generalConfigs,
       generalGroup,
+      insightConfigs,
     };
   }
 
@@ -1119,6 +1174,13 @@ export default class UIManager {
         title: "Overlay cell fitness as a heatmap",
         initial: this.showFitness,
       },
+      {
+        key: "showCelebrationAuras",
+        label: "Celebration Glow",
+        title:
+          "Add a gentle aurora around the top-performing cells as a whimsical overlay",
+        initial: this.showCelebrationAuras,
+      },
     ];
 
     overlayConfigs.forEach(({ key, label, title, initial }) => {
@@ -1129,8 +1191,6 @@ export default class UIManager {
   }
 
   #buildObstacleControls(body, sliderContext) {
-    if (this.obstaclePresets.length <= 0) return;
-
     createSectionHeading(body, "Obstacles", { className: "overlay-header" });
 
     const obstacleGrid = createControlGrid(body, "control-grid--compact");
@@ -1150,7 +1210,7 @@ export default class UIManager {
         },
       });
 
-      if (presetSelect) {
+      if (presetSelect?.options) {
         Array.from(presetSelect.options).forEach((opt) => {
           if (!opt.title && opt.textContent) opt.title = opt.textContent;
         });
@@ -1210,8 +1270,6 @@ export default class UIManager {
           this.#scheduleUpdate();
         },
       );
-
-      this.patternCheckboxes[pattern.id] = checkbox;
     });
 
     const zoneButtons = createControlButtonRow(body);
@@ -1293,6 +1351,31 @@ export default class UIManager {
       "Track population health, energy, and behavioral trends as the simulation unfolds.";
     body.appendChild(intro);
 
+    const sliderContext = this.sliderContext;
+
+    if (sliderContext?.insightConfigs?.length) {
+      const cadenceSection = document.createElement("section");
+
+      cadenceSection.className = "metrics-section insight-cadence";
+      const cadenceTitle = document.createElement("h4");
+
+      cadenceTitle.className = "metrics-section-title";
+      cadenceTitle.textContent = "Update Cadence";
+      cadenceSection.appendChild(cadenceTitle);
+
+      const cadenceBody = document.createElement("div");
+
+      cadenceBody.className = "metrics-section-body";
+      const cadenceGrid = createControlGrid(cadenceBody, "control-grid--compact");
+
+      sliderContext.insightConfigs.forEach((cfg) => {
+        sliderContext.renderSlider(cfg, cadenceGrid);
+      });
+
+      cadenceSection.appendChild(cadenceBody);
+      body.appendChild(cadenceSection);
+    }
+
     this.metricsBox = document.createElement("div");
     this.metricsBox.className = "metrics-box";
     this.metricsBox.setAttribute("role", "status");
@@ -1300,32 +1383,12 @@ export default class UIManager {
     this.#showMetricsPlaceholder("Run the simulation to populate these metrics.");
     body.appendChild(this.metricsBox);
 
-    const lifeEventsSection = document.createElement("section");
+    const sparkGrid = document.createElement("div");
 
-    lifeEventsSection.className = "metrics-section life-events";
-
-    const lifeHeading = document.createElement("h4");
-
-    lifeHeading.className = "metrics-section-title";
-    lifeHeading.textContent = "Life Event Log";
-    lifeEventsSection.appendChild(lifeHeading);
-    const lifeBody = document.createElement("div");
-
-    lifeBody.className = "metrics-section-body life-events-body";
-
-    this.lifeEventsEmptyState = document.createElement("div");
-    this.lifeEventsEmptyState.className = "life-event-empty";
-    this.lifeEventsEmptyState.textContent =
-      "Recent births and deaths will appear once the simulation runs.";
-    lifeBody.appendChild(this.lifeEventsEmptyState);
-
-    this.lifeEventList = document.createElement("ul");
-    this.lifeEventList.className = "life-event-list";
-    this.lifeEventList.setAttribute("role", "list");
-    this.lifeEventList.hidden = true;
-    lifeBody.appendChild(this.lifeEventList);
-    lifeEventsSection.appendChild(lifeBody);
-    body.appendChild(lifeEventsSection);
+    sparkGrid.className = "sparkline-grid";
+    sparkGrid.setAttribute("role", "group");
+    sparkGrid.setAttribute("aria-label", "Historical trend sparklines");
+    body.appendChild(sparkGrid);
 
     // Sparklines canvases
     const traitDescriptors = [
@@ -1374,13 +1437,6 @@ export default class UIManager {
 
     this.traitSparkDescriptors = traitSparkDescriptors;
 
-    const sparkGrid = document.createElement("div");
-
-    sparkGrid.className = "sparkline-grid";
-    sparkGrid.setAttribute("role", "group");
-    sparkGrid.setAttribute("aria-label", "Historical trend sparklines");
-    body.appendChild(sparkGrid);
-
     sparkDescriptors.forEach(({ label, property, color }) => {
       const card = document.createElement("div");
       const caption = document.createElement("div");
@@ -1410,6 +1466,43 @@ export default class UIManager {
 
       this[property] = canvas;
     });
+
+    return panel;
+  }
+
+  #buildLifeEventsPanel() {
+    const { panel, body } = this.#createPanel("Life Event Log", {
+      collapsed: true,
+    });
+
+    const lifeEventsSection = document.createElement("section");
+
+    lifeEventsSection.className = "metrics-section life-events";
+
+    const lifeHeading = document.createElement("h4");
+
+    lifeHeading.className = "metrics-section-title";
+    lifeHeading.textContent = "Recent Activity";
+    lifeEventsSection.appendChild(lifeHeading);
+
+    const lifeBody = document.createElement("div");
+
+    lifeBody.className = "metrics-section-body life-events-body";
+
+    this.lifeEventsEmptyState = document.createElement("div");
+    this.lifeEventsEmptyState.className = "life-event-empty";
+    this.lifeEventsEmptyState.textContent =
+      "Recent births and deaths will appear once the simulation runs.";
+    lifeBody.appendChild(this.lifeEventsEmptyState);
+
+    this.lifeEventList = document.createElement("ul");
+    this.lifeEventList.className = "life-event-list";
+    this.lifeEventList.setAttribute("role", "list");
+    this.lifeEventList.hidden = true;
+    lifeBody.appendChild(this.lifeEventList);
+
+    lifeEventsSection.appendChild(lifeBody);
+    body.appendChild(lifeEventsSection);
 
     return panel;
   }
@@ -1497,6 +1590,9 @@ export default class UIManager {
   }
   getShowFitness() {
     return this.showFitness;
+  }
+  getShowCelebrationAuras() {
+    return this.showCelebrationAuras;
   }
   getShowObstacles() {
     return this.showObstacles;
@@ -1668,9 +1764,9 @@ export default class UIManager {
       title: "Average energy per cell",
     });
     appendMetricRow(vitalitySection, {
-      label: "Mean Age",
+      label: "Mean Age (ticks)",
       value: fixedOrDash(s.meanAge, 1),
-      title: "Average age of living cells",
+      title: "Average age of living cells measured in simulation ticks.",
     });
     appendMetricRow(vitalitySection, {
       label: "Diversity",
@@ -1771,12 +1867,15 @@ export default class UIManager {
     );
 
     const traitPresence = stats?.traitPresence;
+    const behaviorEvenness = Number.isFinite(s.behaviorEvenness)
+      ? clamp01(s.behaviorEvenness)
+      : null;
 
     if (traitPresence) {
       const traitSection = createSection("Trait Presence", { wide: true });
       const traitGroup = document.createElement("div");
 
-      traitGroup.className = "metrics-group";
+      traitGroup.className = "metrics-group trait-metrics";
 
       const traitHeading = document.createElement("div");
 
@@ -1784,36 +1883,197 @@ export default class UIManager {
       traitHeading.textContent = "Traits";
       traitGroup.appendChild(traitHeading);
 
-      const traitRows = document.createElement("div");
+      const traitBody = document.createElement("div");
 
-      traitRows.className = "metrics-group-rows";
-      traitGroup.appendChild(traitRows);
+      traitBody.className = "trait-metrics-body";
+      traitGroup.appendChild(traitBody);
 
       const hasPopulation = traitPresence.population > 0;
-      const traitConfigs = [
-        { key: "cooperation", label: "Cooperation" },
-        { key: "fighting", label: "Fighting" },
-        { key: "breeding", label: "Breeding" },
-        { key: "sight", label: "Sight" },
-      ];
+      const describeEvenness = (value) => {
+        if (!Number.isFinite(value)) {
+          return {
+            label: "Unknown",
+            description:
+              "Run the simulation to measure how evenly traits are expressed.",
+            color: "rgba(255,255,255,0.25)",
+          };
+        }
 
-      for (let i = 0; i < traitConfigs.length; i++) {
-        const trait = traitConfigs[i];
-        const count = traitPresence.counts?.[trait.key] ?? 0;
-        const fraction = traitPresence.fractions?.[trait.key] ?? 0;
-        const value = hasPopulation
-          ? `${count} (${(fraction * 100).toFixed(0)}%)`
-          : "—";
-        const tooltipBase =
-          "Active cells have a normalized value ≥ 60% for this trait.";
+        if (value >= 0.8) {
+          return {
+            label: "Balanced",
+            description: "Traits are evenly expressed across the population this tick.",
+            color: "#2ecc71",
+          };
+        }
 
-        this.#appendControlRow(traitRows, {
-          label: trait.label,
-          value,
-          title: hasPopulation
-            ? tooltipBase
-            : `${tooltipBase} No living cells in population.`,
-        });
+        if (value >= 0.55) {
+          return {
+            label: "Mixed",
+            description:
+              "Multiple strategies are active with a slight behavioral tilt.",
+            color: "#f1c40f",
+          };
+        }
+
+        return {
+          label: "Dominant",
+          description: "One or two strategies dominate the population this tick.",
+          color: "#e74c3c",
+        };
+      };
+
+      if (behaviorEvenness != null || hasPopulation) {
+        const evennessValue =
+          hasPopulation && behaviorEvenness != null ? behaviorEvenness : 0;
+        const evennessMeta = describeEvenness(
+          hasPopulation ? behaviorEvenness : Number.NaN,
+        );
+        const balanceCard = document.createElement("div");
+
+        balanceCard.className = "trait-balance";
+        if (!hasPopulation) {
+          balanceCard.classList.add("trait-balance--empty");
+        }
+        balanceCard.title = `${evennessMeta.description} Normalized evenness ${(evennessValue * 100).toFixed(0)}%.`;
+
+        const balanceHeader = document.createElement("div");
+
+        balanceHeader.className = "trait-balance-header";
+        const balanceLabel = document.createElement("span");
+
+        balanceLabel.className = "trait-balance-label";
+        balanceLabel.textContent = "Behavior Balance";
+        balanceHeader.appendChild(balanceLabel);
+
+        const balanceValue = document.createElement("span");
+
+        balanceValue.className = "trait-balance-value";
+        balanceValue.textContent = hasPopulation
+          ? `${(evennessValue * 100).toFixed(0)}% ${evennessMeta.label}`
+          : "No living cells";
+        balanceHeader.appendChild(balanceValue);
+        balanceCard.appendChild(balanceHeader);
+
+        const balanceMeter = document.createElement("div");
+
+        balanceMeter.className = "trait-balance-meter";
+        balanceMeter.setAttribute("role", "meter");
+        balanceMeter.setAttribute("aria-label", "Behavior balance across traits");
+        balanceMeter.setAttribute("aria-valuemin", "0");
+        balanceMeter.setAttribute("aria-valuemax", "1");
+        balanceMeter.setAttribute(
+          "aria-valuenow",
+          hasPopulation ? evennessValue.toFixed(2) : "0",
+        );
+        balanceMeter.setAttribute(
+          "aria-valuetext",
+          hasPopulation
+            ? `${(evennessValue * 100).toFixed(0)}% of behaviors are evenly distributed`
+            : "No living cells to sample",
+        );
+        const balanceFill = document.createElement("div");
+
+        balanceFill.className = "trait-balance-fill";
+        balanceFill.style.width = `${(evennessValue * 100).toFixed(0)}%`;
+        balanceFill.style.background = hasPopulation
+          ? evennessMeta.color
+          : "rgba(255,255,255,0.25)";
+        balanceMeter.appendChild(balanceFill);
+        balanceCard.appendChild(balanceMeter);
+
+        const balanceSummary = document.createElement("p");
+
+        balanceSummary.className = "trait-balance-summary";
+        balanceSummary.textContent = hasPopulation
+          ? evennessMeta.description
+          : "Run the simulation to measure how evenly traits are expressed.";
+        balanceCard.appendChild(balanceSummary);
+
+        traitBody.appendChild(balanceCard);
+      }
+
+      if (hasPopulation) {
+        const traitPalette = {
+          cooperation: "#74b9ff",
+          fighting: "#ff7675",
+          breeding: "#f39c12",
+          sight: "#55efc4",
+        };
+        const traitConfigs = [
+          { key: "cooperation", label: "Cooperation" },
+          { key: "fighting", label: "Fighting" },
+          { key: "breeding", label: "Breeding" },
+          { key: "sight", label: "Sight" },
+        ];
+        const traitList = document.createElement("ul");
+
+        traitList.className = "trait-bar-list";
+        traitList.setAttribute("role", "list");
+
+        for (let i = 0; i < traitConfigs.length; i++) {
+          const trait = traitConfigs[i];
+          const countRaw = traitPresence.counts?.[trait.key] ?? 0;
+          const fractionRaw = traitPresence.fractions?.[trait.key] ?? 0;
+          const count = Number.isFinite(countRaw) ? countRaw : 0;
+          const fraction = clamp01(Number.isFinite(fractionRaw) ? fractionRaw : 0);
+          const percentText = `${(fraction * 100).toFixed(0)}%`;
+          const countText = count.toLocaleString();
+          const tooltipBase =
+            "Active cells have a normalized value ≥ 60% for this trait.";
+          const item = document.createElement("li");
+
+          item.className = "trait-bar-item";
+
+          const header = document.createElement("div");
+
+          header.className = "trait-bar-header";
+          const labelEl = document.createElement("span");
+
+          labelEl.className = "trait-bar-label";
+          labelEl.textContent = trait.label;
+          header.appendChild(labelEl);
+
+          const valueEl = document.createElement("span");
+
+          valueEl.className = "trait-bar-value";
+          valueEl.textContent = `${countText} cells (${percentText})`;
+          header.appendChild(valueEl);
+
+          item.appendChild(header);
+
+          const meter = document.createElement("div");
+
+          meter.className = "trait-bar-meter";
+          meter.setAttribute("role", "meter");
+          meter.setAttribute("aria-label", `${trait.label} presence`);
+          meter.setAttribute("aria-valuemin", "0");
+          meter.setAttribute("aria-valuemax", "1");
+          meter.setAttribute("aria-valuenow", fraction.toFixed(2));
+          meter.setAttribute(
+            "aria-valuetext",
+            `${percentText} of living cells show high ${trait.label.toLowerCase()}`,
+          );
+          meter.title = `${tooltipBase} ${percentText} of the population exceeds the threshold.`;
+
+          const fill = document.createElement("div");
+
+          fill.className = "trait-bar-fill";
+          fill.style.width = `${(fraction * 100).toFixed(0)}%`;
+          fill.style.background = traitPalette[trait.key] || "#74b9ff";
+          meter.appendChild(fill);
+
+          item.appendChild(meter);
+          traitList.appendChild(item);
+        }
+
+        traitBody.appendChild(traitList);
+      } else {
+        const emptyState = document.createElement("p");
+
+        emptyState.className = "trait-empty-state";
+        emptyState.textContent = "No living cells to sample for trait presence yet.";
+        traitBody.appendChild(emptyState);
       }
 
       traitSection.appendChild(traitGroup);
@@ -1903,12 +2163,9 @@ export default class UIManager {
       Number.isFinite(value) ? value.toLocaleString() : "—";
 
     entries.forEach((entry, index) => {
-      const smoothedFitness = Number.isFinite(entry.smoothedFitness)
-        ? entry.smoothedFitness
-        : undefined;
-      const summaryFitness = Number.isFinite(smoothedFitness)
-        ? smoothedFitness
-        : entry.fitness;
+      const summaryFitness = Number.isFinite(entry.fitness)
+        ? entry.fitness
+        : Number.NaN;
       const brain = entry.brain ?? {};
       const card = document.createElement("article");
 
@@ -1951,9 +2208,7 @@ export default class UIManager {
       const summaryLabel = document.createElement("span");
 
       summaryLabel.className = "leaderboard-summary-label";
-      summaryLabel.textContent = Number.isFinite(smoothedFitness)
-        ? "Smoothed Fitness"
-        : "Fitness";
+      summaryLabel.textContent = "Fitness";
       summary.appendChild(summaryLabel);
 
       const summaryValue = document.createElement("span");
@@ -1971,17 +2226,13 @@ export default class UIManager {
 
       const detailRows = [];
 
-      if (Number.isFinite(entry.fitness) && Number.isFinite(smoothedFitness)) {
-        detailRows.push({ label: "Raw Fitness", value: formatFloat(entry.fitness) });
-      }
-
       detailRows.push(
         { label: "Brain Fitness", value: formatFloat(brain.fitness) },
         { label: "Neurons", value: formatCount(brain.neuronCount) },
         { label: "Connections", value: formatCount(brain.connectionCount) },
         { label: "Offspring", value: formatCount(entry.offspring) },
         { label: "Fights Won", value: formatCount(entry.fightsWon) },
-        { label: "Age", value: formatCount(entry.age) },
+        { label: "Age (ticks)", value: formatCount(entry.age) },
       );
 
       detailRows.forEach(({ label, value }) => {
@@ -2011,12 +2262,8 @@ export default class UIManager {
         `Connections ${formatCount(brain.connectionCount)}`,
         `Offspring ${formatCount(entry.offspring)}`,
         `Fights ${formatCount(entry.fightsWon)}`,
-        `Age ${formatCount(entry.age)}`,
+        `Age ${formatCount(entry.age)} ticks`,
       ];
-
-      if (Number.isFinite(entry.fitness) && Number.isFinite(smoothedFitness)) {
-        tooltipParts.splice(1, 0, `Raw Fitness ${formatFloat(entry.fitness)}`);
-      }
 
       card.title = tooltipParts.join(" | ");
       card.appendChild(statsContainer);

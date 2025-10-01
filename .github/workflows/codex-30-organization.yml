@@ -19,7 +19,7 @@ jobs:
       pr_title: "Codex: Project Organization Sweep"
       pr_body: "Seed PR for Codex to relocate one function, module, or asset to a more coherent home and tidy references."
       prompt: >
-        Perform a focused organization pass. Locate one function, module, or asset that
+        Perform a focused organization pass. Locate one function, module, or file/asset that
         currently lives in an ill-fitting directory or file (e.g., UI helper in core
         logic, event utilities outside `src/events`, grid helpers outside `src/grid`).
         Justify why the current placement is suboptimal, then move it to the more

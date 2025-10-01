@@ -1,6 +1,12 @@
 import { clamp } from "./utils.js";
 
 const EMPTY_APPLIED_EVENTS = Object.freeze([]);
+const NO_EVENT_MODIFIERS = Object.freeze({
+  regenMultiplier: 1,
+  regenAdd: 0,
+  drainAdd: 0,
+  appliedEvents: EMPTY_APPLIED_EVENTS,
+});
 
 function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }) {
   if (
@@ -15,11 +21,7 @@ function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }
     return null;
   }
 
-  let sum = 0;
-
-  for (let i = 0; i < neighborEnergies.length; i++) {
-    sum += neighborEnergies[i] || 0;
-  }
+  const sum = neighborEnergies.reduce((total, value) => total + (value || 0), 0);
 
   return sum / neighborEnergies.length;
 }
@@ -73,44 +75,58 @@ export function accumulateEventModifiers({
       ? sharedEffectCache
       : null;
   const effectCache = reusableEffectCache ?? (resolveEffect ? new Map() : null);
-  const strengthMultiplier = Number(eventStrengthMultiplier || 1);
+  const numericStrengthMultiplier = Number(eventStrengthMultiplier);
+  const strengthMultiplier = Number.isFinite(numericStrengthMultiplier)
+    ? numericStrengthMultiplier
+    : 1;
 
-  for (const ev of events) {
-    if (!ev) continue;
-    if (eventApplies && !eventApplies(ev, row, col)) continue;
+  for (
+    let eventIndex = 0, eventCount = events.length;
+    eventIndex < eventCount;
+    eventIndex++
+  ) {
+    const eventInstance = events[eventIndex];
 
-    let effect = null;
+    if (!eventInstance) continue;
+    if (eventApplies && !eventApplies(eventInstance, row, col)) continue;
+
+    let eventEffect = null;
 
     if (resolveEffect) {
-      const type = ev.eventType;
+      const type = eventInstance.eventType;
 
       if (effectCache) {
-        if (effectCache.has(type)) {
-          effect = effectCache.get(type);
+        const cached = effectCache.get(type);
+
+        if (cached !== undefined) {
+          eventEffect = cached;
         } else {
-          effect = resolveEffect(type);
-          effectCache.set(type, effect ?? null);
+          eventEffect = resolveEffect(type) ?? null;
+          effectCache.set(type, eventEffect);
         }
       } else {
-        effect = resolveEffect(type);
+        eventEffect = resolveEffect(type);
       }
     }
 
-    if (!effect) continue;
+    if (!eventEffect) continue;
 
-    const baseStrength = Number(ev.strength || 0);
-    const strength = baseStrength * strengthMultiplier;
+    const strength = Number(eventInstance.strength ?? 0) * strengthMultiplier;
 
     if (!Number.isFinite(strength) || strength === 0) continue;
 
-    if (effect.regenScale) {
-      const { base = 1, change = 0, min = 0 } = effect.regenScale;
+    const {
+      regenScale,
+      regenAdd: effectRegenAdd,
+      drainAdd: effectDrainAdd,
+    } = eventEffect;
+
+    if (regenScale) {
+      const { base = 1, change = 0, min = 0 } = regenScale;
       const scale = Math.max(min, base + change * strength);
 
       regenMultiplier *= scale;
     }
-
-    const { regenAdd: effectRegenAdd, drainAdd: effectDrainAdd } = effect;
 
     if (typeof effectRegenAdd === "number") {
       regenAdd += effectRegenAdd * strength;
@@ -120,7 +136,11 @@ export function accumulateEventModifiers({
       drainAdd += effectDrainAdd * strength;
     }
 
-    (appliedEvents ??= []).push({ event: ev, effect, strength });
+    (appliedEvents ??= []).push({
+      event: eventInstance,
+      effect: eventEffect,
+      strength,
+    });
   }
 
   return {
@@ -194,15 +214,18 @@ export function computeTileEnergyUpdate(
 
   regen *= Math.max(0, 1 - (regenDensityPenalty ?? 0) * effectiveDensity);
 
-  const modifiers = accumulateEventModifiers({
-    events,
-    row,
-    col,
-    eventStrengthMultiplier,
-    isEventAffecting,
-    getEventEffect,
-    effectCache,
-  });
+  const modifiers =
+    Array.isArray(events) && events.length > 0
+      ? accumulateEventModifiers({
+          events,
+          row,
+          col,
+          eventStrengthMultiplier,
+          isEventAffecting,
+          getEventEffect,
+          effectCache,
+        })
+      : NO_EVENT_MODIFIERS;
 
   regen *= modifiers.regenMultiplier;
   regen += modifiers.regenAdd;

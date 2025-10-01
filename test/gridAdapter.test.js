@@ -2,6 +2,7 @@ import { test } from "uvu";
 import * as assert from "uvu/assert";
 
 import GridInteractionAdapter from "../src/grid/gridAdapter.js";
+import { MAX_TILE_ENERGY } from "../src/config.js";
 
 const createGrid = (rows, cols) =>
   Array.from({ length: rows }, () => Array.from({ length: cols }, () => null));
@@ -122,6 +123,24 @@ test("maxTileEnergy falls back to global GridManager constant when available", (
 
   assert.is(adapter.maxTileEnergy(), 42);
   delete globalThis.GridManager;
+});
+
+test("maxTileEnergy falls back to config default when manager provides no cap", () => {
+  const adapter = new GridInteractionAdapter({ gridManager: {} });
+
+  assert.is(adapter.maxTileEnergy(), MAX_TILE_ENERGY);
+});
+
+test("transferEnergy uses config fallback when no maxTileEnergy provided", () => {
+  const adapter = new GridInteractionAdapter({ gridManager: {} });
+  const donor = createCell(0, 0, 5);
+  const recipient = createCell(0, 1, 1);
+
+  const transferred = adapter.transferEnergy({ from: donor, to: recipient, amount: 3 });
+
+  assert.is(transferred, 3);
+  assert.is(donor.energy, 2);
+  assert.is(recipient.energy, 4);
 });
 
 test("densityAt prefers provided density grid over manager helper", () => {

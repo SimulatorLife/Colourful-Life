@@ -1,7 +1,7 @@
 import js from "@eslint/js";
 import htmlPlugin from "eslint-plugin-html";
-import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 import globals from "globals";
+import eslintConfigPrettier from "eslint-config-prettier";
 
 const IGNORE_PATTERNS = [
   "node_modules/",
@@ -54,5 +54,5 @@ export default [
       html: htmlPlugin,
     },
   },
-  eslintPluginPrettierRecommended,
+  eslintConfigPrettier,
 ];

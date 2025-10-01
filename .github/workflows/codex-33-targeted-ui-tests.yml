@@ -1,0 +1,30 @@
+name: Codex 33 – Targeted UI Tests
+
+on:
+  schedule:
+    - cron: "11 6 * * *" # daily at 06:11 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Targeted UI Test"
+      pr_body: "Seed PR for Codex to add a focused unit test guarding a high-value UI element."
+      prompt: >
+        Identify one UI element, input, panel, or widget that lacks dedicated unit-level coverage yet 
+        carries meaningful user impact—prefer surfaces with higher interaction frequency, risk, or bug 
+        history. Examine implementation details in the codebase to understand state, events, and 
+        rendering paths. Author a concise unit (or component-level) test that exercises the element's 
+        critical behaviour, validates accessibility expectations (labels, focus, ARIA) when applicable, 
+        and guards against regressions that have surfaced historically. Keep the test isolated, fast, 
+        and deterministic: mock expensive dependencies sparingly, reuse existing helpers, and plug into 
+        the existing test runner. Update fixtures or test utilities if needed, ensure lint/test suites 
+        pass, and document the new coverage in the PR body. If you uncover blocking defects while 
+        writing the test, fix them within the same focused change set, expanding coverage accordingly.

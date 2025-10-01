@@ -1,3 +1,5 @@
+import { MAX_TILE_ENERGY } from "../config.js";
+
 /**
  * Thin adapter exposing a stable API for systems that need to query or mutate
  * the grid without depending on the full {@link GridManager} surface. Used by
@@ -100,32 +102,36 @@ export default class GridInteractionAdapter {
     if (!donor || requested <= 0 || typeof donor.energy !== "number") return 0;
 
     const available = Math.max(0, Math.min(requested, donor.energy));
-    const maxEnergy = this.maxTileEnergy();
-    let accepted = available;
+    const tileEnergyCapacity = this.maxTileEnergy();
+    let transferred = available;
 
     if (recipient) {
       const current = typeof recipient.energy === "number" ? recipient.energy : 0;
-      const capacity = Math.max(0, maxEnergy - current);
+      const capacity = Math.max(0, tileEnergyCapacity - current);
 
-      accepted = Math.max(0, Math.min(available, capacity));
-      recipient.energy = current + accepted;
+      transferred = Math.max(0, Math.min(available, capacity));
+      recipient.energy = current + transferred;
     }
 
-    donor.energy = Math.max(0, donor.energy - accepted);
+    donor.energy = Math.max(0, donor.energy - transferred);
 
-    return accepted;
+    return transferred;
   }
 
   maxTileEnergy() {
-    if (typeof this.gridManager?.maxTileEnergy === "number") {
-      return this.gridManager.maxTileEnergy;
+    const managerValue = this.gridManager?.maxTileEnergy;
+
+    if (Number.isFinite(managerValue) && managerValue > 0) {
+      return managerValue;
     }
 
-    if (typeof globalThis?.GridManager?.maxTileEnergy === "number") {
-      return globalThis.GridManager.maxTileEnergy;
+    const globalValue = globalThis?.GridManager?.maxTileEnergy;
+
+    if (Number.isFinite(globalValue) && globalValue > 0) {
+      return globalValue;
     }
 
-    return 0;
+    return MAX_TILE_ENERGY;
   }
 
   densityAt(row, col, { densityGrid } = {}) {

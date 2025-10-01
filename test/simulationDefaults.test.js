@@ -182,6 +182,7 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.showEnergy, defaults.showEnergy);
   assert.is(uiManager.showDensity, defaults.showDensity);
   assert.is(uiManager.showFitness, defaults.showFitness);
+  assert.is(uiManager.showCelebrationAuras, defaults.showCelebrationAuras);
   assert.is(uiManager.autoPauseOnBlur, defaults.autoPauseOnBlur);
 
   if (originalDocument === undefined) delete global.document;
@@ -218,6 +219,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     showEnergy: defaults.showEnergy,
     showDensity: defaults.showDensity,
     showFitness: defaults.showFitness,
+    showCelebrationAuras: defaults.showCelebrationAuras,
     leaderboardIntervalMs: defaults.leaderboardIntervalMs,
     matingDiversityThreshold: defaults.matingDiversityThreshold,
     lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
@@ -253,6 +255,7 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.is(ui.getShowEnergy(), defaults.showEnergy);
   assert.is(ui.getShowDensity(), defaults.showDensity);
   assert.is(ui.getShowFitness(), defaults.showFitness);
+  assert.is(ui.getShowCelebrationAuras(), defaults.showCelebrationAuras);
   assert.is(ui.getAutoPauseOnBlur(), defaults.autoPauseOnBlur);
   assert.ok(ui.shouldRenderSlowUi(0));
   assert.ok(!ui.shouldRenderSlowUi(defaults.leaderboardIntervalMs - 1));

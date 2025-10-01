@@ -38,17 +38,32 @@ extending tests, or polishing docs.
 
 ## Tooling
 
-| Purpose     | Command(s)                                | Notes                                                                                                                            |
-| ----------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Format      | `npm run format` / `npm run format:check` | Apply or verify Prettier formatting across source, documentation, and configuration files.                                       |
-| Lint        | `npm run lint` / `npm run lint:fix`       | Run ESLint with the project ruleset. Use `:fix` to apply safe autofixes after addressing root issues.                            |
-| Tests       | `npm test`                                | Execute UVU suites under an esbuild loader. Focused suites live beside their target modules in `test/`.                          |
-| Profiling   | `node scripts/profile-energy.mjs`         | Benchmark the energy preparation loop. Configure dimensions with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, and `PERF_ITERATIONS`. |
-| Cache reset | `npm run clean:parcel`                    | Delete `dist/` and `.parcel-cache/` when Parcel hot reloads or builds become inconsistent.                                       |
+| Purpose     | Command(s)                                | Notes                                                                                                                                                                   |
+| ----------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Format      | `npm run format` / `npm run format:check` | Apply or verify Prettier formatting across source, documentation, and configuration files.                                                                              |
+| Lint        | `npm run lint` / `npm run lint:fix`       | Run ESLint with the project ruleset. Use `:fix` to apply safe autofixes after addressing root issues.                                                                   |
+| Tests       | `npm test`                                | Execute UVU suites under an esbuild loader. Focused suites live beside their target modules in `test/`.                                                                 |
+| Profiling   | `node scripts/profile-energy.mjs`         | Benchmark the energy preparation loop. Configure dimensions with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and stub `cellSize` with `PERF_CELL_SIZE`. |
+| Cache reset | `npm run clean:parcel`                    | Delete `dist/` and `.parcel-cache/` when Parcel hot reloads or builds become inconsistent.                                                                              |
 
 Always run the formatter and linter before committing. Execute `npm test` when
 changing simulation logic, utilities, UI behaviour, or configuration that can
 affect runtime outcomes.
+
+## Configuration overrides
+
+- `COLOURFUL_LIFE_MAX_TILE_ENERGY` adjusts the per-tile energy ceiling. Set it
+  before running tests or headless scripts to explore higher or lower caps
+  without modifying `src/config.js`.
+- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` tunes how strongly local population
+  density suppresses regeneration (0 disables the penalty, 1 preserves the
+  default).
+- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` controls how much additional
+  energy cost organisms pay when harvesting from crowded tiles (0 removes the
+  tax, 1 matches the baseline density pressure).
+- Non-finite or out-of-range values are ignored and fall back to the defaults
+  resolved in [`src/config.js`](../src/config.js). The energy overlays pull the
+  sanitized values so UI telemetry reflects the active configuration.
 
 ## Documentation conventions
 
@@ -60,6 +75,13 @@ affect runtime outcomes.
 - Use JSDoc for exported functions and classes. Include parameter types,
   default values, return shapes, and noteworthy side effects. Internal helper
   functions should still carry brief comments when behaviour is non-obvious.
+- When adding a new module or exported helper, mirror the existing JSDoc style
+  and ensure every export (function, class, constant map) carries a concise
+  description so contributors can consume it without scanning implementation
+  details.
+- Periodically audit for missing docstrings by searching for `export function`
+  / `export default` declarations. Add coverage before shipping changes so the
+  codebase remains self-explanatory.
 - When deprecating behaviour, call it out explicitly in the relevant docs and
   add TODOs that reference follow-up issues where appropriate.
 - Inline comments should explain **why** code exists, not rephrase what it

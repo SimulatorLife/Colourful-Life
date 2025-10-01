@@ -1,4 +1,4 @@
-import { randomRange, clamp, lerp, createRankedBuffer } from "../utils.js";
+import { randomRange, clamp, lerp, createRankedBuffer, warnOnce } from "../utils.js";
 import DNA from "../genome.js";
 import Cell from "../cell.js";
 import { computeFitness } from "../fitness.mjs";
@@ -22,6 +22,7 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 
 const similarityCache = new WeakMap();
+const INTERACTION_KEYS = ["cooperate", "fight", "avoid"];
 const NEIGHBOR_OFFSETS = [
   [-1, -1],
   [-1, 0],
@@ -61,6 +62,46 @@ function getPairSimilarity(cellA, cellB) {
   cacheB.set(cellA, value);
 
   return value;
+}
+
+function normalizeInteractionGene(genes, key) {
+  if (!genes || typeof genes !== "object") return null;
+
+  const raw = genes[key];
+
+  if (raw == null) return null;
+
+  const value = Number(raw);
+
+  if (!Number.isFinite(value)) return null;
+
+  return clamp(value, 0, 1);
+}
+
+export function computeBehaviorComplementarity(parentA, parentB) {
+  if (!parentA || !parentB) return 0;
+
+  const genesA = parentA.interactionGenes;
+  const genesB = parentB.interactionGenes;
+
+  if (!genesA || !genesB) return 0;
+
+  let sum = 0;
+  let count = 0;
+
+  for (const key of INTERACTION_KEYS) {
+    const valueA = normalizeInteractionGene(genesA, key);
+    const valueB = normalizeInteractionGene(genesB, key);
+
+    if (valueA == null || valueB == null) continue;
+
+    sum += Math.abs(valueA - valueB);
+    count++;
+  }
+
+  if (count === 0) return 0;
+
+  return clamp(sum / count, 0, 1);
 }
 
 function toBrainSnapshotCollector(candidate) {
@@ -152,6 +193,70 @@ export default class GridManager {
     const drive = curiosity * (0.55 + 0.45 * caution);
 
     return clamp(drive * 0.7 + environment * 0.3, 0, 1);
+  }
+
+  static #computePairDiversityThreshold({
+    parentA,
+    parentB,
+    baseThreshold,
+    localDensity = 0,
+    tileEnergy = 0.5,
+    tileEnergyDelta = 0,
+    diversityPressure = 0,
+  } = {}) {
+    const baseline = clamp(Number.isFinite(baseThreshold) ? baseThreshold : 0, 0, 1);
+    const appetiteNeutral = 0.35;
+    const appetiteA = clamp(parentA?.diversityAppetite ?? 0, 0, 1);
+    const appetiteB = clamp(parentB?.diversityAppetite ?? 0, 0, 1);
+    const appetiteAverage = (appetiteA + appetiteB) / 2;
+    const appetiteDelta = appetiteAverage - appetiteNeutral;
+    const biasA = clamp(parentA?.matePreferenceBias ?? 0, -1, 1);
+    const biasB = clamp(parentB?.matePreferenceBias ?? 0, -1, 1);
+    const biasAverage = clamp((biasA + biasB) / 2, -1, 1);
+    const noveltyBias = Math.max(0, -biasAverage);
+    const kinBias = Math.max(0, biasAverage);
+    const fertilityFracA = clamp(
+      typeof parentA?.dna?.reproductionThresholdFrac === "function"
+        ? parentA.dna.reproductionThresholdFrac()
+        : 0.4,
+      0,
+      1,
+    );
+    const fertilityFracB = clamp(
+      typeof parentB?.dna?.reproductionThresholdFrac === "function"
+        ? parentB.dna.reproductionThresholdFrac()
+        : 0.4,
+      0,
+      1,
+    );
+    const cautionAverage = clamp(1 - (fertilityFracA + fertilityFracB) / 2, 0, 1);
+    const cautionDelta = cautionAverage - 0.5;
+    const densitySignal = clamp(localDensity ?? 0, 0, 1);
+    const scarcitySignal = clamp(1 - (tileEnergy ?? 0), 0, 1);
+    const declineSignal = clamp(-(tileEnergyDelta ?? 0), 0, 1);
+    const environmentUrgency = clamp(
+      densitySignal * 0.45 + scarcitySignal * 0.35 + declineSignal * 0.2,
+      0,
+      1,
+    );
+    const pressure = clamp(
+      Number.isFinite(diversityPressure) ? diversityPressure : 0,
+      0,
+      1,
+    );
+    const appetiteShift =
+      appetiteDelta * (0.3 + environmentUrgency * 0.3 + pressure * 0.2);
+    const cautionShift = cautionDelta * (0.18 + environmentUrgency * 0.22);
+    const noveltyShift =
+      noveltyBias * (0.15 + environmentUrgency * 0.25 + pressure * 0.2);
+    const kinShift = kinBias * (0.2 - environmentUrgency * 0.1 - pressure * 0.05);
+    const pressureShift = pressure * 0.08;
+    const delta =
+      appetiteShift + cautionShift + noveltyShift + pressureShift - kinShift;
+    const rawThreshold = clamp(baseline + delta, 0, 1);
+    const smoothing = clamp(0.25 + environmentUrgency * 0.35 + pressure * 0.25, 0, 1);
+
+    return clamp(baseline * (1 - smoothing) + rawThreshold * smoothing, 0, 1);
   }
 
   #scoreSpawnCandidate(candidate, context = {}) {
@@ -386,8 +491,17 @@ export default class GridManager {
     return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
   }
 
-  static moveRandomly(gridArr, row, col, cell, rows, cols, options = {}) {
-    const { dr, dc } = cell.decideRandomMove();
+  static moveRandomly(
+    gridArr,
+    row,
+    col,
+    cell,
+    rows,
+    cols,
+    options = {},
+    movementContext = null,
+  ) {
+    const { dr, dc } = cell.decideRandomMove(movementContext);
 
     return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
   }
@@ -508,7 +622,7 @@ export default class GridManager {
         cols,
         this.#movementOptions(),
       );
-    this.boundMoveRandomly = (gridArr, row, col, cell, rows, cols) =>
+    this.boundMoveRandomly = (gridArr, row, col, cell, rows, cols, movementContext) =>
       GridManager.moveRandomly(
         gridArr,
         row,
@@ -517,6 +631,7 @@ export default class GridManager {
         rows,
         cols,
         this.#movementOptions(),
+        movementContext,
       );
     const resolvedPresetId = this.#resolveInitialObstaclePreset({
       initialPreset: initialObstaclePreset,
@@ -840,10 +955,29 @@ export default class GridManager {
     presetId,
     { clearExisting = true, append = false, presetOptions = {}, evict = true } = {},
   ) {
+    const normalizedId =
+      typeof presetId === "string"
+        ? presetId.trim()
+        : presetId === "none"
+          ? "none"
+          : "";
+    const isClearPreset = normalizedId === "none";
+    const isKnownPreset =
+      isClearPreset ||
+      OBSTACLE_PRESETS.some(
+        (preset) => typeof preset?.id === "string" && preset.id === normalizedId,
+      );
+
+    if (!isKnownPreset) {
+      warnOnce(`Unknown obstacle preset "${presetId}"; ignoring request.`);
+
+      return;
+    }
+
     if (clearExisting && !append) this.clearObstacles();
     const options = presetOptions || {};
 
-    switch (presetId) {
+    switch (normalizedId) {
       case "none":
         if (clearExisting) this.clearObstacles();
         break;
@@ -1713,6 +1847,8 @@ export default class GridManager {
     baseProbability = 1,
     floor = 0,
     diversityPressure = 0,
+    behaviorEvenness = 0,
+    behaviorComplementarity = 0,
   } = {}) {
     const sliderFloor = clamp(Number.isFinite(floor) ? floor : 0, 0, 1);
 
@@ -1747,6 +1883,17 @@ export default class GridManager {
       1,
     );
     const kinComfort = clamp(0.5 + 0.5 * kinPreference, 0, 1);
+    const evenness = clamp(
+      Number.isFinite(behaviorEvenness) ? behaviorEvenness : 0,
+      0,
+      1,
+    );
+    const evennessDrag = clamp(1 - evenness, 0, 1);
+    const complementarity = clamp(
+      Number.isFinite(behaviorComplementarity) ? behaviorComplementarity : 0,
+      0,
+      1,
+    );
 
     const pressure = clamp(
       Number.isFinite(diversityPressure) ? diversityPressure : 0,
@@ -1761,6 +1908,17 @@ export default class GridManager {
 
     severity *= clamp(1 - kinComfort * 0.45, 0.3, 1);
     severity *= 1 + pressure * 0.75;
+    severity *= 1 + evennessDrag * (0.35 + 0.25 * combinedDrive);
+
+    if (complementarity > 0 && evennessDrag > 0) {
+      const reliefScale =
+        0.25 + evennessDrag * 0.4 + combinedDrive * 0.25 + pressure * 0.2;
+      const relief = clamp(complementarity * reliefScale, 0, 0.8);
+
+      severity *= clamp(1 - relief, 0.25, 1);
+      severity -= complementarity * evennessDrag * 0.12;
+    }
+
     severity = clamp(severity, 0, 1);
 
     return clamp(1 - severity, sliderFloor, 1);
@@ -1800,7 +1958,7 @@ export default class GridManager {
         : cell.similarityTo(bestMate.target);
     const diversity =
       typeof bestMate.diversity === "number" ? bestMate.diversity : 1 - similarity;
-    const diversityThreshold =
+    const diversityThresholdBaseline =
       typeof this.matingDiversityThreshold === "number"
         ? this.matingDiversityThreshold
         : 0;
@@ -1811,6 +1969,17 @@ export default class GridManager {
           ? stats.diversityPressure
           : 0;
     const diversityPressure = clamp(diversityPressureSource, 0, 1);
+    const behaviorEvennessSource =
+      typeof stats?.getBehavioralEvenness === "function"
+        ? stats.getBehavioralEvenness()
+        : Number.isFinite(stats?.behavioralEvenness)
+          ? stats.behavioralEvenness
+          : 0;
+    const behaviorEvenness = clamp(behaviorEvennessSource, 0, 1);
+    const behaviorComplementarity = computeBehaviorComplementarity(
+      cell,
+      bestMate.target,
+    );
     const penaltyFloor =
       typeof this.lowDiversityReproMultiplier === "number"
         ? clamp(this.lowDiversityReproMultiplier, 0, 1)
@@ -1857,21 +2026,33 @@ export default class GridManager {
       tileEnergyDelta,
     });
 
+    const pairDiversityThreshold = GridManager.#computePairDiversityThreshold({
+      parentA: cell,
+      parentB: bestMate.target,
+      baseThreshold: diversityThresholdBaseline,
+      localDensity,
+      tileEnergy,
+      tileEnergyDelta,
+      diversityPressure,
+    });
+
     let effectiveReproProb = clamp(reproProb ?? 0, 0, 1);
 
-    if (diversity < diversityThreshold) {
+    if (diversity < pairDiversityThreshold) {
       penalizedForSimilarity = true;
       penaltyMultiplier = this.#computeLowDiversityPenaltyMultiplier({
         parentA: cell,
         parentB: bestMate.target,
         diversity,
-        diversityThreshold,
+        diversityThreshold: pairDiversityThreshold,
         localDensity,
         tileEnergy,
         tileEnergyDelta,
         baseProbability: effectiveReproProb,
         floor: penaltyFloor,
         diversityPressure,
+        behaviorEvenness,
+        behaviorComplementarity,
       });
 
       if (penaltyMultiplier <= 0) {
@@ -1879,9 +2060,9 @@ export default class GridManager {
       } else {
         effectiveReproProb = clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
       }
-    } else if (diversityPressure > 0 && diversityThreshold < 1) {
+    } else if (diversityPressure > 0 && pairDiversityThreshold < 1) {
       const normalizedExcess = clamp(
-        (diversity - diversityThreshold) / (1 - diversityThreshold),
+        (diversity - pairDiversityThreshold) / (1 - pairDiversityThreshold),
         0,
         1,
       );
@@ -1891,6 +2072,20 @@ export default class GridManager {
         const bonus = 1 + normalizedExcess * bonusScale;
 
         effectiveReproProb = clamp(effectiveReproProb * bonus, 0, 1);
+      }
+    }
+
+    if (behaviorComplementarity > 0) {
+      const complementPressure = clamp(1 - behaviorEvenness, 0, 1);
+
+      if (complementPressure > 0) {
+        const complementBonus =
+          1 +
+          behaviorComplementarity *
+            complementPressure *
+            (0.18 + diversityPressure * 0.22);
+
+        effectiveReproProb = clamp(effectiveReproProb * complementBonus, 0, 1);
       }
     }
 
@@ -2042,6 +2237,8 @@ export default class GridManager {
         success: reproduced,
         penalized: penalizedForSimilarity,
         penaltyMultiplier,
+        behaviorComplementarity,
+        threshold: pairDiversityThreshold,
       });
     }
 
@@ -2296,18 +2493,12 @@ export default class GridManager {
         if (!cell) continue;
 
         const fitness = computeFitness(cell, cap);
-        const previous = Number.isFinite(cell.fitnessScore)
-          ? cell.fitnessScore
-          : fitness;
-        const smoothed = previous * 0.8 + fitness * 0.2;
-
-        cell.fitnessScore = smoothed;
 
         snapshot.population++;
         snapshot.totalEnergy += cell.energy;
         snapshot.totalAge += cell.age;
         snapshot.cells.push(cell);
-        const entry = { row, col, cell, fitness, smoothedFitness: smoothed };
+        const entry = { row, col, cell, fitness };
 
         snapshot.entries.push(entry);
         if (Number.isFinite(entry.fitness)) {
@@ -2490,6 +2681,3 @@ export default class GridManager {
     return this.burstAt(r, c, opts);
   }
 }
-
-GridManager.OBSTACLE_PRESETS = OBSTACLE_PRESETS;
-export { OBSTACLE_PRESETS };

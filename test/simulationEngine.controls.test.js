@@ -103,6 +103,23 @@ test("numeric setters sanitize input, clamp values, and flag slow UI updates", a
   }
 });
 
+test("updateSetting routes updatesPerSecond through the setter", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.pendingSlowUiUpdate = false;
+    engine.updateSetting("updatesPerSecond", 180);
+
+    assert.is(engine.state.updatesPerSecond, 180);
+    assert.ok(engine.pendingSlowUiUpdate, "setter marks slow UI work pending");
+  } finally {
+    restore();
+  }
+});
+
 test("overlay visibility toggles mutate only requested flags", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);

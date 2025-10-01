@@ -121,7 +121,6 @@ export default class Cell {
       typeof this.dna.neuralReinforcementProfile === "function"
         ? this.dna.neuralReinforcementProfile()
         : null;
-    this.fitnessScore = null;
     this.matePreferenceBias =
       typeof this.dna.mateSimilarityBias === "function"
         ? this.dna.mateSimilarityBias()
@@ -192,12 +191,49 @@ export default class Cell {
     this._interactionDecay = clamp(interactionProfile?.decay ?? 0.08, 0.001, 0.6);
     this._lastInteractionDecayAge = this.age;
     this._lastInteractionSummary = null;
-    // Cache metabolism from gene row 5 to avoid per-tick recompute
+    // Cache metabolism profile once; combine DNA-driven baseline with neural imprint
     const geneRow = this.genes?.[5];
-
-    this.metabolism = Array.isArray(geneRow)
-      ? geneRow.reduce((s, g) => s + Math.abs(g), 0) / (geneRow.length || 1)
+    const neuralSignature = Array.isArray(geneRow)
+      ? geneRow.reduce((sum, weight) => sum + Math.abs(weight), 0) /
+        (geneRow.length || 1)
       : Math.abs(Number(geneRow) || 0);
+    const dnaMetabolismProfile =
+      typeof this.dna.metabolicProfile === "function"
+        ? this.dna.metabolicProfile()
+        : null;
+    const baselineMetabolism = clamp(
+      Number.isFinite(dnaMetabolismProfile?.baseline)
+        ? dnaMetabolismProfile.baseline
+        : 0.35 + neuralSignature * 0.3,
+      0.05,
+      2.5,
+    );
+    const neuralDrag = clamp(
+      Number.isFinite(dnaMetabolismProfile?.neuralDrag)
+        ? dnaMetabolismProfile.neuralDrag
+        : 0.35,
+      0.05,
+      1.5,
+    );
+
+    this.metabolicCrowdingTax = clamp(
+      Number.isFinite(dnaMetabolismProfile?.crowdingTax)
+        ? dnaMetabolismProfile.crowdingTax
+        : 0.35,
+      0,
+      2,
+    );
+    this.metabolism = clamp(
+      baselineMetabolism + neuralSignature * neuralDrag * 0.5,
+      0.05,
+      3,
+    );
+    this.metabolicProfile = {
+      baseline: baselineMetabolism,
+      neuralDrag,
+      crowdingTax: this.metabolicCrowdingTax,
+      neuralSignature,
+    };
     this.offspring = 0;
     this.fightsWon = 0;
     this.fightsLost = 0;
@@ -233,25 +269,52 @@ export default class Cell {
         : typeof window !== "undefined" && window.GridManager?.maxTileEnergy != null
           ? window.GridManager.maxTileEnergy
           : MAX_TILE_ENERGY;
-    const calculateInvestment = (parent, starvation) => {
+    const demandFracA = clamp(
+      typeof parentA.dna?.offspringEnergyDemandFrac === "function"
+        ? parentA.dna.offspringEnergyDemandFrac()
+        : 0.22,
+      0.05,
+      0.85,
+    );
+    const demandFracB = clamp(
+      typeof parentB.dna?.offspringEnergyDemandFrac === "function"
+        ? parentB.dna.offspringEnergyDemandFrac()
+        : 0.22,
+      0.05,
+      0.85,
+    );
+    const calculateInvestment = (parent, starvation, demandFrac) => {
       const fracFn = parent.dna?.parentalInvestmentFrac;
       const investFrac = typeof fracFn === "function" ? fracFn.call(parent.dna) : 0.4;
-      const desired = Math.max(0, Math.min(parent.energy, parent.energy * investFrac));
+      const desiredBase = Math.max(
+        0,
+        Math.min(parent.energy, parent.energy * investFrac),
+      );
+      const targetEnergy =
+        resolvedMaxTileEnergy *
+        clamp(Number.isFinite(demandFrac) ? demandFrac : 0.22, 0, 1);
+      const desired = Math.max(desiredBase, targetEnergy);
       const maxSpend = Math.max(0, parent.energy - starvation);
 
       return Math.min(desired, maxSpend);
     };
     const starvationA = parentA.starvationThreshold(resolvedMaxTileEnergy);
     const starvationB = parentB.starvationThreshold(resolvedMaxTileEnergy);
-    const investA = calculateInvestment(parentA, starvationA);
-    const investB = calculateInvestment(parentB, starvationB);
+    const investA = calculateInvestment(parentA, starvationA, demandFracA);
+    const investB = calculateInvestment(parentB, starvationB, demandFracB);
 
     if (investA <= 0 || investB <= 0) return null;
 
+    const offspringEnergy = investA + investB;
+    const viabilityThreshold =
+      resolvedMaxTileEnergy * Math.max(demandFracA, demandFracB); // honor the pickier parent's viability floor
+
+    if (offspringEnergy + EPSILON < viabilityThreshold) {
+      return null;
+    }
+
     parentA.energy = Math.max(0, parentA.energy - investA);
     parentB.energy = Math.max(0, parentB.energy - investB);
-
-    const offspringEnergy = investA + investB;
     const offspring = new Cell(row, col, childDNA, offspringEnergy);
     const parentStrategies = [];
 
@@ -2270,14 +2333,97 @@ export default class Cell {
     return { action, usedBrain: true };
   }
 
-  decideRandomMove() {
-    // DNA-driven rest probability: more cautious genomes rest more
+  decideRandomMove(context = {}) {
+    // Blend DNA predispositions with environmental feedback so fallback movement
+    // emerges from the same pressures that shape neural policies.
+    const {
+      localDensity = 0,
+      densityEffectMultiplier = 1,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
+      maxTileEnergy = MAX_TILE_ENERGY,
+    } = context ?? {};
     const g = this.movementGenes || { wandering: 0.33, pursuit: 0.33, cautious: 0.34 };
-    const w = Math.max(0, g.wandering);
-    const p = Math.max(0, g.pursuit);
-    const c = Math.max(0, g.cautious);
-    const total = w + p + c || 1;
-    const pStay = Math.max(0, Math.min(0.9, 0.15 + 0.7 * (c / total)));
+    const wandering = Math.max(0, g.wandering);
+    const pursuit = Math.max(0, g.pursuit);
+    const cautious = Math.max(0, g.cautious);
+    const total = wandering + pursuit + cautious || 1;
+    const cautiousFrac = cautious / total;
+    const roamingFrac = (wandering + pursuit) / total;
+    const pursuitFrac = pursuit / total;
+    const effDensity = clamp(localDensity * densityEffectMultiplier, 0, 1);
+    const crowdComfort = clamp(
+      Number.isFinite(this._crowdingTolerance)
+        ? this._crowdingTolerance
+        : Number.isFinite(this.baseCrowdingTolerance)
+          ? this.baseCrowdingTolerance
+          : 0.5,
+      0,
+      1,
+    );
+    const crowdPressure = effDensity > crowdComfort ? effDensity - crowdComfort : 0;
+    const crowdRelief = effDensity < crowdComfort ? crowdComfort - effDensity : 0;
+    const energyCap =
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1;
+    const energyFrac = clamp((this.energy ?? 0) / energyCap, 0, 1);
+    const tileLevel =
+      tileEnergy != null && Number.isFinite(tileEnergy)
+        ? clamp(tileEnergy, 0, 1)
+        : energyFrac;
+    const scarcity = clamp(1 - tileLevel, 0, 1);
+    const trend = clamp(tileEnergyDelta ?? 0, -1, 1);
+    const fatigue = this.#currentNeuralFatigue();
+    const riskTolerance = this.#resolveRiskTolerance();
+    const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
+    const restProfile = this.neuralFatigueProfile || {};
+    const restThreshold = clamp(
+      Number.isFinite(restProfile.restThreshold) ? restProfile.restThreshold : 0.45,
+      0,
+      1,
+    );
+    const restSupport =
+      energyFrac > restThreshold
+        ? clamp((energyFrac - restThreshold) / Math.max(0.001, 1 - restThreshold), 0, 1)
+        : 0;
+    const resourceAdaptation = clamp(this.resourceTrendAdaptation ?? 0.35, 0, 1);
+    const resourceSignal = clamp(this._resourceSignal ?? 0, -1, 1);
+    const { scarcityMemory, confidenceMemory } = this.#riskMemorySensorValues();
+
+    let stayWeight =
+      cautiousFrac * 0.35 +
+      fatigue * (0.5 + cautiousFrac * 0.3) +
+      scarcity * (0.25 + (1 - riskTolerance) * 0.35) +
+      crowdPressure * (0.4 + cautiousFrac * 0.25) +
+      eventPressure * (0.2 + cautiousFrac * 0.2) +
+      restSupport * (0.25 + cautiousFrac * 0.35);
+
+    if (scarcityMemory > 0) stayWeight += scarcityMemory * 0.3;
+    if (confidenceMemory < 0) stayWeight += -confidenceMemory * 0.25;
+    if (resourceSignal < 0) {
+      stayWeight += Math.abs(resourceSignal) * (0.25 + cautiousFrac * 0.25);
+    }
+
+    let moveWeight =
+      roamingFrac * (0.35 + riskTolerance * 0.3) +
+      pursuitFrac * 0.15 +
+      crowdRelief * (0.3 + roamingFrac * 0.3) +
+      Math.max(0, -scarcityMemory) * 0.25 +
+      Math.max(0, confidenceMemory) * 0.3 +
+      (1 - fatigue) * (0.25 + roamingFrac * 0.2) +
+      energyFrac * (0.2 + riskTolerance * 0.2) +
+      Math.max(0, trend) * (0.25 + resourceAdaptation * 0.3);
+
+    if (resourceSignal > 0) {
+      moveWeight += resourceSignal * (0.2 + roamingFrac * 0.2);
+    }
+
+    const baseline = clamp(0.1 + 0.8 * cautiousFrac, 0.05, 0.95);
+    const combined = stayWeight + moveWeight;
+    let pStay = combined > 0 ? stayWeight / combined : baseline;
+
+    pStay = clamp(lerp(baseline, pStay, 0.65), 0.05, 0.95);
     const rng = this.resolveRng("movementRandom");
 
     if (rng() < pStay) return { dr: 0, dc: 0 };
@@ -2302,8 +2448,14 @@ export default class Cell {
       : minLoss;
     const energyDensityMult = lerp(minLoss, maxLoss, effectiveDensity);
     const baseLoss = this.dna.energyLossBase();
+    const metabolicMultiplier = 1 + Math.max(0, this.metabolism || 0);
+    const crowdPenalty =
+      1 + effectiveDensity * Math.max(0, this.metabolicCrowdingTax || 0);
     const lossScale =
-      this.dna.baseEnergyLossScale() * (1 + this.metabolism) * energyDensityMult;
+      this.dna.baseEnergyLossScale() *
+      metabolicMultiplier *
+      energyDensityMult *
+      crowdPenalty;
     const agingPenalty = this.ageEnergyMultiplier();
 
     return baseLoss * lossScale * agingPenalty;
@@ -2588,12 +2740,22 @@ export default class Cell {
       getEnergyAt,
       tryMove,
       isTileBlocked,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
+      maxTileEnergy = MAX_TILE_ENERGY,
     } = {},
   ) {
     const strategy = this.#legacyChooseMovementStrategy(
       localDensity,
       densityEffectMultiplier,
     );
+    const movementContext = {
+      localDensity,
+      densityEffectMultiplier,
+      tileEnergy,
+      tileEnergyDelta,
+      maxTileEnergy,
+    };
 
     if (strategy === "pursuit") {
       const target =
@@ -2604,7 +2766,7 @@ export default class Cell {
       if (target)
         return moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
 
-      return moveRandomly(gridArr, row, col, this, rows, cols);
+      return moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
     }
     if (strategy === "cautious") {
       const threat =
@@ -2623,7 +2785,7 @@ export default class Cell {
           cols,
         );
 
-      return moveRandomly(gridArr, row, col, this, rows, cols);
+      return moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
     }
     // wandering: try cohesion toward allies first
     if (Array.isArray(society) && society.length > 0) {
@@ -2683,11 +2845,11 @@ export default class Cell {
         if (typeof tryMove === "function")
           return tryMove(gridArr, row, col, best.dr, best.dc, rows, cols);
 
-        return moveRandomly(gridArr, row, col, this, rows, cols);
+        return moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
       }
     }
 
-    return moveRandomly(gridArr, row, col, this, rows, cols);
+    return moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
   }
 
   executeMovementStrategy(gridArr, row, col, mates, enemies, society, context = {}) {
@@ -2712,6 +2874,13 @@ export default class Cell {
       mates,
       enemies,
       society,
+      maxTileEnergy,
+      tileEnergy,
+      tileEnergyDelta,
+    };
+    const movementContext = {
+      localDensity,
+      densityEffectMultiplier,
       maxTileEnergy,
       tileEnergy,
       tileEnergyDelta,
@@ -2770,7 +2939,7 @@ export default class Cell {
       }
 
       if (typeof moveRandomly === "function") {
-        moveRandomly(gridArr, row, col, this, rows, cols);
+        moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
       }
 
       return true;
@@ -2821,7 +2990,7 @@ export default class Cell {
     if (chosen === "explore" && attemptEnergyExploit()) return;
 
     if (typeof moveRandomly === "function") {
-      moveRandomly(gridArr, row, col, this, rows, cols);
+      moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
     }
   }
 

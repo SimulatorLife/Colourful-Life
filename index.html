@@ -15,7 +15,8 @@
       import SimulationEngine from "./src/simulationEngine.js";
       import UIManager from "./src/ui/uiManager.js";
       import BrainDebugger from "./src/ui/brainDebugger.js";
-      import { OBSTACLE_PRESETS } from "./src/grid/gridManager.js";
+      import SelectionManager from "./src/ui/selectionManager.js";
+      import { OBSTACLE_PRESETS } from "./src/grid/obstaclePresets.js";
 
       const canvas = document.getElementById("gameCanvas");
 
@@ -26,6 +27,7 @@
         },
         autoStart: false,
         brainSnapshotCollector: BrainDebugger,
+        selectionManagerFactory: (rows, cols) => new SelectionManager(rows, cols),
       });
 
       const uiManager = new UIManager(
@@ -40,6 +42,7 @@
           burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
           applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
           obstaclePresets: OBSTACLE_PRESETS,
+          getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
           selectionManager: engine.selectionManager,
           getCellSize: () => engine.cellSize,
         },

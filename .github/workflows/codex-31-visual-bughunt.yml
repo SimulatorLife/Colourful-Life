@@ -1,0 +1,29 @@
+name: Codex 31 – Visual Bug Hunt
+
+on:
+  schedule:
+    - cron: "17 0,8,16 * * *" # three times daily at 00:17, 08:17, 16:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Visual Bug Hunt"
+      pr_body: "Seed PR for Codex to diagnose and correct a visual/UI defect encountered by running the simulation."
+      prompt: >
+        Launch the Colourful Life simulation locally and actively explore the rendered experience—adjust
+        controls, toggles, resize the viewport, and interact with detail panels—to surface a concrete 
+        visual or interactive UI defect. Capture the specific UI surface, reproduction steps, and 
+        expected behaviour, then implement one targeted fix that resolves the issue without redesigning
+        adjacent systems or regressing performance/accessibility. Validate the change by rerunning the 
+        simulation and re-testing the affected controls, add or update tests when logic is touched, and revise documentation or release notes if user-facing behaviour shifts.
+        If you cannot find a blocking defect after a thorough hunt, identify the highest-risk inconsistency
+        you observed, explain the investigation, and still ship an incremental tweak that hardens the UI 
+        against that scenario.

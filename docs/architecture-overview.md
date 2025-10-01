@@ -9,7 +9,7 @@ This document captures how the Colourful Life simulation composes its core syste
    - Prepares the grid for the upcoming tick via `grid.prepareTick`.
    - Advances the grid one step, which updates organism state, tile energy, events, and overlays.
    - Emits lifecycle events (`tick`, `metrics`, `leaderboard`, `state`) consumed by UI panels and analytics.
-2. **UIManager** (`src/ui/uiManager.js`) renders controls, metrics, and overlays. It dispatches user actions (pause, stamping obstacles, slider changes) back to the engine by calling `engine` helpers exposed through `createSimulation`. When the browser UI is unavailable, `createHeadlessUiManager` in `src/main.js` mirrors the same surface area so headless runs share settings and cadence management.
+2. **UIManager** (`src/ui/uiManager.js`) renders controls, metrics, and overlays. It dispatches user actions (pause, stamping obstacles, slider changes) back to the engine by calling `engine` helpers exposed through `createSimulation`. When the browser UI is unavailable, `createHeadlessUiManager` in `src/ui/headlessUiManager.js` mirrors the same surface area so headless runs share settings and cadence management.
 3. **BrainDebugger** (`src/ui/brainDebugger.js`) receives neuron snapshots from the grid and exposes them to the browser console for inspection. The debugger is optional in headless environments and doubles as the default brain snapshot collector for headless runs.
 
 ## Core subsystems
@@ -28,6 +28,20 @@ This document captures how the Colourful Life simulation composes its core syste
 - `computeTileEnergyUpdate` is called for each tile while the grid is preparing a tick.
 - Blends base regeneration with density penalties, diffusion from neighbouring tiles, and modifiers contributed by active environmental events.
 - Returns both the next energy value and any event metadata so overlays can highlight affected regions.
+- The default regeneration coefficient (`0.0082`) keeps headless test runs from
+  crashing into starvation after the opening events while preserving scarcity
+  pressure. A quick tile-only probe (600 ticks, density 0.35, no diffusion)
+  nudged the equilibrium energy from ~2.86 to ~3.00, reducing early collapses
+  without flooding the map; adjust via `resolveSimulationDefaults` when
+  experimenting with alternative baselines.
+
+- Environment overrides such as `COLOURFUL_LIFE_MAX_TILE_ENERGY`,
+  `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`, and
+  `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` flow through
+  [`src/config.js`](../src/config.js), letting experiments tweak caps, regeneration
+  suppression, and harvesting taxes without patching source. The sanitized values
+  are consumed by both the energy computations and overlays so telemetry stays in
+  sync.
 
 ### Events
 
@@ -44,6 +58,8 @@ This document captures how the Colourful Life simulation composes its core syste
 - DNA derives a `neuralReinforcementProfile` alongside plasticity data; cells convert it into per-decision reward signals that bias learning toward genome-preferred actions, energy states, and targeting focus instead of relying on hard-coded heuristics.
 - DNA also provides a `neuralFatigueProfile` that cells use to accumulate neural fatigue from energy budgets and activation loads; the resulting fatigue dynamically shapes risk tolerance sensors so behaviour cools off when cognition is overtaxed and sharpens again when rested. Neural policies can now intentionally choose the `rest` movement to cash in DNA-tuned recovery efficiency, letting well-fed organisms clear fatigue faster in low-pressure environments.
 - DNA now emits a `riskMemoryProfile` that couples neural sensor modulation with a short-term memory of resource trends, environmental shocks, and social support. Cells fold those memories back into risk tolerance, so scarcity, disasters, and ally presence push behaviour toward exploration, caution, or boldness based on genome-specific weights instead of hard-coded heuristics. The accumulated memories surface through `scarcityMemory` and `confidenceMemory` sensors, letting neural policies react to enduring shortages or resilience boons without bespoke scripts.
+- DNA exposes a `metabolicProfile` translating activity, efficiency, and crowding genes into baseline maintenance drain and a density-driven crowding tax, so genomes comfortable in throngs waste less energy than solitary specialists when packed together.
+- DNA encodes an `offspringEnergyDemandFrac` that establishes a DNA-driven viability floor for reproduction. Parents refuse to spawn unless their combined energy investment clears the pickier genome's expectation, allowing nurturing lineages to favour fewer, well-funded offspring while opportunists tolerate lean births.
 - Decision telemetry is available through `cell.getDecisionTelemetry`, which the debugger captures for UI display.
 
 ### InteractionSystem
@@ -54,7 +70,7 @@ This document captures how the Colourful Life simulation composes its core syste
 
 ### Stats and telemetry
 
-- **Stats** (`src/stats.js`) accumulates per-tick metrics, maintains rolling history for charts, and reports aggregate counters (births, deaths, fights, cooperations).
+- **Stats** (`src/stats.js`) accumulates per-tick metrics, maintains rolling history for charts, and reports aggregate counters (births, deaths, fights, cooperations). Age-related telemetry is expressed in simulation ticks so downstream tools can map it to seconds using their chosen tick cadence.
 - **Leaderboard** (`src/leaderboard.js`) combines `computeFitness` output with brain snapshots to surface top-performing organisms.
 - **BrainDebugger** (`src/ui/brainDebugger.js`) mirrors neuron traces into the browser console for inspection. `SimulationEngine` forwards snapshots each tick when the debugger is available, and the debugger doubles as the default brain snapshot collector for headless runs.
 
@@ -67,6 +83,12 @@ This document captures how the Colourful Life simulation composes its core syste
 - `ReproductionZonePolicy` (`src/grid/reproductionZonePolicy.js`) keeps `GridManager`'s reproduction flow decoupled from the selection implementation by translating zone checks into simple allow/deny results.
 - `config.js` consolidates slider bounds, simulation defaults, and runtime-tunable constants such as diffusion and regeneration rates so UI and headless contexts remain in sync.
 - `utils.js` houses deterministic helpers (`createRNG`, `createRankedBuffer`, `cloneTracePayload`, etc.) reused across the simulation, UI, and tests.
+
+- The overlay pipeline is orchestrated by `drawOverlays`, which delegates to granular helpers (`drawEventOverlays`,
+  `drawEnergyHeatmap`, `drawDensityHeatmap`, `drawFitnessHeatmap`) and reuses colour ramps such as `densityToRgba`. Each helper
+  exposes legends or palette selection so UI extensions can stay consistent without reimplementing scaling logic.
+- `drawSelectionZones` renders active reproduction zones using cached geometry from the selection manager, ensuring the mating UI
+  and reproduction policy share exactly the same coordinates.
 
 ## Headless and scripted usage
 
@@ -91,7 +113,7 @@ When running outside the browser:
 
 ## Related scripts
 
-- `scripts/profile-energy.mjs` benchmarks the grid preparation loop. Tune dimensions via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, and `PERF_ITERATIONS`.
+- `scripts/profile-energy.mjs` benchmarks the grid preparation loop. Tune dimensions via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and adjust the stub cell size with `PERF_CELL_SIZE`.
 - `scripts/clean-parcel.js` clears `dist/` and `.parcel-cache/` and underpins the `npm run clean:parcel` command for recovering from stubborn Parcel state.
 - Additional helpers in `scripts/` showcase headless usage patterns. Each script is documented inline with configuration tips.
 

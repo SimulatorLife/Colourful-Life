@@ -1,26 +1,48 @@
 import UIManager from "./ui/uiManager.js";
 import BrainDebugger from "./ui/brainDebugger.js";
 import SimulationEngine from "./simulationEngine.js";
+import SelectionManager from "./ui/selectionManager.js";
+import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
-import { resolveSimulationDefaults } from "./config.js";
+import { createHeadlessUiManager } from "./ui/headlessUiManager.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
 function resolveHeadlessCanvasSize(config = {}) {
-  const cellSize = Number.isFinite(config?.cellSize) ? config.cellSize : 5;
-  const rowsFallback = Number.isFinite(config?.rows) ? config.rows : 120;
-  const colsFallback = Number.isFinite(config?.cols) ? config.cols : 120;
+  const toFinite = (value) => {
+    if (value == null) return null;
+    const numeric =
+      typeof value === "number"
+        ? value
+        : typeof value === "string" && value.trim().length > 0
+          ? Number.parseFloat(value)
+          : Number(value);
+
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  const cellSize = toFinite(config?.cellSize) ?? 5;
+  const rowsFallback = toFinite(config?.rows) ?? 120;
+  const colsFallback = toFinite(config?.cols) ?? 120;
   const widthCandidates = [
-    config?.width,
-    config?.canvasWidth,
-    config?.canvasSize?.width,
-    Number.isFinite(config?.cols) ? config.cols * cellSize : null,
+    toFinite(config?.width),
+    toFinite(config?.canvasWidth),
+    toFinite(config?.canvasSize?.width),
+    (() => {
+      const cols = toFinite(config?.cols);
+
+      return cols != null ? cols * cellSize : null;
+    })(),
   ];
   const heightCandidates = [
-    config?.height,
-    config?.canvasHeight,
-    config?.canvasSize?.height,
-    Number.isFinite(config?.rows) ? config.rows * cellSize : null,
+    toFinite(config?.height),
+    toFinite(config?.canvasHeight),
+    toFinite(config?.canvasSize?.height),
+    (() => {
+      const rows = toFinite(config?.rows);
+
+      return rows != null ? rows * cellSize : null;
+    })(),
   ];
   const fallbackWidth = colsFallback * cellSize;
   const fallbackHeight = rowsFallback * cellSize;
@@ -71,151 +93,6 @@ function createHeadlessCanvas(config = {}) {
   context.canvas = canvas;
 
   return canvas;
-}
-
-/**
- * Creates a lightweight {@link UIManager}-compatible adapter for environments
- * where no DOM-backed UI is available (e.g. tests, server-side rendering, or
- * custom render loops). The adapter mirrors the most important controls that
- * the visual UI exposes—pause state, update rates, event and mutation
- * multipliers, diversity settings, overlays (obstacles/energy/density/fitness),
- * linger penalty, and leaderboard cadence—so simulation code can interact with
- * shared settings consistently regardless of whether the real UI is mounted.
- *
- * The returned object implements a subset of {@link UIManager}'s surface area,
- * exposing getters and setters for the mirrored options plus a
- * `selectionManager` reference. Rendering hooks (`renderMetrics`,
- * `renderLeaderboard`) are provided as no-ops to satisfy consumers such as the
- * {@link SimulationEngine} when events are emitted.
- *
- * @param {Object} [options]
- * @param {boolean} [options.paused=false] Whether the simulation starts paused.
- * @param {number} [options.updatesPerSecond=60] Simulation tick frequency.
- * @param {number} [options.eventFrequencyMultiplier] Multiplier for event cadence.
- * @param {number} [options.mutationMultiplier] Mutation rate multiplier.
- * @param {number} [options.densityEffectMultiplier] Density impact multiplier.
- * @param {number} [options.societySimilarity] Preferred similarity for friendly agents.
- * @param {number} [options.enemySimilarity] Preferred similarity for hostile agents.
- * @param {number} [options.eventStrengthMultiplier] Event strength multiplier.
- * @param {number} [options.energyRegenRate] Baseline energy regeneration.
- * @param {number} [options.energyDiffusionRate] Ambient energy spread.
- * @param {number} [options.combatEdgeSharpness] Sharpness multiplier for combat odds.
- * @param {number} [options.matingDiversityThreshold] Genetic similarity tolerance for mating.
- * @param {number} [options.lowDiversityReproMultiplier] Reproduction multiplier applied when diversity is low.
- * @param {boolean} [options.showObstacles] Whether obstacle overlays are shown.
- * @param {boolean} [options.showEnergy] Whether energy overlays are shown.
- * @param {boolean} [options.showDensity] Whether population density overlays are shown.
- * @param {boolean} [options.showFitness] Whether fitness overlays are shown.
- * @param {number} [options.leaderboardIntervalMs] Minimum time between leaderboard updates.
- * @param {Object} [options.selectionManager=null] Shared selection manager instance.
- * @returns {{
- *   isPaused: () => boolean,
- *   setPaused: (value: boolean) => void,
- *   getUpdatesPerSecond: () => number,
- *   setUpdatesPerSecond: (value: number) => void,
- *   getEventFrequencyMultiplier: () => number,
- *   getMutationMultiplier: () => number,
- *   getDensityEffectMultiplier: () => number,
- *   getSocietySimilarity: () => number,
- *   getEnemySimilarity: () => number,
- *   getEventStrengthMultiplier: () => number,
- *   getEnergyRegenRate: () => number,
- *   getEnergyDiffusionRate: () => number,
- *   getMatingDiversityThreshold: () => number,
- *   setMatingDiversityThreshold: (value: number) => void,
- *   getLowDiversityReproMultiplier: () => number,
- *   setLowDiversityReproMultiplier: (value: number) => void,
- *   getShowObstacles: () => boolean,
- *   getShowEnergy: () => boolean,
- *   getShowDensity: () => boolean,
- *   getShowFitness: () => boolean,
- *   shouldRenderSlowUi: (timestamp: number) => boolean,
- *   renderMetrics: Function,
- *   renderLeaderboard: Function,
- *   selectionManager: Object|null,
- * }} Headless UI facade that keeps simulation code agnostic to environment.
- */
-function createHeadlessUiManager(options = {}) {
-  const { selectionManager, onSettingChange, ...overrides } = options || {};
-  const defaults = resolveSimulationDefaults(overrides);
-  const settings = { ...defaults };
-
-  let lastSlowUiRender = Number.NEGATIVE_INFINITY;
-  const updateIfFinite = (key, value) => {
-    const numeric = Number(value);
-
-    if (!Number.isFinite(numeric)) return false;
-
-    settings[key] = numeric;
-
-    return true;
-  };
-  const notify = (key, value) => {
-    if (typeof onSettingChange === "function") {
-      onSettingChange(key, value);
-    }
-  };
-
-  return {
-    isPaused: () => settings.paused,
-    setPaused: (value) => {
-      settings.paused = Boolean(value);
-    },
-    getUpdatesPerSecond: () => settings.updatesPerSecond,
-    setUpdatesPerSecond: (value) => {
-      if (updateIfFinite("updatesPerSecond", value)) {
-        notify("updatesPerSecond", settings.updatesPerSecond);
-      }
-    },
-    getEventFrequencyMultiplier: () => settings.eventFrequencyMultiplier,
-    getMutationMultiplier: () => settings.mutationMultiplier,
-    getDensityEffectMultiplier: () => settings.densityEffectMultiplier,
-    getSocietySimilarity: () => settings.societySimilarity,
-    getEnemySimilarity: () => settings.enemySimilarity,
-    getEventStrengthMultiplier: () => settings.eventStrengthMultiplier,
-    getCombatEdgeSharpness: () => settings.combatEdgeSharpness,
-    getEnergyRegenRate: () => settings.energyRegenRate,
-    getEnergyDiffusionRate: () => settings.energyDiffusionRate,
-    getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
-    setMatingDiversityThreshold: (value) => {
-      if (updateIfFinite("matingDiversityThreshold", value)) {
-        notify("matingDiversityThreshold", settings.matingDiversityThreshold);
-      }
-    },
-    getLowDiversityReproMultiplier: () => settings.lowDiversityReproMultiplier,
-    setLowDiversityReproMultiplier: (value) => {
-      if (updateIfFinite("lowDiversityReproMultiplier", value)) {
-        notify("lowDiversityReproMultiplier", settings.lowDiversityReproMultiplier);
-      }
-    },
-    setCombatEdgeSharpness: (value) => {
-      if (updateIfFinite("combatEdgeSharpness", value)) {
-        notify("combatEdgeSharpness", settings.combatEdgeSharpness);
-      }
-    },
-    getShowObstacles: () => settings.showObstacles,
-    getShowEnergy: () => settings.showEnergy,
-    getShowDensity: () => settings.showDensity,
-    getShowFitness: () => settings.showFitness,
-    shouldRenderSlowUi: (timestamp) => {
-      if (!Number.isFinite(timestamp)) return false;
-      if (timestamp - lastSlowUiRender >= settings.leaderboardIntervalMs) {
-        lastSlowUiRender = timestamp;
-
-        return true;
-      }
-
-      return false;
-    },
-    renderMetrics: () => {},
-    renderLeaderboard: () => {},
-    getAutoPauseOnBlur: () => settings.autoPauseOnBlur,
-    setAutoPauseOnBlur: (value) => {
-      settings.autoPauseOnBlur = Boolean(value);
-      notify("autoPauseOnBlur", settings.autoPauseOnBlur);
-    },
-    selectionManager: selectionManager ?? null,
-  };
 }
 
 /**
@@ -321,6 +198,15 @@ export function createSimulation({
     resolvedCanvas = createHeadlessCanvas(config);
   }
 
+  const selectionManagerFactory =
+    typeof config.selectionManagerFactory === "function"
+      ? config.selectionManagerFactory
+      : (rows, cols) => new SelectionManager(rows, cols);
+  const overlayRenderer =
+    typeof config.drawOverlays === "function"
+      ? config.drawOverlays
+      : defaultDrawOverlays;
+
   const engine = new SimulationEngine({
     canvas: resolvedCanvas,
     config,
@@ -332,6 +218,8 @@ export function createSimulation({
     document: injectedDocument,
     autoStart: false,
     brainSnapshotCollector: BrainDebugger,
+    drawOverlays: overlayRenderer,
+    selectionManagerFactory,
   });
 
   const uiOptions = config.ui ?? {};
@@ -339,6 +227,7 @@ export function createSimulation({
     burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
     obstaclePresets: OBSTACLE_PRESETS,
+    getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
     selectionManager: engine.selectionManager,
     getCellSize: () => engine.cellSize,
     ...(uiOptions.actions || {}),
@@ -390,10 +279,6 @@ export function createSimulation({
 
   if (win) {
     win.uiManager = uiManager;
-  }
-
-  if (typeof uiManager?.setAutoPauseOnBlur === "function") {
-    uiManager.setAutoPauseOnBlur(engine.autoPauseOnBlur);
   }
 
   const unsubscribers = [];
@@ -451,7 +336,7 @@ export function createSimulation({
     selectionManager: engine.selectionManager,
     start: () => engine.start(),
     stop: () => engine.stop(),
-    step: (timestamp) => engine.tick(timestamp),
+    step: (timestamp) => engine.step(timestamp),
     tick: (timestamp) => engine.tick(timestamp),
     pause: () => engine.pause(),
     resume: () => engine.resume(),

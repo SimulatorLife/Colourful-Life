@@ -50,7 +50,7 @@ test("start schedules a frame and ticking through RAF uses sanitized defaults", 
       societySimilarity: 0.7,
       enemySimilarity: 0.4,
       eventStrengthMultiplier: 1,
-      energyRegenRate: 0.007,
+      energyRegenRate: 0.0082,
       energyDiffusionRate: 0.05,
       mutationMultiplier: 1,
       matingDiversityThreshold: 0.45,
@@ -156,8 +156,9 @@ test("tick emits events and clears pending slow UI updates after throttle interv
     assert.is(leaderboardEvents.length, 1, "leaderboard event emitted once");
     assert.equal(leaderboardEvents[0].entries, [
       {
+        row: 0,
+        col: 0,
         fitness: 1,
-        smoothedFitness: 2,
         offspring: 3,
         fightsWon: 4,
         age: 5,
@@ -241,6 +242,42 @@ test("updateSetting speedMultiplier and low diversity multiplier propagate chang
     );
   } finally {
     restore();
+  }
+});
+
+test("tick forwards instance maxTileEnergy to overlay renderer", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine, GridManager } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+  const originalMax = GridManager.maxTileEnergy;
+
+  try {
+    const recorded = [];
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(16, 16),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      drawOverlays: (...args) => {
+        const [, , , options] = args;
+
+        recorded.push(options?.maxTileEnergy);
+      },
+    });
+
+    const customMax = originalMax * 3;
+
+    engine.grid.maxTileEnergy = customMax;
+    GridManager.maxTileEnergy = originalMax;
+
+    engine.tick(0);
+
+    assert.ok(recorded.length >= 1, "drawOverlays invoked at least once");
+    assert.is(recorded.at(-1), customMax, "overlay receives the grid's maxTileEnergy");
+  } finally {
+    restore();
+    GridManager.maxTileEnergy = originalMax;
   }
 });
 

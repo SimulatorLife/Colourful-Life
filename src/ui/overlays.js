@@ -4,6 +4,149 @@ import { clamp, clamp01, lerp, warnOnce } from "../utils.js";
 const FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
 const FITNESS_BASE_HUE = 52;
+const DEFAULT_CELEBRATION_PALETTE = Object.freeze([
+  { rgb: [255, 214, 137] },
+  { rgb: [172, 210, 255] },
+  { rgb: [255, 176, 208] },
+  { rgb: [198, 255, 214] },
+]);
+const MAX_CELEBRATION_HIGHLIGHTS = 4;
+
+function toCelebrationColor(rgb, alpha) {
+  if (!Array.isArray(rgb) || rgb.length < 3) return "rgba(255,255,255,0)";
+
+  const [r, g, b] = rgb;
+  const clamped = clamp01(Number.isFinite(alpha) ? alpha : 0);
+
+  return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${clamped.toFixed(3)})`;
+}
+
+function selectCelebrationHighlights(entries, limit = MAX_CELEBRATION_HIGHLIGHTS) {
+  if (!Array.isArray(entries) || entries.length === 0) return [];
+
+  const capped = Math.max(0, Math.min(limit, MAX_CELEBRATION_HIGHLIGHTS));
+
+  if (capped === 0) return [];
+
+  const highlights = [];
+
+  for (const entry of entries) {
+    if (!entry) continue;
+
+    const value = Number.isFinite(entry.fitness)
+      ? entry.fitness
+      : Number.NEGATIVE_INFINITY;
+
+    if (!Number.isFinite(value)) continue;
+
+    const candidate = { entry, score: value };
+    let inserted = false;
+
+    for (let i = 0; i < highlights.length; i++) {
+      if (value > highlights[i].score) {
+        highlights.splice(i, 0, candidate);
+        inserted = true;
+        break;
+      }
+    }
+
+    if (!inserted && highlights.length < capped) {
+      highlights.push(candidate);
+      inserted = true;
+    }
+
+    if (inserted && highlights.length > capped) {
+      highlights.length = capped;
+    }
+  }
+
+  return highlights.map((item) => item.entry);
+}
+
+export function drawCelebrationAuras(snapshot, ctx, cellSize, options = {}) {
+  if (!snapshot || !ctx || typeof ctx.createRadialGradient !== "function") return;
+  if (!(cellSize > 0)) return;
+
+  const entries = Array.isArray(snapshot.entries)
+    ? snapshot.entries
+    : Array.isArray(snapshot.cells)
+      ? snapshot.cells
+      : null;
+
+  if (!entries || entries.length === 0) return;
+
+  const palette =
+    Array.isArray(options.palette) && options.palette.length > 0
+      ? options.palette
+      : DEFAULT_CELEBRATION_PALETTE;
+  const limit = Math.max(
+    0,
+    Math.min(
+      Number.isFinite(options.maxHighlights) ? options.maxHighlights : palette.length,
+      palette.length,
+      MAX_CELEBRATION_HIGHLIGHTS,
+    ),
+  );
+
+  if (limit === 0) return;
+
+  const highlights = selectCelebrationHighlights(entries, limit);
+
+  if (highlights.length === 0) return;
+
+  let maxFitness = Number.isFinite(snapshot.maxFitness) ? snapshot.maxFitness : 0;
+
+  if (!(maxFitness > 0)) {
+    for (const entry of highlights) {
+      const candidate = Number.isFinite(entry?.fitness) ? entry.fitness : 0;
+
+      if (candidate > maxFitness) maxFitness = candidate;
+    }
+  }
+
+  maxFitness = maxFitness > 0 ? maxFitness : 1;
+
+  ctx.save();
+
+  for (let i = 0; i < highlights.length; i++) {
+    const entry = highlights[i];
+
+    if (!entry) continue;
+
+    const { row, col } = entry;
+
+    if (!Number.isFinite(row) || !Number.isFinite(col)) continue;
+
+    const x = (col + 0.5) * cellSize;
+    const y = (row + 0.5) * cellSize;
+    const rawScore = Number.isFinite(entry.fitness) ? entry.fitness : 0;
+    const normalized = clamp01(rawScore / maxFitness);
+    const paletteEntry = palette[i % palette.length];
+    const rgb = Array.isArray(paletteEntry?.rgb)
+      ? paletteEntry.rgb
+      : Array.isArray(paletteEntry)
+        ? paletteEntry
+        : null;
+
+    if (!rgb) continue;
+
+    const outerRadius = Math.min(cellSize * (2.2 + normalized * 3.4), cellSize * 6.5);
+    const innerRadius = Math.max(cellSize * 0.4, outerRadius * 0.2);
+    const gradient = ctx.createRadialGradient(x, y, innerRadius, x, y, outerRadius);
+    const baseAlpha = 0.22 + normalized * 0.4;
+
+    gradient.addColorStop(0, toCelebrationColor(rgb, Math.min(0.8, baseAlpha + 0.18)));
+    gradient.addColorStop(0.5, toCelebrationColor(rgb, Math.min(0.55, baseAlpha)));
+    gradient.addColorStop(1, toCelebrationColor(rgb, 0));
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, outerRadius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
 
 function createFitnessPalette(steps, hue) {
   const palette = [];
@@ -27,6 +170,16 @@ function createFitnessPalette(steps, hue) {
   return palette;
 }
 
+/**
+ * Paints translucent rectangles for each active environmental event. Colour
+ * resolution is delegated to the supplied callback so custom palettes can be
+ * injected by UI extensions.
+ *
+ * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
+ * @param {number} cellSize - Width/height of a single grid cell in pixels.
+ * @param {Array} activeEvents - Events with `affectedArea` rectangles to render.
+ * @param {(event: object) => string} [getColor] - Optional colour resolver invoked per event.
+ */
 export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
   if (!ctx || !Array.isArray(activeEvents) || activeEvents.length === 0) return;
 
@@ -222,6 +375,16 @@ function drawEnergyLegend(ctx, cellSize, cols, rows, stats, maxTileEnergy) {
   ctx.restore();
 }
 
+/**
+ * Resolves the local density value for a given tile by consulting whichever
+ * API the grid exposes. GridManager provides `getDensityAt`, but tests and
+ * headless consumers may only surface `densityGrid` or `localDensity`.
+ *
+ * @param {object} grid - Grid-like object returned by `GridManager`.
+ * @param {number} r - Row index to inspect.
+ * @param {number} c - Column index to inspect.
+ * @returns {number} Normalized density value for the tile.
+ */
 export function getDensityAt(grid, r, c) {
   if (typeof grid.getDensityAt === "function") return grid.getDensityAt(r, c);
   if (Array.isArray(grid.densityGrid)) return grid.densityGrid[r]?.[c] ?? 0;
@@ -230,6 +393,14 @@ export function getDensityAt(grid, r, c) {
   return 0;
 }
 
+/**
+ * Maps a normalized density value (0..1) to an RGBA colour along a perceptually
+ * smooth gradient used by the density heatmap and legend.
+ *
+ * @param {number} normalizedValue - Density value in the 0..1 range.
+ * @param {{opaque?: boolean}} [options] - When `opaque` is true the alpha channel is set to 1.
+ * @returns {string} CSS rgba() string representing the density colour.
+ */
 export function densityToRgba(normalizedValue, { opaque = false } = {}) {
   const clampedValue = Number.isFinite(normalizedValue) ? normalizedValue : 0;
   const t = clamp01(clampedValue);
@@ -344,7 +515,16 @@ function getSelectionZoneEntries(selectionManager) {
   }
 }
 
-function drawSelectionZones(selectionManager, ctx, cellSize) {
+/**
+ * Fills active reproduction zones using cached geometry supplied by the
+ * selection manager. Zones are rendered on top of the canvas to mirror UI state
+ * in the visual overlays.
+ *
+ * @param {import('../ui/selectionManager.js').default|undefined} selectionManager - Active selection manager.
+ * @param {CanvasRenderingContext2D} ctx - Canvas context used for drawing.
+ * @param {number} cellSize - Size of a single grid cell in pixels.
+ */
+export function drawSelectionZones(selectionManager, ctx, cellSize) {
   if (!hasActiveSelectionZones(selectionManager)) return;
 
   const zoneEntries = getSelectionZoneEntries(selectionManager);
@@ -389,19 +569,29 @@ function drawSelectionZones(selectionManager, ctx, cellSize) {
   ctx.restore();
 }
 
-export { drawSelectionZones };
-
+/**
+ * Master overlay renderer invoked by {@link SimulationEngine}. It orchestrates
+ * event shading, reproduction zones, obstacle masks, and heatmaps depending on
+ * the flags provided by UI controls.
+ *
+ * @param {object} grid - Grid manager exposing obstacle, energy, and density data.
+ * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
+ * @param {number} cellSize - Width/height of each cell in pixels.
+ * @param {object} [opts] - Overlay options and data dependencies.
+ */
 export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   const {
     showEnergy,
     showDensity,
     showFitness,
+    showCelebrationAuras,
     showObstacles = true,
     maxTileEnergy = MAX_TILE_ENERGY,
     activeEvents,
     getEventColor,
     snapshot: providedSnapshot,
     selectionManager: explicitSelection,
+    celebrationAurasOptions,
   } = opts;
   let snapshot = providedSnapshot;
   const selectionManager = explicitSelection || grid?.selectionManager;
@@ -417,14 +607,28 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
 
   if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);
   if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
-  if (showFitness) {
+  if (showFitness || showCelebrationAuras) {
     if (!snapshot && typeof grid?.getLastSnapshot === "function") {
       snapshot = grid.getLastSnapshot();
     }
+  }
+  if (showFitness) {
     drawFitnessHeatmap(snapshot, ctx, cellSize);
+  }
+  if (showCelebrationAuras) {
+    drawCelebrationAuras(snapshot, ctx, cellSize, celebrationAurasOptions);
   }
 }
 
+/**
+ * Renders a green energy heatmap layer plus summary legend showing minimum,
+ * maximum, and mean tile energy.
+ *
+ * @param {object} grid - Grid-like object exposing `energyGrid`, `rows`, and `cols`.
+ * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
+ * @param {number} cellSize - Width/height of each cell in pixels.
+ * @param {number} [maxTileEnergy=MAX_TILE_ENERGY] - Energy cap used to normalize colours.
+ */
 export function drawEnergyHeatmap(
   grid,
   ctx,
@@ -461,6 +665,14 @@ function ensureDensityScratchSize(size) {
   return densityScratchBuffer;
 }
 
+/**
+ * Visualizes population density across the grid using a blue→red gradient and
+ * accompanying legend so observers can contextualize numeric extremes.
+ *
+ * @param {object} grid - Grid-like object exposing `rows`, `cols`, and density helpers.
+ * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
+ * @param {number} cellSize - Width/height of each cell in pixels.
+ */
 export function drawDensityHeatmap(grid, ctx, cellSize) {
   const rows = grid.rows;
   const cols = grid.cols;
@@ -520,6 +732,15 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
   drawDensityLegend(ctx, cellSize, cols, rows, originalMin, originalMax);
 }
 
+/**
+ * Highlights the top performers from a leaderboard snapshot by tinting their
+ * grid cells using a warm palette. Lower performers are ignored to keep the
+ * overlay legible.
+ *
+ * @param {{rows:number, cols:number, entries:Array, maxFitness:number}} snapshot - Latest leaderboard snapshot.
+ * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
+ * @param {number} cellSize - Width/height of a single grid cell in pixels.
+ */
 export function drawFitnessHeatmap(snapshot, ctx, cellSize) {
   if (!snapshot || snapshot.maxFitness <= 0) return;
 

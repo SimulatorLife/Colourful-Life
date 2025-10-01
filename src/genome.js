@@ -406,6 +406,31 @@ export class DNA {
     return 0.2 + 0.5 * this.geneFraction(GENE_LOCI.PARENTAL);
   }
 
+  // Minimum fraction of tile energy this genome expects per offspring
+  offspringEnergyDemandFrac() {
+    const rng = this.prngFor("offspringEnergyDemandFrac");
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const nurture = 0.22 + 0.58 * parental; // 0.22..0.80
+    const brood = 0.1 + 0.5 * fertility; // 0.10..0.60
+    const thrift = 0.2 + 0.6 * efficiency; // 0.20..0.80
+    const stamina = 0.14 + 0.46 * capacity; // 0.14..0.60
+    const boldness = 0.1 + 0.35 * risk; // 0.10..0.45
+    const base =
+      0.14 +
+      nurture * 0.45 +
+      brood * 0.28 +
+      boldness * 0.22 +
+      stamina * 0.25 -
+      thrift * 0.38;
+    const jitter = (rng() - 0.5) * 0.08; // deterministic per-genome wobble
+
+    return clamp(base + jitter, 0.08, 0.55);
+  }
+
   // How strongly aging increases maintenance costs and reduces fertility
   senescenceRate() {
     return 0.1 + 0.4 * (1 - this.geneFraction(GENE_LOCI.SENESCENCE));
@@ -599,6 +624,43 @@ export class DNA {
     const base = 0.018 + 0.02 * (1 - efficiency) + 0.01 * drivePenalty;
 
     return clamp(base, 0.012, 0.055);
+  }
+
+  metabolicProfile() {
+    const rng = this.prngFor("metabolicProfile");
+    const activity = this.geneFraction(GENE_LOCI.ACTIVITY);
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const jitter = (rng() - 0.5) * 0.08;
+
+    const baseline = clamp(
+      0.25 +
+        0.45 * activity +
+        0.25 * movement +
+        0.2 * risk -
+        0.35 * efficiency -
+        0.2 * recovery +
+        jitter,
+      0.05,
+      1.3,
+    );
+    const crowdingTax = clamp(
+      0.2 + 0.4 * (1 - density) + 0.2 * risk + 0.15 * parental - 0.25 * efficiency,
+      0.05,
+      1.15,
+    );
+    const neuralDrag = clamp(
+      0.15 + 0.45 * neural + 0.2 * activity - 0.2 * recovery,
+      0.05,
+      1,
+    );
+
+    return { baseline, crowdingTax, neuralDrag };
   }
 
   // How efficiently a cell can harvest tile energy per tick (0.15..0.85)

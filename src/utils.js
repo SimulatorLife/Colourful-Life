@@ -50,6 +50,20 @@ export function clamp01(value) {
 }
 
 /**
+ * Normalizes an arbitrary candidate to a plain object. Non-object values are
+ * coerced to an empty object so callers can safely destructure nested options
+ * without additional guards.
+ *
+ * @template T
+ * @param {T} candidate - Potential object-like value supplied by callers.
+ * @returns {T extends object ? T : Object} An object suitable for
+ *   destructuring.
+ */
+export function toPlainObject(candidate) {
+  return candidate && typeof candidate === "object" ? candidate : {};
+}
+
+/**
  * Deep clones the sensor/node trace payloads used by the brain debugger so the
  * UI can mutate copies without affecting simulation state.
  *

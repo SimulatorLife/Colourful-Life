@@ -20,8 +20,8 @@ jobs:
         Identify and improve one configuration surface (e.g., package.json
         scripts/fields, dependency hygiene, lockfile consistency,
         ESLint/Prettier/EditorConfig settings, TypeScript/Babel config,
-        Browserslist/engines, or CI lint/test steps) that will make the project easier
-        to build, lint, test, and maintain—without changing app behavior. Pick a single
+        Browserslist/engines, minimization/uglification, or CI lint/test steps) that will make the project easier
+        to build, lint, secure, test, and maintain—without changing app behavior. Pick a single
         coherent target and deliver one concrete fix. For example: normalize or clarify
         npm scripts (add lint, lint:fix, format, test, build, start with accurate
         commands), remove unused devDeps, fix incorrect/duplicated dependencies or
