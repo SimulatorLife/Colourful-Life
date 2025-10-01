@@ -2504,18 +2504,12 @@ export default class GridManager {
         if (!cell) continue;
 
         const fitness = computeFitness(cell, cap);
-        const previous = Number.isFinite(cell.fitnessScore)
-          ? cell.fitnessScore
-          : fitness;
-        const smoothed = previous * 0.8 + fitness * 0.2;
-
-        cell.fitnessScore = smoothed;
 
         snapshot.population++;
         snapshot.totalEnergy += cell.energy;
         snapshot.totalAge += cell.age;
         snapshot.cells.push(cell);
-        const entry = { row, col, cell, fitness, smoothedFitness: smoothed };
+        const entry = { row, col, cell, fitness };
 
         snapshot.entries.push(entry);
         if (Number.isFinite(entry.fitness)) {

@@ -66,9 +66,9 @@ test("drawCelebrationAuras renders gradients for top performers", () => {
   const ctx = createMockContext();
   const snapshot = {
     entries: [
-      { row: 0, col: 0, fitness: 0.2, smoothedFitness: 0.3 },
-      { row: 3, col: 4, fitness: 0.9, smoothedFitness: 0.92 },
-      { row: 5, col: 1, fitness: 0.7, smoothedFitness: 0.71 },
+      { row: 0, col: 0, fitness: 0.2 },
+      { row: 3, col: 4, fitness: 0.9 },
+      { row: 5, col: 1, fitness: 0.7 },
       { row: 6, col: 6, fitness: 0.1 },
     ],
     maxFitness: 1,

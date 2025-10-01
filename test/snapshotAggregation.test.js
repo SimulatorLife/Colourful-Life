@@ -143,9 +143,7 @@ test("computeLeaderboard returns top entries in descending fitness order", async
     entries: [
       {
         fitness: 10,
-        smoothedFitness: 12,
         cell: createStubCell({
-          fitnessScore: 9,
           offspring: 5,
           fightsWon: 3,
           age: 7,
@@ -154,9 +152,7 @@ test("computeLeaderboard returns top entries in descending fitness order", async
       },
       {
         fitness: 8,
-        smoothedFitness: 11,
         cell: createStubCell({
-          fitnessScore: 8,
           offspring: 4,
           fightsWon: 1,
           age: 6,
@@ -165,9 +161,7 @@ test("computeLeaderboard returns top entries in descending fitness order", async
       },
       {
         fitness: 15,
-        smoothedFitness: 11,
         cell: createStubCell({
-          fitnessScore: 8,
           offspring: 2,
           fightsWon: 4,
           age: 4,
@@ -177,7 +171,6 @@ test("computeLeaderboard returns top entries in descending fitness order", async
       {
         fitness: 9,
         cell: createStubCell({
-          fitnessScore: 13,
           offspring: 6,
           fightsWon: 5,
           age: 8,
@@ -210,31 +203,28 @@ test("computeLeaderboard returns top entries in descending fitness order", async
   assert.is(leaderboard.length, 3);
   assert.equal(
     leaderboard.map(({ color }) => color),
-    ["#dd3", "#aa0", "#cc2"],
+    ["#cc2", "#aa0", "#dd3"],
   );
   assert.equal(leaderboard[0], {
-    fitness: 9,
-    smoothedFitness: 13,
-    offspring: 6,
-    fightsWon: 5,
-    age: 8,
-    color: "#dd3",
+    fitness: 15,
+    offspring: 2,
+    fightsWon: 4,
+    age: 4,
+    color: "#cc2",
   });
   assert.equal(leaderboard[1], {
     fitness: 10,
-    smoothedFitness: 12,
     offspring: 5,
     fightsWon: 3,
     age: 7,
     color: "#aa0",
   });
   assert.equal(leaderboard[2], {
-    fitness: 15,
-    smoothedFitness: 11,
-    offspring: 2,
-    fightsWon: 4,
-    age: 4,
-    color: "#cc2",
+    fitness: 9,
+    offspring: 6,
+    fightsWon: 5,
+    age: 8,
+    color: "#dd3",
   });
 });
 
@@ -244,18 +234,15 @@ test("computeLeaderboard sanitizes topN before slicing", async () => {
     entries: [
       {
         fitness: 10,
-        smoothedFitness: 10,
-        cell: createStubCell({ fitnessScore: 10, color: "#000" }),
+        cell: createStubCell({ color: "#000" }),
       },
       {
         fitness: 8,
-        smoothedFitness: 8,
-        cell: createStubCell({ fitnessScore: 8, color: "#111" }),
+        cell: createStubCell({ color: "#111" }),
       },
       {
         fitness: 6,
-        smoothedFitness: 6,
-        cell: createStubCell({ fitnessScore: 6, color: "#222" }),
+        cell: createStubCell({ color: "#222" }),
       },
     ],
   };
@@ -278,7 +265,6 @@ test("computeLeaderboard tolerates entries missing cell data", async () => {
   assert.is(leaderboard.length, 1);
   assert.equal(leaderboard[0], {
     fitness: 5,
-    smoothedFitness: 5,
     offspring: 0,
     fightsWon: 0,
     age: 0,
@@ -296,7 +282,7 @@ test("computeLeaderboard skips entries with non-finite fitness", async () => {
         cell: { offspring: 1, fightsWon: 1, age: 1 },
         fitness: Number.POSITIVE_INFINITY,
       },
-      { cell: { offspring: 0, fightsWon: 0, age: 2 }, fitness: 7, smoothedFitness: 6 },
+      { cell: { offspring: 0, fightsWon: 0, age: 2 }, fitness: 7 },
     ],
   };
 
@@ -305,7 +291,6 @@ test("computeLeaderboard skips entries with non-finite fitness", async () => {
   assert.is(leaderboard.length, 1);
   assert.equal(leaderboard[0], {
     fitness: 7,
-    smoothedFitness: 6,
     offspring: 0,
     fightsWon: 0,
     age: 2,
