@@ -153,19 +153,25 @@ export function accumulateEventModifiers({
  * @param {Function} options.config.isEventAffecting - Predicate to determine if an event affects the tile.
  * @param {Function} options.config.getEventEffect - Retrieves effect configuration for an event.
  * @param {Map} [options.config.effectCache] - Cache reused across tiles for resolved event effects.
+ * @param {{nextEnergy:number, drain:number, appliedEvents:Array}|undefined} [out]
+ *   Optional result object to populate, allowing callers to reuse allocations in
+ *   tight loops. When omitted, a fresh object is returned.
  * @returns {{nextEnergy:number, drain:number, appliedEvents:Array}}
  */
-export function computeTileEnergyUpdate({
-  currentEnergy,
-  density = 0,
-  neighborEnergies = [],
-  neighborSum,
-  neighborCount,
-  events = [],
-  row,
-  col,
-  config,
-}) {
+export function computeTileEnergyUpdate(
+  {
+    currentEnergy,
+    density = 0,
+    neighborEnergies = [],
+    neighborSum,
+    neighborCount,
+    events = [],
+    row,
+    col,
+    config,
+  },
+  out,
+) {
   const {
     maxTileEnergy,
     regenRate,
@@ -218,6 +224,14 @@ export function computeTileEnergyUpdate({
   let nextEnergy = energy + regen - drain + diffusion;
 
   nextEnergy = clamp(nextEnergy, 0, maxTileEnergy);
+
+  if (out && typeof out === "object") {
+    out.nextEnergy = nextEnergy;
+    out.drain = drain;
+    out.appliedEvents = modifiers.appliedEvents;
+
+    return out;
+  }
 
   return { nextEnergy, drain, appliedEvents: modifiers.appliedEvents };
 }
