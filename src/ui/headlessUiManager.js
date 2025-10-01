@@ -126,13 +126,13 @@ export function createHeadlessUiManager(options = {}) {
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
     getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
     setMatingDiversityThreshold: (value) => {
-      if (updateIfFinite("matingDiversityThreshold", value)) {
+      if (updateIfFinite("matingDiversityThreshold", value, { min: 0, max: 1 })) {
         notify("matingDiversityThreshold", settings.matingDiversityThreshold);
       }
     },
     getLowDiversityReproMultiplier: () => settings.lowDiversityReproMultiplier,
     setLowDiversityReproMultiplier: (value) => {
-      if (updateIfFinite("lowDiversityReproMultiplier", value)) {
+      if (updateIfFinite("lowDiversityReproMultiplier", value, { min: 0, max: 1 })) {
         notify("lowDiversityReproMultiplier", settings.lowDiversityReproMultiplier);
       }
     },
