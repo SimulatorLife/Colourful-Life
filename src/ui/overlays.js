@@ -1,5 +1,5 @@
 import { MAX_TILE_ENERGY } from "../config.js";
-import { lerp, warnOnce } from "../utils.js";
+import { clamp, clamp01, lerp, warnOnce } from "../utils.js";
 
 const FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
@@ -101,13 +101,10 @@ function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = "0,0,0") {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const rawAlpha = alphaAt(r, c);
-      let a = Number.isFinite(rawAlpha) ? rawAlpha : 0;
+      const alpha = clamp01(Number.isFinite(rawAlpha) ? rawAlpha : 0);
 
-      if (a > 1) a = 1;
-      else if (a < 0) a = 0;
-
-      if (a <= 0) continue;
-      ctx.fillStyle = `rgba(${color},${a.toFixed(3)})`;
+      if (alpha <= 0) continue;
+      ctx.fillStyle = `rgba(${color},${alpha.toFixed(3)})`;
       ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
     }
   }
@@ -123,7 +120,7 @@ export function getDensityAt(grid, r, c) {
 
 export function densityToRgba(normalizedValue, { opaque = false } = {}) {
   const clampedValue = Number.isFinite(normalizedValue) ? normalizedValue : 0;
-  const t = Math.min(1, Math.max(0, clampedValue));
+  const t = clamp01(clampedValue);
   const stops = [
     { t: 0, color: [59, 76, 192] },
     { t: 0.5, color: [221, 244, 255] },
@@ -152,7 +149,7 @@ export function densityToRgba(normalizedValue, { opaque = false } = {}) {
 }
 
 function drawDensityLegend(ctx, cellSize, cols, rows, minDensity, maxDensity) {
-  const gradientWidth = Math.min(160, Math.max(120, cols * cellSize * 0.25));
+  const gradientWidth = clamp(cols * cellSize * 0.25, 120, 160);
   const gradientHeight = 14;
   const padding = 10;
   const textLineHeight = 14;
