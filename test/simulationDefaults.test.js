@@ -3,6 +3,7 @@ import * as assert from "uvu/assert";
 import { MockCanvas } from "./helpers/simulationEngine.js";
 
 const configModulePromise = import("../src/config.js");
+const sliderConfigModulePromise = import("../src/ui/sliderConfig.js");
 const uiManagerModulePromise = import("../src/ui/uiManager.js");
 const simulationEngineModulePromise = import("../src/simulationEngine.js");
 const mainModulePromise = import("../src/main.js");
@@ -105,40 +106,41 @@ class MockDocument {
 test("resolveSimulationDefaults returns expected baseline configuration", async () => {
   const {
     resolveSimulationDefaults,
-    UI_SLIDER_CONFIG,
     ENERGY_REGEN_RATE_DEFAULT,
     ENERGY_DIFFUSION_RATE_DEFAULT,
     COMBAT_EDGE_SHARPNESS_DEFAULT,
+    SIMULATION_DEFAULTS,
   } = await configModulePromise;
+  const { UI_SLIDER_CONFIG } = await sliderConfigModulePromise;
   const defaults = resolveSimulationDefaults();
   const expected = {
-    paused: false,
-    updatesPerSecond: 60,
-    eventFrequencyMultiplier: UI_SLIDER_CONFIG.eventFrequencyMultiplier?.default ?? 1,
-    mutationMultiplier: UI_SLIDER_CONFIG.mutationMultiplier?.default ?? 1,
-    densityEffectMultiplier: UI_SLIDER_CONFIG.densityEffectMultiplier?.default ?? 1,
-    societySimilarity: UI_SLIDER_CONFIG.societySimilarity?.default ?? 0.7,
-    enemySimilarity: UI_SLIDER_CONFIG.enemySimilarity?.default ?? 0.4,
-    eventStrengthMultiplier: UI_SLIDER_CONFIG.eventStrengthMultiplier?.default ?? 1,
+    ...SIMULATION_DEFAULTS,
     energyRegenRate: ENERGY_REGEN_RATE_DEFAULT,
     energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
     combatEdgeSharpness:
-      UI_SLIDER_CONFIG.combatEdgeSharpness?.default ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
-    showObstacles: true,
-    showEnergy: false,
-    showDensity: false,
-    showFitness: false,
-    leaderboardIntervalMs: UI_SLIDER_CONFIG.leaderboardIntervalMs?.default ?? 750,
-    matingDiversityThreshold:
-      UI_SLIDER_CONFIG.matingDiversityThreshold?.default ?? 0.45,
-    lowDiversityReproMultiplier:
-      UI_SLIDER_CONFIG.lowDiversityReproMultiplier?.default ?? 0.1,
-    speedMultiplier: UI_SLIDER_CONFIG.speedMultiplier?.default ?? 1,
-    lingerPenalty: 0,
+      SIMULATION_DEFAULTS.combatEdgeSharpness ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
     autoPauseOnBlur: defaults.autoPauseOnBlur,
   };
 
   assert.equal(defaults, expected);
+
+  // Slider defaults should mirror the canonical simulation defaults so UI wiring stays in sync.
+  assert.is(
+    UI_SLIDER_CONFIG.societySimilarity.default,
+    SIMULATION_DEFAULTS.societySimilarity,
+  );
+  assert.is(
+    UI_SLIDER_CONFIG.enemySimilarity.default,
+    SIMULATION_DEFAULTS.enemySimilarity,
+  );
+  assert.is(
+    UI_SLIDER_CONFIG.matingDiversityThreshold.default,
+    SIMULATION_DEFAULTS.matingDiversityThreshold,
+  );
+  assert.is(
+    UI_SLIDER_CONFIG.lowDiversityReproMultiplier.default,
+    SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
+  );
 });
 
 test("UIManager constructor seeds settings from resolveSimulationDefaults", async () => {
