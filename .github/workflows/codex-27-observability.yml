@@ -30,8 +30,8 @@ jobs:
         a large feature, add a smaller win, for example adding a visual cue when
         mutation rate sliders change. 
 
-        Do not respond with "no major issues"—produce an actionable upgrade, update
-        documentation/tests when behaviour changes. Maintain architectural boundaries (simulation logic vs
+        Do not respond with "found no major issues" or similar—produce SOMETHING. Be sure to update
+        documentation/tests when behaviour changes as appropriate. Maintain architectural boundaries (simulation logic vs
         rendering vs UI), ensure additions are performant (no unnecessary per-frame
         allocations), keep visuals accessible, and avoid heavyweight dependencies. If a
         new configuration toggle is needed, add sensible defaults and document them.
