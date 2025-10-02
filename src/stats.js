@@ -52,11 +52,7 @@ function wrapTraitCompute(fn) {
 function normalizeThreshold(value, fallback = TRAIT_THRESHOLD) {
   const numeric = Number(value);
 
-  if (!Number.isFinite(numeric)) {
-    return clamp01(fallback);
-  }
-
-  return clamp01(numeric);
+  return clamp01(Number.isFinite(numeric) ? numeric : fallback);
 }
 
 const clampInteractionTrait = (genes, key) => {
