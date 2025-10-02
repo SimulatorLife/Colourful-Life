@@ -102,6 +102,9 @@ test("tick emits events and clears pending slow UI updates after throttle interv
     engine.on("metrics", (payload) => metricsEvents.push(payload));
     engine.on("leaderboard", (payload) => leaderboardEvents.push(payload));
 
+    engine.state.eventFrequencyMultiplier = 1;
+    engine.eventManager.reset({ startWithEvent: true });
+
     now = 1000;
     const result = engine.tick(now);
 

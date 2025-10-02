@@ -171,6 +171,18 @@ function expectedEventFromSequence(
   };
 }
 
+test("EventManager leaves external influence dormant by default", async () => {
+  const { default: EventManager } = await import("../src/events/eventManager.js");
+  const rows = 40;
+  const cols = 60;
+  const rng = makeSequenceRng([0.1, 0.2, 0.3]);
+  const manager = new EventManager(rows, cols, rng);
+
+  assert.is(manager.currentEvent, null);
+  assert.is(manager.activeEvents.length, 0);
+  assert.is(rng.getCalls(), 0, "external events should not consume RNG when disabled");
+});
+
 test("EventManager respects injected RNG for deterministic events", async () => {
   const [{ default: EventManager }, { EVENT_TYPES }] = await Promise.all([
     import("../src/events/eventManager.js"),
@@ -180,7 +192,7 @@ test("EventManager respects injected RNG for deterministic events", async () => 
   const cols = 60;
   const sequence = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7];
   const rng = makeSequenceRng(sequence.slice());
-  const manager = new EventManager(rows, cols, rng);
+  const manager = new EventManager(rows, cols, rng, { startWithEvent: true });
   const expected = expectedEventFromSequence(sequence, rows, cols, EVENT_TYPES);
 
   assert.equal(manager.currentEvent, expected);
