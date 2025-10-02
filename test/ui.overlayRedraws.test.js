@@ -1,46 +1,7 @@
 import { test, assert } from "#tests/harness";
 import UIManager from "../src/ui/uiManager.js";
 import { setupDom } from "./helpers/mockDom.js";
-
-function traverse(node, predicate) {
-  if (!node) return null;
-  if (predicate(node)) return node;
-  if (!Array.isArray(node.children)) return null;
-
-  for (const child of node.children) {
-    const match = traverse(child, predicate);
-
-    if (match) return match;
-  }
-
-  return null;
-}
-
-function findCheckboxByLabel(root, labelText) {
-  const labelSpan = traverse(root, (node) => {
-    return (
-      node &&
-      node.tagName === "SPAN" &&
-      typeof node.textContent === "string" &&
-      node.textContent.trim() === labelText
-    );
-  });
-
-  if (!labelSpan) return null;
-
-  let current = labelSpan;
-
-  while (current && current.tagName !== "LABEL") {
-    current = current.parentElement;
-  }
-
-  if (!current) return null;
-
-  return traverse(
-    current,
-    (node) => node?.tagName === "INPUT" && node.type === "checkbox",
-  );
-}
+import { findCheckboxByLabel } from "./helpers/controlQueries.js";
 
 test("overlay toggles request a redraw while paused", () => {
   const restore = setupDom();
