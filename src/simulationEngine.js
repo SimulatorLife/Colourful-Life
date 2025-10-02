@@ -1290,7 +1290,7 @@ export default class SimulationEngine {
         this.state.matingDiversityThreshold ??
         this.stats?.matingDiversityThreshold ??
         SIMULATION_DEFAULTS.matingDiversityThreshold ??
-        0.45,
+        0.42,
       lowDiversityMultiplier: clamped,
     });
 

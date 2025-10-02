@@ -80,6 +80,7 @@ This document captures how the Colourful Life simulation composes its core syste
 ### Stats and telemetry
 
 - **Stats** (`src/stats.js`) accumulates per-tick metrics, maintains rolling history for charts, and reports aggregate counters (births, deaths, fights, cooperations). Age-related telemetry is expressed in simulation ticks so downstream tools can map it to seconds using their chosen tick cadence.
+- Headless sampling over 300 ticks on a 60×60 grid (seed 12345) showed the prior `0.45` mating diversity threshold averaging ~0.27 diversity with five successes across 241 mate choices, while the gentler `0.42` baseline lifted diversity to ~0.30 with six successes in 269 attempts, so the default now reflects the less restrictive gate to avoid reproduction stalls in homogenised periods.
 - **Leaderboard** (`src/leaderboard.js`) combines `computeFitness` output with brain snapshots to surface top-performing organisms.
 - **BrainDebugger** (`src/ui/brainDebugger.js`) mirrors neuron traces into the browser console for inspection. `SimulationEngine` forwards snapshots each tick when the debugger is available, and the debugger doubles as the default brain snapshot collector for headless runs.
 

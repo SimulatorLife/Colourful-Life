@@ -892,7 +892,7 @@ export default class GridManager {
     const initialThreshold =
       typeof stats?.matingDiversityThreshold === "number"
         ? clamp(stats.matingDiversityThreshold, 0, 1)
-        : 0.45;
+        : 0.42;
 
     this.matingDiversityThreshold = initialThreshold;
     // Raised alongside the config default so kin-heavy stretches still produce
