@@ -10,6 +10,7 @@ import {
   resolveSimulationDefaults,
 } from "./config.js";
 import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
+import { clamp } from "./utils.js";
 
 const noop = () => {};
 
@@ -1138,7 +1139,7 @@ export default class SimulationEngine {
 
     if (!Number.isFinite(numeric)) return;
 
-    const clamped = Math.min(Math.max(numeric, 0), 1);
+    const clamped = clamp(numeric, 0, 1);
 
     if (this.state.matingDiversityThreshold === clamped) return;
 
@@ -1164,7 +1165,7 @@ export default class SimulationEngine {
 
     if (!Number.isFinite(numeric)) return;
 
-    const clamped = Math.min(Math.max(numeric, 0), 1);
+    const clamped = clamp(numeric, 0, 1);
 
     if (this.state.lowDiversityReproMultiplier === clamped) return;
 

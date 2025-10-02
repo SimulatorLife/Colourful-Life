@@ -1,6 +1,6 @@
 import { resolveSimulationDefaults } from "../config.js";
 import { UI_SLIDER_CONFIG } from "./sliderConfig.js";
-import { clamp01, warnOnce, toPlainObject } from "../utils.js";
+import { clamp, clamp01, warnOnce, toPlainObject } from "../utils.js";
 import {
   createControlButtonRow,
   createControlGrid,
@@ -538,7 +538,7 @@ export default class UIManager {
     const typeLabel = this.#formatEventTypeLabel(event.type);
     const pieces = [];
     const coverage = Number.isFinite(event.coverageRatio)
-      ? `${Math.round(Math.min(Math.max(event.coverageRatio, 0), 1) * 100)}% of the grid`
+      ? `${Math.round(clamp(event.coverageRatio, 0, 1) * 100)}% of the grid`
       : null;
     const remaining = Number.isFinite(event.remainingTicks)
       ? `${event.remainingTicks} ticks remaining`
@@ -1748,7 +1748,7 @@ export default class UIManager {
     const coverageOrNull = (ratio) => {
       if (!Number.isFinite(ratio)) return null;
 
-      const clamped = Math.min(Math.max(ratio, 0), 1);
+      const clamped = clamp(ratio, 0, 1);
 
       return `${Math.round(clamped * 100)}% area`;
     };

@@ -1,5 +1,5 @@
 import { TRAIT_ACTIVATION_THRESHOLD } from "./config.js";
-import { clamp01, warnOnce } from "./utils.js";
+import { clamp, clamp01, warnOnce } from "./utils.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;
@@ -767,7 +767,7 @@ export default class Stats {
 
     if (!Number.isFinite(numeric)) return;
 
-    this.matingDiversityThreshold = Math.min(Math.max(numeric, 0), 1);
+    this.matingDiversityThreshold = clamp(numeric, 0, 1);
   }
 
   /**
