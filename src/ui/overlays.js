@@ -93,17 +93,15 @@ export function drawCelebrationAuras(snapshot, ctx, cellSize, options = {}) {
 
   if (highlights.length === 0) return;
 
-  let maxFitness = Number.isFinite(snapshot.maxFitness) ? snapshot.maxFitness : 0;
-
-  if (!(maxFitness > 0)) {
-    for (const entry of highlights) {
-      const candidate = Number.isFinite(entry?.fitness) ? entry.fitness : 0;
-
-      if (candidate > maxFitness) maxFitness = candidate;
-    }
-  }
-
-  maxFitness = maxFitness > 0 ? maxFitness : 1;
+  const maxFitnessCandidate =
+    Number.isFinite(snapshot.maxFitness) && snapshot.maxFitness > 0
+      ? snapshot.maxFitness
+      : highlights.reduce(
+          (max, entry) =>
+            Number.isFinite(entry?.fitness) ? Math.max(max, entry.fitness) : max,
+          0,
+        );
+  const maxFitness = maxFitnessCandidate > 0 ? maxFitnessCandidate : 1;
 
   ctx.save();
 
