@@ -1,0 +1,94 @@
+export function findCheckboxByLabel(root, label) {
+  const queue = [root];
+
+  while (queue.length > 0) {
+    const node = queue.shift();
+
+    if (node && Array.isArray(node.children)) {
+      queue.push(...node.children);
+    }
+
+    if (!node || node.tagName !== "LABEL" || !Array.isArray(node.children)) {
+      continue;
+    }
+
+    const line = node.children[0];
+
+    if (!line || !Array.isArray(line.children)) continue;
+
+    const input = line.children.find((child) => child?.tagName === "INPUT");
+    const directName = line.children.find(
+      (child) => child?.className === "control-name",
+    );
+    const nestedLabel = line.children.find(
+      (child) => child?.className === "control-checkbox-label",
+    );
+    const nestedName = Array.isArray(nestedLabel?.children)
+      ? nestedLabel.children.find((child) => child?.className === "control-name")
+      : null;
+    const name = directName ?? nestedName;
+
+    const extractText = (element) => {
+      if (!element) return "";
+      if (typeof element.textContent === "string" && element.textContent.trim()) {
+        return element.textContent;
+      }
+      if (!Array.isArray(element.children) || element.children.length === 0) {
+        return "";
+      }
+
+      return element.children.map((child) => extractText(child)).join("");
+    };
+
+    if (name && extractText(name).trim() === label) {
+      return input ?? null;
+    }
+  }
+
+  return null;
+}
+
+export function findSliderByLabel(root, label) {
+  const queue = [root];
+
+  while (queue.length > 0) {
+    const node = queue.shift();
+
+    if (node && Array.isArray(node.children)) {
+      queue.push(...node.children);
+    }
+
+    if (!node || node.tagName !== "LABEL" || !Array.isArray(node.children)) {
+      continue;
+    }
+
+    const name = node.children.find((child) => child?.className === "control-name");
+    const line = node.children.find((child) => child?.className === "control-line");
+
+    if (!line || !Array.isArray(line.children)) continue;
+
+    const input = line.children.find(
+      (child) => child?.tagName === "INPUT" && child?.type === "range",
+    );
+
+    if (!input) continue;
+
+    const extractText = (element) => {
+      if (!element) return "";
+      if (typeof element.textContent === "string" && element.textContent.trim()) {
+        return element.textContent;
+      }
+      if (!Array.isArray(element.children) || element.children.length === 0) {
+        return "";
+      }
+
+      return element.children.map((child) => extractText(child)).join("");
+    };
+
+    if (name && extractText(name).trim() === label) {
+      return input;
+    }
+  }
+
+  return null;
+}
