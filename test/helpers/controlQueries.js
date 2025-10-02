@@ -1,3 +1,15 @@
+function extractTextContent(element) {
+  if (!element) return "";
+  if (typeof element.textContent === "string" && element.textContent.trim()) {
+    return element.textContent;
+  }
+  if (!Array.isArray(element.children) || element.children.length === 0) {
+    return "";
+  }
+
+  return element.children.map((child) => extractTextContent(child)).join("");
+}
+
 export function findCheckboxByLabel(root, label) {
   const queue = [root];
 
@@ -28,19 +40,7 @@ export function findCheckboxByLabel(root, label) {
       : null;
     const name = directName ?? nestedName;
 
-    const extractText = (element) => {
-      if (!element) return "";
-      if (typeof element.textContent === "string" && element.textContent.trim()) {
-        return element.textContent;
-      }
-      if (!Array.isArray(element.children) || element.children.length === 0) {
-        return "";
-      }
-
-      return element.children.map((child) => extractText(child)).join("");
-    };
-
-    if (name && extractText(name).trim() === label) {
+    if (name && extractTextContent(name).trim() === label) {
       return input ?? null;
     }
   }
@@ -73,19 +73,7 @@ export function findSliderByLabel(root, label) {
 
     if (!input) continue;
 
-    const extractText = (element) => {
-      if (!element) return "";
-      if (typeof element.textContent === "string" && element.textContent.trim()) {
-        return element.textContent;
-      }
-      if (!Array.isArray(element.children) || element.children.length === 0) {
-        return "";
-      }
-
-      return element.children.map((child) => extractText(child)).join("");
-    };
-
-    if (name && extractText(name).trim() === label) {
+    if (name && extractTextContent(name).trim() === label) {
       return input;
     }
   }
