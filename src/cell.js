@@ -2146,6 +2146,119 @@ export default class Cell {
     return boost;
   }
 
+  #resolveExploreExploitIntent(
+    decision,
+    {
+      localDensity = 0,
+      densityEffectMultiplier = 1,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
+      maxTileEnergy = MAX_TILE_ENERGY,
+      energyScanAvailable = false,
+    } = {},
+  ) {
+    const density = clamp(localDensity * densityEffectMultiplier, 0, 1);
+    const energyCap =
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1;
+    const energyFrac = clamp((this.energy ?? 0) / energyCap, 0, 1);
+    const tileLevel =
+      tileEnergy != null && Number.isFinite(tileEnergy)
+        ? clamp(tileEnergy, 0, 1)
+        : energyFrac;
+    const scarcity = clamp(1 - tileLevel, 0, 1);
+    const trend = clamp(tileEnergyDelta ?? 0, -1, 1);
+    const fatigue = this.#currentNeuralFatigue();
+    const riskTolerance = this.#resolveRiskTolerance();
+    let baseIntent =
+      0.45 +
+      scarcity * 0.35 +
+      (1 - density) * 0.1 +
+      Math.max(0, -trend) * 0.1 +
+      riskTolerance * 0.1 -
+      fatigue * 0.25;
+
+    baseIntent = clamp(baseIntent, 0.05, 0.95);
+
+    let neuralSignal = null;
+    let neuralAdvantage = 0;
+    let neuralIntent = null;
+    const movementOutcome = this.#getDecisionOutcome("movement");
+
+    if (decision?.usedBrain && movementOutcome) {
+      let probabilities =
+        movementOutcome.probabilities &&
+        typeof movementOutcome.probabilities === "object"
+          ? movementOutcome.probabilities
+          : null;
+
+      if (!probabilities && movementOutcome.logits) {
+        const entries = OUTPUT_GROUPS.movement;
+        const logits = entries.map(({ key }) => {
+          const value = Number(movementOutcome.logits?.[key]);
+
+          return Number.isFinite(value) ? value : 0;
+        });
+        const labels = entries.map(({ key }) => key);
+        const normalized = softmax(logits);
+
+        probabilities = {};
+
+        for (let i = 0; i < labels.length; i++) {
+          probabilities[labels[i]] = normalized[i] ?? 0;
+        }
+      }
+
+      if (probabilities) {
+        const clampProb = (key) => clamp(Number(probabilities[key]) || 0, 0, 1);
+        const exploreProb = clampProb("explore");
+        const restProb = clampProb("rest");
+        const pursueProb = clampProb("pursue");
+        const avoidProb = clampProb("avoid");
+        const cohereProb = clampProb("cohere");
+
+        neuralSignal = exploreProb;
+        const rival = Math.max(restProb, pursueProb, avoidProb, cohereProb);
+
+        neuralAdvantage = Math.max(0, exploreProb - rival);
+        neuralIntent = clamp(
+          exploreProb * (0.65 + neuralAdvantage * 0.5) + (1 - restProb) * 0.2,
+          0,
+          1,
+        );
+      }
+    }
+
+    const neuralWeight =
+      neuralIntent != null ? clamp(0.5 + neuralAdvantage * 0.35, 0, 1) : 0;
+    const finalIntent =
+      neuralIntent != null ? lerp(baseIntent, neuralIntent, neuralWeight) : baseIntent;
+    const availableIntent = energyScanAvailable ? finalIntent : 0;
+    const rng = this.resolveRng("movementExploitIntent");
+    const shouldAttempt = energyScanAvailable && rng() < availableIntent;
+
+    this.#assignDecisionOutcome("movement", {
+      exploreExploitBase: baseIntent,
+      exploreExploitIntent: finalIntent,
+      exploreExploitNeural: neuralSignal,
+      exploreExploitAdvantage: neuralAdvantage,
+      exploreExploitScanAvailable: energyScanAvailable,
+      exploreExploitPlanned: shouldAttempt,
+      exploreExploitExecuted: false,
+      exploreExploitSucceeded: false,
+      exploreExploitDirection: null,
+    });
+
+    return {
+      shouldAttempt,
+      probability: finalIntent,
+      baseIntent,
+      neuralSignal,
+      neuralAdvantage,
+    };
+  }
+
   #interactionSensors({
     localDensity = 0,
     densityEffectMultiplier = 1,
@@ -3166,12 +3279,17 @@ export default class Cell {
       );
     }
 
+    const exploitPlan = this.#resolveExploreExploitIntent(decision, {
+      ...movementContext,
+      energyScanAvailable: typeof getEnergyAt === "function",
+    });
     const chosen = decision.action;
     const nearestEnemy = this.#nearest(enemies, row, col);
     const nearestMate = this.#nearest(mates, row, col);
     const nearestAlly = this.#nearest(society, row, col);
 
     const attemptEnergyExploit = () => {
+      if (!exploitPlan?.shouldAttempt) return false;
       if (typeof getEnergyAt !== "function") return false;
       const dirs = [
         { dr: -1, dc: 0 },
@@ -3197,17 +3315,41 @@ export default class Cell {
         }
       }
 
-      if (!bestDir) return false;
+      if (!bestDir) {
+        this.#assignDecisionOutcome("movement", {
+          exploreExploitExecuted: false,
+          exploreExploitDirection: null,
+          exploreExploitSucceeded: false,
+        });
+
+        return false;
+      }
+
+      let moved = false;
 
       if (typeof tryMove === "function") {
-        const moved = tryMove(gridArr, row, col, bestDir.dr, bestDir.dc, rows, cols);
+        moved = Boolean(tryMove(gridArr, row, col, bestDir.dr, bestDir.dc, rows, cols));
 
-        if (moved) return true;
+        if (moved) {
+          this.#assignDecisionOutcome("movement", {
+            exploreExploitExecuted: true,
+            exploreExploitDirection: { dr: bestDir.dr, dc: bestDir.dc },
+            exploreExploitSucceeded: true,
+          });
+
+          return true;
+        }
       }
 
       if (typeof moveRandomly === "function") {
         moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
       }
+
+      this.#assignDecisionOutcome("movement", {
+        exploreExploitExecuted: true,
+        exploreExploitDirection: { dr: bestDir.dr, dc: bestDir.dc },
+        exploreExploitSucceeded: false,
+      });
 
       return true;
     };
