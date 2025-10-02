@@ -1,5 +1,5 @@
 import { EVENT_TYPES } from "./eventEffects.js";
-import { clamp, randomRange } from "../utils.js";
+import { clamp, randomRange, sanitizeNumber } from "../utils.js";
 import { defaultIsEventAffecting } from "./eventContext.js";
 
 export { defaultIsEventAffecting as isEventAffecting };
@@ -68,20 +68,21 @@ function sanitizeSpanConfig(candidate, fallback) {
     return { ...fallback };
   }
 
-  const min = Number(candidate.min);
-  const ratio = Number(candidate.ratio ?? candidate.fraction ?? candidate.maxFraction);
-  const sanitizedMin = Number.isFinite(min)
-    ? Math.max(1, Math.floor(min))
-    : fallback.min;
-  let sanitizedRatio = Number.isFinite(ratio) ? ratio : fallback.ratio;
+  const ratioCandidate = candidate.ratio ?? candidate.fraction ?? candidate.maxFraction;
 
-  if (!Number.isFinite(sanitizedRatio)) {
-    sanitizedRatio = fallback.ratio;
-  }
+  const min = sanitizeNumber(candidate.min, {
+    fallback: fallback.min,
+    min: 1,
+    round: Math.floor,
+  });
 
-  sanitizedRatio = clamp(sanitizedRatio, 0, 1);
+  const ratio = sanitizeNumber(ratioCandidate, {
+    fallback: fallback.ratio,
+    min: 0,
+    max: 1,
+  });
 
-  return { min: sanitizedMin, ratio: sanitizedRatio };
+  return { min, ratio };
 }
 
 function sanitizeRandomEventConfig(candidate) {
