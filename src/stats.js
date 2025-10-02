@@ -892,8 +892,17 @@ export default class Stats {
       return [];
     }
 
-    const clampedLimit = Math.max(1, Math.floor(limit));
-    const trimmed = values.slice(-clampedLimit);
+    const numericLimit = Number(limit);
+    const clampedLimit = Number.isFinite(numericLimit)
+      ? Math.max(0, Math.floor(numericLimit))
+      : Math.max(0, Math.floor(12));
+
+    if (clampedLimit === 0) {
+      return [];
+    }
+
+    const trimmed =
+      clampedLimit >= values.length ? values.slice() : values.slice(-clampedLimit);
 
     return trimmed.reverse();
   }
