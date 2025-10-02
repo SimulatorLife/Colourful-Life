@@ -45,10 +45,10 @@ where practical.
 - Relocated the leaderboard refresh slider into the Evolution Insights panel,
   renaming it "Insights Refresh Interval" so cadence controls live alongside
   the metrics and leaderboard they influence.
-- Moved the "Pause When Hidden" toggle next to the playback controls so
-  auto-pause behaviour is discoverable alongside the Pause and Step actions,
-  and disabled it by default so unattended, long-running simulations can
-  continue advancing even when the browser tab loses focus.
+- Relocated the "Pause When Hidden" toggle into the General Settings group so
+  the auto-pause behaviour sits with other simulation-wide preferences while
+  remaining easy to discover, and kept it disabled by default so unattended,
+  long-running simulations continue advancing when the browser tab loses focus.
 - Shifted the playback speed slider beneath the Pause/Step controls so cadence
   adjustments live with the playback actions they influence.
 - Removed the wall linger penalty control and supporting plumbing from the

@@ -42,10 +42,16 @@ test("autopause toggle updates pause indicator and notifies listeners", async ()
     const controlRow = toggle.parentElement?.parentElement;
 
     assert.is(controlRow?.tagName, "LABEL");
-    assert.is(
-      controlRow?.title,
-      "Automatically pause when the tab or window loses focus, resuming on return.",
-    );
+    const expectedDescription =
+      "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
+
+    assert.is(controlRow?.title, expectedDescription);
+
+    const descriptionEl = controlRow?.querySelector(".control-checkbox-description");
+
+    if (descriptionEl) {
+      assert.is(descriptionEl.textContent, expectedDescription);
+    }
 
     toggle.checked = true;
     toggle.trigger("input");

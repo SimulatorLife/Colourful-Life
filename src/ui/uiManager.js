@@ -1358,17 +1358,6 @@ export default class UIManager {
       },
     });
 
-    this.autoPauseCheckbox = this.#addCheckbox(
-      body,
-      "Pause When Hidden",
-      "Automatically pause when the tab or window loses focus, resuming on return.",
-      this.autoPauseOnBlur,
-      (checked) => {
-        this.setAutoPauseOnBlur(checked);
-        this.#updateSetting("autoPauseOnBlur", checked);
-      },
-    );
-
     const speedBounds = UI_SLIDER_CONFIG?.speedMultiplier || {};
     const speedMin = speedBounds.min ?? 0.5;
     const speedMax = speedBounds.max ?? 100;
@@ -1602,6 +1591,20 @@ export default class UIManager {
     generalConfigs
       .filter((cfg) => cfg.position === "beforeOverlays")
       .forEach((cfg) => renderSlider(cfg, generalGroup));
+
+    const autoPauseDescription =
+      "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
+
+    this.autoPauseCheckbox = this.#addCheckbox(
+      generalGroup,
+      "Pause When Hidden",
+      { title: autoPauseDescription, description: autoPauseDescription },
+      this.autoPauseOnBlur,
+      (checked) => {
+        this.setAutoPauseOnBlur(checked);
+        this.#updateSetting("autoPauseOnBlur", checked);
+      },
+    );
 
     return {
       renderSlider,
