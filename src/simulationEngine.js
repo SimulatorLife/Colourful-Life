@@ -10,7 +10,7 @@ import {
   resolveSimulationDefaults,
 } from "./config.js";
 import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
-import { clamp, reportError, sanitizeNumber } from "./utils.js";
+import { clamp, reportError, sanitizeNumber, toFiniteNumber } from "./utils.js";
 import {
   ensureCanvasDimensions,
   resolveCanvas,
@@ -35,15 +35,8 @@ function createSelectionManagerStub(rows, cols) {
     togglePattern() {
       return false;
     },
-    clearCustomZones() {},
-    addCustomRectangle() {
-      return null;
-    },
     getActiveZones() {
       return [];
-    },
-    hasCustomZones() {
-      return false;
     },
     hasActiveZones() {
       return false;
@@ -154,13 +147,7 @@ export default class SimulationEngine {
     }
 
     const { width, height } = ensureCanvasDimensions(resolvedCanvas, config);
-    const toFinite = (value) => {
-      if (value == null) return null;
-
-      const numeric = Number(value);
-
-      return Number.isFinite(numeric) ? numeric : null;
-    };
+    const toFinite = (value) => toFiniteNumber(value, { fallback: null });
     const resolvePositiveInt = (value, fallback) => {
       const numeric = toFinite(value);
 
@@ -976,7 +963,6 @@ export default class SimulationEngine {
         obstaclePreset: opts.obstaclePreset,
         presetOptions: opts.presetOptions,
         reseed: opts.reseed,
-        clearCustomZones: opts.clearCustomZones ?? false,
       });
     }
 

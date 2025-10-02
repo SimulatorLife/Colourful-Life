@@ -97,6 +97,44 @@ export function sanitizeNumber(
 }
 
 /**
+ * Converts an arbitrary value to a finite `number` or returns the provided
+ * fallback when the conversion fails. Useful when normalizing configuration
+ * options that may arrive as strings, BigInts, or other primitives.
+ *
+ * @param {any} value - Candidate value supplied by callers.
+ * @param {{fallback?: any}} [options]
+ * @param {any} [options.fallback=null] - Value returned when conversion fails.
+ * @returns {number|any} Finite number or the fallback when invalid.
+ */
+export function toFiniteNumber(value, { fallback = null } = {}) {
+  if (value == null) return fallback;
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+
+    if (trimmed.length === 0) return fallback;
+
+    const parsed = Number.parseFloat(trimmed);
+
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  if (typeof value === "bigint") {
+    const numeric = Number(value);
+
+    return Number.isFinite(numeric) ? numeric : fallback;
+  }
+
+  const numeric = Number(value);
+
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+/**
  * Normalizes an arbitrary candidate to a plain object. Non-object values are
  * coerced to an empty object so callers can safely destructure nested options
  * without additional guards.

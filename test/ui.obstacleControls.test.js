@@ -137,9 +137,7 @@ test("clearing obstacles resets preset select to open field", async () => {
           getPatterns: () => [],
           togglePattern: () => {},
           getActiveZones: () => [],
-          clearCustomZones: () => {},
-          hasCustomZones: () => false,
-          addCustomRectangle: () => null,
+          hasActiveZones: () => false,
         },
       },
       { canvasElement: new MockCanvas(200, 200) },
@@ -181,6 +179,10 @@ test("clearing obstacles resets preset select to open field", async () => {
     presetSelect.value = "sealed-quadrants";
     presetSelect.dispatchEvent({ type: "change" });
     assert.is(uiManager.obstaclePreset, "sealed-quadrants");
+    assert.ok(
+      applyCalls.some(([id]) => id === "sealed-quadrants"),
+      "changing the preset should immediately apply the layout",
+    );
 
     const clearButton = findButtonByText(uiManager.controlsPanel, "Clear Obstacles");
 

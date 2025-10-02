@@ -1588,7 +1588,6 @@ export default class GridManager {
     obstaclePreset = null,
     presetOptions = null,
     reseed = true,
-    clearCustomZones = false,
   } = {}) {
     const baseEnergy = this.maxTileEnergy / 2;
 
@@ -1619,10 +1618,6 @@ export default class GridManager {
     this.lastSnapshot = null;
     this.densityDirtyTiles?.clear?.();
     this.eventEffectCache?.clear?.();
-
-    if (clearCustomZones && this.selectionManager?.clearCustomZones) {
-      this.selectionManager.clearCustomZones();
-    }
 
     const shouldRandomize = Boolean(randomizeObstacles);
     let targetPreset = obstaclePreset;

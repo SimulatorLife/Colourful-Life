@@ -80,19 +80,12 @@ export default class UIManager {
       typeof setGeometryFn === "function"
         ? setGeometryFn.bind(normalizedActions)
         : null;
-    this.selectionDrawingEnabled = false;
-    this.selectionDragStart = null;
     this.canvasElement = null;
-    this.selectionDrawingActive = false;
-    this.selectionDragEnd = null;
-    this.drawZoneButton = null;
     this.zoneSummaryEl = null;
     this.zoneSummaryTextEl = null;
     this.zoneSummaryList = null;
     this._checkboxIdSequence = 0;
-    this._selectionListenersInstalled = false;
     this.stepButton = null;
-    this.clearZonesButton = null;
     this.metricsPlaceholder = null;
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
@@ -145,6 +138,7 @@ export default class UIManager {
     this.combatEdgeSharpness = defaults.combatEdgeSharpness;
     this.matingDiversityThreshold = defaults.matingDiversityThreshold;
     this.lowDiversityReproMultiplier = defaults.lowDiversityReproMultiplier;
+    this.lowDiversitySlider = null;
     this.energyRegenRate = defaults.energyRegenRate; // base logistic regen rate (0..0.2)
     this.energyDiffusionRate = defaults.energyDiffusionRate; // neighbor diffusion rate (0..0.5)
     this.leaderboardIntervalMs = defaults.leaderboardIntervalMs;
@@ -492,7 +486,6 @@ export default class UIManager {
 
     this.#ensureMainRowMounted(anchor);
     this.canvasContainer.appendChild(targetCanvas);
-    this.#installRegionDrawing();
   }
 
   #ensureMainRowMounted(anchor) {
@@ -706,26 +699,6 @@ export default class UIManager {
     return null;
   }
 
-  #setPointerCapture(target, pointerId) {
-    if (!target || typeof target.setPointerCapture !== "function") return;
-
-    try {
-      target.setPointerCapture(pointerId);
-    } catch (error) {
-      warnOnce("Failed to set pointer capture for selection drawing.", error);
-    }
-  }
-
-  #releasePointerCapture(target, pointerId) {
-    if (!target || typeof target.releasePointerCapture !== "function") return;
-
-    try {
-      target.releasePointerCapture(pointerId);
-    } catch (error) {
-      warnOnce("Failed to release pointer capture after selection drawing.", error);
-    }
-  }
-
   #scheduleUpdate() {
     if (typeof this.simulationCallbacks?.requestFrame === "function") {
       this.simulationCallbacks.requestFrame();
@@ -811,35 +784,6 @@ export default class UIManager {
     });
   }
 
-  #setDrawingEnabled(enabled) {
-    this.selectionDrawingEnabled = Boolean(enabled);
-    const isActive = this.selectionDrawingEnabled;
-
-    if (this.drawZoneButton) {
-      this.drawZoneButton.classList.toggle("active", isActive);
-      this.drawZoneButton.textContent = isActive
-        ? "Cancel Drawing"
-        : "Draw Custom Zone";
-      this.drawZoneButton.setAttribute("aria-pressed", isActive ? "true" : "false");
-      this.drawZoneButton.title = isActive
-        ? "Cancel drawing mode and keep the current reproductive zones."
-        : "Enable drawing mode to sketch a custom reproductive zone on the canvas.";
-    }
-
-    if (!isActive) {
-      this.selectionDragStart = null;
-      this.selectionDragEnd = null;
-      this.selectionDrawingActive = false;
-    }
-  }
-
-  #toggleRegionDrawing(nextState) {
-    const state =
-      typeof nextState === "boolean" ? nextState : !this.selectionDrawingEnabled;
-
-    this.#setDrawingEnabled(state);
-  }
-
   #updateZoneSummary() {
     if (!this.zoneSummaryEl) return;
     const zones =
@@ -889,132 +833,7 @@ export default class UIManager {
         this.zoneSummaryList.hidden = true;
       }
     }
-
-    this.#updateCustomZoneButtons();
   }
-
-  #updateCustomZoneButtons() {
-    if (!this.clearZonesButton) return;
-
-    const hasZones = Boolean(
-      this.selectionManager &&
-        typeof this.selectionManager.hasCustomZones === "function" &&
-        this.selectionManager.hasCustomZones(),
-    );
-
-    this.clearZonesButton.disabled = !hasZones;
-    this.clearZonesButton.title = hasZones
-      ? "Remove all custom reproductive zones."
-      : "No custom reproductive zones to clear.";
-  }
-
-  #canvasToGrid(event) {
-    if (!this.canvasElement) return null;
-
-    const rect = this.canvasElement.getBoundingClientRect?.();
-    const cellSize = Math.max(1, this.getCellSize());
-    const offsetX = event.clientX - (rect?.left ?? 0);
-    const offsetY = event.clientY - (rect?.top ?? 0);
-    const scaleX =
-      rect && Number.isFinite(rect.width) && rect.width > 0
-        ? this.canvasElement.width / rect.width
-        : 1;
-    const scaleY =
-      rect && Number.isFinite(rect.height) && rect.height > 0
-        ? this.canvasElement.height / rect.height
-        : 1;
-    const canvasX = offsetX * (Number.isFinite(scaleX) && scaleX > 0 ? scaleX : 1);
-    const canvasY = offsetY * (Number.isFinite(scaleY) && scaleY > 0 ? scaleY : 1);
-    const col = Math.floor(canvasX / cellSize);
-    const row = Math.floor(canvasY / cellSize);
-    const maxCols = Math.floor(this.canvasElement.width / cellSize);
-    const maxRows = Math.floor(this.canvasElement.height / cellSize);
-
-    if (col < 0 || row < 0 || col >= maxCols || row >= maxRows) return null;
-
-    return { row, col };
-  }
-
-  #installRegionDrawing() {
-    if (
-      !this.canvasElement ||
-      !this.selectionManager ||
-      this._selectionListenersInstalled
-    )
-      return;
-
-    this.selectionDrawingActive = false;
-    this.selectionDragEnd = null;
-
-    const canvas = this.canvasElement;
-    const handlePointerDown = (event) => {
-      if (!this.selectionDrawingEnabled) return;
-      const start = this.#canvasToGrid(event);
-
-      if (!start) return;
-
-      event.preventDefault();
-      this.selectionDrawingActive = true;
-      this.selectionDragStart = start;
-      this.selectionDragEnd = start;
-      this.#setPointerCapture(canvas, event.pointerId);
-    };
-
-    const handlePointerMove = (event) => {
-      if (!this.selectionDrawingActive || !this.selectionDrawingEnabled) return;
-      const point = this.#canvasToGrid(event);
-
-      if (point) this.selectionDragEnd = point;
-    };
-
-    const finalizeDrawing = (event) => {
-      if (!this.selectionDrawingActive) return;
-
-      event.preventDefault();
-      this.#releasePointerCapture(canvas, event.pointerId);
-
-      const end = this.#canvasToGrid(event) || this.selectionDragEnd;
-      const start = this.selectionDragStart;
-
-      if (start && end) {
-        const zone = this.selectionManager.addCustomRectangle(
-          start.row,
-          start.col,
-          end.row,
-          end.col,
-        );
-
-        if (zone) {
-          this.#updateZoneSummary();
-          this.#scheduleUpdate();
-        }
-      }
-
-      this.selectionDrawingActive = false;
-      this.selectionDragStart = null;
-      this.selectionDragEnd = null;
-      this.#setDrawingEnabled(false);
-    };
-
-    const cancelDrawing = (event) => {
-      if (!this.selectionDrawingActive) return;
-      this.#releasePointerCapture(canvas, event.pointerId);
-
-      this.selectionDrawingActive = false;
-      this.selectionDragStart = null;
-      this.selectionDragEnd = null;
-      this.#setDrawingEnabled(false);
-    };
-
-    canvas.addEventListener("pointerdown", handlePointerDown);
-    canvas.addEventListener("pointermove", handlePointerMove);
-    canvas.addEventListener("pointerup", finalizeDrawing);
-    canvas.addEventListener("pointerleave", finalizeDrawing);
-    canvas.addEventListener("pointercancel", cancelDrawing);
-
-    this._selectionListenersInstalled = true;
-  }
-
   // Reusable checkbox row helper
   #addCheckbox(body, label, titleOrOptions, initial, onChange) {
     const options =
@@ -1641,7 +1460,7 @@ export default class UIManager {
 
     this.#buildOverlayToggles(body);
 
-    this.#buildObstacleControls(body, sliderContext);
+    this.#buildObstacleControls(body);
 
     this.#buildReproductiveZoneTools(body);
 
@@ -1712,7 +1531,6 @@ export default class UIManager {
       onClick: (event) => {
         const options = {
           randomizeObstacles: Boolean(event?.shiftKey),
-          clearCustomZones: true,
         };
 
         if (typeof this.simulationCallbacks?.resetWorld === "function") {
@@ -1920,6 +1738,7 @@ export default class UIManager {
       const floor = bounds.floor;
 
       return {
+        key,
         label: overrides.label,
         min,
         max,
@@ -2038,6 +1857,19 @@ export default class UIManager {
       }),
     ];
 
+    const lowDiversitySliderConfig = withSliderConfig("lowDiversityReproMultiplier", {
+      label: "Low Diversity Penalty ×",
+      min: 0,
+      max: 1,
+      step: 0.05,
+      title:
+        "Multiplier applied to reproduction chance when diversity is below the threshold (0 disables births)",
+      format: (v) => v.toFixed(2),
+      getValue: () => this.lowDiversityReproMultiplier,
+      setValue: (v) => this.#updateSetting("lowDiversityReproMultiplier", v),
+      position: "beforeOverlays",
+    });
+
     const generalConfigs = [
       withSliderConfig("mutationMultiplier", {
         label: "Mutation Rate ×",
@@ -2063,18 +1895,7 @@ export default class UIManager {
         setValue: (v) => this.#updateSetting("combatEdgeSharpness", v),
         position: "beforeOverlays",
       }),
-      withSliderConfig("lowDiversityReproMultiplier", {
-        label: "Low Diversity Penalty ×",
-        min: 0,
-        max: 1,
-        step: 0.05,
-        title:
-          "Multiplier applied to reproduction chance when diversity is below the threshold (0 disables births)",
-        format: (v) => v.toFixed(2),
-        getValue: () => this.lowDiversityReproMultiplier,
-        setValue: (v) => this.#updateSetting("lowDiversityReproMultiplier", v),
-        position: "beforeOverlays",
-      }),
+      lowDiversitySliderConfig,
     ];
 
     const insightConfigs = [
@@ -2106,7 +1927,13 @@ export default class UIManager {
 
     generalConfigs
       .filter((cfg) => cfg.position === "beforeOverlays")
-      .forEach((cfg) => renderSlider(cfg, generalGroup));
+      .forEach((cfg) => {
+        const input = renderSlider(cfg, generalGroup);
+
+        if (cfg.key === "lowDiversityReproMultiplier") {
+          this.lowDiversitySlider = input;
+        }
+      });
 
     return {
       renderSlider,
@@ -2172,12 +1999,21 @@ export default class UIManager {
     });
   }
 
-  #buildObstacleControls(body, sliderContext) {
+  #buildObstacleControls(body) {
     createSectionHeading(body, "Obstacles", { className: "overlay-header" });
 
     const obstacleGrid = createControlGrid(body, "control-grid--compact");
 
     if (this.obstaclePresets.length > 0) {
+      const applyPreset = (id) => {
+        const args = [id, { clearExisting: true }];
+
+        if (typeof this.actions.applyObstaclePreset === "function")
+          this.actions.applyObstaclePreset(...args);
+        else if (window.grid?.applyObstaclePreset)
+          window.grid.applyObstaclePreset(...args);
+      };
+
       const presetSelect = createSelectRow(obstacleGrid, {
         label: "Layout Preset",
         title: "Choose a static obstacle layout to apply immediately.",
@@ -2189,6 +2025,7 @@ export default class UIManager {
         })),
         onChange: (value) => {
           this.obstaclePreset = value;
+          applyPreset(value);
         },
       });
 
@@ -2198,26 +2035,9 @@ export default class UIManager {
         });
       }
 
-      const applyPreset = (id) => {
-        const args = [id, { clearExisting: true }];
-
-        if (typeof this.actions.applyObstaclePreset === "function")
-          this.actions.applyObstaclePreset(...args);
-        else if (window.grid?.applyObstaclePreset)
-          window.grid.applyObstaclePreset(...args);
-      };
-
       const presetButtons = document.createElement("div");
 
       presetButtons.className = "control-line";
-      const applyLayoutButton = document.createElement("button");
-
-      applyLayoutButton.textContent = "Apply Layout";
-      applyLayoutButton.title =
-        "Replace the current obstacle mask with the selected preset.";
-      applyLayoutButton.addEventListener("click", () => {
-        applyPreset(this.obstaclePreset);
-      });
       const clearButton = document.createElement("button");
 
       clearButton.textContent = "Clear Obstacles";
@@ -2233,7 +2053,6 @@ export default class UIManager {
         if (presetSelect) presetSelect.value = clearedPreset;
         applyPreset(clearedPreset);
       });
-      presetButtons.appendChild(applyLayoutButton);
       presetButtons.appendChild(clearButton);
       obstacleGrid.appendChild(presetButtons);
     }
@@ -2248,7 +2067,7 @@ export default class UIManager {
 
     zoneIntro.className = "zone-intro control-hint";
     zoneIntro.textContent =
-      "Focus reproduction by enabling preset regions or sketching your own priority areas.";
+      "Focus reproduction by enabling preset regions and combining patterns to guide evolution.";
     body.appendChild(zoneIntro);
 
     const zoneGrid = createControlGrid(body, "control-grid--compact");
@@ -2272,37 +2091,6 @@ export default class UIManager {
         },
       );
     });
-
-    const zoneButtons = createControlButtonRow(body);
-
-    zoneButtons.setAttribute("role", "group");
-    zoneButtons.setAttribute("aria-label", "Custom reproductive zone controls");
-
-    this.drawZoneButton = document.createElement("button");
-    this.drawZoneButton.textContent = "Draw Custom Zone";
-    this.drawZoneButton.type = "button";
-    this.drawZoneButton.title =
-      "Enable drawing mode to sketch a custom reproductive zone on the canvas.";
-    this.drawZoneButton.setAttribute("aria-pressed", "false");
-    this.drawZoneButton.addEventListener("click", () => {
-      this.#toggleRegionDrawing(!this.selectionDrawingEnabled);
-    });
-    zoneButtons.appendChild(this.drawZoneButton);
-
-    const clearButton = document.createElement("button");
-
-    clearButton.textContent = "Clear Custom Zones";
-    clearButton.type = "button";
-    clearButton.title = "No custom reproductive zones to clear.";
-    clearButton.addEventListener("click", () => {
-      this.selectionManager.clearCustomZones();
-      this.#setDrawingEnabled(false);
-      this.#updateZoneSummary();
-      this.#scheduleUpdate();
-      this.#updateCustomZoneButtons();
-    });
-    zoneButtons.appendChild(clearButton);
-    this.clearZonesButton = clearButton;
 
     const summaryValue = document.createElement("div");
 
@@ -2333,13 +2121,6 @@ export default class UIManager {
       this.zoneSummaryEl.setAttribute("role", "status");
       this.zoneSummaryEl.setAttribute("aria-live", "polite");
       this.zoneSummaryEl.setAttribute("aria-describedby", summaryText.id);
-    }
-    if (this.zoneSummaryEl) {
-      zoneButtons.setAttribute("aria-describedby", summaryText.id);
-      if (this.drawZoneButton) {
-        this.drawZoneButton.setAttribute("aria-controls", "zone-summary");
-      }
-      clearButton.setAttribute("aria-controls", "zone-summary");
     }
 
     this.#updateZoneSummary();
@@ -2670,6 +2451,9 @@ export default class UIManager {
   getMutationMultiplier() {
     return this.mutationMultiplier;
   }
+  getLowDiversityReproMultiplier() {
+    return this.lowDiversityReproMultiplier;
+  }
   getEventFrequencyMultiplier() {
     return this.eventFrequencyMultiplier;
   }
@@ -2710,6 +2494,25 @@ export default class UIManager {
   }
   getShowLifeEventMarkers() {
     return this.showLifeEventMarkers;
+  }
+
+  setLowDiversityReproMultiplier(value, { notify = true } = {}) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return;
+
+    const clamped = clamp(numeric, 0, 1);
+    const changed = this.lowDiversityReproMultiplier !== clamped;
+
+    this.lowDiversityReproMultiplier = clamped;
+
+    if (this.lowDiversitySlider?.updateDisplay) {
+      this.lowDiversitySlider.updateDisplay(clamped);
+    }
+
+    if (changed && notify) {
+      this.#notifySettingChange("lowDiversityReproMultiplier", clamped);
+    }
   }
 
   #showMetricsPlaceholder(message) {

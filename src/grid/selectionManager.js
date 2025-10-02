@@ -1,5 +1,3 @@
-import { clamp } from "../utils.js";
-
 const DEFAULT_COLORS = [
   "rgba(80, 160, 255, 0.22)",
   "rgba(120, 220, 120, 0.22)",
@@ -14,18 +12,16 @@ const EMPTY_GEOMETRY = Object.freeze({
 
 /**
  * Tracks reproductive zone definitions. SelectionManager provides built-in
- * geometric patterns and supports user-drawn rectangles so the simulation can
- * restrict mating and spawning to curated areas of the map.
+ * geometric patterns so the simulation can restrict mating and spawning to
+ * curated areas of the map.
  */
 export default class SelectionManager {
   constructor(rows, cols) {
     this.rows = rows;
     this.cols = cols;
     this.patterns = new Map();
-    this.customZones = [];
     this.zoneGeometryCache = new Map();
     this.geometryRevision = 0;
-    this.customZoneCounter = 0;
     this.#definePredefinedPatterns();
   }
 
@@ -34,8 +30,6 @@ export default class SelectionManager {
     this.rows = rows;
     this.cols = cols;
     this.patterns.clear();
-    this.customZones = [];
-    this.customZoneCounter = 0;
     this.#invalidateAllZoneGeometry();
     this.#definePredefinedPatterns();
   }
@@ -112,47 +106,12 @@ export default class SelectionManager {
     return pattern.active;
   }
 
-  clearCustomZones() {
-    this.customZones = [];
-    this.#invalidateAllZoneGeometry();
-  }
-
-  addCustomRectangle(startRow, startCol, endRow, endCol) {
-    const sr = this.#clampRow(Math.min(startRow, endRow));
-    const er = this.#clampRow(Math.max(startRow, endRow));
-    const sc = this.#clampCol(Math.min(startCol, endCol));
-    const ec = this.#clampCol(Math.max(startCol, endCol));
-
-    if (Number.isNaN(sr) || Number.isNaN(er) || Number.isNaN(sc) || Number.isNaN(ec))
-      return null;
-
-    const zoneIndex = this.customZoneCounter++;
-    const zone = {
-      id: `custom-${zoneIndex}`,
-      name: `Custom Zone ${this.customZones.length + 1}`,
-      description: "User-drawn reproductive zone",
-      active: true,
-      color: DEFAULT_COLORS[(this.customZones.length + 2) % DEFAULT_COLORS.length],
-      contains: (row, col) => row >= sr && row <= er && col >= sc && col <= ec,
-      bounds: { startRow: sr, endRow: er, startCol: sc, endCol: ec },
-    };
-
-    this.customZones.push(zone);
-    this.#storeZoneGeometry(zone, this.#computeGeometryFromBounds(zone.bounds));
-
-    return zone;
-  }
-
   getActiveZones() {
     const patterns = Array.from(this.patterns.values()).filter(
       (pattern) => pattern.active,
     );
 
-    return [...patterns, ...this.customZones.filter((zone) => zone.active !== false)];
-  }
-
-  hasCustomZones() {
-    return this.customZones.length > 0;
+    return patterns;
   }
 
   hasActiveZones() {
@@ -230,14 +189,6 @@ export default class SelectionManager {
     }));
   }
 
-  #clampRow(row) {
-    return clamp(Math.floor(row), 0, this.rows - 1);
-  }
-
-  #clampCol(col) {
-    return clamp(Math.floor(col), 0, this.cols - 1);
-  }
-
   #invalidateAllZoneGeometry() {
     this.zoneGeometryCache.clear();
     this.geometryRevision += 1;
@@ -294,35 +245,7 @@ export default class SelectionManager {
   #computeZoneGeometry(zone) {
     if (!zone) return EMPTY_GEOMETRY;
 
-    if (zone.bounds) {
-      return this.#computeGeometryFromBounds(zone.bounds);
-    }
-
     return this.#computeGeometryFromContains(zone);
-  }
-
-  #computeGeometryFromBounds(bounds) {
-    if (!bounds) return EMPTY_GEOMETRY;
-
-    const { startRow, endRow, startCol, endCol } = bounds;
-    const rowSpan = endRow - startRow + 1;
-    const colSpan = endCol - startCol + 1;
-
-    if (rowSpan <= 0 || colSpan <= 0) {
-      return EMPTY_GEOMETRY;
-    }
-
-    return {
-      rects: [
-        {
-          row: startRow,
-          col: startCol,
-          rowSpan,
-          colSpan,
-        },
-      ],
-      bounds: { startRow, endRow, startCol, endCol },
-    };
   }
 
   #computeGeometryFromContains(zone) {

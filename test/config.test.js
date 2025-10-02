@@ -141,3 +141,25 @@ test("resolveActivityBaseRate clamps invalid overrides", async () => {
     0.28,
   );
 });
+
+test("MUTATION_CHANCE_BASELINE exposes the environment-aware default", async () => {
+  const { MUTATION_CHANCE_BASELINE } = await configModulePromise;
+
+  assert.is(MUTATION_CHANCE_BASELINE, 0.15);
+});
+
+test("resolveMutationChance respects overrides", async () => {
+  const { resolveMutationChance } = await configModulePromise;
+
+  assert.is(resolveMutationChance({ COLOURFUL_LIFE_MUTATION_CHANCE: "0.22" }), 0.22);
+});
+
+test("resolveMutationChance clamps invalid overrides", async () => {
+  const { resolveMutationChance } = await configModulePromise;
+
+  assert.is(resolveMutationChance({ COLOURFUL_LIFE_MUTATION_CHANCE: "-0.5" }), 0);
+
+  assert.is(resolveMutationChance({ COLOURFUL_LIFE_MUTATION_CHANCE: "2" }), 1);
+
+  assert.is(resolveMutationChance({ COLOURFUL_LIFE_MUTATION_CHANCE: "NaN" }), 0.15);
+});

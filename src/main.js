@@ -5,44 +5,29 @@ import SelectionManager from "./grid/selectionManager.js";
 import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { createHeadlessUiManager } from "./ui/headlessUiManager.js";
 import { resolveSimulationDefaults } from "./config.js";
-import { toPlainObject } from "./utils.js";
+import { toPlainObject, toFiniteNumber } from "./utils.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
 function resolveHeadlessCanvasSize(config = {}) {
-  const toFinite = (value) => {
-    if (value == null) return null;
-
-    let candidate = value;
-
-    if (typeof candidate === "string") {
-      const trimmed = candidate.trim();
-
-      if (trimmed.length === 0) {
-        return null;
-      }
-
-      candidate = trimmed;
-    }
-
-    const numeric =
-      typeof candidate === "number"
-        ? candidate
-        : typeof candidate === "string"
-          ? Number.parseFloat(candidate)
-          : Number(candidate);
-
-    return Number.isFinite(numeric) ? numeric : null;
-  };
+  const toFinite = (value) => toFiniteNumber(value, { fallback: null });
 
   const cellSize = toFinite(config?.cellSize) ?? 5;
   const rows = toFinite(config?.rows);
   const cols = toFinite(config?.cols);
   const defaultWidth = (cols ?? 120) * cellSize;
   const defaultHeight = (rows ?? 120) * cellSize;
-  const pickFirstFinite = (candidates, fallback) =>
-    // Preserve the first usable size override while falling back to defaults.
-    candidates.find(Number.isFinite) ?? fallback;
+  const pickFirstFinite = (candidates, fallback) => {
+    for (const candidate of candidates) {
+      const normalized = toFinite(candidate);
+
+      if (normalized != null) {
+        return normalized;
+      }
+    }
+
+    return fallback;
+  };
 
   return {
     width: pickFirstFinite(
@@ -317,7 +302,7 @@ export function createSimulation({
     typeof syncLowDiversity === "number" &&
     typeof uiManager?.setLowDiversityReproMultiplier === "function"
   ) {
-    uiManager.setLowDiversityReproMultiplier(syncLowDiversity);
+    uiManager.setLowDiversityReproMultiplier(syncLowDiversity, { notify: false });
   }
 
   const unsubscribers = [];
@@ -352,6 +337,15 @@ export function createSimulation({
           typeof uiManager.setAutoPauseOnBlur === "function"
         ) {
           uiManager.setAutoPauseOnBlur(changes.autoPauseOnBlur, { notify: false });
+        }
+        if (
+          changes?.lowDiversityReproMultiplier !== undefined &&
+          typeof uiManager.setLowDiversityReproMultiplier === "function"
+        ) {
+          uiManager.setLowDiversityReproMultiplier(
+            changes.lowDiversityReproMultiplier,
+            { notify: false },
+          );
         }
       }),
     );

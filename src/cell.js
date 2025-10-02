@@ -4,7 +4,7 @@ import { randomRange, clamp, lerp, cloneTracePayload, warnOnce } from "./utils.j
 import { isEventAffecting } from "./events/eventManager.js";
 import { getEventEffect } from "./events/eventEffects.js";
 import { accumulateEventModifiers } from "./energySystem.js";
-import { MAX_TILE_ENERGY } from "./config.js";
+import { MAX_TILE_ENERGY, MUTATION_CHANCE_BASELINE } from "./config.js";
 
 const EPSILON = 1e-9;
 
@@ -77,7 +77,7 @@ function sampleFromDistribution(probabilities = [], labels = [], rng = Math.rand
 }
 
 export default class Cell {
-  static chanceToMutate = 0.15;
+  static chanceToMutate = MUTATION_CHANCE_BASELINE;
   static geneMutationRange = 0.2;
 
   constructor(row, col, dna, energy) {
@@ -1556,7 +1556,7 @@ export default class Cell {
     return clamp(fromVector ? (numeric + 1) * 0.5 : numeric, 0, 1);
   }
 
-  #normalizeSigned(value, fromVector) {
+  #normalizeSigned(value) {
     const numeric = Number.isFinite(value) ? value : 0;
 
     return clamp(numeric, -1, 1);
@@ -1593,10 +1593,7 @@ export default class Cell {
       "resourceTrend",
       this._resourceSignal ?? 0,
     );
-    const resourceTrend = this.#normalizeSigned(
-      resourceInfo.value,
-      resourceInfo.fromVector,
-    );
+    const resourceTrend = this.#normalizeSigned(resourceInfo.value);
 
     const eventInfo = this.#readSensor(
       sensorVector,
@@ -1645,10 +1642,7 @@ export default class Cell {
       "interactionMomentum",
       this._interactionMomentum ?? 0,
     );
-    const momentumSignal = this.#normalizeSigned(
-      momentumInfo.value,
-      momentumInfo.fromVector,
-    );
+    const momentumSignal = this.#normalizeSigned(momentumInfo.value);
 
     const riskInfo = this.#readSensor(
       sensorVector,

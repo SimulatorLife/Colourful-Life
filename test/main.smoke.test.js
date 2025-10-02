@@ -241,6 +241,46 @@ test("browser UI setter toggles auto-pause through the engine", async () => {
   }
 });
 
+test("browser UI exposes low diversity reproduction controls", async () => {
+  const restore = setupDom();
+
+  try {
+    const { createSimulation } = await simulationModulePromise;
+
+    const simulation = createSimulation({
+      autoStart: false,
+      canvas: new MockCanvas(60, 60),
+    });
+
+    assert.type(
+      simulation.uiManager.setLowDiversityReproMultiplier,
+      "function",
+      "UI manager should expose a setter for the low diversity penalty",
+    );
+
+    simulation.uiManager.setLowDiversityReproMultiplier("0.35");
+
+    assert.is(simulation.uiManager.lowDiversityReproMultiplier, 0.35);
+    assert.is(simulation.engine.getStateSnapshot().lowDiversityReproMultiplier, 0.35);
+    assert.is(simulation.uiManager.lowDiversitySlider.value, "0.35");
+
+    simulation.engine.setLowDiversityReproMultiplier(0.6);
+
+    assert.is(simulation.uiManager.lowDiversityReproMultiplier, 0.6);
+    assert.is(simulation.engine.getStateSnapshot().lowDiversityReproMultiplier, 0.6);
+    assert.is(simulation.uiManager.lowDiversitySlider.value, "0.6");
+
+    simulation.uiManager.setLowDiversityReproMultiplier(-0.25);
+
+    assert.is(simulation.uiManager.lowDiversityReproMultiplier, 0);
+    assert.is(simulation.engine.getStateSnapshot().lowDiversityReproMultiplier, 0);
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});
+
 test("headless UI clamps diversity controls to the 0..1 range", async () => {
   const { createSimulation } = await simulationModulePromise;
 
@@ -325,7 +365,7 @@ test("createSimulation merges obstacle preset overrides into the catalog", async
   }
 });
 
-test("engine.resetWorld reseeds the ecosystem and clears custom zones", async () => {
+test("engine.resetWorld reseeds the ecosystem and resets stats", async () => {
   const { createSimulation } = await simulationModulePromise;
   const deterministicRng = () => 0.01;
 
@@ -340,20 +380,14 @@ test("engine.resetWorld reseeds the ecosystem and clears custom zones", async ()
 
   const { stats, selectionManager, grid } = simulation;
 
-  selectionManager.addCustomRectangle(0, 0, 2, 2);
-  assert.ok(selectionManager.hasCustomZones(), "custom zone seeded before reset");
   assert.ok(stats.history.population.length > 0, "history populated before reset");
+  assert.is(selectionManager.hasActiveZones(), false, "no zones active before reset");
 
-  simulation.engine.resetWorld({ clearCustomZones: true });
+  simulation.engine.resetWorld();
 
   const snapshot = grid.buildSnapshot();
 
   assert.ok(snapshot.population > 0, "population reseeded after reset");
-  assert.is(
-    selectionManager.hasCustomZones(),
-    false,
-    "custom zones cleared after reset",
-  );
   assert.is(stats.totals.ticks, 1, "tick counter restarted after reset");
   assert.is(stats.history.population.length, 1, "history contains a fresh sample");
   assert.is(stats.getRecentLifeEvents().length, 0, "life event log cleared");

@@ -1,3 +1,5 @@
+import { toFiniteNumber } from "../utils.js";
+
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
 const defaultNow = () => {
@@ -52,33 +54,7 @@ export function resolveCanvas(canvas, documentRef) {
  * @throws {Error} When no width/height can be resolved.
  */
 export function ensureCanvasDimensions(canvas, config) {
-  const toFiniteDimension = (value) => {
-    if (value == null) return null;
-
-    if (typeof value === "number") {
-      return Number.isFinite(value) ? value : null;
-    }
-
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-
-      if (trimmed.length === 0) return null;
-
-      const parsed = Number.parseFloat(trimmed);
-
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    if (typeof value === "bigint") {
-      const numeric = Number(value);
-
-      return Number.isFinite(numeric) ? numeric : null;
-    }
-
-    const numeric = Number(value);
-
-    return Number.isFinite(numeric) ? numeric : null;
-  };
+  const toFiniteDimension = (value) => toFiniteNumber(value, { fallback: null });
 
   const pickDimension = (candidates) => {
     for (const candidate of candidates) {
