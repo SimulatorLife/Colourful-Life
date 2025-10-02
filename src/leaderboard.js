@@ -1,9 +1,7 @@
-import { createRankedBuffer } from "./utils.js";
+import { createRankedBuffer, sanitizeNumber } from "./utils.js";
 
 function sanitizeCoordinate(value) {
-  const numeric = Number(value);
-
-  return Number.isFinite(numeric) ? numeric : null;
+  return sanitizeNumber(value, { fallback: null });
 }
 
 /**
