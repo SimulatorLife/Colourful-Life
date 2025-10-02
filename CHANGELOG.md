@@ -44,6 +44,9 @@ where practical.
 - Prevented the Corner Islands obstacle preset from evicting every organism by
   recalculating the final layout before blocking tiles, preserving residents
   inside the carved pockets while still sealing the surrounding terrain.
+- Removed horizontal scroll bars from sidebar panels by clamping their width
+  and allowing controls to flex within the available space so each panel stays
+  within a single view.
 
 ### Removed
 

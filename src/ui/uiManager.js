@@ -1394,6 +1394,8 @@ export default class UIManager {
     const panel = document.createElement("div");
 
     panel.className = "panel";
+    panel.style.maxWidth = "100%";
+    panel.style.overflowX = "hidden";
     const header = document.createElement("div");
 
     header.className = "panel-header";
