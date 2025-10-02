@@ -1860,6 +1860,29 @@ export default class GridManager {
 
   relocateCell(fromRow, fromCol, toRow, toCol) {
     if (fromRow === toRow && fromCol === toCol) return true;
+
+    if (
+      !Number.isInteger(fromRow) ||
+      !Number.isInteger(fromCol) ||
+      !Number.isInteger(toRow) ||
+      !Number.isInteger(toCol)
+    ) {
+      return false;
+    }
+
+    if (
+      GridManager.#isOutOfBounds(fromRow, fromCol, this.rows, this.cols) ||
+      GridManager.#isOutOfBounds(toRow, toCol, this.rows, this.cols)
+    ) {
+      return false;
+    }
+
+    const rowDelta = Math.abs(toRow - fromRow);
+    const colDelta = Math.abs(toCol - fromCol);
+
+    if (rowDelta > 1 || colDelta > 1 || (rowDelta === 0 && colDelta === 0)) {
+      return false;
+    }
     const moving = this.grid[fromRow]?.[fromCol];
 
     if (!moving) return false;

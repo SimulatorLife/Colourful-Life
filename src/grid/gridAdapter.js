@@ -66,6 +66,31 @@ export default class GridInteractionAdapter {
       return this.gridManager.relocateCell(fromRow, fromCol, toRow, toCol);
     }
 
+    if (
+      fromRow === toRow &&
+      fromCol === toCol &&
+      Number.isInteger(fromRow) &&
+      Number.isInteger(fromCol)
+    ) {
+      return true;
+    }
+
+    if (
+      !Number.isInteger(fromRow) ||
+      !Number.isInteger(fromCol) ||
+      !Number.isInteger(toRow) ||
+      !Number.isInteger(toCol)
+    ) {
+      return false;
+    }
+
+    const rowDelta = Math.abs(toRow - fromRow);
+    const colDelta = Math.abs(toCol - fromCol);
+
+    if (rowDelta > 1 || colDelta > 1 || (rowDelta === 0 && colDelta === 0)) {
+      return false;
+    }
+
     const moving = this.getCell(fromRow, fromCol);
 
     if (!moving || this.getCell(toRow, toCol)) return false;
