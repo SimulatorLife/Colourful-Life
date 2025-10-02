@@ -321,6 +321,21 @@ canvas {
   justify-content: space-between;
   gap: var(--space-md);
 }
+.control-line--inline-actions {
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: var(--space-sm);
+}
+.control-line--inline-actions select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.control-line--inline-actions button {
+  flex: 0 0 auto;
+  width: auto;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
 .control-line--checkbox {
   justify-content: flex-start;
   align-items: flex-start;

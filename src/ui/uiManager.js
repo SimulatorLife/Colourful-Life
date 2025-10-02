@@ -2035,11 +2035,10 @@ export default class UIManager {
         });
       }
 
-      const presetButtons = document.createElement("div");
-
-      presetButtons.className = "control-line";
+      const selectLine = presetSelect.closest(".control-line");
       const clearButton = document.createElement("button");
 
+      clearButton.type = "button";
       clearButton.textContent = "Clear Obstacles";
       clearButton.title = "Remove all obstacles from the grid.";
       clearButton.addEventListener("click", () => {
@@ -2053,8 +2052,12 @@ export default class UIManager {
         if (presetSelect) presetSelect.value = clearedPreset;
         applyPreset(clearedPreset);
       });
-      presetButtons.appendChild(clearButton);
-      obstacleGrid.appendChild(presetButtons);
+      if (selectLine) {
+        selectLine.classList.add("control-line--inline-actions");
+        selectLine.appendChild(clearButton);
+      } else {
+        obstacleGrid.appendChild(clearButton);
+      }
     }
   }
 
