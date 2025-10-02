@@ -235,6 +235,30 @@ test("engine.resetWorld reseeds the ecosystem and clears custom zones", async ()
   simulation.destroy();
 });
 
+test("engine.resetWorld preserves paused state for running simulations", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({ headless: true, autoStart: true });
+
+  simulation.engine.pause();
+  assert.ok(simulation.engine.isRunning, "engine keeps running loop while paused");
+  assert.is(simulation.engine.isPaused(), true, "engine paused before reset");
+
+  simulation.engine.resetWorld();
+
+  assert.ok(
+    simulation.engine.isRunning,
+    "reset should resume the engine loop when it was previously running",
+  );
+  assert.is(
+    simulation.engine.isPaused(),
+    true,
+    "reset should not resume playback when simulation was paused",
+  );
+
+  simulation.destroy();
+});
+
 test("createSimulation controller step delegates to engine.step", async () => {
   const { createSimulation } = await simulationModulePromise;
   const simulation = createSimulation({

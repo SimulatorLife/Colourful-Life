@@ -974,10 +974,14 @@ export default class SimulationEngine {
     this.lastSlowUiRender = this.now();
     this.pendingSlowUiUpdate = false;
 
-    this.setPaused(wasPaused);
-
     if (wasRunning) {
       this.start();
+
+      if (wasPaused) {
+        this.pause();
+      }
+    } else {
+      this.setPaused(wasPaused);
     }
   }
 
