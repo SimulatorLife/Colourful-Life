@@ -378,6 +378,7 @@ export default class SimulationEngine {
       showDensity: defaults.showDensity,
       showFitness: defaults.showFitness,
       showCelebrationAuras: defaults.showCelebrationAuras,
+      showLifeEventMarkers: defaults.showLifeEventMarkers,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
@@ -731,12 +732,23 @@ export default class SimulationEngine {
 
     this.grid.draw({ showObstacles: this.state.showObstacles ?? true });
 
+    const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
+    const recentLifeEvents =
+      includeLifeEventMarkers && typeof this.stats?.getRecentLifeEvents === "function"
+        ? this.stats.getRecentLifeEvents()
+        : null;
+    const lifeEventTick =
+      includeLifeEventMarkers && Number.isFinite(this.stats?.totals?.ticks)
+        ? this.stats.totals.ticks
+        : null;
+
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
       showDensity: this.state.showDensity ?? false,
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
       showCelebrationAuras: this.state.showCelebrationAuras ?? false,
+      showLifeEventMarkers: includeLifeEventMarkers,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
@@ -745,6 +757,8 @@ export default class SimulationEngine {
       getEventColor: this.eventManager.getColor?.bind(this.eventManager),
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
       selectionManager: this.selectionManager,
+      lifeEvents: recentLifeEvents,
+      currentTick: lifeEventTick,
     });
 
     if (this.pendingSlowUiUpdate) {
@@ -928,12 +942,23 @@ export default class SimulationEngine {
     const showObstacles = this.state.showObstacles ?? true;
 
     this.grid?.draw?.({ showObstacles });
+    const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
+    const recentLifeEvents =
+      includeLifeEventMarkers && typeof this.stats?.getRecentLifeEvents === "function"
+        ? this.stats.getRecentLifeEvents()
+        : null;
+    const lifeEventTick =
+      includeLifeEventMarkers && Number.isFinite(this.stats?.totals?.ticks)
+        ? this.stats.totals.ticks
+        : null;
+
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
       showDensity: this.state.showDensity ?? false,
       showFitness: this.state.showFitness ?? false,
       showObstacles,
       showCelebrationAuras: this.state.showCelebrationAuras ?? false,
+      showLifeEventMarkers: includeLifeEventMarkers,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
@@ -942,6 +967,8 @@ export default class SimulationEngine {
       getEventColor: this.eventManager?.getColor?.bind(this.eventManager),
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
       selectionManager: this.selectionManager,
+      lifeEvents: recentLifeEvents,
+      currentTick: lifeEventTick,
     });
 
     this.lastSlowUiRender = this.now();
@@ -1129,6 +1156,7 @@ export default class SimulationEngine {
     showDensity,
     showFitness,
     showCelebrationAuras,
+    showLifeEventMarkers,
   }) {
     const coerceBoolean = (candidate, fallback) => {
       if (typeof candidate === "boolean") {
@@ -1172,6 +1200,7 @@ export default class SimulationEngine {
       showDensity,
       showFitness,
       showCelebrationAuras,
+      showLifeEventMarkers,
     })
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => [key, coerceBoolean(value, Boolean(this.state?.[key]))]);
@@ -1256,6 +1285,7 @@ export default class SimulationEngine {
       case "showDensity":
       case "showFitness":
       case "showCelebrationAuras":
+      case "showLifeEventMarkers":
         this.setOverlayVisibility({ [key]: value });
         break;
       case "autoPauseOnBlur":

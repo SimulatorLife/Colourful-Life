@@ -43,6 +43,10 @@ Values outside their accepted ranges fall back to the defaults defined in [`src/
 
 Flip on the **Celebration Glow** checkbox in the Overlays panel to surround the most successful organisms with a soft aurora. The highlight quietly layers on top of the existing canvas without changing simulation mechanics, respects motion-sensitive setups (no flashing or animation), and avoids obscuring other overlays by using gentle transparency. Toggle it off at any time to return to the standard presentation.
 
+### Life event marker overlay
+
+Enable **Life Event Markers** in the Overlays panel to spotlight where births and deaths just occurred. The overlay drops colour-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps.
+
 ## Core systems
 
 The simulation runs on cooperating modules housed in `src/`:

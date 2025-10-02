@@ -100,6 +100,7 @@ export default class UIManager {
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
     this.showCelebrationAuras = defaults.showCelebrationAuras;
+    this.showLifeEventMarkers = defaults.showLifeEventMarkers;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
     const initialObstaclePreset = this.#resolveInitialObstaclePreset(actionFns);
@@ -1359,6 +1360,13 @@ export default class UIManager {
           "Add a gentle aurora around the top-performing cells as a whimsical overlay",
         initial: this.showCelebrationAuras,
       },
+      {
+        key: "showLifeEventMarkers",
+        label: "Life Event Markers",
+        title:
+          "Pinpoint recent births and deaths directly on the grid with fading markers",
+        initial: this.showLifeEventMarkers,
+      },
     ];
 
     overlayConfigs.forEach(({ key, label, title, initial }) => {
@@ -1806,6 +1814,9 @@ export default class UIManager {
   }
   getShowObstacles() {
     return this.showObstacles;
+  }
+  getShowLifeEventMarkers() {
+    return this.showLifeEventMarkers;
   }
 
   #showMetricsPlaceholder(message) {
