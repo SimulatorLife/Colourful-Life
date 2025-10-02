@@ -205,6 +205,15 @@ class FixedSizeRingBuffer {
 
     return values;
   }
+
+  clear() {
+    this.start = 0;
+    this.length = 0;
+
+    if (Array.isArray(this.buffer)) {
+      this.buffer.fill(undefined);
+    }
+  }
 }
 
 // Helper ensures ring construction is consistently clamped to integers.
@@ -318,6 +327,28 @@ export default class Stats {
     this.fights = 0;
     this.cooperations = 0;
     this.mating = createEmptyMatingSnapshot();
+    this.lastMatingDebug = null;
+    this.lastBlockedReproduction = null;
+  }
+
+  resetAll() {
+    this.resetTick();
+    this.totals = { ticks: 0, births: 0, deaths: 0, fights: 0, cooperations: 0 };
+
+    Object.values(this.#historyRings).forEach((ring) => ring?.clear?.());
+    const traitPresenceRings = this.#traitHistoryRings?.presence ?? {};
+    const traitAverageRings = this.#traitHistoryRings?.average ?? {};
+
+    Object.values(traitPresenceRings).forEach((ring) => ring?.clear?.());
+    Object.values(traitAverageRings).forEach((ring) => ring?.clear?.());
+
+    this.traitPresence = createEmptyTraitPresence(this.traitDefinitions);
+    this.diversityPressure = 0;
+    this.behavioralEvenness = 0;
+    this.meanBehaviorComplementarity = 0;
+    this.successfulBehaviorComplementarity = 0;
+    this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
+    this.lifeEventSequence = 0;
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
   }

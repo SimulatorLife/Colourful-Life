@@ -796,6 +796,9 @@ export default class GridManager {
     this.ctx = ctx || window.ctx;
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
+    this.randomObstaclePresetPool = Array.isArray(randomObstaclePresetPool)
+      ? randomObstaclePresetPool.filter((id) => typeof id === "string" && id)
+      : null;
     this.reproductionZones = new ReproductionZonePolicy();
     Object.defineProperty(this, "selectionManager", {
       configurable: true,
@@ -1381,6 +1384,74 @@ export default class GridManager {
         }
       }
     }
+  }
+
+  resetWorld({
+    randomizeObstacles = false,
+    obstaclePreset = null,
+    presetOptions = null,
+    reseed = true,
+    clearCustomZones = false,
+  } = {}) {
+    const baseEnergy = this.maxTileEnergy / 2;
+
+    for (let row = 0; row < this.rows; row++) {
+      const gridRow = this.grid[row];
+      const energyRow = this.energyGrid[row];
+      const nextRow = this.energyNext?.[row];
+      const deltaRow = this.energyDeltaGrid?.[row];
+      const obstacleRow = this.obstacles?.[row];
+      const densityCountRow = this.densityCounts?.[row];
+      const densityLiveRow = this.densityLiveGrid?.[row];
+      const densityRow = this.densityGrid?.[row];
+
+      for (let col = 0; col < this.cols; col++) {
+        if (gridRow) gridRow[col] = null;
+        if (energyRow) energyRow[col] = baseEnergy;
+        if (nextRow) nextRow[col] = 0;
+        if (deltaRow) deltaRow[col] = 0;
+        if (obstacleRow) obstacleRow[col] = false;
+        if (densityCountRow) densityCountRow[col] = 0;
+        if (densityLiveRow) densityLiveRow[col] = 0;
+        if (densityRow) densityRow[col] = 0;
+      }
+    }
+
+    this.activeCells.clear();
+    this.tickCount = 0;
+    this.lastSnapshot = null;
+    this.densityDirtyTiles?.clear?.();
+    this.eventEffectCache?.clear?.();
+
+    if (clearCustomZones && this.selectionManager?.clearCustomZones) {
+      this.selectionManager.clearCustomZones();
+    }
+
+    const shouldRandomize = Boolean(randomizeObstacles);
+    let targetPreset = obstaclePreset;
+
+    if (shouldRandomize) {
+      targetPreset = this.#pickRandomObstaclePresetId(this.randomObstaclePresetPool);
+    }
+
+    if (typeof targetPreset !== "string" || targetPreset.length === 0) {
+      targetPreset = this.currentObstaclePreset || "none";
+    }
+
+    const presetArgs = {
+      clearExisting: true,
+      presetOptions: presetOptions ?? {},
+      evict: true,
+    };
+
+    this.applyObstaclePreset(targetPreset, presetArgs);
+
+    if (reseed !== false) {
+      this.init();
+    }
+
+    this.recalculateDensityCounts();
+    this.rebuildActiveCells();
   }
 
   seed(currentPopulation, minPopulation) {

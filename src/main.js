@@ -133,6 +133,7 @@ function createHeadlessCanvas(config = {}) {
  * - `uiManager`: either the mounted {@link UIManager} instance or the headless
  *   adapter.
  * - Lifecycle helpers: `start`, `stop`, `pause`, `resume`, `step`/`tick`/`update`.
+ * - `resetWorld(options)`: clears the grid, reseeds organisms, and refreshes stats.
  * - `destroy()`: cleans up subscriptions and stops the engine.
  *
  * @param {Object} [options]
@@ -168,6 +169,7 @@ function createHeadlessCanvas(config = {}) {
  *   pause: () => void,
  *   resume: () => void,
  *   update: (timestamp?: number) => void,
+ *   resetWorld: (options?: Record<string, any>) => void,
  *   destroy: () => void,
  * }} Simulation controller composed of engine, UI, and lifecycle helpers.
  */
@@ -249,6 +251,7 @@ export function createSimulation({
     togglePause: () => engine.togglePause(),
     step: () => engine.step(),
     onSettingChange: (key, value) => engine.updateSetting(key, value),
+    resetWorld: (options) => engine.resetWorld(options),
   };
 
   let headlessOptions = null;
@@ -359,6 +362,7 @@ export function createSimulation({
     pause: () => engine.pause(),
     resume: () => engine.resume(),
     update: (timestamp) => engine.tick(timestamp),
+    resetWorld: (options) => engine.resetWorld(options),
     destroy: () => {
       while (unsubscribers.length) {
         const unsub = unsubscribers.pop();

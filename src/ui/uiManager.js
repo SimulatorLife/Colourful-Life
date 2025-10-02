@@ -1007,7 +1007,10 @@ export default class UIManager {
       button.id = id;
       button.textContent = label;
       button.title = title;
-      button.addEventListener("click", onClick);
+      button.type = "button";
+      button.addEventListener("click", (event) => {
+        if (typeof onClick === "function") onClick(event);
+      });
       buttonRow.appendChild(button);
 
       return button;
@@ -1039,6 +1042,28 @@ export default class UIManager {
         if (typeof this.actions.burst === "function") this.actions.burst();
         else if (window.grid && typeof window.grid.burstRandomCells === "function")
           window.grid.burstRandomCells();
+      },
+    });
+
+    this.resetWorldButton = addControlButton({
+      id: "resetWorldButton",
+      label: "Regenerate World",
+      title:
+        "Clear the map and spawn a fresh population. Hold Shift to randomize obstacle layouts.",
+      onClick: (event) => {
+        const options = {
+          randomizeObstacles: Boolean(event?.shiftKey),
+          clearCustomZones: true,
+        };
+
+        if (typeof this.simulationCallbacks?.resetWorld === "function") {
+          this.simulationCallbacks.resetWorld(options);
+        } else if (window.simulationEngine?.resetWorld) {
+          window.simulationEngine.resetWorld(options);
+        }
+
+        this.#updateZoneSummary();
+        this.#scheduleUpdate();
       },
     });
 

@@ -273,6 +273,21 @@ export default class EventManager {
     return { eventType, duration, affectedArea, strength, remaining: duration };
   }
 
+  reset({ startWithEvent = true } = {}) {
+    this.activeEvents = [];
+    this.currentEvent = null;
+    this.cooldown = 0;
+
+    if (startWithEvent) {
+      const event = this.generateRandomEvent();
+
+      if (event) {
+        this.activeEvents.push(event);
+        this.currentEvent = event;
+      }
+    }
+  }
+
   updateEvent(frequencyMultiplier = 1, maxConcurrent = 2) {
     // Update existing events and remove finished
     this.activeEvents.forEach((ev) => (ev.remaining = Math.max(0, ev.remaining - 1)));

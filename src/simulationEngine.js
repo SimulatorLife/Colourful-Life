@@ -837,6 +837,123 @@ export default class SimulationEngine {
     return next;
   }
 
+  resetWorld(options = {}) {
+    const opts = options && typeof options === "object" ? options : {};
+    const wasRunning = this.running;
+    const wasPaused = this.isPaused();
+
+    this.stop();
+
+    if (typeof this.stats?.resetAll === "function") {
+      this.stats.resetAll();
+    } else {
+      this.stats?.resetTick?.();
+    }
+
+    const shouldStartWithEvent =
+      (this.state.eventFrequencyMultiplier ?? 1) > 0 &&
+      (this.state.maxConcurrentEvents ?? MAX_CONCURRENT_EVENTS_FALLBACK) > 0;
+
+    if (typeof this.eventManager?.reset === "function") {
+      this.eventManager.reset({ startWithEvent: shouldStartWithEvent });
+    } else if (this.eventManager) {
+      this.eventManager.activeEvents = [];
+      this.eventManager.currentEvent = null;
+      this.eventManager.cooldown = 0;
+    }
+
+    if (typeof this.grid?.resetWorld === "function") {
+      this.grid.resetWorld({
+        randomizeObstacles: Boolean(opts.randomizeObstacles),
+        obstaclePreset: opts.obstaclePreset,
+        presetOptions: opts.presetOptions,
+        reseed: opts.reseed,
+        clearCustomZones: opts.clearCustomZones ?? false,
+      });
+    }
+
+    const diversityThreshold =
+      this.state.matingDiversityThreshold ??
+      SIMULATION_DEFAULTS.matingDiversityThreshold;
+
+    if (typeof this.stats?.setMatingDiversityThreshold === "function") {
+      this.stats.setMatingDiversityThreshold(diversityThreshold);
+    } else if (this.stats) {
+      this.stats.matingDiversityThreshold = diversityThreshold;
+    }
+
+    if (typeof this.grid?.setMatingDiversityOptions === "function") {
+      this.grid.setMatingDiversityOptions({
+        threshold: this.stats?.matingDiversityThreshold,
+        lowDiversityMultiplier:
+          this.state.lowDiversityReproMultiplier ??
+          SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
+      });
+    }
+
+    this.lastSnapshot =
+      typeof this.grid?.buildSnapshot === "function" ? this.grid.buildSnapshot() : null;
+
+    if (typeof this.stats?.setMutationMultiplier === "function") {
+      this.stats.setMutationMultiplier(this.state.mutationMultiplier ?? 1);
+    }
+
+    this.lastMetrics =
+      this.lastSnapshot && typeof this.stats?.updateFromSnapshot === "function"
+        ? this.stats.updateFromSnapshot(this.lastSnapshot)
+        : null;
+
+    const environment = {
+      activeEvents: this.#summarizeActiveEvents(),
+      updatesPerSecond: Math.max(1, Math.round(this.state.updatesPerSecond ?? 60)),
+      eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
+        ? this.state.eventStrengthMultiplier
+        : 1,
+    };
+
+    if (this.lastMetrics) {
+      this.emit("metrics", {
+        stats: this.stats,
+        metrics: this.lastMetrics,
+        environment,
+      });
+    }
+
+    const leaderboard = this.lastSnapshot
+      ? computeLeaderboard(this.lastSnapshot, 5)
+      : [];
+
+    this.emit("leaderboard", { entries: leaderboard });
+
+    const showObstacles = this.state.showObstacles ?? true;
+
+    this.grid?.draw?.({ showObstacles });
+    this.drawOverlays(this.grid, this.ctx, this.cellSize, {
+      showEnergy: this.state.showEnergy ?? false,
+      showDensity: this.state.showDensity ?? false,
+      showFitness: this.state.showFitness ?? false,
+      showObstacles,
+      showCelebrationAuras: this.state.showCelebrationAuras ?? false,
+      maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
+        ? this.grid.maxTileEnergy
+        : GridManager.maxTileEnergy,
+      snapshot: this.lastSnapshot,
+      activeEvents: this.eventManager?.activeEvents,
+      getEventColor: this.eventManager?.getColor?.bind(this.eventManager),
+      mutationMultiplier: this.state.mutationMultiplier ?? 1,
+      selectionManager: this.selectionManager,
+    });
+
+    this.lastSlowUiRender = this.now();
+    this.pendingSlowUiUpdate = false;
+
+    this.setPaused(wasPaused);
+
+    if (wasRunning) {
+      this.start();
+    }
+  }
+
   stop() {
     this.running = false;
     if (this.frameHandle != null) {
