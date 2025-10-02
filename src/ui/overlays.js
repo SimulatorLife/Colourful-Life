@@ -11,6 +11,14 @@ const DEFAULT_CELEBRATION_PALETTE = Object.freeze([
   { rgb: [198, 255, 214] },
 ]);
 const MAX_CELEBRATION_HIGHLIGHTS = 4;
+const LIFE_EVENT_MARKER_MAX_COUNT = 24;
+const LIFE_EVENT_MARKER_FADE_TICKS = 36;
+const LIFE_EVENT_MARKER_MIN_ALPHA = 0.18;
+const LIFE_EVENT_MARKER_MAX_ALPHA = 0.92;
+const LIFE_EVENT_MARKER_DEFAULT_COLORS = Object.freeze({
+  birth: "#7bed9f",
+  death: "#ff6b6b",
+});
 
 function toCelebrationColor(rgb, alpha) {
   if (!Array.isArray(rgb) || rgb.length < 3) return "rgba(255,255,255,0)";
@@ -126,6 +134,181 @@ export function drawCelebrationAuras(snapshot, ctx, cellSize, options = {}) {
   }
 
   ctx.restore();
+}
+
+function computeLifeEventAlpha(
+  ageTicks,
+  { maxAge = LIFE_EVENT_MARKER_FADE_TICKS } = {},
+) {
+  if (!(maxAge > 0)) return LIFE_EVENT_MARKER_MAX_ALPHA;
+
+  if (!Number.isFinite(ageTicks) || ageTicks <= 0) {
+    return LIFE_EVENT_MARKER_MAX_ALPHA;
+  }
+
+  if (ageTicks >= maxAge) {
+    return LIFE_EVENT_MARKER_MIN_ALPHA;
+  }
+
+  const normalized = clamp01(ageTicks / maxAge);
+  const span = LIFE_EVENT_MARKER_MAX_ALPHA - LIFE_EVENT_MARKER_MIN_ALPHA;
+
+  return LIFE_EVENT_MARKER_MIN_ALPHA + span * (1 - normalized * normalized);
+}
+
+function resolveLifeEventColor(event) {
+  if (event?.highlight?.color) {
+    const candidate = event.highlight.color;
+
+    if (typeof candidate === "string" && candidate.length > 0) {
+      return candidate;
+    }
+  }
+
+  const colorCandidate = event?.color;
+
+  if (typeof colorCandidate === "string" && colorCandidate.length > 0) {
+    return colorCandidate;
+  }
+
+  const fallback = LIFE_EVENT_MARKER_DEFAULT_COLORS[event?.type];
+
+  return typeof fallback === "string" && fallback.length > 0
+    ? fallback
+    : LIFE_EVENT_MARKER_DEFAULT_COLORS.birth;
+}
+
+function drawDeathMarker(ctx, centerX, centerY, radius, color) {
+  if (!ctx) return;
+
+  const half = radius * Math.SQRT1_2;
+
+  if (typeof ctx.beginPath === "function") {
+    ctx.beginPath();
+    if (typeof ctx.moveTo === "function" && typeof ctx.lineTo === "function") {
+      ctx.moveTo(centerX - half, centerY - half);
+      ctx.lineTo(centerX + half, centerY + half);
+      ctx.moveTo(centerX - half, centerY + half);
+      ctx.lineTo(centerX + half, centerY - half);
+    }
+    if (typeof ctx.stroke === "function") {
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+  }
+
+  if (typeof ctx.beginPath === "function" && typeof ctx.arc === "function") {
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, Math.max(radius * 0.35, 0.75), 0, Math.PI * 2);
+    if (typeof ctx.fill === "function") {
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+  }
+}
+
+function drawBirthMarker(ctx, centerX, centerY, radius, color) {
+  if (!ctx) return;
+
+  if (typeof ctx.beginPath === "function" && typeof ctx.arc === "function") {
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    if (typeof ctx.stroke === "function") {
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, Math.max(radius * 0.45, 1), 0, Math.PI * 2);
+    if (typeof ctx.fill === "function") {
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+  }
+}
+
+export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
+  if (!ctx || !(cellSize > 0)) return;
+  if (!Array.isArray(events) || events.length === 0) return;
+
+  const maxCount = Math.max(
+    0,
+    Math.floor(options.limit ?? LIFE_EVENT_MARKER_MAX_COUNT),
+  );
+
+  if (maxCount === 0) return;
+
+  const currentTick = Number.isFinite(options.currentTick) ? options.currentTick : null;
+  const fadeWindow = Number.isFinite(options.fadeTicks)
+    ? Math.max(1, options.fadeTicks)
+    : LIFE_EVENT_MARKER_FADE_TICKS;
+  const markerRadius = Math.max(cellSize * 0.42, cellSize * 0.24);
+  const strokeWidth = Math.max(cellSize * 0.18, 1.25);
+  let rendered = 0;
+
+  if (typeof ctx.save === "function") ctx.save();
+
+  if (ctx.lineJoin !== undefined) ctx.lineJoin = "round";
+  if (ctx.lineCap !== undefined) ctx.lineCap = "round";
+
+  const previousLineWidth = ctx.lineWidth;
+
+  if (ctx.lineWidth !== undefined) ctx.lineWidth = strokeWidth;
+
+  for (let i = 0; i < events.length && rendered < maxCount; i++) {
+    const event = events[i];
+
+    if (!event) continue;
+
+    const row = Number(event.row);
+    const col = Number(event.col);
+
+    if (!Number.isFinite(row) || !Number.isFinite(col)) {
+      continue;
+    }
+
+    const tick = Number(event.tick);
+
+    if (currentTick != null && Number.isFinite(tick)) {
+      const age = currentTick - tick;
+
+      if (age < 0) {
+        continue;
+      }
+
+      if (age > fadeWindow) {
+        continue;
+      }
+
+      const alpha = computeLifeEventAlpha(age, { maxAge: fadeWindow });
+
+      if (ctx.globalAlpha !== undefined) {
+        ctx.globalAlpha = clamp(alpha, 0, 1);
+      }
+    } else if (ctx.globalAlpha !== undefined) {
+      ctx.globalAlpha = LIFE_EVENT_MARKER_MAX_ALPHA;
+    }
+
+    const color = resolveLifeEventColor(event);
+    const centerX = (col + 0.5) * cellSize;
+    const centerY = (row + 0.5) * cellSize;
+
+    if (event.type === "death") {
+      drawDeathMarker(ctx, centerX, centerY, markerRadius, color);
+    } else {
+      drawBirthMarker(ctx, centerX, centerY, markerRadius, color);
+    }
+
+    rendered++;
+  }
+
+  if (ctx.globalAlpha !== undefined) {
+    ctx.globalAlpha = 1;
+  }
+  if (ctx.lineWidth !== undefined && Number.isFinite(previousLineWidth)) {
+    ctx.lineWidth = previousLineWidth;
+  }
+  if (typeof ctx.restore === "function") ctx.restore();
 }
 
 function createFitnessPalette(steps, hue) {
@@ -575,6 +758,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showDensity,
     showFitness,
     showCelebrationAuras,
+    showLifeEventMarkers,
     showObstacles = true,
     maxTileEnergy = MAX_TILE_ENERGY,
     activeEvents,
@@ -582,6 +766,10 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     snapshot: providedSnapshot,
     selectionManager: explicitSelection,
     celebrationAurasOptions,
+    lifeEvents,
+    currentTick: lifeEventCurrentTick,
+    lifeEventFadeTicks,
+    lifeEventLimit,
   } = opts;
   let snapshot = providedSnapshot;
   const selectionManager = explicitSelection || grid?.selectionManager;
@@ -607,6 +795,13 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   }
   if (showCelebrationAuras) {
     drawCelebrationAuras(snapshot, ctx, cellSize, celebrationAurasOptions);
+  }
+  if (showLifeEventMarkers && Array.isArray(lifeEvents) && lifeEvents.length > 0) {
+    drawLifeEventMarkers(ctx, cellSize, lifeEvents, {
+      currentTick: lifeEventCurrentTick,
+      fadeTicks: lifeEventFadeTicks,
+      limit: lifeEventLimit,
+    });
   }
 }
 

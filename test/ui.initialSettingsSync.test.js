@@ -18,6 +18,7 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       showEnergy: true,
       showFitness: true,
       showCelebrationAuras: true,
+      showLifeEventMarkers: true,
     };
 
     const simulation = createSimulation({
@@ -33,6 +34,7 @@ test("createSimulation aligns UI controls with config defaults", async () => {
     assert.is(uiManager.showEnergy, true);
     assert.is(uiManager.showFitness, true);
     assert.is(uiManager.showCelebrationAuras, true);
+    assert.is(uiManager.showLifeEventMarkers, true);
     assert.is(uiManager.autoPauseOnBlur, false);
 
     const findCheckboxByLabel = (root, label) => {
@@ -139,18 +141,24 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       uiManager.controlsPanel,
       "Celebration Glow",
     );
+    const lifeEventInput = findCheckboxByLabel(
+      uiManager.controlsPanel,
+      "Life Event Markers",
+    );
 
     assert.ok(obstaclesInput, "obstacle toggle should exist");
     assert.ok(densityInput, "density toggle should exist");
     assert.ok(energyInput, "energy toggle should exist");
     assert.ok(fitnessInput, "fitness toggle should exist");
     assert.ok(celebrationInput, "celebration toggle should exist");
+    assert.ok(lifeEventInput, "life event marker toggle should exist");
 
     assert.is(obstaclesInput.checked, false);
     assert.is(densityInput.checked, true);
     assert.is(energyInput.checked, true);
     assert.is(fitnessInput.checked, true);
     assert.is(celebrationInput.checked, true);
+    assert.is(lifeEventInput.checked, true);
 
     const playbackSlider = findSliderByLabel(
       uiManager.controlsPanel,

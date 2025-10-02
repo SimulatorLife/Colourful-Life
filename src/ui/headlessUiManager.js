@@ -156,6 +156,7 @@ export function createHeadlessUiManager(options = {}) {
     getShowDensity: () => settings.showDensity,
     getShowFitness: () => settings.showFitness,
     getShowCelebrationAuras: () => settings.showCelebrationAuras,
+    getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
     shouldRenderSlowUi: (timestamp) => {
       if (!Number.isFinite(timestamp)) return false;
       if (timestamp - lastSlowUiRender >= settings.leaderboardIntervalMs) {

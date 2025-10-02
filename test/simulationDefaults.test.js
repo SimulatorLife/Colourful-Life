@@ -153,6 +153,7 @@ test("resolveSimulationDefaults coerces string boolean overrides", async () => {
     showDensity: "0",
     showFitness: "1",
     showCelebrationAuras: "yes",
+    showLifeEventMarkers: "on",
     autoPauseOnBlur: "off",
   });
 
@@ -162,6 +163,7 @@ test("resolveSimulationDefaults coerces string boolean overrides", async () => {
   assert.is(defaults.showDensity, false);
   assert.is(defaults.showFitness, true);
   assert.is(defaults.showCelebrationAuras, true);
+  assert.is(defaults.showLifeEventMarkers, true);
   assert.is(defaults.autoPauseOnBlur, false);
 
   // Non-boolean defaults remain untouched when not overridden.
@@ -228,6 +230,7 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.showDensity, defaults.showDensity);
   assert.is(uiManager.showFitness, defaults.showFitness);
   assert.is(uiManager.showCelebrationAuras, defaults.showCelebrationAuras);
+  assert.is(uiManager.showLifeEventMarkers, defaults.showLifeEventMarkers);
   assert.is(uiManager.autoPauseOnBlur, defaults.autoPauseOnBlur);
 
   if (originalDocument === undefined) delete global.document;
@@ -266,6 +269,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     showDensity: defaults.showDensity,
     showFitness: defaults.showFitness,
     showCelebrationAuras: defaults.showCelebrationAuras,
+    showLifeEventMarkers: defaults.showLifeEventMarkers,
     leaderboardIntervalMs: defaults.leaderboardIntervalMs,
     matingDiversityThreshold: defaults.matingDiversityThreshold,
     lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
@@ -305,6 +309,7 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.is(ui.getShowDensity(), defaults.showDensity);
   assert.is(ui.getShowFitness(), defaults.showFitness);
   assert.is(ui.getShowCelebrationAuras(), defaults.showCelebrationAuras);
+  assert.is(ui.getShowLifeEventMarkers(), defaults.showLifeEventMarkers);
   assert.is(ui.getAutoPauseOnBlur(), defaults.autoPauseOnBlur);
   assert.ok(ui.shouldRenderSlowUi(0));
   assert.ok(!ui.shouldRenderSlowUi(defaults.leaderboardIntervalMs - 1));

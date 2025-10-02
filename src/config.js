@@ -147,6 +147,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showDensity: false,
   showFitness: false,
   showCelebrationAuras: false,
+  showLifeEventMarkers: false,
   leaderboardIntervalMs: 750,
   matingDiversityThreshold: 0.45,
   lowDiversityReproMultiplier: 0.1,
@@ -161,6 +162,7 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showDensity",
   "showFitness",
   "showCelebrationAuras",
+  "showLifeEventMarkers",
   "autoPauseOnBlur",
 ]);
 
