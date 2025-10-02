@@ -4,6 +4,7 @@ const DEFAULT_REGEN_DENSITY_PENALTY = 0.5;
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.5;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 const DEFAULT_ACTIVITY_BASE_RATE = 0.3;
+const DEFAULT_MUTATION_CHANCE = 0.15;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
@@ -161,6 +162,37 @@ export function resolveActivityBaseRate(env = RUNTIME_ENV) {
 }
 
 export const ACTIVITY_BASE_RATE = resolveActivityBaseRate();
+
+/**
+ * Resolves the baseline mutation probability applied when genomes reproduce
+ * without a DNA-provided override. Environment overrides allow experiments to
+ * globally calm or accelerate evolutionary churn without code changes.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Mutation probability constrained to the 0..1 interval.
+ */
+export function resolveMutationChance(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_MUTATION_CHANCE;
+  const parsed = Number.parseFloat(raw);
+
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_MUTATION_CHANCE;
+  }
+
+  if (parsed <= 0) {
+    return 0;
+  }
+
+  if (parsed >= 1) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+export const MUTATION_CHANCE_BASELINE = resolveMutationChance();
 
 export const SIMULATION_DEFAULTS = Object.freeze({
   paused: false,
