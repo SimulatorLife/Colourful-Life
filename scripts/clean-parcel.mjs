@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { rm } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { cwd } from 'node:process';
+import { rm } from "node:fs/promises";
+import { resolve } from "node:path";
+import { cwd } from "node:process";
 
-const targetDirs = ['dist', '.parcel-cache'];
+const targetDirs = ["dist", ".parcel-cache"];
 
 async function removePath(path) {
   const fullPath = resolve(cwd(), path);
@@ -20,7 +20,7 @@ async function removePath(path) {
 (async () => {
   try {
     await Promise.all(targetDirs.map(removePath));
-    console.log('Parcel artifacts cleaned.');
+    console.log("Parcel artifacts cleaned.");
   } catch (error) {
     process.exitCode = 1;
   }
