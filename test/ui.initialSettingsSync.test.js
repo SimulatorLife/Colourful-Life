@@ -135,6 +135,8 @@ test("createSimulation honours layout initial settings overrides", async () => {
               showCelebrationAuras: true,
               showLifeEventMarkers: true,
               autoPauseOnBlur: true,
+              updatesPerSecond: 48,
+              paused: true,
             },
           },
         },
@@ -188,6 +190,19 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.is(celebrationToggle.checked, true);
     assert.is(lifeEventToggle.checked, true);
     assert.is(autoPauseToggle.checked, true);
+    assert.is(uiManager.getUpdatesPerSecond(), 48);
+    assert.is(uiManager.isPaused(), true);
+
+    const state = simulation.engine.getStateSnapshot();
+
+    assert.is(state.updatesPerSecond, 48);
+    assert.is(state.showEnergy, true);
+    assert.is(state.showDensity, true);
+    assert.is(state.showFitness, true);
+    assert.is(state.showCelebrationAuras, true);
+    assert.is(state.showLifeEventMarkers, true);
+    assert.is(state.autoPauseOnBlur, true);
+    assert.is(simulation.engine.isPaused(), true);
 
     simulation.destroy();
   } finally {

@@ -186,6 +186,10 @@ export function createSimulation({
 } = {}) {
   const win = injectedWindow ?? (typeof window !== "undefined" ? window : undefined);
 
+  config = toPlainObject(config);
+  const layoutInitialSettings = toPlainObject(config?.ui?.layout?.initialSettings);
+  const configWithLayoutDefaults = { ...layoutInitialSettings, ...config };
+
   if (win) {
     win.BrainDebugger = BrainDebugger;
   } else {
@@ -195,23 +199,23 @@ export function createSimulation({
   let resolvedCanvas = canvas;
 
   if (headless && !resolvedCanvas) {
-    resolvedCanvas = createHeadlessCanvas(config);
+    resolvedCanvas = createHeadlessCanvas(configWithLayoutDefaults);
   }
 
   const selectionManagerFactory =
-    typeof config.selectionManagerFactory === "function"
-      ? config.selectionManagerFactory
+    typeof configWithLayoutDefaults.selectionManagerFactory === "function"
+      ? configWithLayoutDefaults.selectionManagerFactory
       : (rows, cols) => new SelectionManager(rows, cols);
   const overlayRenderer =
-    typeof config.drawOverlays === "function"
-      ? config.drawOverlays
+    typeof configWithLayoutDefaults.drawOverlays === "function"
+      ? configWithLayoutDefaults.drawOverlays
       : defaultDrawOverlays;
 
-  const sanitizedDefaults = resolveSimulationDefaults(config);
+  const sanitizedDefaults = resolveSimulationDefaults(configWithLayoutDefaults);
 
   const engine = new SimulationEngine({
     canvas: resolvedCanvas,
-    config,
+    config: configWithLayoutDefaults,
     rng,
     requestAnimationFrame: injectedRaf,
     cancelAnimationFrame: injectedCaf,
