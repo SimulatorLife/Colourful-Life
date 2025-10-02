@@ -65,6 +65,14 @@ The simulation runs on cooperating modules housed in `src/`:
 
 For an architectural deep dive—including subsystem hand-offs, data flow, and extension tips—see [`docs/architecture-overview.md`](docs/architecture-overview.md).
 
+## The 5 Simulation Core Laws
+
+1. Only one organism may occupy a grid cell at any time; movement and spawning routines must prevent conflicts.
+2. Organisms may never teleport or be relocated discontinuously; any change in position must be achieved through valid movement across adjacent cells.
+3. Reproduction and child-spawning must respect required conditions: parents must occupy adjacent tiles, ensure offspring spawn on empty neighbouring cells.
+4. Organisms cannot live forever—aging, decay, or other lifecycle rules must ensure every organism eventually dies without manual intervention.
+5. External influence systems (global buffs, forced traits, god-mode interventions) remain disabled by default; they should only activate when users explicitly enable them via the documented UI or configuration. The only excemptions are mutations and environmental effects that are part of normal simulation dynamics.
+
 ## Developer workflow
 
 - **Formatting** — Run `npm run format` before committing or rely on the included Prettier integration. `npm run format:check` verifies without writing.
