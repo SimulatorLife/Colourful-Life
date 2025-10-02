@@ -15,6 +15,11 @@ extending tests, or polishing docs.
 4. If Parcel ever becomes stuck, run `npm run clean:parcel` to remove `dist/`
    and `.parcel-cache/` before restarting the dev server.
 
+> The in-app "Pause When Hidden" toggle now starts disabled so long-running
+> simulations can keep evolving without babysitting the browser tab. Re-enable
+> it from the playback controls if you prefer the previous focus-dependent
+> behaviour.
+
 > Tip: The Parcel server performs hot module replacement. If you need a clean
 > build, use `npm run build` to emit a production bundle in `dist/`.
 

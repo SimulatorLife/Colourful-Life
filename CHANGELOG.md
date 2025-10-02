@@ -36,7 +36,9 @@ where practical.
   renaming it "Insights Refresh Interval" so cadence controls live alongside
   the metrics and leaderboard they influence.
 - Moved the "Pause When Hidden" toggle next to the playback controls so
-  auto-pause behaviour is discoverable alongside the Pause and Step actions.
+  auto-pause behaviour is discoverable alongside the Pause and Step actions,
+  and disabled it by default so unattended, long-running simulations can
+  continue advancing even when the browser tab loses focus.
 - Removed the wall linger penalty control and supporting plumbing from the
   engine, UI, and headless adapter after determining it duplicated existing
   movement costs and defaulted to zero, simplifying obstacle behaviour while

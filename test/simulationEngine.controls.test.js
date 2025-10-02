@@ -313,27 +313,23 @@ test("autoPauseOnBlur setter keeps engine state aligned", async () => {
   try {
     const engine = createEngine(modules);
 
-    assert.is(engine.state.autoPauseOnBlur, true, "autopause defaults to enabled");
+    assert.is(engine.state.autoPauseOnBlur, false, "autopause defaults to disabled");
+
+    engine.setAutoPauseOnBlur(true);
+
+    assert.is(engine.state.autoPauseOnBlur, true, "enabling autopause updates state");
+    assert.is(engine.autoPauseOnBlur, true, "instance flag mirrors enabled state");
 
     engine._autoPauseResumePending = true;
     engine.setAutoPauseOnBlur(false);
 
     assert.is(engine.state.autoPauseOnBlur, false, "disabling autopause updates state");
-    assert.is(engine.autoPauseOnBlur, false, "instance flag mirrors state change");
+    assert.is(engine.autoPauseOnBlur, false, "instance flag mirrors disabled state");
     assert.is(
       engine._autoPauseResumePending,
       false,
       "disabling autopause clears any pending auto-resume markers",
     );
-
-    engine.setAutoPauseOnBlur(true);
-
-    assert.is(
-      engine.state.autoPauseOnBlur,
-      true,
-      "re-enabling autopause updates state",
-    );
-    assert.is(engine.autoPauseOnBlur, true, "instance flag mirrors re-enabled state");
   } finally {
     restore();
   }

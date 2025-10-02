@@ -1,6 +1,7 @@
 import { test } from "uvu";
 import * as assert from "uvu/assert";
 import { MockCanvas } from "./helpers/simulationEngine.js";
+import { setupDom } from "./helpers/mockDom.js";
 
 const simulationModulePromise = import("../src/main.js");
 
@@ -124,6 +125,41 @@ test("headless UI forwards setting changes to the engine", async () => {
   assert.is(simulation.engine.autoPauseOnBlur, false);
 
   simulation.destroy();
+});
+
+test("browser UI keeps auto-pause disabled by default", async () => {
+  const restore = setupDom();
+
+  try {
+    const { createSimulation } = await simulationModulePromise;
+
+    const simulation = createSimulation({
+      autoStart: false,
+      canvas: new MockCanvas(60, 60),
+    });
+
+    assert.is(
+      simulation.engine.autoPauseOnBlur,
+      false,
+      "engine starts with autoPauseOnBlur disabled",
+    );
+    assert.is(
+      simulation.engine.state.autoPauseOnBlur,
+      false,
+      "engine state snapshot reflects disabled auto pause",
+    );
+    assert.is(
+      typeof simulation.uiManager.getAutoPauseOnBlur === "function"
+        ? simulation.uiManager.getAutoPauseOnBlur()
+        : simulation.uiManager.autoPauseOnBlur,
+      false,
+      "UI surfaces a disabled auto-pause setting",
+    );
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
 });
 
 test("headless UI clamps diversity controls to the 0..1 range", async () => {

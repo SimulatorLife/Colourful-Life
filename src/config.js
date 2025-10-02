@@ -151,7 +151,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   matingDiversityThreshold: 0.45,
   lowDiversityReproMultiplier: 0.1,
   speedMultiplier: 1,
-  autoPauseOnBlur: true,
+  autoPauseOnBlur: false,
 });
 
 const BOOLEAN_DEFAULT_KEYS = Object.freeze([
