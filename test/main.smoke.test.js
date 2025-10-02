@@ -161,6 +161,38 @@ test("browser UI keeps auto-pause disabled by default", async () => {
   }
 });
 
+test("browser UI setter toggles auto-pause through the engine", async () => {
+  const restore = setupDom();
+
+  try {
+    const { createSimulation } = await simulationModulePromise;
+
+    const simulation = createSimulation({
+      autoStart: false,
+      canvas: new MockCanvas(60, 60),
+    });
+
+    assert.is(simulation.engine.autoPauseOnBlur, false);
+    assert.is(simulation.engine.getStateSnapshot().autoPauseOnBlur, false);
+
+    simulation.uiManager.setAutoPauseOnBlur(true);
+
+    assert.is(simulation.uiManager.autoPauseOnBlur, true);
+    assert.is(simulation.engine.autoPauseOnBlur, true);
+    assert.is(simulation.engine.getStateSnapshot().autoPauseOnBlur, true);
+
+    simulation.uiManager.setAutoPauseOnBlur(false);
+
+    assert.is(simulation.uiManager.autoPauseOnBlur, false);
+    assert.is(simulation.engine.autoPauseOnBlur, false);
+    assert.is(simulation.engine.getStateSnapshot().autoPauseOnBlur, false);
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});
+
 test("headless UI clamps diversity controls to the 0..1 range", async () => {
   const { createSimulation } = await simulationModulePromise;
 

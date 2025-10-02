@@ -336,7 +336,7 @@ export function createSimulation({
           changes?.autoPauseOnBlur !== undefined &&
           typeof uiManager.setAutoPauseOnBlur === "function"
         ) {
-          uiManager.setAutoPauseOnBlur(changes.autoPauseOnBlur);
+          uiManager.setAutoPauseOnBlur(changes.autoPauseOnBlur, { notify: false });
         }
       }),
     );
