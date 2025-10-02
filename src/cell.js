@@ -191,6 +191,7 @@ export default class Cell {
     this._interactionDecay = clamp(interactionProfile?.decay ?? 0.08, 0.001, 0.6);
     this._lastInteractionDecayAge = this.age;
     this._lastInteractionSummary = null;
+    this._reproductionCooldown = 0;
     // Cache metabolism profile once; combine DNA-driven baseline with neural imprint
     const geneRow = this.genes?.[5];
     const neuralSignature = Array.isArray(geneRow)
@@ -339,12 +340,42 @@ export default class Cell {
     }
     parentA.offspring = (parentA.offspring || 0) + 1;
     parentB.offspring = (parentB.offspring || 0) + 1;
+    if (typeof parentA.startReproductionCooldown === "function") {
+      parentA.startReproductionCooldown();
+    }
+    if (typeof parentB.startReproductionCooldown === "function") {
+      parentB.startReproductionCooldown();
+    }
 
     return offspring;
   }
 
   similarityTo(other) {
     return this.dna.similarity(other.dna);
+  }
+
+  getReproductionCooldown() {
+    return Math.max(0, Math.round(this._reproductionCooldown || 0));
+  }
+
+  isReproductionCoolingDown() {
+    return this.getReproductionCooldown() > 0;
+  }
+
+  startReproductionCooldown() {
+    const base =
+      typeof this.dna?.reproductionCooldownTicks === "function"
+        ? this.dna.reproductionCooldownTicks()
+        : 2;
+    const duration = Math.max(1, Math.round(base));
+
+    this._reproductionCooldown = Math.max(this.getReproductionCooldown(), duration);
+  }
+
+  tickReproductionCooldown() {
+    if (!this._reproductionCooldown) return;
+
+    this._reproductionCooldown = Math.max(0, this._reproductionCooldown - 1);
   }
 
   // Lifespan is fully DNA-dictated via genome.lifespanDNA()

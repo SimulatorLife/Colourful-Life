@@ -2245,6 +2245,11 @@ export default class GridManager {
     if (!cell || processed.has(cell)) return;
     processed.add(cell);
     cell.age++;
+    if (typeof cell.tickReproductionCooldown === "function") {
+      cell.tickReproductionCooldown();
+    } else if (cell.reproductionCooldown > 0) {
+      cell.reproductionCooldown = Math.max(0, cell.reproductionCooldown - 1);
+    }
     const densityValue = densityGrid?.[row]?.[col];
     const localDensity = clamp(Number.isFinite(densityValue) ? densityValue : 0, 0, 1);
     const energyCap =
@@ -2757,6 +2762,31 @@ export default class GridManager {
         reason: "Parents not adjacent",
         parentA: { row: parentRow, col: parentCol },
         parentB: { row: mateRow, col: mateCol },
+      };
+    }
+
+    const parentCooldownRemaining =
+      typeof cell.getReproductionCooldown === "function"
+        ? cell.getReproductionCooldown()
+        : Math.max(0, cell.reproductionCooldown || 0);
+    const mateCooldownRemaining =
+      typeof bestMate.target?.getReproductionCooldown === "function"
+        ? bestMate.target.getReproductionCooldown()
+        : Math.max(0, bestMate.target?.reproductionCooldown || 0);
+
+    if (!blockedInfo && (parentCooldownRemaining > 0 || mateCooldownRemaining > 0)) {
+      blockedInfo = {
+        reason: "Reproduction cooldown active",
+        parentA: {
+          row: parentRow,
+          col: parentCol,
+          cooldown: parentCooldownRemaining,
+        },
+        parentB: {
+          row: mateRow,
+          col: mateCol,
+          cooldown: mateCooldownRemaining,
+        },
       };
     }
 

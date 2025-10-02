@@ -475,6 +475,20 @@ export class DNA {
     return Math.min(0.9, Math.max(0.05, base * synergyAdj * noise));
   }
 
+  reproductionCooldownTicks() {
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const base = 3 + Math.round(4 * (1 - fertility));
+    const nurturePenalty = Math.round(parental * 3);
+    const cautionPenalty = Math.round((1 - risk) * 2);
+    const efficiencyRelief = Math.round(efficiency * 2);
+    const cooldown = base + nurturePenalty + cautionPenalty - efficiencyRelief;
+
+    return Math.max(2, cooldown);
+  }
+
   // Target mate similarity and tolerance derived from genome
   mateSimilarityPreference() {
     const rnd = this.prngFor("mateSimilarityPreference");
