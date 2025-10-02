@@ -1,6 +1,24 @@
 import { resolveSimulationDefaults } from "../config.js";
 import { UI_SLIDER_CONFIG } from "./sliderConfig.js";
 import { clamp, clamp01, warnOnce, toPlainObject } from "../utils.js";
+
+/**
+ * Formats numeric values that may occasionally be non-finite. When the value
+ * fails the finite check the provided fallback is returned instead.
+ *
+ * @param {number} value - Candidate number to format.
+ * @param {(value:number) => any} formatter - Function applied to valid inputs.
+ * @param {any} [fallback=null] - Value to return for non-finite input.
+ * @returns {any} Either the formatted value or the fallback.
+ */
+function formatIfFinite(value, formatter, fallback = null) {
+  if (!Number.isFinite(value)) return fallback;
+
+  const safeFormatter = typeof formatter === "function" ? formatter : (v) => v;
+
+  return safeFormatter(value);
+}
+
 import {
   createControlButtonRow,
   createControlGrid,
@@ -537,21 +555,26 @@ export default class UIManager {
 
     const typeLabel = this.#formatEventTypeLabel(event.type);
     const pieces = [];
-    const coverage = Number.isFinite(event.coverageRatio)
-      ? `${Math.round(clamp(event.coverageRatio, 0, 1) * 100)}% of the grid`
-      : null;
-    const remaining = Number.isFinite(event.remainingTicks)
-      ? `${event.remainingTicks} ticks remaining`
-      : null;
-    const duration = Number.isFinite(event.durationTicks)
-      ? `${event.durationTicks} ticks total`
-      : null;
-    const baseIntensity = Number.isFinite(event.strength)
-      ? `base intensity ${event.strength.toFixed(2)}×`
-      : null;
-    const effectiveIntensity = Number.isFinite(event.effectiveStrength)
-      ? `effective intensity ${event.effectiveStrength.toFixed(2)}×`
-      : null;
+    const coverage = formatIfFinite(
+      event.coverageRatio,
+      (ratio) => `${Math.round(clamp(ratio, 0, 1) * 100)}% of the grid`,
+    );
+    const remaining = formatIfFinite(
+      event.remainingTicks,
+      (ticks) => `${ticks} ticks remaining`,
+    );
+    const duration = formatIfFinite(
+      event.durationTicks,
+      (ticks) => `${ticks} ticks total`,
+    );
+    const baseIntensity = formatIfFinite(
+      event.strength,
+      (strength) => `base intensity ${strength.toFixed(2)}×`,
+    );
+    const effectiveIntensity = formatIfFinite(
+      event.effectiveStrength,
+      (strength) => `effective intensity ${strength.toFixed(2)}×`,
+    );
 
     if (coverage) pieces.push(coverage);
     if (remaining) pieces.push(remaining);
@@ -561,9 +584,11 @@ export default class UIManager {
     const strengthParts = [baseIntensity, effectiveIntensity]
       .filter(Boolean)
       .join(" → ");
-    const multiplierPart = Number.isFinite(multiplier)
-      ? `Global strength multiplier ${multiplier.toFixed(2)}×.`
-      : "";
+    const multiplierPart = formatIfFinite(
+      multiplier,
+      (value) => `Global strength multiplier ${value.toFixed(2)}×.`,
+      "",
+    );
 
     return [`${typeLabel} affects ${summary}.`, strengthParts, multiplierPart]
       .map((part) => part && part.trim())
@@ -1701,35 +1726,36 @@ export default class UIManager {
     };
 
     const finiteOrDash = (value, formatter = String) =>
-      Number.isFinite(value) ? formatter(value) : "—";
+      formatIfFinite(value, formatter, "—");
     const percentOrDash = (value) =>
-      finiteOrDash(value, (v) => `${(v * 100).toFixed(0)}%`);
+      formatIfFinite(value, (v) => `${(v * 100).toFixed(0)}%`, "—");
     const countOrDash = (value) => finiteOrDash(value);
     const fixedOrDash = (value, digits) =>
-      finiteOrDash(value, (v) => v.toFixed(digits));
-    const coverageOrNull = (ratio) => {
-      if (!Number.isFinite(ratio)) return null;
+      formatIfFinite(value, (v) => v.toFixed(digits), "—");
+    const coverageOrNull = (ratio) =>
+      formatIfFinite(
+        ratio,
+        (value) => `${Math.round(clamp(value, 0, 1) * 100)}% area`,
+        null,
+      );
+    const secondsOrNull = (seconds) =>
+      formatIfFinite(
+        seconds,
+        (value) => {
+          const rounded = value >= 10 ? Math.round(value) : value.toFixed(1);
 
-      const clamped = clamp(ratio, 0, 1);
+          return `${rounded}s left`;
+        },
+        null,
+      );
+    const intensityOrNull = (value) =>
+      formatIfFinite(value, (v) => `${v.toFixed(2)}× intensity`, null);
 
-      return `${Math.round(clamped * 100)}% area`;
-    };
-    const secondsOrNull = (seconds) => {
-      if (!Number.isFinite(seconds)) return null;
-
-      const rounded = seconds >= 10 ? Math.round(seconds) : seconds.toFixed(1);
-
-      return `${rounded}s left`;
-    };
-    const intensityOrNull = (value) => {
-      if (!Number.isFinite(value)) return null;
-
-      return `${value.toFixed(2)}× intensity`;
-    };
-
-    const eventMultiplier = Number.isFinite(environment?.eventStrengthMultiplier)
-      ? environment.eventStrengthMultiplier
-      : null;
+    const eventMultiplier = formatIfFinite(
+      environment?.eventStrengthMultiplier,
+      (value) => value,
+      null,
+    );
     const activeEvents = Array.isArray(environment?.activeEvents)
       ? environment.activeEvents
       : [];
