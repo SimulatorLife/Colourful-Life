@@ -1920,13 +1920,14 @@ export default class GridManager {
     return total > 0 ? count / total : 0;
   }
 
-  draw() {
+  draw(options = {}) {
     const ctx = this.ctx;
     const cellSize = this.cellSize;
+    const { showObstacles = true } = options ?? {};
 
     // Clear full canvas once
     ctx.clearRect(0, 0, this.cols * cellSize, this.rows * cellSize);
-    if (this.obstacles) {
+    if (showObstacles && this.obstacles) {
       ctx.fillStyle = "rgba(40,40,55,0.9)";
       for (let row = 0; row < this.rows; row++) {
         for (let col = 0; col < this.cols; col++) {
