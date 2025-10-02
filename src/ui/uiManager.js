@@ -76,6 +76,11 @@ export default class UIManager {
     this.metricsPlaceholder = null;
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
+    this.lifeEventsSummary = null;
+    this.lifeEventsSummaryBirthItem = null;
+    this.lifeEventsSummaryDeathItem = null;
+    this.lifeEventsSummaryBirthCount = null;
+    this.lifeEventsSummaryDeathCount = null;
     this.playbackSpeedSlider = null;
     this.pauseOverlay = null;
     this.pauseOverlayTitle = null;
@@ -1034,6 +1039,50 @@ export default class UIManager {
     return valueEl;
   }
 
+  #updateLifeEventsSummary(birthCount = 0, deathCount = 0, totalCount) {
+    if (!this.lifeEventsSummary) return;
+
+    const updateItem = (item, countEl, count) => {
+      if (!item || !countEl) return;
+
+      const label =
+        (typeof item.getAttribute === "function" && item.getAttribute("data-label")) ||
+        item.dataset?.label ||
+        "";
+      const safeCount = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+
+      countEl.textContent = String(safeCount);
+      item.classList.toggle("life-events-summary__item--muted", safeCount === 0);
+
+      if (label) {
+        const labelLower = label.toLowerCase();
+        const plural = labelLower.endsWith("s") ? labelLower : `${labelLower}s`;
+
+        item.setAttribute("aria-label", `${safeCount} recent ${plural}`);
+      } else if (typeof item.removeAttribute === "function") {
+        item.removeAttribute("aria-label");
+      }
+    };
+
+    updateItem(
+      this.lifeEventsSummaryBirthItem,
+      this.lifeEventsSummaryBirthCount,
+      birthCount,
+    );
+    updateItem(
+      this.lifeEventsSummaryDeathItem,
+      this.lifeEventsSummaryDeathCount,
+      deathCount,
+    );
+
+    const total =
+      Number.isFinite(totalCount) && totalCount >= 0
+        ? totalCount
+        : Math.max(0, (birthCount || 0) + (deathCount || 0));
+
+    this.lifeEventsSummary.classList.toggle("life-events-summary--empty", total === 0);
+  }
+
   #renderLifeEvents(stats) {
     if (!this.lifeEventList) return;
 
@@ -1045,6 +1094,7 @@ export default class UIManager {
     this.lifeEventList.innerHTML = "";
 
     if (!events || events.length === 0) {
+      this.#updateLifeEventsSummary(0, 0, 0);
       this.lifeEventList.hidden = true;
       if (this.lifeEventsEmptyState) {
         this.lifeEventsEmptyState.hidden = false;
@@ -1053,12 +1103,18 @@ export default class UIManager {
       return;
     }
 
+    let birthCount = 0;
+    let deathCount = 0;
+
     this.lifeEventList.hidden = false;
     if (this.lifeEventsEmptyState) {
       this.lifeEventsEmptyState.hidden = true;
     }
 
     events.forEach((event) => {
+      if (event?.type === "birth") birthCount += 1;
+      else if (event?.type === "death") deathCount += 1;
+
       const item = document.createElement("li");
 
       item.className = `life-event life-event--${event.type || "unknown"}`;
@@ -1196,6 +1252,8 @@ export default class UIManager {
       item.appendChild(details);
       this.lifeEventList.appendChild(item);
     });
+
+    this.#updateLifeEventsSummary(birthCount, deathCount, events.length);
   }
 
   // Utility to create a collapsible panel with a header
@@ -1999,6 +2057,51 @@ export default class UIManager {
 
     lifeBody.className = "metrics-section-body life-events-body";
 
+    const createSummaryItem = (label, modifierClass) => {
+      const item = document.createElement("div");
+
+      item.className = `life-events-summary__item ${modifierClass}`;
+      if (typeof item.setAttribute === "function") {
+        item.setAttribute("data-label", label);
+      }
+      const labelEl = document.createElement("span");
+
+      labelEl.className = "life-events-summary__label";
+      labelEl.textContent = label;
+      const countEl = document.createElement("span");
+
+      countEl.className = "life-events-summary__count";
+      countEl.textContent = "0";
+      item.appendChild(labelEl);
+      item.appendChild(countEl);
+
+      return { item, countEl };
+    };
+
+    this.lifeEventsSummary = document.createElement("div");
+    this.lifeEventsSummary.className = "life-events-summary";
+    this.lifeEventsSummary.setAttribute("role", "status");
+    this.lifeEventsSummary.setAttribute("aria-live", "polite");
+    this.lifeEventsSummary.setAttribute("aria-label", "Recent birth and death counts");
+
+    const birthsSummary = createSummaryItem(
+      "Births",
+      "life-events-summary__item--birth",
+    );
+    const deathsSummary = createSummaryItem(
+      "Deaths",
+      "life-events-summary__item--death",
+    );
+
+    this.lifeEventsSummaryBirthItem = birthsSummary.item;
+    this.lifeEventsSummaryBirthCount = birthsSummary.countEl;
+    this.lifeEventsSummaryDeathItem = deathsSummary.item;
+    this.lifeEventsSummaryDeathCount = deathsSummary.countEl;
+
+    this.lifeEventsSummary.appendChild(birthsSummary.item);
+    this.lifeEventsSummary.appendChild(deathsSummary.item);
+    lifeBody.appendChild(this.lifeEventsSummary);
+
     this.lifeEventsEmptyState = document.createElement("div");
     this.lifeEventsEmptyState.className = "life-event-empty";
     this.lifeEventsEmptyState.textContent =
@@ -2015,6 +2118,8 @@ export default class UIManager {
 
     lifeEventsSection.appendChild(lifeBody);
     body.appendChild(lifeEventsSection);
+
+    this.#updateLifeEventsSummary(0, 0, 0);
 
     return panel;
   }
