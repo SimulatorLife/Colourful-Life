@@ -1674,7 +1674,6 @@ export default class UIManager {
       this.autoPauseOnBlur,
       (checked) => {
         this.setAutoPauseOnBlur(checked);
-        this.#updateSetting("autoPauseOnBlur", checked);
       },
     );
 
@@ -2161,12 +2160,19 @@ export default class UIManager {
     this.#updatePauseIndicator();
   }
 
-  setAutoPauseOnBlur(enabled) {
-    this.autoPauseOnBlur = Boolean(enabled);
+  setAutoPauseOnBlur(enabled, { notify = true } = {}) {
+    const nextValue = Boolean(enabled);
+    const changed = this.autoPauseOnBlur !== nextValue;
+
+    this.autoPauseOnBlur = nextValue;
     if (this.autoPauseCheckbox) {
       this.autoPauseCheckbox.checked = this.autoPauseOnBlur;
     }
     this.#updatePauseIndicator();
+
+    if (changed && notify) {
+      this.#notifySettingChange("autoPauseOnBlur", this.autoPauseOnBlur);
+    }
   }
 
   // Getters for simulation
