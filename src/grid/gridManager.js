@@ -2455,8 +2455,28 @@ export default class GridManager {
 
     if (matePool.length === 0) return false;
 
+    const energyRow = this.energyGrid?.[row];
+    const energyValue = energyRow ? energyRow[col] : 0;
+    const parentEnergyCap = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
+    const parentTileEnergy =
+      parentEnergyCap > 0 ? clamp(energyValue / parentEnergyCap, 0, 1) : 0;
+    const parentTileEnergyDelta = this.energyDeltaGrid?.[row]?.[col] ?? 0;
+    let parentLocalDensity = densityGrid?.[row]?.[col];
+
+    if (parentLocalDensity == null) {
+      parentLocalDensity = this.getDensityAt(row, col);
+    }
+
+    const reproductionContext = {
+      localDensity: clamp(parentLocalDensity ?? 0, 0, 1),
+      densityEffectMultiplier,
+      maxTileEnergy: this.maxTileEnergy,
+      tileEnergy: parentTileEnergy,
+      tileEnergyDelta: parentTileEnergyDelta,
+    };
+
     const selection = cell.selectMateWeighted
-      ? cell.selectMateWeighted(matePool)
+      ? cell.selectMateWeighted(matePool, reproductionContext)
       : null;
     const selectedMate = selection?.chosen ?? null;
     const evaluated = Array.isArray(selection?.evaluated) ? selection.evaluated : [];
@@ -2465,7 +2485,7 @@ export default class GridManager {
     let bestMate = selectedMate;
 
     if (!bestMate || !bestMate.target) {
-      bestMate = cell.findBestMate(matePool);
+      bestMate = cell.findBestMate(matePool, reproductionContext);
 
       if (!bestMate) return false;
     }
