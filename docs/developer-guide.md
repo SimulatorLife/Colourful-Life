@@ -17,8 +17,8 @@ extending tests, or polishing docs.
 
 > The in-app "Pause When Hidden" toggle now starts disabled so long-running
 > simulations can keep evolving without babysitting the browser tab. Re-enable
-> it from the playback controls if you prefer the previous focus-dependent
-> behaviour.
+> it beneath the playback controls at the top of the Simulation Controls panel
+> if you prefer the previous focus-dependent behaviour.
 
 > Tip: The Parcel server performs hot module replacement. If you need a clean
 > build, use `npm run build` to emit a production bundle in `dist/`.
