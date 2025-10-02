@@ -1,7 +1,7 @@
 import { MAX_TILE_ENERGY } from "../config.js";
 import { clamp, clamp01, lerp, warnOnce, createRankedBuffer } from "../utils.js";
 
-const FITNESS_TOP_PERCENT = 0.1;
+const DEFAULT_FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
 const FITNESS_BASE_HUE = 52;
 const DEFAULT_CELEBRATION_PALETTE = Object.freeze([
@@ -779,6 +779,8 @@ export function drawSelectionZones(selectionManager, ctx, cellSize) {
  * @param {CanvasRenderingContext2D} ctx - Rendering context.
  * @param {number} cellSize - Size of a single grid cell in pixels.
  * @param {Object} [opts] - Overlay toggles and helpers.
+ * @param {{topPercent?: number}} [opts.fitnessOverlayOptions] - Customisation hooks for
+ *   {@link drawFitnessHeatmap}. Defaults preserve the original 10% highlight window.
  */
 export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   const {
@@ -793,6 +795,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     getEventColor,
     snapshot: providedSnapshot,
     selectionManager: explicitSelection,
+    fitnessOverlayOptions,
     celebrationAurasOptions,
     lifeEvents,
     currentTick: lifeEventCurrentTick,
@@ -819,7 +822,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     }
   }
   if (showFitness) {
-    drawFitnessHeatmap(snapshot, ctx, cellSize);
+    drawFitnessHeatmap(snapshot, ctx, cellSize, fitnessOverlayOptions);
   }
   if (showCelebrationAuras) {
     drawCelebrationAuras(snapshot, ctx, cellSize, celebrationAurasOptions);
@@ -950,8 +953,10 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
  * @param {{rows?: number, cols?: number, entries?: Array, maxFitness?: number}} snapshot - Leaderboard data.
  * @param {CanvasRenderingContext2D} ctx - Rendering context.
  * @param {number} cellSize - Size of a single grid cell in pixels.
+ * @param {{topPercent?: number}} [options] - Overrides for highlight selection. `topPercent`
+ *   controls the fraction of the leaderboard emphasised. Defaults to 0.1 when omitted.
  */
-export function drawFitnessHeatmap(snapshot, ctx, cellSize) {
+export function drawFitnessHeatmap(snapshot, ctx, cellSize, options = {}) {
   if (!snapshot || snapshot.maxFitness <= 0) return;
 
   const { rows, cols } = snapshot;
@@ -960,7 +965,10 @@ export function drawFitnessHeatmap(snapshot, ctx, cellSize) {
   if (!entries.length) return;
 
   const sortedEntries = [...entries].sort((a, b) => b.fitness - a.fitness);
-  const keepCount = Math.max(1, Math.floor(sortedEntries.length * FITNESS_TOP_PERCENT));
+  const topPercentCandidate = Number.isFinite(options.topPercent)
+    ? clamp(options.topPercent, 0, 1)
+    : DEFAULT_FITNESS_TOP_PERCENT;
+  const keepCount = Math.max(1, Math.floor(sortedEntries.length * topPercentCandidate));
   const topEntries = sortedEntries.slice(0, keepCount);
   const palette = createFitnessPalette(FITNESS_GRADIENT_STEPS, FITNESS_BASE_HUE);
   const tierSize = Math.max(1, Math.ceil(topEntries.length / palette.length));
