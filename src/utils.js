@@ -163,6 +163,36 @@ export function createRNG(seed) {
 }
 
 const warnedMessages = new Set();
+const reportedErrors = new Set();
+
+/**
+ * Reports an error to the console with an optional deduplication toggle so
+ * recoverable failures can surface diagnostic details without spamming logs.
+ *
+ * @param {string} message - Human-readable description of the error context.
+ * @param {Error} [error] - Optional error object for stack/metadata.
+ * @param {{once?: boolean}} [options] - Log control flags.
+ */
+export function reportError(message, error, options = {}) {
+  if (typeof message !== "string" || message.length === 0) return;
+
+  const { once = false } = options ?? {};
+
+  if (once === true) {
+    const errorKey = `${message}::$${error?.name ?? ""}::$${error?.message ?? ""}`;
+
+    if (reportedErrors.has(errorKey)) return;
+    reportedErrors.add(errorKey);
+  }
+
+  if (typeof console !== "undefined" && typeof console.error === "function") {
+    if (error) {
+      console.error(message, error);
+    } else {
+      console.error(message);
+    }
+  }
+}
 
 /**
  * Logs a warning message once per unique combination of message and error
