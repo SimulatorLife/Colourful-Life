@@ -168,6 +168,25 @@ test("resolveSimulationDefaults coerces string boolean overrides", async () => {
   assert.is(defaults.updatesPerSecond, SIMULATION_DEFAULTS.updatesPerSecond);
 });
 
+test("resolveSimulationDefaults derives cadence from speed overrides", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+  const defaults = resolveSimulationDefaults({ speedMultiplier: 2 });
+
+  assert.is(defaults.speedMultiplier, 2);
+  assert.is(
+    defaults.updatesPerSecond,
+    Math.round(SIMULATION_DEFAULTS.updatesPerSecond * 2),
+  );
+});
+
+test("resolveSimulationDefaults backfills speed multiplier from cadence overrides", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+  const defaults = resolveSimulationDefaults({ updatesPerSecond: 45 });
+
+  assert.is(defaults.updatesPerSecond, 45);
+  assert.is(defaults.speedMultiplier, 45 / SIMULATION_DEFAULTS.updatesPerSecond);
+});
+
 test("UIManager constructor seeds settings from resolveSimulationDefaults", async () => {
   const originalDocument = global.document;
   const originalNode = global.Node;

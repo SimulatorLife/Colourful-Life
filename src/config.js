@@ -233,5 +233,58 @@ export function resolveSimulationDefaults(overrides = {}) {
     merged.maxConcurrentEvents = Math.max(0, Math.floor(concurrencyValue));
   }
 
+  const hasUpdatesOverride = Object.prototype.hasOwnProperty.call(
+    overrides,
+    "updatesPerSecond",
+  );
+  const hasSpeedOverride = Object.prototype.hasOwnProperty.call(
+    overrides,
+    "speedMultiplier",
+  );
+  const baseUpdates = Number.isFinite(defaults.updatesPerSecond)
+    ? defaults.updatesPerSecond
+    : SIMULATION_DEFAULTS.updatesPerSecond;
+
+  if (hasUpdatesOverride) {
+    const numeric = Number(merged.updatesPerSecond);
+
+    if (Number.isFinite(numeric) && numeric > 0) {
+      merged.updatesPerSecond = Math.max(1, Math.round(numeric));
+    } else {
+      merged.updatesPerSecond = baseUpdates;
+    }
+
+    const derivedMultiplier = merged.updatesPerSecond / baseUpdates;
+
+    merged.speedMultiplier = Number.isFinite(derivedMultiplier)
+      ? derivedMultiplier
+      : defaults.speedMultiplier;
+  } else if (hasSpeedOverride) {
+    const numeric = Number(merged.speedMultiplier);
+
+    if (Number.isFinite(numeric) && numeric > 0) {
+      merged.speedMultiplier = numeric;
+      merged.updatesPerSecond = Math.max(
+        1,
+        Math.round(baseUpdates * merged.speedMultiplier),
+      );
+    } else {
+      merged.speedMultiplier = defaults.speedMultiplier;
+      merged.updatesPerSecond = baseUpdates;
+    }
+  } else {
+    const numericUpdates = Number(merged.updatesPerSecond);
+    const numericSpeed = Number(merged.speedMultiplier);
+
+    merged.updatesPerSecond =
+      Number.isFinite(numericUpdates) && numericUpdates > 0
+        ? Math.max(1, Math.round(numericUpdates))
+        : baseUpdates;
+    merged.speedMultiplier =
+      Number.isFinite(numericSpeed) && numericSpeed > 0
+        ? numericSpeed
+        : defaults.speedMultiplier;
+  }
+
   return merged;
 }
