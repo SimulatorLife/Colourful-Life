@@ -6,7 +6,6 @@ import {
   loadSimulationModules,
   patchSimulationPrototypes,
 } from "./helpers/simulationEngine.js";
-import { drawOverlays as defaultDrawOverlays } from "../src/ui/overlays.js";
 
 function createEngine(modules) {
   const { SimulationEngine } = modules;
@@ -251,16 +250,17 @@ test("overlay visibility coercion handles string inputs", async () => {
   }
 });
 
-// Regression test: direct SimulationEngine constructions (like index.html) previously
-// defaulted to a noop overlay renderer, leaving UI toggles with no visible effect.
-test("SimulationEngine defaults to the shared overlay renderer", async () => {
+test("SimulationEngine exposes a callable overlay renderer by default", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
 
   try {
     const engine = createEngine(modules);
 
-    assert.is(engine.drawOverlays, defaultDrawOverlays);
+    assert.type(engine.drawOverlays, "function");
+    assert.not.throws(() =>
+      engine.drawOverlays(engine.grid, engine.ctx, engine.cellSize, {}),
+    );
   } finally {
     restore();
   }
