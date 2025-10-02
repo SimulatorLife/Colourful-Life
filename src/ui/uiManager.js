@@ -784,7 +784,7 @@ export default class UIManager {
     const { title, description, color, describedBy } = options || {};
     const row = document.createElement("label");
 
-    row.className = "control-row control-row--checkbox";
+    row.className = "control-row";
     if (title) row.title = title;
     const line = document.createElement("div");
 
@@ -1866,7 +1866,7 @@ export default class UIManager {
     if (sliderContext?.insightConfigs?.length) {
       const cadenceSection = document.createElement("section");
 
-      cadenceSection.className = "metrics-section insight-cadence";
+      cadenceSection.className = "metrics-section";
       const cadenceTitle = document.createElement("h4");
 
       cadenceTitle.className = "metrics-section-title";
@@ -1987,7 +1987,7 @@ export default class UIManager {
 
     const lifeEventsSection = document.createElement("section");
 
-    lifeEventsSection.className = "metrics-section life-events";
+    lifeEventsSection.className = "metrics-section";
 
     const lifeHeading = document.createElement("h4");
 
