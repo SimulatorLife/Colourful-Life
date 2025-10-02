@@ -241,6 +241,7 @@ export default class Cell {
     this.matingSuccesses = 0;
     this.diverseMateScore = 0;
     this.similarityPenalty = 0;
+    this.strategyPenalty = 0;
   }
 
   static breed(parentA, parentB, mutationMultiplier = 1, options = {}) {
@@ -692,6 +693,7 @@ export default class Cell {
     success = false,
     penalized = false,
     penaltyMultiplier = 1,
+    strategyPenaltyMultiplier = 1,
   } = {}) {
     this.matingAttempts = (this.matingAttempts || 0) + 1;
 
@@ -705,6 +707,12 @@ export default class Cell {
       const penalty = clamp(1 - (penaltyMultiplier ?? 1), 0, 1);
 
       this.similarityPenalty = (this.similarityPenalty || 0) + penalty;
+    }
+
+    const strategyPenalty = clamp(1 - (strategyPenaltyMultiplier ?? 1), 0, 1);
+
+    if (strategyPenalty > 0) {
+      this.strategyPenalty = (this.strategyPenalty || 0) + strategyPenalty;
     }
   }
 

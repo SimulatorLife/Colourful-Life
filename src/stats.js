@@ -21,6 +21,7 @@ const HISTORY_SERIES_KEYS = [
 
 const DIVERSITY_TARGET_DEFAULT = 0.35;
 const DIVERSITY_PRESSURE_SMOOTHING = 0.85;
+const STRATEGY_PRESSURE_SMOOTHING = 0.82;
 
 const LIFE_EVENT_LOG_CAPACITY = 240;
 const LIFE_EVENT_RATE_DEFAULT_WINDOW = 200;
@@ -230,6 +231,8 @@ const createEmptyMatingSnapshot = () => ({
   poolSizeSum: 0,
   complementaritySum: 0,
   complementaritySuccessSum: 0,
+  strategyPenaltySum: 0,
+  strategyPressureSum: 0,
   blocks: 0,
   lastBlockReason: null,
 });
@@ -277,6 +280,7 @@ export default class Stats {
     this.diversityTarget = DIVERSITY_TARGET_DEFAULT;
     this.diversityPressure = 0;
     this.behavioralEvenness = 0;
+    this.strategyPressure = 0;
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
     this.lifeEventSequence = 0;
 
@@ -338,6 +342,7 @@ export default class Stats {
     this.traitPresence = createEmptyTraitPresence(this.traitDefinitions);
     this.diversityPressure = 0;
     this.behavioralEvenness = 0;
+    this.strategyPressure = 0;
     this.meanBehaviorComplementarity = 0;
     this.successfulBehaviorComplementarity = 0;
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
@@ -366,6 +371,12 @@ export default class Stats {
     const value = Number.isFinite(this.behavioralEvenness)
       ? this.behavioralEvenness
       : 0;
+
+    return clamp01(value);
+  }
+
+  getStrategyPressure() {
+    const value = Number.isFinite(this.strategyPressure) ? this.strategyPressure : 0;
 
     return clamp01(value);
   }
@@ -405,6 +416,22 @@ export default class Stats {
       targetPressure * (1 - DIVERSITY_PRESSURE_SMOOTHING);
 
     this.diversityPressure = clamp01(next);
+
+    const monotonyDemand = clamp01(
+      evennessShortfall * (0.45 + geneticShortfall * 0.35),
+    );
+    const complementReliefStrategy = clamp01(
+      complementValue * (0.25 + geneticShortfall * 0.3),
+    );
+    const rawStrategyPressure = clamp01(monotonyDemand - complementReliefStrategy);
+    const prevStrategy = Number.isFinite(this.strategyPressure)
+      ? this.strategyPressure
+      : 0;
+    const strategyNext =
+      prevStrategy * STRATEGY_PRESSURE_SMOOTHING +
+      rawStrategyPressure * (1 - STRATEGY_PRESSURE_SMOOTHING);
+
+    this.strategyPressure = clamp01(strategyNext);
   }
 
   #computeBehavioralEvenness(traitPresence) {
@@ -753,6 +780,10 @@ export default class Stats {
       choiceCount > 0 ? mateStats.complementaritySum / choiceCount : 0;
     const successfulComplementarity =
       successCount > 0 ? mateStats.complementaritySuccessSum / successCount : 0;
+    const meanStrategyPenalty =
+      choiceCount > 0 ? mateStats.strategyPenaltySum / choiceCount : 1;
+    const meanStrategyPressure =
+      choiceCount > 0 ? mateStats.strategyPressureSum / choiceCount : 0;
 
     this.#updateDiversityPressure(
       diversity,
@@ -801,6 +832,9 @@ export default class Stats {
       meanBehaviorComplementarity: meanComplementarity,
       successfulBehaviorComplementarity: successfulComplementarity,
       behaviorEvenness,
+      meanStrategyPenalty,
+      meanStrategyPressure,
+      strategyPressure: this.strategyPressure,
       curiositySelections: mateStats.selectionModes.curiosity,
       lastMating: this.lastMatingDebug,
       mutationMultiplier: this.mutationMultiplier,
@@ -832,6 +866,8 @@ export default class Stats {
     penalized = false,
     penaltyMultiplier = 1,
     behaviorComplementarity = 0,
+    strategyPenaltyMultiplier = 1,
+    strategyPressure = undefined,
     threshold,
   } = {}) {
     if (!this.mating) {
@@ -851,6 +887,14 @@ export default class Stats {
     if (selectionMode === "curiosity") this.mating.selectionModes.curiosity++;
     else this.mating.selectionModes.preference++;
     this.mating.complementaritySum += complementarity;
+    const strategyMultiplier = clamp01(
+      Number.isFinite(strategyPenaltyMultiplier) ? strategyPenaltyMultiplier : 1,
+    );
+
+    this.mating.strategyPenaltySum += strategyMultiplier;
+    if (Number.isFinite(strategyPressure)) {
+      this.mating.strategyPressureSum += clamp01(strategyPressure);
+    }
 
     if (success) {
       this.mating.successes++;
@@ -870,6 +914,8 @@ export default class Stats {
       penalized,
       penaltyMultiplier,
       behaviorComplementarity: complementarity,
+      strategyPenaltyMultiplier,
+      strategyPressure,
       blockedReason: this.mating.lastBlockReason || undefined,
     };
     // Consume the one-time reason so the next mating record does not reuse it.

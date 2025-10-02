@@ -1,4 +1,5 @@
 import { assert, test } from "#tests/harness";
+import { approxEqual } from "./helpers/assertions.js";
 
 test("GridManager.tryMove updates a cell's stored coordinates", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
@@ -978,6 +979,101 @@ test("low-diversity penalties respond to mate preferences and environment", asyn
   assert.ok(
     kinRecord.penaltyMultiplier >= 0.7,
     `expected kin-friendly pair to retain high multiplier, got ${kinRecord.penaltyMultiplier}`,
+  );
+});
+
+test("strategy pressure dampens homogeneous pair reproduction even above diversity threshold", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const records = [];
+  const stats = {
+    onBirth() {},
+    onDeath() {},
+    getBehavioralEvenness: () => 0.25,
+    getDiversityPressure: () => 0.15,
+    getStrategyPressure: () => 0.8,
+    recordMateChoice(data) {
+      records.push(data);
+    },
+    matingDiversityThreshold: 0.3,
+  };
+
+  const gm = new TestGridManager(1, 2, {
+    eventManager: { activeEvents: [] },
+    stats,
+  });
+
+  gm.setMatingDiversityOptions({ threshold: 0.3, lowDiversityMultiplier: 0.1 });
+
+  const parent = new Cell(0, 0, new DNA(10, 20, 30), MAX_TILE_ENERGY);
+  const mate = new Cell(0, 1, new DNA(12, 22, 32), MAX_TILE_ENERGY);
+
+  parent.interactionGenes = { cooperate: 0.9, fight: 0.05, avoid: 0.15 };
+  mate.interactionGenes = { cooperate: 0.9, fight: 0.05, avoid: 0.15 };
+  parent.computeReproductionProbability = () => 1;
+  parent.decideReproduction = () => ({ probability: 1 });
+  parent.resolveSharedRng = () => () => 0;
+
+  const mateEntry = parent.evaluateMateCandidate({
+    row: mate.row,
+    col: mate.col,
+    target: mate,
+  }) || {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 0.5,
+    diversity: 0.5,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  mateEntry.similarity = 0.5;
+  mateEntry.diversity = 0.5;
+
+  gm.setCell(0, 0, parent);
+  gm.setCell(0, 1, mate);
+  gm.densityGrid = [[0.1, 0.1]];
+  gm.energyGrid = [[MAX_TILE_ENERGY, MAX_TILE_ENERGY]];
+  gm.energyDeltaGrid = [[0, 0]];
+
+  gm.handleReproduction(
+    0,
+    0,
+    parent,
+    { mates: [mateEntry], society: [] },
+    {
+      stats,
+      densityGrid: gm.densityGrid,
+      densityEffectMultiplier: 1,
+      mutationMultiplier: 1,
+    },
+  );
+
+  assert.ok(records.length >= 1, "expected reproduction attempt to be recorded");
+  const [record] = records;
+
+  assert.ok(record.penalized, "strategy pressure should mark pairing penalized");
+  assert.ok(
+    record.strategyPenaltyMultiplier < 1,
+    `expected strategy penalty multiplier below 1, got ${record.strategyPenaltyMultiplier}`,
+  );
+  approxEqual(
+    record.penaltyMultiplier,
+    record.strategyPenaltyMultiplier,
+    1e-9,
+    "no genetic penalty should leave combined multiplier equal to strategy penalty",
+  );
+  assert.ok(
+    parent.strategyPenalty > 0,
+    "parent should accumulate strategy penalty exposure",
   );
 });
 

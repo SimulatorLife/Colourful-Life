@@ -38,14 +38,19 @@ export function computeFitness(cell, maxTileEnergy) {
   const penaltySum = Number.isFinite(cell.similarityPenalty)
     ? Math.max(0, cell.similarityPenalty)
     : 0;
+  const monotonySum = Number.isFinite(cell.strategyPenalty)
+    ? Math.max(0, cell.strategyPenalty)
+    : 0;
 
   const successRate = attempts > 0 ? successes / attempts : 0;
   const diversityRate = successes > 0 ? diversitySum / successes : 0;
   const penaltyRate = attempts > 0 ? Math.min(1, penaltySum / attempts) : 0;
+  const monotonyRate = attempts > 0 ? Math.min(1, monotonySum / attempts) : 0;
 
   const diversityBonus = diversityRate * 1.2;
   const adaptabilityBonus = successRate * 0.4;
   const similarityDrag = penaltyRate * 0.6;
+  const monotonyDrag = monotonyRate * 0.4;
 
   return (
     fights +
@@ -54,6 +59,7 @@ export function computeFitness(cell, maxTileEnergy) {
     survival +
     diversityBonus +
     adaptabilityBonus -
-    similarityDrag
+    similarityDrag -
+    monotonyDrag
   );
 }
