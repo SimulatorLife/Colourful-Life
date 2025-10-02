@@ -1566,6 +1566,26 @@ export class DNA {
     return clamp(appetite, 0, 1);
   }
 
+  diversityComfort() {
+    const rng = this.prngFor("diversityComfort");
+    const ally = this.geneFraction(GENE_LOCI.ALLY);
+    const enemy = this.geneFraction(GENE_LOCI.ENEMY);
+    const courtship = this.geneFraction(GENE_LOCI.COURTSHIP);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+
+    const noveltyPull = 0.4 * enemy + 0.35 * courtship + 0.25 * risk;
+    const kinAnchor = 0.4 + 0.4 * ally + 0.2 * parental + 0.1 * cooperation;
+    const discipline = 0.2 * strategy + 0.1 * cooperation;
+    const baseline = 0.23 + noveltyPull - kinAnchor * 0.3 - discipline;
+    const jitter = (rng() - 0.5) * (0.12 + courtship * 0.08);
+    const comfort = baseline + jitter;
+
+    return clamp(comfort, 0.05, 0.95);
+  }
+
   mateSamplingProfile() {
     const rng = this.prngFor("mateSamplingProfile");
     const courtship = this.geneFraction(GENE_LOCI.COURTSHIP);

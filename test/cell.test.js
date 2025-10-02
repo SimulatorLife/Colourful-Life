@@ -1267,6 +1267,21 @@ test("selectMateWeighted honors mate sampling curiosity bias", () => {
   assert.is(chosen, diverse, "curiosity pick should favor diverse mates");
 });
 
+test("cells cache DNA-tuned diversity comfort preferences", () => {
+  const dna = new DNA(140, 120, 200);
+  const expected = dna.diversityComfort();
+  const cell = new Cell(0, 0, dna, 5);
+
+  assert.type(cell.diversityComfort, "number");
+  assert.ok(cell.diversityComfort >= 0 && cell.diversityComfort <= 1);
+  approxEqual(
+    cell.diversityComfort,
+    expected,
+    1e-9,
+    "cell should reuse the DNA-derived diversity comfort",
+  );
+});
+
 test("breed uses DNA inheritStrategy to compute offspring strategy", () => {
   const dnaA = new DNA(10, 20, 30);
   const dnaB = new DNA(40, 50, 60);

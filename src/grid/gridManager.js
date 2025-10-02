@@ -271,7 +271,25 @@ export default class GridManager {
     diversityPressure = 0,
   } = {}) {
     const baseline = clamp(Number.isFinite(baseThreshold) ? baseThreshold : 0, 0, 1);
-    const appetiteNeutral = 0.35;
+    const comfortA = clamp(
+      Number.isFinite(parentA?.diversityComfort)
+        ? parentA.diversityComfort
+        : typeof parentA?.dna?.diversityComfort === "function"
+          ? parentA.dna.diversityComfort()
+          : 0.35,
+      0,
+      1,
+    );
+    const comfortB = clamp(
+      Number.isFinite(parentB?.diversityComfort)
+        ? parentB.diversityComfort
+        : typeof parentB?.dna?.diversityComfort === "function"
+          ? parentB.dna.diversityComfort()
+          : 0.35,
+      0,
+      1,
+    );
+    const appetiteNeutral = (comfortA + comfortB) / 2;
     const appetiteA = clamp(parentA?.diversityAppetite ?? 0, 0, 1);
     const appetiteB = clamp(parentB?.diversityAppetite ?? 0, 0, 1);
     const appetiteAverage = (appetiteA + appetiteB) / 2;

@@ -850,6 +850,8 @@ test("low-diversity penalties respond to mate preferences and environment", asyn
 
     seeker.diversityAppetite = 1;
     seekerMate.diversityAppetite = 1;
+    seeker.diversityComfort = 0.75;
+    seekerMate.diversityComfort = 0.75;
     seeker.matePreferenceBias = -1;
     seekerMate.matePreferenceBias = -1;
     seeker.dna.reproductionThresholdFrac = () => 0.25;
@@ -912,6 +914,8 @@ test("low-diversity penalties respond to mate preferences and environment", asyn
 
     kinLover.diversityAppetite = 0;
     kinMate.diversityAppetite = 0;
+    kinLover.diversityComfort = 0.2;
+    kinMate.diversityComfort = 0.2;
     kinLover.matePreferenceBias = 1;
     kinMate.matePreferenceBias = 1;
     kinLover.dna.reproductionThresholdFrac = () => 0.4;
@@ -978,6 +982,118 @@ test("low-diversity penalties respond to mate preferences and environment", asyn
   assert.ok(
     kinRecord.penaltyMultiplier >= 0.7,
     `expected kin-friendly pair to retain high multiplier, got ${kinRecord.penaltyMultiplier}`,
+  );
+});
+
+test("DNA diversity comfort calibrates low-diversity penalties", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const runPair = async (comfort) => {
+    const records = [];
+    const stats = {
+      onBirth() {},
+      onDeath() {},
+      recordMateChoice(data) {
+        records.push(data);
+      },
+      matingDiversityThreshold: 0.4,
+    };
+    const gm = new TestGridManager(1, 3, {
+      eventManager: { activeEvents: [] },
+      stats,
+    });
+
+    gm.setMatingDiversityOptions({ threshold: 0.4, lowDiversityMultiplier: 0.2 });
+    gm.densityGrid = [[0.6, 0.6, 0.6]];
+    gm.energyGrid = [
+      [MAX_TILE_ENERGY * 0.6, MAX_TILE_ENERGY * 0.6, MAX_TILE_ENERGY * 0.6],
+    ];
+    gm.energyDeltaGrid = [[0, 0, 0]];
+
+    const parent = new Cell(0, 0, new DNA(80, 120, 160), MAX_TILE_ENERGY);
+    const mate = new Cell(0, 1, new DNA(82, 118, 162), MAX_TILE_ENERGY);
+
+    parent.diversityAppetite = 0.8;
+    mate.diversityAppetite = 0.8;
+    parent.matePreferenceBias = 0;
+    mate.matePreferenceBias = 0;
+    parent.diversityComfort = comfort;
+    mate.diversityComfort = comfort;
+    parent.dna.reproductionThresholdFrac = () => 0.25;
+    mate.dna.reproductionThresholdFrac = () => 0.25;
+    parent.computeReproductionProbability = () => 1;
+    parent.decideReproduction = () => ({ probability: 1 });
+
+    const entry = parent.evaluateMateCandidate({
+      row: mate.row,
+      col: mate.col,
+      target: mate,
+    }) || {
+      target: mate,
+      row: mate.row,
+      col: mate.col,
+      similarity: 0.85,
+      diversity: 0.15,
+      selectionWeight: 1,
+      preferenceScore: 1,
+    };
+
+    entry.diversity = Math.min(entry.diversity ?? 0.15, 0.2);
+    entry.similarity = Math.max(entry.similarity ?? 0.85, 0.8);
+    entry.selectionWeight = 1;
+    entry.preferenceScore = 1;
+
+    parent.selectMateWeighted = () => ({
+      chosen: entry,
+      evaluated: [entry],
+      mode: "preference",
+    });
+    parent.findBestMate = () => entry;
+
+    gm.setCell(0, 0, parent);
+    gm.setCell(0, 1, mate);
+
+    const originalRandom = Math.random;
+
+    Math.random = () => 0.99;
+
+    try {
+      gm.handleReproduction(
+        0,
+        0,
+        parent,
+        { mates: [entry], society: [] },
+        {
+          stats,
+          densityGrid: gm.densityGrid,
+          densityEffectMultiplier: 1,
+          mutationMultiplier: 1,
+        },
+      );
+    } finally {
+      Math.random = originalRandom;
+    }
+
+    assert.is(records.length, 1, "mate choice should be recorded");
+
+    return records[0];
+  };
+
+  const alignedComfort = await runPair(0.7);
+  const neutralComfort = await runPair(0.35);
+
+  assert.ok(alignedComfort.penalized);
+  assert.ok(neutralComfort.penalized);
+  assert.ok(
+    alignedComfort.penaltyMultiplier > neutralComfort.penaltyMultiplier,
+    "matching DNA comfort should ease low-diversity penalties",
   );
 });
 

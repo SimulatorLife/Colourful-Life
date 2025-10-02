@@ -129,6 +129,10 @@ export default class Cell {
       typeof this.dna.diversityAppetite === "function"
         ? this.dna.diversityAppetite()
         : 0;
+    this.diversityComfort =
+      typeof this.dna.diversityComfort === "function"
+        ? this.dna.diversityComfort()
+        : 0.35;
     this.mateSamplingProfile =
       typeof this.dna.mateSamplingProfile === "function"
         ? this.dna.mateSamplingProfile()
