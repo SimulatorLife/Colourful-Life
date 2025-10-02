@@ -68,6 +68,9 @@ export default class UIManager {
     this.selectionDragEnd = null;
     this.drawZoneButton = null;
     this.zoneSummaryEl = null;
+    this.zoneSummaryTextEl = null;
+    this.zoneSummaryList = null;
+    this._checkboxIdSequence = 0;
     this._selectionListenersInstalled = false;
     this.stepButton = null;
     this.clearZonesButton = null;
@@ -315,11 +318,54 @@ export default class UIManager {
 
   #updateZoneSummary() {
     if (!this.zoneSummaryEl) return;
-    const summary = this.selectionManager
-      ? this.selectionManager.describeActiveZones()
-      : "All tiles eligible";
+    const zones =
+      this.selectionManager &&
+      typeof this.selectionManager.getActiveZones === "function"
+        ? this.selectionManager.getActiveZones()
+        : [];
 
-    this.zoneSummaryEl.textContent = summary;
+    const zoneNames = zones
+      .map((zone) => zone?.name || zone?.id)
+      .filter((name) => typeof name === "string" && name.length > 0);
+    const hasZones = zoneNames.length > 0;
+    const summaryText = hasZones
+      ? `Focused on ${zoneNames.length === 1 ? "zone" : "zones"}: ${zoneNames.join(", ")}`
+      : "All tiles eligible for reproduction";
+
+    if (this.zoneSummaryTextEl) {
+      this.zoneSummaryTextEl.textContent = summaryText;
+    } else {
+      this.zoneSummaryEl.textContent = summaryText;
+    }
+
+    if (this.zoneSummaryList) {
+      this.zoneSummaryList.innerHTML = "";
+      if (hasZones) {
+        this.zoneSummaryList.hidden = false;
+        zones.forEach((zone) => {
+          const item = document.createElement("li");
+
+          item.className = "zone-summary-tag";
+          if (zone?.description) item.title = zone.description;
+          const swatch = document.createElement("span");
+
+          swatch.className = "zone-summary-swatch";
+          if (zone?.color) swatch.style.background = zone.color;
+          else swatch.classList.add("zone-summary-swatch--muted");
+          swatch.setAttribute("aria-hidden", "true");
+          item.appendChild(swatch);
+
+          const label = document.createElement("span");
+
+          label.textContent = zone?.name || zone?.id || "Zone";
+          item.appendChild(label);
+          this.zoneSummaryList.appendChild(item);
+        });
+      } else {
+        this.zoneSummaryList.hidden = true;
+      }
+    }
+
     this.#updateCustomZoneButtons();
   }
 
@@ -446,10 +492,15 @@ export default class UIManager {
   }
 
   // Reusable checkbox row helper
-  #addCheckbox(body, label, title, initial, onChange) {
+  #addCheckbox(body, label, titleOrOptions, initial, onChange) {
+    const options =
+      titleOrOptions && typeof titleOrOptions === "object"
+        ? titleOrOptions
+        : { title: titleOrOptions };
+    const { title, description, color, describedBy } = options || {};
     const row = document.createElement("label");
 
-    row.className = "control-row";
+    row.className = "control-row control-row--checkbox";
     if (title) row.title = title;
     const line = document.createElement("div");
 
@@ -458,15 +509,51 @@ export default class UIManager {
 
     input.type = "checkbox";
     input.checked = Boolean(initial);
-    if (typeof onChange === "function") {
-      input.addEventListener("input", () => onChange(input.checked));
-    }
+
+    const labelContainer = document.createElement("div");
+
+    labelContainer.className = "control-checkbox-label";
     const name = document.createElement("div");
 
     name.className = "control-name";
-    name.textContent = label ?? "";
+    if (color) {
+      const swatch = document.createElement("span");
+
+      swatch.className = "control-swatch";
+      swatch.style.background = color;
+      name.appendChild(swatch);
+    }
+
+    const nameText = document.createElement("span");
+
+    nameText.textContent = label ?? "";
+    name.appendChild(nameText);
+    labelContainer.appendChild(name);
+
+    let descriptionId = null;
+
+    if (description) {
+      descriptionId = `checkbox-hint-${++this._checkboxIdSequence}`;
+      const descriptionEl = document.createElement("div");
+
+      descriptionEl.className = "control-checkbox-description control-hint";
+      descriptionEl.id = descriptionId;
+      descriptionEl.textContent = description;
+      labelContainer.appendChild(descriptionEl);
+    } else if (typeof describedBy === "string" && describedBy.length > 0) {
+      descriptionId = describedBy;
+    }
+
+    if (descriptionId) {
+      input.setAttribute("aria-describedby", descriptionId);
+    }
+
+    if (typeof onChange === "function") {
+      input.addEventListener("input", () => onChange(input.checked));
+    }
+
     line.appendChild(input);
-    line.appendChild(name);
+    line.appendChild(labelContainer);
     row.appendChild(line);
     body.appendChild(row);
 
@@ -1311,14 +1398,26 @@ export default class UIManager {
 
     createSectionHeading(body, "Reproductive Zones", { className: "overlay-header" });
 
+    const zoneIntro = document.createElement("p");
+
+    zoneIntro.className = "zone-intro control-hint";
+    zoneIntro.textContent =
+      "Focus reproduction by enabling preset regions or sketching your own priority areas.";
+    body.appendChild(zoneIntro);
+
     const zoneGrid = createControlGrid(body, "control-grid--compact");
     const patterns = this.selectionManager.getPatterns();
 
     patterns.forEach((pattern) => {
+      const description =
+        typeof pattern.description === "string" && pattern.description.trim().length > 0
+          ? pattern.description
+          : null;
+
       this.#addCheckbox(
         zoneGrid,
         pattern.name,
-        pattern.description || "",
+        { title: description || "", description, color: pattern.color },
         pattern.active,
         (checked) => {
           this.selectionManager.togglePattern(pattern.id, checked);
@@ -1359,20 +1458,38 @@ export default class UIManager {
     zoneButtons.appendChild(clearButton);
     this.clearZonesButton = clearButton;
 
+    const summaryValue = document.createElement("div");
+
+    summaryValue.className = "zone-summary";
+    const summaryText = document.createElement("p");
+
+    summaryText.className = "zone-summary-text";
+    summaryText.id = "zone-summary-text";
+    summaryValue.appendChild(summaryText);
+    const summaryList = document.createElement("ul");
+
+    summaryList.className = "zone-summary-tags";
+    summaryList.setAttribute("role", "list");
+    summaryList.hidden = true;
+    summaryValue.appendChild(summaryList);
+
     const summaryRow = this.#appendControlRow(body, {
       label: "Active Zones",
-      value: this.selectionManager.describeActiveZones(),
-      valueClass: "control-value--left control-hint",
+      value: summaryValue,
+      valueClass: "control-value--left",
     });
 
     this.zoneSummaryEl = summaryRow.querySelector(".control-value");
+    this.zoneSummaryTextEl = summaryText;
+    this.zoneSummaryList = summaryList;
     if (this.zoneSummaryEl) {
       this.zoneSummaryEl.id = "zone-summary";
       this.zoneSummaryEl.setAttribute("role", "status");
       this.zoneSummaryEl.setAttribute("aria-live", "polite");
+      this.zoneSummaryEl.setAttribute("aria-describedby", summaryText.id);
     }
     if (this.zoneSummaryEl) {
-      zoneButtons.setAttribute("aria-describedby", "zone-summary");
+      zoneButtons.setAttribute("aria-describedby", summaryText.id);
       if (this.drawZoneButton) {
         this.drawZoneButton.setAttribute("aria-controls", "zone-summary");
       }
