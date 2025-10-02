@@ -56,7 +56,7 @@ function sanitizeNumericRange(range, fallback, { min: minBound, max: maxBound } 
     max = Math.min(max, maxBound);
   }
 
-  if (max <= min) {
+  if (max < min) {
     return { ...fallback };
   }
 

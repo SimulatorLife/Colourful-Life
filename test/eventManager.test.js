@@ -54,7 +54,7 @@ function sanitizeRange(range, fallback, { min: minBound } = {}) {
     min = Math.max(min, minBound);
   }
 
-  if (max <= min) {
+  if (max < min) {
     return { ...fallback };
   }
 
@@ -255,6 +255,35 @@ test("randomEventConfig customizes generated event ranges", async () => {
   const event = manager.generateRandomEvent();
 
   assert.equal(event, expected);
+  assert.is(rng.getCalls(), sequence.length);
+});
+
+test("randomEventConfig accepts deterministic ranges", async () => {
+  const [{ default: EventManager }, { EVENT_TYPES }] = await Promise.all([
+    import("../src/events/eventManager.js"),
+    import("../src/events/eventEffects.js"),
+  ]);
+  const rows = 20;
+  const cols = 24;
+  const sequence = [0.05, 0.33, 0.72, 0.1, 0.25, 0.4, 0.6];
+  const rng = makeSequenceRng(sequence.slice());
+  const config = {
+    durationRange: { min: 150, max: 150 },
+    strengthRange: { min: 0.5, max: 0.5 },
+    span: { min: 6, ratio: 0 },
+  };
+  const manager = new EventManager(rows, cols, rng, {
+    startWithEvent: false,
+    randomEventConfig: config,
+  });
+  const expected = expectedEventFromSequence(sequence, rows, cols, EVENT_TYPES, config);
+  const event = manager.generateRandomEvent();
+
+  assert.equal(event, expected);
+  assert.is(event.duration, 150);
+  assert.is(event.strength, 0.5);
+  assert.is(event.affectedArea.width, 6);
+  assert.is(event.affectedArea.height, 6);
   assert.is(rng.getCalls(), sequence.length);
 });
 
