@@ -14,12 +14,12 @@ This document captures the guardrails and shared context for any automation or A
 - Ignore `node_modules/`, lockfile caches, and other generated artifacts when scanning, searching, or linting. Focus on checked-in source (`src/`, `ui/`, `test/`, `demo/`, etc.). Ignore build outputs in `dist/` and `build/`, hidden files/folders unless explicitly relevant, and the helper script `codex-setup-env-script.sh`.
 - Do not delete or downgrade existing tests. Add coverage when behavior changes or risk increases.
 - Keep the working tree clean. Stage only relevant files and ensure commits represent minimal, logical changes.
-- **Always respect the [Simulation Laws](README.md#the-simulation-laws).** When proposing or implementing changes, confirm they do not violate the canon constraints. If a task risks bending a law, call it out to the human reviewer and seek an alternative that preserves the law.
+- **Always respect the [Simulation Laws](README.md#the-simulation-laws).** When proposing or implementing changes, confirm they do not violate the canon constraints on occupancy, movement, reproduction, mortality, external influence, genome-driven behaviour, or energy economics. If a task risks bending a law, call it out to the human reviewer and seek an alternative that preserves the rule.
 
 ## Simulation Law Alignment
 
 - Treat the Simulation Laws as non-negotiable constraints; new features must extend rather than circumvent them.
-- Audit related code paths (simulation logic, documentation, tests) to ensure genome-informed behaviour, plausible reproduction costs, and death/decay mechanics stay intact.
+- Audit related code paths (simulation logic, documentation, tests) to ensure genome-informed behaviour, plausible reproduction costs, energy accounting, and death/decay mechanics stay intact.
 - When a change touches any law, document the evidence and reasoning in the PR description or commit message so reviewers can trace compliance.
 - If gaps are discovered, prioritize fixes that bring the system back into alignment before adding unrelated enhancements.
 
