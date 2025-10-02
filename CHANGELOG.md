@@ -9,22 +9,14 @@ where practical.
 
 ### Added
 
-- Documentation audit covering the README, developer guide, architecture
-  overview, and changelog to highlight headless usage, cache-reset tooling,
-  supporting modules such as the cell model, and the overlay rendering
-  pipeline.
-- Environment override documentation in the README and developer guide for
-  `COLOURFUL_LIFE_MAX_TILE_ENERGY`, `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`,
-  `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY`, and
-  `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` so experiments can adjust
-  regeneration, harvesting behaviour, and telemetry thresholds without editing
-  source while keeping overlays accurate.
-- Developer guide call-out pointing contributors to the overlay JSDoc style so
-  future canvas helpers stay self-documenting.
+- Documentation audit covering the README, developer guide, architecture overview, and changelog to highlight headless usage, cache-reset tooling, supporting modules such as the cell model, and the overlay rendering pipeline.
+- Environment override documentation in the README and developer guide for `COLOURFUL_LIFE_MAX_TILE_ENERGY`, `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`, `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY`, and `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` so experiments can adjust regeneration, harvesting behaviour, and telemetry thresholds without editing source while keeping overlays accurate.
+- Developer guide call-out pointing contributors to the overlay JSDoc style so future canvas helpers stay self-documenting.
 - Changelog tracking ongoing project evolution.
-- Life event dashboard summary combining births, deaths, and net population
-  cadence derived from a new stats helper so observers can spot surges or
-  collapses without scanning individual log entries.
+- Life event dashboard summary combining births, deaths, and net population cadence derived from a new stats helper so observers can spot surges or collapses without scanning individual log entries.
+- README guidance for embedding and headless automation, plus repository layout notes covering the engine environment adapters and shared utilities.
+- Architecture overview coverage for the environment adapters and life event summaries to keep subsystem documentation aligned with the current UI.
+- JSDoc coverage for the canvas/timing environment helpers so every exported function documents its contract for browser and headless consumers.
 
 ### Changed
 
@@ -67,6 +59,7 @@ where practical.
 - Deleted the legacy CommonJS energy profiling harness in favour of the
   environment-aware ES module variant so only the supported benchmarking tool
   remains in `scripts/profile-energy.mjs`.
+- Normalised README command tables and cross-links so contributor workflow references stay easy to scan.
 
 ## [0.1.0]
 

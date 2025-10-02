@@ -6,6 +6,7 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 - [Quick start](#quick-start)
 - [Core systems](#core-systems)
+- [Headless and embedded usage](#headless-and-embedded-usage)
 - [Developer workflow](#developer-workflow)
 - [Key scripts and commands](#key-scripts-and-commands)
 - [Repository layout](#repository-layout)
@@ -62,8 +63,20 @@ The simulation runs on cooperating modules housed in `src/`:
 - **Stats & leaderboard** (`src/stats.js`, `src/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface active environmental event summaries (intensity, coverage, and remaining duration), and select the top-performing organisms. Organism age readings surfaced here and in the UI are measured in simulation ticks so observers can translate them into seconds using the active tick rate.
 - **UI manager** (`src/ui/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/ui/headlessUiManager.js` mirrors the interface for tests and Node scripts.
 - **Selection tooling** (`src/grid/selectionManager.js`, `src/grid/reproductionZonePolicy.js`) — Defines preset and user-drawn mating zones, keeps geometry caches in sync with grid dimensions, and exposes helpers consumed by UI controls and reproduction policies.
+- **Engine environment adapters** (`src/engine/environment.js`) — Normalize canvas lookups, sizing, and timing providers so the simulation can run inside browsers, tests, and offscreen contexts without bespoke wiring.
+- **Utility helpers** (`src/utils.js`) — Shared math, RNG, ranking, error-reporting, and cloning helpers consumed by the engine, UI, and tests.
 
 For an architectural deep dive—including subsystem hand-offs, data flow, and extension tips—see [`docs/architecture-overview.md`](docs/architecture-overview.md).
+
+## Headless and embedded usage
+
+`createSimulation` exported from [`src/main.js`](src/main.js) stitches together the engine, UI, overlays, and lifecycle helpers. Pass `{ headless: true }` to obtain a headless controller for automation or tests and inject `{ requestAnimationFrame, cancelAnimationFrame, performanceNow }` to supply deterministic timing in non-browser environments. The helper will:
+
+- Resolve or create a canvas using [`resolveCanvas`](src/engine/environment.js) and [`ensureCanvasDimensions`](src/engine/environment.js).
+- Construct the grid, stats, selection manager, and event manager, exposing them on the returned controller (`{ grid, stats, selectionManager, eventManager }`).
+- Mount the full UI via [`UIManager`](src/ui/uiManager.js) or build a headless adapter with [`createHeadlessUiManager`](src/ui/headlessUiManager.js).
+
+Headless consumers can call `controller.tick()` to advance the simulation one step, `controller.resetWorld()` to reseed organisms with optional overrides, and subscribe to `SimulationEngine` events (`tick`, `metrics`, `leaderboard`, `state`) for instrumentation.
 
 ## The Simulation Laws
 
@@ -87,6 +100,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 ## Repository layout
 
 - `src/` — Simulation engine, UI construction, and supporting utilities.
+  - `src/engine/` — Canvas/timing adapters consumed by the engine and headless entry points.
   - `src/events/` — Event configuration, context helpers, and presets.
   - `src/grid/` — Adaptors for interacting with the grid from other systems.
   - `src/ui/` — UI manager, control builders, overlays, and debugging helpers.
@@ -99,19 +113,20 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 
 ## Key scripts and commands
 
-| Command                                   | Purpose                                                                                        |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `npm run start`                           | Launches the Parcel development server with hot module replacement at `http://localhost:1234`. |
-| `npm run build`                           | Produces an optimized production bundle in `dist/`.                                            |
-| `npm run clean`                           | Removes `dist/` and `.parcel-cache/` to recover from stubborn Parcel caches.                   |
-| `npm run lint` / `npm run lint:fix`       | Runs ESLint across the codebase, optionally applying autofixes.                                |
-| `npm run format` / `npm run format:check` | Applies or verifies Prettier formatting for source, documentation, and configuration files.    |
-| `npm test`                                | Runs the Node.js test suites covering simulation and UI modules.                               |
-| `node scripts/profile-energy.mjs`         | Benchmarks the energy preparation loop with configurable grid sizes via environment variables. |
+| Command                                   | Purpose                                                                                       |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `npm run start`                           | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.  |
+| `npm run build`                           | Produce an optimized production bundle in `dist/`.                                            |
+| `npm run clean`                           | Remove `dist/` and `.parcel-cache/` to reset Parcel caches.                                   |
+| `npm run lint` / `npm run lint:fix`       | Run ESLint across the codebase, optionally applying autofixes.                                |
+| `npm run format` / `npm run format:check` | Apply or verify Prettier formatting for source, documentation, and configuration files.       |
+| `npm test`                                | Execute the Node.js test suites covering simulation and UI modules.                           |
+| `node scripts/profile-energy.mjs`         | Benchmark the energy preparation loop with configurable grid sizes via environment variables. |
 
 ## Further reading
 
 - [`docs/architecture-overview.md`](docs/architecture-overview.md) — Component responsibilities and data flow diagrams.
+- [`docs/architecture-overview.md`](docs/architecture-overview.md#headless-and-scripted-usage) — Notes on embedding the engine without the browser UI.
 - [`docs/developer-guide.md`](docs/developer-guide.md) — Conventions for contributors, testing expectations, and documentation tips.
 - Inline JSDoc and comments throughout `src/` describing exported functions, complex routines, and configuration helpers.
 - Environment variable reference in [`src/config.js`](src/config.js) for tuning energy caps and regeneration penalties without patching source.
