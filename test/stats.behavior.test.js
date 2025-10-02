@@ -333,6 +333,83 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.5, 0.5, 0.5]);
 });
 
+test("diversity pressure responds to behavioral stagnation and complementary success", async () => {
+  const { default: Stats } = await statsModulePromise;
+
+  class DeterministicStats extends Stats {
+    constructor(size) {
+      super(size);
+      this.diversitySequence = [];
+    }
+
+    estimateDiversity() {
+      return this.diversitySequence.length ? this.diversitySequence.shift() : 0;
+    }
+  }
+
+  const stats = new DeterministicStats(3);
+
+  stats.diversitySequence.push(0.34, 0.34);
+
+  const homogeneousCells = [
+    createCell({ interactionGenes: { cooperate: 0.95, fight: 0.05 }, sight: 0.2 }),
+    createCell({ interactionGenes: { cooperate: 0.92, fight: 0.04 }, sight: 0.1 }),
+    createCell({ interactionGenes: { cooperate: 0.9, fight: 0.03 }, sight: 0.1 }),
+  ];
+
+  stats.mating = {
+    choices: 1,
+    successes: 1,
+    diverseChoices: 0,
+    diverseSuccesses: 0,
+    appetiteSum: 0,
+    selectionModes: { curiosity: 0, preference: 1 },
+    poolSizeSum: 0,
+    complementaritySum: 0.1,
+    complementaritySuccessSum: 0.1,
+  };
+
+  stats.updateFromSnapshot({
+    population: homogeneousCells.length,
+    totalEnergy: 0,
+    totalAge: 0,
+    cells: homogeneousCells,
+  });
+
+  const firstEvenness = stats.getBehavioralEvenness();
+
+  assert.ok(firstEvenness < 0.3);
+  const firstPressure = stats.getDiversityPressure();
+
+  assert.ok(firstPressure > 0.02);
+
+  stats.resetTick();
+  stats.mating = {
+    choices: 1,
+    successes: 1,
+    diverseChoices: 0,
+    diverseSuccesses: 0,
+    appetiteSum: 0,
+    selectionModes: { curiosity: 0, preference: 1 },
+    poolSizeSum: 0,
+    complementaritySum: 0.9,
+    complementaritySuccessSum: 0.9,
+  };
+
+  stats.diversitySequence.push(0.34);
+
+  stats.updateFromSnapshot({
+    population: homogeneousCells.length,
+    totalEnergy: 0,
+    totalAge: 0,
+    cells: homogeneousCells,
+  });
+
+  const relievedPressure = stats.getDiversityPressure();
+
+  assert.ok(relievedPressure < firstPressure);
+});
+
 test("behavioral evenness drops when one trait dominates", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(2);
@@ -452,7 +529,7 @@ test("diversity pressure increases when diversity stays below target", async () 
   }
 
   const stats = new PressureStats();
-  const snapshot = {
+  const sparseSnapshot = {
     population: 2,
     totalEnergy: 0,
     totalAge: 0,
@@ -460,21 +537,47 @@ test("diversity pressure increases when diversity stays below target", async () 
   };
 
   stats.setDiversityTarget(0.5);
-  stats.updateFromSnapshot(snapshot);
+  stats.updateFromSnapshot(sparseSnapshot);
 
   assert.ok(stats.getDiversityPressure() > 0);
 
   const firstPressure = stats.getDiversityPressure();
 
   stats.mockDiversity = 0.05;
-  stats.updateFromSnapshot(snapshot);
+  stats.updateFromSnapshot(sparseSnapshot);
 
   const elevatedPressure = stats.getDiversityPressure();
 
   assert.ok(elevatedPressure > firstPressure);
 
+  stats.resetTick();
   stats.mockDiversity = 0.8;
-  stats.updateFromSnapshot(snapshot);
+
+  stats.mating = {
+    choices: 1,
+    successes: 1,
+    diverseChoices: 1,
+    diverseSuccesses: 1,
+    appetiteSum: 1,
+    selectionModes: { curiosity: 1, preference: 0 },
+    poolSizeSum: 2,
+    complementaritySum: 0.9,
+    complementaritySuccessSum: 0.9,
+  };
+
+  const variedSnapshot = {
+    population: 4,
+    totalEnergy: 0,
+    totalAge: 0,
+    cells: [
+      createCell({ interactionGenes: { cooperate: 0.9, fight: 0.1 }, sight: 0.8 }),
+      createCell({ interactionGenes: { cooperate: 0.2, fight: 0.9 }, sight: 0.3 }),
+      createCell({ interactionGenes: { cooperate: 0.4, fight: 0.4 }, sight: 0.5 }),
+      createCell({ interactionGenes: { cooperate: 0.7, fight: 0.2 }, sight: 0.6 }),
+    ],
+  };
+
+  stats.updateFromSnapshot(variedSnapshot);
 
   assert.ok(stats.getDiversityPressure() < elevatedPressure);
 });

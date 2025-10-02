@@ -373,7 +373,11 @@ export default class Stats {
     return clamp01(value);
   }
 
-  #updateDiversityPressure(observedDiversity = 0) {
+  #updateDiversityPressure(
+    observedDiversity = 0,
+    behaviorEvenness = 0,
+    successfulComplementarity = 0,
+  ) {
     const target = clamp01(this.diversityTarget ?? DIVERSITY_TARGET_DEFAULT);
 
     if (target <= 0) {
@@ -382,11 +386,26 @@ export default class Stats {
       return;
     }
 
-    const normalizedShortfall = clamp01((target - observedDiversity) / target);
+    const diversityValue = clamp01(
+      Number.isFinite(observedDiversity) ? observedDiversity : 0,
+    );
+    const evennessValue = clamp01(
+      Number.isFinite(behaviorEvenness) ? behaviorEvenness : 0,
+    );
+    const complementValue = clamp01(
+      Number.isFinite(successfulComplementarity) ? successfulComplementarity : 0,
+    );
+
+    const geneticShortfall = clamp01((target - diversityValue) / target);
+    const evennessShortfall = clamp01(1 - evennessValue);
+    const evennessDemand = evennessShortfall * (0.3 + geneticShortfall * 0.4);
+    const combinedShortfall = clamp01(geneticShortfall * 0.7 + evennessDemand);
+    const complementRelief = complementValue * 0.35;
+    const targetPressure = Math.max(0, combinedShortfall - complementRelief);
     const prev = Number.isFinite(this.diversityPressure) ? this.diversityPressure : 0;
     const next =
       prev * DIVERSITY_PRESSURE_SMOOTHING +
-      normalizedShortfall * (1 - DIVERSITY_PRESSURE_SMOOTHING);
+      targetPressure * (1 - DIVERSITY_PRESSURE_SMOOTHING);
 
     this.diversityPressure = clamp01(next);
   }
@@ -723,8 +742,6 @@ export default class Stats {
     // Age is tracked in simulation ticks; convert with the active tick rate if seconds are needed.
     const meanAge = pop > 0 ? totalAge / pop : 0;
     const diversity = this.estimateDiversity(cells);
-
-    this.#updateDiversityPressure(diversity);
     const traitPresence = this.computeTraitPresence(cells);
     const behaviorEvenness = this.#computeBehavioralEvenness(traitPresence);
     const mateStats = this.mating || createEmptyMatingSnapshot();
@@ -739,6 +756,12 @@ export default class Stats {
       choiceCount > 0 ? mateStats.complementaritySum / choiceCount : 0;
     const successfulComplementarity =
       successCount > 0 ? mateStats.complementaritySuccessSum / successCount : 0;
+
+    this.#updateDiversityPressure(
+      diversity,
+      behaviorEvenness,
+      successfulComplementarity,
+    );
 
     this.pushHistory("population", pop);
     this.pushHistory("diversity", diversity);
