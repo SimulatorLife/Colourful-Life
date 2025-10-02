@@ -1662,6 +1662,7 @@ export default class UIManager {
     overlayConfigs.forEach(({ key, label, title, initial }) => {
       this.#addCheckbox(overlayGrid, label, title, initial, (checked) => {
         this.#updateSetting(key, checked);
+        this.#scheduleUpdate();
       });
     });
   }
