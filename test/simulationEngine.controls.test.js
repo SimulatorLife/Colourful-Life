@@ -1,12 +1,9 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import {
   MockCanvas,
   loadSimulationModules,
   patchSimulationPrototypes,
 } from "./helpers/simulationEngine.js";
-import { drawOverlays as defaultDrawOverlays } from "../src/ui/overlays.js";
 
 function createEngine(modules) {
   const { SimulationEngine } = modules;
@@ -203,10 +200,12 @@ test("overlay visibility toggles mutate only requested flags", async () => {
       showObstacles: false,
       showDensity: undefined,
       showFitness: true,
+      showLifeEventMarkers: true,
     });
 
     assert.is(engine.state.showObstacles, false);
     assert.is(engine.state.showFitness, true);
+    assert.is(engine.state.showLifeEventMarkers, true);
     assert.is(
       engine.state.showDensity,
       false,
@@ -222,16 +221,48 @@ test("overlay visibility toggles mutate only requested flags", async () => {
   }
 });
 
-// Regression test: direct SimulationEngine constructions (like index.html) previously
-// defaulted to a noop overlay renderer, leaving UI toggles with no visible effect.
-test("SimulationEngine defaults to the shared overlay renderer", async () => {
+test("overlay visibility coercion handles string inputs", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
 
   try {
     const engine = createEngine(modules);
 
-    assert.is(engine.drawOverlays, defaultDrawOverlays);
+    engine.setOverlayVisibility({
+      showObstacles: "false",
+      showEnergy: " ",
+      showDensity: "TRUE",
+      showFitness: "0",
+      showCelebrationAuras: "yes",
+      showLifeEventMarkers: "on",
+    });
+
+    assert.is(engine.state.showObstacles, false);
+    assert.is(
+      engine.state.showEnergy,
+      false,
+      "blank strings fall back to current state",
+    );
+    assert.is(engine.state.showDensity, true);
+    assert.is(engine.state.showFitness, false);
+    assert.is(engine.state.showCelebrationAuras, true);
+    assert.is(engine.state.showLifeEventMarkers, true);
+  } finally {
+    restore();
+  }
+});
+
+test("SimulationEngine exposes a callable overlay renderer by default", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    assert.type(engine.drawOverlays, "function");
+    assert.not.throws(() =>
+      engine.drawOverlays(engine.grid, engine.ctx, engine.cellSize, {}),
+    );
   } finally {
     restore();
   }
@@ -259,6 +290,7 @@ test("tick forwards overlay visibility flags to the renderer", async () => {
       showEnergy: true,
       showDensity: true,
       showFitness: true,
+      showLifeEventMarkers: true,
     });
 
     engine.tick(0);
@@ -274,6 +306,7 @@ test("tick forwards overlay visibility flags to the renderer", async () => {
     assert.is(options.showFitness, true);
     assert.is(options.showObstacles, true, "obstacles stay enabled by default");
     assert.is(options.showCelebrationAuras, false);
+    assert.is(options.showLifeEventMarkers, true);
   } finally {
     restore();
   }
@@ -334,5 +367,3 @@ test("autoPauseOnBlur setter keeps engine state aligned", async () => {
     restore();
   }
 });
-
-test.run();

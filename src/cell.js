@@ -1940,7 +1940,55 @@ export default class Cell {
     const densityRelief = clamp(0.35 + (1 - densityPenalty) * 0.65, 0.2, 1);
     const baseBoost =
       restEfficiency * densityRelief * (0.3 + restNeed * 0.5 + restSupport * 0.35);
-    const boost = clamp(baseBoost, 0, 1.2);
+    const outcome = this.#getDecisionOutcome("movement");
+    let neuralSignal = null;
+    let neuralCompetitor = 0;
+    let neuralMix = 0;
+    let neuralAmplifier = 1;
+
+    if (outcome && outcome.usedBrain) {
+      const { probabilities, logits } = outcome;
+
+      if (probabilities && typeof probabilities === "object") {
+        for (const [key, value] of Object.entries(probabilities)) {
+          const normalized = Number.isFinite(value) ? clamp(value, 0, 1) : null;
+
+          if (key === "rest") {
+            if (normalized != null) neuralSignal = normalized;
+          } else if (normalized != null && normalized > neuralCompetitor) {
+            neuralCompetitor = normalized;
+          }
+        }
+      }
+
+      if (neuralSignal == null && logits && typeof logits === "object") {
+        const restLogit = Number(logits.rest);
+
+        if (Number.isFinite(restLogit)) {
+          const clamped = clamp(restLogit, -12, 12);
+
+          neuralSignal = 1 / (1 + Math.exp(-clamped));
+        }
+      }
+
+      if (neuralSignal != null) {
+        const intentAdvantage = neuralSignal - neuralCompetitor;
+        const positiveAdvantage = intentAdvantage > 0 ? intentAdvantage : 0;
+
+        neuralMix = clamp(0.35 + positiveAdvantage * 0.5, 0.1, 1);
+        neuralAmplifier = clamp(
+          0.6 + neuralSignal * 0.8 + positiveAdvantage * 0.6,
+          0.3,
+          1.8,
+        );
+      }
+    }
+
+    const boosted =
+      neuralSignal != null
+        ? lerp(baseBoost, baseBoost * neuralAmplifier, neuralMix)
+        : baseBoost;
+    const boost = clamp(boosted, 0, 1.5);
     const carry = clamp(
       (Number.isFinite(this._pendingRestRecovery) ? this._pendingRestRecovery : 0) +
         boost,
@@ -1951,11 +1999,16 @@ export default class Cell {
     this._pendingRestRecovery = carry;
 
     this.#assignDecisionOutcome("movement", {
+      restBaseBoost: baseBoost,
       restBoost: boost,
       restCarry: carry,
       restNeed,
       restSupport,
       restDensityRelief: densityRelief,
+      restNeuralSignal: neuralSignal,
+      restNeuralCompetitor: neuralSignal != null ? neuralCompetitor : null,
+      restNeuralMix: neuralSignal != null ? neuralMix : 0,
+      restNeuralAmplifier: neuralSignal != null ? neuralAmplifier : 1,
     });
 
     return boost;
@@ -2281,6 +2334,78 @@ export default class Cell {
     const loadFactor = clamp(Number.isFinite(load) ? load : 1, 0, 3);
 
     return 1 + (combined - 1) * loadFactor;
+  }
+
+  computeSenescenceHazard({
+    ageFraction = this.getAgeFraction(),
+    energyFraction = null,
+    localDensity = 0,
+    densityEffectMultiplier = 1,
+    eventPressure = this.lastEventPressure ?? 0,
+    crowdingPreference = this.baseCrowdingTolerance ?? 0.5,
+  } = {}) {
+    const normalizedAge = clamp(
+      Number.isFinite(ageFraction) ? ageFraction : this.getAgeFraction(),
+      0,
+      3,
+    );
+
+    if (normalizedAge <= 0) {
+      return 0;
+    }
+
+    const fallbackEnergyCap =
+      Number.isFinite(MAX_TILE_ENERGY) && MAX_TILE_ENERGY > 0 ? MAX_TILE_ENERGY : 1;
+    const normalizedEnergy = clamp(
+      Number.isFinite(energyFraction)
+        ? energyFraction
+        : (Number.isFinite(this.energy) ? this.energy : 0) / fallbackEnergyCap,
+      0,
+      1,
+    );
+    const densityScale = Number.isFinite(densityEffectMultiplier)
+      ? densityEffectMultiplier
+      : 1;
+    const normalizedDensity = clamp(
+      (Number.isFinite(localDensity) ? localDensity : 0) * densityScale,
+      0,
+      1,
+    );
+    const comfort = clamp(
+      Number.isFinite(crowdingPreference)
+        ? crowdingPreference
+        : (this.baseCrowdingTolerance ?? 0.5),
+      0,
+      1,
+    );
+    const densityStress = Math.max(0, normalizedDensity - comfort);
+    const energyStress = 1 - normalizedEnergy;
+    const pressureStress = clamp(
+      Number.isFinite(eventPressure) ? eventPressure : 0,
+      0,
+      1,
+    );
+    const senescence = clamp(
+      typeof this.dna?.senescenceRate === "function" ? this.dna.senescenceRate() : 0.25,
+      0,
+      2,
+    );
+    const resilience = clamp(this.dna?.recoveryRate?.() ?? 0.35, 0, 1);
+    const adaptation = clamp(this.resourceTrendAdaptation ?? 0.35, 0, 1);
+    const vitality = clamp(resilience * 0.65 + adaptation * 0.35, 0, 1);
+    const baseCurve = (normalizedAge - 0.85) * (5 + senescence * 4);
+    const overshoot = Math.max(0, normalizedAge - 1);
+    const overshootCurve = overshoot * (6 + senescence * 5);
+    const stressCurve =
+      energyStress * (1.5 - vitality * 1.05) +
+      densityStress * (1.3 - vitality * 0.85) +
+      pressureStress * (1.4 - vitality * 0.7);
+    const mitigation = vitality * 1.25;
+    const hazardInput = baseCurve + overshootCurve + stressCurve - mitigation - 1.1;
+    const logisticInput = clamp(hazardInput, -12, 12);
+    const hazard = 1 / (1 + Math.exp(-logisticInput));
+
+    return clamp(hazard, 0, 1);
   }
 
   #decideMovementAction(context = {}) {

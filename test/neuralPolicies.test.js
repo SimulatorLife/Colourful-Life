@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
 let Cell;
@@ -423,5 +422,3 @@ test("brains enforce minimum neuron floor while pruning unreachable connections"
 
   approxEqual(cell.energy, startingEnergy - (energyLoss + expectedCognitive), 1e-9);
 });
-
-test.run();

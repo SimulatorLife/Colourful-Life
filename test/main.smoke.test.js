@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { MockCanvas } from "./helpers/simulationEngine.js";
 import { setupDom } from "./helpers/mockDom.js";
 
@@ -65,6 +64,21 @@ test("headless canvas respects numeric strings for dimensions", async () => {
 
   assert.is(simulation.engine.canvas.width, 800);
   assert.is(simulation.engine.canvas.height, 400);
+
+  simulation.destroy();
+});
+
+test("headless canvas ignores blank dimension strings", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    config: { width: "", height: "" },
+  });
+
+  assert.is(simulation.engine.canvas.width, 600);
+  assert.is(simulation.engine.canvas.height, 600);
 
   simulation.destroy();
 });
@@ -162,6 +176,38 @@ test("browser UI keeps auto-pause disabled by default", async () => {
   }
 });
 
+test("browser UI setter toggles auto-pause through the engine", async () => {
+  const restore = setupDom();
+
+  try {
+    const { createSimulation } = await simulationModulePromise;
+
+    const simulation = createSimulation({
+      autoStart: false,
+      canvas: new MockCanvas(60, 60),
+    });
+
+    assert.is(simulation.engine.autoPauseOnBlur, false);
+    assert.is(simulation.engine.getStateSnapshot().autoPauseOnBlur, false);
+
+    simulation.uiManager.setAutoPauseOnBlur(true);
+
+    assert.is(simulation.uiManager.autoPauseOnBlur, true);
+    assert.is(simulation.engine.autoPauseOnBlur, true);
+    assert.is(simulation.engine.getStateSnapshot().autoPauseOnBlur, true);
+
+    simulation.uiManager.setAutoPauseOnBlur(false);
+
+    assert.is(simulation.uiManager.autoPauseOnBlur, false);
+    assert.is(simulation.engine.autoPauseOnBlur, false);
+    assert.is(simulation.engine.getStateSnapshot().autoPauseOnBlur, false);
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});
+
 test("headless UI clamps diversity controls to the 0..1 range", async () => {
   const { createSimulation } = await simulationModulePromise;
 
@@ -196,6 +242,112 @@ test("headless UI clamps update frequency like the engine", async () => {
   simulation.uiManager.setUpdatesPerSecond(59.6);
   assert.is(simulation.uiManager.getUpdatesPerSecond(), 60);
   assert.is(simulation.engine.getStateSnapshot().updatesPerSecond, 60);
+
+  simulation.destroy();
+});
+
+test("createSimulation merges obstacle preset overrides into the catalog", async () => {
+  const restore = setupDom();
+
+  try {
+    const { createSimulation } = await simulationModulePromise;
+    const canvas = new MockCanvas(60, 60);
+    const injectedPresets = {
+      includeDefaults: false,
+      presets: [
+        { id: "midline", label: "Alternate Midline" },
+        { id: "custom", label: "Custom Layout", description: "Injected" },
+        "none",
+      ],
+    };
+    const simulation = createSimulation({
+      canvas,
+      autoStart: false,
+      config: { obstaclePresets: injectedPresets },
+    });
+
+    const enginePresets = simulation.engine.obstaclePresets;
+    const presetIds = enginePresets.map((preset) => preset.id);
+
+    assert.ok(
+      presetIds.includes("custom"),
+      "custom preset should be appended to the catalog",
+    );
+    assert.is(
+      enginePresets.find((preset) => preset.id === "midline")?.label,
+      "Alternate Midline",
+    );
+    assert.is(
+      enginePresets.find((preset) => preset.id === "custom")?.description,
+      "Injected",
+    );
+    assert.ok(
+      simulation.grid.obstaclePresets.some((preset) => preset.id === "custom"),
+      "GridManager should receive the injected preset",
+    );
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});
+
+test("engine.resetWorld reseeds the ecosystem and clears custom zones", async () => {
+  const { createSimulation } = await simulationModulePromise;
+  const deterministicRng = () => 0.01;
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    rng: deterministicRng,
+    config: { rows: 12, cols: 12, cellSize: 5 },
+  });
+
+  simulation.engine.tick();
+
+  const { stats, selectionManager, grid } = simulation;
+
+  selectionManager.addCustomRectangle(0, 0, 2, 2);
+  assert.ok(selectionManager.hasCustomZones(), "custom zone seeded before reset");
+  assert.ok(stats.history.population.length > 0, "history populated before reset");
+
+  simulation.engine.resetWorld({ clearCustomZones: true });
+
+  const snapshot = grid.buildSnapshot();
+
+  assert.ok(snapshot.population > 0, "population reseeded after reset");
+  assert.is(
+    selectionManager.hasCustomZones(),
+    false,
+    "custom zones cleared after reset",
+  );
+  assert.is(stats.totals.ticks, 1, "tick counter restarted after reset");
+  assert.is(stats.history.population.length, 1, "history contains a fresh sample");
+  assert.is(stats.getRecentLifeEvents().length, 0, "life event log cleared");
+
+  simulation.destroy();
+});
+
+test("engine.resetWorld preserves paused state for running simulations", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({ headless: true, autoStart: true });
+
+  simulation.engine.pause();
+  assert.ok(simulation.engine.isRunning, "engine keeps running loop while paused");
+  assert.is(simulation.engine.isPaused(), true, "engine paused before reset");
+
+  simulation.engine.resetWorld();
+
+  assert.ok(
+    simulation.engine.isRunning,
+    "reset should resume the engine loop when it was previously running",
+  );
+  assert.is(
+    simulation.engine.isPaused(),
+    true,
+    "reset should not resume playback when simulation was paused",
+  );
 
   simulation.destroy();
 });
@@ -587,6 +739,66 @@ test("step control calls engine.step when using createSimulation", async () => {
     simulation.uiManager.stepButton.click();
 
     assert.is(stepCalls, 1, "clicking Step delegates to engine.step");
+
+    stepCalls = 0;
+
+    const keydownHandlers = mockDocument._listeners.get("keydown") || [];
+
+    assert.ok(keydownHandlers.length > 0, "UI manager registers keyboard hotkeys");
+
+    const pausedEvent = {
+      key: "s",
+      target: mockDocument.body,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      defaultPrevented: false,
+    };
+
+    keydownHandlers.forEach((handler) => handler(pausedEvent));
+
+    assert.is(
+      stepCalls,
+      1,
+      "pressing the step hotkey triggers a single step while paused",
+    );
+    assert.ok(
+      pausedEvent.defaultPrevented,
+      "hotkey prevents default behavior while paused",
+    );
+
+    stepCalls = 0;
+
+    const runningEvent = {
+      key: "s",
+      target: mockDocument.body,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      defaultPrevented: false,
+    };
+
+    simulation.engine.togglePause();
+    assert.ok(
+      !simulation.uiManager.isPaused(),
+      "simulation resumes before running hotkey test",
+    );
+
+    keydownHandlers.forEach((handler) => handler(runningEvent));
+
+    assert.is(
+      stepCalls,
+      1,
+      "pressing the step hotkey while running pauses and advances once",
+    );
+    assert.ok(
+      simulation.uiManager.isPaused(),
+      "hotkey leaves the simulation paused after stepping",
+    );
+    assert.ok(
+      runningEvent.defaultPrevented,
+      "hotkey prevents default behavior after resuming from running state",
+    );
   } finally {
     simulation?.destroy?.();
     global.window = originalWindow;
@@ -596,5 +808,3 @@ test("step control calls engine.step when using createSimulation", async () => {
     global.HTMLCanvasElement = originalHTMLCanvasElement;
   }
 });
-
-test.run();

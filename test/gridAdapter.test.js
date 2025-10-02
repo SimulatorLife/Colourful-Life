@@ -1,6 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import GridInteractionAdapter from "../src/grid/gridAdapter.js";
 import { MAX_TILE_ENERGY } from "../src/config.js";
 
@@ -163,5 +161,3 @@ test("densityAt prefers provided density grid over manager helper", () => {
     "manager fallback used",
   );
 });
-
-test.run();

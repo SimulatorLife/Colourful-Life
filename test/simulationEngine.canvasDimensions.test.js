@@ -1,7 +1,10 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
-import { ensureCanvasDimensions } from "../src/simulationEngine.js";
+import { assert, test } from "#tests/harness";
+import { ensureCanvasDimensions } from "../src/engine/environment.js";
+import {
+  MockCanvas,
+  loadSimulationModules,
+  patchSimulationPrototypes,
+} from "./helpers/simulationEngine.js";
 
 test("ensureCanvasDimensions accepts numeric string overrides", () => {
   const canvas = { width: undefined, height: undefined };
@@ -27,4 +30,27 @@ test("ensureCanvasDimensions normalizes mixed sources", () => {
   assert.is(canvas.height, 720);
 });
 
-test.run();
+test("SimulationEngine falls back to derived dimensions when row/col overrides are invalid", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const canvas = new MockCanvas(200, 100);
+    const engine = new SimulationEngine({
+      canvas,
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      config: { rows: "nope", cols: { value: "bad" }, cellSize: 5 },
+    });
+
+    assert.is(engine.rows, 20);
+    assert.is(engine.cols, 40);
+    assert.is(engine.grid.grid.length, 20);
+    assert.is(engine.grid.grid[0].length, 40);
+  } finally {
+    restore();
+  }
+});

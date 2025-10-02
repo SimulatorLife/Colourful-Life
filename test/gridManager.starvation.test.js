@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 test("GridManager removes cells that report starvation", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
@@ -98,5 +97,3 @@ test("GridManager respects dynamic max tile energy", async () => {
     GridManager.maxTileEnergy = originalMax;
   }
 });
-
-test.run();

@@ -1,6 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import {
   randomRange,
   lerp,
@@ -9,6 +7,7 @@ import {
   cloneTracePayload,
   createRankedBuffer,
   createRNG,
+  reportError,
   warnOnce,
 } from "../src/utils.js";
 
@@ -167,4 +166,41 @@ test("warnOnce ignores non-string or empty messages", () => {
   assert.equal(calls[0], ["gamma-message"]);
 });
 
-test.run();
+test("reportError logs errors and supports optional deduplication", () => {
+  const originalError = console.error;
+  const calls = [];
+
+  console.error = (...args) => {
+    calls.push(args);
+  };
+
+  try {
+    const firstError = new Error("alpha");
+    const secondError = new Error("beta");
+
+    reportError("first message", firstError);
+    reportError("first message", firstError);
+
+    reportError("dedup message", firstError, { once: true });
+    reportError("dedup message", firstError, { once: true });
+    reportError("dedup message", secondError, { once: true });
+
+    reportError("message only");
+    reportError("", secondError);
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.is(calls.length, 5);
+  assert.equal(
+    calls.map((args) => args[0]),
+    [
+      "first message",
+      "first message",
+      "dedup message",
+      "dedup message",
+      "message only",
+    ],
+  );
+  assert.is(calls[0][1], calls[1][1]);
+});

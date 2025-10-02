@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
 let Cell;
@@ -312,21 +311,34 @@ test("neural rest action queues DNA-driven fatigue recovery bonus", () => {
 
   const grid = [[cell]];
 
-  cell.executeMovementStrategy(grid, 0, 0, [], [], [], {
-    rows: 1,
-    cols: 1,
-    localDensity: 0.1,
-    densityEffectMultiplier: 0.6,
-    moveToTarget: () => {},
-    moveAwayFromTarget: () => {},
-    moveRandomly: () => {},
-    getEnergyAt: () => 0,
-    tryMove: () => false,
-    isTileBlocked: () => false,
-  });
+  withMockedRandom([0], () =>
+    cell.executeMovementStrategy(grid, 0, 0, [], [], [], {
+      rows: 1,
+      cols: 1,
+      localDensity: 0.1,
+      densityEffectMultiplier: 0.6,
+      moveToTarget: () => {},
+      moveAwayFromTarget: () => {},
+      moveRandomly: () => {},
+      getEnergyAt: () => 0,
+      tryMove: () => false,
+      isTileBlocked: () => false,
+    }),
+  );
 
   assert.ok(cell._pendingRestRecovery > 0, "rest should queue recovery boost");
   const queued = cell._pendingRestRecovery;
+  const movementOutcome = cell._decisionContextIndex.get("movement")?.outcome ?? null;
+
+  assert.ok(movementOutcome, "rest decision outcome should be tracked");
+  assert.ok(
+    Number.isFinite(movementOutcome.restNeuralSignal),
+    "rest neural signal should be recorded",
+  );
+  assert.ok(
+    Number.isFinite(movementOutcome.restNeuralAmplifier),
+    "rest neural amplifier should be recorded",
+  );
 
   const context = {
     localDensity: 0.1,
@@ -352,6 +364,95 @@ test("neural rest action queues DNA-driven fatigue recovery bonus", () => {
   assert.ok(
     cell.getNeuralFatigue() < fatigueBefore + 1e-9,
     "rest cycle should not increase fatigue when well supplied",
+  );
+});
+
+test("neural rest confidence amplifies recovery boost", () => {
+  const dna = new DNA(200, 120, 80);
+
+  dna.genes[GENE_LOCI.RECOVERY] = 210;
+  dna.genes[GENE_LOCI.NEURAL] = 230;
+  dna.genes[GENE_LOCI.ACTIVITY] = 20;
+
+  const createBrainWithScores = ({ rest, pursue, avoid, cohere, explore }) => {
+    const sensorVector = new Array(Brain.SENSOR_COUNT).fill(0);
+    const energyIndex = Brain.sensorIndex("energy");
+
+    if (Number.isFinite(energyIndex)) {
+      sensorVector[energyIndex] = 0.65;
+    }
+
+    return {
+      connectionCount: 4,
+      evaluateGroup(group) {
+        if (group !== "movement") return null;
+
+        return {
+          values: { rest, pursue, avoid, cohere, explore },
+          activationCount: 4,
+          sensors: sensorVector,
+        };
+      },
+    };
+  };
+
+  const runRestDecision = (scores) => {
+    const cell = new Cell(0, 0, dna, 9);
+
+    cell.brain = createBrainWithScores(scores);
+    cell._neuralFatigue = 0.78;
+    cell._neuralEnergyReserve = 0.82;
+
+    const grid = [[cell]];
+
+    withMockedRandom([0], () =>
+      cell.executeMovementStrategy(grid, 0, 0, [], [], [], {
+        rows: 1,
+        cols: 1,
+        localDensity: 0.12,
+        densityEffectMultiplier: 0.5,
+        moveToTarget: () => {},
+        moveAwayFromTarget: () => {},
+        moveRandomly: () => {},
+        getEnergyAt: () => 0,
+        tryMove: () => false,
+        isTileBlocked: () => false,
+      }),
+    );
+
+    const outcome = cell._decisionContextIndex.get("movement")?.outcome ?? {};
+
+    return { cell, outcome };
+  };
+
+  const confident = runRestDecision({
+    rest: 6,
+    pursue: -4,
+    avoid: -4,
+    cohere: -3.5,
+    explore: -4,
+  });
+  const hesitant = runRestDecision({
+    rest: 1.25,
+    pursue: 1.1,
+    avoid: 0.9,
+    cohere: 0.8,
+    explore: 0.7,
+  });
+
+  assert.ok(
+    confident.cell._pendingRestRecovery > hesitant.cell._pendingRestRecovery,
+    "confident rest intent should queue a larger recovery boost",
+  );
+  assert.ok(
+    (confident.outcome.restNeuralAmplifier ?? 0) >
+      (hesitant.outcome.restNeuralAmplifier ?? 0),
+    "rest amplifier should scale with neural confidence",
+  );
+  assert.ok(
+    (confident.outcome.restNeuralSignal ?? 0) >
+      (hesitant.outcome.restNeuralSignal ?? 0),
+    "rest neural signal should reflect stronger intent",
   );
 });
 
@@ -1260,4 +1361,45 @@ test("strategyDriftRange expands for exploratory genomes", () => {
   );
 });
 
-test.run();
+test("computeSenescenceHazard blends age, resources, and density", () => {
+  const dna = new DNA(120, 140, 200);
+  const cell = new Cell(0, 0, dna, 8);
+
+  cell.lifespan = 100;
+  cell.age = 5;
+  const youthful = cell.computeSenescenceHazard({
+    ageFraction: cell.age / cell.lifespan,
+    energyFraction: 0.95,
+    localDensity: 0.1,
+    eventPressure: 0,
+  });
+
+  cell.age = 105;
+  const supported = cell.computeSenescenceHazard({
+    ageFraction: cell.age / cell.lifespan,
+    energyFraction: 0.9,
+    localDensity: 0.2,
+    eventPressure: 0.1,
+  });
+
+  const depleted = cell.computeSenescenceHazard({
+    ageFraction: cell.age / cell.lifespan,
+    energyFraction: 0.1,
+    localDensity: 0.95,
+    eventPressure: 0.9,
+  });
+
+  assert.ok(
+    youthful < 0.15,
+    "young, well-resourced cells should face little senescence risk",
+  );
+  assert.ok(
+    supported > youthful,
+    "aging should increase senescence risk even when conditions remain favourable",
+  );
+  assert.ok(
+    depleted > supported + 0.1,
+    "stressors like scarcity and crowding should amplify senescence hazard",
+  );
+  assert.ok(depleted > 0.5, "stacked stress should push hazard into failure territory");
+});

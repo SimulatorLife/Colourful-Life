@@ -20,8 +20,15 @@ This document captures how the Colourful Life simulation composes its core syste
 - Drives reproduction, mutation, movement, combat, cooperation, and death each tick.
 - Delegates complex social interactions to **InteractionSystem** and neural decision making to **Brain** instances.
 - Collects leaderboard entries by combining `computeFitness` with Brain snapshots.
-- Applies obstacle presets (`OBSTACLE_PRESETS`) and exposes helpers such as `burstRandomCells` and `applyObstaclePreset` that the UI surfaces.
+- Applies obstacle presets resolved via `resolveObstaclePresetCatalog` and exposes helpers such as `burstRandomCells` and `applyObstaclePreset` that the UI surfaces. Embedding contexts can pass `config.obstaclePresets` to extend or replace the catalog without touching core code.
 - Integrates with `SelectionManager` and `ReproductionZonePolicy` to respect curated reproduction areas, and with wall-contact penalties configured per DNA profile.
+
+### Cell
+
+- Implemented in [`src/cell.js`](../src/cell.js), each `Cell` instance encapsulates DNA-derived behaviour, neural wiring, and telemetry gathered during simulation ticks.
+- Maintains rolling histories for decisions, risk memories, and mating preferences so overlays and analytics modules can display recent context.
+- Applies DNA-driven caps (e.g. crowding tolerance, neural fatigue profiles, diversity appetites) when responding to environment and interaction hooks.
+- Emits brain snapshots and decision traces consumed by the debugger, leaderboard, and overlays.
 
 ### EnergySystem
 
@@ -46,7 +53,7 @@ This document captures how the Colourful Life simulation composes its core syste
 
 ### Events
 
-- **EventManager** (`src/events/eventManager.js`) spawns periodic floods, droughts, heatwaves, and coldwaves. Events carry strength, duration, and a rectangular affected area. The manager exposes a colour resolver consumed by overlays and can be configured with custom event pools.
+- **EventManager** (`src/events/eventManager.js`) spawns periodic floods, droughts, heatwaves, and coldwaves. Events carry strength, duration, and a rectangular affected area. The manager exposes a color resolver consumed by overlays and can be configured with custom event pools.
 - **eventEffects** (`src/events/eventEffects.js`) maps event types to regeneration/drain modifiers and per-cell effects (energy loss, resistance genes).
 - **eventContext** (`src/events/eventContext.js`) exposes helpers used by the grid and energy systems to determine whether an event affects a tile. Headless consumers can reuse it to keep behaviour consistent without depending on DOM state.
 - Overlay rendering uses `EventManager.getColor` to shade the canvas and exposes `activeEvents` for analytics.
@@ -78,15 +85,16 @@ This document captures how the Colourful Life simulation composes its core syste
 ### UI and overlays
 
 - `UIManager` uses builders in `src/ui/controlBuilders.js` to generate consistent control rows and slider behaviour.
-- Overlays (`src/ui/overlays.js`) render density, energy, fitness, and obstacle layers on top of the main canvas, including
-  contextual legends such as the energy overlay's min/mean/max summary so observers can quickly gauge resource availability.
+- Overlays (`src/ui/overlays.js`) render density, energy, fitness, life-event markers, and obstacle layers on top of the main
+  canvas, including contextual legends such as the energy overlay's min/mean/max summary so observers can quickly gauge resource
+  availability.
 - Selection tooling (`src/grid/selectionManager.js`) exposes reusable mating zones and user-drawn rectangles that gate reproduction.
 - `ReproductionZonePolicy` (`src/grid/reproductionZonePolicy.js`) keeps `GridManager`'s reproduction flow decoupled from the selection implementation by translating zone checks into simple allow/deny results.
 - `config.js` consolidates slider bounds, simulation defaults, and runtime-tunable constants such as diffusion and regeneration rates so UI and headless contexts remain in sync.
 - `utils.js` houses deterministic helpers (`createRNG`, `createRankedBuffer`, `cloneTracePayload`, etc.) reused across the simulation, UI, and tests.
 
 - The overlay pipeline is orchestrated by `drawOverlays`, which delegates to granular helpers (`drawEventOverlays`,
-  `drawEnergyHeatmap`, `drawDensityHeatmap`, `drawFitnessHeatmap`) and reuses colour ramps such as `densityToRgba`. Each helper
+  `drawEnergyHeatmap`, `drawDensityHeatmap`, `drawFitnessHeatmap`) and reuses color ramps such as `densityToRgba`. Each helper
   exposes legends or palette selection so UI extensions can stay consistent without reimplementing scaling logic.
 - `drawSelectionZones` renders active reproduction zones using cached geometry from the selection manager, ensuring the mating UI
   and reproduction policy share exactly the same coordinates.

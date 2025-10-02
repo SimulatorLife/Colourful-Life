@@ -16,7 +16,7 @@
       import UIManager from "./src/ui/uiManager.js";
       import BrainDebugger from "./src/ui/brainDebugger.js";
       import SelectionManager from "./src/grid/selectionManager.js";
-      import { OBSTACLE_PRESETS } from "./src/grid/obstaclePresets.js";
+      import { drawOverlays } from "./src/ui/overlays.js";
 
       const canvas = document.getElementById("gameCanvas");
 
@@ -28,6 +28,7 @@
         autoStart: false,
         brainSnapshotCollector: BrainDebugger,
         selectionManagerFactory: (rows, cols) => new SelectionManager(rows, cols),
+        drawOverlays,
       });
 
       const uiManager = new UIManager(
@@ -41,7 +42,7 @@
         {
           burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
           applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
-          obstaclePresets: OBSTACLE_PRESETS,
+          obstaclePresets: engine.obstaclePresets,
           getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
           selectionManager: engine.selectionManager,
           getCellSize: () => engine.cellSize,

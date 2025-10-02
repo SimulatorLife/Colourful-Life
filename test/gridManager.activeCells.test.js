@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 const baseOptions = {
   eventManager: { activeEvents: [] },
@@ -52,5 +51,3 @@ test("GridManager keeps activeCells aligned with grid mutations", async () => {
   gm.clearCell(0, 0);
   assert.is(gm.activeCells.size, 0, "clearing a slot should purge active tracking");
 });
-
-test.run();

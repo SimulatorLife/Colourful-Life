@@ -2,7 +2,6 @@ import EventManager from "./events/eventManager.js";
 import GridManager from "./grid/gridManager.js";
 import Stats from "./stats.js";
 import { computeLeaderboard } from "./leaderboard.js";
-import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -10,8 +9,13 @@ import {
   SIMULATION_DEFAULTS,
   resolveSimulationDefaults,
 } from "./config.js";
-import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
-import { clamp } from "./utils.js";
+import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
+import { clamp, reportError, sanitizeNumber } from "./utils.js";
+import {
+  ensureCanvasDimensions,
+  resolveCanvas,
+  resolveTimingProviders,
+} from "./engine/environment.js";
 
 function createSelectionManagerStub(rows, cols) {
   const state = { rows: Math.max(0, rows ?? 0), cols: Math.max(0, cols ?? 0) };
@@ -67,136 +71,19 @@ function createSelectionManagerStub(rows, cols) {
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
-const defaultNow = () => {
-  if (typeof performance !== "undefined" && typeof performance.now === "function") {
-    return performance.now();
-  }
-
-  return Date.now();
-};
-
-const defaultRequestAnimationFrame = (cb) => setTimeout(() => cb(defaultNow()), 16);
-const defaultCancelAnimationFrame = (id) => clearTimeout(id);
-
 const MAX_CONCURRENT_EVENTS_FALLBACK = Math.max(
   0,
   Math.floor(SIMULATION_DEFAULTS.maxConcurrentEvents ?? 2),
 );
 
-function sanitizeNumeric(
-  value,
-  {
-    fallback,
-    min = Number.NEGATIVE_INFINITY,
-    max = Number.POSITIVE_INFINITY,
-    round = false,
-  },
-) {
-  const numeric = Number(value);
-
-  if (!Number.isFinite(numeric)) return fallback;
-
-  let sanitized = numeric;
-
-  if (round === true) {
-    sanitized = Math.round(sanitized);
-  } else if (typeof round === "function") {
-    sanitized = round(sanitized);
-  }
-
-  if (Number.isFinite(min)) sanitized = Math.max(min, sanitized);
-  if (Number.isFinite(max)) sanitized = Math.min(max, sanitized);
-
-  return sanitized;
-}
+const noop = () => {};
 
 function sanitizeMaxConcurrentEvents(value, fallback = MAX_CONCURRENT_EVENTS_FALLBACK) {
-  return sanitizeNumeric(value, {
+  return sanitizeNumber(value, {
     fallback,
     min: 0,
     round: (candidate) => Math.floor(candidate),
   });
-}
-
-function resolveCanvas(canvas, documentRef) {
-  if (canvas) return canvas;
-
-  if (documentRef && typeof documentRef.getElementById === "function") {
-    return documentRef.getElementById("gameCanvas");
-  }
-
-  return null;
-}
-
-function ensureCanvasDimensions(canvas, config) {
-  const toFiniteDimension = (value) => {
-    if (value == null) return null;
-
-    if (typeof value === "number") {
-      return Number.isFinite(value) ? value : null;
-    }
-
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-
-      if (trimmed.length === 0) return null;
-
-      const parsed = Number.parseFloat(trimmed);
-
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    if (typeof value === "bigint") {
-      const numeric = Number(value);
-
-      return Number.isFinite(numeric) ? numeric : null;
-    }
-
-    const numeric = Number(value);
-
-    return Number.isFinite(numeric) ? numeric : null;
-  };
-
-  const pickDimension = (candidates) => {
-    for (const candidate of candidates) {
-      const normalized = toFiniteDimension(candidate);
-
-      if (normalized != null) {
-        return normalized;
-      }
-    }
-
-    return null;
-  };
-
-  const width = pickDimension([
-    config?.width,
-    config?.canvasWidth,
-    config?.canvasSize?.width,
-    canvas?.width,
-  ]);
-  const height = pickDimension([
-    config?.height,
-    config?.canvasHeight,
-    config?.canvasSize?.height,
-    canvas?.height,
-  ]);
-
-  if (canvas && width != null) canvas.width = width;
-  if (canvas && height != null) canvas.height = height;
-
-  const canvasWidth = toFiniteDimension(canvas?.width);
-  const canvasHeight = toFiniteDimension(canvas?.height);
-
-  if (canvasWidth != null && canvasHeight != null) {
-    return { width: canvasWidth, height: canvasHeight };
-  }
-
-  if (width != null && height != null) {
-    return { width, height };
-  }
-
-  throw new Error("SimulationEngine requires canvas dimensions to be specified.");
 }
 
 /**
@@ -225,6 +112,7 @@ function ensureCanvasDimensions(canvas, config) {
  * @param {() => number} [options.performanceNow] - High-resolution timer hook, defaults to
  *   `performance.now` with a Date fallback.
  * @param {Function} [options.drawOverlays] - Optional overlay renderer invoked each frame.
+ *   Defaults to a no-op when omitted so the engine can operate without UI dependencies.
  * @param {Object} [options.selectionManager] - Optional selection manager to reuse.
  * @param {(rows:number, cols:number) => Object} [options.selectionManagerFactory]
  *   Factory invoked to create a selection manager when one is not supplied.
@@ -266,9 +154,34 @@ export default class SimulationEngine {
     }
 
     const { width, height } = ensureCanvasDimensions(resolvedCanvas, config);
-    const cellSize = config.cellSize ?? 5;
-    const rows = config.rows ?? Math.floor(height / cellSize);
-    const cols = config.cols ?? Math.floor(width / cellSize);
+    const toFinite = (value) => {
+      if (value == null) return null;
+
+      const numeric = Number(value);
+
+      return Number.isFinite(numeric) ? numeric : null;
+    };
+    const resolvePositiveInt = (value, fallback) => {
+      const numeric = toFinite(value);
+
+      if (numeric != null && numeric > 0) {
+        return Math.floor(numeric);
+      }
+
+      const fallbackNumeric = toFinite(fallback);
+
+      if (fallbackNumeric != null && fallbackNumeric > 0) {
+        return Math.floor(fallbackNumeric);
+      }
+
+      return 1;
+    };
+    const resolvedCellSize = toFinite(config.cellSize);
+    const cellSize = resolvedCellSize && resolvedCellSize > 0 ? resolvedCellSize : 5;
+    const baseRows = height / cellSize;
+    const baseCols = width / cellSize;
+    const rows = resolvePositiveInt(config.rows, baseRows);
+    const cols = resolvePositiveInt(config.cols, baseCols);
 
     this.window = win;
     this.document = doc;
@@ -277,21 +190,18 @@ export default class SimulationEngine {
     this.cellSize = cellSize;
     this.rows = rows;
     this.cols = cols;
-    this.now = typeof injectedNow === "function" ? injectedNow : defaultNow;
-    this.raf =
-      typeof injectedRaf === "function"
-        ? injectedRaf
-        : win && typeof win.requestAnimationFrame === "function"
-          ? win.requestAnimationFrame.bind(win)
-          : defaultRequestAnimationFrame;
-    this.caf =
-      typeof injectedCaf === "function"
-        ? injectedCaf
-        : win && typeof win.cancelAnimationFrame === "function"
-          ? win.cancelAnimationFrame.bind(win)
-          : defaultCancelAnimationFrame;
-    this.drawOverlays =
-      typeof drawOverlays === "function" ? drawOverlays : defaultDrawOverlays;
+    this._obstaclePresets = resolveObstaclePresetCatalog(config.obstaclePresets);
+    const { now, raf, caf } = resolveTimingProviders({
+      window: win,
+      requestAnimationFrame: injectedRaf,
+      cancelAnimationFrame: injectedCaf,
+      performanceNow: injectedNow,
+    });
+
+    this.now = now;
+    this.raf = raf;
+    this.caf = caf;
+    this.drawOverlays = typeof drawOverlays === "function" ? drawOverlays : noop;
 
     const defaults = resolveSimulationDefaults(config);
     const maxConcurrentEvents = sanitizeMaxConcurrentEvents(
@@ -299,6 +209,29 @@ export default class SimulationEngine {
     );
 
     defaults.maxConcurrentEvents = maxConcurrentEvents;
+
+    const baseUpdatesCandidate =
+      Number.isFinite(defaults.speedMultiplier) && defaults.speedMultiplier > 0
+        ? defaults.updatesPerSecond / defaults.speedMultiplier
+        : SIMULATION_DEFAULTS.updatesPerSecond;
+    const normalizedBaseUpdates = Number.isFinite(baseUpdatesCandidate)
+      ? baseUpdatesCandidate
+      : SIMULATION_DEFAULTS.updatesPerSecond;
+
+    this.baseUpdatesPerSecond = Math.max(1, Math.round(normalizedBaseUpdates));
+
+    const defaultSpeedMultiplier = Number.isFinite(defaults.speedMultiplier)
+      ? defaults.speedMultiplier
+      : (() => {
+          const base =
+            this.baseUpdatesPerSecond > 0
+              ? this.baseUpdatesPerSecond
+              : Math.max(1, Math.round(SIMULATION_DEFAULTS.updatesPerSecond ?? 60));
+          const derived = Math.max(1, Math.round(defaults.updatesPerSecond));
+          const ratio = derived / base;
+
+          return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+        })();
 
     this.eventManager = new EventManager(rows, cols, rng, {
       startWithEvent:
@@ -343,6 +276,7 @@ export default class SimulationEngine {
       initialObstaclePresetOptions: config.initialObstaclePresetOptions,
       randomizeInitialObstacles,
       randomObstaclePresetPool: config.randomObstaclePresetPool,
+      obstaclePresets: this._obstaclePresets,
       rng,
       brainSnapshotCollector,
     });
@@ -362,6 +296,7 @@ export default class SimulationEngine {
     this.state = {
       paused: Boolean(defaults.paused),
       updatesPerSecond: Math.max(1, Math.round(defaults.updatesPerSecond)),
+      speedMultiplier: defaultSpeedMultiplier,
       eventFrequencyMultiplier: defaults.eventFrequencyMultiplier,
       mutationMultiplier: defaults.mutationMultiplier,
       densityEffectMultiplier: defaults.densityEffectMultiplier,
@@ -377,6 +312,7 @@ export default class SimulationEngine {
       showDensity: defaults.showDensity,
       showFitness: defaults.showFitness,
       showCelebrationAuras: defaults.showCelebrationAuras,
+      showLifeEventMarkers: defaults.showLifeEventMarkers,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
@@ -414,7 +350,7 @@ export default class SimulationEngine {
   }
 
   get obstaclePresets() {
-    return OBSTACLE_PRESETS;
+    return this._obstaclePresets;
   }
 
   /**
@@ -471,10 +407,11 @@ export default class SimulationEngine {
       try {
         handler(payload);
       } catch (error) {
-        // Surface errors asynchronously so the loop keeps running
-        setTimeout(() => {
-          throw error;
-        }, 0);
+        reportError(
+          `SimulationEngine listener for "${event}" threw; continuing without interruption.`,
+          error,
+          { once: true },
+        );
       }
     });
   }
@@ -730,12 +667,23 @@ export default class SimulationEngine {
 
     this.grid.draw({ showObstacles: this.state.showObstacles ?? true });
 
+    const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
+    const recentLifeEvents =
+      includeLifeEventMarkers && typeof this.stats?.getRecentLifeEvents === "function"
+        ? this.stats.getRecentLifeEvents()
+        : null;
+    const lifeEventTick =
+      includeLifeEventMarkers && Number.isFinite(this.stats?.totals?.ticks)
+        ? this.stats.totals.ticks
+        : null;
+
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
       showDensity: this.state.showDensity ?? false,
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
       showCelebrationAuras: this.state.showCelebrationAuras ?? false,
+      showLifeEventMarkers: includeLifeEventMarkers,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
@@ -744,6 +692,8 @@ export default class SimulationEngine {
       getEventColor: this.eventManager.getColor?.bind(this.eventManager),
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
       selectionManager: this.selectionManager,
+      lifeEvents: recentLifeEvents,
+      currentTick: lifeEventTick,
     });
 
     if (this.pendingSlowUiUpdate) {
@@ -836,6 +786,140 @@ export default class SimulationEngine {
     return next;
   }
 
+  resetWorld(options = {}) {
+    const opts = options && typeof options === "object" ? options : {};
+    const wasRunning = this.running;
+    const wasPaused = this.isPaused();
+
+    this.stop();
+
+    if (typeof this.stats?.resetAll === "function") {
+      this.stats.resetAll();
+    } else {
+      this.stats?.resetTick?.();
+    }
+
+    const shouldStartWithEvent =
+      (this.state.eventFrequencyMultiplier ?? 1) > 0 &&
+      (this.state.maxConcurrentEvents ?? MAX_CONCURRENT_EVENTS_FALLBACK) > 0;
+
+    if (typeof this.eventManager?.reset === "function") {
+      this.eventManager.reset({ startWithEvent: shouldStartWithEvent });
+    } else if (this.eventManager) {
+      this.eventManager.activeEvents = [];
+      this.eventManager.currentEvent = null;
+      this.eventManager.cooldown = 0;
+    }
+
+    if (typeof this.grid?.resetWorld === "function") {
+      this.grid.resetWorld({
+        randomizeObstacles: Boolean(opts.randomizeObstacles),
+        obstaclePreset: opts.obstaclePreset,
+        presetOptions: opts.presetOptions,
+        reseed: opts.reseed,
+        clearCustomZones: opts.clearCustomZones ?? false,
+      });
+    }
+
+    const diversityThreshold =
+      this.state.matingDiversityThreshold ??
+      SIMULATION_DEFAULTS.matingDiversityThreshold;
+
+    if (typeof this.stats?.setMatingDiversityThreshold === "function") {
+      this.stats.setMatingDiversityThreshold(diversityThreshold);
+    } else if (this.stats) {
+      this.stats.matingDiversityThreshold = diversityThreshold;
+    }
+
+    if (typeof this.grid?.setMatingDiversityOptions === "function") {
+      this.grid.setMatingDiversityOptions({
+        threshold: this.stats?.matingDiversityThreshold,
+        lowDiversityMultiplier:
+          this.state.lowDiversityReproMultiplier ??
+          SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
+      });
+    }
+
+    this.lastSnapshot =
+      typeof this.grid?.buildSnapshot === "function" ? this.grid.buildSnapshot() : null;
+
+    if (typeof this.stats?.setMutationMultiplier === "function") {
+      this.stats.setMutationMultiplier(this.state.mutationMultiplier ?? 1);
+    }
+
+    this.lastMetrics =
+      this.lastSnapshot && typeof this.stats?.updateFromSnapshot === "function"
+        ? this.stats.updateFromSnapshot(this.lastSnapshot)
+        : null;
+
+    const environment = {
+      activeEvents: this.#summarizeActiveEvents(),
+      updatesPerSecond: Math.max(1, Math.round(this.state.updatesPerSecond ?? 60)),
+      eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
+        ? this.state.eventStrengthMultiplier
+        : 1,
+    };
+
+    if (this.lastMetrics) {
+      this.emit("metrics", {
+        stats: this.stats,
+        metrics: this.lastMetrics,
+        environment,
+      });
+    }
+
+    const leaderboard = this.lastSnapshot
+      ? computeLeaderboard(this.lastSnapshot, 5)
+      : [];
+
+    this.emit("leaderboard", { entries: leaderboard });
+
+    const showObstacles = this.state.showObstacles ?? true;
+
+    this.grid?.draw?.({ showObstacles });
+    const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
+    const recentLifeEvents =
+      includeLifeEventMarkers && typeof this.stats?.getRecentLifeEvents === "function"
+        ? this.stats.getRecentLifeEvents()
+        : null;
+    const lifeEventTick =
+      includeLifeEventMarkers && Number.isFinite(this.stats?.totals?.ticks)
+        ? this.stats.totals.ticks
+        : null;
+
+    this.drawOverlays(this.grid, this.ctx, this.cellSize, {
+      showEnergy: this.state.showEnergy ?? false,
+      showDensity: this.state.showDensity ?? false,
+      showFitness: this.state.showFitness ?? false,
+      showObstacles,
+      showCelebrationAuras: this.state.showCelebrationAuras ?? false,
+      showLifeEventMarkers: includeLifeEventMarkers,
+      maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
+        ? this.grid.maxTileEnergy
+        : GridManager.maxTileEnergy,
+      snapshot: this.lastSnapshot,
+      activeEvents: this.eventManager?.activeEvents,
+      getEventColor: this.eventManager?.getColor?.bind(this.eventManager),
+      mutationMultiplier: this.state.mutationMultiplier ?? 1,
+      selectionManager: this.selectionManager,
+      lifeEvents: recentLifeEvents,
+      currentTick: lifeEventTick,
+    });
+
+    this.lastSlowUiRender = this.now();
+    this.pendingSlowUiUpdate = false;
+
+    if (wasRunning) {
+      this.start();
+
+      if (wasPaused) {
+        this.pause();
+      }
+    } else {
+      this.setPaused(wasPaused);
+    }
+  }
+
   stop() {
     this.running = false;
     if (this.frameHandle != null) {
@@ -885,19 +969,27 @@ export default class SimulationEngine {
   }
 
   setUpdatesPerSecond(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.updatesPerSecond,
       min: 1,
       round: true,
     });
 
-    this.#updateStateAndFlag({ updatesPerSecond: sanitized });
+    const base = this.baseUpdatesPerSecond > 0 ? this.baseUpdatesPerSecond : sanitized;
+    const multiplier = base > 0 ? sanitized / base : this.state.speedMultiplier;
+
+    this.#updateStateAndFlag({
+      updatesPerSecond: sanitized,
+      speedMultiplier: Number.isFinite(multiplier)
+        ? multiplier
+        : this.state.speedMultiplier,
+    });
 
     return sanitized;
   }
 
   setEventFrequencyMultiplier(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.eventFrequencyMultiplier,
       min: 0,
     });
@@ -915,7 +1007,7 @@ export default class SimulationEngine {
   }
 
   setMutationMultiplier(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.mutationMultiplier,
       min: 0,
     });
@@ -924,7 +1016,7 @@ export default class SimulationEngine {
   }
 
   setCombatEdgeSharpness(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.combatEdgeSharpness,
       min: 0.1,
     });
@@ -933,7 +1025,7 @@ export default class SimulationEngine {
   }
 
   setDensityEffectMultiplier(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.densityEffectMultiplier,
       min: 0,
     });
@@ -945,7 +1037,7 @@ export default class SimulationEngine {
     const changes = {};
 
     if (societySimilarity !== undefined) {
-      changes.societySimilarity = sanitizeNumeric(societySimilarity, {
+      changes.societySimilarity = sanitizeNumber(societySimilarity, {
         fallback: this.state.societySimilarity,
         min: 0,
         max: 1,
@@ -953,7 +1045,7 @@ export default class SimulationEngine {
     }
 
     if (enemySimilarity !== undefined) {
-      changes.enemySimilarity = sanitizeNumeric(enemySimilarity, {
+      changes.enemySimilarity = sanitizeNumber(enemySimilarity, {
         fallback: this.state.enemySimilarity,
         min: 0,
         max: 1,
@@ -966,7 +1058,7 @@ export default class SimulationEngine {
   }
 
   setEventStrengthMultiplier(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.eventStrengthMultiplier,
       min: 0,
     });
@@ -978,14 +1070,14 @@ export default class SimulationEngine {
     const changes = {};
 
     if (regen !== undefined) {
-      changes.energyRegenRate = sanitizeNumeric(regen, {
+      changes.energyRegenRate = sanitizeNumber(regen, {
         fallback: this.state.energyRegenRate,
         min: 0,
       });
     }
 
     if (diffusion !== undefined) {
-      changes.energyDiffusionRate = sanitizeNumeric(diffusion, {
+      changes.energyDiffusionRate = sanitizeNumber(diffusion, {
         fallback: this.state.energyDiffusionRate,
         min: 0,
       });
@@ -997,7 +1089,7 @@ export default class SimulationEngine {
   }
 
   setLeaderboardInterval(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.leaderboardIntervalMs,
       min: 0,
     });
@@ -1011,16 +1103,54 @@ export default class SimulationEngine {
     showDensity,
     showFitness,
     showCelebrationAuras,
+    showLifeEventMarkers,
   }) {
+    const coerceBoolean = (candidate, fallback) => {
+      if (typeof candidate === "boolean") {
+        return candidate;
+      }
+
+      if (candidate == null) {
+        return fallback;
+      }
+
+      if (typeof candidate === "number") {
+        return Number.isFinite(candidate) ? candidate !== 0 : fallback;
+      }
+
+      if (typeof candidate === "string") {
+        const normalized = candidate.trim().toLowerCase();
+
+        if (normalized.length === 0) return fallback;
+        if (normalized === "true" || normalized === "yes" || normalized === "on") {
+          return true;
+        }
+        if (normalized === "false" || normalized === "no" || normalized === "off") {
+          return false;
+        }
+
+        const numeric = Number(normalized);
+
+        if (!Number.isNaN(numeric)) {
+          return numeric !== 0;
+        }
+
+        return fallback;
+      }
+
+      return Boolean(candidate);
+    };
+
     const entries = Object.entries({
       showObstacles,
       showEnergy,
       showDensity,
       showFitness,
       showCelebrationAuras,
+      showLifeEventMarkers,
     })
       .filter(([, value]) => value !== undefined)
-      .map(([key, value]) => [key, Boolean(value)]);
+      .map(([key, value]) => [key, coerceBoolean(value, Boolean(this.state?.[key]))]);
 
     if (entries.length === 0) return;
 
@@ -1089,9 +1219,16 @@ export default class SimulationEngine {
         break;
       case "speedMultiplier": {
         const numeric = Number(value);
-        const sanitized = Number.isFinite(numeric) ? Math.max(0.5, numeric) : 1;
 
-        this.setUpdatesPerSecond(60 * sanitized);
+        if (!Number.isFinite(numeric)) break;
+
+        const sanitized = Math.max(0.5, numeric);
+        const baseUpdates =
+          this.baseUpdatesPerSecond > 0
+            ? this.baseUpdatesPerSecond
+            : (SIMULATION_DEFAULTS.updatesPerSecond ?? 60);
+
+        this.setUpdatesPerSecond(baseUpdates * sanitized);
         break;
       }
       case "leaderboardIntervalMs":
@@ -1102,6 +1239,7 @@ export default class SimulationEngine {
       case "showDensity":
       case "showFitness":
       case "showCelebrationAuras":
+      case "showLifeEventMarkers":
         this.setOverlayVisibility({ [key]: value });
         break;
       case "autoPauseOnBlur":

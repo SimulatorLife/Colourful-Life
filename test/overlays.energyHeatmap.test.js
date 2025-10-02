@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { drawEnergyHeatmap } from "../src/ui/overlays.js";
 
 function createRecordingContext(rows, cols, cellSize) {
@@ -58,7 +57,3 @@ test("drawEnergyHeatmap keeps tiny energy values visible", () => {
 
   assert.is(ctx.cells[0][0], "rgba(0,255,0,0.001)");
 });
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  test.run();
-}

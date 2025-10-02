@@ -3,7 +3,6 @@ import BrainDebugger from "./ui/brainDebugger.js";
 import SimulationEngine from "./simulationEngine.js";
 import SelectionManager from "./grid/selectionManager.js";
 import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
-import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
 import { createHeadlessUiManager } from "./ui/headlessUiManager.js";
 import { resolveSimulationDefaults } from "./config.js";
 import { toPlainObject } from "./utils.js";
@@ -13,12 +12,25 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 function resolveHeadlessCanvasSize(config = {}) {
   const toFinite = (value) => {
     if (value == null) return null;
+
+    let candidate = value;
+
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim();
+
+      if (trimmed.length === 0) {
+        return null;
+      }
+
+      candidate = trimmed;
+    }
+
     const numeric =
-      typeof value === "number"
-        ? value
-        : typeof value === "string" && value.trim().length > 0
-          ? Number.parseFloat(value)
-          : Number(value);
+      typeof candidate === "number"
+        ? candidate
+        : typeof candidate === "string"
+          ? Number.parseFloat(candidate)
+          : Number(candidate);
 
     return Number.isFinite(numeric) ? numeric : null;
   };
@@ -26,29 +38,30 @@ function resolveHeadlessCanvasSize(config = {}) {
   const cellSize = toFinite(config?.cellSize) ?? 5;
   const rows = toFinite(config?.rows);
   const cols = toFinite(config?.cols);
-  const fallbackWidth = (cols ?? 120) * cellSize;
-  const fallbackHeight = (rows ?? 120) * cellSize;
-  const pickCandidate = (candidates, fallback) =>
+  const defaultWidth = (cols ?? 120) * cellSize;
+  const defaultHeight = (rows ?? 120) * cellSize;
+  const pickFirstFinite = (candidates, fallback) =>
+    // Preserve the first usable size override while falling back to defaults.
     candidates.find(Number.isFinite) ?? fallback;
 
   return {
-    width: pickCandidate(
+    width: pickFirstFinite(
       [
         toFinite(config?.width),
         toFinite(config?.canvasWidth),
         toFinite(config?.canvasSize?.width),
         cols != null ? cols * cellSize : null,
       ],
-      fallbackWidth,
+      defaultWidth,
     ),
-    height: pickCandidate(
+    height: pickFirstFinite(
       [
         toFinite(config?.height),
         toFinite(config?.canvasHeight),
         toFinite(config?.canvasSize?.height),
         rows != null ? rows * cellSize : null,
       ],
-      fallbackHeight,
+      defaultHeight,
     ),
   };
 }
@@ -132,6 +145,7 @@ function createHeadlessCanvas(config = {}) {
  * - `uiManager`: either the mounted {@link UIManager} instance or the headless
  *   adapter.
  * - Lifecycle helpers: `start`, `stop`, `pause`, `resume`, `step`/`tick`/`update`.
+ * - `resetWorld(options)`: clears the grid, reseeds organisms, and refreshes stats.
  * - `destroy()`: cleans up subscriptions and stops the engine.
  *
  * @param {Object} [options]
@@ -167,6 +181,7 @@ function createHeadlessCanvas(config = {}) {
  *   pause: () => void,
  *   resume: () => void,
  *   update: (timestamp?: number) => void,
+ *   resetWorld: (options?: Record<string, any>) => void,
  *   destroy: () => void,
  * }} Simulation controller composed of engine, UI, and lifecycle helpers.
  */
@@ -184,6 +199,10 @@ export function createSimulation({
 } = {}) {
   const win = injectedWindow ?? (typeof window !== "undefined" ? window : undefined);
 
+  config = toPlainObject(config);
+  const layoutInitialSettings = toPlainObject(config?.ui?.layout?.initialSettings);
+  const configWithLayoutDefaults = { ...layoutInitialSettings, ...config };
+
   if (win) {
     win.BrainDebugger = BrainDebugger;
   } else {
@@ -193,23 +212,23 @@ export function createSimulation({
   let resolvedCanvas = canvas;
 
   if (headless && !resolvedCanvas) {
-    resolvedCanvas = createHeadlessCanvas(config);
+    resolvedCanvas = createHeadlessCanvas(configWithLayoutDefaults);
   }
 
   const selectionManagerFactory =
-    typeof config.selectionManagerFactory === "function"
-      ? config.selectionManagerFactory
+    typeof configWithLayoutDefaults.selectionManagerFactory === "function"
+      ? configWithLayoutDefaults.selectionManagerFactory
       : (rows, cols) => new SelectionManager(rows, cols);
   const overlayRenderer =
-    typeof config.drawOverlays === "function"
-      ? config.drawOverlays
+    typeof configWithLayoutDefaults.drawOverlays === "function"
+      ? configWithLayoutDefaults.drawOverlays
       : defaultDrawOverlays;
 
-  const sanitizedDefaults = resolveSimulationDefaults(config);
+  const sanitizedDefaults = resolveSimulationDefaults(configWithLayoutDefaults);
 
   const engine = new SimulationEngine({
     canvas: resolvedCanvas,
-    config,
+    config: configWithLayoutDefaults,
     rng,
     requestAnimationFrame: injectedRaf,
     cancelAnimationFrame: injectedCaf,
@@ -225,8 +244,8 @@ export function createSimulation({
   const uiOptions = config.ui ?? {};
   const userLayout = toPlainObject(uiOptions.layout);
   const mergedInitialSettings = {
-    ...toPlainObject(userLayout.initialSettings),
     ...sanitizedDefaults,
+    ...toPlainObject(userLayout.initialSettings),
   };
   const uiLayoutOptions = {
     canvasElement: engine.canvas,
@@ -236,7 +255,7 @@ export function createSimulation({
   const baseActions = {
     burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
-    obstaclePresets: OBSTACLE_PRESETS,
+    obstaclePresets: engine.obstaclePresets,
     getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
     selectionManager: engine.selectionManager,
     getCellSize: () => engine.cellSize,
@@ -248,6 +267,7 @@ export function createSimulation({
     togglePause: () => engine.togglePause(),
     step: () => engine.step(),
     onSettingChange: (key, value) => engine.updateSetting(key, value),
+    resetWorld: (options) => engine.resetWorld(options),
   };
 
   let headlessOptions = null;
@@ -329,7 +349,7 @@ export function createSimulation({
           changes?.autoPauseOnBlur !== undefined &&
           typeof uiManager.setAutoPauseOnBlur === "function"
         ) {
-          uiManager.setAutoPauseOnBlur(changes.autoPauseOnBlur);
+          uiManager.setAutoPauseOnBlur(changes.autoPauseOnBlur, { notify: false });
         }
       }),
     );
@@ -358,6 +378,7 @@ export function createSimulation({
     pause: () => engine.pause(),
     resume: () => engine.resume(),
     update: (timestamp) => engine.tick(timestamp),
+    resetWorld: (options) => engine.resetWorld(options),
     destroy: () => {
       while (unsubscribers.length) {
         const unsub = unsubscribers.pop();

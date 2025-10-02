@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
 const baseArea = { x: 0, y: 0, width: 5, height: 5 };
@@ -204,5 +203,3 @@ test("computeTileEnergyUpdate populates provided output object", async () => {
   approxEqual(reused.drain, baseline.drain, 1e-6);
   assert.equal(reused.appliedEvents, baseline.appliedEvents);
 });
-
-test.run();

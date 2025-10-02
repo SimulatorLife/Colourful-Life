@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { drawDensityHeatmap, densityToRgba, getDensityAt } from "../src/ui/overlays.js";
 
 function drawDensityHeatmapBaseline(grid) {
@@ -158,7 +157,3 @@ test("drawDensityHeatmap handles uniform densities with epsilon adjustment", () 
 
   assertHeatmapMatches(grid, 6);
 });
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  test.run();
-}

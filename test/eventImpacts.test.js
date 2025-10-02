@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
 if (typeof globalThis.window === "undefined") {
@@ -83,5 +82,3 @@ test("Cell.applyEventEffects uses event mapping and DNA resistance", async () =>
   unaffected.applyEventEffects(5, 5, event, 1, 5);
   assert.is(unaffected.energy, 2);
 });
-
-test.run();

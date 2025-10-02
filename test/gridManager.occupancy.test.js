@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 const baseOptions = {
   eventManager: { activeEvents: [] },
@@ -84,5 +83,3 @@ test("GridManager relocation respects occupied destinations", async () => {
   assert.is(cellB.row, 1, "blocker row should remain unchanged");
   assert.is(cellB.col, 2, "blocker column should remain unchanged");
 });
-
-test.run();

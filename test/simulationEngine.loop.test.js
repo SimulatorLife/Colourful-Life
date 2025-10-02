@@ -1,22 +1,23 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import {
   MockCanvas,
   loadSimulationModules,
   patchSimulationPrototypes,
 } from "./helpers/simulationEngine.js";
+import { approxEqual } from "./helpers/assertions.js";
 
 test("start schedules a frame and ticking through RAF uses sanitized defaults", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
   const { restore, calls, snapshot } = patchSimulationPrototypes(modules);
 
+  let engine;
+
   try {
     let rafCallback = null;
     let rafHandle = 0;
 
-    const engine = new SimulationEngine({
+    engine = new SimulationEngine({
       canvas: new MockCanvas(20, 20),
       autoStart: false,
       performanceNow: () => 0,
@@ -54,7 +55,7 @@ test("start schedules a frame and ticking through RAF uses sanitized defaults", 
       energyDiffusionRate: 0.05,
       mutationMultiplier: 1,
       matingDiversityThreshold: 0.45,
-      lowDiversityReproMultiplier: 0.1,
+      lowDiversityReproMultiplier: 0.12,
       combatEdgeSharpness: 3.2,
     });
 
@@ -76,9 +77,12 @@ test("tick emits events and clears pending slow UI updates after throttle interv
   const { SimulationEngine } = modules;
   const { restore, snapshot, metrics } = patchSimulationPrototypes(modules);
 
+  let engine;
+
   try {
     let now = 0;
-    const engine = new SimulationEngine({
+
+    engine = new SimulationEngine({
       canvas: new MockCanvas(24, 24),
       autoStart: false,
       performanceNow: () => now,
@@ -190,12 +194,14 @@ test("updateSetting speedMultiplier and low diversity multiplier propagate chang
       cancelAnimationFrame: () => {},
     });
 
+    assert.is(engine.state.speedMultiplier, 1, "defaults expose speedMultiplier state");
     engine.updateSetting("speedMultiplier", 2);
     assert.is(
       engine.state.updatesPerSecond,
       120,
       "speedMultiplier adjusts updatesPerSecond",
     );
+    assert.is(engine.state.speedMultiplier, 2, "speedMultiplier updates state");
     assert.ok(engine.pendingSlowUiUpdate, "speedMultiplier marks pendingSlowUiUpdate");
 
     const stateEvents = [];
@@ -240,6 +246,15 @@ test("updateSetting speedMultiplier and low diversity multiplier propagate chang
       0.42,
       "engine stores new low diversity multiplier",
     );
+
+    engine.setUpdatesPerSecond(45);
+    assert.is(engine.state.updatesPerSecond, 45, "explicit updatesPerSecond stored");
+    approxEqual(
+      engine.state.speedMultiplier,
+      45 / engine.baseUpdatesPerSecond,
+      1e-9,
+      "speedMultiplier derives from updatesPerSecond",
+    );
   } finally {
     restore();
   }
@@ -281,4 +296,31 @@ test("tick forwards instance maxTileEnergy to overlay renderer", async () => {
   }
 });
 
-test.run();
+test("speed multiplier updates respect the engine's base cadence", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  let engine;
+
+  try {
+    engine = new SimulationEngine({
+      canvas: new MockCanvas(16, 16),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+    });
+
+    engine.stop();
+    engine.baseUpdatesPerSecond = 48;
+    engine.setUpdatesPerSecond(48);
+
+    engine.updateSetting("speedMultiplier", 1.5);
+
+    assert.is(engine.state.updatesPerSecond, 72);
+    approxEqual(engine.state.speedMultiplier, 1.5, 1e-9);
+  } finally {
+    restore();
+  }
+});

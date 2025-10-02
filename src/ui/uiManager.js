@@ -1,5 +1,12 @@
-import { resolveSimulationDefaults } from "../config.js";
+import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
 import { UI_SLIDER_CONFIG } from "./sliderConfig.js";
+import {
+  createControlButtonRow,
+  createControlGrid,
+  createSectionHeading,
+  createSelectRow,
+  createSliderRow,
+} from "./controlBuilders.js";
 import { clamp, clamp01, warnOnce, toPlainObject } from "../utils.js";
 
 /**
@@ -18,14 +25,6 @@ function formatIfFinite(value, formatter, fallback = null) {
 
   return safeFormatter(value);
 }
-
-import {
-  createControlButtonRow,
-  createControlGrid,
-  createSectionHeading,
-  createSelectRow,
-  createSliderRow,
-} from "./controlBuilders.js";
 
 /**
  * Constructs and manages the browser-based control surface. The UI manager
@@ -77,6 +76,21 @@ export default class UIManager {
     this.metricsPlaceholder = null;
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
+    this.lifeEventsSummary = null;
+    this.lifeEventsSummaryBirthItem = null;
+    this.lifeEventsSummaryDeathItem = null;
+    this.lifeEventsSummaryBirthCount = null;
+    this.lifeEventsSummaryDeathCount = null;
+    this.lifeEventsSummaryTrend = null;
+    this.lifeEventsSummaryNet = null;
+    this.lifeEventsSummaryRate = null;
+    this.playbackSpeedSlider = null;
+    this.speedPresetButtons = [];
+    this.pauseOverlay = null;
+    this.pauseOverlayTitle = null;
+    this.pauseOverlayHint = null;
+    this.pauseOverlayAutopause = null;
+    this.stepHotkeySet = new Set();
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -85,6 +99,20 @@ export default class UIManager {
     this.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
     this.maxConcurrentEvents = defaults.maxConcurrentEvents;
     this.speedMultiplier = defaults.speedMultiplier;
+    const baseUpdatesCandidate =
+      Number.isFinite(this.speedMultiplier) && this.speedMultiplier > 0
+        ? defaults.updatesPerSecond / this.speedMultiplier
+        : defaults.updatesPerSecond;
+    const fallbackBase =
+      Number.isFinite(defaults.updatesPerSecond) && defaults.updatesPerSecond > 0
+        ? defaults.updatesPerSecond
+        : SIMULATION_DEFAULTS.updatesPerSecond;
+    const resolvedBase =
+      Number.isFinite(baseUpdatesCandidate) && baseUpdatesCandidate > 0
+        ? baseUpdatesCandidate
+        : fallbackBase;
+
+    this.baseUpdatesPerSecond = resolvedBase;
     this.densityEffectMultiplier = defaults.densityEffectMultiplier;
     this.mutationMultiplier = defaults.mutationMultiplier;
     this.combatEdgeSharpness = defaults.combatEdgeSharpness;
@@ -100,6 +128,7 @@ export default class UIManager {
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
     this.showCelebrationAuras = defaults.showCelebrationAuras;
+    this.showLifeEventMarkers = defaults.showLifeEventMarkers;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
     const initialObstaclePreset = this.#resolveInitialObstaclePreset(actionFns);
@@ -122,10 +151,12 @@ export default class UIManager {
     this.dashboardGrid.className = "dashboard-grid";
     this.sidebar.appendChild(this.dashboardGrid);
     this.mainRow.appendChild(this.canvasContainer);
+    this.#installPauseIndicator();
     this.mainRow.appendChild(this.sidebar);
 
-    // Allow callers to customize which keys toggle the pause state.
-    this.pauseHotkeySet = this.#resolveHotkeySet(layoutConfig.pauseHotkeys);
+    // Allow callers to customize which keys toggle the pause state or step once.
+    this.pauseHotkeySet = this.#resolveHotkeySet(layoutConfig.pauseHotkeys, ["p"]);
+    this.stepHotkeySet = this.#resolveHotkeySet(layoutConfig.stepHotkeys, ["s"]);
 
     const canvasEl =
       layoutConfig.canvasElement || this.#resolveNode(layoutConfig.canvasSelector);
@@ -146,31 +177,102 @@ export default class UIManager {
     this.dashboardGrid.appendChild(this.lifeEventsPanel);
 
     // Keyboard toggle
-    document.addEventListener("keydown", (e) => {
-      if (!e?.key) return;
+    document.addEventListener("keydown", (event) => {
+      if (!event?.key) return;
+      if (this.#shouldIgnoreHotkey(event)) return;
 
-      const key = e.key.toLowerCase();
+      const key = this.#normalizeHotkeyValue(event.key);
+
+      if (!key) return;
 
       if (this.pauseHotkeySet.has(key)) {
+        event.preventDefault();
         this.togglePause();
+
+        return;
+      }
+
+      if (this.stepHotkeySet.has(key)) {
+        event.preventDefault();
+
+        if (this.paused) {
+          this.#executeStep();
+        } else {
+          const nowPaused = this.togglePause();
+
+          if (nowPaused) {
+            this.#executeStep();
+          }
+        }
       }
     });
   }
 
-  #resolveHotkeySet(candidate) {
-    const fallback = ["p"];
+  #normalizeHotkeyValue(value) {
+    if (typeof value !== "string") return "";
+    if (value === " ") return " ";
+
+    const trimmed = value.trim().toLowerCase();
+
+    if (!trimmed) return "";
+
+    switch (trimmed) {
+      case "space":
+      case "spacebar":
+        return " ";
+      default:
+        break;
+    }
+
+    return trimmed.replace(/[-_\s]+/g, "");
+  }
+
+  #resolveHotkeySet(candidate, fallbackKeys = ["p"]) {
+    const fallbackList = Array.isArray(fallbackKeys)
+      ? fallbackKeys
+      : typeof fallbackKeys === "string" && fallbackKeys.length > 0
+        ? [fallbackKeys]
+        : ["p"];
+
+    const normalizedFallback = fallbackList
+      .map((value) => this.#normalizeHotkeyValue(value))
+      .filter((value) => value.length > 0);
+
+    if (normalizedFallback.length === 0) {
+      normalizedFallback.push("p");
+    }
 
     const values = Array.isArray(candidate)
       ? candidate
       : typeof candidate === "string" && candidate.length > 0
         ? [candidate]
-        : fallback;
+        : fallbackList;
 
     const normalized = values
-      .map((value) => (typeof value === "string" ? value.trim().toLowerCase() : ""))
+      .map((value) => this.#normalizeHotkeyValue(value))
       .filter((value) => value.length > 0);
 
-    return new Set(normalized.length > 0 ? normalized : fallback);
+    return new Set(normalized.length > 0 ? normalized : normalizedFallback);
+  }
+
+  #shouldIgnoreHotkey(event) {
+    if (!event || event.defaultPrevented) return true;
+    if (event.ctrlKey || event.metaKey || event.altKey) return true;
+
+    const target = event.target;
+
+    if (!target) return false;
+    if (target.isContentEditable) return true;
+
+    const tagName =
+      typeof target.tagName === "string" ? target.tagName.toLowerCase() : "";
+
+    return (
+      tagName === "input" ||
+      tagName === "textarea" ||
+      tagName === "select" ||
+      tagName === "button"
+    );
   }
 
   #resolveInitialObstaclePreset(actionFns = {}) {
@@ -231,6 +333,197 @@ export default class UIManager {
     }
   }
 
+  #installPauseIndicator() {
+    if (!this.canvasContainer || this.pauseOverlay) return;
+
+    const overlay = document.createElement("div");
+
+    overlay.className = "canvas-pause-indicator";
+    overlay.setAttribute("role", "status");
+    overlay.setAttribute("aria-live", "polite");
+    overlay.hidden = true;
+
+    const title = document.createElement("span");
+
+    title.className = "canvas-pause-indicator__title";
+    title.textContent = "Paused";
+
+    const hint = document.createElement("span");
+
+    hint.className = "canvas-pause-indicator__hint";
+
+    const autopause = document.createElement("span");
+
+    autopause.className = "canvas-pause-indicator__autopause";
+    autopause.hidden = true;
+
+    overlay.appendChild(title);
+    overlay.appendChild(hint);
+    overlay.appendChild(autopause);
+
+    this.canvasContainer.appendChild(overlay);
+
+    this.pauseOverlay = overlay;
+    this.pauseOverlayTitle = title;
+    this.pauseOverlayHint = hint;
+    this.pauseOverlayAutopause = autopause;
+
+    this.#updatePauseIndicator();
+  }
+
+  #formatHotkeyLabel(key) {
+    const normalized = this.#normalizeHotkeyValue(key);
+
+    if (!normalized) return "";
+
+    switch (normalized) {
+      case " ":
+        return "Space";
+      case "arrowup":
+        return "Arrow Up";
+      case "arrowdown":
+        return "Arrow Down";
+      case "arrowleft":
+        return "Arrow Left";
+      case "arrowright":
+        return "Arrow Right";
+      case "escape":
+        return "Esc";
+      case "enter":
+        return "Enter";
+      case "return":
+        return "Return";
+      case "pagedown":
+        return "Page Down";
+      case "pageup":
+        return "Page Up";
+      default:
+        break;
+    }
+
+    if (normalized.length === 1) {
+      return normalized.toUpperCase();
+    }
+
+    return normalized[0].toUpperCase() + normalized.slice(1);
+  }
+
+  #formatHotkeyList(hotkeySet) {
+    if (!hotkeySet || hotkeySet.size === 0) {
+      return "";
+    }
+
+    const keys = Array.from(hotkeySet, (key) => this.#formatHotkeyLabel(key)).filter(
+      (label) => label.length > 0,
+    );
+
+    if (keys.length === 0) return "";
+    if (keys.length === 1) return keys[0];
+    if (keys.length === 2) return `${keys[0]} or ${keys[1]}`;
+
+    const last = keys[keys.length - 1];
+    const leading = keys.slice(0, -1).join(", ");
+
+    return `${leading}, or ${last}`;
+  }
+
+  #formatPauseHotkeys() {
+    return this.#formatHotkeyList(this.pauseHotkeySet);
+  }
+
+  #formatStepHotkeys() {
+    return this.#formatHotkeyList(this.stepHotkeySet);
+  }
+
+  #formatAriaKeyShortcuts(hotkeySet) {
+    if (!hotkeySet || hotkeySet.size === 0) {
+      return "";
+    }
+
+    const entries = Array.from(hotkeySet, (key) => {
+      const normalized = this.#normalizeHotkeyValue(key);
+
+      if (!normalized) return "";
+
+      if (normalized === " ") return "Space";
+
+      const label = this.#formatHotkeyLabel(normalized);
+
+      return label.replace(/\s+/g, "");
+    }).filter((value) => value.length > 0);
+
+    return entries.join(" ");
+  }
+
+  #applyButtonHotkeys(button, hotkeySet) {
+    if (!button) return;
+
+    const shortcutValue = this.#formatAriaKeyShortcuts(hotkeySet);
+
+    if (shortcutValue.length > 0) {
+      button.setAttribute("aria-keyshortcuts", shortcutValue);
+    } else {
+      button.removeAttribute("aria-keyshortcuts");
+    }
+  }
+
+  #updateStepButtonState() {
+    if (!this.stepButton) return;
+
+    this.stepButton.disabled = !this.paused;
+
+    const hotkeyLabel = this.#formatStepHotkeys();
+    const hotkeySuffix = hotkeyLabel.length > 0 ? ` (shortcut: ${hotkeyLabel})` : "";
+    const pausedHint =
+      "Advance one tick while paused to inspect changes frame-by-frame";
+    const runningHint = "Pause the simulation to enable single-step playback";
+
+    this.stepButton.title = this.paused
+      ? `${pausedHint}${hotkeySuffix}.`
+      : `${runningHint}${hotkeySuffix}.`;
+  }
+
+  #updatePauseIndicator() {
+    if (!this.pauseOverlay) return;
+
+    if (!this.paused) {
+      this.pauseOverlay.hidden = true;
+
+      return;
+    }
+
+    this.pauseOverlay.hidden = false;
+
+    if (this.pauseOverlayTitle) {
+      this.pauseOverlayTitle.textContent = "Paused";
+    }
+
+    if (this.pauseOverlayHint) {
+      const hotkeyText = this.#formatPauseHotkeys();
+      const hasHotkey = hotkeyText.length > 0;
+      const resumeHint = hasHotkey
+        ? `Press ${hotkeyText} to resume`
+        : "Use the Resume button to continue";
+      const buttonSuffix = hasHotkey ? " or use the Resume button." : ".";
+      const stepHotkeys = this.#formatStepHotkeys();
+      const showStepHint = this.#canStep() && stepHotkeys.length > 0;
+      const stepHint = showStepHint ? ` Press ${stepHotkeys} to step once.` : "";
+
+      this.pauseOverlayHint.textContent = `${resumeHint}${buttonSuffix}${stepHint}`;
+    }
+
+    if (this.pauseOverlayAutopause) {
+      if (this.autoPauseOnBlur) {
+        this.pauseOverlayAutopause.hidden = false;
+        this.pauseOverlayAutopause.textContent =
+          "Autopause resumes when the tab regains focus.";
+      } else {
+        this.pauseOverlayAutopause.hidden = true;
+        this.pauseOverlayAutopause.textContent = "";
+      }
+    }
+  }
+
   #resolveNode(candidate) {
     if (!candidate) return null;
     if (candidate instanceof Node) return candidate;
@@ -276,6 +569,20 @@ export default class UIManager {
     }
   }
 
+  #canStep() {
+    return typeof this.simulationCallbacks?.step === "function";
+  }
+
+  #executeStep() {
+    if (!this.paused) return false;
+    if (!this.#canStep()) return false;
+
+    this.simulationCallbacks.step();
+    this.#scheduleUpdate();
+
+    return true;
+  }
+
   #notifySettingChange(key, value) {
     if (typeof this.simulationCallbacks?.onSettingChange === "function") {
       this.simulationCallbacks.onSettingChange(key, value);
@@ -285,6 +592,51 @@ export default class UIManager {
   #updateSetting(key, value) {
     this[key] = value;
     this.#notifySettingChange(key, value);
+  }
+
+  #sanitizeSpeedMultiplier(value) {
+    const bounds = UI_SLIDER_CONFIG?.speedMultiplier || {};
+    const floor = Number.isFinite(bounds.floor) ? bounds.floor : undefined;
+    const min = Number.isFinite(bounds.min) ? bounds.min : undefined;
+    const max = Number.isFinite(bounds.max) ? bounds.max : undefined;
+    const lowerBound = floor ?? min ?? 0.1;
+    const upperBound = max ?? 100;
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return null;
+
+    return clamp(numeric, lowerBound, upperBound);
+  }
+
+  #setSpeedMultiplier(value) {
+    const sanitized = this.#sanitizeSpeedMultiplier(value);
+
+    if (!Number.isFinite(sanitized)) return;
+
+    this.#updateSetting("speedMultiplier", sanitized);
+    this.#updateSpeedMultiplierUI(sanitized);
+  }
+
+  #updateSpeedMultiplierUI(value) {
+    const numeric = Number(value);
+
+    if (Number.isFinite(numeric) && this.playbackSpeedSlider?.updateDisplay) {
+      this.playbackSpeedSlider.updateDisplay(numeric);
+    }
+
+    if (!Array.isArray(this.speedPresetButtons)) return;
+
+    const tolerance = 0.001;
+
+    this.speedPresetButtons.forEach(({ value: presetValue, button }) => {
+      if (!button) return;
+      const isActive = Number.isFinite(numeric)
+        ? Math.abs(numeric - presetValue) <= tolerance
+        : false;
+
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
   }
 
   #setDrawingEnabled(enabled) {
@@ -500,7 +852,7 @@ export default class UIManager {
     const { title, description, color, describedBy } = options || {};
     const row = document.createElement("label");
 
-    row.className = "control-row control-row--checkbox";
+    row.className = "control-row";
     if (title) row.title = title;
     const line = document.createElement("div");
 
@@ -750,6 +1102,102 @@ export default class UIManager {
     return valueEl;
   }
 
+  #updateLifeEventsSummary(birthCount = 0, deathCount = 0, totalCount, trend) {
+    if (!this.lifeEventsSummary) return;
+
+    const updateItem = (item, countEl, count) => {
+      if (!item || !countEl) return;
+
+      const label =
+        (typeof item.getAttribute === "function" && item.getAttribute("data-label")) ||
+        item.dataset?.label ||
+        "";
+      const safeCount = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+
+      countEl.textContent = String(safeCount);
+      item.classList.toggle("life-events-summary__item--muted", safeCount === 0);
+
+      if (label) {
+        const labelLower = label.toLowerCase();
+        const plural = labelLower.endsWith("s") ? labelLower : `${labelLower}s`;
+
+        item.setAttribute("aria-label", `${safeCount} recent ${plural}`);
+      } else if (typeof item.removeAttribute === "function") {
+        item.removeAttribute("aria-label");
+      }
+    };
+
+    updateItem(
+      this.lifeEventsSummaryBirthItem,
+      this.lifeEventsSummaryBirthCount,
+      birthCount,
+    );
+    updateItem(
+      this.lifeEventsSummaryDeathItem,
+      this.lifeEventsSummaryDeathCount,
+      deathCount,
+    );
+
+    const total =
+      Number.isFinite(totalCount) && totalCount >= 0
+        ? totalCount
+        : Math.max(0, (birthCount || 0) + (deathCount || 0));
+
+    this.lifeEventsSummary.classList.toggle("life-events-summary--empty", total === 0);
+
+    const netSource = Number.isFinite(trend?.net)
+      ? Math.round(trend.net)
+      : Math.round((birthCount || 0) - (deathCount || 0));
+    const eventsPer100 = Number.isFinite(trend?.eventsPer100Ticks)
+      ? trend.eventsPer100Ticks
+      : 0;
+
+    if (this.lifeEventsSummaryTrend) {
+      this.lifeEventsSummaryTrend.classList.toggle(
+        "life-events-summary__trend--positive",
+        netSource > 0,
+      );
+      this.lifeEventsSummaryTrend.classList.toggle(
+        "life-events-summary__trend--negative",
+        netSource < 0,
+      );
+      this.lifeEventsSummaryTrend.classList.toggle(
+        "life-events-summary__trend--neutral",
+        netSource === 0,
+      );
+
+      const netLabel =
+        netSource > 0
+          ? `Net increase of ${netSource}`
+          : netSource < 0
+            ? `Net decrease of ${Math.abs(netSource)}`
+            : "Net change of 0";
+      const rateLabel =
+        Number.isFinite(eventsPer100) && eventsPer100 > 0
+          ? `${eventsPer100.toFixed(1)} events per 100 ticks`
+          : "No recent events per 100 ticks";
+
+      this.lifeEventsSummaryTrend.setAttribute(
+        "aria-label",
+        `${netLabel}; ${rateLabel}`,
+      );
+    }
+
+    if (this.lifeEventsSummaryNet) {
+      const formattedNet = netSource > 0 ? `+${netSource}` : String(netSource);
+
+      this.lifeEventsSummaryNet.textContent = formattedNet;
+    }
+
+    if (this.lifeEventsSummaryRate) {
+      if (Number.isFinite(eventsPer100) && eventsPer100 > 0) {
+        this.lifeEventsSummaryRate.textContent = `≈${eventsPer100.toFixed(1)} events / 100 ticks`;
+      } else {
+        this.lifeEventsSummaryRate.textContent = "No activity in window";
+      }
+    }
+  }
+
   #renderLifeEvents(stats) {
     if (!this.lifeEventList) return;
 
@@ -757,10 +1205,15 @@ export default class UIManager {
       typeof stats?.getRecentLifeEvents === "function"
         ? stats.getRecentLifeEvents(12)
         : [];
+    const trendSummary =
+      typeof stats?.getLifeEventRateSummary === "function"
+        ? stats.getLifeEventRateSummary()
+        : null;
 
     this.lifeEventList.innerHTML = "";
 
     if (!events || events.length === 0) {
+      this.#updateLifeEventsSummary(0, 0, 0, trendSummary);
       this.lifeEventList.hidden = true;
       if (this.lifeEventsEmptyState) {
         this.lifeEventsEmptyState.hidden = false;
@@ -769,12 +1222,18 @@ export default class UIManager {
       return;
     }
 
+    let birthCount = 0;
+    let deathCount = 0;
+
     this.lifeEventList.hidden = false;
     if (this.lifeEventsEmptyState) {
       this.lifeEventsEmptyState.hidden = true;
     }
 
     events.forEach((event) => {
+      if (event?.type === "birth") birthCount += 1;
+      else if (event?.type === "death") deathCount += 1;
+
       const item = document.createElement("li");
 
       item.className = `life-event life-event--${event.type || "unknown"}`;
@@ -912,6 +1371,8 @@ export default class UIManager {
       item.appendChild(details);
       this.lifeEventList.appendChild(item);
     });
+
+    this.#updateLifeEventsSummary(birthCount, deathCount, events.length, trendSummary);
   }
 
   // Utility to create a collapsible panel with a header
@@ -1007,29 +1468,39 @@ export default class UIManager {
       button.id = id;
       button.textContent = label;
       button.title = title;
-      button.addEventListener("click", onClick);
+      button.type = "button";
+      button.addEventListener("click", (event) => {
+        if (typeof onClick === "function") onClick(event);
+      });
       buttonRow.appendChild(button);
 
       return button;
     };
 
+    const pauseHotkeys = this.#formatPauseHotkeys();
+    const pauseTitle =
+      pauseHotkeys.length > 0
+        ? `Pause/resume the simulation (shortcut: ${pauseHotkeys})`
+        : "Pause/resume the simulation.";
+
     this.pauseButton = addControlButton({
       id: "pauseButton",
       label: "Pause",
-      title: "Pause/resume the simulation (shortcut: P)",
+      title: pauseTitle,
       onClick: () => this.togglePause(),
     });
+    this.#applyButtonHotkeys(this.pauseButton, this.pauseHotkeySet);
 
     this.stepButton = addControlButton({
       id: "stepButton",
       label: "Step",
       title: "Advance one tick while paused to inspect changes frame-by-frame.",
       onClick: () => {
-        if (typeof this.simulationCallbacks?.step === "function") {
-          this.simulationCallbacks.step();
-        }
+        this.#executeStep();
       },
     });
+    this.#applyButtonHotkeys(this.stepButton, this.stepHotkeySet);
+    this.#updateStepButtonState();
 
     addControlButton({
       id: "burstButton",
@@ -1042,16 +1513,95 @@ export default class UIManager {
       },
     });
 
-    this.autoPauseCheckbox = this.#addCheckbox(
-      body,
-      "Pause When Hidden",
-      "Automatically pause when the tab or window loses focus, resuming on return.",
-      this.autoPauseOnBlur,
-      (checked) => {
-        this.setAutoPauseOnBlur(checked);
-        this.#updateSetting("autoPauseOnBlur", checked);
+    this.resetWorldButton = addControlButton({
+      id: "resetWorldButton",
+      label: "Regenerate World",
+      title:
+        "Clear the map and spawn a fresh population. Hold Shift to randomize obstacle layouts.",
+      onClick: (event) => {
+        const options = {
+          randomizeObstacles: Boolean(event?.shiftKey),
+          clearCustomZones: true,
+        };
+
+        if (typeof this.simulationCallbacks?.resetWorld === "function") {
+          this.simulationCallbacks.resetWorld(options);
+        } else if (window.simulationEngine?.resetWorld) {
+          window.simulationEngine.resetWorld(options);
+        }
+
+        this.#updateZoneSummary();
+        this.#scheduleUpdate();
       },
-    );
+    });
+
+    const speedBounds = UI_SLIDER_CONFIG?.speedMultiplier || {};
+    const speedMin = speedBounds.min ?? 0.5;
+    const speedMax = speedBounds.max ?? 100;
+    const speedStep = speedBounds.step ?? 0.5;
+
+    this.playbackSpeedSlider = createSliderRow(body, {
+      label: "Playback Speed ×",
+      min: speedMin,
+      max: speedMax,
+      step: speedStep,
+      value: this.speedMultiplier,
+      title: "Speed multiplier relative to 60 updates/sec (0.5x..100x)",
+      format: (v) => `${v.toFixed(1)}x`,
+      onInput: (value) => {
+        this.#setSpeedMultiplier(value);
+      },
+    });
+
+    const speedPresetRow = createControlButtonRow(body, {
+      className: "control-button-row control-button-row--compact",
+    });
+
+    speedPresetRow.setAttribute("role", "group");
+    speedPresetRow.setAttribute("aria-label", "Playback speed presets");
+
+    const baseUpdates =
+      this.baseUpdatesPerSecond > 0
+        ? this.baseUpdatesPerSecond
+        : (SIMULATION_DEFAULTS.updatesPerSecond ?? 60);
+    const describeSpeedPreset = (multiplier) => {
+      const display =
+        Number.isFinite(multiplier) &&
+        Math.abs(multiplier - Math.round(multiplier)) < 1e-9
+          ? `${Math.round(multiplier)}×`
+          : `${multiplier.toFixed(1)}×`;
+      const updates = Number.isFinite(baseUpdates)
+        ? Math.round(baseUpdates * multiplier)
+        : 0;
+      const updatesText = updates > 0 ? ` (~${updates} updates/sec)` : "";
+
+      return `Set playback speed to ${display}${updatesText}.`;
+    };
+
+    const speedPresets = [
+      { label: "0.5×", value: 0.5 },
+      { label: "1×", value: 1 },
+      { label: "2×", value: 2 },
+      { label: "4×", value: 4 },
+    ];
+
+    this.speedPresetButtons = [];
+
+    speedPresets.forEach(({ label, value }) => {
+      const button = document.createElement("button");
+
+      button.type = "button";
+      button.textContent = label;
+      button.title = describeSpeedPreset(value);
+      button.setAttribute("aria-pressed", "false");
+      button.addEventListener("click", () => {
+        this.#setSpeedMultiplier(value);
+      });
+      speedPresetRow.appendChild(button);
+      this.speedPresetButtons.push({ value, button });
+    });
+
+    this.#updateSpeedMultiplierUI(this.speedMultiplier);
   }
 
   #buildSliderGroups(body) {
@@ -1233,17 +1783,6 @@ export default class UIManager {
         setValue: (v) => this.#updateSetting("lowDiversityReproMultiplier", v),
         position: "beforeOverlays",
       }),
-      withSliderConfig("speedMultiplier", {
-        label: "Speed ×",
-        min: 0.5,
-        max: 100,
-        step: 0.5,
-        title: "Speed multiplier relative to 60 updates/sec (0.5x..100x)",
-        format: (v) => `${v.toFixed(1)}x`,
-        getValue: () => this.speedMultiplier,
-        setValue: (v) => this.#updateSetting("speedMultiplier", v),
-        position: "beforeOverlays",
-      }),
     ];
 
     const insightConfigs = [
@@ -1276,6 +1815,19 @@ export default class UIManager {
     generalConfigs
       .filter((cfg) => cfg.position === "beforeOverlays")
       .forEach((cfg) => renderSlider(cfg, generalGroup));
+
+    const autoPauseDescription =
+      "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
+
+    this.autoPauseCheckbox = this.#addCheckbox(
+      generalGroup,
+      "Pause When Hidden",
+      { title: autoPauseDescription, description: autoPauseDescription },
+      this.autoPauseOnBlur,
+      (checked) => {
+        this.setAutoPauseOnBlur(checked);
+      },
+    );
 
     return {
       renderSlider,
@@ -1324,11 +1876,19 @@ export default class UIManager {
           "Add a gentle aurora around the top-performing cells as a whimsical overlay",
         initial: this.showCelebrationAuras,
       },
+      {
+        key: "showLifeEventMarkers",
+        label: "Life Event Markers",
+        title:
+          "Pinpoint recent births and deaths directly on the grid with fading markers",
+        initial: this.showLifeEventMarkers,
+      },
     ];
 
     overlayConfigs.forEach(({ key, label, title, initial }) => {
       this.#addCheckbox(overlayGrid, label, title, initial, (checked) => {
         this.#updateSetting(key, checked);
+        this.#scheduleUpdate();
       });
     });
   }
@@ -1536,7 +2096,7 @@ export default class UIManager {
     if (sliderContext?.insightConfigs?.length) {
       const cadenceSection = document.createElement("section");
 
-      cadenceSection.className = "metrics-section insight-cadence";
+      cadenceSection.className = "metrics-section";
       const cadenceTitle = document.createElement("h4");
 
       cadenceTitle.className = "metrics-section-title";
@@ -1657,7 +2217,7 @@ export default class UIManager {
 
     const lifeEventsSection = document.createElement("section");
 
-    lifeEventsSection.className = "metrics-section life-events";
+    lifeEventsSection.className = "metrics-section";
 
     const lifeHeading = document.createElement("h4");
 
@@ -1668,6 +2228,83 @@ export default class UIManager {
     const lifeBody = document.createElement("div");
 
     lifeBody.className = "metrics-section-body life-events-body";
+
+    const createSummaryItem = (label, modifierClass) => {
+      const item = document.createElement("div");
+
+      item.className = `life-events-summary__item ${modifierClass}`;
+      if (typeof item.setAttribute === "function") {
+        item.setAttribute("data-label", label);
+      }
+      const labelEl = document.createElement("span");
+
+      labelEl.className = "life-events-summary__label";
+      labelEl.textContent = label;
+      const countEl = document.createElement("span");
+
+      countEl.className = "life-events-summary__count";
+      countEl.textContent = "0";
+      item.appendChild(labelEl);
+      item.appendChild(countEl);
+
+      return { item, countEl };
+    };
+
+    this.lifeEventsSummary = document.createElement("div");
+    this.lifeEventsSummary.className = "life-events-summary";
+    this.lifeEventsSummary.setAttribute("role", "status");
+    this.lifeEventsSummary.setAttribute("aria-live", "polite");
+    this.lifeEventsSummary.setAttribute("aria-label", "Recent birth and death counts");
+
+    const birthsSummary = createSummaryItem(
+      "Births",
+      "life-events-summary__item--birth",
+    );
+    const deathsSummary = createSummaryItem(
+      "Deaths",
+      "life-events-summary__item--death",
+    );
+
+    this.lifeEventsSummaryBirthItem = birthsSummary.item;
+    this.lifeEventsSummaryBirthCount = birthsSummary.countEl;
+    this.lifeEventsSummaryDeathItem = deathsSummary.item;
+    this.lifeEventsSummaryDeathCount = deathsSummary.countEl;
+
+    this.lifeEventsSummary.appendChild(birthsSummary.item);
+    this.lifeEventsSummary.appendChild(deathsSummary.item);
+
+    const trendSummary = document.createElement("div");
+
+    trendSummary.className =
+      "life-events-summary__trend life-events-summary__trend--neutral";
+    trendSummary.setAttribute("role", "group");
+    trendSummary.setAttribute("aria-label", "Net population change and event cadence");
+
+    const trendLabel = document.createElement("span");
+
+    trendLabel.className = "life-events-summary__trend-label";
+    trendLabel.textContent = "Net change";
+
+    const trendValue = document.createElement("span");
+
+    trendValue.className = "life-events-summary__trend-value";
+    trendValue.textContent = "0";
+
+    const trendRate = document.createElement("span");
+
+    trendRate.className = "life-events-summary__trend-rate";
+    trendRate.textContent = "0 events / 100 ticks";
+
+    trendSummary.appendChild(trendLabel);
+    trendSummary.appendChild(trendValue);
+    trendSummary.appendChild(trendRate);
+
+    this.lifeEventsSummaryTrend = trendSummary;
+    this.lifeEventsSummaryNet = trendValue;
+    this.lifeEventsSummaryRate = trendRate;
+
+    this.lifeEventsSummary.appendChild(trendSummary);
+    lifeBody.appendChild(this.lifeEventsSummary);
 
     this.lifeEventsEmptyState = document.createElement("div");
     this.lifeEventsEmptyState.className = "life-event-empty";
@@ -1686,6 +2323,8 @@ export default class UIManager {
     lifeEventsSection.appendChild(lifeBody);
     body.appendChild(lifeEventsSection);
 
+    this.#updateLifeEventsSummary(0, 0, 0, null);
+
     return panel;
   }
 
@@ -1695,6 +2334,8 @@ export default class UIManager {
 
     this.setPauseState(nextPaused);
     if (!nextPaused) this.#scheduleUpdate();
+
+    return this.paused;
   }
 
   isPaused() {
@@ -1706,18 +2347,22 @@ export default class UIManager {
     if (this.pauseButton) {
       this.pauseButton.textContent = this.paused ? "Resume" : "Pause";
     }
-    if (this.stepButton) {
-      this.stepButton.disabled = !this.paused;
-      this.stepButton.title = this.paused
-        ? "Advance one tick while paused to inspect changes frame-by-frame."
-        : "Pause the simulation to enable single-step playback.";
-    }
+    this.#updateStepButtonState();
+    this.#updatePauseIndicator();
   }
 
-  setAutoPauseOnBlur(enabled) {
-    this.autoPauseOnBlur = Boolean(enabled);
+  setAutoPauseOnBlur(enabled, { notify = true } = {}) {
+    const nextValue = Boolean(enabled);
+    const changed = this.autoPauseOnBlur !== nextValue;
+
+    this.autoPauseOnBlur = nextValue;
     if (this.autoPauseCheckbox) {
       this.autoPauseCheckbox.checked = this.autoPauseOnBlur;
+    }
+    this.#updatePauseIndicator();
+
+    if (changed && notify) {
+      this.#notifySettingChange("autoPauseOnBlur", this.autoPauseOnBlur);
     }
   }
 
@@ -1731,9 +2376,14 @@ export default class UIManager {
   getEventStrengthMultiplier() {
     return this.eventStrengthMultiplier;
   }
-  // Returns effective updates/sec derived from 60 * speedMultiplier
+  // Returns effective updates/sec derived from the configured base cadence
   getUpdatesPerSecond() {
-    return Math.max(1, Math.round(60 * this.speedMultiplier));
+    const base =
+      Number.isFinite(this.baseUpdatesPerSecond) && this.baseUpdatesPerSecond > 0
+        ? this.baseUpdatesPerSecond
+        : SIMULATION_DEFAULTS.updatesPerSecond;
+
+    return Math.max(1, Math.round(base * this.speedMultiplier));
   }
   getDensityEffectMultiplier() {
     return this.densityEffectMultiplier;
@@ -1778,6 +2428,9 @@ export default class UIManager {
   }
   getShowObstacles() {
     return this.showObstacles;
+  }
+  getShowLifeEventMarkers() {
+    return this.showLifeEventMarkers;
   }
 
   #showMetricsPlaceholder(message) {

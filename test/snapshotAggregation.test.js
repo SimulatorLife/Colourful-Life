@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 const gridManagerModulePromise = import("../src/grid/gridManager.js");
 const leaderboardModulePromise = import("../src/leaderboard.js");
@@ -297,5 +296,3 @@ test("computeLeaderboard skips entries with non-finite fitness", async () => {
     color: undefined,
   });
 });
-
-test.run();

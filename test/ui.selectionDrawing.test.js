@@ -1,5 +1,4 @@
-import { suite } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, suite } from "#tests/harness";
 import { MockCanvas, MockPointerEvent, setupDom } from "./helpers/mockDom.js";
 
 const test = suite("ui selection drawing");
@@ -65,5 +64,3 @@ test("selection drawing respects canvas CSS scaling", async () => {
     restore();
   }
 });
-
-test.run();

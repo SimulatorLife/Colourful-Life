@@ -23,6 +23,7 @@ const DIVERSITY_TARGET_DEFAULT = 0.35;
 const DIVERSITY_PRESSURE_SMOOTHING = 0.85;
 
 const LIFE_EVENT_LOG_CAPACITY = 240;
+const LIFE_EVENT_RATE_DEFAULT_WINDOW = 200;
 
 const INTERACTION_TRAIT_LABELS = Object.freeze({
   cooperate: "Cooperative",
@@ -52,11 +53,7 @@ function wrapTraitCompute(fn) {
 function normalizeThreshold(value, fallback = TRAIT_THRESHOLD) {
   const numeric = Number(value);
 
-  if (!Number.isFinite(numeric)) {
-    return clamp01(fallback);
-  }
-
-  return clamp01(numeric);
+  return clamp01(Number.isFinite(numeric) ? numeric : fallback);
 }
 
 const clampInteractionTrait = (genes, key) => {
@@ -195,15 +192,20 @@ class FixedSizeRingBuffer {
   values() {
     if (this.length === 0 || this.capacity === 0) return [];
 
-    const values = new Array(this.length);
+    return Array.from({ length: this.length }, (_, index) => {
+      const bufferIndex = (this.start + index) % this.capacity;
 
-    for (let i = 0; i < this.length; i++) {
-      const index = (this.start + i) % this.capacity;
+      return this.buffer[bufferIndex];
+    });
+  }
 
-      values[i] = this.buffer[index];
+  clear() {
+    this.start = 0;
+    this.length = 0;
+
+    if (Array.isArray(this.buffer)) {
+      this.buffer.fill(undefined);
     }
-
-    return values;
   }
 }
 
@@ -322,6 +324,28 @@ export default class Stats {
     this.lastBlockedReproduction = null;
   }
 
+  resetAll() {
+    this.resetTick();
+    this.totals = { ticks: 0, births: 0, deaths: 0, fights: 0, cooperations: 0 };
+
+    Object.values(this.#historyRings).forEach((ring) => ring?.clear?.());
+    const traitPresenceRings = this.#traitHistoryRings?.presence ?? {};
+    const traitAverageRings = this.#traitHistoryRings?.average ?? {};
+
+    Object.values(traitPresenceRings).forEach((ring) => ring?.clear?.());
+    Object.values(traitAverageRings).forEach((ring) => ring?.clear?.());
+
+    this.traitPresence = createEmptyTraitPresence(this.traitDefinitions);
+    this.diversityPressure = 0;
+    this.behavioralEvenness = 0;
+    this.meanBehaviorComplementarity = 0;
+    this.successfulBehaviorComplementarity = 0;
+    this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
+    this.lifeEventSequence = 0;
+    this.lastMatingDebug = null;
+    this.lastBlockedReproduction = null;
+  }
+
   setDiversityTarget(value) {
     const numeric = Number(value);
 
@@ -346,7 +370,11 @@ export default class Stats {
     return clamp01(value);
   }
 
-  #updateDiversityPressure(observedDiversity = 0) {
+  #updateDiversityPressure(
+    observedDiversity = 0,
+    behaviorEvenness = 0,
+    successfulComplementarity = 0,
+  ) {
     const target = clamp01(this.diversityTarget ?? DIVERSITY_TARGET_DEFAULT);
 
     if (target <= 0) {
@@ -355,11 +383,26 @@ export default class Stats {
       return;
     }
 
-    const normalizedShortfall = clamp01((target - observedDiversity) / target);
+    const diversityValue = clamp01(
+      Number.isFinite(observedDiversity) ? observedDiversity : 0,
+    );
+    const evennessValue = clamp01(
+      Number.isFinite(behaviorEvenness) ? behaviorEvenness : 0,
+    );
+    const complementValue = clamp01(
+      Number.isFinite(successfulComplementarity) ? successfulComplementarity : 0,
+    );
+
+    const geneticShortfall = clamp01((target - diversityValue) / target);
+    const evennessShortfall = clamp01(1 - evennessValue);
+    const evennessDemand = evennessShortfall * (0.3 + geneticShortfall * 0.4);
+    const combinedShortfall = clamp01(geneticShortfall * 0.7 + evennessDemand);
+    const complementRelief = complementValue * 0.35;
+    const targetPressure = Math.max(0, combinedShortfall - complementRelief);
     const prev = Number.isFinite(this.diversityPressure) ? this.diversityPressure : 0;
     const next =
       prev * DIVERSITY_PRESSURE_SMOOTHING +
-      normalizedShortfall * (1 - DIVERSITY_PRESSURE_SMOOTHING);
+      targetPressure * (1 - DIVERSITY_PRESSURE_SMOOTHING);
 
     this.diversityPressure = clamp01(next);
   }
@@ -696,8 +739,6 @@ export default class Stats {
     // Age is tracked in simulation ticks; convert with the active tick rate if seconds are needed.
     const meanAge = pop > 0 ? totalAge / pop : 0;
     const diversity = this.estimateDiversity(cells);
-
-    this.#updateDiversityPressure(diversity);
     const traitPresence = this.computeTraitPresence(cells);
     const behaviorEvenness = this.#computeBehavioralEvenness(traitPresence);
     const mateStats = this.mating || createEmptyMatingSnapshot();
@@ -712,6 +753,12 @@ export default class Stats {
       choiceCount > 0 ? mateStats.complementaritySum / choiceCount : 0;
     const successfulComplementarity =
       successCount > 0 ? mateStats.complementaritySuccessSum / successCount : 0;
+
+    this.#updateDiversityPressure(
+      diversity,
+      behaviorEvenness,
+      successfulComplementarity,
+    );
 
     this.pushHistory("population", pop);
     this.pushHistory("diversity", diversity);
@@ -859,16 +906,125 @@ export default class Stats {
   getRecentLifeEvents(limit = 12) {
     if (!this.lifeEventLog) return [];
 
+    const numericLimit = Math.floor(Number(limit));
+
+    if (!Number.isFinite(numericLimit) || numericLimit <= 0) {
+      return [];
+    }
+
     const values = this.lifeEventLog.values();
 
     if (!Array.isArray(values) || values.length === 0) {
       return [];
     }
 
-    const clampedLimit = Math.max(1, Math.floor(limit));
-    const trimmed = values.slice(-clampedLimit);
+    const boundedLimit = Math.min(values.length, numericLimit);
 
-    return trimmed.reverse();
+    return values.slice(values.length - boundedLimit).reverse();
+  }
+
+  getLifeEventRateSummary(windowSize = LIFE_EVENT_RATE_DEFAULT_WINDOW) {
+    if (!this.lifeEventLog) {
+      return {
+        births: 0,
+        deaths: 0,
+        net: 0,
+        total: 0,
+        window: 0,
+        eventsPer100Ticks: 0,
+        birthsPer100Ticks: 0,
+        deathsPer100Ticks: 0,
+      };
+    }
+
+    const numericWindow = Math.floor(Number(windowSize));
+
+    if (!Number.isFinite(numericWindow) || numericWindow <= 0) {
+      return {
+        births: 0,
+        deaths: 0,
+        net: 0,
+        total: 0,
+        window: 0,
+        eventsPer100Ticks: 0,
+        birthsPer100Ticks: 0,
+        deathsPer100Ticks: 0,
+      };
+    }
+
+    const latestTick = Number.isFinite(this.totals?.ticks) ? this.totals.ticks : 0;
+    const windowStart = Math.max(0, latestTick - numericWindow);
+    const values = this.lifeEventLog.values();
+
+    if (!Array.isArray(values) || values.length === 0) {
+      return {
+        births: 0,
+        deaths: 0,
+        net: 0,
+        total: 0,
+        window: Math.max(0, latestTick - windowStart),
+        eventsPer100Ticks: 0,
+        birthsPer100Ticks: 0,
+        deathsPer100Ticks: 0,
+      };
+    }
+
+    let births = 0;
+    let deaths = 0;
+    let earliestTick = latestTick;
+
+    for (const event of values) {
+      if (!event) continue;
+
+      const tick = Number.isFinite(event.tick) ? event.tick : null;
+
+      if (tick == null || tick < windowStart) {
+        continue;
+      }
+
+      if (event.type === "birth") {
+        births += 1;
+      } else if (event.type === "death") {
+        deaths += 1;
+      }
+
+      if (tick < earliestTick) {
+        earliestTick = tick;
+      }
+    }
+
+    const total = births + deaths;
+
+    if (total === 0) {
+      return {
+        births: 0,
+        deaths: 0,
+        net: 0,
+        total: 0,
+        window: Math.max(0, latestTick - windowStart),
+        eventsPer100Ticks: 0,
+        birthsPer100Ticks: 0,
+        deathsPer100Ticks: 0,
+      };
+    }
+
+    const spanStart = Math.min(earliestTick, latestTick);
+    const observedSpan = Math.max(1, latestTick - spanStart || 1);
+    const normalizedSpan = Math.max(1, Math.min(numericWindow, observedSpan));
+
+    const birthsPer100Ticks = (births / normalizedSpan) * 100;
+    const deathsPer100Ticks = (deaths / normalizedSpan) * 100;
+
+    return {
+      births,
+      deaths,
+      net: births - deaths,
+      total,
+      window: normalizedSpan,
+      eventsPer100Ticks: (total / normalizedSpan) * 100,
+      birthsPer100Ticks,
+      deathsPer100Ticks,
+    };
   }
 
   setMutationMultiplier(multiplier = 1) {

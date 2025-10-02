@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 const configModulePromise = import("../src/config.js");
 
@@ -115,4 +114,27 @@ test("resolveTraitActivationThreshold clamps invalid overrides", async () => {
   );
 });
 
-test.run();
+test("ACTIVITY_BASE_RATE exposes the environment-aware default", async () => {
+  const { ACTIVITY_BASE_RATE } = await configModulePromise;
+
+  assert.is(ACTIVITY_BASE_RATE, 0.3);
+});
+
+test("resolveActivityBaseRate respects overrides", async () => {
+  const { resolveActivityBaseRate } = await configModulePromise;
+
+  assert.is(
+    resolveActivityBaseRate({ COLOURFUL_LIFE_ACTIVITY_BASE_RATE: "0.45" }),
+    0.45,
+  );
+});
+
+test("resolveActivityBaseRate clamps invalid overrides", async () => {
+  const { resolveActivityBaseRate } = await configModulePromise;
+
+  assert.is(resolveActivityBaseRate({ COLOURFUL_LIFE_ACTIVITY_BASE_RATE: "1.4" }), 1);
+
+  assert.is(resolveActivityBaseRate({ COLOURFUL_LIFE_ACTIVITY_BASE_RATE: "-0.5" }), 0);
+
+  assert.is(resolveActivityBaseRate({ COLOURFUL_LIFE_ACTIVITY_BASE_RATE: "NaN" }), 0.3);
+});

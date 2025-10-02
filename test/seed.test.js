@@ -1,15 +1,5 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
-function createRNG(seed) {
-  seed = seed >>> 0;
-
-  return function () {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-
-    return seed / 4294967296;
-  };
-}
+import { assert, test } from "#tests/harness";
+import { createRNG } from "../src/utils.js";
 
 class Cell {
   static randomGenes(rng = Math.random) {
@@ -56,5 +46,3 @@ test("cells from different seeds differ", () => {
 
   assert.not.equal(a, b);
 });
-
-test.run();

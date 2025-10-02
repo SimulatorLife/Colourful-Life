@@ -8,6 +8,46 @@ const NO_EVENT_MODIFIERS = Object.freeze({
   appliedEvents: EMPTY_APPLIED_EVENTS,
 });
 
+/**
+ * Returns a cache suitable for storing resolved event effects. When callers
+ * supply a shared cache, reuse it so neighbouring tiles piggyback on identical
+ * effect lookups during a tick. Otherwise fall back to a fresh in-memory map.
+ */
+function prepareEffectCache(resolveEffect, sharedEffectCache) {
+  if (!resolveEffect) return null;
+
+  const cacheIsReusable =
+    sharedEffectCache &&
+    typeof sharedEffectCache.get === "function" &&
+    typeof sharedEffectCache.set === "function";
+
+  return cacheIsReusable ? sharedEffectCache : new Map();
+}
+
+/**
+ * Retrieves the event effect configuration, caching results to avoid repeated
+ * resolution work for identical event types within the same update cycle.
+ */
+function lookupEventEffect(eventType, resolveEffect, effectCache) {
+  if (!resolveEffect) return null;
+
+  if (!effectCache) {
+    return resolveEffect(eventType);
+  }
+
+  const cached = effectCache.get(eventType);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const resolved = resolveEffect(eventType) ?? null;
+
+  effectCache.set(eventType, resolved);
+
+  return resolved;
+}
+
 function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }) {
   if (
     Number.isFinite(neighborSum) &&
@@ -46,7 +86,7 @@ export function accumulateEventModifiers({
   eventStrengthMultiplier = 1,
   isEventAffecting,
   getEventEffect,
-  effectCache: sharedEffectCache,
+  effectCache: externalEffectCache,
 }) {
   let regenMultiplier = 1;
   let regenAdd = 0;
@@ -64,17 +104,7 @@ export function accumulateEventModifiers({
 
   const eventApplies = typeof isEventAffecting === "function" ? isEventAffecting : null;
   const resolveEffect = typeof getEventEffect === "function" ? getEventEffect : null;
-  // Cache event effect lookups so tiles affected by the same event type do not
-  // repeatedly resolve identical configuration objects during tight update
-  // loops. When a cache is provided, reuse it across invocations to avoid
-  // repeatedly allocating identical maps.
-  // Reuse a shared cache when callers supply one so neighbouring tiles can
-  // piggyback on the same resolved effect objects during a tick.
-  const reusableEffectCache =
-    resolveEffect && sharedEffectCache && typeof sharedEffectCache.get === "function"
-      ? sharedEffectCache
-      : null;
-  const effectCache = reusableEffectCache ?? (resolveEffect ? new Map() : null);
+  const effectCache = prepareEffectCache(resolveEffect, externalEffectCache);
   const numericStrengthMultiplier = Number(eventStrengthMultiplier);
   const strengthMultiplier = Number.isFinite(numericStrengthMultiplier)
     ? numericStrengthMultiplier
@@ -105,24 +135,11 @@ export function accumulateEventModifiers({
       continue;
     }
 
-    let eventEffect = null;
-
-    if (resolveEffect) {
-      const type = eventInstance.eventType;
-
-      if (effectCache) {
-        const cached = effectCache.get(type);
-
-        if (cached !== undefined) {
-          eventEffect = cached;
-        } else {
-          eventEffect = resolveEffect(type) ?? null;
-          effectCache.set(type, eventEffect);
-        }
-      } else {
-        eventEffect = resolveEffect(type);
-      }
-    }
+    const eventEffect = lookupEventEffect(
+      eventInstance.eventType,
+      resolveEffect,
+      effectCache,
+    );
 
     if (!eventEffect) continue;
 

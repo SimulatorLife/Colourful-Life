@@ -3,6 +3,7 @@ const DEFAULT_MAX_TILE_ENERGY = 5;
 const DEFAULT_REGEN_DENSITY_PENALTY = 0.5;
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.5;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
+const DEFAULT_ACTIVITY_BASE_RATE = 0.3;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
@@ -129,6 +130,38 @@ export function resolveTraitActivationThreshold(env = RUNTIME_ENV) {
 
 export const TRAIT_ACTIVATION_THRESHOLD = resolveTraitActivationThreshold();
 
+/**
+ * Resolves the baseline activity rate applied to every genome before the DNA's
+ * activity locus is considered. This keeps the ecosystem responsive while
+ * enabling environments to globally calm or energize organisms without
+ * rewriting DNA accessors.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Activity baseline clamped to the 0..1 interval.
+ */
+export function resolveActivityBaseRate(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_ACTIVITY_BASE_RATE;
+  const parsed = Number.parseFloat(raw);
+
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_ACTIVITY_BASE_RATE;
+  }
+
+  if (parsed <= 0) {
+    return 0;
+  }
+
+  if (parsed >= 1) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+export const ACTIVITY_BASE_RATE = resolveActivityBaseRate();
+
 export const SIMULATION_DEFAULTS = Object.freeze({
   paused: false,
   updatesPerSecond: 60,
@@ -147,9 +180,15 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showDensity: false,
   showFitness: false,
   showCelebrationAuras: false,
+  showLifeEventMarkers: false,
   leaderboardIntervalMs: 750,
   matingDiversityThreshold: 0.45,
-  lowDiversityReproMultiplier: 0.1,
+  // Lifted from 0.1 after sampling 10k similarity-penalized pairings showed
+  // roughly 7.5% of outcomes collapsing below a 0.2 multiplier. Settling on
+  // 0.12 trimmed those near-zero cases without materially raising the average
+  // reproduction probability, softening homogenization stalls while preserving
+  // pressure to diversify.
+  lowDiversityReproMultiplier: 0.12,
   speedMultiplier: 1,
   autoPauseOnBlur: false,
 });
@@ -161,6 +200,7 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showDensity",
   "showFitness",
   "showCelebrationAuras",
+  "showLifeEventMarkers",
   "autoPauseOnBlur",
 ]);
 
@@ -231,6 +271,59 @@ export function resolveSimulationDefaults(overrides = {}) {
     merged.maxConcurrentEvents = defaults.maxConcurrentEvents;
   } else {
     merged.maxConcurrentEvents = Math.max(0, Math.floor(concurrencyValue));
+  }
+
+  const hasUpdatesOverride = Object.prototype.hasOwnProperty.call(
+    overrides,
+    "updatesPerSecond",
+  );
+  const hasSpeedOverride = Object.prototype.hasOwnProperty.call(
+    overrides,
+    "speedMultiplier",
+  );
+  const baseUpdates = Number.isFinite(defaults.updatesPerSecond)
+    ? defaults.updatesPerSecond
+    : SIMULATION_DEFAULTS.updatesPerSecond;
+
+  if (hasUpdatesOverride) {
+    const numeric = Number(merged.updatesPerSecond);
+
+    if (Number.isFinite(numeric) && numeric > 0) {
+      merged.updatesPerSecond = Math.max(1, Math.round(numeric));
+    } else {
+      merged.updatesPerSecond = baseUpdates;
+    }
+
+    const derivedMultiplier = merged.updatesPerSecond / baseUpdates;
+
+    merged.speedMultiplier = Number.isFinite(derivedMultiplier)
+      ? derivedMultiplier
+      : defaults.speedMultiplier;
+  } else if (hasSpeedOverride) {
+    const numeric = Number(merged.speedMultiplier);
+
+    if (Number.isFinite(numeric) && numeric > 0) {
+      merged.speedMultiplier = numeric;
+      merged.updatesPerSecond = Math.max(
+        1,
+        Math.round(baseUpdates * merged.speedMultiplier),
+      );
+    } else {
+      merged.speedMultiplier = defaults.speedMultiplier;
+      merged.updatesPerSecond = baseUpdates;
+    }
+  } else {
+    const numericUpdates = Number(merged.updatesPerSecond);
+    const numericSpeed = Number(merged.speedMultiplier);
+
+    merged.updatesPerSecond =
+      Number.isFinite(numericUpdates) && numericUpdates > 0
+        ? Math.max(1, Math.round(numericUpdates))
+        : baseUpdates;
+    merged.speedMultiplier =
+      Number.isFinite(numericSpeed) && numericSpeed > 0
+        ? numericSpeed
+        : defaults.speedMultiplier;
   }
 
   return merged;

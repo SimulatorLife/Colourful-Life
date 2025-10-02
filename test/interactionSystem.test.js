@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 let InteractionSystem;
 
@@ -260,5 +259,3 @@ test("cooperation transfers bounded energy to partner via adapter", () => {
     "partner receives transferred energy capped by max energy",
   );
 });
-
-test.run();

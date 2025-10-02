@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
 let Cell;
@@ -178,5 +177,3 @@ test("DNA neural plasticity profile is deterministic and within expected bounds"
     "brain should enable plasticity when profile is present",
   );
 });
-
-test.run();

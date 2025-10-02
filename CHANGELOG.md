@@ -9,22 +9,30 @@ where practical.
 
 ### Added
 
-- Documentation audit covering the README, developer guide, and architecture
-  overview to highlight headless usage, cache-reset tooling, supporting
-  modules, and the overlay rendering pipeline.
+- Documentation audit covering the README, developer guide, architecture
+  overview, and changelog to highlight headless usage, cache-reset tooling,
+  supporting modules such as the cell model, and the overlay rendering
+  pipeline.
 - Environment override documentation in the README and developer guide for
-  `COLOURFUL_LIFE_MAX_TILE_ENERGY`, `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`, and
-  `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` so experiments can adjust
-  regeneration and harvesting behaviour without editing source while keeping
-  overlays accurate.
+  `COLOURFUL_LIFE_MAX_TILE_ENERGY`, `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`,
+  `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY`, and
+  `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` so experiments can adjust
+  regeneration, harvesting behaviour, and telemetry thresholds without editing
+  source while keeping overlays accurate.
+- Developer guide call-out pointing contributors to the overlay JSDoc style so
+  future canvas helpers stay self-documenting.
 - Changelog tracking ongoing project evolution.
+- Life event dashboard summary combining births, deaths, and net population
+  cadence derived from a new stats helper so observers can spot surges or
+  collapses without scanning individual log entries.
 
 ### Changed
 
 - Expanded inline documentation for maintenance scripts to clarify intent and
   usage.
-- Added JSDoc coverage for overlay helpers to keep exported drawing utilities
-  self-documenting.
+- Expanded JSDoc coverage for overlay helpers (celebration glow, life events,
+  density/energy/fitness heatmaps, selection zones) so exported drawing
+  utilities remain self-documenting.
 - Raised the default energy regeneration rate from `0.007` to `0.0075` after a
   200-tick headless run showed populations crashing to ~60 survivors (avg tile
   energy ~0.88) versus roughly 300 organisms and ~1.08 average energy with the
@@ -32,17 +40,27 @@ where practical.
   pressure, and nudged it again to `0.0082` after tile-only probes settled
   closer to 3.0 energy versus 2.86 under moderate density, reducing early
   starvation cascades without saturating the map.
+- Raised the low-diversity reproduction multiplier floor from `0.10` to `0.12`
+  after sampling 10k similarity-penalised pairings showed roughly 7.5% of
+  outcomes collapsing below a 0.2 multiplier; the higher floor trimmed those
+  stalls without materially lifting average reproduction odds, helping
+  homogenised populations recover while keeping diversity pressure intact.
 - Relocated the leaderboard refresh slider into the Evolution Insights panel,
   renaming it "Insights Refresh Interval" so cadence controls live alongside
   the metrics and leaderboard they influence.
-- Moved the "Pause When Hidden" toggle next to the playback controls so
-  auto-pause behaviour is discoverable alongside the Pause and Step actions,
-  and disabled it by default so unattended, long-running simulations can
-  continue advancing even when the browser tab loses focus.
+- Relocated the "Pause When Hidden" toggle into the General Settings group so
+  the auto-pause behaviour sits with other simulation-wide preferences while
+  remaining easy to discover, and kept it disabled by default so unattended,
+  long-running simulations continue advancing when the browser tab loses focus.
+- Shifted the playback speed slider beneath the Pause/Step controls so cadence
+  adjustments live with the playback actions they influence.
 - Removed the wall linger penalty control and supporting plumbing from the
   engine, UI, and headless adapter after determining it duplicated existing
   movement costs and defaulted to zero, simplifying obstacle behaviour while
   keeping the low-diversity reproduction slider as the primary tuning surface.
+- Deleted the legacy CommonJS energy profiling harness in favour of the
+  environment-aware ES module variant so only the supported benchmarking tool
+  remains in `scripts/profile-energy.mjs`.
 
 ## [0.1.0]
 

@@ -1,6 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import {
   createEventContext,
   defaultEventContext,
@@ -95,5 +93,3 @@ test("defaultEventContext remains immutable under consumer usage", () => {
     "override should not mutate the shared default context",
   );
 });
-
-test.run();

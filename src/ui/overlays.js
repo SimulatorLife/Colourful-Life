@@ -11,6 +11,14 @@ const DEFAULT_CELEBRATION_PALETTE = Object.freeze([
   { rgb: [198, 255, 214] },
 ]);
 const MAX_CELEBRATION_HIGHLIGHTS = 4;
+const LIFE_EVENT_MARKER_MAX_COUNT = 24;
+const LIFE_EVENT_MARKER_FADE_TICKS = 36;
+const LIFE_EVENT_MARKER_MIN_ALPHA = 0.18;
+const LIFE_EVENT_MARKER_MAX_ALPHA = 0.92;
+const LIFE_EVENT_MARKER_DEFAULT_COLORS = Object.freeze({
+  birth: "#7bed9f",
+  death: "#ff6b6b",
+});
 
 function toCelebrationColor(rgb, alpha) {
   if (!Array.isArray(rgb) || rgb.length < 3) return "rgba(255,255,255,0)";
@@ -43,6 +51,17 @@ function selectCelebrationHighlights(entries, limit = MAX_CELEBRATION_HIGHLIGHTS
   return ranked.getItems().map((item) => item.entry);
 }
 
+/**
+ * Draws soft radial gradients around top-performing organisms highlighted by
+ * the Celebration Glow overlay.
+ *
+ * @param {{entries?: Array, cells?: Array, maxFitness?: number}} snapshot
+ *   Latest leaderboard snapshot supplied by {@link GridManager}.
+ * @param {CanvasRenderingContext2D} ctx - Rendering context.
+ * @param {number} cellSize - Size of a single grid cell in pixels.
+ * @param {{palette?: Array, maxHighlights?: number}} [options]
+ *   Rendering customisations.
+ */
 export function drawCelebrationAuras(snapshot, ctx, cellSize, options = {}) {
   if (!snapshot || !ctx || typeof ctx.createRadialGradient !== "function") return;
   if (!(cellSize > 0)) return;
@@ -74,17 +93,15 @@ export function drawCelebrationAuras(snapshot, ctx, cellSize, options = {}) {
 
   if (highlights.length === 0) return;
 
-  let maxFitness = Number.isFinite(snapshot.maxFitness) ? snapshot.maxFitness : 0;
-
-  if (!(maxFitness > 0)) {
-    for (const entry of highlights) {
-      const candidate = Number.isFinite(entry?.fitness) ? entry.fitness : 0;
-
-      if (candidate > maxFitness) maxFitness = candidate;
-    }
-  }
-
-  maxFitness = maxFitness > 0 ? maxFitness : 1;
+  const maxFitnessCandidate =
+    Number.isFinite(snapshot.maxFitness) && snapshot.maxFitness > 0
+      ? snapshot.maxFitness
+      : highlights.reduce(
+          (max, entry) =>
+            Number.isFinite(entry?.fitness) ? Math.max(max, entry.fitness) : max,
+          0,
+        );
+  const maxFitness = maxFitnessCandidate > 0 ? maxFitnessCandidate : 1;
 
   ctx.save();
 
@@ -128,6 +145,189 @@ export function drawCelebrationAuras(snapshot, ctx, cellSize, options = {}) {
   ctx.restore();
 }
 
+function computeLifeEventAlpha(
+  ageTicks,
+  { maxAge = LIFE_EVENT_MARKER_FADE_TICKS } = {},
+) {
+  if (!(maxAge > 0)) return LIFE_EVENT_MARKER_MAX_ALPHA;
+
+  if (!Number.isFinite(ageTicks) || ageTicks <= 0) {
+    return LIFE_EVENT_MARKER_MAX_ALPHA;
+  }
+
+  if (ageTicks >= maxAge) {
+    return LIFE_EVENT_MARKER_MIN_ALPHA;
+  }
+
+  const normalized = clamp01(ageTicks / maxAge);
+  const span = LIFE_EVENT_MARKER_MAX_ALPHA - LIFE_EVENT_MARKER_MIN_ALPHA;
+
+  return LIFE_EVENT_MARKER_MIN_ALPHA + span * (1 - normalized * normalized);
+}
+
+function resolveLifeEventColor(event) {
+  const options = [
+    event?.highlight?.color,
+    event?.color,
+    LIFE_EVENT_MARKER_DEFAULT_COLORS[event?.type],
+    LIFE_EVENT_MARKER_DEFAULT_COLORS.birth,
+  ];
+
+  return (
+    options.find(
+      (candidate) => typeof candidate === "string" && candidate.length > 0,
+    ) ?? LIFE_EVENT_MARKER_DEFAULT_COLORS.birth
+  );
+}
+
+function drawDeathMarker(ctx, centerX, centerY, radius, color) {
+  if (!ctx) return;
+
+  const half = radius * Math.SQRT1_2;
+
+  if (typeof ctx.beginPath === "function") {
+    ctx.beginPath();
+    if (typeof ctx.moveTo === "function" && typeof ctx.lineTo === "function") {
+      ctx.moveTo(centerX - half, centerY - half);
+      ctx.lineTo(centerX + half, centerY + half);
+      ctx.moveTo(centerX - half, centerY + half);
+      ctx.lineTo(centerX + half, centerY - half);
+    }
+    if (typeof ctx.stroke === "function") {
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+  }
+
+  if (typeof ctx.beginPath === "function" && typeof ctx.arc === "function") {
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, Math.max(radius * 0.35, 0.75), 0, Math.PI * 2);
+    if (typeof ctx.fill === "function") {
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+  }
+}
+
+function drawBirthMarker(ctx, centerX, centerY, radius, color) {
+  if (!ctx) return;
+
+  if (typeof ctx.beginPath === "function" && typeof ctx.arc === "function") {
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    if (typeof ctx.stroke === "function") {
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, Math.max(radius * 0.45, 1), 0, Math.PI * 2);
+    if (typeof ctx.fill === "function") {
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+  }
+}
+
+/**
+ * Renders transient birth/death markers on top of the canvas so recent life
+ * events are easy to spot without overwhelming other overlays.
+ *
+ * @param {CanvasRenderingContext2D} ctx - Rendering context.
+ * @param {number} cellSize - Size of a single grid cell in pixels.
+ * @param {Array} events - Queue of recent events produced by
+ *   {@link GridManager}.
+ * @param {{
+ *   limit?: number,
+ *   fadeTicks?: number,
+ *   currentTick?: number,
+ *   colors?: Record<string, string>,
+ * }} [options] - Rendering customisations.
+ */
+export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
+  if (!ctx || !(cellSize > 0)) return;
+  if (!Array.isArray(events) || events.length === 0) return;
+
+  const maxCount = Math.max(
+    0,
+    Math.floor(options.limit ?? LIFE_EVENT_MARKER_MAX_COUNT),
+  );
+
+  if (maxCount === 0) return;
+
+  const currentTick = Number.isFinite(options.currentTick) ? options.currentTick : null;
+  const fadeWindow = Number.isFinite(options.fadeTicks)
+    ? Math.max(1, options.fadeTicks)
+    : LIFE_EVENT_MARKER_FADE_TICKS;
+  const markerRadius = Math.max(cellSize * 0.42, cellSize * 0.24);
+  const strokeWidth = Math.max(cellSize * 0.18, 1.25);
+  let rendered = 0;
+
+  if (typeof ctx.save === "function") ctx.save();
+
+  if (ctx.lineJoin !== undefined) ctx.lineJoin = "round";
+  if (ctx.lineCap !== undefined) ctx.lineCap = "round";
+
+  const previousLineWidth = ctx.lineWidth;
+
+  if (ctx.lineWidth !== undefined) ctx.lineWidth = strokeWidth;
+
+  for (let i = 0; i < events.length && rendered < maxCount; i++) {
+    const event = events[i];
+
+    if (!event) continue;
+
+    const row = Number(event.row);
+    const col = Number(event.col);
+
+    if (!Number.isFinite(row) || !Number.isFinite(col)) {
+      continue;
+    }
+
+    const tick = Number(event.tick);
+
+    if (currentTick != null && Number.isFinite(tick)) {
+      const age = currentTick - tick;
+
+      if (age < 0) {
+        continue;
+      }
+
+      if (age > fadeWindow) {
+        continue;
+      }
+
+      const alpha = computeLifeEventAlpha(age, { maxAge: fadeWindow });
+
+      if (ctx.globalAlpha !== undefined) {
+        ctx.globalAlpha = clamp(alpha, 0, 1);
+      }
+    } else if (ctx.globalAlpha !== undefined) {
+      ctx.globalAlpha = LIFE_EVENT_MARKER_MAX_ALPHA;
+    }
+
+    const color = resolveLifeEventColor(event);
+    const centerX = (col + 0.5) * cellSize;
+    const centerY = (row + 0.5) * cellSize;
+
+    if (event.type === "death") {
+      drawDeathMarker(ctx, centerX, centerY, markerRadius, color);
+    } else {
+      drawBirthMarker(ctx, centerX, centerY, markerRadius, color);
+    }
+
+    rendered++;
+  }
+
+  if (ctx.globalAlpha !== undefined) {
+    ctx.globalAlpha = 1;
+  }
+  if (ctx.lineWidth !== undefined && Number.isFinite(previousLineWidth)) {
+    ctx.lineWidth = previousLineWidth;
+  }
+  if (typeof ctx.restore === "function") ctx.restore();
+}
+
 function createFitnessPalette(steps, hue) {
   const palette = [];
   const minLightness = 32;
@@ -151,14 +351,14 @@ function createFitnessPalette(steps, hue) {
 }
 
 /**
- * Paints translucent rectangles for each active environmental event. Colour
- * resolution is delegated to the supplied callback so custom palettes can be
- * injected by UI extensions.
+ * Shades active environmental event rectangles on the canvas.
  *
- * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
- * @param {number} cellSize - Width/height of a single grid cell in pixels.
- * @param {Array} activeEvents - Events with `affectedArea` rectangles to render.
- * @param {(event: object) => string} [getColor] - Optional colour resolver invoked per event.
+ * @param {CanvasRenderingContext2D} ctx - Rendering context.
+ * @param {number} cellSize - Size of a single grid cell in pixels.
+ * @param {Array} activeEvents - Current events supplied by
+ *   {@link EventManager}.
+ * @param {(event: Object) => string} getColor - Resolver that maps events to
+ *   fill colours.
  */
 export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
   if (!ctx || !Array.isArray(activeEvents) || activeEvents.length === 0) return;
@@ -366,14 +566,12 @@ function drawEnergyLegend(ctx, cellSize, cols, rows, stats, maxTileEnergy) {
 }
 
 /**
- * Resolves the local density value for a given tile by consulting whichever
- * API the grid exposes. GridManager provides `getDensityAt`, but tests and
- * headless consumers may only surface `densityGrid` or `localDensity`.
+ * Reads the normalized density value for the supplied coordinates.
  *
- * @param {object} grid - Grid-like object returned by `GridManager`.
- * @param {number} r - Row index to inspect.
- * @param {number} c - Column index to inspect.
- * @returns {number} Normalized density value for the tile.
+ * @param {{density?: Array<Array<number>>}} grid - Grid snapshot.
+ * @param {number} r - Row index.
+ * @param {number} c - Column index.
+ * @returns {number} Density value in the 0..1 range.
  */
 export function getDensityAt(grid, r, c) {
   if (typeof grid.getDensityAt === "function") return grid.getDensityAt(r, c);
@@ -384,12 +582,12 @@ export function getDensityAt(grid, r, c) {
 }
 
 /**
- * Maps a normalized density value (0..1) to an RGBA colour along a perceptually
- * smooth gradient used by the density heatmap and legend.
+ * Converts a normalized density value into an RGBA string using the density
+ * overlay palette.
  *
  * @param {number} normalizedValue - Density value in the 0..1 range.
- * @param {{opaque?: boolean}} [options] - When `opaque` is true the alpha channel is set to 1.
- * @returns {string} CSS rgba() string representing the density colour.
+ * @param {{opaque?: boolean}} [options] - Controls alpha output.
+ * @returns {string} RGBA colour suitable for `fillStyle`.
  */
 export function densityToRgba(normalizedValue, { opaque = false } = {}) {
   const clampedValue = Number.isFinite(normalizedValue) ? normalizedValue : 0;
@@ -506,12 +704,11 @@ function getSelectionZoneEntries(selectionManager) {
 }
 
 /**
- * Fills active reproduction zones using cached geometry supplied by the
- * selection manager. Zones are rendered on top of the canvas to mirror UI state
- * in the visual overlays.
+ * Outlines active reproduction zones supplied by the selection manager.
  *
- * @param {import('../grid/selectionManager.js').default|undefined} selectionManager - Active selection manager.
- * @param {CanvasRenderingContext2D} ctx - Canvas context used for drawing.
+ * @param {import('../grid/selectionManager.js').default} selectionManager
+ *   - Selection manager instance controlling mating zones.
+ * @param {CanvasRenderingContext2D} ctx - Rendering context.
  * @param {number} cellSize - Size of a single grid cell in pixels.
  */
 export function drawSelectionZones(selectionManager, ctx, cellSize) {
@@ -560,14 +757,13 @@ export function drawSelectionZones(selectionManager, ctx, cellSize) {
 }
 
 /**
- * Master overlay renderer invoked by {@link SimulationEngine}. It orchestrates
- * event shading, reproduction zones, obstacle masks, and heatmaps depending on
- * the flags provided by UI controls.
+ * High-level overlay renderer orchestrating density, energy, fitness, event,
+ * celebration, and selection layers.
  *
- * @param {object} grid - Grid manager exposing obstacle, energy, and density data.
- * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
- * @param {number} cellSize - Width/height of each cell in pixels.
- * @param {object} [opts] - Overlay options and data dependencies.
+ * @param {Object} grid - Grid snapshot from {@link GridManager}.
+ * @param {CanvasRenderingContext2D} ctx - Rendering context.
+ * @param {number} cellSize - Size of a single grid cell in pixels.
+ * @param {Object} [opts] - Overlay toggles and helpers.
  */
 export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   const {
@@ -575,6 +771,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showDensity,
     showFitness,
     showCelebrationAuras,
+    showLifeEventMarkers,
     showObstacles = true,
     maxTileEnergy = MAX_TILE_ENERGY,
     activeEvents,
@@ -582,6 +779,10 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     snapshot: providedSnapshot,
     selectionManager: explicitSelection,
     celebrationAurasOptions,
+    lifeEvents,
+    currentTick: lifeEventCurrentTick,
+    lifeEventFadeTicks,
+    lifeEventLimit,
   } = opts;
   let snapshot = providedSnapshot;
   const selectionManager = explicitSelection || grid?.selectionManager;
@@ -608,16 +809,22 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   if (showCelebrationAuras) {
     drawCelebrationAuras(snapshot, ctx, cellSize, celebrationAurasOptions);
   }
+  if (showLifeEventMarkers && Array.isArray(lifeEvents) && lifeEvents.length > 0) {
+    drawLifeEventMarkers(ctx, cellSize, lifeEvents, {
+      currentTick: lifeEventCurrentTick,
+      fadeTicks: lifeEventFadeTicks,
+      limit: lifeEventLimit,
+    });
+  }
 }
 
 /**
- * Renders a green energy heatmap layer plus summary legend showing minimum,
- * maximum, and mean tile energy.
+ * Draws the energy heatmap overlay summarising per-tile energy levels.
  *
- * @param {object} grid - Grid-like object exposing `energyGrid`, `rows`, and `cols`.
- * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
- * @param {number} cellSize - Width/height of each cell in pixels.
- * @param {number} [maxTileEnergy=MAX_TILE_ENERGY] - Energy cap used to normalize colours.
+ * @param {Object} grid - Grid snapshot containing energy data.
+ * @param {CanvasRenderingContext2D} ctx - Rendering context.
+ * @param {number} cellSize - Size of a single grid cell in pixels.
+ * @param {number} [maxTileEnergy=MAX_TILE_ENERGY] - Energy cap used to normalise colours.
  */
 export function drawEnergyHeatmap(
   grid,
@@ -656,12 +863,11 @@ function ensureDensityScratchSize(size) {
 }
 
 /**
- * Visualizes population density across the grid using a blue→red gradient and
- * accompanying legend so observers can contextualize numeric extremes.
+ * Renders the density heatmap overlay using density normalisation helpers.
  *
- * @param {object} grid - Grid-like object exposing `rows`, `cols`, and density helpers.
- * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
- * @param {number} cellSize - Width/height of each cell in pixels.
+ * @param {Object} grid - Grid snapshot containing density data.
+ * @param {CanvasRenderingContext2D} ctx - Rendering context.
+ * @param {number} cellSize - Size of a single grid cell in pixels.
  */
 export function drawDensityHeatmap(grid, ctx, cellSize) {
   const rows = grid.rows;
@@ -723,13 +929,12 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
 }
 
 /**
- * Highlights the top performers from a leaderboard snapshot by tinting their
- * grid cells using a warm palette. Lower performers are ignored to keep the
- * overlay legible.
+ * Shades the canvas to highlight the fittest organisms based on the latest
+ * leaderboard snapshot.
  *
- * @param {{rows:number, cols:number, entries:Array, maxFitness:number}} snapshot - Latest leaderboard snapshot.
- * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
- * @param {number} cellSize - Width/height of a single grid cell in pixels.
+ * @param {{rows?: number, cols?: number, entries?: Array, maxFitness?: number}} snapshot - Leaderboard data.
+ * @param {CanvasRenderingContext2D} ctx - Rendering context.
+ * @param {number} cellSize - Size of a single grid cell in pixels.
  */
 export function drawFitnessHeatmap(snapshot, ctx, cellSize) {
   if (!snapshot || snapshot.maxFitness <= 0) return;

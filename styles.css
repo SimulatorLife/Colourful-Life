@@ -8,6 +8,12 @@
   --color-text-subtle: #aaa;
   --color-accent: #2b2b2b;
   --color-accent-hover: #333;
+  --color-life-birth: #4caf50;
+  --color-life-death: #e74c3c;
+  --color-life-birth-soft: rgba(76, 175, 80, 0.25);
+  --color-life-death-soft: rgba(231, 76, 60, 0.25);
+  --color-life-birth-strong: rgba(76, 175, 80, 0.35);
+  --color-life-death-strong: rgba(231, 76, 60, 0.35);
 
   /* Radius */
   --radius-sm: 4px;
@@ -31,6 +37,10 @@ body {
   margin: 0;
   color: var(--color-text);
   font-family: var(--font);
+}
+
+[hidden] {
+  display: none !important;
 }
 
 .visually-hidden {
@@ -72,6 +82,7 @@ canvas {
   align-self: flex-start;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
 #gameCanvas {
@@ -113,6 +124,40 @@ canvas {
   .dashboard-grid {
     width: 100%;
   }
+}
+
+.canvas-pause-indicator {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg) var(--space-md);
+  box-sizing: border-box;
+  background: rgba(17, 17, 17, 0.72);
+  color: var(--color-text);
+  pointer-events: none;
+  backdrop-filter: blur(1px);
+}
+
+.canvas-pause-indicator__title {
+  font-size: clamp(1.2rem, 2vw, 1.6rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.canvas-pause-indicator__hint,
+.canvas-pause-indicator__autopause {
+  font-size: clamp(0.85rem, 1.4vw, 1rem);
+  color: var(--color-text-subtle);
+}
+
+.canvas-pause-indicator__autopause {
+  max-width: 20ch;
 }
 
 /* Base panel styling */
@@ -223,6 +268,14 @@ canvas {
 }
 .control-button-row button {
   margin-bottom: 0;
+}
+.control-button-row--compact {
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+}
+.control-button-row--compact button {
+  padding: calc(var(--space-sm) * 2) var(--space-sm);
+  font-size: 13px;
+  line-height: 1.2;
 }
 .control-row {
   display: block;
@@ -544,6 +597,130 @@ canvas {
   gap: var(--space-sm);
 }
 
+.life-events-summary {
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.life-events-summary__item {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 10px 12px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  min-height: 0;
+}
+
+.life-events-summary__item::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 3px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent;
+}
+
+.life-events-summary__item--birth::before {
+  background: var(--color-life-birth);
+}
+
+.life-events-summary__item--death::before {
+  background: var(--color-life-death);
+}
+
+.life-events-summary__item--muted {
+  opacity: 0.8;
+}
+
+.life-events-summary__item--muted::before {
+  background: var(--color-border);
+}
+
+.life-events-summary__item--muted .life-events-summary__count {
+  color: var(--color-text-subtle);
+}
+
+.life-events-summary__item--muted .life-events-summary__label {
+  color: var(--color-text-subtle);
+}
+
+.life-events-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.life-events-summary__count {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.life-events-summary__trend {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.life-events-summary__trend-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.life-events-summary__trend-value {
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.life-events-summary__trend-rate {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+
+.life-events-summary__trend--positive {
+  border-style: solid;
+  border-color: var(--color-life-birth);
+  box-shadow: 0 0 0 1px var(--color-life-birth-soft);
+}
+
+.life-events-summary__trend--negative {
+  border-style: solid;
+  border-color: var(--color-life-death);
+  box-shadow: 0 0 0 1px var(--color-life-death-soft);
+}
+
+.life-events-summary__trend--neutral {
+  border-style: dashed;
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
 .life-event-empty {
   padding: var(--space-sm);
   border: 1px dashed var(--color-border);
@@ -584,11 +761,11 @@ canvas {
 }
 
 .life-event--birth {
-  border-color: rgba(76, 175, 80, 0.35);
+  border-color: var(--color-life-birth-strong);
 }
 
 .life-event--death {
-  border-color: rgba(231, 76, 60, 0.35);
+  border-color: var(--color-life-death-strong);
 }
 
 .life-event-header {
@@ -618,11 +795,11 @@ canvas {
 }
 
 .life-event-type--birth {
-  background: rgba(76, 175, 80, 0.25);
+  background: var(--color-life-birth-soft);
 }
 
 .life-event-type--death {
-  background: rgba(231, 76, 60, 0.25);
+  background: var(--color-life-death-soft);
 }
 
 .life-event-type--unknown {
