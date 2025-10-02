@@ -78,6 +78,15 @@ function normalizeInteractionGene(genes, key) {
   return clamp(value, 0, 1);
 }
 
+/**
+ * Measures how dissimilar two parents' interaction genes are, returning a
+ * normalized complementarity score used to encourage diverse pairings during
+ * reproduction.
+ *
+ * @param {import('../cell.js').default} parentA - First parent cell.
+ * @param {import('../cell.js').default} parentB - Second parent cell.
+ * @returns {number} Complementarity score between 0 (identical) and 1 (maximally different).
+ */
 export function computeBehaviorComplementarity(parentA, parentB) {
   if (!parentA || !parentB) return 0;
 

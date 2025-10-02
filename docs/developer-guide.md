@@ -88,6 +88,9 @@ affect runtime outcomes.
   and ensure every export (function, class, constant map) carries a concise
   description so contributors can consume it without scanning implementation
   details.
+- Overlay utilities in [`src/ui/overlays.js`](../src/ui/overlays.js) describe
+  their canvas options via JSDoc; follow the same pattern when extending the
+  overlay pipeline so rendering hooks remain self-documenting.
 - Periodically audit for missing docstrings by searching for `export function`
   / `export default` declarations. Add coverage before shipping changes so the
   codebase remains self-explanatory.
