@@ -310,11 +310,132 @@ test("handleReproduction requires parents to be adjacent before spawning", async
 
   assert.is(reproduced, false);
   assert.is(births, 0);
-  assert.is(blockReason, "Parents not adjacent");
+  assert.is(blockReason, "Parents out of reach");
   assert.is(parent.row, 0);
   assert.is(parent.col, 2);
   assert.is(gm.getCell(0, 2), parent);
   assert.is(gm.getCell(0, 5), mate);
+});
+
+test("handleReproduction succeeds when DNA grants extended reach", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  let births = 0;
+  let blockReason = null;
+  const stats = {
+    onBirth() {
+      births += 1;
+    },
+    onDeath() {},
+    recordMateChoice() {},
+    recordReproductionBlocked(info) {
+      blockReason = info?.reason ?? null;
+    },
+  };
+
+  const gm = new TestGridManager(1, 6, {
+    eventManager: { activeEvents: [] },
+    stats,
+  });
+
+  gm.rebuildActiveCells();
+
+  const densityGrid = Array.from({ length: 1 }, () =>
+    Array.from({ length: 6 }, () => 0),
+  );
+
+  const parentDNA = new DNA(0, 0, 0);
+
+  parentDNA.reproductionThresholdFrac = () => 0;
+  parentDNA.parentalInvestmentFrac = () => 0.5;
+  parentDNA.starvationThresholdFrac = () => 0;
+  parentDNA.reproductionReachProfile = () => ({
+    base: 3,
+    min: 1.5,
+    max: 3.2,
+    densityPenalty: 0.05,
+    energyBonus: 0.2,
+    scarcityBoost: 0.3,
+    affinityWeight: 0.25,
+  });
+  const mateDNA = new DNA(0, 0, 0);
+
+  mateDNA.reproductionThresholdFrac = () => 0;
+  mateDNA.parentalInvestmentFrac = () => 0.5;
+  mateDNA.starvationThresholdFrac = () => 0;
+  mateDNA.reproductionReachProfile = () => ({
+    base: 2.6,
+    min: 1.2,
+    max: 3,
+    densityPenalty: 0.1,
+    energyBonus: 0.25,
+    scarcityBoost: 0.25,
+    affinityWeight: 0.2,
+  });
+
+  const parent = new Cell(0, 1, parentDNA, MAX_TILE_ENERGY);
+  const mate = new Cell(0, 4, mateDNA, MAX_TILE_ENERGY);
+
+  parent.computeReproductionProbability = () => 1;
+  parent.decideReproduction = () => ({ probability: 1 });
+
+  const mateEntry = parent.evaluateMateCandidate({
+    row: mate.row,
+    col: mate.col,
+    target: mate,
+  }) || {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 1,
+    diversity: 0,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  parent.selectMateWeighted = () => ({
+    chosen: mateEntry,
+    evaluated: [mateEntry],
+    mode: "preference",
+  });
+  parent.findBestMate = () => mateEntry;
+
+  gm.setCell(0, 1, parent);
+  gm.setCell(0, 4, mate);
+
+  const originalRandom = Math.random;
+
+  Math.random = () => 0;
+
+  let reproduced = null;
+
+  try {
+    reproduced = gm.handleReproduction(
+      0,
+      1,
+      parent,
+      { mates: [mateEntry], society: [] },
+      {
+        stats,
+        densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 1,
+      },
+    );
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.is(reproduced, true);
+  assert.is(births, 1);
+  assert.is(blockReason, null);
 });
 
 test("handleReproduction does not wrap offspring placement across map edges", async () => {
@@ -431,8 +552,30 @@ test("handleReproduction bases reproduction decisions on the post-move density",
 
   const densityGrid = [[0.1, 0.75, 0.2]];
 
-  const parent = new Cell(0, 0, new DNA(0, 0, 0), MAX_TILE_ENERGY);
-  const mate = new Cell(0, 2, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+  const parentDNA = new DNA(0, 0, 0);
+
+  parentDNA.reproductionReachProfile = () => ({
+    base: 2.4,
+    min: 1.2,
+    max: 3,
+    densityPenalty: 0.08,
+    energyBonus: 0.25,
+    scarcityBoost: 0.25,
+    affinityWeight: 0.22,
+  });
+  const mateDNA = new DNA(0, 0, 0);
+
+  mateDNA.reproductionReachProfile = () => ({
+    base: 2.2,
+    min: 1.1,
+    max: 2.8,
+    densityPenalty: 0.1,
+    energyBonus: 0.25,
+    scarcityBoost: 0.25,
+    affinityWeight: 0.2,
+  });
+  const parent = new Cell(0, 0, parentDNA, MAX_TILE_ENERGY);
+  const mate = new Cell(0, 2, mateDNA, MAX_TILE_ENERGY);
 
   parent.dna.reproductionThresholdFrac = () => 0;
   mate.dna.reproductionThresholdFrac = () => 0;
@@ -1107,8 +1250,30 @@ test("handleReproduction leaves diverse pairs unaffected by low-diversity penalt
 
   gm.setMatingDiversityOptions({ threshold: 0.3, lowDiversityMultiplier: 0 });
 
-  const parent = new Cell(0, 0, new DNA(10, 20, 30), MAX_TILE_ENERGY);
-  const mate = new Cell(0, 2, new DNA(90, 40, 70), MAX_TILE_ENERGY);
+  const parentDNA = new DNA(10, 20, 30);
+
+  parentDNA.reproductionReachProfile = () => ({
+    base: 2.3,
+    min: 1.1,
+    max: 2.9,
+    densityPenalty: 0.08,
+    energyBonus: 0.3,
+    scarcityBoost: 0.25,
+    affinityWeight: 0.24,
+  });
+  const mateDNA = new DNA(90, 40, 70);
+
+  mateDNA.reproductionReachProfile = () => ({
+    base: 2.1,
+    min: 1,
+    max: 2.6,
+    densityPenalty: 0.1,
+    energyBonus: 0.28,
+    scarcityBoost: 0.25,
+    affinityWeight: 0.22,
+  });
+  const parent = new Cell(0, 0, parentDNA, MAX_TILE_ENERGY);
+  const mate = new Cell(0, 2, mateDNA, MAX_TILE_ENERGY);
 
   parent.dna.reproductionThresholdFrac = () => 0;
   mate.dna.reproductionThresholdFrac = () => 0;

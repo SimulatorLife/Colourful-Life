@@ -133,6 +133,10 @@ export default class Cell {
       typeof this.dna.mateSamplingProfile === "function"
         ? this.dna.mateSamplingProfile()
         : null;
+    this.reproductionReachProfile =
+      typeof this.dna.reproductionReachProfile === "function"
+        ? this.dna.reproductionReachProfile()
+        : null;
     this.riskMemoryProfile =
       typeof this.dna.riskMemoryProfile === "function"
         ? this.dna.riskMemoryProfile()
@@ -3401,6 +3405,56 @@ export default class Cell {
     if (typeof moveRandomly === "function") {
       moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
     }
+  }
+
+  getReproductionReach({
+    localDensity = 0,
+    tileEnergy = 0.5,
+    tileEnergyDelta = 0,
+    partner = null,
+    partnerSimilarity = null,
+  } = {}) {
+    const profile = this.reproductionReachProfile || {};
+    let minReach = Number.isFinite(profile.min) ? profile.min : 0.85;
+    let maxReach = Number.isFinite(profile.max) ? profile.max : 1.6;
+
+    if (!(maxReach >= minReach)) {
+      maxReach = minReach;
+    }
+    minReach = clamp(minReach, 0.4, 3);
+    maxReach = clamp(maxReach, minReach, 4);
+    let reach = Number.isFinite(profile.base) ? profile.base : 1;
+
+    reach = clamp(reach, minReach, maxReach);
+
+    const density = clamp(Number.isFinite(localDensity) ? localDensity : 0, 0, 1);
+    const energy = clamp(Number.isFinite(tileEnergy) ? tileEnergy : 0, 0, 1);
+    const trend = clamp(Number.isFinite(tileEnergyDelta) ? tileEnergyDelta : 0, -1, 1);
+    const densityPenalty = clamp(profile.densityPenalty ?? 0.45, 0, 1.5);
+    const energyBonus = clamp(profile.energyBonus ?? 0.35, 0, 1.5);
+    const scarcityBoost = clamp(profile.scarcityBoost ?? 0.25, 0, 1);
+    const affinityWeight = clamp(profile.affinityWeight ?? 0.18, 0, 0.8);
+
+    reach -= density * densityPenalty;
+    reach += (energy - 0.5) * energyBonus;
+
+    if (trend < 0) {
+      reach += -trend * scarcityBoost;
+    }
+
+    if (affinityWeight > 0) {
+      const similarity =
+        partnerSimilarity != null && Number.isFinite(partnerSimilarity)
+          ? clamp(partnerSimilarity, 0, 1)
+          : this.#safeSimilarityTo(partner, {
+              context: "reproduction reach partner similarity",
+              fallback: 0.5,
+            });
+
+      reach += (similarity - 0.5) * affinityWeight;
+    }
+
+    return clamp(reach, minReach, maxReach);
   }
 
   computeReproductionProbability(partner, { localDensity, densityEffectMultiplier }) {

@@ -1425,6 +1425,43 @@ export class DNA {
     return clamp(threshold, 0.22, 0.7);
   }
 
+  reproductionReachProfile() {
+    const courtship = this.geneFraction(GENE_LOCI.COURTSHIP);
+    const cohesion = this.geneFraction(GENE_LOCI.COHESION);
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+
+    const rawBase =
+      1.15 +
+      courtship * 0.75 +
+      cohesion * 0.35 +
+      sense * 0.25 +
+      exploration * 0.25 +
+      parental * 0.15 -
+      risk * 0.4 -
+      (1 - efficiency) * 0.15;
+    const base = clamp(rawBase, 0.6, 3.5);
+    const min = clamp(0.85 + parental * 0.2, 0.5, base);
+    const max = clamp(Math.max(base, 1.3 + courtship * 1.1 + cohesion * 0.6), base, 4);
+    const densityPenalty = clamp(0.2 + (1 - cohesion) * 0.5 + risk * 0.35, 0.05, 1.2);
+    const energyBonus = clamp(0.25 + parental * 0.35 + courtship * 0.25, 0, 1.2);
+    const scarcityBoost = clamp(0.15 + exploration * 0.35 + sense * 0.25, 0, 1);
+    const affinityWeight = clamp(0.12 + courtship * 0.35 - risk * 0.1, 0, 0.7);
+
+    return {
+      base,
+      min,
+      max,
+      densityPenalty,
+      energyBonus,
+      scarcityBoost,
+      affinityWeight,
+    };
+  }
+
   conflictFocus() {
     const rng = this.prngFor("conflictFocus");
     const risk = this.geneFraction(GENE_LOCI.RISK);

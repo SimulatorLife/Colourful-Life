@@ -2752,16 +2752,46 @@ export default class GridManager {
       };
     }
 
+    let mateLocalDensity = densityGrid?.[mateRow]?.[mateCol];
+
+    if (mateLocalDensity == null) {
+      mateLocalDensity = this.getDensityAt(mateRow, mateCol);
+    }
+
+    const mateEnergyRaw = this.energyGrid?.[mateRow]?.[mateCol] ?? 0;
+    const mateTileEnergy = mateEnergyRaw / energyDenominator;
+    const mateTileEnergyDelta = this.energyDeltaGrid?.[mateRow]?.[mateCol] ?? 0;
     const rowDelta = Math.abs(parentRow - mateRow);
     const colDelta = Math.abs(parentCol - mateCol);
-    const parentsAdjacent =
-      (rowDelta > 0 || colDelta > 0) && rowDelta <= 1 && colDelta <= 1;
+    const separation = Math.max(rowDelta, colDelta);
+    const parentReach =
+      typeof cell.getReproductionReach === "function"
+        ? cell.getReproductionReach({
+            localDensity,
+            tileEnergy,
+            tileEnergyDelta,
+            partner: bestMate.target,
+            partnerSimilarity: similarity,
+          })
+        : 1;
+    const mateReach =
+      typeof bestMate.target.getReproductionReach === "function"
+        ? bestMate.target.getReproductionReach({
+            localDensity: mateLocalDensity,
+            tileEnergy: mateTileEnergy,
+            tileEnergyDelta: mateTileEnergyDelta,
+            partner: cell,
+            partnerSimilarity: similarity,
+          })
+        : 1;
+    const effectiveReach = clamp((parentReach + mateReach) / 2, 0, 4);
 
-    if (!blockedInfo && !parentsAdjacent) {
+    if (!blockedInfo && (separation === 0 || separation > effectiveReach)) {
       blockedInfo = {
-        reason: "Parents not adjacent",
-        parentA: { row: parentRow, col: parentCol },
-        parentB: { row: mateRow, col: mateCol },
+        reason: "Parents out of reach",
+        parentA: { row: parentRow, col: parentCol, reach: parentReach },
+        parentB: { row: mateRow, col: mateCol, reach: mateReach },
+        separation: { distance: separation, effectiveReach },
       };
     }
 
