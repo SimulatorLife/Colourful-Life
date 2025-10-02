@@ -1,6 +1,4 @@
-import { suite } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, suite } from "#tests/harness";
 import { MockCanvas, setupDom } from "./helpers/mockDom.js";
 
 const test = suite("ui initial settings sync");
@@ -242,5 +240,3 @@ test("createSimulation keeps engine cadence in sync with speed defaults", async 
     restore();
   }
 });
-
-test.run();

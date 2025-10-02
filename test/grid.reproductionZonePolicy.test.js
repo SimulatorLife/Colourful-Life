@@ -1,5 +1,4 @@
-import { suite } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, suite } from "#tests/harness";
 import ReproductionZonePolicy from "../src/grid/reproductionZonePolicy.js";
 
 const test = suite("ReproductionZonePolicy");
@@ -182,5 +181,3 @@ test("filterSpawnCandidates respects active zones and preserves fallbacks", () =
     "missing isInActiveZone method leaves candidates untouched",
   );
 });
-
-test.run();

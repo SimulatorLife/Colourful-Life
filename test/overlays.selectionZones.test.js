@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { drawSelectionZones } from "../src/ui/overlays.js";
 import SelectionManager from "../src/grid/selectionManager.js";
 
@@ -128,5 +127,3 @@ test("pattern geometry is cached after activation", () => {
   manager.getActiveZoneRenderData();
   assert.is(containsCalls, 0, "subsequent calls should not trigger recomputation");
 });
-
-test.run();

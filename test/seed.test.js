@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 function createRNG(seed) {
   seed = seed >>> 0;
@@ -56,5 +55,3 @@ test("cells from different seeds differ", () => {
 
   assert.not.equal(a, b);
 });
-
-test.run();

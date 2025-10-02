@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 const configModulePromise = import("../src/config.js");
 
@@ -114,5 +113,3 @@ test("resolveTraitActivationThreshold clamps invalid overrides", async () => {
     0.6,
   );
 });
-
-test.run();

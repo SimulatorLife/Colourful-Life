@@ -32,7 +32,7 @@ This document captures the guardrails and shared context for any automation or A
 ## Testing Expectations
 
 - Execute `npm test` after logic changes touching simulation behavior, utilities, or shared helpers.
-- Extend UVU test suites in `test/` when new functionality or bug fixes introduce edge cases.
+- Extend the Node.js test suites in `test/` when new functionality or bug fixes introduce edge cases.
 - For UI changes, add lightweight integration checks or storybook-style demos when possible.
 
 ## Collaboration Workflow

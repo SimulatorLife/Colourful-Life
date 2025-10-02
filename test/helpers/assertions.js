@@ -1,4 +1,4 @@
-import * as assert from "uvu/assert";
+import { assert } from "#tests/harness";
 
 /**
  * Asserts that two numeric values are approximately equal within the provided

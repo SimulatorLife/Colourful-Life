@@ -1,6 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import {
   MockCanvas,
   loadSimulationModules,
@@ -280,5 +278,3 @@ test("tick forwards instance maxTileEnergy to overlay renderer", async () => {
     GridManager.maxTileEnergy = originalMax;
   }
 });
-
-test.run();

@@ -1,6 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import {
   randomRange,
   lerp,
@@ -166,5 +164,3 @@ test("warnOnce ignores non-string or empty messages", () => {
   assert.is(calls.length, 1);
   assert.equal(calls[0], ["gamma-message"]);
 });
-
-test.run();

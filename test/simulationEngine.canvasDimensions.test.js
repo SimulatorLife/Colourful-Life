@@ -1,6 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import { ensureCanvasDimensions } from "../src/simulationEngine.js";
 
 test("ensureCanvasDimensions accepts numeric string overrides", () => {
@@ -26,5 +24,3 @@ test("ensureCanvasDimensions normalizes mixed sources", () => {
   assert.is(canvas.width, 1280);
   assert.is(canvas.height, 720);
 });
-
-test.run();

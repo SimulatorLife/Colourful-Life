@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { MockCanvas } from "./helpers/simulationEngine.js";
 import { setupDom } from "./helpers/mockDom.js";
 
@@ -692,5 +691,3 @@ test("step control calls engine.step when using createSimulation", async () => {
     global.HTMLCanvasElement = originalHTMLCanvasElement;
   }
 });
-
-test.run();

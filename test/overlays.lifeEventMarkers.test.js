@@ -1,6 +1,4 @@
-import { suite } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, suite } from "#tests/harness";
 import { drawLifeEventMarkers } from "../src/ui/overlays.js";
 
 const test = suite("ui overlays: life event markers");
@@ -107,7 +105,3 @@ test("drawLifeEventMarkers renders crosses for deaths", () => {
   assert.ok(moveOps.length >= 2, "death markers draw diagonal segments");
   assert.is(moveOps.length, lineOps.length, "each move has a matching line segment");
 });
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  test.run();
-}

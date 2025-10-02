@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 const DEFAULT_RANDOM_EVENT_CONFIG = {
   durationRange: { min: 300, max: 900 },
@@ -294,5 +293,3 @@ test("isEventAffecting checks if coordinates fall within event area", async () =
   assert.not.ok(isEventAffecting(event, 12, 8), "outside width excluded");
   assert.not.ok(isEventAffecting(null, 10, 5), "null event excluded");
 });
-
-test.run();

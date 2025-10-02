@@ -22,7 +22,7 @@ npm run build    # Production bundle written to dist/
 npm run clean:parcel  # Remove dist/ and the Parcel cache when builds misbehave
 npm run format   # Format code with Prettier
 npm run format:check  # Validate formatting without writing
-npm run test     # UVU unit tests
+npm run test     # Node.js test suites
 npm run lint     # ESLint across JS modules and inline HTML
 npm run lint:fix # ESLint with autofix enabled
 ```
@@ -67,7 +67,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 
 - **Formatting** — Run `npm run format` before committing or rely on the included Prettier integration. `npm run format:check` verifies without writing.
 - **Linting** — `npm run lint` enforces the ESLint + Prettier ruleset across JavaScript and inline HTML. Use `npm run lint:fix` to auto-resolve minor issues.
-- **Testing** — `npm test` executes UVU suites under an esbuild loader. Tests cover grid utilities, selection logic, and regression harnesses. Add cases when behaviours change.
+- **Testing** — `npm test` runs the Node.js test suites. Tests cover grid utilities, selection logic, and regression harnesses. Add cases when behaviours change.
 - **Profiling** — `node scripts/profile-energy.mjs` benchmarks the energy preparation loop. Adjust rows/cols via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and the stub `cellSize` with `PERF_CELL_SIZE` environment variables.
 - **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap and use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures without modifying source defaults.
 - **Headless usage** — `createSimulation` accepts `{ headless: true }` to return a controller without mounting DOM controls. Inject `requestAnimationFrame`, `performanceNow`, or RNG hooks for deterministic automation.
@@ -81,7 +81,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
   - `src/ui/` — UI manager, control builders, overlays, and debugging helpers.
 - `scripts/` — Node scripts (e.g., performance profiling) that exercise the engine headlessly.
 - `scripts/clean-parcel.js` — Utility invoked by `npm run clean:parcel` to wipe the Parcel cache (`.parcel-cache/`) and `dist/` outputs when builds or hot reloads drift out of sync.
-- `test/` — UVU tests executed via `npm test`.
+- `test/` — Node.js test suites executed via `npm test`.
 - `docs/` — Architecture notes, developer guides, and background reading.
 - `index.html`, `styles.css` — Browser entry point and shared styles.
 - `eslint.config.mjs`, `package.json` — Tooling and dependency configuration.
@@ -95,7 +95,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 | `npm run clean:parcel`                    | Removes `dist/` and `.parcel-cache/` to recover from stubborn Parcel caches.                   |
 | `npm run lint` / `npm run lint:fix`       | Runs ESLint across the codebase, optionally applying autofixes.                                |
 | `npm run format` / `npm run format:check` | Applies or verifies Prettier formatting for source, documentation, and configuration files.    |
-| `npm test`                                | Executes UVU suites under an esbuild loader.                                                   |
+| `npm test`                                | Runs the Node.js test suites covering simulation and UI modules.                               |
 | `node scripts/profile-energy.mjs`         | Benchmarks the energy preparation loop with configurable grid sizes via environment variables. |
 
 ## Further reading

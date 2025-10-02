@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import SelectionManager from "../src/grid/selectionManager.js";
 
 function createManager(rows = 6, cols = 6) {
@@ -258,5 +257,3 @@ test("addCustomRectangle returns null for invalid coordinates and retains counte
   );
   assert.is(manager.zoneGeometryCache.size, 0, "geometry cache remains untouched");
 });
-
-test.run();

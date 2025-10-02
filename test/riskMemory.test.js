@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
 let Cell;
@@ -154,5 +153,3 @@ test("risk memory adjusts risk tolerance after contrasting experiences", () => {
     "resource recovery and ally support should restore risk tolerance",
   );
 });
-
-test.run();

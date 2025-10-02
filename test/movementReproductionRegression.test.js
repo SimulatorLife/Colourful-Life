@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 test("GridManager.tryMove updates a cell's stored coordinates", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
@@ -1140,5 +1139,3 @@ test("density counts stay consistent through spawn, movement, and removal", asyn
     GridManager.prototype.init = originalInit;
   }
 });
-
-test.run();

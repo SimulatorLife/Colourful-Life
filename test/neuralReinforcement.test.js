@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
 let Cell;
@@ -193,5 +192,3 @@ test("cells derive reward signals from DNA reinforcement preferences", () => {
     "rest-aligned preference should produce a stronger reward than pursuit",
   );
 });
-
-test.run();
