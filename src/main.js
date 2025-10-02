@@ -6,6 +6,7 @@ import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
 import { createHeadlessUiManager } from "./ui/headlessUiManager.js";
 import { resolveSimulationDefaults } from "./config.js";
+import { toPlainObject } from "./utils.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
@@ -222,6 +223,16 @@ export function createSimulation({
   });
 
   const uiOptions = config.ui ?? {};
+  const userLayout = toPlainObject(uiOptions.layout);
+  const mergedInitialSettings = {
+    ...toPlainObject(userLayout.initialSettings),
+    ...sanitizedDefaults,
+  };
+  const uiLayoutOptions = {
+    canvasElement: engine.canvas,
+    ...userLayout,
+    initialSettings: mergedInitialSettings,
+  };
   const baseActions = {
     burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
@@ -267,10 +278,7 @@ export function createSimulation({
         simulationCallbacks,
         uiOptions.mountSelector ?? "#app",
         baseActions,
-        {
-          canvasElement: engine.canvas,
-          ...(uiOptions.layout || {}),
-        },
+        uiLayoutOptions,
       );
 
   if (!headless) {
