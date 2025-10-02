@@ -2639,6 +2639,19 @@ export default class GridManager {
       };
     }
 
+    const rowDelta = Math.abs(parentRow - mateRow);
+    const colDelta = Math.abs(parentCol - mateCol);
+    const parentsAdjacent =
+      (rowDelta > 0 || colDelta > 0) && rowDelta <= 1 && colDelta <= 1;
+
+    if (!blockedInfo && !parentsAdjacent) {
+      blockedInfo = {
+        reason: "Parents not adjacent",
+        parentA: { row: parentRow, col: parentCol },
+        parentB: { row: mateRow, col: mateCol },
+      };
+    }
+
     const reproductionRng =
       typeof cell.resolveSharedRng === "function"
         ? cell.resolveSharedRng(bestMate.target, "reproductionRoll")
