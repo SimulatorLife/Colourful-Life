@@ -11,11 +11,13 @@ test("start schedules a frame and ticking through RAF uses sanitized defaults", 
   const { SimulationEngine } = modules;
   const { restore, calls, snapshot } = patchSimulationPrototypes(modules);
 
+  let engine;
+
   try {
     let rafCallback = null;
     let rafHandle = 0;
 
-    const engine = new SimulationEngine({
+    engine = new SimulationEngine({
       canvas: new MockCanvas(20, 20),
       autoStart: false,
       performanceNow: () => 0,
@@ -75,9 +77,12 @@ test("tick emits events and clears pending slow UI updates after throttle interv
   const { SimulationEngine } = modules;
   const { restore, snapshot, metrics } = patchSimulationPrototypes(modules);
 
+  let engine;
+
   try {
     let now = 0;
-    const engine = new SimulationEngine({
+
+    engine = new SimulationEngine({
       canvas: new MockCanvas(24, 24),
       autoStart: false,
       performanceNow: () => now,
@@ -288,5 +293,34 @@ test("tick forwards instance maxTileEnergy to overlay renderer", async () => {
   } finally {
     restore();
     GridManager.maxTileEnergy = originalMax;
+  }
+});
+
+test("speed multiplier updates respect the engine's base cadence", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  let engine;
+
+  try {
+    engine = new SimulationEngine({
+      canvas: new MockCanvas(16, 16),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+    });
+
+    engine.stop();
+    engine.baseUpdatesPerSecond = 48;
+    engine.setUpdatesPerSecond(48);
+
+    engine.updateSetting("speedMultiplier", 1.5);
+
+    assert.is(engine.state.updatesPerSecond, 72);
+    approxEqual(engine.state.speedMultiplier, 1.5, 1e-9);
+  } finally {
+    restore();
   }
 });

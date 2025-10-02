@@ -1,4 +1,4 @@
-import { resolveSimulationDefaults } from "../config.js";
+import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
 import { sanitizeNumber } from "../utils.js";
 
 /**
@@ -71,6 +71,14 @@ export function createHeadlessUiManager(options = {}) {
   const { selectionManager, onSettingChange, ...overrides } = options || {};
   const defaults = resolveSimulationDefaults(overrides);
   const settings = { ...defaults };
+  const baseUpdatesCandidate =
+    Number.isFinite(settings.speedMultiplier) && settings.speedMultiplier > 0
+      ? settings.updatesPerSecond / settings.speedMultiplier
+      : settings.updatesPerSecond;
+  const baseUpdatesPerSecond =
+    Number.isFinite(baseUpdatesCandidate) && baseUpdatesCandidate > 0
+      ? baseUpdatesCandidate
+      : SIMULATION_DEFAULTS.updatesPerSecond;
 
   let lastSlowUiRender = Number.NEGATIVE_INFINITY;
   const updateIfFinite = (key, value, options = {}) => {
@@ -102,6 +110,9 @@ export function createHeadlessUiManager(options = {}) {
     getUpdatesPerSecond: () => settings.updatesPerSecond,
     setUpdatesPerSecond: (value) => {
       if (updateIfFinite("updatesPerSecond", value, { min: 1, round: true })) {
+        const safeBase = baseUpdatesPerSecond > 0 ? baseUpdatesPerSecond : 1;
+
+        settings.speedMultiplier = settings.updatesPerSecond / safeBase;
         notify("updatesPerSecond", settings.updatesPerSecond);
       }
     },
