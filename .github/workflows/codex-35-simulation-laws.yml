@@ -1,0 +1,30 @@
+name: Codex 35 – Core Law Validation
+
+on:
+  schedule:
+    - cron: "29 5,17 * * *" # twice daily at 05:29 and 17:29 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Core Law Validation"
+      pr_body: "Seed PR for Codex to audit core simulation laws and land one targeted improvement."
+      prompt: >
+        Review the Colourful Life codebase with the explicit goal of validating and reinforcing the "Simulation Laws"
+        outlined in the README. These laws are fundamental to the integrity and realism of the simulation, and it is crucial
+        that they are consistently upheld throughout the codebase. Audit current implementations, documentation, and 
+        tests against these rules. Identify the highest leverage gap—missing or outdated docs, drift in behaviour, inadequate 
+        safeguards, or missing regression coverage—and deliver one focused fix–you will always be able to find SOMETHING to 
+        improve with regards to the "Simulation Laws". Acceptable scopes include tightening logic, clarifying or expanding 
+        documentation, or adding/adjusting tests. Avoid broad project-wide refactors; commit your changes/fixes, ensuring 
+        they are targeted and justified. Clearly record investigated evidence in the commit message, reference the law(s) 
+        as justification for the change, and ensure the change keeps the project's performance and accessibility expectations 
+        intact.

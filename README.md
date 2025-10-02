@@ -65,13 +65,14 @@ The simulation runs on cooperating modules housed in `src/`:
 
 For an architectural deep dive—including subsystem hand-offs, data flow, and extension tips—see [`docs/architecture-overview.md`](docs/architecture-overview.md).
 
-## The 5 Simulation Laws
+## The Simulation Laws
 
 1. Only one organism may occupy a grid cell at any time; movement and spawning routines must prevent conflicts.
 2. Organisms may never teleport or be relocated discontinuously; any change in position must be achieved through valid movement across adjacent cells.
-3. Reproduction and child-spawning must respect required conditions: parents must occupy adjacent tiles, ensure offspring spawn on empty neighbouring cells.
+3. Reproduction and child-spawning must respect required conditions: parents must occupy adjacent tiles, ensure offspring spawn on empty neighbouring cells, and pay plausible biological costs. Compatible genomes must combine to form the offspring DNA, reproduction should draw down parental energy reserves (no energy, no viable child), and gestation steps or cooldown periods must elapse before another birth—mirroring how real organisms invest time and resources to produce limited, inheritable progeny.
 4. Organisms cannot live forever—aging, decay, or other lifecycle rules must ensure every organism eventually dies without manual intervention.
 5. External influence systems (global buffs, forced traits, god-mode interventions) remain disabled by default; they should only activate when users explicitly enable them via the documented UI or configuration. The only excemptions are mutations and environmental effects that are part of normal simulation dynamics.
+6. Behaviour must emerge from the organism’s encoded biology: DNA/genomes declare the sensors available to the body and define the neuron topology and connection weights that form its brain. As in real organisms, genes build the sensory organs and wire up neural circuits, so choices at runtime must flow from sensor inputs through those genome-derived neural pathways—avoid hard-coded overrides or behaviour that bypasses the encoded network.
 
 ## Developer workflow
 
