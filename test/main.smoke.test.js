@@ -200,6 +200,42 @@ test("headless UI clamps update frequency like the engine", async () => {
   simulation.destroy();
 });
 
+test("engine.resetWorld reseeds the ecosystem and clears custom zones", async () => {
+  const { createSimulation } = await simulationModulePromise;
+  const deterministicRng = () => 0.01;
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    rng: deterministicRng,
+    config: { rows: 12, cols: 12, cellSize: 5 },
+  });
+
+  simulation.engine.tick();
+
+  const { stats, selectionManager, grid } = simulation;
+
+  selectionManager.addCustomRectangle(0, 0, 2, 2);
+  assert.ok(selectionManager.hasCustomZones(), "custom zone seeded before reset");
+  assert.ok(stats.history.population.length > 0, "history populated before reset");
+
+  simulation.engine.resetWorld({ clearCustomZones: true });
+
+  const snapshot = grid.buildSnapshot();
+
+  assert.ok(snapshot.population > 0, "population reseeded after reset");
+  assert.is(
+    selectionManager.hasCustomZones(),
+    false,
+    "custom zones cleared after reset",
+  );
+  assert.is(stats.totals.ticks, 1, "tick counter restarted after reset");
+  assert.is(stats.history.population.length, 1, "history contains a fresh sample");
+  assert.is(stats.getRecentLifeEvents().length, 0, "life event log cleared");
+
+  simulation.destroy();
+});
+
 test("createSimulation controller step delegates to engine.step", async () => {
   const { createSimulation } = await simulationModulePromise;
   const simulation = createSimulation({
