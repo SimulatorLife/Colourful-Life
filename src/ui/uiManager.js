@@ -1,5 +1,12 @@
 import { resolveSimulationDefaults } from "../config.js";
 import { UI_SLIDER_CONFIG } from "./sliderConfig.js";
+import {
+  createControlButtonRow,
+  createControlGrid,
+  createSectionHeading,
+  createSelectRow,
+  createSliderRow,
+} from "./controlBuilders.js";
 import { clamp, clamp01, warnOnce, toPlainObject } from "../utils.js";
 
 /**
@@ -18,14 +25,6 @@ function formatIfFinite(value, formatter, fallback = null) {
 
   return safeFormatter(value);
 }
-
-import {
-  createControlButtonRow,
-  createControlGrid,
-  createSectionHeading,
-  createSelectRow,
-  createSliderRow,
-} from "./controlBuilders.js";
 
 /**
  * Constructs and manages the browser-based control surface. The UI manager
