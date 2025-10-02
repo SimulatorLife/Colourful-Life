@@ -7,7 +7,10 @@ const simulationModulePromise = import("../src/main.js");
 test("createSimulation runs in a headless Node environment", async () => {
   const { createSimulation } = await simulationModulePromise;
   const canvas = new MockCanvas(100, 100);
-  const calls = [];
+  const rafCallbacks = [];
+  const rafHandles = [];
+  const cancelledHandles = [];
+  let nextHandle = 1;
 
   const simulation = createSimulation({
     canvas,
@@ -15,25 +18,55 @@ test("createSimulation runs in a headless Node environment", async () => {
     autoStart: false,
     performanceNow: () => 0,
     requestAnimationFrame: (cb) => {
-      const id = setTimeout(() => {
-        calls.push("raf");
-        cb(0);
-      }, 0);
+      const handle = nextHandle++;
 
-      return id;
+      rafHandles.push(handle);
+      rafCallbacks.push(cb);
+
+      return handle;
     },
-    cancelAnimationFrame: (id) => clearTimeout(id),
+    cancelAnimationFrame: (handle) => {
+      cancelledHandles.push(handle);
+    },
   });
 
   assert.ok(simulation.grid, "grid is returned");
   assert.ok(simulation.uiManager, "uiManager is returned");
 
-  const result = simulation.step();
+  simulation.pause();
+  const stepped = simulation.step(123);
 
-  assert.type(result, "boolean", "step returns whether a tick occurred");
+  assert.is(stepped, true, "step should advance once when paused");
+  assert.is(
+    rafHandles.length,
+    0,
+    "autoStart=false should not schedule frames immediately",
+  );
+
+  simulation.start();
+
+  assert.is(rafHandles.length, 1, "starting schedules the first animation frame");
+  const [firstCallback] = rafCallbacks;
+
+  assert.type(firstCallback, "function", "start captures an animation frame callback");
+
+  firstCallback(16);
+
+  assert.is(
+    rafHandles.length,
+    2,
+    "running frames enqueue a follow-up animation frame for the loop",
+  );
 
   simulation.stop();
-  assert.ok(Array.isArray(calls));
+
+  assert.equal(
+    cancelledHandles,
+    [2],
+    "stop cancels the pending animation frame handle",
+  );
+
+  simulation.destroy();
 });
 
 test("createSimulation headless mode infers a canvas when omitted", async () => {
