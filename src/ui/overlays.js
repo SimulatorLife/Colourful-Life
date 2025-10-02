@@ -334,14 +334,14 @@ function createFitnessPalette(steps, hue) {
 }
 
 /**
- * Paints translucent rectangles for each active environmental event. Colour
+ * Paints translucent rectangles for each active environmental event. Color
  * resolution is delegated to the supplied callback so custom palettes can be
  * injected by UI extensions.
  *
  * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
  * @param {number} cellSize - Width/height of a single grid cell in pixels.
  * @param {Array} activeEvents - Events with `affectedArea` rectangles to render.
- * @param {(event: object) => string} [getColor] - Optional colour resolver invoked per event.
+ * @param {(event: object) => string} [getColor] - Optional color resolver invoked per event.
  */
 export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
   if (!ctx || !Array.isArray(activeEvents) || activeEvents.length === 0) return;
@@ -567,12 +567,12 @@ export function getDensityAt(grid, r, c) {
 }
 
 /**
- * Maps a normalized density value (0..1) to an RGBA colour along a perceptually
+ * Maps a normalized density value (0..1) to an RGBA color along a perceptually
  * smooth gradient used by the density heatmap and legend.
  *
  * @param {number} normalizedValue - Density value in the 0..1 range.
  * @param {{opaque?: boolean}} [options] - When `opaque` is true the alpha channel is set to 1.
- * @returns {string} CSS rgba() string representing the density colour.
+ * @returns {string} CSS rgba() string representing the density color.
  */
 export function densityToRgba(normalizedValue, { opaque = false } = {}) {
   const clampedValue = Number.isFinite(normalizedValue) ? normalizedValue : 0;
@@ -812,7 +812,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
  * @param {object} grid - Grid-like object exposing `energyGrid`, `rows`, and `cols`.
  * @param {CanvasRenderingContext2D} ctx - Canvas context receiving the draw calls.
  * @param {number} cellSize - Width/height of each cell in pixels.
- * @param {number} [maxTileEnergy=MAX_TILE_ENERGY] - Energy cap used to normalize colours.
+ * @param {number} [maxTileEnergy=MAX_TILE_ENERGY] - Energy cap used to normalize colors.
  */
 export function drawEnergyHeatmap(
   grid,
