@@ -26,29 +26,30 @@ function resolveHeadlessCanvasSize(config = {}) {
   const cellSize = toFinite(config?.cellSize) ?? 5;
   const rows = toFinite(config?.rows);
   const cols = toFinite(config?.cols);
-  const fallbackWidth = (cols ?? 120) * cellSize;
-  const fallbackHeight = (rows ?? 120) * cellSize;
-  const pickCandidate = (candidates, fallback) =>
+  const defaultWidth = (cols ?? 120) * cellSize;
+  const defaultHeight = (rows ?? 120) * cellSize;
+  const pickFirstFinite = (candidates, fallback) =>
+    // Preserve the first usable size override while falling back to defaults.
     candidates.find(Number.isFinite) ?? fallback;
 
   return {
-    width: pickCandidate(
+    width: pickFirstFinite(
       [
         toFinite(config?.width),
         toFinite(config?.canvasWidth),
         toFinite(config?.canvasSize?.width),
         cols != null ? cols * cellSize : null,
       ],
-      fallbackWidth,
+      defaultWidth,
     ),
-    height: pickCandidate(
+    height: pickFirstFinite(
       [
         toFinite(config?.height),
         toFinite(config?.canvasHeight),
         toFinite(config?.canvasSize?.height),
         rows != null ? rows * cellSize : null,
       ],
-      fallbackHeight,
+      defaultHeight,
     ),
   };
 }
