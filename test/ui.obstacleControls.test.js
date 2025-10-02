@@ -4,7 +4,7 @@ import { MockCanvas, setupDom } from "./helpers/mockDom.js";
 
 const test = suite("ui obstacle controls");
 
-test("linger penalty slider renders without obstacle presets", async () => {
+test("obstacle controls expose preset actions without linger penalty slider", async () => {
   const restore = setupDom();
 
   try {
@@ -18,17 +18,39 @@ test("linger penalty slider renders without obstacle presets", async () => {
         onSettingChange: () => {},
       },
       "#app",
-      { obstaclePresets: [], getCellSize: () => 5 },
+      {
+        obstaclePresets: [
+          { id: "none", label: "Clear" },
+          { id: "midline", label: "Wall" },
+        ],
+        getCellSize: () => 5,
+      },
       { canvasElement: new MockCanvas(400, 400) },
     );
 
-    assert.ok(uiManager.lingerPenaltySlider, "slider should be created");
-    assert.is(uiManager.lingerPenaltySlider.tagName, "INPUT");
-    assert.is(uiManager.lingerPenaltySlider.type, "range");
-    assert.ok(
-      uiManager.lingerPenaltySlider.parentElement,
-      "slider should be attached to the DOM",
+    assert.is(
+      uiManager.lingerPenaltySlider,
+      undefined,
+      "linger penalty slider should no longer be present",
     );
+
+    const findButton = (node, text) => {
+      if (!node || typeof node !== "object") return null;
+      if (node.tagName === "BUTTON" && node.textContent === text) return node;
+      if (!Array.isArray(node.children)) return null;
+
+      for (const child of node.children) {
+        const match = findButton(child, text);
+
+        if (match) return match;
+      }
+
+      return null;
+    };
+
+    const clearButton = findButton(uiManager.controlsPanel, "Clear Obstacles");
+
+    assert.ok(clearButton, "clear obstacles button should render");
   } finally {
     restore();
   }

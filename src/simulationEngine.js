@@ -382,9 +382,6 @@ export default class SimulationEngine {
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
       autoPauseOnBlur: this.autoPauseOnBlur,
     };
-    this.lingerPenalty = defaults.lingerPenalty;
-
-    this.grid.setLingerPenalty(this.lingerPenalty);
 
     const initialThreshold = this.state.matingDiversityThreshold;
 
@@ -445,7 +442,7 @@ export default class SimulationEngine {
   }
 
   getStateSnapshot() {
-    return { ...this.state, lingerPenalty: this.lingerPenalty };
+    return { ...this.state };
   }
 
   on(event, handler) {
@@ -1035,22 +1032,6 @@ export default class SimulationEngine {
     this.grid?.setBrainSnapshotCollector(collector);
   }
 
-  setLingerPenalty(value) {
-    const sanitized = sanitizeNumeric(value, {
-      fallback: this.lingerPenalty,
-      min: 0,
-    });
-
-    if (sanitized === this.lingerPenalty) return;
-
-    this.lingerPenalty = sanitized;
-    this.grid.setLingerPenalty(sanitized);
-    this.emit("state", {
-      state: this.getStateSnapshot(),
-      changes: { lingerPenalty: sanitized },
-    });
-  }
-
   setAutoPauseOnBlur(value) {
     const enabled = Boolean(value);
 
@@ -1122,9 +1103,6 @@ export default class SimulationEngine {
       case "showFitness":
       case "showCelebrationAuras":
         this.setOverlayVisibility({ [key]: value });
-        break;
-      case "lingerPenalty":
-        this.setLingerPenalty(value);
         break;
       case "autoPauseOnBlur":
         this.setAutoPauseOnBlur(value);

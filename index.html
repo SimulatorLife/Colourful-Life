@@ -41,7 +41,6 @@
         {
           burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
           applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
-          setLingerPenalty: (value) => engine.setLingerPenalty(value),
           obstaclePresets: OBSTACLE_PRESETS,
           getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
           selectionManager: engine.selectionManager,
@@ -69,7 +68,6 @@
       });
 
       uiManager.setPauseState(engine.isPaused());
-      engine.setLingerPenalty(uiManager.getLingerPenalty?.() ?? 0);
 
       if (typeof window !== "undefined") {
         window.uiManager = uiManager;

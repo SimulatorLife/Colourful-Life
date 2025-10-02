@@ -138,8 +138,6 @@ export default class GridManager {
   static #normalizeMoveOptions(options = {}) {
     const {
       obstacles = null,
-      lingerPenalty = 0,
-      penalizeOnBounds = true,
       onBlocked = null,
       onMove = null,
       activeCells = null,
@@ -148,8 +146,6 @@ export default class GridManager {
 
     return {
       obstacles,
-      lingerPenalty,
-      penalizeOnBounds: penalizeOnBounds !== false,
       onBlocked,
       onMove,
       activeCells,
@@ -163,61 +159,6 @@ export default class GridManager {
 
   static #isObstacle(obstacles, row, col) {
     return Boolean(obstacles?.[row]?.[col]);
-  }
-
-  static #resolvePenaltyAmount(penalty, context) {
-    if (typeof penalty === "function") {
-      const value = penalty(context);
-
-      return Number.isFinite(value) ? Math.max(0, value) : 0;
-    }
-
-    return Number.isFinite(penalty) ? Math.max(0, penalty) : 0;
-  }
-
-  static #applyWallPenalty(cell, penalty, context) {
-    if (!cell || typeof cell !== "object" || cell.energy == null) return;
-
-    let amount = GridManager.#resolvePenaltyAmount(penalty, context);
-    const profile =
-      cell?.dna && typeof cell.dna.wallContactProfile === "function"
-        ? cell.dna.wallContactProfile()
-        : null;
-
-    const baseMultiplier = Number.isFinite(profile?.baseMultiplier)
-      ? Math.max(0, profile.baseMultiplier)
-      : 1;
-    const lingerMultiplier = Number.isFinite(profile?.lingerMultiplier)
-      ? Math.max(0, profile.lingerMultiplier)
-      : 1;
-    const contactGrowth = Number.isFinite(profile?.contactGrowth)
-      ? clamp(profile.contactGrowth, 0, 1)
-      : 0.25;
-    const maxMemory = Number.isFinite(profile?.maxMemory)
-      ? Math.max(0, Math.round(profile.maxMemory))
-      : 6;
-
-    if (!Number.isFinite(amount)) amount = 0;
-    amount *= baseMultiplier * lingerMultiplier;
-
-    if (amount <= 0) return;
-
-    const prior = cell.wallContactTicks || 0;
-    const effectiveContacts = Math.min(prior, maxMemory);
-    const scale = 1 + effectiveContacts * contactGrowth;
-    const ageScale =
-      typeof cell.ageEnergyMultiplier === "function"
-        ? cell.ageEnergyMultiplier(0.4)
-        : 1;
-
-    cell.energy = Math.max(0, cell.energy - amount * scale * ageScale);
-    cell.wallContactTicks = prior + 1;
-  }
-
-  static #resetWallPenalty(cell) {
-    if (cell && typeof cell === "object" && cell.wallContactTicks) {
-      cell.wallContactTicks = 0;
-    }
   }
 
   static #resolveDiversityDrive(
@@ -467,15 +408,6 @@ export default class GridManager {
     };
 
     if (GridManager.#isOutOfBounds(attempt.toRow, attempt.toCol, rows, cols)) {
-      if (normalizedOptions.penalizeOnBounds) {
-        GridManager.#applyWallPenalty(moving, normalizedOptions.lingerPenalty, {
-          cell: moving,
-          reason: "bounds",
-          attemptedRow: attempt.toRow,
-          attemptedCol: attempt.toCol,
-        });
-      }
-
       GridManager.#notify(normalizedOptions.onBlocked, {
         reason: "bounds",
         row: sr,
@@ -491,13 +423,6 @@ export default class GridManager {
     if (
       GridManager.#isObstacle(normalizedOptions.obstacles, attempt.toRow, attempt.toCol)
     ) {
-      GridManager.#applyWallPenalty(moving, normalizedOptions.lingerPenalty, {
-        cell: moving,
-        reason: "obstacle",
-        attemptedRow: attempt.toRow,
-        attemptedCol: attempt.toCol,
-      });
-
       GridManager.#notify(normalizedOptions.onBlocked, {
         reason: "obstacle",
         row: sr,
@@ -520,8 +445,6 @@ export default class GridManager {
       onCellMoved: normalizedOptions.onCellMoved,
       activeCells: normalizedOptions.activeCells,
     });
-
-    GridManager.#resetWallPenalty(moving);
 
     return true;
   }
@@ -658,7 +581,6 @@ export default class GridManager {
     this.densityGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.densityDirtyTiles = new Set();
     this.lastSnapshot = null;
-    this.lingerPenalty = 0;
     this.currentObstaclePreset = "none";
     this.tickCount = 0;
     this.rng = typeof rng === "function" ? rng : Math.random;
@@ -738,8 +660,6 @@ export default class GridManager {
   #movementOptions() {
     return {
       obstacles: this.obstacles,
-      lingerPenalty: this.lingerPenalty,
-      penalizeOnBounds: true,
       onMove: this.onMoveCallback,
       activeCells: this.activeCells,
       onCellMoved: (cell) => {
@@ -833,12 +753,6 @@ export default class GridManager {
 
   getEventContext() {
     return this.eventContext;
-  }
-
-  setLingerPenalty(value = 0) {
-    const numeric = Number(value);
-
-    this.lingerPenalty = Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
   }
 
   setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {

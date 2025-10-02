@@ -37,6 +37,10 @@ where practical.
   the metrics and leaderboard they influence.
 - Moved the "Pause When Hidden" toggle next to the playback controls so
   auto-pause behaviour is discoverable alongside the Pause and Step actions.
+- Removed the wall linger penalty control and supporting plumbing from the
+  engine, UI, and headless adapter after determining it duplicated existing
+  movement costs and defaulted to zero, simplifying obstacle behaviour while
+  keeping the low-diversity reproduction slider as the primary tuning surface.
 
 ## [0.1.0]
 

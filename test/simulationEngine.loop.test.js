@@ -176,7 +176,7 @@ test("tick emits events and clears pending slow UI updates after throttle interv
   }
 });
 
-test("updateSetting speedMultiplier and setLingerPenalty propagate changes", async () => {
+test("updateSetting speedMultiplier and low diversity multiplier propagate changes", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
   const { restore, calls } = patchSimulationPrototypes(modules);
@@ -199,33 +199,47 @@ test("updateSetting speedMultiplier and setLingerPenalty propagate changes", asy
     assert.ok(engine.pendingSlowUiUpdate, "speedMultiplier marks pendingSlowUiUpdate");
 
     const stateEvents = [];
+    const initialThreshold = engine.state.matingDiversityThreshold;
 
     engine.on("state", (payload) => stateEvents.push(payload));
 
-    engine.setLingerPenalty(3.5);
+    engine.setLowDiversityReproMultiplier(0.42);
 
-    const lingerCalls = calls.grid.setLingerPenalty;
+    const diversityCalls = calls.grid.setMatingDiversityOptions;
 
     assert.ok(
-      lingerCalls.length >= 2,
-      "setLingerPenalty called at least twice (initial + manual)",
+      diversityCalls.length >= 2,
+      "setMatingDiversityOptions called at least twice (initial + manual)",
     );
-    assert.equal(lingerCalls.at(-1), [3.5], "grid receives sanitized linger penalty");
+    assert.equal(
+      diversityCalls.at(-1),
+      [
+        {
+          threshold: initialThreshold,
+          lowDiversityMultiplier: 0.42,
+        },
+      ],
+      "grid receives updated low diversity multiplier",
+    );
 
     assert.ok(stateEvents.length >= 1, "state event emitted");
     const lastEvent = stateEvents.at(-1);
 
     assert.is(
-      lastEvent.changes.lingerPenalty,
-      3.5,
-      "state change includes lingerPenalty",
+      lastEvent.changes.lowDiversityReproMultiplier,
+      0.42,
+      "state change includes low diversity multiplier",
     );
     assert.is(
-      lastEvent.state.lingerPenalty,
-      3.5,
-      "state snapshot reflects lingerPenalty",
+      lastEvent.state.lowDiversityReproMultiplier,
+      0.42,
+      "state snapshot reflects low diversity multiplier",
     );
-    assert.is(engine.lingerPenalty, 3.5, "engine stores new lingerPenalty");
+    assert.is(
+      engine.state.lowDiversityReproMultiplier,
+      0.42,
+      "engine stores new low diversity multiplier",
+    );
   } finally {
     restore();
   }

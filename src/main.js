@@ -225,7 +225,6 @@ export function createSimulation({
   const baseActions = {
     burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
-    setLingerPenalty: (value) => engine.setLingerPenalty(value),
     obstaclePresets: OBSTACLE_PRESETS,
     getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
     selectionManager: engine.selectionManager,
@@ -244,6 +243,7 @@ export function createSimulation({
 
   if (headless) {
     headlessOptions = {
+      ...sanitizedDefaults,
       ...uiOptions,
       selectionManager: engine.selectionManager,
     };
@@ -281,10 +281,13 @@ export function createSimulation({
     win.uiManager = uiManager;
   }
 
-  if (typeof uiManager?.setLingerPenalty === "function") {
-    uiManager.setLingerPenalty(engine.lingerPenalty);
-  } else if (typeof uiManager?.getLingerPenalty === "function") {
-    engine.setLingerPenalty(uiManager.getLingerPenalty());
+  const syncLowDiversity = engine.state?.lowDiversityReproMultiplier;
+
+  if (
+    typeof syncLowDiversity === "number" &&
+    typeof uiManager?.setLowDiversityReproMultiplier === "function"
+  ) {
+    uiManager.setLowDiversityReproMultiplier(syncLowDiversity);
   }
 
   const unsubscribers = [];
