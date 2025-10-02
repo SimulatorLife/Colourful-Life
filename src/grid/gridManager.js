@@ -1435,26 +1435,6 @@ export default class GridManager {
           3,
           Math.min(Math.floor(options.islandCols ?? maxIslandCols / 2), maxIslandCols),
         );
-        const carve = (startRow, startCol) => {
-          const endRow = Math.min(this.rows - 1, startRow + islandRows - 1);
-          const endCol = Math.min(this.cols - 1, startCol + islandCols - 1);
-
-          for (let r = startRow; r <= endRow; r++) {
-            for (let c = startCol; c <= endCol; c++) {
-              if (r < 0 || c < 0 || r >= this.rows || c >= this.cols) continue;
-              this.obstacles[r][c] = false;
-              this.energyGrid[r][c] = this.maxTileEnergy / 2;
-              this.energyNext[r][c] = 0;
-            }
-          }
-        };
-
-        for (let r = 0; r < this.rows; r++) {
-          for (let c = 0; c < this.cols; c++) {
-            this.setObstacle(r, c, true, { evict });
-          }
-        }
-
         const topStart = Math.max(0, gapRows);
         const leftStart = Math.max(0, gapCols);
         const rightStart = Math.max(0, this.cols - gapCols - islandCols);
@@ -1463,11 +1443,39 @@ export default class GridManager {
         const safeBottom = Math.min(bottomStart, this.rows - islandRows);
         const safeLeft = Math.min(leftStart, this.cols - islandCols);
         const safeRight = Math.min(rightStart, this.cols - islandCols);
+        const baseEnergy = this.maxTileEnergy / 2;
 
-        carve(safeTop, safeLeft);
-        carve(safeTop, safeRight);
-        carve(safeBottom, safeLeft);
-        carve(safeBottom, safeRight);
+        const isInsideIsland = (row, col) =>
+          (row >= safeTop &&
+            row < safeTop + islandRows &&
+            col >= safeLeft &&
+            col < safeLeft + islandCols) ||
+          (row >= safeTop &&
+            row < safeTop + islandRows &&
+            col >= safeRight &&
+            col < safeRight + islandCols) ||
+          (row >= safeBottom &&
+            row < safeBottom + islandRows &&
+            col >= safeLeft &&
+            col < safeLeft + islandCols) ||
+          (row >= safeBottom &&
+            row < safeBottom + islandRows &&
+            col >= safeRight &&
+            col < safeRight + islandCols);
+
+        for (let r = 0; r < this.rows; r++) {
+          for (let c = 0; c < this.cols; c++) {
+            if (isInsideIsland(r, c)) {
+              if (this.isObstacle(r, c)) {
+                this.setObstacle(r, c, false, { evict });
+              }
+              if (this.energyGrid?.[r]) this.energyGrid[r][c] = baseEnergy;
+              if (this.energyNext?.[r]) this.energyNext[r][c] = 0;
+            } else {
+              this.setObstacle(r, c, true, { evict });
+            }
+          }
+        }
         break;
       }
       default:
