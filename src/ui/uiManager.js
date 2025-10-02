@@ -77,6 +77,10 @@ export default class UIManager {
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
     this.playbackSpeedSlider = null;
+    this.pauseOverlay = null;
+    this.pauseOverlayTitle = null;
+    this.pauseOverlayHint = null;
+    this.pauseOverlayAutopause = null;
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -122,6 +126,7 @@ export default class UIManager {
     this.dashboardGrid.className = "dashboard-grid";
     this.sidebar.appendChild(this.dashboardGrid);
     this.mainRow.appendChild(this.canvasContainer);
+    this.#installPauseIndicator();
     this.mainRow.appendChild(this.sidebar);
 
     // Allow callers to customize which keys toggle the pause state.
@@ -228,6 +233,144 @@ export default class UIManager {
       anchor.parentElement.insertBefore(this.mainRow, anchor);
     } else {
       this.root.appendChild(this.mainRow);
+    }
+  }
+
+  #installPauseIndicator() {
+    if (!this.canvasContainer || this.pauseOverlay) return;
+
+    const overlay = document.createElement("div");
+
+    overlay.className = "canvas-pause-indicator";
+    overlay.setAttribute("role", "status");
+    overlay.setAttribute("aria-live", "polite");
+    overlay.hidden = true;
+
+    const title = document.createElement("span");
+
+    title.className = "canvas-pause-indicator__title";
+    title.textContent = "Paused";
+
+    const hint = document.createElement("span");
+
+    hint.className = "canvas-pause-indicator__hint";
+
+    const autopause = document.createElement("span");
+
+    autopause.className = "canvas-pause-indicator__autopause";
+    autopause.hidden = true;
+
+    overlay.appendChild(title);
+    overlay.appendChild(hint);
+    overlay.appendChild(autopause);
+
+    this.canvasContainer.appendChild(overlay);
+
+    this.pauseOverlay = overlay;
+    this.pauseOverlayTitle = title;
+    this.pauseOverlayHint = hint;
+    this.pauseOverlayAutopause = autopause;
+
+    this.#updatePauseIndicator();
+  }
+
+  #formatHotkeyLabel(key) {
+    if (typeof key !== "string") return "";
+
+    const trimmed = key.trim();
+
+    if (!trimmed) return "";
+
+    const normalized = trimmed.toLowerCase();
+
+    switch (normalized) {
+      case " ":
+      case "space":
+        return "Space";
+      case "arrowup":
+        return "Arrow Up";
+      case "arrowdown":
+        return "Arrow Down";
+      case "arrowleft":
+        return "Arrow Left";
+      case "arrowright":
+        return "Arrow Right";
+      case "escape":
+        return "Esc";
+      case "enter":
+        return "Enter";
+      case "return":
+        return "Return";
+      default:
+        break;
+    }
+
+    if (normalized.length === 1) {
+      return normalized.toUpperCase();
+    }
+
+    return normalized
+      .split(/[-_\s]+/)
+      .filter(Boolean)
+      .map((segment) => segment[0].toUpperCase() + segment.slice(1))
+      .join(" ");
+  }
+
+  #formatPauseHotkeys() {
+    if (!this.pauseHotkeySet || this.pauseHotkeySet.size === 0) {
+      return "";
+    }
+
+    const keys = Array.from(this.pauseHotkeySet, (key) =>
+      this.#formatHotkeyLabel(key),
+    ).filter((label) => label.length > 0);
+
+    if (keys.length === 0) return "";
+
+    if (keys.length === 1) return keys[0];
+    if (keys.length === 2) return `${keys[0]} or ${keys[1]}`;
+
+    const last = keys[keys.length - 1];
+    const leading = keys.slice(0, -1).join(", ");
+
+    return `${leading}, or ${last}`;
+  }
+
+  #updatePauseIndicator() {
+    if (!this.pauseOverlay) return;
+
+    if (!this.paused) {
+      this.pauseOverlay.hidden = true;
+
+      return;
+    }
+
+    this.pauseOverlay.hidden = false;
+
+    if (this.pauseOverlayTitle) {
+      this.pauseOverlayTitle.textContent = "Paused";
+    }
+
+    if (this.pauseOverlayHint) {
+      const hotkeyText = this.#formatPauseHotkeys();
+      const hasHotkey = hotkeyText.length > 0;
+      const resumeHint = hasHotkey
+        ? `Press ${hotkeyText} to resume`
+        : "Use the Resume button to continue";
+      const buttonSuffix = hasHotkey ? " or use the Resume button." : ".";
+
+      this.pauseOverlayHint.textContent = `${resumeHint}${buttonSuffix}`;
+    }
+
+    if (this.pauseOverlayAutopause) {
+      if (this.autoPauseOnBlur) {
+        this.pauseOverlayAutopause.hidden = false;
+        this.pauseOverlayAutopause.textContent =
+          "Autopause resumes when the tab regains focus.";
+      } else {
+        this.pauseOverlayAutopause.hidden = true;
+        this.pauseOverlayAutopause.textContent = "";
+      }
     }
   }
 
@@ -1740,6 +1883,7 @@ export default class UIManager {
         ? "Advance one tick while paused to inspect changes frame-by-frame."
         : "Pause the simulation to enable single-step playback.";
     }
+    this.#updatePauseIndicator();
   }
 
   setAutoPauseOnBlur(enabled) {
@@ -1747,6 +1891,7 @@ export default class UIManager {
     if (this.autoPauseCheckbox) {
       this.autoPauseCheckbox.checked = this.autoPauseOnBlur;
     }
+    this.#updatePauseIndicator();
   }
 
   // Getters for simulation

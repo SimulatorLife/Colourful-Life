@@ -72,6 +72,7 @@ canvas {
   align-self: flex-start;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
 #gameCanvas {
@@ -113,6 +114,40 @@ canvas {
   .dashboard-grid {
     width: 100%;
   }
+}
+
+.canvas-pause-indicator {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg) var(--space-md);
+  box-sizing: border-box;
+  background: rgba(17, 17, 17, 0.72);
+  color: var(--color-text);
+  pointer-events: none;
+  backdrop-filter: blur(1px);
+}
+
+.canvas-pause-indicator__title {
+  font-size: clamp(1.2rem, 2vw, 1.6rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.canvas-pause-indicator__hint,
+.canvas-pause-indicator__autopause {
+  font-size: clamp(0.85rem, 1.4vw, 1rem);
+  color: var(--color-text-subtle);
+}
+
+.canvas-pause-indicator__autopause {
+  max-width: 20ch;
 }
 
 /* Base panel styling */
