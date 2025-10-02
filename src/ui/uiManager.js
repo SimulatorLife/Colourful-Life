@@ -114,6 +114,7 @@ export default class UIManager {
     this.combatEdgeSharpness = defaults.combatEdgeSharpness;
     this.matingDiversityThreshold = defaults.matingDiversityThreshold;
     this.lowDiversityReproMultiplier = defaults.lowDiversityReproMultiplier;
+    this.lowDiversitySlider = null;
     this.energyRegenRate = defaults.energyRegenRate; // base logistic regen rate (0..0.2)
     this.energyDiffusionRate = defaults.energyDiffusionRate; // neighbor diffusion rate (0..0.5)
     this.leaderboardIntervalMs = defaults.leaderboardIntervalMs;
@@ -1476,6 +1477,7 @@ export default class UIManager {
       const floor = bounds.floor;
 
       return {
+        key,
         label: overrides.label,
         min,
         max,
@@ -1594,6 +1596,19 @@ export default class UIManager {
       }),
     ];
 
+    const lowDiversitySliderConfig = withSliderConfig("lowDiversityReproMultiplier", {
+      label: "Low Diversity Penalty ×",
+      min: 0,
+      max: 1,
+      step: 0.05,
+      title:
+        "Multiplier applied to reproduction chance when diversity is below the threshold (0 disables births)",
+      format: (v) => v.toFixed(2),
+      getValue: () => this.lowDiversityReproMultiplier,
+      setValue: (v) => this.#updateSetting("lowDiversityReproMultiplier", v),
+      position: "beforeOverlays",
+    });
+
     const generalConfigs = [
       withSliderConfig("mutationMultiplier", {
         label: "Mutation Rate ×",
@@ -1619,18 +1634,7 @@ export default class UIManager {
         setValue: (v) => this.#updateSetting("combatEdgeSharpness", v),
         position: "beforeOverlays",
       }),
-      withSliderConfig("lowDiversityReproMultiplier", {
-        label: "Low Diversity Penalty ×",
-        min: 0,
-        max: 1,
-        step: 0.05,
-        title:
-          "Multiplier applied to reproduction chance when diversity is below the threshold (0 disables births)",
-        format: (v) => v.toFixed(2),
-        getValue: () => this.lowDiversityReproMultiplier,
-        setValue: (v) => this.#updateSetting("lowDiversityReproMultiplier", v),
-        position: "beforeOverlays",
-      }),
+      lowDiversitySliderConfig,
     ];
 
     const insightConfigs = [
@@ -1662,7 +1666,13 @@ export default class UIManager {
 
     generalConfigs
       .filter((cfg) => cfg.position === "beforeOverlays")
-      .forEach((cfg) => renderSlider(cfg, generalGroup));
+      .forEach((cfg) => {
+        const input = renderSlider(cfg, generalGroup);
+
+        if (cfg.key === "lowDiversityReproMultiplier") {
+          this.lowDiversitySlider = input;
+        }
+      });
 
     return {
       renderSlider,
@@ -2180,6 +2190,9 @@ export default class UIManager {
   getMutationMultiplier() {
     return this.mutationMultiplier;
   }
+  getLowDiversityReproMultiplier() {
+    return this.lowDiversityReproMultiplier;
+  }
   getEventFrequencyMultiplier() {
     return this.eventFrequencyMultiplier;
   }
@@ -2220,6 +2233,25 @@ export default class UIManager {
   }
   getShowLifeEventMarkers() {
     return this.showLifeEventMarkers;
+  }
+
+  setLowDiversityReproMultiplier(value, { notify = true } = {}) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return;
+
+    const clamped = clamp(numeric, 0, 1);
+    const changed = this.lowDiversityReproMultiplier !== clamped;
+
+    this.lowDiversityReproMultiplier = clamped;
+
+    if (this.lowDiversitySlider?.updateDisplay) {
+      this.lowDiversitySlider.updateDisplay(clamped);
+    }
+
+    if (changed && notify) {
+      this.#notifySettingChange("lowDiversityReproMultiplier", clamped);
+    }
   }
 
   #showMetricsPlaceholder(message) {

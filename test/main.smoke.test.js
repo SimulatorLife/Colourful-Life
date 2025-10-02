@@ -241,6 +241,46 @@ test("browser UI setter toggles auto-pause through the engine", async () => {
   }
 });
 
+test("browser UI exposes low diversity reproduction controls", async () => {
+  const restore = setupDom();
+
+  try {
+    const { createSimulation } = await simulationModulePromise;
+
+    const simulation = createSimulation({
+      autoStart: false,
+      canvas: new MockCanvas(60, 60),
+    });
+
+    assert.type(
+      simulation.uiManager.setLowDiversityReproMultiplier,
+      "function",
+      "UI manager should expose a setter for the low diversity penalty",
+    );
+
+    simulation.uiManager.setLowDiversityReproMultiplier("0.35");
+
+    assert.is(simulation.uiManager.lowDiversityReproMultiplier, 0.35);
+    assert.is(simulation.engine.getStateSnapshot().lowDiversityReproMultiplier, 0.35);
+    assert.is(simulation.uiManager.lowDiversitySlider.value, "0.35");
+
+    simulation.engine.setLowDiversityReproMultiplier(0.6);
+
+    assert.is(simulation.uiManager.lowDiversityReproMultiplier, 0.6);
+    assert.is(simulation.engine.getStateSnapshot().lowDiversityReproMultiplier, 0.6);
+    assert.is(simulation.uiManager.lowDiversitySlider.value, "0.6");
+
+    simulation.uiManager.setLowDiversityReproMultiplier(-0.25);
+
+    assert.is(simulation.uiManager.lowDiversityReproMultiplier, 0);
+    assert.is(simulation.engine.getStateSnapshot().lowDiversityReproMultiplier, 0);
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});
+
 test("headless UI clamps diversity controls to the 0..1 range", async () => {
   const { createSimulation } = await simulationModulePromise;
 
