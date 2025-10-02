@@ -409,7 +409,65 @@ export default class Cell {
     return mate;
   }
 
-  scorePotentialMates(potentialMates = []) {
+  #resolveNeuralMateInfluence() {
+    if (!this.#canUseNeuralPolicies()) return 0;
+
+    const reinforcement = this.neuralReinforcementProfile || {};
+    const samplingProfile = this.mateSamplingProfile || {};
+    const reproductionWeight = clamp(
+      Number.isFinite(reinforcement.reproductionWeight)
+        ? reinforcement.reproductionWeight
+        : 0.4,
+      0,
+      1.2,
+    );
+    const appetite = clamp(
+      Number.isFinite(this.diversityAppetite) ? this.diversityAppetite : 0,
+      0,
+      1,
+    );
+    const samplingWeight = clamp(
+      Number.isFinite(samplingProfile.neuralPreferenceWeight)
+        ? samplingProfile.neuralPreferenceWeight
+        : 0.6 + appetite * 0.25,
+      0,
+      1.5,
+    );
+
+    return clamp(reproductionWeight * samplingWeight, 0, 0.75);
+  }
+
+  #estimateNeuralMateAffinity(partner, context = {}) {
+    if (!partner || !this.#canUseNeuralPolicies()) return null;
+
+    const baseProbability = Number.isFinite(context.baseProbability)
+      ? context.baseProbability
+      : this.computeReproductionProbability(partner, context);
+    const sensors = this.#reproductionSensors(partner, {
+      ...context,
+      baseProbability,
+    });
+    const preview = this.#previewBrainGroup("reproduction", sensors);
+
+    if (!preview?.values) return null;
+
+    const entries = OUTPUT_GROUPS.reproduction;
+    const logits = entries.map(({ key }) => preview.values[key] ?? 0);
+    const probs = softmax(logits);
+    const acceptIndex = entries.findIndex((entry) => entry.key === "accept");
+    const acceptProb = acceptIndex >= 0 ? clamp(probs[acceptIndex] ?? 0, 0, 1) : 0;
+    const baseProb = clamp(
+      Number.isFinite(baseProbability)
+        ? baseProbability
+        : (sensors.baseReproductionProbability ?? 0),
+      0,
+      1,
+    );
+
+    return clamp((baseProb + acceptProb) / 2, 0, 1);
+  }
+
+  scorePotentialMates(potentialMates = [], context = {}) {
     const scored = [];
 
     for (let i = 0; i < potentialMates.length; i++) {
@@ -427,14 +485,49 @@ export default class Cell {
 
       const evaluated = this.evaluateMateCandidate(mate);
 
-      if (evaluated) scored.push(evaluated);
+      if (evaluated) {
+        if (evaluated.target) {
+          const baseProbability = this.computeReproductionProbability(
+            evaluated.target,
+            context,
+          );
+
+          if (Number.isFinite(baseProbability)) {
+            evaluated.baseReproductionProbability = clamp(baseProbability, 0, 1);
+          }
+
+          const neuralAffinity = this.#estimateNeuralMateAffinity(evaluated.target, {
+            ...context,
+            baseProbability,
+          });
+
+          if (Number.isFinite(neuralAffinity)) {
+            evaluated.neuralAffinity = clamp(neuralAffinity, 0, 1);
+          }
+        }
+
+        if (Number.isFinite(evaluated?.neuralAffinity)) {
+          const influence = this.#resolveNeuralMateInfluence();
+
+          if (influence > 0) {
+            const baseWeight = Math.max(0.0001, evaluated.selectionWeight || 0);
+            const neuralSignal = evaluated.neuralAffinity;
+            const neuralLift = Math.max(0.0001, baseWeight * 0.5 + neuralSignal);
+            const blended = lerp(baseWeight, neuralLift, influence);
+
+            evaluated.selectionWeight = Math.max(0.0001, blended);
+          }
+        }
+
+        scored.push(evaluated);
+      }
     }
 
     return scored;
   }
 
-  selectMateWeighted(potentialMates = []) {
-    const evaluated = this.scorePotentialMates(potentialMates).filter(
+  selectMateWeighted(potentialMates = [], context = {}) {
+    const evaluated = this.scorePotentialMates(potentialMates, context).filter(
       (m) => m && m.selectionWeight > 0 && m.target,
     );
 
@@ -582,10 +675,10 @@ export default class Cell {
     return bestMate;
   }
 
-  findBestMate(potentialMates) {
+  findBestMate(potentialMates, context = {}) {
     if (!Array.isArray(potentialMates) || potentialMates.length === 0) return null;
 
-    const scored = this.scorePotentialMates(potentialMates);
+    const scored = this.scorePotentialMates(potentialMates, context);
 
     if (scored.length === 0) {
       return this.#fallbackMateSelection(potentialMates);
@@ -2249,6 +2342,16 @@ export default class Cell {
     this.#registerDecisionContext(group, sensors, result, activationLoad);
 
     return result.values;
+  }
+
+  #previewBrainGroup(group, sensors) {
+    if (!this.#canUseNeuralPolicies()) return null;
+
+    const result = this.brain.evaluateGroup(group, sensors, { trace: false });
+
+    if (!result || !result.values) return null;
+
+    return result;
   }
 
   #mapLegacyStrategyToAction(strategy) {
