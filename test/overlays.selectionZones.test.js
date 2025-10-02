@@ -88,22 +88,6 @@ test("drawSelectionZones matches tile coverage for predefined patterns", () => {
   assert.equal(sortedSetValues(drawnCells), sortedSetValues(expectedCells));
 });
 
-test("drawSelectionZones matches tile coverage for custom rectangles", () => {
-  const manager = new SelectionManager(12, 12);
-
-  manager.addCustomRectangle(2, 3, 6, 7);
-  manager.addCustomRectangle(0, 0, 1, 4);
-
-  const ctx = createMockContext();
-
-  drawSelectionZones(manager, ctx, 8);
-
-  const drawnCells = collectCellsFromOperations(ctx.operations, 8);
-  const expectedCells = baselineCoverage(manager);
-
-  assert.equal(sortedSetValues(drawnCells), sortedSetValues(expectedCells));
-});
-
 test("pattern geometry is cached after activation", () => {
   const manager = new SelectionManager(10, 10);
   const pattern = manager.patterns.get("alternatingBands");

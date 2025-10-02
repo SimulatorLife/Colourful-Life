@@ -38,6 +38,13 @@ where practical.
   outcomes collapsing below a 0.2 multiplier; the higher floor trimmed those
   stalls without materially lifting average reproduction odds, helping
   homogenised populations recover while keeping diversity pressure intact.
+
+### Removed
+
+- Retired the "Draw Custom Zone" controls, simulation hooks, and documentation
+  because the advanced drawing workflow saw almost no use, players preferred a
+  more observational experience with simple presets, and the extra UI surfaced
+  little value while bloating the sidebar.
 - Lowered the default mating diversity threshold from `0.45` to `0.42` after a
   300-tick headless run (60×60 grid, seed 12345) nudged mean diversity from
   ~0.27 to ~0.30 and raised successful matings from 5/241 to 6/269, easing
