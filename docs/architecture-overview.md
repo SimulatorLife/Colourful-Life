@@ -23,6 +23,13 @@ This document captures how the Colourful Life simulation composes its core syste
 - Applies obstacle presets (`OBSTACLE_PRESETS`) and exposes helpers such as `burstRandomCells` and `applyObstaclePreset` that the UI surfaces.
 - Integrates with `SelectionManager` and `ReproductionZonePolicy` to respect curated reproduction areas, and with wall-contact penalties configured per DNA profile.
 
+### Cell
+
+- Implemented in [`src/cell.js`](../src/cell.js), each `Cell` instance encapsulates DNA-derived behaviour, neural wiring, and telemetry gathered during simulation ticks.
+- Maintains rolling histories for decisions, risk memories, and mating preferences so overlays and analytics modules can display recent context.
+- Applies DNA-driven caps (e.g. crowding tolerance, neural fatigue profiles, diversity appetites) when responding to environment and interaction hooks.
+- Emits brain snapshots and decision traces consumed by the debugger, leaderboard, and overlays.
+
 ### EnergySystem
 
 - `computeTileEnergyUpdate` is called for each tile while the grid is preparing a tick.

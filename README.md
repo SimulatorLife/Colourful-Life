@@ -36,6 +36,7 @@ Tune baseline energy and density behaviour without editing source by setting env
 - `COLOURFUL_LIFE_MAX_TILE_ENERGY` — Raises or lowers the per-tile energy cap used by the energy system and heatmap legends.
 - `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` — Adjusts how strongly local population density suppresses energy regeneration (0 disables the penalty, 1 matches the default cap).
 - `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` — Tunes the harvesting penalty applied when crowded organisms attempt to consume energy from a tile, allowing experiments with more competitive or laissez-faire ecosystems.
+- `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Adjusts the normalized cutoff the stats system uses when counting organisms as "active" for a trait, keeping telemetry aligned with looser or stricter interpretations of participation.
 
 Values outside their accepted ranges fall back to the defaults defined in [`src/config.js`](src/config.js) so experiments remain predictable across environments and overlays stay aligned with the active configuration.
 
@@ -54,6 +55,7 @@ The simulation runs on cooperating modules housed in `src/`:
 - **Simulation engine** (`src/simulationEngine.js`) — Coordinates the render loop, tick cadence, and lifecycle events consumed by UI panels and automation hooks.
 - **Grid manager** (`src/grid/gridManager.js`) — Maintains the cellular grid, applies movement, reproduction, energy transfer, and obstacle interactions, and surfaces leaderboard snapshots.
 - **Energy system** (`src/energySystem.js`) — Computes tile-level regeneration, diffusion, and drain while blending in environmental events and density penalties.
+- **Cell model** (`src/cell.js`) — Maintains per-organism state, applies DNA-driven preferences, and records telemetry consumed by fitness calculations and overlays.
 - **Genetics and brains** (`src/genome.js`, `src/brain.js`) — DNA factories encode traits ranging from combat appetite to neural wiring. Brains interpret sensor inputs, adapt gains over time, and emit movement/interaction intents.
 - **Interaction system** (`src/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
 - **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and color overlays.
@@ -69,7 +71,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 - **Linting** — `npm run lint` enforces the ESLint + Prettier ruleset across JavaScript and inline HTML. Use `npm run lint:fix` to auto-resolve minor issues.
 - **Testing** — `npm test` runs the Node.js test suites. Tests cover grid utilities, selection logic, and regression harnesses. Add cases when behaviours change.
 - **Profiling** — `node scripts/profile-energy.mjs` benchmarks the energy preparation loop. Adjust rows/cols via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and the stub `cellSize` with `PERF_CELL_SIZE` environment variables.
-- **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap and use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures without modifying source defaults.
+- **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap. Use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures and `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` to retune telemetry cutoffs without modifying source defaults.
 - **Headless usage** — `createSimulation` accepts `{ headless: true }` to return a controller without mounting DOM controls. Inject `requestAnimationFrame`, `performanceNow`, or RNG hooks for deterministic automation.
 - **Documentation** — Follow the conventions in [`docs/developer-guide.md`](docs/developer-guide.md) when updating code comments, tests, or user-facing docs.
 
@@ -85,6 +87,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 - `docs/` — Architecture notes, developer guides, and background reading.
 - `index.html`, `styles.css` — Browser entry point and shared styles.
 - `eslint.config.mjs`, `package.json` — Tooling and dependency configuration.
+- `CHANGELOG.md` — Human-readable log of noteworthy fixes, features, and documentation updates between releases.
 
 ## Key scripts and commands
 
