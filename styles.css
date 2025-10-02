@@ -262,6 +262,14 @@ canvas {
 .control-button-row button {
   margin-bottom: 0;
 }
+.control-button-row--compact {
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+}
+.control-button-row--compact button {
+  padding: calc(var(--space-sm) * 2) var(--space-sm);
+  font-size: 13px;
+  line-height: 1.2;
+}
 .control-row {
   display: block;
   margin: var(--space-md) 0;
