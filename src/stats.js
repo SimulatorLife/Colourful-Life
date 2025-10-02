@@ -270,7 +270,7 @@ export default class Stats {
     this.totals = { ticks: 0, births: 0, deaths: 0, fights: 0, cooperations: 0 };
     this.traitHistory = { presence: {}, average: {} };
     this.#traitHistoryRings = { presence: {}, average: {} };
-    this.matingDiversityThreshold = 0.45;
+    this.matingDiversityThreshold = 0.42;
     this.lastMatingDebug = null;
     this.mutationMultiplier = 1;
     this.lastBlockedReproduction = null;

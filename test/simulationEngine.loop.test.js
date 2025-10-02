@@ -54,7 +54,7 @@ test("start schedules a frame and ticking through RAF uses sanitized defaults", 
       energyRegenRate: 0.0082,
       energyDiffusionRate: 0.05,
       mutationMultiplier: 1,
-      matingDiversityThreshold: 0.45,
+      matingDiversityThreshold: 0.42,
       lowDiversityReproMultiplier: 0.12,
       combatEdgeSharpness: 3.2,
     });
