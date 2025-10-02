@@ -946,9 +946,16 @@ export default class GridManager {
     }
 
     if (!candidates || candidates.length === 0) return null;
-    const index = Math.floor(this.#random() * candidates.length);
 
-    return candidates[index]?.id ?? null;
+    // Treat the "none" preset as an explicit opt-out. Randomization should favour
+    // actual obstacle layouts so users who ask for a randomized map do not
+    // occasionally receive the empty field. When "none" is the only available
+    // option (e.g. custom pools), keep it as the fallback.
+    const usableCandidates = candidates.filter((preset) => preset?.id !== "none");
+    const pool = usableCandidates.length > 0 ? usableCandidates : candidates;
+    const index = Math.floor(this.#random() * pool.length);
+
+    return pool[index]?.id ?? null;
   }
 
   #resolveInitialObstaclePreset({
