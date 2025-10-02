@@ -222,12 +222,12 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   // gate reduces reproduction stalls in homogenised stretches while keeping the
   // diversity incentive in place.
   matingDiversityThreshold: 0.42,
-  // Lifted from 0.1 after sampling 10k similarity-penalized pairings showed
-  // roughly 7.5% of outcomes collapsing below a 0.2 multiplier. Settling on
-  // 0.12 trimmed those near-zero cases without materially raising the average
-  // reproduction probability, softening homogenization stalls while preserving
-  // pressure to diversify.
-  lowDiversityReproMultiplier: 0.12,
+  // Raised from 0.12 after the population stability harness exposed sporadic
+  // collapses in smaller headless runs where kin-heavy pairings dominated.
+  // A 0.2 floor keeps similarity penalties meaningful while guaranteeing the
+  // ecosystem can recover instead of sliding into extinction spirals when
+  // diversity temporarily stalls.
+  lowDiversityReproMultiplier: 0.2,
   speedMultiplier: 1,
   autoPauseOnBlur: false,
 });
