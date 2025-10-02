@@ -110,13 +110,7 @@ export function accumulateEventModifiers({
     ? numericStrengthMultiplier
     : 1;
 
-  for (
-    let eventIndex = 0, eventCount = events.length;
-    eventIndex < eventCount;
-    eventIndex++
-  ) {
-    const eventInstance = events[eventIndex];
-
+  for (const eventInstance of events) {
     if (!eventInstance) continue;
     if (eventApplies && !eventApplies(eventInstance, row, col)) continue;
 
