@@ -161,7 +161,7 @@ export default class EventManager {
    * @param {Object} [options]
    * @param {(eventType: string) => string} [options.resolveEventColor]
    * @param {Record<string, string>} [options.eventColors]
-   * @param {boolean} [options.startWithEvent=true]
+   * @param {boolean} [options.startWithEvent=false]
    * @param {string[]} [options.eventTypes] Custom pool used when picking random events.
    * @param {(context: {rng: () => number, eventTypes: string[], defaultPick: () => string}) => string} [options.pickEventType]
    * @param {{
@@ -180,7 +180,7 @@ export default class EventManager {
     const {
       resolveEventColor,
       eventColors,
-      startWithEvent = true,
+      startWithEvent = false,
       eventTypes: injectedEventTypes,
       pickEventType,
       randomEventConfig,
@@ -237,10 +237,12 @@ export default class EventManager {
       this.pickEventType = defaultPicker;
     }
     if (startWithEvent) {
-      const e = this.generateRandomEvent();
+      const initialEvent = this.generateRandomEvent();
 
-      this.activeEvents.push(e);
-      this.currentEvent = e;
+      if (initialEvent) {
+        this.activeEvents.push(initialEvent);
+        this.currentEvent = initialEvent;
+      }
     }
   }
 
@@ -329,7 +331,7 @@ export default class EventManager {
     return { eventType, duration, affectedArea, strength, remaining: duration };
   }
 
-  reset({ startWithEvent = true } = {}) {
+  reset({ startWithEvent = false } = {}) {
     this.activeEvents = [];
     this.currentEvent = null;
     this.cooldown = 0;
