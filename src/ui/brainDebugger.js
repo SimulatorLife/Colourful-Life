@@ -130,15 +130,10 @@ const BrainDebugger = {
         const genes = safeInvoke(() => cell.dna.neuralGenes(), "neuralGenes", []);
 
         if (Array.isArray(genes) && genes.length > 0) {
-          let enabled = 0;
-
-          for (let j = 0; j < genes.length; j += 1) {
-            const gene = genes[j];
-
-            if (gene && gene.enabled !== false) enabled += 1;
-          }
-
-          fallbackConnectionCount = enabled;
+          fallbackConnectionCount = genes.reduce(
+            (enabled, gene) => (gene && gene.enabled !== false ? enabled + 1 : enabled),
+            0,
+          );
         }
       }
 
