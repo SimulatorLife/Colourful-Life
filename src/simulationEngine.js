@@ -9,7 +9,7 @@ import {
   SIMULATION_DEFAULTS,
   resolveSimulationDefaults,
 } from "./config.js";
-import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
+import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
 import { clamp, reportError } from "./utils.js";
 
 function createSelectionManagerStub(rows, cols) {
@@ -304,6 +304,7 @@ export default class SimulationEngine {
     this.cellSize = cellSize;
     this.rows = rows;
     this.cols = cols;
+    this._obstaclePresets = resolveObstaclePresetCatalog(config.obstaclePresets);
     this.now = typeof injectedNow === "function" ? injectedNow : defaultNow;
     this.raf =
       typeof injectedRaf === "function"
@@ -369,6 +370,7 @@ export default class SimulationEngine {
       initialObstaclePresetOptions: config.initialObstaclePresetOptions,
       randomizeInitialObstacles,
       randomObstaclePresetPool: config.randomObstaclePresetPool,
+      obstaclePresets: this._obstaclePresets,
       rng,
       brainSnapshotCollector,
     });
@@ -441,7 +443,7 @@ export default class SimulationEngine {
   }
 
   get obstaclePresets() {
-    return OBSTACLE_PRESETS;
+    return this._obstaclePresets;
   }
 
   /**

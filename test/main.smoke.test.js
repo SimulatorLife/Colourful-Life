@@ -199,6 +199,52 @@ test("headless UI clamps update frequency like the engine", async () => {
   simulation.destroy();
 });
 
+test("createSimulation merges obstacle preset overrides into the catalog", async () => {
+  const restore = setupDom();
+
+  try {
+    const { createSimulation } = await simulationModulePromise;
+    const canvas = new MockCanvas(60, 60);
+    const injectedPresets = {
+      includeDefaults: false,
+      presets: [
+        { id: "midline", label: "Alternate Midline" },
+        { id: "custom", label: "Custom Layout", description: "Injected" },
+        "none",
+      ],
+    };
+    const simulation = createSimulation({
+      canvas,
+      autoStart: false,
+      config: { obstaclePresets: injectedPresets },
+    });
+
+    const enginePresets = simulation.engine.obstaclePresets;
+    const presetIds = enginePresets.map((preset) => preset.id);
+
+    assert.ok(
+      presetIds.includes("custom"),
+      "custom preset should be appended to the catalog",
+    );
+    assert.is(
+      enginePresets.find((preset) => preset.id === "midline")?.label,
+      "Alternate Midline",
+    );
+    assert.is(
+      enginePresets.find((preset) => preset.id === "custom")?.description,
+      "Injected",
+    );
+    assert.ok(
+      simulation.grid.obstaclePresets.some((preset) => preset.id === "custom"),
+      "GridManager should receive the injected preset",
+    );
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});
+
 test("engine.resetWorld reseeds the ecosystem and clears custom zones", async () => {
   const { createSimulation } = await simulationModulePromise;
   const deterministicRng = () => 0.01;

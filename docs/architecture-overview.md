@@ -20,7 +20,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - Drives reproduction, mutation, movement, combat, cooperation, and death each tick.
 - Delegates complex social interactions to **InteractionSystem** and neural decision making to **Brain** instances.
 - Collects leaderboard entries by combining `computeFitness` with Brain snapshots.
-- Applies obstacle presets (`OBSTACLE_PRESETS`) and exposes helpers such as `burstRandomCells` and `applyObstaclePreset` that the UI surfaces.
+- Applies obstacle presets resolved via `resolveObstaclePresetCatalog` and exposes helpers such as `burstRandomCells` and `applyObstaclePreset` that the UI surfaces. Embedding contexts can pass `config.obstaclePresets` to extend or replace the catalog without touching core code.
 - Integrates with `SelectionManager` and `ReproductionZonePolicy` to respect curated reproduction areas, and with wall-contact penalties configured per DNA profile.
 
 ### Cell
