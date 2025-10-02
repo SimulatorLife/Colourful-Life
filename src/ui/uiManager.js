@@ -431,17 +431,177 @@ export default class UIManager {
     this.currentCellSize = cellSize;
     this.gridRows = rows;
     this.gridCols = cols;
+
+    this.#updateGeometrySummary(
+      { cellSize, rows, cols },
+      { raw: { cellSize, rows, cols } },
+    );
   }
 
-  #updateGeometrySummary({ cellSize, rows, cols }) {
-    const summaryEl = this.geometryControls?.summaryEl;
+  #updateGeometrySummary(values = {}, options = {}) {
+    const fallback = options.fallback ?? {
+      cellSize: this.currentCellSize,
+      rows: this.gridRows,
+      cols: this.gridCols,
+    };
+    const normalized = this.#normalizeGeometryValues(values, fallback);
+    const controls = this.geometryControls;
 
-    if (!summaryEl) return;
+    if (!controls?.summaryEl) return normalized;
 
-    const widthPx = Math.round(cols * cellSize);
-    const heightPx = Math.round(rows * cellSize);
+    const rawValues = options.raw ?? values ?? {};
+    const hasEmpty = Boolean(options.hasEmpty);
+    const hasInvalid = Boolean(options.hasInvalid);
+    const isIncomplete = hasEmpty || hasInvalid;
+    const formatNumber = (value) =>
+      Number.isFinite(value) ? value.toLocaleString() : "—";
 
-    summaryEl.textContent = `${cols} × ${rows} cells (${widthPx} × ${heightPx} px)`;
+    const widthPx =
+      Number.isFinite(normalized.cols) && Number.isFinite(normalized.cellSize)
+        ? Math.round(normalized.cols * normalized.cellSize)
+        : Number.NaN;
+    const heightPx =
+      Number.isFinite(normalized.rows) && Number.isFinite(normalized.cellSize)
+        ? Math.round(normalized.rows * normalized.cellSize)
+        : Number.NaN;
+
+    if (controls.previewCellsEl) {
+      controls.previewCellsEl.textContent = isIncomplete
+        ? "—"
+        : `${formatNumber(normalized.cols)} × ${formatNumber(normalized.rows)}`;
+    }
+
+    if (controls.previewPixelsEl) {
+      controls.previewPixelsEl.textContent = isIncomplete
+        ? "—"
+        : `${formatNumber(widthPx)} × ${formatNumber(heightPx)}`;
+    }
+
+    const differsFromCurrent =
+      !isIncomplete &&
+      (normalized.cellSize !== this.currentCellSize ||
+        normalized.rows !== this.gridRows ||
+        normalized.cols !== this.gridCols);
+
+    const state = isIncomplete
+      ? "incomplete"
+      : differsFromCurrent
+        ? "pending"
+        : "current";
+
+    controls.summaryEl.setAttribute("data-state", state);
+
+    if (controls.summaryStatusEl) {
+      let statusText = "Current";
+
+      if (state === "pending") statusText = "Pending Apply";
+      else if (state === "incomplete")
+        statusText = hasInvalid ? "Enter Valid Numbers" : "Enter All Values";
+
+      controls.summaryStatusEl.textContent = statusText;
+    }
+
+    if (controls.summaryNoteEl) {
+      const noteEl = controls.summaryNoteEl;
+      const defaultNote = controls.summaryDefaultNote;
+
+      noteEl.classList.remove("geometry-summary__note--warning");
+
+      if (isIncomplete) {
+        noteEl.textContent = hasInvalid
+          ? "Enter valid numbers to preview the new grid."
+          : "Enter values for every field to preview the new grid.";
+        noteEl.classList.add("geometry-summary__note--warning");
+      } else {
+        const adjustments = this.#describeGeometryAdjustments(rawValues, normalized);
+
+        if (adjustments.length > 0) {
+          noteEl.textContent = `Adjusted to stay within limits: ${this.#formatReadableList(
+            adjustments,
+          )}.`;
+          noteEl.classList.add("geometry-summary__note--warning");
+        } else {
+          noteEl.textContent =
+            defaultNote || "Preview updates as you edit. Apply to confirm changes.";
+        }
+      }
+    }
+
+    if (controls.applyButton) {
+      const disabled = isIncomplete || !differsFromCurrent;
+
+      controls.applyButton.disabled = disabled;
+      controls.applyButton.setAttribute("aria-disabled", disabled ? "true" : "false");
+    }
+
+    return normalized;
+  }
+
+  #describeGeometryAdjustments(raw = {}, normalized = {}) {
+    const bounds = GRID_GEOMETRY_BOUNDS;
+    const descriptors = [
+      { key: "cellSize", label: "Cell size", unit: "px", bounds: bounds.cellSize },
+      { key: "rows", label: "Rows", unit: "tiles", bounds: bounds.rows },
+      { key: "cols", label: "Columns", unit: "tiles", bounds: bounds.cols },
+    ];
+    const adjustments = [];
+
+    const formatValue = (value, unit) => {
+      if (!Number.isFinite(value)) return null;
+
+      const formatted = value.toLocaleString();
+
+      return unit ? `${formatted} ${unit}` : formatted;
+    };
+
+    descriptors.forEach(({ key, label, unit, bounds: bound }) => {
+      const rawValue = raw?.[key];
+      const normalizedValue = normalized?.[key];
+
+      if (!Number.isFinite(rawValue) || !Number.isFinite(normalizedValue)) return;
+
+      const rounded = Math.round(rawValue);
+      const formatted = formatValue(normalizedValue, unit);
+
+      if (!formatted) return;
+
+      if (rounded < bound.min && normalizedValue === bound.min) {
+        adjustments.push(`${label} raised to ${formatted}`);
+
+        return;
+      }
+
+      if (rounded > bound.max && normalizedValue === bound.max) {
+        adjustments.push(`${label} capped at ${formatted}`);
+
+        return;
+      }
+
+      if (rounded !== rawValue && normalizedValue === rounded) {
+        adjustments.push(`${label} rounded to ${formatted}`);
+
+        return;
+      }
+
+      if (normalizedValue !== rawValue) {
+        adjustments.push(`${label} adjusted to ${formatted}`);
+      }
+    });
+
+    return adjustments;
+  }
+
+  #formatReadableList(items = []) {
+    const list = Array.isArray(items) ? items.filter(Boolean) : [];
+
+    if (list.length === 0) return "";
+    if (list.length === 1) return list[0];
+    if (list.length === 2) return `${list[0]} and ${list[1]}`;
+
+    const head = list.slice(0, -1).join(", ");
+    const tail = list[list.length - 1];
+
+    return `${head}, and ${tail}`;
   }
 
   #applyWorldGeometry(values = {}) {
@@ -460,7 +620,6 @@ export default class UIManager {
     const applied = this.#normalizeGeometryValues(result, request);
 
     this.#updateGeometryInputs(applied);
-    this.#updateGeometrySummary(applied);
     this.#scheduleUpdate();
     this.#updateZoneSummary();
 
@@ -471,7 +630,6 @@ export default class UIManager {
     const normalized = this.#normalizeGeometryValues(values);
 
     this.#updateGeometryInputs(normalized);
-    this.#updateGeometrySummary(normalized);
   }
 
   attachCanvas(canvasElement, options = {}) {
@@ -1688,11 +1846,65 @@ export default class UIManager {
       });
     });
     buttonRow.appendChild(applyButton);
+    applyButton.disabled = true;
+    applyButton.setAttribute("aria-disabled", "true");
 
     const summary = document.createElement("div");
 
-    summary.className = "control-hint";
+    summary.className = "geometry-summary";
     summary.style.gridColumn = "1 / -1";
+    summary.setAttribute("role", "status");
+    summary.setAttribute("aria-live", "polite");
+    summary.setAttribute("aria-atomic", "true");
+
+    const summaryHeader = document.createElement("div");
+
+    summaryHeader.className = "geometry-summary__header";
+
+    const summaryTitle = document.createElement("span");
+
+    summaryTitle.className = "geometry-summary__title";
+    summaryTitle.textContent = "Preview";
+
+    const summaryStatus = document.createElement("span");
+
+    summaryStatus.className = "geometry-summary__status";
+    summaryStatus.textContent = "Current";
+
+    summaryHeader.appendChild(summaryTitle);
+    summaryHeader.appendChild(summaryStatus);
+    summary.appendChild(summaryHeader);
+
+    const summaryGrid = document.createElement("dl");
+
+    summaryGrid.className = "geometry-summary__grid";
+
+    const createSummaryValue = (labelText) => {
+      const labelEl = document.createElement("dt");
+
+      labelEl.className = "geometry-summary__label";
+      labelEl.textContent = labelText;
+      const valueEl = document.createElement("dd");
+
+      valueEl.className = "geometry-summary__value";
+      valueEl.textContent = "—";
+      summaryGrid.appendChild(labelEl);
+      summaryGrid.appendChild(valueEl);
+
+      return valueEl;
+    };
+
+    const cellsValueEl = createSummaryValue("Grid (cells)");
+    const pixelsValueEl = createSummaryValue("Canvas (px)");
+
+    summary.appendChild(summaryGrid);
+
+    const summaryNote = document.createElement("p");
+
+    summaryNote.className = "geometry-summary__note";
+    summaryNote.textContent = "Preview updates as you edit. Apply to confirm changes.";
+    summary.appendChild(summaryNote);
+
     geometryGrid.appendChild(summary);
 
     this.geometryControls = {
@@ -1701,9 +1913,41 @@ export default class UIManager {
       colsInput,
       applyButton,
       summaryEl: summary,
+      summaryStatusEl: summaryStatus,
+      summaryNoteEl: summaryNote,
+      summaryDefaultNote: summaryNote.textContent,
+      previewCellsEl: cellsValueEl,
+      previewPixelsEl: pixelsValueEl,
+    };
+
+    const handlePreviewChange = () => {
+      const parseState = (input) => {
+        const text = String(input.value ?? "").trim();
+        const value = Number.parseFloat(input.value);
+
+        return { text, value };
+      };
+
+      const cellSizeState = parseState(cellSizeInput);
+      const rowsState = parseState(rowsInput);
+      const colsState = parseState(colsInput);
+      const states = [cellSizeState, rowsState, colsState];
+      const hasEmpty = states.some(({ text }) => text === "");
+      const hasInvalid = states.some(
+        ({ text, value }) => text !== "" && !Number.isFinite(value),
+      );
+
+      const raw = {
+        cellSize: cellSizeState.value,
+        rows: rowsState.value,
+        cols: colsState.value,
+      };
+
+      this.#updateGeometrySummary(raw, { raw, hasEmpty, hasInvalid });
     };
 
     [cellSizeInput, rowsInput, colsInput].forEach((input) => {
+      input.addEventListener("input", handlePreviewChange);
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
@@ -1713,7 +1957,6 @@ export default class UIManager {
     });
 
     this.#updateGeometryInputs(geometry);
-    this.#updateGeometrySummary(geometry);
   }
 
   #buildSliderGroups(body) {

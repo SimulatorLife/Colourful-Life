@@ -416,6 +416,100 @@ canvas {
   line-height: 1.5;
 }
 
+.geometry-summary {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+
+.geometry-summary[data-state="current"] {
+  opacity: 0.9;
+}
+
+.geometry-summary[data-state="pending"] {
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  opacity: 1;
+}
+
+.geometry-summary[data-state="incomplete"] {
+  border-color: rgba(231, 76, 60, 0.45);
+  box-shadow: 0 0 0 1px var(--color-life-death-soft);
+  opacity: 1;
+}
+
+.geometry-summary__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.geometry-summary__title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.geometry-summary__status {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+  transition: color 160ms ease;
+}
+
+.geometry-summary[data-state="pending"] .geometry-summary__status {
+  color: var(--color-life-birth);
+}
+
+.geometry-summary[data-state="incomplete"] .geometry-summary__status {
+  color: var(--color-life-death);
+}
+
+.geometry-summary__grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px var(--space-sm);
+  margin: 0;
+}
+
+.geometry-summary__label {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.geometry-summary__value {
+  margin: 0;
+  justify-self: end;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.geometry-summary__note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-subtle);
+}
+
+.geometry-summary__note--warning {
+  color: var(--color-life-death);
+}
+
 .zone-intro {
   margin: 4px 0 var(--space-sm);
 }
