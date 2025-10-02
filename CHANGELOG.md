@@ -32,6 +32,11 @@ where practical.
   pressure, and nudged it again to `0.0082` after tile-only probes settled
   closer to 3.0 energy versus 2.86 under moderate density, reducing early
   starvation cascades without saturating the map.
+- Raised the low-diversity reproduction multiplier floor from `0.10` to `0.12`
+  after sampling 10k similarity-penalised pairings showed roughly 7.5% of
+  outcomes collapsing below a 0.2 multiplier; the higher floor trimmed those
+  stalls without materially lifting average reproduction odds, helping
+  homogenised populations recover while keeping diversity pressure intact.
 - Relocated the leaderboard refresh slider into the Evolution Insights panel,
   renaming it "Insights Refresh Interval" so cadence controls live alongside
   the metrics and leaderboard they influence.
