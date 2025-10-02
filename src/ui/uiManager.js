@@ -81,7 +81,11 @@ export default class UIManager {
     this.lifeEventsSummaryDeathItem = null;
     this.lifeEventsSummaryBirthCount = null;
     this.lifeEventsSummaryDeathCount = null;
+    this.lifeEventsSummaryTrend = null;
+    this.lifeEventsSummaryNet = null;
+    this.lifeEventsSummaryRate = null;
     this.playbackSpeedSlider = null;
+    this.speedPresetButtons = [];
     this.pauseOverlay = null;
     this.pauseOverlayTitle = null;
     this.pauseOverlayHint = null;
@@ -590,6 +594,51 @@ export default class UIManager {
     this.#notifySettingChange(key, value);
   }
 
+  #sanitizeSpeedMultiplier(value) {
+    const bounds = UI_SLIDER_CONFIG?.speedMultiplier || {};
+    const floor = Number.isFinite(bounds.floor) ? bounds.floor : undefined;
+    const min = Number.isFinite(bounds.min) ? bounds.min : undefined;
+    const max = Number.isFinite(bounds.max) ? bounds.max : undefined;
+    const lowerBound = floor ?? min ?? 0.1;
+    const upperBound = max ?? 100;
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return null;
+
+    return clamp(numeric, lowerBound, upperBound);
+  }
+
+  #setSpeedMultiplier(value) {
+    const sanitized = this.#sanitizeSpeedMultiplier(value);
+
+    if (!Number.isFinite(sanitized)) return;
+
+    this.#updateSetting("speedMultiplier", sanitized);
+    this.#updateSpeedMultiplierUI(sanitized);
+  }
+
+  #updateSpeedMultiplierUI(value) {
+    const numeric = Number(value);
+
+    if (Number.isFinite(numeric) && this.playbackSpeedSlider?.updateDisplay) {
+      this.playbackSpeedSlider.updateDisplay(numeric);
+    }
+
+    if (!Array.isArray(this.speedPresetButtons)) return;
+
+    const tolerance = 0.001;
+
+    this.speedPresetButtons.forEach(({ value: presetValue, button }) => {
+      if (!button) return;
+      const isActive = Number.isFinite(numeric)
+        ? Math.abs(numeric - presetValue) <= tolerance
+        : false;
+
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
+  }
+
   #setDrawingEnabled(enabled) {
     this.selectionDrawingEnabled = Boolean(enabled);
     const isActive = this.selectionDrawingEnabled;
@@ -1053,7 +1102,7 @@ export default class UIManager {
     return valueEl;
   }
 
-  #updateLifeEventsSummary(birthCount = 0, deathCount = 0, totalCount) {
+  #updateLifeEventsSummary(birthCount = 0, deathCount = 0, totalCount, trend) {
     if (!this.lifeEventsSummary) return;
 
     const updateItem = (item, countEl, count) => {
@@ -1095,6 +1144,58 @@ export default class UIManager {
         : Math.max(0, (birthCount || 0) + (deathCount || 0));
 
     this.lifeEventsSummary.classList.toggle("life-events-summary--empty", total === 0);
+
+    const netSource = Number.isFinite(trend?.net)
+      ? Math.round(trend.net)
+      : Math.round((birthCount || 0) - (deathCount || 0));
+    const eventsPer100 = Number.isFinite(trend?.eventsPer100Ticks)
+      ? trend.eventsPer100Ticks
+      : 0;
+
+    if (this.lifeEventsSummaryTrend) {
+      this.lifeEventsSummaryTrend.classList.toggle(
+        "life-events-summary__trend--positive",
+        netSource > 0,
+      );
+      this.lifeEventsSummaryTrend.classList.toggle(
+        "life-events-summary__trend--negative",
+        netSource < 0,
+      );
+      this.lifeEventsSummaryTrend.classList.toggle(
+        "life-events-summary__trend--neutral",
+        netSource === 0,
+      );
+
+      const netLabel =
+        netSource > 0
+          ? `Net increase of ${netSource}`
+          : netSource < 0
+            ? `Net decrease of ${Math.abs(netSource)}`
+            : "Net change of 0";
+      const rateLabel =
+        Number.isFinite(eventsPer100) && eventsPer100 > 0
+          ? `${eventsPer100.toFixed(1)} events per 100 ticks`
+          : "No recent events per 100 ticks";
+
+      this.lifeEventsSummaryTrend.setAttribute(
+        "aria-label",
+        `${netLabel}; ${rateLabel}`,
+      );
+    }
+
+    if (this.lifeEventsSummaryNet) {
+      const formattedNet = netSource > 0 ? `+${netSource}` : String(netSource);
+
+      this.lifeEventsSummaryNet.textContent = formattedNet;
+    }
+
+    if (this.lifeEventsSummaryRate) {
+      if (Number.isFinite(eventsPer100) && eventsPer100 > 0) {
+        this.lifeEventsSummaryRate.textContent = `≈${eventsPer100.toFixed(1)} events / 100 ticks`;
+      } else {
+        this.lifeEventsSummaryRate.textContent = "No activity in window";
+      }
+    }
   }
 
   #renderLifeEvents(stats) {
@@ -1104,11 +1205,15 @@ export default class UIManager {
       typeof stats?.getRecentLifeEvents === "function"
         ? stats.getRecentLifeEvents(12)
         : [];
+    const trendSummary =
+      typeof stats?.getLifeEventRateSummary === "function"
+        ? stats.getLifeEventRateSummary()
+        : null;
 
     this.lifeEventList.innerHTML = "";
 
     if (!events || events.length === 0) {
-      this.#updateLifeEventsSummary(0, 0, 0);
+      this.#updateLifeEventsSummary(0, 0, 0, trendSummary);
       this.lifeEventList.hidden = true;
       if (this.lifeEventsEmptyState) {
         this.lifeEventsEmptyState.hidden = false;
@@ -1267,7 +1372,7 @@ export default class UIManager {
       this.lifeEventList.appendChild(item);
     });
 
-    this.#updateLifeEventsSummary(birthCount, deathCount, events.length);
+    this.#updateLifeEventsSummary(birthCount, deathCount, events.length, trendSummary);
   }
 
   // Utility to create a collapsible panel with a header
@@ -1434,7 +1539,6 @@ export default class UIManager {
     const speedMin = speedBounds.min ?? 0.5;
     const speedMax = speedBounds.max ?? 100;
     const speedStep = speedBounds.step ?? 0.5;
-    const speedFloor = speedBounds.floor ?? speedMin;
 
     this.playbackSpeedSlider = createSliderRow(body, {
       label: "Playback Speed ×",
@@ -1445,11 +1549,59 @@ export default class UIManager {
       title: "Speed multiplier relative to 60 updates/sec (0.5x..100x)",
       format: (v) => `${v.toFixed(1)}x`,
       onInput: (value) => {
-        const sanitized = Math.max(speedFloor, value);
-
-        this.#updateSetting("speedMultiplier", sanitized);
+        this.#setSpeedMultiplier(value);
       },
     });
+
+    const speedPresetRow = createControlButtonRow(body, {
+      className: "control-button-row control-button-row--compact",
+    });
+
+    speedPresetRow.setAttribute("role", "group");
+    speedPresetRow.setAttribute("aria-label", "Playback speed presets");
+
+    const baseUpdates =
+      this.baseUpdatesPerSecond > 0
+        ? this.baseUpdatesPerSecond
+        : (SIMULATION_DEFAULTS.updatesPerSecond ?? 60);
+    const describeSpeedPreset = (multiplier) => {
+      const display =
+        Number.isFinite(multiplier) &&
+        Math.abs(multiplier - Math.round(multiplier)) < 1e-9
+          ? `${Math.round(multiplier)}×`
+          : `${multiplier.toFixed(1)}×`;
+      const updates = Number.isFinite(baseUpdates)
+        ? Math.round(baseUpdates * multiplier)
+        : 0;
+      const updatesText = updates > 0 ? ` (~${updates} updates/sec)` : "";
+
+      return `Set playback speed to ${display}${updatesText}.`;
+    };
+
+    const speedPresets = [
+      { label: "0.5×", value: 0.5 },
+      { label: "1×", value: 1 },
+      { label: "2×", value: 2 },
+      { label: "4×", value: 4 },
+    ];
+
+    this.speedPresetButtons = [];
+
+    speedPresets.forEach(({ label, value }) => {
+      const button = document.createElement("button");
+
+      button.type = "button";
+      button.textContent = label;
+      button.title = describeSpeedPreset(value);
+      button.setAttribute("aria-pressed", "false");
+      button.addEventListener("click", () => {
+        this.#setSpeedMultiplier(value);
+      });
+      speedPresetRow.appendChild(button);
+      this.speedPresetButtons.push({ value, button });
+    });
+
+    this.#updateSpeedMultiplierUI(this.speedMultiplier);
   }
 
   #buildSliderGroups(body) {
@@ -2113,6 +2265,38 @@ export default class UIManager {
 
     this.lifeEventsSummary.appendChild(birthsSummary.item);
     this.lifeEventsSummary.appendChild(deathsSummary.item);
+
+    const trendSummary = document.createElement("div");
+
+    trendSummary.className =
+      "life-events-summary__trend life-events-summary__trend--neutral";
+    trendSummary.setAttribute("role", "group");
+    trendSummary.setAttribute("aria-label", "Net population change and event cadence");
+
+    const trendLabel = document.createElement("span");
+
+    trendLabel.className = "life-events-summary__trend-label";
+    trendLabel.textContent = "Net change";
+
+    const trendValue = document.createElement("span");
+
+    trendValue.className = "life-events-summary__trend-value";
+    trendValue.textContent = "0";
+
+    const trendRate = document.createElement("span");
+
+    trendRate.className = "life-events-summary__trend-rate";
+    trendRate.textContent = "0 events / 100 ticks";
+
+    trendSummary.appendChild(trendLabel);
+    trendSummary.appendChild(trendValue);
+    trendSummary.appendChild(trendRate);
+
+    this.lifeEventsSummaryTrend = trendSummary;
+    this.lifeEventsSummaryNet = trendValue;
+    this.lifeEventsSummaryRate = trendRate;
+
+    this.lifeEventsSummary.appendChild(trendSummary);
     lifeBody.appendChild(this.lifeEventsSummary);
 
     this.lifeEventsEmptyState = document.createElement("div");
@@ -2132,7 +2316,7 @@ export default class UIManager {
     lifeEventsSection.appendChild(lifeBody);
     body.appendChild(lifeEventsSection);
 
-    this.#updateLifeEventsSummary(0, 0, 0);
+    this.#updateLifeEventsSummary(0, 0, 0, null);
 
     return panel;
   }

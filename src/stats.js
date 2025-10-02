@@ -23,6 +23,7 @@ const DIVERSITY_TARGET_DEFAULT = 0.35;
 const DIVERSITY_PRESSURE_SMOOTHING = 0.85;
 
 const LIFE_EVENT_LOG_CAPACITY = 240;
+const LIFE_EVENT_RATE_DEFAULT_WINDOW = 200;
 
 const INTERACTION_TRAIT_LABELS = Object.freeze({
   cooperate: "Cooperative",
@@ -905,25 +906,125 @@ export default class Stats {
   getRecentLifeEvents(limit = 12) {
     if (!this.lifeEventLog) return [];
 
+    const numericLimit = Math.floor(Number(limit));
+
+    if (!Number.isFinite(numericLimit) || numericLimit <= 0) {
+      return [];
+    }
+
     const values = this.lifeEventLog.values();
 
     if (!Array.isArray(values) || values.length === 0) {
       return [];
     }
 
-    const numericLimit = Number(limit);
-    const clampedLimit = Number.isFinite(numericLimit)
-      ? Math.max(0, Math.floor(numericLimit))
-      : Math.max(0, Math.floor(12));
+    const boundedLimit = Math.min(values.length, numericLimit);
 
-    if (clampedLimit === 0) {
-      return [];
+    return values.slice(values.length - boundedLimit).reverse();
+  }
+
+  getLifeEventRateSummary(windowSize = LIFE_EVENT_RATE_DEFAULT_WINDOW) {
+    if (!this.lifeEventLog) {
+      return {
+        births: 0,
+        deaths: 0,
+        net: 0,
+        total: 0,
+        window: 0,
+        eventsPer100Ticks: 0,
+        birthsPer100Ticks: 0,
+        deathsPer100Ticks: 0,
+      };
     }
 
-    const trimmed =
-      clampedLimit >= values.length ? values.slice() : values.slice(-clampedLimit);
+    const numericWindow = Math.floor(Number(windowSize));
 
-    return trimmed.reverse();
+    if (!Number.isFinite(numericWindow) || numericWindow <= 0) {
+      return {
+        births: 0,
+        deaths: 0,
+        net: 0,
+        total: 0,
+        window: 0,
+        eventsPer100Ticks: 0,
+        birthsPer100Ticks: 0,
+        deathsPer100Ticks: 0,
+      };
+    }
+
+    const latestTick = Number.isFinite(this.totals?.ticks) ? this.totals.ticks : 0;
+    const windowStart = Math.max(0, latestTick - numericWindow);
+    const values = this.lifeEventLog.values();
+
+    if (!Array.isArray(values) || values.length === 0) {
+      return {
+        births: 0,
+        deaths: 0,
+        net: 0,
+        total: 0,
+        window: Math.max(0, latestTick - windowStart),
+        eventsPer100Ticks: 0,
+        birthsPer100Ticks: 0,
+        deathsPer100Ticks: 0,
+      };
+    }
+
+    let births = 0;
+    let deaths = 0;
+    let earliestTick = latestTick;
+
+    for (const event of values) {
+      if (!event) continue;
+
+      const tick = Number.isFinite(event.tick) ? event.tick : null;
+
+      if (tick == null || tick < windowStart) {
+        continue;
+      }
+
+      if (event.type === "birth") {
+        births += 1;
+      } else if (event.type === "death") {
+        deaths += 1;
+      }
+
+      if (tick < earliestTick) {
+        earliestTick = tick;
+      }
+    }
+
+    const total = births + deaths;
+
+    if (total === 0) {
+      return {
+        births: 0,
+        deaths: 0,
+        net: 0,
+        total: 0,
+        window: Math.max(0, latestTick - windowStart),
+        eventsPer100Ticks: 0,
+        birthsPer100Ticks: 0,
+        deathsPer100Ticks: 0,
+      };
+    }
+
+    const spanStart = Math.min(earliestTick, latestTick);
+    const observedSpan = Math.max(1, latestTick - spanStart || 1);
+    const normalizedSpan = Math.max(1, Math.min(numericWindow, observedSpan));
+
+    const birthsPer100Ticks = (births / normalizedSpan) * 100;
+    const deathsPer100Ticks = (deaths / normalizedSpan) * 100;
+
+    return {
+      births,
+      deaths,
+      net: births - deaths,
+      total,
+      window: normalizedSpan,
+      eventsPer100Ticks: (total / normalizedSpan) * 100,
+      birthsPer100Ticks,
+      deathsPer100Ticks,
+    };
   }
 
   setMutationMultiplier(multiplier = 1) {

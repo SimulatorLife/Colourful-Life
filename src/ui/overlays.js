@@ -166,25 +166,18 @@ function computeLifeEventAlpha(
 }
 
 function resolveLifeEventColor(event) {
-  if (event?.highlight?.color) {
-    const candidate = event.highlight.color;
+  const options = [
+    event?.highlight?.color,
+    event?.color,
+    LIFE_EVENT_MARKER_DEFAULT_COLORS[event?.type],
+    LIFE_EVENT_MARKER_DEFAULT_COLORS.birth,
+  ];
 
-    if (typeof candidate === "string" && candidate.length > 0) {
-      return candidate;
-    }
-  }
-
-  const colorCandidate = event?.color;
-
-  if (typeof colorCandidate === "string" && colorCandidate.length > 0) {
-    return colorCandidate;
-  }
-
-  const fallback = LIFE_EVENT_MARKER_DEFAULT_COLORS[event?.type];
-
-  return typeof fallback === "string" && fallback.length > 0
-    ? fallback
-    : LIFE_EVENT_MARKER_DEFAULT_COLORS.birth;
+  return (
+    options.find(
+      (candidate) => typeof candidate === "string" && candidate.length > 0,
+    ) ?? LIFE_EVENT_MARKER_DEFAULT_COLORS.birth
+  );
 }
 
 function drawDeathMarker(ctx, centerX, centerY, radius, color) {

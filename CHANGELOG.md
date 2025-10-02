@@ -22,6 +22,9 @@ where practical.
 - Developer guide call-out pointing contributors to the overlay JSDoc style so
   future canvas helpers stay self-documenting.
 - Changelog tracking ongoing project evolution.
+- Life event dashboard summary combining births, deaths, and net population
+  cadence derived from a new stats helper so observers can spot surges or
+  collapses without scanning individual log entries.
 
 ### Changed
 
