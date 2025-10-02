@@ -1,5 +1,8 @@
 import { clamp, createRNG, randomRange } from "./utils.js";
 import Brain, { NEURAL_GENE_BYTES } from "./brain.js";
+import { ACTIVITY_BASE_RATE } from "./config.js";
+
+const ACTIVITY_RATE_SPAN = 0.7;
 
 /**
  * Gene loci mapping. The first three indices are reserved for RGB rendering,
@@ -398,7 +401,11 @@ export class DNA {
 
   // DNA-driven activity rate: how often a cell attempts actions per tick
   activityRate() {
-    return 0.3 + 0.7 * this.geneFraction(GENE_LOCI.ACTIVITY);
+    return clamp(
+      ACTIVITY_BASE_RATE + ACTIVITY_RATE_SPAN * this.geneFraction(GENE_LOCI.ACTIVITY),
+      0,
+      1,
+    );
   }
 
   // Fraction of current energy invested in offspring
