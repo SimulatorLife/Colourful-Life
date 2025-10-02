@@ -59,6 +59,18 @@ test("relocateCell moves occupants only when destination empty", () => {
   assert.is(adapter.getCell(0, 0), null);
 });
 
+test("relocateCell rejects teleportation when manager lacks hook", () => {
+  const grid = createGrid(4, 4);
+  const adapter = new GridInteractionAdapter({ gridManager: { grid } });
+
+  adapter.setCell(0, 0, createCell(0, 0));
+
+  const relocated = adapter.relocateCell(0, 0, 3, 3);
+
+  assert.is(relocated, false, "teleportation attempts should be blocked");
+  assert.ok(adapter.getCell(0, 0), "original occupant should remain in place");
+});
+
 test("consumeTileEnergy defers to manager consumeEnergy when available", () => {
   const calls = [];
   const manager = {

@@ -83,3 +83,18 @@ test("GridManager relocation respects occupied destinations", async () => {
   assert.is(cellB.row, 1, "blocker row should remain unchanged");
   assert.is(cellB.col, 2, "blocker column should remain unchanged");
 });
+
+test("GridManager relocation rejects non-adjacent destinations", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+    consumeEnergy() {}
+  }
+
+  const gm = new TestGridManager(5, 5, baseOptions);
+
+  const relocated = gm.relocateCell(0, 0, 3, 3);
+
+  assert.is(relocated, false, "relocation should fail when target is not adjacent");
+});
