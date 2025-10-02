@@ -815,7 +815,9 @@ export default class GridManager {
         : 0.45;
 
     this.matingDiversityThreshold = initialThreshold;
-    this.lowDiversityReproMultiplier = 0.1;
+    // Raised alongside the config default so kin-heavy stretches still produce
+    // offspring instead of stalling out when penalty math bottoms out.
+    this.lowDiversityReproMultiplier = 0.12;
     this.densityRadius = GridManager.DENSITY_RADIUS;
     this.densityCounts = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
