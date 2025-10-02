@@ -1,5 +1,5 @@
 import { EVENT_TYPES } from "./eventEffects.js";
-import { randomRange } from "../utils.js";
+import { clamp, randomRange } from "../utils.js";
 import { defaultIsEventAffecting } from "./eventContext.js";
 
 export { defaultIsEventAffecting as isEventAffecting };
@@ -79,7 +79,7 @@ function sanitizeSpanConfig(candidate, fallback) {
     sanitizedRatio = fallback.ratio;
   }
 
-  sanitizedRatio = Math.min(Math.max(sanitizedRatio, 0), 1);
+  sanitizedRatio = clamp(sanitizedRatio, 0, 1);
 
   return { min: sanitizedMin, ratio: sanitizedRatio };
 }
@@ -116,7 +116,7 @@ function sampleEventSpan(limit, rng, spanConfig = DEFAULT_RANDOM_EVENT_CONFIG.sp
     ? Math.max(1, Math.floor(spanConfig.min))
     : DEFAULT_RANDOM_EVENT_CONFIG.span.min;
   const ratio = Number.isFinite(spanConfig?.ratio)
-    ? Math.min(Math.max(spanConfig.ratio, 0), 1)
+    ? clamp(spanConfig.ratio, 0, 1)
     : DEFAULT_RANDOM_EVENT_CONFIG.span.ratio;
   const minSpan = Math.min(minCandidate, maxSpan);
   const spanCandidate = Math.max(minSpan, Math.floor(maxSpan * ratio));
@@ -133,7 +133,7 @@ function clampEventStart(rawStart, span, limit) {
     return 0;
   }
 
-  return Math.min(maxStart, Math.max(0, rawStart));
+  return clamp(rawStart, 0, maxStart);
 }
 
 /**
