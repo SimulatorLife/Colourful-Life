@@ -1940,7 +1940,55 @@ export default class Cell {
     const densityRelief = clamp(0.35 + (1 - densityPenalty) * 0.65, 0.2, 1);
     const baseBoost =
       restEfficiency * densityRelief * (0.3 + restNeed * 0.5 + restSupport * 0.35);
-    const boost = clamp(baseBoost, 0, 1.2);
+    const outcome = this.#getDecisionOutcome("movement");
+    let neuralSignal = null;
+    let neuralCompetitor = 0;
+    let neuralMix = 0;
+    let neuralAmplifier = 1;
+
+    if (outcome && outcome.usedBrain) {
+      const { probabilities, logits } = outcome;
+
+      if (probabilities && typeof probabilities === "object") {
+        for (const [key, value] of Object.entries(probabilities)) {
+          const normalized = Number.isFinite(value) ? clamp(value, 0, 1) : null;
+
+          if (key === "rest") {
+            if (normalized != null) neuralSignal = normalized;
+          } else if (normalized != null && normalized > neuralCompetitor) {
+            neuralCompetitor = normalized;
+          }
+        }
+      }
+
+      if (neuralSignal == null && logits && typeof logits === "object") {
+        const restLogit = Number(logits.rest);
+
+        if (Number.isFinite(restLogit)) {
+          const clamped = clamp(restLogit, -12, 12);
+
+          neuralSignal = 1 / (1 + Math.exp(-clamped));
+        }
+      }
+
+      if (neuralSignal != null) {
+        const intentAdvantage = neuralSignal - neuralCompetitor;
+        const positiveAdvantage = intentAdvantage > 0 ? intentAdvantage : 0;
+
+        neuralMix = clamp(0.35 + positiveAdvantage * 0.5, 0.1, 1);
+        neuralAmplifier = clamp(
+          0.6 + neuralSignal * 0.8 + positiveAdvantage * 0.6,
+          0.3,
+          1.8,
+        );
+      }
+    }
+
+    const boosted =
+      neuralSignal != null
+        ? lerp(baseBoost, baseBoost * neuralAmplifier, neuralMix)
+        : baseBoost;
+    const boost = clamp(boosted, 0, 1.5);
     const carry = clamp(
       (Number.isFinite(this._pendingRestRecovery) ? this._pendingRestRecovery : 0) +
         boost,
@@ -1951,11 +1999,16 @@ export default class Cell {
     this._pendingRestRecovery = carry;
 
     this.#assignDecisionOutcome("movement", {
+      restBaseBoost: baseBoost,
       restBoost: boost,
       restCarry: carry,
       restNeed,
       restSupport,
       restDensityRelief: densityRelief,
+      restNeuralSignal: neuralSignal,
+      restNeuralCompetitor: neuralSignal != null ? neuralCompetitor : null,
+      restNeuralMix: neuralSignal != null ? neuralMix : 0,
+      restNeuralAmplifier: neuralSignal != null ? neuralAmplifier : 1,
     });
 
     return boost;

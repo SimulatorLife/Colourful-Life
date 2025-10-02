@@ -54,9 +54,30 @@ test("createSimulation aligns UI controls with config defaults", async () => {
         if (!line || !Array.isArray(line.children)) continue;
 
         const input = line.children.find((child) => child?.tagName === "INPUT");
-        const name = line.children.find((child) => child?.className === "control-name");
+        const directName = line.children.find(
+          (child) => child?.className === "control-name",
+        );
+        const nestedLabel = line.children.find(
+          (child) => child?.className === "control-checkbox-label",
+        );
+        const nestedName = Array.isArray(nestedLabel?.children)
+          ? nestedLabel.children.find((child) => child?.className === "control-name")
+          : null;
+        const name = directName ?? nestedName;
 
-        if (name?.textContent === label) {
+        const extractText = (element) => {
+          if (!element) return "";
+          if (typeof element.textContent === "string" && element.textContent.trim()) {
+            return element.textContent;
+          }
+          if (!Array.isArray(element.children) || element.children.length === 0) {
+            return "";
+          }
+
+          return element.children.map((child) => extractText(child)).join("");
+        };
+
+        if (name && extractText(name).trim() === label) {
           return input ?? null;
         }
       }
