@@ -2336,6 +2336,78 @@ export default class Cell {
     return 1 + (combined - 1) * loadFactor;
   }
 
+  computeSenescenceHazard({
+    ageFraction = this.getAgeFraction(),
+    energyFraction = null,
+    localDensity = 0,
+    densityEffectMultiplier = 1,
+    eventPressure = this.lastEventPressure ?? 0,
+    crowdingPreference = this.baseCrowdingTolerance ?? 0.5,
+  } = {}) {
+    const normalizedAge = clamp(
+      Number.isFinite(ageFraction) ? ageFraction : this.getAgeFraction(),
+      0,
+      3,
+    );
+
+    if (normalizedAge <= 0) {
+      return 0;
+    }
+
+    const fallbackEnergyCap =
+      Number.isFinite(MAX_TILE_ENERGY) && MAX_TILE_ENERGY > 0 ? MAX_TILE_ENERGY : 1;
+    const normalizedEnergy = clamp(
+      Number.isFinite(energyFraction)
+        ? energyFraction
+        : (Number.isFinite(this.energy) ? this.energy : 0) / fallbackEnergyCap,
+      0,
+      1,
+    );
+    const densityScale = Number.isFinite(densityEffectMultiplier)
+      ? densityEffectMultiplier
+      : 1;
+    const normalizedDensity = clamp(
+      (Number.isFinite(localDensity) ? localDensity : 0) * densityScale,
+      0,
+      1,
+    );
+    const comfort = clamp(
+      Number.isFinite(crowdingPreference)
+        ? crowdingPreference
+        : (this.baseCrowdingTolerance ?? 0.5),
+      0,
+      1,
+    );
+    const densityStress = Math.max(0, normalizedDensity - comfort);
+    const energyStress = 1 - normalizedEnergy;
+    const pressureStress = clamp(
+      Number.isFinite(eventPressure) ? eventPressure : 0,
+      0,
+      1,
+    );
+    const senescence = clamp(
+      typeof this.dna?.senescenceRate === "function" ? this.dna.senescenceRate() : 0.25,
+      0,
+      2,
+    );
+    const resilience = clamp(this.dna?.recoveryRate?.() ?? 0.35, 0, 1);
+    const adaptation = clamp(this.resourceTrendAdaptation ?? 0.35, 0, 1);
+    const vitality = clamp(resilience * 0.65 + adaptation * 0.35, 0, 1);
+    const baseCurve = (normalizedAge - 0.85) * (5 + senescence * 4);
+    const overshoot = Math.max(0, normalizedAge - 1);
+    const overshootCurve = overshoot * (6 + senescence * 5);
+    const stressCurve =
+      energyStress * (1.5 - vitality * 1.05) +
+      densityStress * (1.3 - vitality * 0.85) +
+      pressureStress * (1.4 - vitality * 0.7);
+    const mitigation = vitality * 1.25;
+    const hazardInput = baseCurve + overshootCurve + stressCurve - mitigation - 1.1;
+    const logisticInput = clamp(hazardInput, -12, 12);
+    const hazard = 1 / (1 + Math.exp(-logisticInput));
+
+    return clamp(hazard, 0, 1);
+  }
+
   #decideMovementAction(context = {}) {
     const sensors = this.#movementSensors(context);
     const values = this.#evaluateBrainGroup("movement", sensors);
