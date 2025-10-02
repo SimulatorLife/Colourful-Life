@@ -4,6 +4,7 @@ import {
   loadSimulationModules,
   patchSimulationPrototypes,
 } from "./helpers/simulationEngine.js";
+import { approxEqual } from "./helpers/assertions.js";
 
 test("start schedules a frame and ticking through RAF uses sanitized defaults", async () => {
   const modules = await loadSimulationModules();
@@ -188,12 +189,14 @@ test("updateSetting speedMultiplier and low diversity multiplier propagate chang
       cancelAnimationFrame: () => {},
     });
 
+    assert.is(engine.state.speedMultiplier, 1, "defaults expose speedMultiplier state");
     engine.updateSetting("speedMultiplier", 2);
     assert.is(
       engine.state.updatesPerSecond,
       120,
       "speedMultiplier adjusts updatesPerSecond",
     );
+    assert.is(engine.state.speedMultiplier, 2, "speedMultiplier updates state");
     assert.ok(engine.pendingSlowUiUpdate, "speedMultiplier marks pendingSlowUiUpdate");
 
     const stateEvents = [];
@@ -237,6 +240,15 @@ test("updateSetting speedMultiplier and low diversity multiplier propagate chang
       engine.state.lowDiversityReproMultiplier,
       0.42,
       "engine stores new low diversity multiplier",
+    );
+
+    engine.setUpdatesPerSecond(45);
+    assert.is(engine.state.updatesPerSecond, 45, "explicit updatesPerSecond stored");
+    approxEqual(
+      engine.state.speedMultiplier,
+      45 / engine.baseUpdatesPerSecond,
+      1e-9,
+      "speedMultiplier derives from updatesPerSecond",
     );
   } finally {
     restore();

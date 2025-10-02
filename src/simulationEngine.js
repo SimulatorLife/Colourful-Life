@@ -326,6 +326,29 @@ export default class SimulationEngine {
 
     defaults.maxConcurrentEvents = maxConcurrentEvents;
 
+    const baseUpdatesCandidate =
+      Number.isFinite(defaults.speedMultiplier) && defaults.speedMultiplier > 0
+        ? defaults.updatesPerSecond / defaults.speedMultiplier
+        : SIMULATION_DEFAULTS.updatesPerSecond;
+    const normalizedBaseUpdates = Number.isFinite(baseUpdatesCandidate)
+      ? baseUpdatesCandidate
+      : SIMULATION_DEFAULTS.updatesPerSecond;
+
+    this.baseUpdatesPerSecond = Math.max(1, Math.round(normalizedBaseUpdates));
+
+    const defaultSpeedMultiplier = Number.isFinite(defaults.speedMultiplier)
+      ? defaults.speedMultiplier
+      : (() => {
+          const base =
+            this.baseUpdatesPerSecond > 0
+              ? this.baseUpdatesPerSecond
+              : Math.max(1, Math.round(SIMULATION_DEFAULTS.updatesPerSecond ?? 60));
+          const derived = Math.max(1, Math.round(defaults.updatesPerSecond));
+          const ratio = derived / base;
+
+          return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+        })();
+
     this.eventManager = new EventManager(rows, cols, rng, {
       startWithEvent:
         (defaults.eventFrequencyMultiplier ?? 1) > 0 && maxConcurrentEvents > 0,
@@ -388,6 +411,7 @@ export default class SimulationEngine {
     this.state = {
       paused: Boolean(defaults.paused),
       updatesPerSecond: Math.max(1, Math.round(defaults.updatesPerSecond)),
+      speedMultiplier: defaultSpeedMultiplier,
       eventFrequencyMultiplier: defaults.eventFrequencyMultiplier,
       mutationMultiplier: defaults.mutationMultiplier,
       densityEffectMultiplier: defaults.densityEffectMultiplier,
@@ -1066,7 +1090,15 @@ export default class SimulationEngine {
       round: true,
     });
 
-    this.#updateStateAndFlag({ updatesPerSecond: sanitized });
+    const base = this.baseUpdatesPerSecond > 0 ? this.baseUpdatesPerSecond : sanitized;
+    const multiplier = base > 0 ? sanitized / base : this.state.speedMultiplier;
+
+    this.#updateStateAndFlag({
+      updatesPerSecond: sanitized,
+      speedMultiplier: Number.isFinite(multiplier)
+        ? multiplier
+        : this.state.speedMultiplier,
+    });
 
     return sanitized;
   }
