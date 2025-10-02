@@ -194,4 +194,45 @@ test("createSimulation aligns UI controls with config defaults", async () => {
   }
 });
 
+test("createSimulation keeps engine cadence in sync with speed defaults", async () => {
+  const restore = setupDom();
+
+  try {
+    const [{ createSimulation }, { SIMULATION_DEFAULTS }] = await Promise.all([
+      import("../src/main.js"),
+      import("../src/config.js"),
+    ]);
+
+    const baseUpdates = SIMULATION_DEFAULTS.updatesPerSecond;
+    const speedConfig = { speedMultiplier: 1.8, paused: true };
+    const fastSimulation = createSimulation({
+      canvas: new MockCanvas(120, 120),
+      autoStart: false,
+      config: speedConfig,
+    });
+
+    assert.is(fastSimulation.uiManager.speedMultiplier, speedConfig.speedMultiplier);
+    assert.is(
+      fastSimulation.engine.state.updatesPerSecond,
+      Math.round(baseUpdates * speedConfig.speedMultiplier),
+    );
+
+    fastSimulation.destroy();
+
+    const cadenceConfig = { updatesPerSecond: 90, paused: true };
+    const cadenceSimulation = createSimulation({
+      canvas: new MockCanvas(120, 120),
+      autoStart: false,
+      config: cadenceConfig,
+    });
+
+    assert.is(cadenceSimulation.engine.state.updatesPerSecond, 90);
+    assert.is(cadenceSimulation.uiManager.speedMultiplier, 90 / baseUpdates);
+
+    cadenceSimulation.destroy();
+  } finally {
+    restore();
+  }
+});
+
 test.run();
