@@ -1,4 +1,5 @@
 import { resolveSimulationDefaults } from "../config.js";
+import { sanitizeNumber } from "../utils.js";
 
 /**
  * Creates a lightweight {@link UIManager}-compatible adapter for environments
@@ -73,25 +74,15 @@ export function createHeadlessUiManager(options = {}) {
 
   let lastSlowUiRender = Number.NEGATIVE_INFINITY;
   const updateIfFinite = (key, value, options = {}) => {
-    const numeric = Number(value);
-
-    if (!Number.isFinite(numeric)) return false;
-
-    const {
-      min = Number.NEGATIVE_INFINITY,
-      max = Number.POSITIVE_INFINITY,
+    const { min, max, round } = options || {};
+    const sanitized = sanitizeNumber(value, {
+      fallback: Number.NaN,
+      min,
+      max,
       round,
-    } = options || {};
-    let sanitized = numeric;
+    });
 
-    if (round === true) {
-      sanitized = Math.round(sanitized);
-    } else if (typeof round === "function") {
-      sanitized = round(sanitized);
-    }
-
-    if (Number.isFinite(min)) sanitized = Math.max(min, sanitized);
-    if (Number.isFinite(max)) sanitized = Math.min(max, sanitized);
+    if (!Number.isFinite(sanitized)) return false;
 
     settings[key] = sanitized;
 

@@ -10,7 +10,7 @@ import {
   resolveSimulationDefaults,
 } from "./config.js";
 import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
-import { clamp, reportError } from "./utils.js";
+import { clamp, reportError, sanitizeNumber } from "./utils.js";
 
 function createSelectionManagerStub(rows, cols) {
   const state = { rows: Math.max(0, rows ?? 0), cols: Math.max(0, cols ?? 0) };
@@ -84,35 +84,8 @@ const MAX_CONCURRENT_EVENTS_FALLBACK = Math.max(
 
 const noop = () => {};
 
-function sanitizeNumeric(
-  value,
-  {
-    fallback,
-    min = Number.NEGATIVE_INFINITY,
-    max = Number.POSITIVE_INFINITY,
-    round = false,
-  },
-) {
-  const numeric = Number(value);
-
-  if (!Number.isFinite(numeric)) return fallback;
-
-  let sanitized = numeric;
-
-  if (round === true) {
-    sanitized = Math.round(sanitized);
-  } else if (typeof round === "function") {
-    sanitized = round(sanitized);
-  }
-
-  if (Number.isFinite(min)) sanitized = Math.max(min, sanitized);
-  if (Number.isFinite(max)) sanitized = Math.min(max, sanitized);
-
-  return sanitized;
-}
-
 function sanitizeMaxConcurrentEvents(value, fallback = MAX_CONCURRENT_EVENTS_FALLBACK) {
-  return sanitizeNumeric(value, {
+  return sanitizeNumber(value, {
     fallback,
     min: 0,
     round: (candidate) => Math.floor(candidate),
@@ -1086,7 +1059,7 @@ export default class SimulationEngine {
   }
 
   setUpdatesPerSecond(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.updatesPerSecond,
       min: 1,
       round: true,
@@ -1106,7 +1079,7 @@ export default class SimulationEngine {
   }
 
   setEventFrequencyMultiplier(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.eventFrequencyMultiplier,
       min: 0,
     });
@@ -1124,7 +1097,7 @@ export default class SimulationEngine {
   }
 
   setMutationMultiplier(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.mutationMultiplier,
       min: 0,
     });
@@ -1133,7 +1106,7 @@ export default class SimulationEngine {
   }
 
   setCombatEdgeSharpness(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.combatEdgeSharpness,
       min: 0.1,
     });
@@ -1142,7 +1115,7 @@ export default class SimulationEngine {
   }
 
   setDensityEffectMultiplier(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.densityEffectMultiplier,
       min: 0,
     });
@@ -1154,7 +1127,7 @@ export default class SimulationEngine {
     const changes = {};
 
     if (societySimilarity !== undefined) {
-      changes.societySimilarity = sanitizeNumeric(societySimilarity, {
+      changes.societySimilarity = sanitizeNumber(societySimilarity, {
         fallback: this.state.societySimilarity,
         min: 0,
         max: 1,
@@ -1162,7 +1135,7 @@ export default class SimulationEngine {
     }
 
     if (enemySimilarity !== undefined) {
-      changes.enemySimilarity = sanitizeNumeric(enemySimilarity, {
+      changes.enemySimilarity = sanitizeNumber(enemySimilarity, {
         fallback: this.state.enemySimilarity,
         min: 0,
         max: 1,
@@ -1175,7 +1148,7 @@ export default class SimulationEngine {
   }
 
   setEventStrengthMultiplier(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.eventStrengthMultiplier,
       min: 0,
     });
@@ -1187,14 +1160,14 @@ export default class SimulationEngine {
     const changes = {};
 
     if (regen !== undefined) {
-      changes.energyRegenRate = sanitizeNumeric(regen, {
+      changes.energyRegenRate = sanitizeNumber(regen, {
         fallback: this.state.energyRegenRate,
         min: 0,
       });
     }
 
     if (diffusion !== undefined) {
-      changes.energyDiffusionRate = sanitizeNumeric(diffusion, {
+      changes.energyDiffusionRate = sanitizeNumber(diffusion, {
         fallback: this.state.energyDiffusionRate,
         min: 0,
       });
@@ -1206,7 +1179,7 @@ export default class SimulationEngine {
   }
 
   setLeaderboardInterval(value) {
-    const sanitized = sanitizeNumeric(value, {
+    const sanitized = sanitizeNumber(value, {
       fallback: this.state.leaderboardIntervalMs,
       min: 0,
     });
