@@ -7,7 +7,7 @@ import { accumulateEventModifiers } from "../energySystem.js";
 import InteractionSystem from "../interactionSystem.js";
 import GridInteractionAdapter from "./gridAdapter.js";
 import ReproductionZonePolicy from "./reproductionZonePolicy.js";
-import { OBSTACLE_PRESETS } from "./obstaclePresets.js";
+import { OBSTACLE_PRESETS, resolveObstaclePresetCatalog } from "./obstaclePresets.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -783,6 +783,7 @@ export default class GridManager {
       initialObstaclePresetOptions = {},
       randomizeInitialObstacles = false,
       randomObstaclePresetPool = null,
+      obstaclePresets,
       rng,
       brainSnapshotCollector,
     } = {},
@@ -805,9 +806,22 @@ export default class GridManager {
     this.ctx = ctx || window.ctx;
     this.cellSize = cellSize || window.cellSize || 8;
     this.stats = stats || window.stats;
-    this.randomObstaclePresetPool = Array.isArray(randomObstaclePresetPool)
-      ? randomObstaclePresetPool.filter((id) => typeof id === "string" && id)
+    this.obstaclePresets = resolveObstaclePresetCatalog(obstaclePresets);
+    const knownPresetIds = new Set(
+      this.obstaclePresets
+        .map((preset) => (typeof preset?.id === "string" ? preset.id : null))
+        .filter((id) => typeof id === "string" && id.length > 0),
+    );
+    const sanitizedRandomPool = Array.isArray(randomObstaclePresetPool)
+      ? randomObstaclePresetPool
+          .map((id) => (typeof id === "string" ? id.trim() : ""))
+          .filter((id) => id && knownPresetIds.has(id))
       : null;
+
+    this.randomObstaclePresetPool =
+      sanitizedRandomPool && sanitizedRandomPool.length > 0
+        ? sanitizedRandomPool
+        : null;
     this.reproductionZones = new ReproductionZonePolicy();
     Object.defineProperty(this, "selectionManager", {
       configurable: true,
@@ -933,11 +947,23 @@ export default class GridManager {
   #getPresetById(id) {
     if (typeof id !== "string") return null;
 
-    return OBSTACLE_PRESETS.find((preset) => preset.id === id) ?? null;
+    const trimmed = id.trim();
+
+    if (!trimmed) return null;
+
+    const catalog =
+      Array.isArray(this.obstaclePresets) && this.obstaclePresets.length > 0
+        ? this.obstaclePresets
+        : OBSTACLE_PRESETS;
+
+    return catalog.find((preset) => preset?.id === trimmed) ?? null;
   }
 
   #pickRandomObstaclePresetId(poolIds = null) {
-    let candidates = OBSTACLE_PRESETS;
+    let candidates =
+      Array.isArray(this.obstaclePresets) && this.obstaclePresets.length > 0
+        ? this.obstaclePresets
+        : OBSTACLE_PRESETS;
 
     if (Array.isArray(poolIds) && poolIds.length > 0) {
       const normalized = poolIds.map((id) => this.#getPresetById(id)).filter(Boolean);
@@ -1225,11 +1251,7 @@ export default class GridManager {
           ? "none"
           : "";
     const isClearPreset = normalizedId === "none";
-    const isKnownPreset =
-      isClearPreset ||
-      OBSTACLE_PRESETS.some(
-        (preset) => typeof preset?.id === "string" && preset.id === normalizedId,
-      );
+    const isKnownPreset = isClearPreset || this.#getPresetById(normalizedId) != null;
 
     if (!isKnownPreset) {
       warnOnce(`Unknown obstacle preset "${presetId}"; ignoring request.`);

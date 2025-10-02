@@ -3,7 +3,6 @@ import BrainDebugger from "./ui/brainDebugger.js";
 import SimulationEngine from "./simulationEngine.js";
 import SelectionManager from "./grid/selectionManager.js";
 import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
-import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
 import { createHeadlessUiManager } from "./ui/headlessUiManager.js";
 import { resolveSimulationDefaults } from "./config.js";
 import { toPlainObject } from "./utils.js";
@@ -239,7 +238,7 @@ export function createSimulation({
   const baseActions = {
     burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
-    obstaclePresets: OBSTACLE_PRESETS,
+    obstaclePresets: engine.obstaclePresets,
     getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
     selectionManager: engine.selectionManager,
     getCellSize: () => engine.cellSize,
