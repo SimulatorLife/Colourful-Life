@@ -10,6 +10,7 @@ where practical.
 ### Added
 
 - Documentation audit covering the README, developer guide, architecture overview, and changelog to highlight headless usage, cache-reset tooling, supporting modules such as the cell model, and the overlay rendering pipeline.
+- DNA-tuned opportunity memory that feeds a new `opportunitySignal` sensor, letting neural policies lean on real reward history and energy swings instead of scripted behaviour knobs.
 - Environment override documentation in the README and developer guide for `COLOURFUL_LIFE_MAX_TILE_ENERGY`, `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`, `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY`, and `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` so experiments can adjust regeneration, harvesting behaviour, and telemetry thresholds without editing source while keeping overlays accurate.
 - Developer guide call-out pointing contributors to the overlay JSDoc style so future canvas helpers stay self-documenting.
 - Changelog tracking ongoing project evolution.
