@@ -35,15 +35,8 @@ function createSelectionManagerStub(rows, cols) {
     togglePattern() {
       return false;
     },
-    clearCustomZones() {},
-    addCustomRectangle() {
-      return null;
-    },
     getActiveZones() {
       return [];
-    },
-    hasCustomZones() {
-      return false;
     },
     hasActiveZones() {
       return false;
@@ -811,7 +804,6 @@ export default class SimulationEngine {
         obstaclePreset: opts.obstaclePreset,
         presetOptions: opts.presetOptions,
         reseed: opts.reseed,
-        clearCustomZones: opts.clearCustomZones ?? false,
       });
     }
 

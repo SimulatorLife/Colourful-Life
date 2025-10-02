@@ -325,7 +325,7 @@ test("createSimulation merges obstacle preset overrides into the catalog", async
   }
 });
 
-test("engine.resetWorld reseeds the ecosystem and clears custom zones", async () => {
+test("engine.resetWorld reseeds the ecosystem and resets stats", async () => {
   const { createSimulation } = await simulationModulePromise;
   const deterministicRng = () => 0.01;
 
@@ -340,20 +340,14 @@ test("engine.resetWorld reseeds the ecosystem and clears custom zones", async ()
 
   const { stats, selectionManager, grid } = simulation;
 
-  selectionManager.addCustomRectangle(0, 0, 2, 2);
-  assert.ok(selectionManager.hasCustomZones(), "custom zone seeded before reset");
   assert.ok(stats.history.population.length > 0, "history populated before reset");
+  assert.is(selectionManager.hasActiveZones(), false, "no zones active before reset");
 
-  simulation.engine.resetWorld({ clearCustomZones: true });
+  simulation.engine.resetWorld();
 
   const snapshot = grid.buildSnapshot();
 
   assert.ok(snapshot.population > 0, "population reseeded after reset");
-  assert.is(
-    selectionManager.hasCustomZones(),
-    false,
-    "custom zones cleared after reset",
-  );
   assert.is(stats.totals.ticks, 1, "tick counter restarted after reset");
   assert.is(stats.history.population.length, 1, "history contains a fresh sample");
   assert.is(stats.getRecentLifeEvents().length, 0, "life event log cleared");

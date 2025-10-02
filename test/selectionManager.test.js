@@ -45,37 +45,25 @@ test("activating built-in patterns restricts eligibility and updates description
   );
 });
 
-test("addCustomRectangle clamps coordinates and exposes accurate bounds/contains", () => {
-  const manager = createManager();
-  const zone = manager.addCustomRectangle(-2, -5, 12, 9);
+test("setDimensions resets patterns and geometry cache", () => {
+  const manager = createManager(8, 8);
 
-  assert.ok(zone, "custom zone should be created");
-  assert.is(zone.id, "custom-0");
-  assert.equal(zone.bounds, { startRow: 0, endRow: 5, startCol: 0, endCol: 5 });
-  assert.is(zone.contains(0, 0), true, "clamped origin should be contained");
-  assert.is(zone.contains(5, 5), true, "clamped corner should be contained");
-  assert.is(zone.contains(3, 3), true);
-  assert.is(
-    zone.contains(5, 6),
-    false,
-    "coordinates outside bounds should fail contains",
-  );
+  manager.togglePattern("eastHalf", true);
+  const initialRender = manager.getActiveZoneRenderData();
 
   assert.is(
-    manager.getActiveZones().length,
+    initialRender.length,
     1,
-    "custom zones contribute to active zones",
+    "pattern should contribute geometry before resize",
   );
-  assert.is(manager.hasCustomZones(), true, "custom zone presence is reflected");
 
-  manager.clearCustomZones();
-  assert.is(manager.getActiveZones().length, 0, "clearCustomZones removes user zones");
-  assert.is(
-    manager.hasCustomZones(),
-    false,
-    "custom zone tracker resets after clearing",
-  );
+  manager.setDimensions(12, 10);
+
+  assert.is(manager.hasActiveZones(), false, "patterns reset after resizing");
   assert.is(manager.describeActiveZones(), "All tiles eligible");
+  assert.is(manager.zoneGeometryCache.size, 0, "geometry cache cleared after resizing");
+  assert.is(manager.rows, 12);
+  assert.is(manager.cols, 10);
 });
 
 test("validateReproductionArea enforces zone boundaries for parents and spawn", () => {
@@ -179,7 +167,7 @@ test("pattern geometry caches reuse entries and expose deterministic rectangles"
   assert.is(secondPass, geometry, "subsequent requests reuse cached geometry");
 });
 
-test("geometry cache invalidates on toggles, dimension changes, and custom zone resets", () => {
+test("geometry cache invalidates on toggles and dimension changes", () => {
   const manager = createManager(4, 6);
 
   manager.togglePattern("eastHalf", true);
@@ -210,50 +198,4 @@ test("geometry cache invalidates on toggles, dimension changes, and custom zone 
     startCol: 5,
     endCol: 9,
   });
-
-  const customZone = manager.addCustomRectangle(2, 2, 4, 4);
-  const renderData = manager.getActiveZoneRenderData();
-
-  const customEntry = renderData.find((entry) => entry.zone.id === customZone.id);
-
-  assert.ok(customEntry, "custom zone should appear in render data");
-  assert.equal(
-    customEntry.geometry.bounds,
-    customZone.bounds,
-    "custom geometry mirrors bounds",
-  );
-
-  manager.clearCustomZones();
-  assert.is(
-    manager.zoneGeometryCache.size,
-    0,
-    "clearing custom zones resets geometry cache",
-  );
-
-  const renderAfterReset = manager.getActiveZoneRenderData();
-
-  assert.is(
-    renderAfterReset.length,
-    1,
-    "pattern remains active after clearing custom zones",
-  );
-  assert.equal(
-    renderAfterReset[0].geometry.bounds,
-    { startRow: 0, endRow: 9, startCol: 5, endCol: 9 },
-    "pattern geometry recomputes after cache reset",
-  );
-});
-
-test("addCustomRectangle returns null for invalid coordinates and retains counters", () => {
-  const manager = createManager();
-
-  const result = manager.addCustomRectangle(NaN, 1, 3, 4);
-
-  assert.is(result, null, "invalid coordinates short-circuit custom zone creation");
-  assert.is(
-    manager.customZones.length,
-    0,
-    "custom zone counter does not increment on failure",
-  );
-  assert.is(manager.zoneGeometryCache.size, 0, "geometry cache remains untouched");
 });
