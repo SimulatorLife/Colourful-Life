@@ -105,3 +105,32 @@ test("drawLifeEventMarkers renders crosses for deaths", () => {
   assert.ok(moveOps.length >= 2, "death markers draw diagonal segments");
   assert.is(moveOps.length, lineOps.length, "each move has a matching line segment");
 });
+
+test("drawLifeEventMarkers respects custom color overrides", () => {
+  const ctx = createRecordingContext();
+  const events = [
+    { type: "birth", row: 0, col: 0, tick: 1 },
+    { type: "death", row: 1, col: 1, tick: 1 },
+  ];
+
+  drawLifeEventMarkers(ctx, 10, events, {
+    currentTick: 2,
+    colors: { birth: "#112233", death: "#445566" },
+  });
+
+  const strokeStyles = ctx.ops
+    .filter((op) => op.type === "strokeStyle")
+    .map((op) => op.value);
+  const fillStyles = ctx.ops
+    .filter((op) => op.type === "fillStyle")
+    .map((op) => op.value);
+
+  assert.ok(
+    strokeStyles.includes("#445566"),
+    "death marker uses custom stroke color override",
+  );
+  assert.ok(
+    strokeStyles.includes("#112233") || fillStyles.includes("#112233"),
+    "birth marker applies custom color override",
+  );
+});
