@@ -1012,6 +1012,42 @@ export default class SimulationEngine {
     showFitness,
     showCelebrationAuras,
   }) {
+    const coerceBoolean = (candidate, fallback) => {
+      if (typeof candidate === "boolean") {
+        return candidate;
+      }
+
+      if (candidate == null) {
+        return fallback;
+      }
+
+      if (typeof candidate === "number") {
+        return Number.isFinite(candidate) ? candidate !== 0 : fallback;
+      }
+
+      if (typeof candidate === "string") {
+        const normalized = candidate.trim().toLowerCase();
+
+        if (normalized.length === 0) return fallback;
+        if (normalized === "true" || normalized === "yes" || normalized === "on") {
+          return true;
+        }
+        if (normalized === "false" || normalized === "no" || normalized === "off") {
+          return false;
+        }
+
+        const numeric = Number(normalized);
+
+        if (!Number.isNaN(numeric)) {
+          return numeric !== 0;
+        }
+
+        return fallback;
+      }
+
+      return Boolean(candidate);
+    };
+
     const entries = Object.entries({
       showObstacles,
       showEnergy,
@@ -1020,7 +1056,7 @@ export default class SimulationEngine {
       showCelebrationAuras,
     })
       .filter(([, value]) => value !== undefined)
-      .map(([key, value]) => [key, Boolean(value)]);
+      .map(([key, value]) => [key, coerceBoolean(value, Boolean(this.state?.[key]))]);
 
     if (entries.length === 0) return;
 
