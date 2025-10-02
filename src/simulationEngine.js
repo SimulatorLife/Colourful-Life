@@ -2,7 +2,6 @@ import EventManager from "./events/eventManager.js";
 import GridManager from "./grid/gridManager.js";
 import Stats from "./stats.js";
 import { computeLeaderboard } from "./leaderboard.js";
-import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -82,6 +81,8 @@ const MAX_CONCURRENT_EVENTS_FALLBACK = Math.max(
   0,
   Math.floor(SIMULATION_DEFAULTS.maxConcurrentEvents ?? 2),
 );
+
+const noop = () => {};
 
 function sanitizeNumeric(
   value,
@@ -225,6 +226,7 @@ function ensureCanvasDimensions(canvas, config) {
  * @param {() => number} [options.performanceNow] - High-resolution timer hook, defaults to
  *   `performance.now` with a Date fallback.
  * @param {Function} [options.drawOverlays] - Optional overlay renderer invoked each frame.
+ *   Defaults to a no-op when omitted so the engine can operate without UI dependencies.
  * @param {Object} [options.selectionManager] - Optional selection manager to reuse.
  * @param {(rows:number, cols:number) => Object} [options.selectionManagerFactory]
  *   Factory invoked to create a selection manager when one is not supplied.
@@ -290,8 +292,7 @@ export default class SimulationEngine {
         : win && typeof win.cancelAnimationFrame === "function"
           ? win.cancelAnimationFrame.bind(win)
           : defaultCancelAnimationFrame;
-    this.drawOverlays =
-      typeof drawOverlays === "function" ? drawOverlays : defaultDrawOverlays;
+    this.drawOverlays = typeof drawOverlays === "function" ? drawOverlays : noop;
 
     const defaults = resolveSimulationDefaults(config);
     const maxConcurrentEvents = sanitizeMaxConcurrentEvents(
