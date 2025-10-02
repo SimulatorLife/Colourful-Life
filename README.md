@@ -49,6 +49,10 @@ Flip on the **Celebration Glow** checkbox in the Overlays panel to surround the 
 
 Enable **Life Event Markers** in the Overlays panel to spotlight where births and deaths just occurred. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps.
 
+### Obstacle layout presets
+
+Select a **Layout Preset** in the Obstacles panel to immediately swap the grid's obstacle mask. The dropdown now applies changes as soon as you choose a preset, streamlining the workflow when experimenting with layouts. Use **Clear Obstacles** to reset the field if you need a blank slate again.
+
 ## Core systems
 
 The simulation runs on cooperating modules housed in `src/`:

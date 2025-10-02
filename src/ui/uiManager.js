@@ -1734,6 +1734,15 @@ export default class UIManager {
     const obstacleGrid = createControlGrid(body, "control-grid--compact");
 
     if (this.obstaclePresets.length > 0) {
+      const applyPreset = (id) => {
+        const args = [id, { clearExisting: true }];
+
+        if (typeof this.actions.applyObstaclePreset === "function")
+          this.actions.applyObstaclePreset(...args);
+        else if (window.grid?.applyObstaclePreset)
+          window.grid.applyObstaclePreset(...args);
+      };
+
       const presetSelect = createSelectRow(obstacleGrid, {
         label: "Layout Preset",
         title: "Choose a static obstacle layout to apply immediately.",
@@ -1745,6 +1754,7 @@ export default class UIManager {
         })),
         onChange: (value) => {
           this.obstaclePreset = value;
+          applyPreset(value);
         },
       });
 
@@ -1754,26 +1764,9 @@ export default class UIManager {
         });
       }
 
-      const applyPreset = (id) => {
-        const args = [id, { clearExisting: true }];
-
-        if (typeof this.actions.applyObstaclePreset === "function")
-          this.actions.applyObstaclePreset(...args);
-        else if (window.grid?.applyObstaclePreset)
-          window.grid.applyObstaclePreset(...args);
-      };
-
       const presetButtons = document.createElement("div");
 
       presetButtons.className = "control-line";
-      const applyLayoutButton = document.createElement("button");
-
-      applyLayoutButton.textContent = "Apply Layout";
-      applyLayoutButton.title =
-        "Replace the current obstacle mask with the selected preset.";
-      applyLayoutButton.addEventListener("click", () => {
-        applyPreset(this.obstaclePreset);
-      });
       const clearButton = document.createElement("button");
 
       clearButton.textContent = "Clear Obstacles";
@@ -1789,7 +1782,6 @@ export default class UIManager {
         if (presetSelect) presetSelect.value = clearedPreset;
         applyPreset(clearedPreset);
       });
-      presetButtons.appendChild(applyLayoutButton);
       presetButtons.appendChild(clearButton);
       obstacleGrid.appendChild(presetButtons);
     }

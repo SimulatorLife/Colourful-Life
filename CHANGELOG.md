@@ -68,6 +68,7 @@ where practical.
   environment-aware ES module variant so only the supported benchmarking tool
   remains in `scripts/profile-energy.mjs`.
 - Normalised README command tables and cross-links so contributor workflow references stay easy to scan.
+- Consolidated the obstacle layout preset control so selecting a preset immediately applies it, removing the extra "Apply Layout" button to simplify the UI and reduce the number of steps required to test different masks.
 
 ## [0.1.0]
 
