@@ -78,6 +78,9 @@ affect runtime outcomes.
 
 - Keep the README and architecture documents aligned with the current module
   layout. Update them when adding or removing systems.
+- Refresh the README's headless usage section and architecture notes when
+  `createSimulation`, environment adapters, or UI mounting behaviour change so
+  embedding guidance stays accurate.
 - Prefer short, focused sections. Link to source files (e.g.
   ``[`src/grid/gridManager.js`](../src/grid/gridManager.js)``) when detailing
   behaviour so readers can dive deeper.

@@ -11,6 +11,7 @@ This document captures how the Colourful Life simulation composes its core syste
    - Emits lifecycle events (`tick`, `metrics`, `leaderboard`, `state`) consumed by UI panels and analytics.
 2. **UIManager** (`src/ui/uiManager.js`) renders controls, metrics, and overlays. It dispatches user actions (pause, stamping obstacles, slider changes) back to the engine by calling `engine` helpers exposed through `createSimulation`. When the browser UI is unavailable, `createHeadlessUiManager` in `src/ui/headlessUiManager.js` mirrors the same surface area so headless runs share settings and cadence management.
 3. **BrainDebugger** (`src/ui/brainDebugger.js`) receives neuron snapshots from the grid and exposes them to the browser console for inspection. The debugger is optional in headless environments and doubles as the default brain snapshot collector for headless runs.
+4. **Environment adapters** (`src/engine/environment.js`) normalise canvas lookup, sizing, and timing primitives so the engine can run in browsers, tests, or automation without bespoke wiring.
 
 ## Core subsystems
 
@@ -80,6 +81,7 @@ This document captures how the Colourful Life simulation composes its core syste
 ### Stats and telemetry
 
 - **Stats** (`src/stats.js`) accumulates per-tick metrics, maintains rolling history for charts, and reports aggregate counters (births, deaths, fights, cooperations). Age-related telemetry is expressed in simulation ticks so downstream tools can map it to seconds using their chosen tick cadence.
+- Life event summaries combine rolling birth/death counts with a net population delta and cadence indicator surfaced through the UI's "Life Event Log" panel, keeping the trend accessible to keyboard and assistive technology users.
 - Headless sampling over 300 ticks on a 60×60 grid (seed 12345) showed the prior `0.45` mating diversity threshold averaging ~0.27 diversity with five successes across 241 mate choices, while the gentler `0.42` baseline lifted diversity to ~0.30 with six successes in 269 attempts, so the default now reflects the less restrictive gate to avoid reproduction stalls in homogenised periods.
 - **Leaderboard** (`src/leaderboard.js`) combines `computeFitness` output with brain snapshots to surface top-performing organisms.
 - **BrainDebugger** (`src/ui/brainDebugger.js`) mirrors neuron traces into the browser console for inspection. `SimulationEngine` forwards snapshots each tick when the debugger is available, and the debugger doubles as the default brain snapshot collector for headless runs.
@@ -126,6 +128,6 @@ When running outside the browser:
 
 - `scripts/profile-energy.mjs` benchmarks the grid preparation loop. Tune dimensions via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and adjust the stub cell size with `PERF_CELL_SIZE`.
 - `npm run clean` delegates to Parcel's built-in clean routine to remove `dist/` and `.parcel-cache/` when the bundler cache becomes inconsistent.
-- Additional helpers in `scripts/` showcase headless usage patterns. Each script is documented inline with configuration tips.
+- Additional helpers in `scripts/` showcase headless usage patterns. Each script is documented inline with configuration tips, and `scripts/profile-energy.mjs` is the canonical benchmarking harness used during performance profiling.
 
 For further guidance, browse the inline JSDoc across `src/` and the tests under `test/` to see concrete usage patterns.

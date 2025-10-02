@@ -13,6 +13,21 @@ const defaultNow = () => {
 const defaultRequestAnimationFrame = (cb) => setTimeout(() => cb(defaultNow()), 16);
 const defaultCancelAnimationFrame = (id) => clearTimeout(id);
 
+/**
+ * Resolves the canvas element the simulation should render into.
+ *
+ * Consumers can supply an explicit `HTMLCanvasElement` (or compatible
+ * offscreen canvas). When omitted, the helper attempts to locate the
+ * `#gameCanvas` element on the provided document reference. Returning `null`
+ * allows callers to detect the missing canvas and surface a descriptive error.
+ *
+ * @param {HTMLCanvasElement|OffscreenCanvas|null} canvas - Preferred canvas
+ *   instance supplied by the embedding context.
+ * @param {Document|undefined} documentRef - Document used to look up the
+ *   default canvas when one is not provided explicitly.
+ * @returns {HTMLCanvasElement|OffscreenCanvas|null} Canvas element or `null`
+ *   when unavailable.
+ */
 export function resolveCanvas(canvas, documentRef) {
   if (canvas) return canvas;
 
@@ -23,6 +38,19 @@ export function resolveCanvas(canvas, documentRef) {
   return null;
 }
 
+/**
+ * Applies width/height overrides to the supplied canvas and returns the active
+ * dimensions. The helper inspects both the configuration object and the
+ * existing canvas element, ensuring the engine receives concrete measurements
+ * even when callers pass strings or BigInts.
+ *
+ * @param {HTMLCanvasElement|OffscreenCanvas} canvas - Canvas to size.
+ * @param {{width?:number|string, height?:number|string, canvasWidth?:number|string,
+ *   canvasHeight?:number|string, canvasSize?:{width?:number|string,height?:number|string}}} config
+ *   - Dimension overrides accepted by {@link SimulationEngine}.
+ * @returns {{width:number,height:number}} Active canvas width and height.
+ * @throws {Error} When no width/height can be resolved.
+ */
 export function ensureCanvasDimensions(canvas, config) {
   const toFiniteDimension = (value) => {
     if (value == null) return null;
@@ -94,6 +122,17 @@ export function ensureCanvasDimensions(canvas, config) {
   throw new Error("SimulationEngine requires canvas dimensions to be specified.");
 }
 
+/**
+ * Resolves the timing primitives used by {@link SimulationEngine}. Callers can
+ * inject custom implementations (e.g. for tests or headless environments).
+ * Fallbacks mirror browser behaviour to keep the engine portable.
+ *
+ * @param {{window?:Window, requestAnimationFrame?:Function,
+ *   cancelAnimationFrame?:Function, performanceNow?:Function}} [options]
+ *   - Optional overrides for timing hooks.
+ * @returns {{now:()=>number, raf:(cb:FrameRequestCallback)=>number,
+ *   caf:(handle:number)=>void}} Normalized timing providers.
+ */
 export function resolveTimingProviders({
   window: injectedWindow,
   requestAnimationFrame,
