@@ -5,6 +5,89 @@ import { MockCanvas, setupDom } from "./helpers/mockDom.js";
 
 const test = suite("ui initial settings sync");
 
+function findCheckboxByLabel(root, label) {
+  const queue = [root];
+
+  while (queue.length > 0) {
+    const node = queue.shift();
+
+    if (node && Array.isArray(node.children)) {
+      queue.push(...node.children);
+    }
+
+    if (!node || node.tagName !== "LABEL" || !Array.isArray(node.children)) {
+      continue;
+    }
+
+    const line = node.children[0];
+
+    if (!line || !Array.isArray(line.children)) continue;
+
+    const input = line.children.find((child) => child?.tagName === "INPUT");
+    const directName = line.children.find(
+      (child) => child?.className === "control-name",
+    );
+    const nestedLabel = line.children.find(
+      (child) => child?.className === "control-checkbox-label",
+    );
+    const nestedName = Array.isArray(nestedLabel?.children)
+      ? nestedLabel.children.find((child) => child?.className === "control-name")
+      : null;
+    const name = directName ?? nestedName;
+
+    const extractText = (element) => {
+      if (!element) return "";
+      if (typeof element.textContent === "string" && element.textContent.trim()) {
+        return element.textContent;
+      }
+      if (!Array.isArray(element.children) || element.children.length === 0) {
+        return "";
+      }
+
+      return element.children.map((child) => extractText(child)).join("");
+    };
+
+    if (name && extractText(name).trim() === label) {
+      return input ?? null;
+    }
+  }
+
+  return null;
+}
+
+function findSliderByLabel(root, label) {
+  const queue = [root];
+
+  while (queue.length > 0) {
+    const node = queue.shift();
+
+    if (node && Array.isArray(node.children)) {
+      queue.push(...node.children);
+    }
+
+    if (!node || node.tagName !== "LABEL" || !Array.isArray(node.children)) {
+      continue;
+    }
+
+    const name = node.children.find((child) => child?.className === "control-name");
+    const line = node.children.find((child) => child?.className === "control-line");
+
+    if (!line || !Array.isArray(line.children)) continue;
+
+    const input = line.children.find(
+      (child) => child?.tagName === "INPUT" && child?.type === "range",
+    );
+
+    if (!input) continue;
+
+    const text = typeof name?.textContent === "string" ? name.textContent.trim() : "";
+
+    if (text === label) return input;
+  }
+
+  return null;
+}
+
 test("createSimulation aligns UI controls with config defaults", async () => {
   const restore = setupDom();
 
@@ -36,90 +119,6 @@ test("createSimulation aligns UI controls with config defaults", async () => {
     assert.is(uiManager.showCelebrationAuras, true);
     assert.is(uiManager.showLifeEventMarkers, true);
     assert.is(uiManager.autoPauseOnBlur, false);
-
-    const findCheckboxByLabel = (root, label) => {
-      const queue = [root];
-
-      while (queue.length > 0) {
-        const node = queue.shift();
-
-        if (node && Array.isArray(node.children)) {
-          queue.push(...node.children);
-        }
-
-        if (!node || node.tagName !== "LABEL" || !Array.isArray(node.children)) {
-          continue;
-        }
-
-        const line = node.children[0];
-
-        if (!line || !Array.isArray(line.children)) continue;
-
-        const input = line.children.find((child) => child?.tagName === "INPUT");
-        const directName = line.children.find(
-          (child) => child?.className === "control-name",
-        );
-        const nestedLabel = line.children.find(
-          (child) => child?.className === "control-checkbox-label",
-        );
-        const nestedName = Array.isArray(nestedLabel?.children)
-          ? nestedLabel.children.find((child) => child?.className === "control-name")
-          : null;
-        const name = directName ?? nestedName;
-
-        const extractText = (element) => {
-          if (!element) return "";
-          if (typeof element.textContent === "string" && element.textContent.trim()) {
-            return element.textContent;
-          }
-          if (!Array.isArray(element.children) || element.children.length === 0) {
-            return "";
-          }
-
-          return element.children.map((child) => extractText(child)).join("");
-        };
-
-        if (name && extractText(name).trim() === label) {
-          return input ?? null;
-        }
-      }
-
-      return null;
-    };
-
-    const findSliderByLabel = (root, label) => {
-      const queue = [root];
-
-      while (queue.length > 0) {
-        const node = queue.shift();
-
-        if (node && Array.isArray(node.children)) {
-          queue.push(...node.children);
-        }
-
-        if (!node || node.tagName !== "LABEL" || !Array.isArray(node.children)) {
-          continue;
-        }
-
-        const name = node.children.find((child) => child?.className === "control-name");
-        const line = node.children.find((child) => child?.className === "control-line");
-
-        if (!line || !Array.isArray(line.children)) continue;
-
-        const input = line.children.find(
-          (child) => child?.tagName === "INPUT" && child?.type === "range",
-        );
-
-        if (!input) continue;
-
-        const text =
-          typeof name?.textContent === "string" ? name.textContent.trim() : "";
-
-        if (text === label) return input;
-      }
-
-      return null;
-    };
 
     const obstaclesInput = findCheckboxByLabel(
       uiManager.controlsPanel,
@@ -195,6 +194,84 @@ test("createSimulation aligns UI controls with config defaults", async () => {
         "playback speed slider should render before similarity tuning",
       );
     }
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});
+
+test("createSimulation honours layout initial settings overrides", async () => {
+  const restore = setupDom();
+
+  try {
+    const { createSimulation } = await import("../src/main.js");
+    const simulation = createSimulation({
+      canvas: new MockCanvas(160, 160),
+      autoStart: false,
+      config: {
+        ui: {
+          layout: {
+            initialSettings: {
+              showEnergy: true,
+              showDensity: true,
+              showFitness: true,
+              showCelebrationAuras: true,
+              showLifeEventMarkers: true,
+              autoPauseOnBlur: true,
+            },
+          },
+        },
+      },
+    });
+
+    const { uiManager } = simulation;
+
+    assert.is(uiManager.showEnergy, true);
+    assert.is(uiManager.showDensity, true);
+    assert.is(uiManager.showFitness, true);
+    assert.is(uiManager.showCelebrationAuras, true);
+    assert.is(uiManager.showLifeEventMarkers, true);
+    assert.is(uiManager.autoPauseOnBlur, true);
+
+    const energyToggle = findCheckboxByLabel(
+      uiManager.controlsPanel,
+      "Show Energy Heatmap",
+    );
+    const densityToggle = findCheckboxByLabel(
+      uiManager.controlsPanel,
+      "Show Density Heatmap",
+    );
+    const fitnessToggle = findCheckboxByLabel(
+      uiManager.controlsPanel,
+      "Show Fitness Heatmap",
+    );
+    const celebrationToggle = findCheckboxByLabel(
+      uiManager.controlsPanel,
+      "Celebration Glow",
+    );
+    const lifeEventToggle = findCheckboxByLabel(
+      uiManager.controlsPanel,
+      "Life Event Markers",
+    );
+    const autoPauseToggle = findCheckboxByLabel(
+      uiManager.controlsPanel,
+      "Pause When Hidden",
+    );
+
+    assert.ok(energyToggle, "energy toggle should render");
+    assert.ok(densityToggle, "density toggle should render");
+    assert.ok(fitnessToggle, "fitness toggle should render");
+    assert.ok(celebrationToggle, "celebration toggle should render");
+    assert.ok(lifeEventToggle, "life event toggle should render");
+    assert.ok(autoPauseToggle, "auto-pause toggle should render");
+
+    assert.is(energyToggle.checked, true);
+    assert.is(densityToggle.checked, true);
+    assert.is(fitnessToggle.checked, true);
+    assert.is(celebrationToggle.checked, true);
+    assert.is(lifeEventToggle.checked, true);
+    assert.is(autoPauseToggle.checked, true);
 
     simulation.destroy();
   } finally {

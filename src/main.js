@@ -228,8 +228,8 @@ export function createSimulation({
   const uiOptions = config.ui ?? {};
   const userLayout = toPlainObject(uiOptions.layout);
   const mergedInitialSettings = {
-    ...toPlainObject(userLayout.initialSettings),
     ...sanitizedDefaults,
+    ...toPlainObject(userLayout.initialSettings),
   };
   const uiLayoutOptions = {
     canvasElement: engine.canvas,
