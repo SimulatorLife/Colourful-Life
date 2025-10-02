@@ -10,7 +10,7 @@ import {
   resolveSimulationDefaults,
 } from "./config.js";
 import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
-import { clamp } from "./utils.js";
+import { clamp, reportError } from "./utils.js";
 
 function createSelectionManagerStub(rows, cols) {
   const state = { rows: Math.max(0, rows ?? 0), cols: Math.max(0, cols ?? 0) };
@@ -473,10 +473,11 @@ export default class SimulationEngine {
       try {
         handler(payload);
       } catch (error) {
-        // Surface errors asynchronously so the loop keeps running
-        setTimeout(() => {
-          throw error;
-        }, 0);
+        reportError(
+          `SimulationEngine listener for "${event}" threw; continuing without interruption.`,
+          error,
+          { once: true },
+        );
       }
     });
   }
