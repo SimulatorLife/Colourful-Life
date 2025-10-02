@@ -169,6 +169,8 @@ canvas {
   border-radius: var(--radius-sm);
   padding: var(--space-md);
   box-sizing: border-box;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* Collapsible panels */
@@ -210,7 +212,8 @@ canvas {
   position: sticky;
   top: var(--space-md);
   max-height: calc(100vh - var(--space-lg));
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   grid-column: 1 / -1;
   align-self: start;
   scrollbar-gutter: stable;
@@ -284,7 +287,7 @@ canvas {
 }
 .control-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: var(--space-md);
   margin-bottom: var(--space-md);
 }
@@ -293,7 +296,7 @@ canvas {
 }
 .control-grid--compact {
   gap: var(--space-sm);
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
 }
 .control-section-title,
 .overlay-header {
@@ -320,6 +323,9 @@ canvas {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
+}
+.control-line > * {
+  min-width: 0;
 }
 .control-line--inline-actions {
   justify-content: flex-start;
