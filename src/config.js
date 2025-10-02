@@ -3,6 +3,7 @@ const DEFAULT_MAX_TILE_ENERGY = 5;
 const DEFAULT_REGEN_DENSITY_PENALTY = 0.5;
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.5;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
+const DEFAULT_ACTIVITY_BASE_RATE = 0.3;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
@@ -128,6 +129,38 @@ export function resolveTraitActivationThreshold(env = RUNTIME_ENV) {
 }
 
 export const TRAIT_ACTIVATION_THRESHOLD = resolveTraitActivationThreshold();
+
+/**
+ * Resolves the baseline activity rate applied to every genome before the DNA's
+ * activity locus is considered. This keeps the ecosystem responsive while
+ * enabling environments to globally calm or energize organisms without
+ * rewriting DNA accessors.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Activity baseline clamped to the 0..1 interval.
+ */
+export function resolveActivityBaseRate(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_ACTIVITY_BASE_RATE;
+  const parsed = Number.parseFloat(raw);
+
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_ACTIVITY_BASE_RATE;
+  }
+
+  if (parsed <= 0) {
+    return 0;
+  }
+
+  if (parsed >= 1) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+export const ACTIVITY_BASE_RATE = resolveActivityBaseRate();
 
 export const SIMULATION_DEFAULTS = Object.freeze({
   paused: false,
