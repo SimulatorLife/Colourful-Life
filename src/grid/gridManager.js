@@ -3,7 +3,7 @@ import DNA from "../genome.js";
 import Cell from "../cell.js";
 import { computeFitness } from "../fitness.mjs";
 import { createEventContext, defaultEventContext } from "../events/eventContext.js";
-import { computeTileEnergyUpdate } from "../energySystem.js";
+import { accumulateEventModifiers } from "../energySystem.js";
 import InteractionSystem from "../interactionSystem.js";
 import GridInteractionAdapter from "./gridAdapter.js";
 import ReproductionZonePolicy from "./reproductionZonePolicy.js";
@@ -1460,35 +1460,33 @@ export default class GridManager {
     const hasDensityGrid = Array.isArray(densityGrid);
     const energyGrid = this.energyGrid;
     const next = this.energyNext;
+    const deltaGrid = this.energyDeltaGrid;
     const obstacles = this.obstacles;
     const { isEventAffecting, getEventEffect } =
       this.eventContext ?? defaultEventContext;
-    const sharedConfig = {
-      maxTileEnergy: this.maxTileEnergy,
-      regenRate: R,
-      diffusionRate: D,
-      densityEffectMultiplier,
-      regenDensityPenalty: REGEN_DENSITY_PENALTY,
-      eventStrengthMultiplier,
-      isEventAffecting,
-      getEventEffect,
-      effectCache: getEventEffect ? this.eventEffectCache : null,
-    };
-    const computeOptions = {
-      currentEnergy: 0,
-      density: 0,
-      neighborSum: 0,
-      neighborCount: 0,
-      events: evs,
-      row: 0,
-      col: 0,
-      config: sharedConfig,
-    };
-    const energyComputation = {
-      nextEnergy: 0,
-      drain: 0,
-      appliedEvents: [],
-    };
+    const regenRate = Number.isFinite(R) ? R : 0;
+    const diffusionRate = Number.isFinite(D) ? D : 0;
+    const useDiffusion = diffusionRate !== 0;
+    const maxTileEnergy = this.maxTileEnergy;
+    const invMaxTileEnergy = maxTileEnergy > 0 ? 1 / maxTileEnergy : 1;
+    const normalizedDensityMultiplier = Number.isFinite(densityEffectMultiplier)
+      ? densityEffectMultiplier
+      : 1;
+    const normalizedEventStrengthMultiplier = Number.isFinite(eventStrengthMultiplier)
+      ? eventStrengthMultiplier
+      : 1;
+    const effectCache = getEventEffect ? this.eventEffectCache : null;
+    const eventOptions = hasEvents
+      ? {
+          events: evs,
+          row: 0,
+          col: 0,
+          eventStrengthMultiplier: normalizedEventStrengthMultiplier,
+          isEventAffecting,
+          getEventEffect,
+          effectCache,
+        }
+      : null;
 
     let eventsByRow = null;
 
@@ -1514,16 +1512,17 @@ export default class GridManager {
     for (let r = 0; r < rows; r++) {
       const energyRow = energyGrid[r];
       const nextRow = next[r];
-      const deltaRow = this.energyDeltaGrid[r];
+      const deltaRow = deltaGrid ? deltaGrid[r] : null;
       const densityRow = hasDensityGrid ? densityGrid[r] : null;
-      const obstacleRow = obstacles?.[r];
+      const obstacleRow = obstacles[r];
       const upEnergyRow = r > 0 ? energyGrid[r - 1] : null;
       const downEnergyRow = r < rows - 1 ? energyGrid[r + 1] : null;
-      const upObstacleRow = r > 0 ? obstacles?.[r - 1] : null;
-      const downObstacleRow = r < rows - 1 ? obstacles?.[r + 1] : null;
+      const upObstacleRow = r > 0 ? obstacles[r - 1] : null;
+      const downObstacleRow = r < rows - 1 ? obstacles[r + 1] : null;
       const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
+      const rowHasEvents = Boolean(eventOptions && rowEvents.length > 0);
 
-      computeOptions.events = rowEvents;
+      if (eventOptions) eventOptions.events = rowEvents;
 
       for (let c = 0; c < cols; c++) {
         if (obstacleRow?.[c]) {
@@ -1534,50 +1533,76 @@ export default class GridManager {
           continue;
         }
 
-        const density = hasDensityGrid
-          ? densityRow?.[c]
-          : this.localDensity(r, c, GridManager.DENSITY_RADIUS);
+        let densityValue = hasDensityGrid ? densityRow?.[c] : null;
+
+        if (densityValue == null) {
+          densityValue = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
+        }
+
+        const effectiveDensity = clamp(
+          (densityValue ?? 0) * normalizedDensityMultiplier,
+          0,
+          1,
+        );
+        const currentEnergy = energyRow[c];
+        let regen = regenRate * (1 - currentEnergy / maxTileEnergy);
+
+        regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * effectiveDensity);
+
+        let regenMultiplier = 1;
+        let regenAdd = 0;
+        let drain = 0;
+
+        if (rowHasEvents) {
+          eventOptions.row = r;
+          eventOptions.col = c;
+          const modifiers = accumulateEventModifiers(eventOptions);
+
+          regenMultiplier = modifiers.regenMultiplier;
+          regenAdd = modifiers.regenAdd;
+          drain = modifiers.drainAdd;
+        }
+
+        regen = regen * regenMultiplier + regenAdd;
 
         let neighborSum = 0;
         let neighborCount = 0;
 
-        if (upEnergyRow && !upObstacleRow?.[c]) {
-          neighborSum += upEnergyRow[c];
-          neighborCount += 1;
+        if (useDiffusion) {
+          if (upEnergyRow && (!upObstacleRow || !upObstacleRow[c])) {
+            neighborSum += upEnergyRow[c];
+            neighborCount += 1;
+          }
+
+          if (downEnergyRow && (!downObstacleRow || !downObstacleRow[c])) {
+            neighborSum += downEnergyRow[c];
+            neighborCount += 1;
+          }
+
+          if (c > 0 && (!obstacleRow || !obstacleRow[c - 1])) {
+            neighborSum += energyRow[c - 1];
+            neighborCount += 1;
+          }
+
+          if (c < cols - 1 && (!obstacleRow || !obstacleRow[c + 1])) {
+            neighborSum += energyRow[c + 1];
+            neighborCount += 1;
+          }
         }
 
-        if (downEnergyRow && !downObstacleRow?.[c]) {
-          neighborSum += downEnergyRow[c];
-          neighborCount += 1;
+        let diffusion = 0;
+
+        if (neighborCount > 0) {
+          diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
         }
 
-        if (c > 0 && !obstacleRow?.[c - 1]) {
-          neighborSum += energyRow[c - 1];
-          neighborCount += 1;
-        }
+        let nextEnergy = currentEnergy + regen - drain + diffusion;
 
-        if (c < cols - 1 && !obstacleRow?.[c + 1]) {
-          neighborSum += energyRow[c + 1];
-          neighborCount += 1;
-        }
-
-        computeOptions.currentEnergy = energyRow[c];
-        computeOptions.density = density;
-        computeOptions.neighborSum = neighborSum;
-        computeOptions.neighborCount = neighborCount;
-        computeOptions.row = r;
-        computeOptions.col = c;
-
-        const { nextEnergy } = computeTileEnergyUpdate(
-          computeOptions,
-          energyComputation,
-        );
-
+        nextEnergy = clamp(nextEnergy, 0, maxTileEnergy);
         nextRow[c] = nextEnergy;
-        if (deltaRow) {
-          const denom = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
 
-          deltaRow[c] = clamp((nextEnergy - energyRow[c]) / denom, -1, 1);
+        if (deltaRow) {
+          deltaRow[c] = clamp((nextEnergy - currentEnergy) * invMaxTileEnergy, -1, 1);
         }
       }
     }
