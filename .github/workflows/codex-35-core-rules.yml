@@ -36,6 +36,6 @@ jobs:
         regression coverage—and deliver one focused fix–you will always be able to find SOMETHING to improve
         with regards to the "5 Simulation Laws". Acceptable scopes include tightening logic,
         clarifying or expanding documentation, or adding/adjusting tests. Avoid broad project-wide 
-        refactors; ensure changes are targeted and justified. Clearly record investigated evidence in 
-        the commit message, reference the rule(s) touched, and ensure the change keeps the project's
-        performance and accessibility expectations intact.
+        refactors; commit your changes/fixes, ensuring they are targeted and justified. Clearly record 
+        investigated evidence in the commit message, reference the law(s) as justification for the change, 
+        and ensure the change keeps the project's performance and accessibility expectations intact.
