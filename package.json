@@ -2,6 +2,7 @@
   "name": "code",
   "version": "1.0.0",
   "description": "",
+  "private": true,
   "type": "module",
   "scripts": {
     "start": "parcel ./index.html",
