@@ -25,11 +25,14 @@ export default class UIManager {
     const normalizedCallbacks = toPlainObject(simulationCallbacks);
     const normalizedActions = toPlainObject(actions);
     const normalizedLayout = toPlainObject(layoutOptions);
+    const { initialSettings: initialSettingsOverrides, ...layoutConfig } =
+      normalizedLayout;
+    const initialSettings = toPlainObject(initialSettingsOverrides);
     const { obstaclePresets = [], ...actionFns } = normalizedActions;
     const selectionManagerOption = normalizedActions.selectionManager;
     const getCellSizeFn = normalizedActions.getCellSize;
 
-    const defaults = resolveSimulationDefaults();
+    const defaults = resolveSimulationDefaults(initialSettings);
 
     this.simulationCallbacks = normalizedCallbacks;
     this.actions = actionFns;
@@ -103,14 +106,13 @@ export default class UIManager {
     this.mainRow.appendChild(this.sidebar);
 
     // Allow callers to customize which keys toggle the pause state.
-    this.pauseHotkeySet = this.#resolveHotkeySet(normalizedLayout.pauseHotkeys);
+    this.pauseHotkeySet = this.#resolveHotkeySet(layoutConfig.pauseHotkeys);
 
     const canvasEl =
-      normalizedLayout.canvasElement ||
-      this.#resolveNode(normalizedLayout.canvasSelector);
+      layoutConfig.canvasElement || this.#resolveNode(layoutConfig.canvasSelector);
     const anchorNode =
-      this.#resolveNode(normalizedLayout.before) ||
-      this.#resolveNode(normalizedLayout.insertBefore);
+      this.#resolveNode(layoutConfig.before) ||
+      this.#resolveNode(layoutConfig.insertBefore);
 
     if (canvasEl) {
       this.attachCanvas(canvasEl, { before: anchorNode });
