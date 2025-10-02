@@ -168,11 +168,18 @@ canvas {
   overflow: auto;
   grid-column: 1 / -1;
   align-self: start;
+  scrollbar-gutter: stable;
 }
 .controls-panel.expanded {
-  position: static;
-  max-height: none;
-  overflow: visible;
+  /* Layout overrides handled responsively below. */
+}
+
+@media (max-width: 1180px) {
+  .controls-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
 }
 .controls-panel h3 {
   margin: 0 0 var(--space-md);
