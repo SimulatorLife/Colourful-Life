@@ -1,5 +1,5 @@
 import { assert, test } from "#tests/harness";
-import { ensureCanvasDimensions } from "../src/simulationEngine.js";
+import { ensureCanvasDimensions } from "../src/engine/environment.js";
 import {
   MockCanvas,
   loadSimulationModules,

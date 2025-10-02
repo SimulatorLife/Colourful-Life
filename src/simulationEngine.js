@@ -11,6 +11,11 @@ import {
 } from "./config.js";
 import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
 import { clamp, reportError, sanitizeNumber } from "./utils.js";
+import {
+  ensureCanvasDimensions,
+  resolveCanvas,
+  resolveTimingProviders,
+} from "./engine/environment.js";
 
 function createSelectionManagerStub(rows, cols) {
   const state = { rows: Math.max(0, rows ?? 0), cols: Math.max(0, cols ?? 0) };
@@ -66,17 +71,6 @@ function createSelectionManagerStub(rows, cols) {
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
-const defaultNow = () => {
-  if (typeof performance !== "undefined" && typeof performance.now === "function") {
-    return performance.now();
-  }
-
-  return Date.now();
-};
-
-const defaultRequestAnimationFrame = (cb) => setTimeout(() => cb(defaultNow()), 16);
-const defaultCancelAnimationFrame = (id) => clearTimeout(id);
-
 const MAX_CONCURRENT_EVENTS_FALLBACK = Math.max(
   0,
   Math.floor(SIMULATION_DEFAULTS.maxConcurrentEvents ?? 2),
@@ -90,87 +84,6 @@ function sanitizeMaxConcurrentEvents(value, fallback = MAX_CONCURRENT_EVENTS_FAL
     min: 0,
     round: (candidate) => Math.floor(candidate),
   });
-}
-
-function resolveCanvas(canvas, documentRef) {
-  if (canvas) return canvas;
-
-  if (documentRef && typeof documentRef.getElementById === "function") {
-    return documentRef.getElementById("gameCanvas");
-  }
-
-  return null;
-}
-
-function ensureCanvasDimensions(canvas, config) {
-  const toFiniteDimension = (value) => {
-    if (value == null) return null;
-
-    if (typeof value === "number") {
-      return Number.isFinite(value) ? value : null;
-    }
-
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-
-      if (trimmed.length === 0) return null;
-
-      const parsed = Number.parseFloat(trimmed);
-
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    if (typeof value === "bigint") {
-      const numeric = Number(value);
-
-      return Number.isFinite(numeric) ? numeric : null;
-    }
-
-    const numeric = Number(value);
-
-    return Number.isFinite(numeric) ? numeric : null;
-  };
-
-  const pickDimension = (candidates) => {
-    for (const candidate of candidates) {
-      const normalized = toFiniteDimension(candidate);
-
-      if (normalized != null) {
-        return normalized;
-      }
-    }
-
-    return null;
-  };
-
-  const width = pickDimension([
-    config?.width,
-    config?.canvasWidth,
-    config?.canvasSize?.width,
-    canvas?.width,
-  ]);
-  const height = pickDimension([
-    config?.height,
-    config?.canvasHeight,
-    config?.canvasSize?.height,
-    canvas?.height,
-  ]);
-
-  if (canvas && width != null) canvas.width = width;
-  if (canvas && height != null) canvas.height = height;
-
-  const canvasWidth = toFiniteDimension(canvas?.width);
-  const canvasHeight = toFiniteDimension(canvas?.height);
-
-  if (canvasWidth != null && canvasHeight != null) {
-    return { width: canvasWidth, height: canvasHeight };
-  }
-
-  if (width != null && height != null) {
-    return { width, height };
-  }
-
-  throw new Error("SimulationEngine requires canvas dimensions to be specified.");
 }
 
 /**
@@ -278,19 +191,16 @@ export default class SimulationEngine {
     this.rows = rows;
     this.cols = cols;
     this._obstaclePresets = resolveObstaclePresetCatalog(config.obstaclePresets);
-    this.now = typeof injectedNow === "function" ? injectedNow : defaultNow;
-    this.raf =
-      typeof injectedRaf === "function"
-        ? injectedRaf
-        : win && typeof win.requestAnimationFrame === "function"
-          ? win.requestAnimationFrame.bind(win)
-          : defaultRequestAnimationFrame;
-    this.caf =
-      typeof injectedCaf === "function"
-        ? injectedCaf
-        : win && typeof win.cancelAnimationFrame === "function"
-          ? win.cancelAnimationFrame.bind(win)
-          : defaultCancelAnimationFrame;
+    const { now, raf, caf } = resolveTimingProviders({
+      window: win,
+      requestAnimationFrame: injectedRaf,
+      cancelAnimationFrame: injectedCaf,
+      performanceNow: injectedNow,
+    });
+
+    this.now = now;
+    this.raf = raf;
+    this.caf = caf;
     this.drawOverlays = typeof drawOverlays === "function" ? drawOverlays : noop;
 
     const defaults = resolveSimulationDefaults(config);
