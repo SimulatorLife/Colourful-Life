@@ -2391,6 +2391,7 @@ export default class GridManager {
     diversityPressure = 0,
     behaviorEvenness = 0,
     behaviorComplementarity = 0,
+    strategyPressure = 0,
   } = {}) {
     const sliderFloor = clamp(Number.isFinite(floor) ? floor : 0, 0, 1);
 
@@ -2442,6 +2443,11 @@ export default class GridManager {
       0,
       1,
     );
+    const strategyPressureValue = clamp(
+      Number.isFinite(strategyPressure) ? strategyPressure : 0,
+      0,
+      1,
+    );
     let severity =
       closeness * 0.35 +
       closeness * combinedDrive * (0.4 + 0.2 * probabilitySlack) +
@@ -2451,6 +2457,7 @@ export default class GridManager {
     severity *= clamp(1 - kinComfort * 0.45, 0.3, 1);
     severity *= 1 + pressure * 0.75;
     severity *= 1 + evennessDrag * (0.35 + 0.25 * combinedDrive);
+    severity *= 1 + strategyPressureValue * evennessDrag * (0.25 + closeness * 0.2);
 
     if (complementarity > 0 && evennessDrag > 0) {
       const reliefScale =
@@ -2542,10 +2549,19 @@ export default class GridManager {
       cell,
       bestMate.target,
     );
+    const strategyPressureSource =
+      typeof stats?.getStrategyPressure === "function"
+        ? stats.getStrategyPressure()
+        : Number.isFinite(stats?.strategyPressure)
+          ? stats.strategyPressure
+          : 0;
+    const strategyPressure = clamp(strategyPressureSource, 0, 1);
     const penaltyFloor =
       typeof this.lowDiversityReproMultiplier === "number"
         ? clamp(this.lowDiversityReproMultiplier, 0, 1)
         : 0;
+    let diversityPenaltyMultiplier = 1;
+    let strategyPenaltyMultiplier = 1;
     let penaltyMultiplier = 1;
     let penalizedForSimilarity = false;
 
@@ -2602,7 +2618,7 @@ export default class GridManager {
 
     if (diversity < pairDiversityThreshold) {
       penalizedForSimilarity = true;
-      penaltyMultiplier = this.#computeLowDiversityPenaltyMultiplier({
+      diversityPenaltyMultiplier = this.#computeLowDiversityPenaltyMultiplier({
         parentA: cell,
         parentB: bestMate.target,
         diversity,
@@ -2615,12 +2631,19 @@ export default class GridManager {
         diversityPressure,
         behaviorEvenness,
         behaviorComplementarity,
+        strategyPressure,
       });
 
-      if (penaltyMultiplier <= 0) {
+      diversityPenaltyMultiplier = clamp(diversityPenaltyMultiplier, 0, 1);
+
+      if (diversityPenaltyMultiplier <= 0) {
         effectiveReproProb = 0;
       } else {
-        effectiveReproProb = clamp(effectiveReproProb * penaltyMultiplier, 0, 1);
+        effectiveReproProb = clamp(
+          effectiveReproProb * diversityPenaltyMultiplier,
+          0,
+          1,
+        );
       }
     } else if (diversityPressure > 0 && pairDiversityThreshold < 1) {
       const normalizedExcess = clamp(
@@ -2636,6 +2659,47 @@ export default class GridManager {
         effectiveReproProb = clamp(effectiveReproProb * bonus, 0, 1);
       }
     }
+
+    if (strategyPressure > 0 && effectiveReproProb > 0) {
+      const evennessGap = clamp(1 - behaviorEvenness, 0, 1);
+      const complementarityClamped = clamp(behaviorComplementarity, 0, 1);
+      const complementGap = clamp(1 - complementarityClamped, 0, 1);
+      const similarityPull = clamp(similarity, 0, 1);
+      let monotonySeverity =
+        strategyPressure *
+        evennessGap *
+        (0.45 + 0.35 * similarityPull) *
+        (0.4 + 0.6 * complementGap);
+
+      if (diversity < pairDiversityThreshold) {
+        const diversityGap = clamp(pairDiversityThreshold - diversity, 0, 1);
+
+        monotonySeverity *= 1 + diversityGap * 0.35;
+      }
+
+      monotonySeverity = clamp(monotonySeverity, 0, 0.55);
+
+      if (monotonySeverity > 0.001) {
+        const floor = penaltyFloor > 0 ? penaltyFloor : 0;
+
+        strategyPenaltyMultiplier = clamp(1 - monotonySeverity, floor, 1);
+
+        if (strategyPenaltyMultiplier < 1) {
+          penalizedForSimilarity = true;
+          effectiveReproProb = clamp(
+            effectiveReproProb * strategyPenaltyMultiplier,
+            0,
+            1,
+          );
+        }
+      }
+    }
+
+    penaltyMultiplier = clamp(
+      diversityPenaltyMultiplier * strategyPenaltyMultiplier,
+      0,
+      1,
+    );
 
     if (behaviorComplementarity > 0) {
       const complementPressure = clamp(1 - behaviorEvenness, 0, 1);
@@ -2813,6 +2877,8 @@ export default class GridManager {
         penalized: penalizedForSimilarity,
         penaltyMultiplier,
         behaviorComplementarity,
+        strategyPenaltyMultiplier,
+        strategyPressure,
         threshold: pairDiversityThreshold,
       });
     }
@@ -2824,6 +2890,7 @@ export default class GridManager {
           success: reproduced,
           penalized: penalizedForSimilarity,
           penaltyMultiplier,
+          strategyPenaltyMultiplier,
         });
       }
     };

@@ -97,10 +97,11 @@ test("computeFitness rewards diverse mating and penalizes similarity pressure", 
     matingSuccesses: 2,
     diverseMateScore: 1.2,
     similarityPenalty: 1,
+    strategyPenalty: 0.8,
   };
 
   const result = computeFitness(cell, 10);
-  const expected = 0.6 * 1.2 + 0.5 * 0.4 - 0.25 * 0.6;
+  const expected = 0.6 * 1.2 + 0.5 * 0.4 - 0.25 * 0.6 - 0.2 * 0.4;
 
   approxEqual(result, expected, 1e-9);
 });
