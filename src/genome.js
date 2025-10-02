@@ -1106,6 +1106,16 @@ export class DNA {
       jitter: 0.1,
     });
 
+    updateModulation("opportunitySignal", {
+      gain: 0.7 + 0.35 * strategy + 0.25 * neural,
+      target: toSigned(
+        0.45 + 0.35 * strategy + 0.25 * cooperation - 0.3 * risk,
+        0.5,
+        0.9,
+      ),
+      jitter: 0.09,
+    });
+
     return {
       baselineGains: baseline,
       targets,
@@ -1175,6 +1185,8 @@ export class DNA {
     const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
     const activity = this.geneFraction(GENE_LOCI.ACTIVITY);
     const cohesion = this.geneFraction(GENE_LOCI.COHESION);
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
 
     const movement = this.movementGenes();
     const moveTotal = Math.max(
@@ -1196,6 +1208,44 @@ export class DNA {
         (conflict?.proximity || 0) +
         (conflict?.attrition || 0),
     );
+
+    const opportunityAssimilation = clamp(
+      0.18 + 0.32 * neural + 0.24 * exploration,
+      0.05,
+      0.8,
+    );
+    const opportunityDecay = clamp(
+      0.06 + 0.28 * (1 - strategy) + 0.2 * (1 - recovery),
+      0.01,
+      0.55,
+    );
+    const opportunityPositiveWeight = clamp(
+      0.4 + 0.35 * cooperation + 0.3 * fertility,
+      0.1,
+      1.2,
+    );
+    const opportunityNegativeWeight = clamp(0.35 + 0.4 * risk + 0.3 * combat, 0.1, 1.3);
+    const opportunityVolatility = clamp(
+      0.18 + 0.38 * (1 - strategy) + 0.28 * exploration,
+      0.05,
+      0.9,
+    );
+    const opportunityBaseline = clamp(
+      0.05 + 0.35 * strategy + 0.25 * neural - 0.3 * risk,
+      -0.6,
+      0.8,
+    );
+    const opportunitySynergy = clamp(
+      0.22 + 0.35 * efficiency + 0.25 * parental,
+      0,
+      0.8,
+    );
+    const opportunityGroupWeights = {
+      movement: clamp(0.35 + 0.4 * movement + 0.2 * exploration, 0.05, 1.3),
+      interaction: clamp(0.3 + 0.45 * cooperation + 0.2 * combat, 0.05, 1.3),
+      reproduction: clamp(0.35 + 0.45 * fertility + 0.3 * parental, 0.05, 1.4),
+      targeting: clamp(0.3 + 0.4 * combat + 0.35 * strategy, 0.05, 1.4),
+    };
 
     return {
       energyDeltaWeight: clamp(0.35 + 0.45 * efficiency + 0.2 * recovery, 0.1, 1.25),
@@ -1240,6 +1290,16 @@ export class DNA {
         strong: clamp((conflict?.strong || 0) / conflictTotal, 0, 1),
         proximity: clamp((conflict?.proximity || 0) / conflictTotal, 0, 1),
         attrition: clamp((conflict?.attrition || 0) / conflictTotal, 0, 1),
+      },
+      opportunity: {
+        assimilation: opportunityAssimilation,
+        decay: opportunityDecay,
+        positiveWeight: opportunityPositiveWeight,
+        negativeWeight: opportunityNegativeWeight,
+        volatility: opportunityVolatility,
+        baseline: opportunityBaseline,
+        synergyWeight: opportunitySynergy,
+        groupWeights: opportunityGroupWeights,
       },
     };
   }

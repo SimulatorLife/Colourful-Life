@@ -121,6 +121,7 @@ export default class Cell {
       typeof this.dna.neuralReinforcementProfile === "function"
         ? this.dna.neuralReinforcementProfile()
         : null;
+    this.opportunityProfile = this.neuralReinforcementProfile?.opportunity || null;
     this.matePreferenceBias =
       typeof this.dna.mateSimilarityBias === "function"
         ? this.dna.mateSimilarityBias()
@@ -161,6 +162,13 @@ export default class Cell {
       typeof this.dna.resourceTrendAdaptation === "function"
         ? this.dna.resourceTrendAdaptation()
         : 0.35;
+    this._opportunitySignal = clamp(
+      Number.isFinite(this.opportunityProfile?.baseline)
+        ? this.opportunityProfile.baseline
+        : 0,
+      -1,
+      1,
+    );
     const initialResourceLevel = clamp((energy ?? 0) / (MAX_TILE_ENERGY || 1), 0, 1);
 
     this._resourceBaseline = initialResourceLevel;
@@ -1102,6 +1110,13 @@ export default class Cell {
       }
     }
 
+    this.#updateOpportunitySignal({
+      decisions,
+      energyBefore,
+      energyAfter,
+      maxTileEnergy,
+    });
+
     if (this.brain && typeof this.brain.applySensorFeedback === "function") {
       for (let i = 0; i < decisions.length; i++) {
         const decision = decisions[i];
@@ -1685,6 +1700,126 @@ export default class Cell {
     return { scarcityMemory, confidenceMemory };
   }
 
+  #currentOpportunitySignal() {
+    return clamp(
+      Number.isFinite(this._opportunitySignal) ? this._opportunitySignal : 0,
+      -1,
+      1,
+    );
+  }
+
+  #updateOpportunitySignal({
+    decisions = [],
+    energyBefore = this.energy,
+    energyAfter = this.energy,
+    maxTileEnergy = MAX_TILE_ENERGY,
+  } = {}) {
+    const profile = this.opportunityProfile;
+
+    if (!profile) return;
+
+    const assimilation = clamp(
+      Number.isFinite(profile.assimilation) ? profile.assimilation : 0,
+      0,
+      1,
+    );
+    const decay = clamp(Number.isFinite(profile.decay) ? profile.decay : 0, 0, 1);
+    const positiveWeight = clamp(
+      Number.isFinite(profile.positiveWeight) ? profile.positiveWeight : 0.6,
+      0.1,
+      2,
+    );
+    const negativeWeight = clamp(
+      Number.isFinite(profile.negativeWeight) ? profile.negativeWeight : 0.6,
+      0.1,
+      2,
+    );
+    const volatility = clamp(
+      Number.isFinite(profile.volatility) ? profile.volatility : 0.3,
+      0,
+      2,
+    );
+    const baseline = clamp(
+      Number.isFinite(profile.baseline) ? profile.baseline : 0,
+      -1,
+      1,
+    );
+    const synergyWeight = clamp(
+      Number.isFinite(profile.synergyWeight) ? profile.synergyWeight : 0.3,
+      0,
+      1,
+    );
+    const groupWeights =
+      profile.groupWeights && typeof profile.groupWeights === "object"
+        ? profile.groupWeights
+        : null;
+
+    const current = clamp(
+      Number.isFinite(this._opportunitySignal) ? this._opportunitySignal : baseline,
+      -1,
+      1,
+    );
+    const drifted = lerp(current, baseline, decay);
+
+    let weightedSignal = 0;
+    let totalWeight = 0;
+
+    for (let i = 0; i < decisions.length; i++) {
+      const decision = decisions[i];
+
+      if (!decision || typeof decision !== "object") continue;
+
+      const reward = Number.isFinite(decision.outcome?.rewardSignal)
+        ? clamp(decision.outcome.rewardSignal, -1, 1)
+        : 0;
+
+      if (reward === 0) continue;
+
+      const activationCount = Math.max(1, Number(decision.activationCount) || 0);
+      let weight = 0.4;
+
+      if (
+        groupWeights &&
+        decision.group &&
+        typeof groupWeights[decision.group] === "number"
+      ) {
+        weight = clamp(groupWeights[decision.group], 0.05, 2);
+      }
+
+      const amplitude = reward > 0 ? positiveWeight : negativeWeight;
+      const activationInfluence =
+        1 + Math.max(0, activationCount - 1) * Math.min(volatility, 1) * 0.2;
+      const scaledReward = clamp(reward * amplitude, -2, 2);
+      const influence = Math.max(Math.abs(scaledReward), 0.05);
+      const combinedWeight = weight * activationInfluence * influence;
+
+      weightedSignal += scaledReward * combinedWeight;
+      totalWeight += combinedWeight;
+    }
+
+    const normalized = totalWeight > 0 ? clamp(weightedSignal / totalWeight, -1, 1) : 0;
+    const rewardTarget = clamp(drifted + normalized, -1, 1);
+    const rewardAdjusted = lerp(drifted, rewardTarget, assimilation);
+
+    const capacity = Math.max(
+      1e-4,
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
+    );
+    const energyDelta = clamp(
+      ((Number.isFinite(energyAfter) ? energyAfter : 0) -
+        (Number.isFinite(energyBefore) ? energyBefore : 0)) /
+        capacity,
+      -1,
+      1,
+    );
+    const energyTarget = clamp(rewardAdjusted + energyDelta, -1, 1);
+    const finalSignal = lerp(rewardAdjusted, energyTarget, synergyWeight);
+
+    this._opportunitySignal = clamp(finalSignal, -1, 1);
+  }
+
   resolveTrait(traitName) {
     if (traitName === "riskTolerance") {
       return this.#resolveRiskTolerance();
@@ -2038,6 +2173,7 @@ export default class Cell {
       neuralFatigue,
       scarcityMemory,
       confidenceMemory,
+      opportunitySignal: this.#currentOpportunitySignal(),
     };
   }
 
@@ -2310,6 +2446,7 @@ export default class Cell {
       eventPressure,
       resourceTrend,
       neuralFatigue,
+      opportunitySignal: this.#currentOpportunitySignal(),
     };
   }
 
@@ -2381,6 +2518,7 @@ export default class Cell {
       neuralFatigue,
       scarcityMemory,
       confidenceMemory,
+      opportunitySignal: this.#currentOpportunitySignal(),
     };
   }
 
@@ -2471,6 +2609,7 @@ export default class Cell {
       targetThreat: threatSignal,
       targetProximity: proximitySignal,
       targetAttrition: attritionSignal,
+      opportunitySignal: this.#currentOpportunitySignal(),
     };
   }
 
