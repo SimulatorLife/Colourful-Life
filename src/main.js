@@ -12,12 +12,25 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 function resolveHeadlessCanvasSize(config = {}) {
   const toFinite = (value) => {
     if (value == null) return null;
+
+    let candidate = value;
+
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim();
+
+      if (trimmed.length === 0) {
+        return null;
+      }
+
+      candidate = trimmed;
+    }
+
     const numeric =
-      typeof value === "number"
-        ? value
-        : typeof value === "string" && value.trim().length > 0
-          ? Number.parseFloat(value)
-          : Number(value);
+      typeof candidate === "number"
+        ? candidate
+        : typeof candidate === "string"
+          ? Number.parseFloat(candidate)
+          : Number(candidate);
 
     return Number.isFinite(numeric) ? numeric : null;
   };
