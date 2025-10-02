@@ -165,16 +165,31 @@ function computeLifeEventAlpha(
   return LIFE_EVENT_MARKER_MIN_ALPHA + span * (1 - normalized * normalized);
 }
 
-function resolveLifeEventColor(event) {
-  const options = [
-    event?.highlight?.color,
-    event?.color,
-    LIFE_EVENT_MARKER_DEFAULT_COLORS[event?.type],
-    LIFE_EVENT_MARKER_DEFAULT_COLORS.birth,
-  ];
+function resolveLifeEventColor(event, overrides) {
+  const candidateColors = [event?.highlight?.color, event?.color];
+
+  if (overrides && typeof overrides === "object") {
+    const typeOverride = overrides[event?.type];
+    const fallbackOverride = overrides.default ?? overrides.fallback ?? overrides.other;
+
+    if (typeof typeOverride === "string" && typeOverride.length > 0) {
+      candidateColors.push(typeOverride);
+    }
+
+    if (
+      typeof fallbackOverride === "string" &&
+      fallbackOverride.length > 0 &&
+      fallbackOverride !== typeOverride
+    ) {
+      candidateColors.push(fallbackOverride);
+    }
+  }
+
+  candidateColors.push(LIFE_EVENT_MARKER_DEFAULT_COLORS[event?.type]);
+  candidateColors.push(LIFE_EVENT_MARKER_DEFAULT_COLORS.birth);
 
   return (
-    options.find(
+    candidateColors.find(
       (candidate) => typeof candidate === "string" && candidate.length > 0,
     ) ?? LIFE_EVENT_MARKER_DEFAULT_COLORS.birth
   );
@@ -306,7 +321,7 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
       ctx.globalAlpha = LIFE_EVENT_MARKER_MAX_ALPHA;
     }
 
-    const color = resolveLifeEventColor(event);
+    const color = resolveLifeEventColor(event, options.colors);
     const centerX = (col + 0.5) * cellSize;
     const centerY = (row + 0.5) * cellSize;
 
