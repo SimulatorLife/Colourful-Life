@@ -2,7 +2,11 @@ import { randomRange, clamp, lerp, createRankedBuffer, warnOnce } from "../utils
 import DNA from "../genome.js";
 import Cell from "../cell.js";
 import { computeFitness } from "../fitness.mjs";
-import { createEventContext, defaultEventContext } from "../events/eventContext.js";
+import {
+  createEventContext,
+  defaultEventContext,
+  defaultIsEventAffecting,
+} from "../events/eventContext.js";
 import { accumulateEventModifiers } from "../energySystem.js";
 import InteractionSystem from "../interactionSystem.js";
 import GridInteractionAdapter from "./gridAdapter.js";
@@ -143,6 +147,7 @@ export default class GridManager {
   static maxTileEnergy = MAX_TILE_ENERGY;
   static combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT;
   #spawnCandidateScratch = null;
+  #eventScratch = null;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -202,6 +207,58 @@ export default class GridManager {
     const drive = curiosity * (0.55 + 0.45 * caution);
 
     return clamp(drive * 0.7 + environment * 0.3, 0, 1);
+  }
+
+  #getEventScratch() {
+    if (!this.#eventScratch) {
+      this.#eventScratch = [];
+    }
+
+    this.#eventScratch.length = 0;
+
+    return this.#eventScratch;
+  }
+
+  #resolveEventModifiers({ row, col, rowEvents, eventOptions, useSegmentedEvents }) {
+    if (!eventOptions || !rowEvents || rowEvents.length === 0) {
+      return null;
+    }
+
+    let previousEvents = null;
+
+    if (useSegmentedEvents) {
+      const scratch = this.#getEventScratch();
+
+      for (let i = 0; i < rowEvents.length; i++) {
+        const entry = rowEvents[i];
+
+        if (col < entry.startCol || col >= entry.endCol) continue;
+
+        scratch.push(entry.event);
+      }
+
+      if (scratch.length === 0) {
+        return null;
+      }
+
+      previousEvents = eventOptions.events;
+      eventOptions.events = scratch;
+    } else {
+      previousEvents = eventOptions.events;
+      eventOptions.events = rowEvents;
+    }
+
+    eventOptions.row = row;
+    eventOptions.col = col;
+    const modifiers = accumulateEventModifiers(eventOptions);
+
+    eventOptions.events = previousEvents;
+
+    if (useSegmentedEvents) {
+      this.#eventScratch.length = 0;
+    }
+
+    return modifiers;
   }
 
   static #computePairDiversityThreshold({
@@ -1587,6 +1644,8 @@ export default class GridManager {
       ? eventStrengthMultiplier
       : 1;
     const effectCache = getEventEffect ? this.eventEffectCache : null;
+    const usingSegmentedEvents =
+      hasEvents && isEventAffecting === defaultIsEventAffecting;
     const eventOptions = hasEvents
       ? {
           events: evs,
@@ -1613,9 +1672,23 @@ export default class GridManager {
         const startRow = Math.max(0, Math.floor(area.y));
         const endRow = Math.min(rows, Math.ceil(area.y + area.height));
 
-        for (let rr = startRow; rr < endRow; rr++) {
-          if (!eventsByRow[rr]) eventsByRow[rr] = [];
-          eventsByRow[rr].push(ev);
+        if (startRow >= endRow) continue;
+
+        if (usingSegmentedEvents) {
+          const startCol = Math.max(0, Math.floor(area.x));
+          const endCol = Math.min(cols, Math.ceil(area.x + area.width));
+
+          if (startCol >= endCol) continue;
+
+          for (let rr = startRow; rr < endRow; rr++) {
+            if (!eventsByRow[rr]) eventsByRow[rr] = [];
+            eventsByRow[rr].push({ event: ev, startCol, endCol });
+          }
+        } else {
+          for (let rr = startRow; rr < endRow; rr++) {
+            if (!eventsByRow[rr]) eventsByRow[rr] = [];
+            eventsByRow[rr].push(ev);
+          }
         }
       }
     }
@@ -1632,8 +1705,6 @@ export default class GridManager {
       const downObstacleRow = r < rows - 1 ? obstacles[r + 1] : null;
       const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
       const rowHasEvents = Boolean(eventOptions && rowEvents.length > 0);
-
-      if (eventOptions) eventOptions.events = rowEvents;
 
       for (let c = 0; c < cols; c++) {
         if (obstacleRow?.[c]) {
@@ -1665,13 +1736,23 @@ export default class GridManager {
         let drain = 0;
 
         if (rowHasEvents) {
-          eventOptions.row = r;
-          eventOptions.col = c;
-          const modifiers = accumulateEventModifiers(eventOptions);
+          const modifiers = this.#resolveEventModifiers({
+            row: r,
+            col: c,
+            rowEvents,
+            eventOptions,
+            useSegmentedEvents: usingSegmentedEvents,
+          });
 
-          regenMultiplier = modifiers.regenMultiplier;
-          regenAdd = modifiers.regenAdd;
-          drain = modifiers.drainAdd;
+          if (modifiers) {
+            regenMultiplier = modifiers.regenMultiplier;
+            regenAdd = modifiers.regenAdd;
+            drain = modifiers.drainAdd;
+          } else {
+            regenMultiplier = 1;
+            regenAdd = 0;
+            drain = 0;
+          }
         }
 
         regen = regen * regenMultiplier + regenAdd;
