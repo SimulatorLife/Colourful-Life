@@ -459,15 +459,49 @@ export default class GridManager {
     cols,
     options = {},
   ) {
+    const best = GridManager.#chooseDirectionalStep({
+      mode: "approach",
+      gridArr,
+      row,
+      col,
+      targetRow,
+      targetCol,
+      rows,
+      cols,
+      options,
+    });
+
+    if (best) {
+      return GridManager.tryMove(
+        gridArr,
+        row,
+        col,
+        best.dr,
+        best.dc,
+        rows,
+        cols,
+        options,
+      );
+    }
+
     const dRow = targetRow - row;
     const dCol = targetCol - col;
-    let dr = 0,
-      dc = 0;
+    let fallbackDr = 0;
+    let fallbackDc = 0;
 
-    if (Math.abs(dRow) >= Math.abs(dCol)) dr = Math.sign(dRow);
-    else dc = Math.sign(dCol);
+    if (Math.abs(dRow) >= Math.abs(dCol)) fallbackDr = Math.sign(dRow);
+    else fallbackDc = Math.sign(dCol);
 
-    return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
+    return GridManager.tryMove(
+      gridArr,
+      row,
+      col,
+      fallbackDr,
+      fallbackDc,
+      rows,
+      cols,
+      options,
+    );
   }
 
   static moveAwayFromTarget(
@@ -480,15 +514,220 @@ export default class GridManager {
     cols,
     options = {},
   ) {
+    const best = GridManager.#chooseDirectionalStep({
+      mode: "avoid",
+      gridArr,
+      row,
+      col,
+      targetRow,
+      targetCol,
+      rows,
+      cols,
+      options,
+    });
+
+    if (best) {
+      return GridManager.tryMove(
+        gridArr,
+        row,
+        col,
+        best.dr,
+        best.dc,
+        rows,
+        cols,
+        options,
+      );
+    }
+
     const dRow = targetRow - row;
     const dCol = targetCol - col;
-    let dr = 0,
-      dc = 0;
+    let fallbackDr = 0;
+    let fallbackDc = 0;
 
-    if (Math.abs(dRow) >= Math.abs(dCol)) dr = -Math.sign(dRow);
-    else dc = -Math.sign(dCol);
+    if (Math.abs(dRow) >= Math.abs(dCol)) fallbackDr = -Math.sign(dRow);
+    else fallbackDc = -Math.sign(dCol);
 
-    return GridManager.tryMove(gridArr, row, col, dr, dc, rows, cols, options);
+    return GridManager.tryMove(
+      gridArr,
+      row,
+      col,
+      fallbackDr,
+      fallbackDc,
+      rows,
+      cols,
+      options,
+    );
+  }
+
+  // Picks a direction toward or away from a target by blending local context with
+  // organism traits. This replaces the previous axis-aligned heuristic so pursuit
+  // behavior emerges from DNA-tuned movement genes, crowding tolerance, and
+  // resource appetites.
+  static #chooseDirectionalStep({
+    mode,
+    gridArr,
+    row,
+    col,
+    targetRow,
+    targetCol,
+    rows,
+    cols,
+    options = {},
+  }) {
+    const moving = gridArr?.[row]?.[col] ?? null;
+
+    if (!moving) return null;
+
+    const distBefore = Math.max(Math.abs(targetRow - row), Math.abs(targetCol - col));
+    const candidates = [
+      { dr: -1, dc: 0 },
+      { dr: 1, dc: 0 },
+      { dr: 0, dc: -1 },
+      { dr: 0, dc: 1 },
+    ];
+
+    let bestDirection = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (const direction of candidates) {
+      const nextRow = row + direction.dr;
+      const nextCol = col + direction.dc;
+
+      if (GridManager.#isOutOfBounds(nextRow, nextCol, rows, cols)) continue;
+      if (GridManager.#isObstacle(options?.obstacles, nextRow, nextCol)) continue;
+
+      const occupant = gridArr?.[nextRow]?.[nextCol] ?? null;
+
+      if (occupant && occupant !== moving) continue;
+
+      const distAfter = Math.max(
+        Math.abs(targetRow - nextRow),
+        Math.abs(targetCol - nextCol),
+      );
+      const score = GridManager.#scoreDirectedMove({
+        mode,
+        moving,
+        fromRow: row,
+        fromCol: col,
+        nextRow,
+        nextCol,
+        distBefore,
+        distAfter,
+        options,
+      });
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestDirection = direction;
+      }
+    }
+
+    return bestDirection;
+  }
+
+  // Scores a potential directed move using organism preferences plus
+  // environmental context (energy gradient, local density, risk tolerance).
+  static #scoreDirectedMove({
+    mode,
+    moving,
+    fromRow,
+    fromCol,
+    nextRow,
+    nextCol,
+    distBefore,
+    distAfter,
+    options = {},
+  }) {
+    const movingGenes = moving?.movementGenes || {
+      wandering: 0.33,
+      pursuit: 0.33,
+      cautious: 0.34,
+    };
+    const wandering = Math.max(0, movingGenes.wandering ?? 0);
+    const pursuit = Math.max(0, movingGenes.pursuit ?? 0);
+    const cautious = Math.max(0, movingGenes.cautious ?? 0);
+    const total = wandering + pursuit + cautious || 1;
+    const pursuitBias = pursuit / total;
+    const cautiousBias = cautious / total;
+    const roamingBias = wandering / total;
+    const densityAt =
+      typeof options.densityAt === "function"
+        ? clamp(options.densityAt(nextRow, nextCol) ?? 0, 0, 1)
+        : 0;
+    const tolerance = clamp(
+      Number.isFinite(moving?.baseCrowdingTolerance)
+        ? moving.baseCrowdingTolerance
+        : 0.5,
+      0,
+      1,
+    );
+    const densityGap = densityAt - tolerance;
+    const maxTileEnergy =
+      Number.isFinite(options.maxTileEnergy) && options.maxTileEnergy > 0
+        ? options.maxTileEnergy
+        : MAX_TILE_ENERGY;
+    const energyAtFn = typeof options.energyAt === "function" ? options.energyAt : null;
+    const energyCurrent = clamp(
+      maxTileEnergy > 0 && energyAtFn
+        ? (energyAtFn(fromRow, fromCol) ?? 0) / maxTileEnergy
+        : 0,
+      0,
+      1,
+    );
+    const energyCandidate = clamp(
+      maxTileEnergy > 0 && energyAtFn
+        ? (energyAtFn(nextRow, nextCol) ?? 0) / maxTileEnergy
+        : 0,
+      0,
+      1,
+    );
+    const energyDelta = energyCandidate - energyCurrent;
+    const resourceDrive = clamp(
+      Number.isFinite(moving?.resourceTrendAdaptation)
+        ? moving.resourceTrendAdaptation
+        : 0.35,
+      0,
+      1,
+    );
+    const riskTolerance = clamp(
+      typeof moving?.getRiskTolerance === "function"
+        ? moving.getRiskTolerance()
+        : typeof moving?.baseRiskTolerance === "number"
+          ? moving.baseRiskTolerance
+          : 0.5,
+      0,
+      1,
+    );
+    const distanceDelta = distBefore - distAfter;
+    let score = 0;
+
+    if (mode === "approach") {
+      score += distanceDelta * (0.6 + pursuitBias * 0.6);
+
+      if (distanceDelta <= 0) {
+        score += roamingBias * 0.05;
+      }
+
+      score += riskTolerance * pursuitBias * 0.2;
+    } else {
+      score += -distanceDelta * (0.6 + cautiousBias * 0.6);
+
+      if (distanceDelta > 0) {
+        score -= 0.4 + cautiousBias * 0.5;
+      }
+
+      score += (1 - riskTolerance) * cautiousBias * 0.25;
+    }
+
+    if (densityGap > 0) {
+      score -= densityGap * (0.45 + cautiousBias * 0.45);
+    } else if (densityGap < 0) {
+      score += Math.abs(densityGap) * (0.2 + roamingBias * 0.3);
+    }
+
+    score += energyDelta * (0.25 + resourceDrive * 0.5);
+
+    return score;
   }
 
   static moveRandomly(
@@ -667,6 +906,9 @@ export default class GridManager {
 
         this.activeCells.add(cell);
       },
+      densityAt: (r, c) => this.densityGrid?.[r]?.[c] ?? this.getDensityAt(r, c),
+      energyAt: (r, c) => this.energyGrid?.[r]?.[c] ?? 0,
+      maxTileEnergy: this.maxTileEnergy,
     };
   }
 
