@@ -45,9 +45,27 @@ export class MockElement {
     this.attributes = {};
     this.eventListeners = Object.create(null);
     this.style = {};
-    this.textContent = "";
+    this._textContent = "";
     this.innerHTML = "";
     this.id = "";
+  }
+
+  get textContent() {
+    if (!Array.isArray(this.children) || this.children.length === 0) {
+      return this._textContent;
+    }
+
+    const childText = this.children
+      .map((child) =>
+        child && typeof child.textContent === "string" ? child.textContent : "",
+      )
+      .join("");
+
+    return `${this._textContent}${childText}`;
+  }
+
+  set textContent(value) {
+    this._textContent = value != null ? String(value) : "";
   }
 
   querySelector(selector) {

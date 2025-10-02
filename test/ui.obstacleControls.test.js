@@ -112,4 +112,93 @@ test("layout preset control reflects current obstacle preset", async () => {
   }
 });
 
+test("clearing obstacles resets preset select to open field", async () => {
+  const restore = setupDom();
+
+  try {
+    const [{ default: UIManager }, { OBSTACLE_PRESETS }] = await Promise.all([
+      import("../src/ui/uiManager.js"),
+      import("../src/grid/obstaclePresets.js"),
+    ]);
+
+    const applyCalls = [];
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        applyObstaclePreset: (...args) => {
+          applyCalls.push(args);
+        },
+        obstaclePresets: OBSTACLE_PRESETS,
+        selectionManager: {
+          getPatterns: () => [],
+          togglePattern: () => {},
+          getActiveZones: () => [],
+          clearCustomZones: () => {},
+          hasCustomZones: () => false,
+          addCustomRectangle: () => null,
+        },
+      },
+      { canvasElement: new MockCanvas(200, 200) },
+    );
+
+    const findByTag = (root, tagName) => {
+      const target = tagName.toUpperCase();
+      const queue = [root];
+
+      while (queue.length > 0) {
+        const node = queue.shift();
+
+        if (!node) continue;
+        if (node.tagName === target) return node;
+        if (Array.isArray(node.children)) queue.push(...node.children);
+      }
+
+      return null;
+    };
+
+    const findButtonByText = (root, text) => {
+      const queue = [root];
+
+      while (queue.length > 0) {
+        const node = queue.shift();
+
+        if (!node) continue;
+        if (node.tagName === "BUTTON" && node.textContent === text) return node;
+        if (Array.isArray(node.children)) queue.push(...node.children);
+      }
+
+      return null;
+    };
+
+    const presetSelect = findByTag(uiManager.controlsPanel, "select");
+
+    assert.ok(presetSelect, "obstacle preset dropdown should exist");
+
+    presetSelect.value = "sealed-quadrants";
+    presetSelect.dispatchEvent({ type: "change" });
+    assert.is(uiManager.obstaclePreset, "sealed-quadrants");
+
+    const clearButton = findButtonByText(uiManager.controlsPanel, "Clear Obstacles");
+
+    assert.ok(clearButton, "clear obstacles button should exist");
+
+    clearButton.dispatchEvent({ type: "click" });
+
+    assert.is(uiManager.obstaclePreset, "none");
+    assert.is(presetSelect.value, "none");
+    assert.ok(
+      applyCalls.some(([id]) => id === "none"),
+      "applyObstaclePreset should be called with the cleared preset",
+    );
+  } finally {
+    restore();
+  }
+});
+
 test.run();

@@ -1359,6 +1359,15 @@ export default class UIManager {
         });
       }
 
+      const applyPreset = (id) => {
+        const args = [id, { clearExisting: true }];
+
+        if (typeof this.actions.applyObstaclePreset === "function")
+          this.actions.applyObstaclePreset(...args);
+        else if (window.grid?.applyObstaclePreset)
+          window.grid.applyObstaclePreset(...args);
+      };
+
       const presetButtons = document.createElement("div");
 
       presetButtons.className = "control-line";
@@ -1368,24 +1377,22 @@ export default class UIManager {
       applyLayoutButton.title =
         "Replace the current obstacle mask with the selected preset.";
       applyLayoutButton.addEventListener("click", () => {
-        const args = [this.obstaclePreset, { clearExisting: true }];
-
-        if (typeof this.actions.applyObstaclePreset === "function")
-          this.actions.applyObstaclePreset(...args);
-        else if (window.grid?.applyObstaclePreset)
-          window.grid.applyObstaclePreset(...args);
+        applyPreset(this.obstaclePreset);
       });
       const clearButton = document.createElement("button");
 
       clearButton.textContent = "Clear Obstacles";
       clearButton.title = "Remove all obstacles from the grid.";
       clearButton.addEventListener("click", () => {
-        const args = ["none", { clearExisting: true }];
+        const openFieldPreset = this.obstaclePresets.find(
+          (preset) => preset?.id === "none",
+        );
+        const clearedPreset =
+          openFieldPreset?.id ?? this.obstaclePresets[0]?.id ?? "none";
 
-        if (typeof this.actions.applyObstaclePreset === "function")
-          this.actions.applyObstaclePreset(...args);
-        else if (window.grid?.applyObstaclePreset)
-          window.grid.applyObstaclePreset(...args);
+        this.obstaclePreset = clearedPreset;
+        if (presetSelect) presetSelect.value = clearedPreset;
+        applyPreset(clearedPreset);
       });
       presetButtons.appendChild(applyLayoutButton);
       presetButtons.appendChild(clearButton);

@@ -54,7 +54,22 @@ test("createSimulation aligns UI controls with config defaults", async () => {
         if (!line || !Array.isArray(line.children)) continue;
 
         const input = line.children.find((child) => child?.tagName === "INPUT");
-        const name = line.children.find((child) => child?.className === "control-name");
+
+        const findName = (element) => {
+          if (!element) return null;
+          if (element.className === "control-name") return element;
+          if (!Array.isArray(element.children)) return null;
+
+          for (const child of element.children) {
+            const match = findName(child);
+
+            if (match) return match;
+          }
+
+          return null;
+        };
+
+        const name = findName(line);
 
         if (name?.textContent === label) {
           return input ?? null;
