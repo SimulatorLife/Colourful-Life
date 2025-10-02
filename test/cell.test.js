@@ -120,13 +120,16 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   const metabolism = cell.metabolism;
   const crowdPenalty = 1 + effDensity * (cell.metabolicCrowdingTax ?? 0);
   const baseLoss = dna.energyLossBase();
+  const energyFraction = clamp(initialEnergy / context.maxTileEnergy, 0, 1);
+  const scarcityRelief = 0.55 + energyFraction * 0.45;
   const energyLoss =
     baseLoss *
     dna.baseEnergyLossScale() *
     (1 + metabolism) *
     energyDensityMult *
     crowdPenalty *
-    cell.ageEnergyMultiplier();
+    cell.ageEnergyMultiplier() *
+    scarcityRelief;
   const cognitiveLoss = dna.cognitiveCost(cell.neurons, cell.sight, effDensity);
 
   const starving = cell.manageEnergy(cell.row, cell.col, context);

@@ -17,6 +17,7 @@ const HISTORY_SERIES_KEYS = [
   "diversePairingRate",
   "meanDiversityAppetite",
   "mutationMultiplier",
+  "starvationRate",
 ];
 
 const DIVERSITY_TARGET_DEFAULT = 0.35;
@@ -283,6 +284,7 @@ export default class Stats {
     this.strategyPressure = 0;
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
     this.lifeEventSequence = 0;
+    this.deathCauseTotals = Object.create(null);
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -326,6 +328,7 @@ export default class Stats {
     this.mating = createEmptyMatingSnapshot();
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
+    this.deathCausesTick = Object.create(null);
   }
 
   resetAll() {
@@ -349,6 +352,7 @@ export default class Stats {
     this.lifeEventSequence = 0;
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
+    this.deathCauseTotals = Object.create(null);
   }
 
   setDiversityTarget(value) {
@@ -665,6 +669,23 @@ export default class Stats {
     this.deaths++;
     this.totals.deaths++;
     this.#recordLifeEvent("death", primary, secondary);
+
+    const causeCandidate =
+      secondary && typeof secondary === "object" ? secondary.cause : null;
+    const causeKey =
+      typeof causeCandidate === "string" && causeCandidate.length > 0
+        ? causeCandidate
+        : "unknown";
+
+    if (!this.deathCausesTick) {
+      this.deathCausesTick = Object.create(null);
+    }
+    if (!this.deathCauseTotals) {
+      this.deathCauseTotals = Object.create(null);
+    }
+
+    this.deathCausesTick[causeKey] = (this.deathCausesTick[causeKey] || 0) + 1;
+    this.deathCauseTotals[causeKey] = (this.deathCauseTotals[causeKey] || 0) + 1;
   }
   onFight() {
     this.fights++;
@@ -801,6 +822,10 @@ export default class Stats {
     if (typeof this.mutationMultiplier === "number") {
       this.pushHistory("mutationMultiplier", this.mutationMultiplier);
     }
+    const starvationDeaths = this.deathCausesTick?.starvation ?? 0;
+    const starvationRate = this.deaths > 0 ? starvationDeaths / this.deaths : 0;
+
+    this.pushHistory("starvationRate", starvationRate);
 
     this.traitPresence = traitPresence;
     this.behavioralEvenness = behaviorEvenness;
@@ -840,6 +865,8 @@ export default class Stats {
       mutationMultiplier: this.mutationMultiplier,
       blockedMatings: mateStats.blocks || 0,
       lastBlockedReproduction: this.lastBlockedReproduction,
+      deathBreakdown: this.deathCausesTick ? { ...this.deathCausesTick } : {},
+      starvationRate,
     };
   }
 

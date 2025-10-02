@@ -2693,13 +2693,16 @@ export default class GridManager {
     if (localDensity == null) {
       localDensity = this.getDensityAt(densitySourceRow, densitySourceCol);
     }
-    const baseProb = cell.computeReproductionProbability(bestMate.target, {
-      localDensity,
-      densityEffectMultiplier,
-    });
     const energyDenominator = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
     const tileEnergy = this.energyGrid[parentRow][parentCol] / energyDenominator;
     const tileEnergyDelta = this.energyDeltaGrid?.[parentRow]?.[parentCol] ?? 0;
+    const baseProb = cell.computeReproductionProbability(bestMate.target, {
+      localDensity,
+      densityEffectMultiplier,
+      maxTileEnergy: this.maxTileEnergy,
+      tileEnergy,
+      tileEnergyDelta,
+    });
     const { probability: reproProb } = cell.decideReproduction(bestMate.target, {
       localDensity,
       densityEffectMultiplier,

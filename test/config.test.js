@@ -5,7 +5,7 @@ const configModulePromise = import("../src/config.js");
 test("MAX_TILE_ENERGY exposes the environment-aware default", async () => {
   const { MAX_TILE_ENERGY } = await configModulePromise;
 
-  assert.is(MAX_TILE_ENERGY, 5);
+  assert.is(MAX_TILE_ENERGY, 6);
 });
 
 test("resolveMaxTileEnergy respects overrides", async () => {
@@ -17,7 +17,7 @@ test("resolveMaxTileEnergy respects overrides", async () => {
 test("resolveMaxTileEnergy falls back when override is invalid", async () => {
   const { resolveMaxTileEnergy } = await configModulePromise;
 
-  assert.is(resolveMaxTileEnergy({ COLOURFUL_LIFE_MAX_TILE_ENERGY: "-1" }), 5);
+  assert.is(resolveMaxTileEnergy({ COLOURFUL_LIFE_MAX_TILE_ENERGY: "-1" }), 6);
 });
 
 test("REGEN_DENSITY_PENALTY exposes the environment-aware default", async () => {
@@ -117,7 +117,7 @@ test("resolveTraitActivationThreshold clamps invalid overrides", async () => {
 test("ACTIVITY_BASE_RATE exposes the environment-aware default", async () => {
   const { ACTIVITY_BASE_RATE } = await configModulePromise;
 
-  assert.is(ACTIVITY_BASE_RATE, 0.3);
+  assert.is(ACTIVITY_BASE_RATE, 0.28);
 });
 
 test("resolveActivityBaseRate respects overrides", async () => {
@@ -136,5 +136,8 @@ test("resolveActivityBaseRate clamps invalid overrides", async () => {
 
   assert.is(resolveActivityBaseRate({ COLOURFUL_LIFE_ACTIVITY_BASE_RATE: "-0.5" }), 0);
 
-  assert.is(resolveActivityBaseRate({ COLOURFUL_LIFE_ACTIVITY_BASE_RATE: "NaN" }), 0.3);
+  assert.is(
+    resolveActivityBaseRate({ COLOURFUL_LIFE_ACTIVITY_BASE_RATE: "NaN" }),
+    0.28,
+  );
 });

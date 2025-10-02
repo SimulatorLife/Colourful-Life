@@ -642,9 +642,9 @@ export class DNA {
     const risk = this.geneFraction(GENE_LOCI.RISK);
     const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
     const drivePenalty = 0.45 * risk + 0.2 * (1 - movement);
-    const base = 0.018 + 0.02 * (1 - efficiency) + 0.01 * drivePenalty;
+    const base = 0.014 + 0.015 * (1 - efficiency) + 0.008 * drivePenalty;
 
-    return clamp(base, 0.012, 0.055);
+    return clamp(base, 0.009, 0.042);
   }
 
   metabolicProfile() {
@@ -660,25 +660,25 @@ export class DNA {
     const jitter = (rng() - 0.5) * 0.08;
 
     const baseline = clamp(
-      0.25 +
-        0.45 * activity +
-        0.25 * movement +
-        0.2 * risk -
-        0.35 * efficiency -
-        0.2 * recovery +
+      0.2 +
+        0.38 * activity +
+        0.22 * movement +
+        0.18 * risk -
+        0.4 * efficiency -
+        0.22 * recovery +
         jitter,
-      0.05,
-      1.3,
+      0.04,
+      1.1,
     );
     const crowdingTax = clamp(
-      0.2 + 0.4 * (1 - density) + 0.2 * risk + 0.15 * parental - 0.25 * efficiency,
-      0.05,
-      1.15,
+      0.16 + 0.32 * (1 - density) + 0.18 * risk + 0.12 * parental - 0.28 * efficiency,
+      0.03,
+      1,
     );
     const neuralDrag = clamp(
-      0.15 + 0.45 * neural + 0.2 * activity - 0.2 * recovery,
-      0.05,
-      1,
+      0.12 + 0.38 * neural + 0.18 * activity - 0.24 * recovery,
+      0.04,
+      0.9,
     );
 
     return { baseline, crowdingTax, neuralDrag };
@@ -1267,6 +1267,16 @@ export class DNA {
         0.25 + 0.35 * strategy + 0.25 * combat,
         0.05,
         1.1,
+      ),
+      survivalInstinct: clamp(
+        0.4 + 0.4 * recovery + 0.25 * efficiency + 0.15 * risk,
+        0.2,
+        1.35,
+      ),
+      fertilityUrge: clamp(
+        0.3 + 0.45 * fertility + 0.3 * parental + 0.2 * activity - 0.15 * risk,
+        0.15,
+        1.3,
       ),
       movementActions: {
         rest: clamp((movement?.cautious || 0) / moveTotal, 0, 1),

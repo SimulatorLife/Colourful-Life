@@ -1,4 +1,4 @@
-import DNA from "./genome.js";
+import DNA, { GENE_LOCI } from "./genome.js";
 import Brain, { OUTPUT_GROUPS } from "./brain.js";
 import { randomRange, clamp, lerp, cloneTracePayload, warnOnce } from "./utils.js";
 import { isEventAffecting } from "./events/eventManager.js";
@@ -873,6 +873,16 @@ export default class Cell {
         ? maxTileEnergy
         : MAX_TILE_ENERGY || 1,
     );
+    const normalizedBefore = clamp(
+      (Number.isFinite(energyBefore) ? energyBefore : 0) / capacity,
+      0,
+      1,
+    );
+    const normalizedAfter = clamp(
+      (Number.isFinite(energyAfter) ? energyAfter : 0) / capacity,
+      0,
+      1,
+    );
     const normalizedEnergyDelta = clamp(
       ((Number.isFinite(energyAfter) ? energyAfter : 0) -
         (Number.isFinite(energyBefore) ? energyBefore : 0)) /
@@ -896,10 +906,23 @@ export default class Cell {
       -1,
       1,
     );
+    const energyMidpoint = (normalizedBefore + normalizedAfter) / 2;
+    const energyScarcity = clamp(1 - energyMidpoint, 0, 1);
+    const survivalInstinct = clamp(profile.survivalInstinct ?? 0.5, 0, 1.5);
+    const fertilityUrge = clamp(
+      profile.fertilityUrge ?? profile.reproductionWeight ?? 0,
+      0,
+      1.5,
+    );
+    const survivalEnergyWeight =
+      (profile.energyDeltaWeight ?? 0) * (1 + survivalInstinct * energyScarcity);
+    const survivalCognitiveWeight =
+      (profile.cognitiveCostWeight ?? 0) *
+      (1 + survivalInstinct * energyScarcity * 0.5);
 
     let reward =
-      normalizedEnergyDelta * (profile.energyDeltaWeight ?? 0) -
-      cognitiveCost * (profile.cognitiveCostWeight ?? 0) +
+      normalizedEnergyDelta * survivalEnergyWeight -
+      cognitiveCost * survivalCognitiveWeight +
       fatigueDelta * (profile.fatigueReliefWeight ?? 0);
 
     const sensors = decision.sensors || {};
@@ -919,6 +942,10 @@ export default class Cell {
       if (Number.isFinite(outcome.restBoost)) {
         reward += outcome.restBoost * (profile.restBoostWeight ?? 0);
       }
+
+      if (outcome.action === "rest") {
+        reward += energyScarcity * survivalInstinct * (profile.restBoostWeight ?? 0.5);
+      }
     } else if (group === "interaction") {
       const action = outcome.action;
 
@@ -929,6 +956,10 @@ export default class Cell {
           reward += (pref - 1 / 3) * (profile.interactionAlignmentWeight ?? 0);
         }
       }
+
+      if (action === "fight" && energyScarcity > 0) {
+        reward -= energyScarcity * survivalInstinct * 0.35;
+      }
     } else if (group === "reproduction") {
       const probability = clamp(outcome.probability ?? 0, 0, 1);
       const baseProbability = clamp(
@@ -936,8 +967,18 @@ export default class Cell {
         0,
         1,
       );
+      const reproductionWeight = profile.reproductionWeight ?? 0;
+      const reproductionEnergyFactor = clamp(
+        0.45 +
+          energyMidpoint * 0.55 +
+          fertilityUrge * 0.25 -
+          energyScarcity * survivalInstinct * 0.3,
+        0.1,
+        2,
+      );
 
-      reward += (probability - baseProbability) * (profile.reproductionWeight ?? 0);
+      reward +=
+        (probability - baseProbability) * reproductionWeight * reproductionEnergyFactor;
     } else if (group === "targeting") {
       const chosen = outcome.chosen;
 
@@ -2963,7 +3004,7 @@ export default class Cell {
     }
   }
 
-  #calculateMetabolicEnergyLoss(effectiveDensity) {
+  #calculateMetabolicEnergyLoss(effectiveDensity, maxTileEnergy = MAX_TILE_ENERGY) {
     const energyLossConfig = this.density?.energyLoss ?? { min: 1, max: 1 };
     const minLoss = Number.isFinite(energyLossConfig.min) ? energyLossConfig.min : 1;
     const maxLoss = Number.isFinite(energyLossConfig.max)
@@ -2980,8 +3021,20 @@ export default class Cell {
       energyDensityMult *
       crowdPenalty;
     const agingPenalty = this.ageEnergyMultiplier();
+    const capacity = Math.max(
+      1e-4,
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
+    );
+    const energyFraction = clamp(
+      Number.isFinite(this.energy) ? this.energy / capacity : 0,
+      0,
+      1,
+    );
+    const scarcityRelief = 0.55 + energyFraction * 0.45; // soften upkeep near starvation
 
-    return baseLoss * lossScale * agingPenalty;
+    return baseLoss * lossScale * agingPenalty * scarcityRelief;
   }
 
   #calculateCognitiveCosts(effectiveDensity) {
@@ -3031,7 +3084,10 @@ export default class Cell {
 
   manageEnergy(row, col, { localDensity, densityEffectMultiplier, maxTileEnergy }) {
     const effectiveDensity = clamp(localDensity * densityEffectMultiplier, 0, 1);
-    const energyLoss = this.#calculateMetabolicEnergyLoss(effectiveDensity);
+    const energyLoss = this.#calculateMetabolicEnergyLoss(
+      effectiveDensity,
+      maxTileEnergy,
+    );
     const { baselineCost, dynamicCost, cognitiveLoss, dynamicLoad, baselineNeurons } =
       this.#calculateCognitiveCosts(effectiveDensity);
     const energyBefore = this.energy;
@@ -3596,7 +3652,16 @@ export default class Cell {
     return clamp(reach, minReach, maxReach);
   }
 
-  computeReproductionProbability(partner, { localDensity, densityEffectMultiplier }) {
+  computeReproductionProbability(
+    partner,
+    {
+      localDensity,
+      densityEffectMultiplier,
+      maxTileEnergy = MAX_TILE_ENERGY,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
+    } = {},
+  ) {
     const baseReproProb =
       (this.dna.reproductionProb() + partner.dna.reproductionProb()) / 2;
     const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
@@ -3614,11 +3679,82 @@ export default class Cell {
     const aA = this.lifespan > 0 ? this.age / this.lifespan : 0;
     const aB = partner.lifespan > 0 ? partner.age / partner.lifespan : 0;
     const senPenalty = 1 - 0.5 * (sA * aA + sB * aB);
-
-    return Math.min(
-      0.95,
-      Math.max(0.01, baseReproProb * reproMul * Math.max(0.2, senPenalty)),
+    const energyCap = Math.max(
+      1e-4,
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
     );
+    const energyA = clamp(
+      Number.isFinite(this.energy) ? this.energy / energyCap : 0,
+      0,
+      1,
+    );
+    const energyB = clamp(
+      Number.isFinite(partner?.energy) ? partner.energy / energyCap : 0,
+      0,
+      1,
+    );
+    const energyMean = (energyA + energyB) / 2;
+    const resourceAvailability = clamp(
+      Number.isFinite(tileEnergy) ? tileEnergy : energyMean,
+      0,
+      1,
+    );
+    const resourceDecline = clamp(
+      -(Number.isFinite(tileEnergyDelta) ? tileEnergyDelta : 0),
+      0,
+      1,
+    );
+    const fertilityA =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.FERTILITY)
+        : 0.5;
+    const fertilityB =
+      typeof partner?.dna?.geneFraction === "function"
+        ? partner.dna.geneFraction(GENE_LOCI.FERTILITY)
+        : 0.5;
+    const parentalA =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.PARENTAL)
+        : 0.5;
+    const parentalB =
+      typeof partner?.dna?.geneFraction === "function"
+        ? partner.dna.geneFraction(GENE_LOCI.PARENTAL)
+        : 0.5;
+    const fertilityDrive = clamp((fertilityA + fertilityB) / 2, 0, 1);
+    const parentalDrive = clamp((parentalA + parentalB) / 2, 0, 1);
+    const survivalInstinct = clamp(
+      this.neuralReinforcementProfile?.survivalInstinct ?? 0.5,
+      0,
+      1.5,
+    );
+    const fertilityUrge = clamp(
+      this.neuralReinforcementProfile?.fertilityUrge ?? fertilityDrive,
+      0,
+      1.5,
+    );
+    const energySupport = clamp(
+      0.55 + energyMean * 0.45 + resourceAvailability * 0.25 - resourceDecline * 0.3,
+      0.3,
+      1.35,
+    );
+    const driveBoost = clamp(
+      0.6 + fertilityDrive * 0.25 + parentalDrive * 0.2 + fertilityUrge * 0.1,
+      0.4,
+      1.35,
+    );
+    const scarcity = clamp(1 - energyMean, 0, 1);
+    const cautionFactor = clamp(1 - scarcity * survivalInstinct * 0.28, 0.55, 1);
+    const energyMultiplier = clamp(
+      energySupport * driveBoost * cautionFactor,
+      0.25,
+      1.4,
+    );
+    const baseProbability = baseReproProb * reproMul * Math.max(0.2, senPenalty);
+    const adjustedProbability = baseProbability * energyMultiplier;
+
+    return Math.min(0.95, Math.max(0.01, adjustedProbability));
   }
 
   decideReproduction(partner, context = {}) {

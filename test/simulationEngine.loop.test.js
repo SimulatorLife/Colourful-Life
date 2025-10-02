@@ -5,6 +5,10 @@ import {
   patchSimulationPrototypes,
 } from "./helpers/simulationEngine.js";
 import { approxEqual } from "./helpers/assertions.js";
+import {
+  ENERGY_DIFFUSION_RATE_DEFAULT,
+  ENERGY_REGEN_RATE_DEFAULT,
+} from "../src/config.js";
 
 test("start schedules a frame and ticking through RAF uses sanitized defaults", async () => {
   const modules = await loadSimulationModules();
@@ -51,8 +55,8 @@ test("start schedules a frame and ticking through RAF uses sanitized defaults", 
       societySimilarity: 0.7,
       enemySimilarity: 0.4,
       eventStrengthMultiplier: 1,
-      energyRegenRate: 0.0082,
-      energyDiffusionRate: 0.05,
+      energyRegenRate: ENERGY_REGEN_RATE_DEFAULT,
+      energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
       mutationMultiplier: 1,
       matingDiversityThreshold: 0.42,
       lowDiversityReproMultiplier: 0.12,
