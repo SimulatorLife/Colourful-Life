@@ -214,6 +214,108 @@ test("handleReproduction returns false when offspring cannot be placed", async (
   assert.is(recorded.success, false);
 });
 
+test("handleReproduction requires parents to be adjacent before spawning", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  let births = 0;
+  let blockReason = null;
+  const stats = {
+    onBirth() {
+      births += 1;
+    },
+    onDeath() {},
+    recordMateChoice() {},
+    recordReproductionBlocked(info) {
+      blockReason = info?.reason ?? null;
+    },
+  };
+
+  const gm = new TestGridManager(1, 6, {
+    eventManager: { activeEvents: [] },
+    stats,
+  });
+
+  gm.rebuildActiveCells();
+
+  const densityGrid = Array.from({ length: 1 }, () =>
+    Array.from({ length: 6 }, () => 0),
+  );
+
+  const parent = new Cell(0, 1, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+  const mate = new Cell(0, 5, new DNA(0, 0, 0), MAX_TILE_ENERGY);
+
+  parent.dna.reproductionThresholdFrac = () => 0;
+  mate.dna.reproductionThresholdFrac = () => 0;
+  parent.dna.parentalInvestmentFrac = () => 0.5;
+  mate.dna.parentalInvestmentFrac = () => 0.5;
+  parent.dna.starvationThresholdFrac = () => 0;
+  mate.dna.starvationThresholdFrac = () => 0;
+  parent.computeReproductionProbability = () => 1;
+  parent.decideReproduction = () => ({ probability: 1 });
+
+  const mateEntry = parent.evaluateMateCandidate({
+    row: mate.row,
+    col: mate.col,
+    target: mate,
+  }) || {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 1,
+    diversity: 0,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  parent.selectMateWeighted = () => ({
+    chosen: mateEntry,
+    evaluated: [mateEntry],
+    mode: "preference",
+  });
+  parent.findBestMate = () => mateEntry;
+
+  gm.setCell(0, 1, parent);
+  gm.setCell(0, 5, mate);
+
+  const originalRandom = Math.random;
+
+  Math.random = () => 0;
+
+  let reproduced = null;
+
+  try {
+    reproduced = gm.handleReproduction(
+      0,
+      1,
+      parent,
+      { mates: [mateEntry], society: [] },
+      {
+        stats,
+        densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 1,
+      },
+    );
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.is(reproduced, false);
+  assert.is(births, 0);
+  assert.is(blockReason, "Parents not adjacent");
+  assert.is(parent.row, 0);
+  assert.is(parent.col, 2);
+  assert.is(gm.getCell(0, 2), parent);
+  assert.is(gm.getCell(0, 5), mate);
+});
+
 test("handleReproduction does not wrap offspring placement across map edges", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
