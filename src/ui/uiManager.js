@@ -82,6 +82,7 @@ export default class UIManager {
     this.lifeEventsSummaryBirthCount = null;
     this.lifeEventsSummaryDeathCount = null;
     this.playbackSpeedSlider = null;
+    this.speedPresetButtons = [];
     this.pauseOverlay = null;
     this.pauseOverlayTitle = null;
     this.pauseOverlayHint = null;
@@ -588,6 +589,51 @@ export default class UIManager {
   #updateSetting(key, value) {
     this[key] = value;
     this.#notifySettingChange(key, value);
+  }
+
+  #sanitizeSpeedMultiplier(value) {
+    const bounds = UI_SLIDER_CONFIG?.speedMultiplier || {};
+    const floor = Number.isFinite(bounds.floor) ? bounds.floor : undefined;
+    const min = Number.isFinite(bounds.min) ? bounds.min : undefined;
+    const max = Number.isFinite(bounds.max) ? bounds.max : undefined;
+    const lowerBound = floor ?? min ?? 0.1;
+    const upperBound = max ?? 100;
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return null;
+
+    return clamp(numeric, lowerBound, upperBound);
+  }
+
+  #setSpeedMultiplier(value) {
+    const sanitized = this.#sanitizeSpeedMultiplier(value);
+
+    if (!Number.isFinite(sanitized)) return;
+
+    this.#updateSetting("speedMultiplier", sanitized);
+    this.#updateSpeedMultiplierUI(sanitized);
+  }
+
+  #updateSpeedMultiplierUI(value) {
+    const numeric = Number(value);
+
+    if (Number.isFinite(numeric) && this.playbackSpeedSlider?.updateDisplay) {
+      this.playbackSpeedSlider.updateDisplay(numeric);
+    }
+
+    if (!Array.isArray(this.speedPresetButtons)) return;
+
+    const tolerance = 0.001;
+
+    this.speedPresetButtons.forEach(({ value: presetValue, button }) => {
+      if (!button) return;
+      const isActive = Number.isFinite(numeric)
+        ? Math.abs(numeric - presetValue) <= tolerance
+        : false;
+
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
   }
 
   #setDrawingEnabled(enabled) {
@@ -1434,7 +1480,6 @@ export default class UIManager {
     const speedMin = speedBounds.min ?? 0.5;
     const speedMax = speedBounds.max ?? 100;
     const speedStep = speedBounds.step ?? 0.5;
-    const speedFloor = speedBounds.floor ?? speedMin;
 
     this.playbackSpeedSlider = createSliderRow(body, {
       label: "Playback Speed ×",
@@ -1445,11 +1490,59 @@ export default class UIManager {
       title: "Speed multiplier relative to 60 updates/sec (0.5x..100x)",
       format: (v) => `${v.toFixed(1)}x`,
       onInput: (value) => {
-        const sanitized = Math.max(speedFloor, value);
-
-        this.#updateSetting("speedMultiplier", sanitized);
+        this.#setSpeedMultiplier(value);
       },
     });
+
+    const speedPresetRow = createControlButtonRow(body, {
+      className: "control-button-row control-button-row--compact",
+    });
+
+    speedPresetRow.setAttribute("role", "group");
+    speedPresetRow.setAttribute("aria-label", "Playback speed presets");
+
+    const baseUpdates =
+      this.baseUpdatesPerSecond > 0
+        ? this.baseUpdatesPerSecond
+        : (SIMULATION_DEFAULTS.updatesPerSecond ?? 60);
+    const describeSpeedPreset = (multiplier) => {
+      const display =
+        Number.isFinite(multiplier) &&
+        Math.abs(multiplier - Math.round(multiplier)) < 1e-9
+          ? `${Math.round(multiplier)}×`
+          : `${multiplier.toFixed(1)}×`;
+      const updates = Number.isFinite(baseUpdates)
+        ? Math.round(baseUpdates * multiplier)
+        : 0;
+      const updatesText = updates > 0 ? ` (~${updates} updates/sec)` : "";
+
+      return `Set playback speed to ${display}${updatesText}.`;
+    };
+
+    const speedPresets = [
+      { label: "0.5×", value: 0.5 },
+      { label: "1×", value: 1 },
+      { label: "2×", value: 2 },
+      { label: "4×", value: 4 },
+    ];
+
+    this.speedPresetButtons = [];
+
+    speedPresets.forEach(({ label, value }) => {
+      const button = document.createElement("button");
+
+      button.type = "button";
+      button.textContent = label;
+      button.title = describeSpeedPreset(value);
+      button.setAttribute("aria-pressed", "false");
+      button.addEventListener("click", () => {
+        this.#setSpeedMultiplier(value);
+      });
+      speedPresetRow.appendChild(button);
+      this.speedPresetButtons.push({ value, button });
+    });
+
+    this.#updateSpeedMultiplierUI(this.speedMultiplier);
   }
 
   #buildSliderGroups(body) {
