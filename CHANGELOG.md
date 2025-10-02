@@ -45,6 +45,9 @@ where practical.
   engine, UI, and headless adapter after determining it duplicated existing
   movement costs and defaulted to zero, simplifying obstacle behaviour while
   keeping the low-diversity reproduction slider as the primary tuning surface.
+- Deleted the legacy CommonJS energy profiling harness in favour of the
+  environment-aware ES module variant so only the supported benchmarking tool
+  remains in `scripts/profile-energy.mjs`.
 
 ## [0.1.0]
 
