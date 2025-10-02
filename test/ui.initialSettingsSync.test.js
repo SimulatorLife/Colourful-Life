@@ -85,6 +85,40 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       return null;
     };
 
+    const findSliderByLabel = (root, label) => {
+      const queue = [root];
+
+      while (queue.length > 0) {
+        const node = queue.shift();
+
+        if (node && Array.isArray(node.children)) {
+          queue.push(...node.children);
+        }
+
+        if (!node || node.tagName !== "LABEL" || !Array.isArray(node.children)) {
+          continue;
+        }
+
+        const name = node.children.find((child) => child?.className === "control-name");
+        const line = node.children.find((child) => child?.className === "control-line");
+
+        if (!line || !Array.isArray(line.children)) continue;
+
+        const input = line.children.find(
+          (child) => child?.tagName === "INPUT" && child?.type === "range",
+        );
+
+        if (!input) continue;
+
+        const text =
+          typeof name?.textContent === "string" ? name.textContent.trim() : "";
+
+        if (text === label) return input;
+      }
+
+      return null;
+    };
+
     const obstaclesInput = findCheckboxByLabel(
       uiManager.controlsPanel,
       "Show Obstacles",
@@ -117,6 +151,42 @@ test("createSimulation aligns UI controls with config defaults", async () => {
     assert.is(energyInput.checked, true);
     assert.is(fitnessInput.checked, true);
     assert.is(celebrationInput.checked, true);
+
+    const playbackSlider = findSliderByLabel(
+      uiManager.controlsPanel,
+      "Playback Speed ×",
+    );
+
+    assert.ok(playbackSlider, "playback speed slider should exist");
+    assert.is(
+      playbackSlider.value,
+      String(uiManager.speedMultiplier),
+      "slider should reflect the initial playback speed",
+    );
+
+    const sliderRow = playbackSlider?.parentElement?.parentElement ?? null;
+    const panelBody = uiManager.controlsPanel.children.find(
+      (child) => child?.className === "panel-body",
+    );
+
+    if (panelBody && sliderRow) {
+      const bodyChildren = Array.isArray(panelBody.children) ? panelBody.children : [];
+      const sliderIndex = bodyChildren.indexOf(sliderRow);
+      const thresholdsHeadingIndex = bodyChildren.findIndex(
+        (child) =>
+          child?.className === "control-section-title" &&
+          child.textContent === "Similarity Thresholds",
+      );
+
+      assert.ok(
+        sliderIndex > -1 && thresholdsHeadingIndex > -1,
+        "playback speed slider and similarity heading should exist",
+      );
+      assert.ok(
+        sliderIndex < thresholdsHeadingIndex,
+        "playback speed slider should render before similarity tuning",
+      );
+    }
 
     simulation.destroy();
   } finally {
