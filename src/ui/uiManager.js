@@ -3,6 +3,7 @@ import { UI_SLIDER_CONFIG } from "./sliderConfig.js";
 import {
   createControlButtonRow,
   createControlGrid,
+  createNumberInputRow,
   createSectionHeading,
   createSelectRow,
   createSliderRow,
@@ -11,6 +12,12 @@ import { clamp, clamp01, warnOnce, toPlainObject } from "../utils.js";
 
 const AUTO_PAUSE_DESCRIPTION =
   "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
+
+const GRID_GEOMETRY_BOUNDS = Object.freeze({
+  cellSize: Object.freeze({ min: 2, max: 20, step: 1 }),
+  rows: Object.freeze({ min: 40, max: 240, step: 1 }),
+  cols: Object.freeze({ min: 40, max: 240, step: 1 }),
+});
 
 /**
  * Formats numeric values that may occasionally be non-finite. When the value
@@ -51,6 +58,8 @@ export default class UIManager {
     const { obstaclePresets = [], ...actionFns } = normalizedActions;
     const selectionManagerOption = normalizedActions.selectionManager;
     const getCellSizeFn = normalizedActions.getCellSize;
+    const getDimensionsFn = normalizedActions.getGridDimensions;
+    const setGeometryFn = normalizedActions.setWorldGeometry;
 
     const defaults = resolveSimulationDefaults(initialSettings);
 
@@ -63,6 +72,14 @@ export default class UIManager {
       typeof getCellSizeFn === "function"
         ? getCellSizeFn.bind(normalizedActions)
         : () => 1;
+    this.getGridDimensions =
+      typeof getDimensionsFn === "function"
+        ? getDimensionsFn.bind(normalizedActions)
+        : null;
+    this.setWorldGeometry =
+      typeof setGeometryFn === "function"
+        ? setGeometryFn.bind(normalizedActions)
+        : null;
     this.selectionDrawingEnabled = false;
     this.selectionDragStart = null;
     this.canvasElement = null;
@@ -94,6 +111,13 @@ export default class UIManager {
     this.pauseOverlayHint = null;
     this.pauseOverlayAutopause = null;
     this.stepHotkeySet = new Set();
+    this.geometryControls = null;
+
+    const initialDimensions = this.#readGridDimensions();
+
+    this.gridRows = initialDimensions.rows;
+    this.gridCols = initialDimensions.cols;
+    this.currentCellSize = Math.max(1, this.getCellSize());
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -309,6 +333,151 @@ export default class UIManager {
     const match = this.obstaclePresets.find((preset) => preset?.id === candidate);
 
     return match ? match.id : null;
+  }
+
+  #readGridDimensions() {
+    const fallback = { rows: 120, cols: 120, cellSize: this.getCellSize?.() ?? 5 };
+    let dimensions = null;
+
+    if (typeof this.getGridDimensions === "function") {
+      try {
+        const raw = toPlainObject(this.getGridDimensions());
+
+        dimensions = {
+          rows: Number(raw?.rows),
+          cols: Number(raw?.cols),
+          cellSize: Number(raw?.cellSize ?? fallback.cellSize),
+        };
+      } catch (error) {
+        warnOnce("Failed to read grid dimensions from actions.", error);
+      }
+    }
+
+    if (
+      !dimensions ||
+      !Number.isFinite(dimensions.rows) ||
+      !Number.isFinite(dimensions.cols)
+    ) {
+      const globalRef = typeof window !== "undefined" ? window : globalThis;
+      const grid = globalRef?.grid;
+      const engine = globalRef?.simulationEngine;
+      const rows = Number.isFinite(grid?.rows)
+        ? grid.rows
+        : Number.isFinite(engine?.rows)
+          ? engine.rows
+          : fallback.rows;
+      const cols = Number.isFinite(grid?.cols)
+        ? grid.cols
+        : Number.isFinite(engine?.cols)
+          ? engine.cols
+          : fallback.cols;
+
+      dimensions = { rows, cols, cellSize: fallback.cellSize };
+    }
+
+    return this.#normalizeGeometryValues(dimensions, fallback);
+  }
+
+  #normalizeGeometryValues(candidate = {}, fallback = {}) {
+    const bounds = GRID_GEOMETRY_BOUNDS;
+    const baseCellSize = Number.isFinite(candidate.cellSize)
+      ? candidate.cellSize
+      : Number.isFinite(fallback.cellSize)
+        ? fallback.cellSize
+        : Number.isFinite(this.currentCellSize)
+          ? this.currentCellSize
+          : 5;
+    const baseRows = Number.isFinite(candidate.rows)
+      ? candidate.rows
+      : Number.isFinite(fallback.rows)
+        ? fallback.rows
+        : Number.isFinite(this.gridRows)
+          ? this.gridRows
+          : 120;
+    const baseCols = Number.isFinite(candidate.cols)
+      ? candidate.cols
+      : Number.isFinite(fallback.cols)
+        ? fallback.cols
+        : Number.isFinite(this.gridCols)
+          ? this.gridCols
+          : 120;
+
+    const cellSize = clamp(
+      Math.round(baseCellSize),
+      bounds.cellSize.min,
+      bounds.cellSize.max,
+    );
+    const rows = clamp(Math.round(baseRows), bounds.rows.min, bounds.rows.max);
+    const cols = clamp(Math.round(baseCols), bounds.cols.min, bounds.cols.max);
+
+    return { cellSize, rows, cols };
+  }
+
+  #updateGeometryInputs({ cellSize, rows, cols }) {
+    const controls = this.geometryControls || {};
+
+    if (controls.cellSizeInput?.updateDisplay) {
+      controls.cellSizeInput.updateDisplay(cellSize);
+    } else if (controls.cellSizeInput) {
+      controls.cellSizeInput.value = String(cellSize);
+    }
+
+    if (controls.rowsInput?.updateDisplay) {
+      controls.rowsInput.updateDisplay(rows);
+    } else if (controls.rowsInput) {
+      controls.rowsInput.value = String(rows);
+    }
+
+    if (controls.colsInput?.updateDisplay) {
+      controls.colsInput.updateDisplay(cols);
+    } else if (controls.colsInput) {
+      controls.colsInput.value = String(cols);
+    }
+
+    this.currentCellSize = cellSize;
+    this.gridRows = rows;
+    this.gridCols = cols;
+  }
+
+  #updateGeometrySummary({ cellSize, rows, cols }) {
+    const summaryEl = this.geometryControls?.summaryEl;
+
+    if (!summaryEl) return;
+
+    const widthPx = Math.round(cols * cellSize);
+    const heightPx = Math.round(rows * cellSize);
+
+    summaryEl.textContent = `${cols} × ${rows} cells (${widthPx} × ${heightPx} px)`;
+  }
+
+  #applyWorldGeometry(values = {}) {
+    if (typeof this.setWorldGeometry !== "function") return null;
+
+    const request = this.#normalizeGeometryValues(values);
+    let result = null;
+
+    try {
+      result = this.setWorldGeometry(request);
+    } catch (error) {
+      warnOnce("Failed to update world geometry.", error);
+      result = request;
+    }
+
+    const applied = this.#normalizeGeometryValues(result, request);
+
+    this.#updateGeometryInputs(applied);
+    this.#updateGeometrySummary(applied);
+    this.#scheduleUpdate();
+    this.#updateZoneSummary();
+
+    return applied;
+  }
+
+  setGridGeometry(values = {}) {
+    const normalized = this.#normalizeGeometryValues(values);
+
+    this.#updateGeometryInputs(normalized);
+    this.#updateGeometrySummary(normalized);
   }
 
   attachCanvas(canvasElement, options = {}) {
@@ -1464,6 +1633,7 @@ export default class UIManager {
     panel.classList.add("controls-panel");
 
     this.#buildControlButtons(body);
+    this.#buildGeometryControls(body);
 
     const sliderContext = this.#buildSliderGroups(body);
 
@@ -1633,6 +1803,97 @@ export default class UIManager {
         this.setAutoPauseOnBlur(checked);
       },
     );
+  }
+
+  #buildGeometryControls(body) {
+    if (typeof this.setWorldGeometry !== "function") return;
+
+    createSectionHeading(body, "Grid Geometry");
+
+    const geometryGrid = createControlGrid(body, "control-grid--compact");
+    const geometry = this.#normalizeGeometryValues({
+      cellSize: this.currentCellSize,
+      rows: this.gridRows,
+      cols: this.gridCols,
+    });
+
+    const bounds = GRID_GEOMETRY_BOUNDS;
+
+    const cellSizeInput = createNumberInputRow(geometryGrid, {
+      label: "Cell Size",
+      title: "Pixels used to render each grid cell (2..20)",
+      min: bounds.cellSize.min,
+      max: bounds.cellSize.max,
+      step: bounds.cellSize.step,
+      value: geometry.cellSize,
+      suffix: "px",
+    });
+
+    const rowsInput = createNumberInputRow(geometryGrid, {
+      label: "Rows",
+      title: "Number of cell rows in the grid (40..240)",
+      min: bounds.rows.min,
+      max: bounds.rows.max,
+      step: bounds.rows.step,
+      value: geometry.rows,
+      suffix: "tiles",
+    });
+
+    const colsInput = createNumberInputRow(geometryGrid, {
+      label: "Columns",
+      title: "Number of cell columns in the grid (40..240)",
+      min: bounds.cols.min,
+      max: bounds.cols.max,
+      step: bounds.cols.step,
+      value: geometry.cols,
+      suffix: "tiles",
+    });
+
+    const buttonRow = createControlButtonRow(geometryGrid, {
+      className: "control-button-row control-button-row--compact",
+    });
+
+    buttonRow.style.gridColumn = "1 / -1";
+
+    const applyButton = document.createElement("button");
+
+    applyButton.type = "button";
+    applyButton.textContent = "Apply Geometry";
+    applyButton.title = "Resize the grid using the values above.";
+    applyButton.addEventListener("click", () => {
+      this.#applyWorldGeometry({
+        cellSize: Number.parseFloat(cellSizeInput.value),
+        rows: Number.parseFloat(rowsInput.value),
+        cols: Number.parseFloat(colsInput.value),
+      });
+    });
+    buttonRow.appendChild(applyButton);
+
+    const summary = document.createElement("div");
+
+    summary.className = "control-hint";
+    summary.style.gridColumn = "1 / -1";
+    geometryGrid.appendChild(summary);
+
+    this.geometryControls = {
+      cellSizeInput,
+      rowsInput,
+      colsInput,
+      applyButton,
+      summaryEl: summary,
+    };
+
+    [cellSizeInput, rowsInput, colsInput].forEach((input) => {
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          applyButton.click();
+        }
+      });
+    });
+
+    this.#updateGeometryInputs(geometry);
+    this.#updateGeometrySummary(geometry);
   }
 
   #buildSliderGroups(body) {

@@ -188,6 +188,58 @@ test("updateSetting routes maxConcurrentEvents through the setter", async () => 
   }
 });
 
+test("setWorldGeometry resizes the grid and updates dependent systems", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(150, 150),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+    });
+
+    engine.pendingSlowUiUpdate = false;
+
+    const result = engine.setWorldGeometry({ cellSize: 6, rows: 48, cols: 72 });
+
+    assert.is(result.cellSize, 6, "method returns the applied cell size");
+    assert.is(result.rows, 48, "method returns the applied row count");
+    assert.is(result.cols, 72, "method returns the applied column count");
+    assert.is(engine.cellSize, 6, "engine updates its cell size");
+    assert.is(engine.rows, 48, "engine updates its row count");
+    assert.is(engine.cols, 72, "engine updates its column count");
+    assert.is(engine.canvas.width, 6 * 72, "canvas width matches geometry");
+    assert.is(engine.canvas.height, 6 * 48, "canvas height matches geometry");
+    assert.is(engine.grid.rows, 48, "grid rows match geometry");
+    assert.is(engine.grid.cols, 72, "grid cols match geometry");
+    assert.is(engine.grid.cellSize, 6, "grid cell size updates");
+    assert.is(engine.eventManager.rows, 48, "event manager rows update");
+    assert.is(engine.eventManager.cols, 72, "event manager cols update");
+    assert.is(engine.selectionManager.rows, 48, "selection manager rows update");
+    assert.is(engine.selectionManager.cols, 72, "selection manager cols update");
+    assert.ok(engine.pendingSlowUiUpdate, "geometry change schedules slow UI updates");
+    assert.is(engine.state.gridRows, 48, "state snapshot includes updated row count");
+    assert.is(engine.state.gridCols, 72, "state snapshot includes updated col count");
+    assert.is(engine.state.cellSize, 6, "state snapshot includes updated cell size");
+
+    const noChange = engine.setWorldGeometry({
+      cellSize: "ignored",
+      rows: 0,
+      cols: -5,
+    });
+
+    assert.is(noChange.rows, 48, "invalid updates fall back to previous row count");
+    assert.is(noChange.cols, 72, "invalid updates fall back to previous column count");
+    assert.is(noChange.cellSize, 6, "invalid updates fall back to previous cell size");
+  } finally {
+    restore();
+  }
+});
+
 test("overlay visibility toggles mutate only requested flags", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);

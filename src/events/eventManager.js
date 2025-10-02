@@ -244,6 +244,61 @@ export default class EventManager {
     }
   }
 
+  setDimensions(rows, cols) {
+    const nextRows = sanitizeNumber(rows, {
+      fallback: this.rows,
+      min: 1,
+      round: Math.floor,
+    });
+    const nextCols = sanitizeNumber(cols, {
+      fallback: this.cols,
+      min: 1,
+      round: Math.floor,
+    });
+
+    if (nextRows === this.rows && nextCols === this.cols) {
+      return { rows: this.rows, cols: this.cols };
+    }
+
+    this.rows = nextRows;
+    this.cols = nextCols;
+
+    const clampArea = (event) => {
+      if (!event || !event.affectedArea) return;
+
+      const area = event.affectedArea;
+      const width = clamp(
+        Math.max(1, Math.floor(Number(area.width) || this.cols)),
+        1,
+        this.cols,
+      );
+      const height = clamp(
+        Math.max(1, Math.floor(Number(area.height) || this.rows)),
+        1,
+        this.rows,
+      );
+      const maxX = Math.max(0, this.cols - width);
+      const maxY = Math.max(0, this.rows - height);
+      const x = clamp(Math.floor(Number(area.x) || 0), 0, maxX);
+      const y = clamp(Math.floor(Number(area.y) || 0), 0, maxY);
+
+      area.x = x;
+      area.y = y;
+      area.width = width;
+      area.height = height;
+    };
+
+    if (Array.isArray(this.activeEvents)) {
+      this.activeEvents.forEach(clampArea);
+    }
+
+    if (this.currentEvent) {
+      clampArea(this.currentEvent);
+    }
+
+    return { rows: this.rows, cols: this.cols };
+  }
+
   getColor(ev) {
     if (!ev) return EventManager.DEFAULT_EVENT_COLOR;
 

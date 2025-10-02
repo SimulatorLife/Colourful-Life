@@ -146,6 +146,77 @@ export function createSliderRow(parent, opts = {}) {
 }
 
 /**
+ * Creates a labelled numeric input row with optional suffix text.
+ *
+ * @param {HTMLElement} parent - Container node.
+ * @param {Object} opts - Input options.
+ * @param {string} opts.label - Display label for the control.
+ * @param {number} [opts.min] - Minimum accepted value.
+ * @param {number} [opts.max] - Maximum accepted value.
+ * @param {number} [opts.step=1] - Increment applied when using the input arrows.
+ * @param {number} [opts.value] - Initial value shown in the input.
+ * @param {string} [opts.title] - Optional tooltip description.
+ * @param {string} [opts.suffix] - Optional suffix rendered beside the input.
+ * @param {(value:number)=>void} [opts.onChange] - Callback invoked when value changes.
+ * @returns {HTMLInputElement} The generated number input element.
+ */
+export function createNumberInputRow(parent, opts = {}) {
+  const {
+    label,
+    min,
+    max,
+    step = 1,
+    value,
+    title,
+    suffix,
+    onChange,
+  } = toPlainObject(opts);
+
+  const { line } = createLabeledControlRow(parent, label, { title });
+  const input = document.createElement("input");
+
+  input.type = "number";
+  if (min != null) input.min = String(min);
+  if (max != null) input.max = String(max);
+  if (step != null) input.step = String(step);
+  if (value != null && value !== "") {
+    input.value = String(value);
+  }
+
+  const handleChange = () => {
+    if (typeof onChange !== "function") return;
+
+    const numericValue = Number.parseFloat(input.value);
+
+    if (Number.isFinite(numericValue)) {
+      onChange(numericValue);
+    }
+  };
+
+  input.addEventListener("change", handleChange);
+
+  input.updateDisplay = (nextValue) => {
+    const numericValue = Number(nextValue);
+
+    if (Number.isFinite(numericValue)) {
+      input.value = String(numericValue);
+    }
+  };
+
+  line.appendChild(input);
+
+  if (suffix) {
+    const suffixEl = document.createElement("span");
+
+    suffixEl.className = "control-value";
+    suffixEl.textContent = suffix;
+    line.appendChild(suffixEl);
+  }
+
+  return input;
+}
+
+/**
  * Creates a labelled `<select>` dropdown row.
  *
  * @param {HTMLElement} parent - Container node.

@@ -276,6 +276,10 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     autoPauseOnBlur: defaults.autoPauseOnBlur,
   };
 
+  expectedState.gridRows = engine.rows;
+  expectedState.gridCols = engine.cols;
+  expectedState.cellSize = engine.cellSize;
+
   assert.equal(engine.state, expectedState);
 });
 

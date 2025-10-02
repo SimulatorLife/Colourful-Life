@@ -1,4 +1,11 @@
-import { randomRange, clamp, lerp, createRankedBuffer, warnOnce } from "../utils.js";
+import {
+  randomRange,
+  clamp,
+  lerp,
+  createRankedBuffer,
+  warnOnce,
+  sanitizeNumber,
+} from "../utils.js";
 import DNA from "../genome.js";
 import Cell from "../cell.js";
 import { computeFitness } from "../fitness.mjs";
@@ -1481,6 +1488,99 @@ export default class GridManager {
         }
       }
     }
+  }
+
+  resize(rows, cols, options = {}) {
+    const opts = options && typeof options === "object" ? options : {};
+    const nextRows = sanitizeNumber(rows, {
+      fallback: this.rows,
+      min: 1,
+      round: Math.floor,
+    });
+    const nextCols = sanitizeNumber(cols, {
+      fallback: this.cols,
+      min: 1,
+      round: Math.floor,
+    });
+    const nextCellSize = sanitizeNumber(opts.cellSize, {
+      fallback: this.cellSize,
+      min: 1,
+    });
+
+    const changed =
+      nextRows !== this.rows ||
+      nextCols !== this.cols ||
+      (Number.isFinite(nextCellSize) && nextCellSize !== this.cellSize);
+
+    if (!changed) {
+      return { rows: this.rows, cols: this.cols, cellSize: this.cellSize };
+    }
+
+    const rowsInt = Math.max(1, Math.floor(nextRows));
+    const colsInt = Math.max(1, Math.floor(nextCols));
+    const cellSizeValue = Math.max(1, Math.floor(nextCellSize));
+    const baseEnergy = this.maxTileEnergy / 2;
+
+    this.rows = rowsInt;
+    this.cols = colsInt;
+    this.cellSize = cellSizeValue;
+    this.grid = Array.from({ length: rowsInt }, () => Array(colsInt).fill(null));
+    this.energyGrid = Array.from({ length: rowsInt }, () =>
+      Array.from({ length: colsInt }, () => baseEnergy),
+    );
+    this.energyNext = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
+    this.energyDeltaGrid = Array.from({ length: rowsInt }, () =>
+      Array(colsInt).fill(0),
+    );
+    this.obstacles = Array.from({ length: rowsInt }, () => Array(colsInt).fill(false));
+    this.densityCounts = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
+    this.densityTotals = this.#buildDensityTotals(this.densityRadius);
+    this.densityLiveGrid = Array.from({ length: rowsInt }, () =>
+      Array(colsInt).fill(0),
+    );
+    this.densityGrid = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
+    this.densityDirtyTiles?.clear?.();
+    this.activeCells.clear();
+    this.tickCount = 0;
+    this.lastSnapshot = null;
+    this.eventEffectCache?.clear?.();
+
+    if (this.selectionManager?.setDimensions) {
+      this.selectionManager.setDimensions(rowsInt, colsInt);
+    }
+
+    const resolvedPreset = this.#resolveInitialObstaclePreset({
+      initialPreset:
+        opts.randomizeObstacles === true
+          ? "random"
+          : typeof opts.obstaclePreset === "string"
+            ? opts.obstaclePreset
+            : this.currentObstaclePreset,
+      randomize: Boolean(opts.randomizeObstacles),
+      pool: this.randomObstaclePresetPool,
+    });
+
+    if (resolvedPreset && resolvedPreset !== "none") {
+      const presetOptions = this.#resolvePresetOptions(
+        resolvedPreset,
+        opts.presetOptions,
+      );
+
+      this.applyObstaclePreset(resolvedPreset, {
+        clearExisting: true,
+        append: false,
+        presetOptions,
+        evict: true,
+      });
+    } else {
+      this.currentObstaclePreset = "none";
+    }
+
+    this.init();
+    this.recalculateDensityCounts();
+    this.rebuildActiveCells();
+
+    return { rows: this.rows, cols: this.cols, cellSize: this.cellSize };
   }
 
   resetWorld({

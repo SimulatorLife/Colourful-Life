@@ -201,6 +201,7 @@ export default class SimulationEngine {
     this.now = now;
     this.raf = raf;
     this.caf = caf;
+    this.rng = rng;
     this.drawOverlays = typeof drawOverlays === "function" ? drawOverlays : noop;
 
     const defaults = resolveSimulationDefaults(config);
@@ -317,6 +318,9 @@ export default class SimulationEngine {
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
       autoPauseOnBlur: this.autoPauseOnBlur,
+      gridRows: rows,
+      gridCols: cols,
+      cellSize,
     };
 
     const initialThreshold = this.state.matingDiversityThreshold;
@@ -784,6 +788,161 @@ export default class SimulationEngine {
     if (!next && !this.running) this.start();
 
     return next;
+  }
+
+  setWorldGeometry(options = {}) {
+    const opts = options && typeof options === "object" ? options : {};
+    const randomizeObstacles = Boolean(opts.randomizeObstacles);
+    const obstaclePreset = opts.obstaclePreset;
+    const presetOptions = opts.presetOptions;
+    const reseed = opts.reseed !== false;
+
+    let targetCellSize = sanitizeNumber(opts.cellSize, {
+      fallback: this.cellSize,
+      round: Math.round,
+    });
+    let targetRows = sanitizeNumber(opts.rows, {
+      fallback: this.rows,
+      round: Math.floor,
+    });
+    let targetCols = sanitizeNumber(opts.cols, {
+      fallback: this.cols,
+      round: Math.floor,
+    });
+
+    if (!Number.isFinite(targetCellSize) || targetCellSize < 1) {
+      targetCellSize = this.cellSize;
+    }
+
+    if (!Number.isFinite(targetRows) || targetRows < 1) {
+      targetRows = this.rows;
+    }
+
+    if (!Number.isFinite(targetCols) || targetCols < 1) {
+      targetCols = this.cols;
+    }
+
+    const changed =
+      targetCellSize !== this.cellSize ||
+      targetRows !== this.rows ||
+      targetCols !== this.cols;
+
+    if (!changed) {
+      return { cellSize: this.cellSize, rows: this.rows, cols: this.cols };
+    }
+
+    const wasRunning = this.running;
+    const wasPaused = this.isPaused();
+
+    this.stop();
+
+    this.cellSize = targetCellSize;
+    this.rows = targetRows;
+    this.cols = targetCols;
+
+    if (this.canvas) {
+      this.canvas.width = this.cols * this.cellSize;
+      this.canvas.height = this.rows * this.cellSize;
+    }
+
+    if (this.selectionManager?.setDimensions) {
+      this.selectionManager.setDimensions(this.rows, this.cols);
+    }
+
+    if (typeof this.eventManager?.setDimensions === "function") {
+      this.eventManager.setDimensions(this.rows, this.cols);
+    } else if (this.eventManager) {
+      this.eventManager.rows = this.rows;
+      this.eventManager.cols = this.cols;
+    }
+
+    this.grid?.resize?.(this.rows, this.cols, {
+      cellSize: this.cellSize,
+      randomizeObstacles,
+      obstaclePreset,
+      presetOptions,
+    });
+
+    const shouldStartWithEvent =
+      (this.state.eventFrequencyMultiplier ?? 1) > 0 &&
+      (this.state.maxConcurrentEvents ?? MAX_CONCURRENT_EVENTS_FALLBACK) > 0;
+
+    if (typeof this.eventManager?.reset === "function") {
+      this.eventManager.reset({ startWithEvent: shouldStartWithEvent });
+    } else if (this.eventManager) {
+      this.eventManager.activeEvents = [];
+      this.eventManager.currentEvent = null;
+      this.eventManager.cooldown = 0;
+    }
+
+    if (typeof this.stats?.resetAll === "function") {
+      this.stats.resetAll();
+    } else {
+      this.stats?.resetTick?.();
+    }
+
+    const diversityThreshold =
+      this.state.matingDiversityThreshold ??
+      SIMULATION_DEFAULTS.matingDiversityThreshold;
+
+    if (typeof this.stats?.setMatingDiversityThreshold === "function") {
+      this.stats.setMatingDiversityThreshold(diversityThreshold);
+    } else if (this.stats) {
+      this.stats.matingDiversityThreshold = diversityThreshold;
+    }
+
+    this.grid?.setMatingDiversityOptions?.({
+      threshold: diversityThreshold,
+      lowDiversityMultiplier:
+        this.state.lowDiversityReproMultiplier ??
+        SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
+    });
+
+    if (typeof this.stats?.setMutationMultiplier === "function") {
+      this.stats.setMutationMultiplier(this.state.mutationMultiplier ?? 1);
+    }
+
+    if (reseed && typeof this.grid?.resetWorld === "function") {
+      this.grid.resetWorld({
+        randomizeObstacles,
+        obstaclePreset,
+        presetOptions,
+        reseed: true,
+        clearCustomZones: true,
+      });
+    }
+
+    if (this.ctx) {
+      this.ctx.clearRect(0, 0, this.canvas?.width ?? 0, this.canvas?.height ?? 0);
+    }
+
+    this.lastSnapshot =
+      typeof this.grid?.buildSnapshot === "function" ? this.grid.buildSnapshot() : null;
+    this.lastMetrics =
+      this.lastSnapshot && typeof this.stats?.updateFromSnapshot === "function"
+        ? this.stats.updateFromSnapshot(this.lastSnapshot)
+        : null;
+
+    this.pendingSlowUiUpdate = true;
+    this.lastSlowUiRender = Number.NEGATIVE_INFINITY;
+    this.lastUpdateTime = this.now();
+
+    this.#updateState({
+      cellSize: this.cellSize,
+      gridRows: this.rows,
+      gridCols: this.cols,
+    });
+
+    if (wasRunning) {
+      this.start();
+      if (wasPaused) {
+        this.pause();
+      }
+    } else {
+      this.setPaused(wasPaused);
+    }
+
+    return { cellSize: this.cellSize, rows: this.rows, cols: this.cols };
   }
 
   resetWorld(options = {}) {
