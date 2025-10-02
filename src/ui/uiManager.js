@@ -77,6 +77,7 @@ export default class UIManager {
     this.metricsPlaceholder = null;
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
+    this.playbackSpeedSlider = null;
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -1052,6 +1053,27 @@ export default class UIManager {
         this.#updateSetting("autoPauseOnBlur", checked);
       },
     );
+
+    const speedBounds = UI_SLIDER_CONFIG?.speedMultiplier || {};
+    const speedMin = speedBounds.min ?? 0.5;
+    const speedMax = speedBounds.max ?? 100;
+    const speedStep = speedBounds.step ?? 0.5;
+    const speedFloor = speedBounds.floor ?? speedMin;
+
+    this.playbackSpeedSlider = createSliderRow(body, {
+      label: "Playback Speed ×",
+      min: speedMin,
+      max: speedMax,
+      step: speedStep,
+      value: this.speedMultiplier,
+      title: "Speed multiplier relative to 60 updates/sec (0.5x..100x)",
+      format: (v) => `${v.toFixed(1)}x`,
+      onInput: (value) => {
+        const sanitized = Math.max(speedFloor, value);
+
+        this.#updateSetting("speedMultiplier", sanitized);
+      },
+    });
   }
 
   #buildSliderGroups(body) {
@@ -1231,17 +1253,6 @@ export default class UIManager {
         format: (v) => v.toFixed(2),
         getValue: () => this.lowDiversityReproMultiplier,
         setValue: (v) => this.#updateSetting("lowDiversityReproMultiplier", v),
-        position: "beforeOverlays",
-      }),
-      withSliderConfig("speedMultiplier", {
-        label: "Speed ×",
-        min: 0.5,
-        max: 100,
-        step: 0.5,
-        title: "Speed multiplier relative to 60 updates/sec (0.5x..100x)",
-        format: (v) => `${v.toFixed(1)}x`,
-        getValue: () => this.speedMultiplier,
-        setValue: (v) => this.#updateSetting("speedMultiplier", v),
         position: "beforeOverlays",
       }),
     ];
