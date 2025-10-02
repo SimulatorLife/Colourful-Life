@@ -222,6 +222,35 @@ test("overlay visibility toggles mutate only requested flags", async () => {
   }
 });
 
+test("overlay visibility coercion handles string inputs", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.setOverlayVisibility({
+      showObstacles: "false",
+      showEnergy: " ",
+      showDensity: "TRUE",
+      showFitness: "0",
+      showCelebrationAuras: "yes",
+    });
+
+    assert.is(engine.state.showObstacles, false);
+    assert.is(
+      engine.state.showEnergy,
+      false,
+      "blank strings fall back to current state",
+    );
+    assert.is(engine.state.showDensity, true);
+    assert.is(engine.state.showFitness, false);
+    assert.is(engine.state.showCelebrationAuras, true);
+  } finally {
+    restore();
+  }
+});
+
 // Regression test: direct SimulationEngine constructions (like index.html) previously
 // defaulted to a noop overlay renderer, leaving UI toggles with no visible effect.
 test("SimulationEngine defaults to the shared overlay renderer", async () => {
