@@ -36,17 +36,15 @@ export function computeLeaderboard(snapshot, topN = 5) {
     return Number.isNaN(fitnessDiff) ? 0 : fitnessDiff;
   };
 
-  const brainLookup = new Map();
-
-  for (let i = 0; i < brainSnapshots.length; i++) {
-    const entry = brainSnapshots[i];
-
-    if (!entry) continue;
+  const brainLookup = brainSnapshots.reduce((lookup, entry) => {
+    if (!entry) return lookup;
 
     const key = `${entry.row},${entry.col}`;
 
-    if (!brainLookup.has(key)) brainLookup.set(key, entry);
-  }
+    if (!lookup.has(key)) lookup.set(key, entry);
+
+    return lookup;
+  }, new Map());
 
   const topItems = createRankedBuffer(sanitizedTopN, compareItems);
 
