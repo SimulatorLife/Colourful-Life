@@ -2111,9 +2111,69 @@ export default class GridManager {
     if (!cell || processed.has(cell)) return;
     processed.add(cell);
     cell.age++;
-    if (cell.age >= cell.lifespan) {
+    const densityValue = densityGrid?.[row]?.[col];
+    const localDensity = clamp(Number.isFinite(densityValue) ? densityValue : 0, 0, 1);
+    const energyCap =
+      this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
+    const energyFraction = clamp(
+      Number.isFinite(cell.energy) ? cell.energy / energyCap : 0,
+      0,
+      1,
+    );
+    const ageFraction = clamp(
+      typeof cell.getAgeFraction === "function"
+        ? cell.getAgeFraction()
+        : Number.isFinite(cell.lifespan) && cell.lifespan > 0
+          ? cell.age / cell.lifespan
+          : 0,
+      0,
+      3,
+    );
+    let senescenceHazard = null;
+    let senescenceDeath = false;
+
+    if (typeof cell.computeSenescenceHazard === "function") {
+      const context = {
+        ageFraction,
+        energyFraction,
+        localDensity,
+        densityEffectMultiplier,
+        eventPressure: cell.lastEventPressure ?? 0,
+      };
+
+      senescenceHazard = cell.computeSenescenceHazard(context);
+
+      if (Number.isFinite(senescenceHazard)) {
+        if (senescenceHazard >= 1) {
+          senescenceDeath = true;
+        } else if (senescenceHazard > 0) {
+          const hazardRng =
+            typeof cell.resolveRng === "function"
+              ? cell.resolveRng("senescenceHazard", () => this.#random())
+              : () => this.#random();
+          const roll = Number(hazardRng());
+
+          if (Number.isFinite(roll) && roll < senescenceHazard) {
+            senescenceDeath = true;
+          }
+        }
+      } else {
+        senescenceHazard = null;
+      }
+    }
+
+    if (!senescenceDeath && senescenceHazard == null && cell.age >= cell.lifespan) {
+      senescenceDeath = true;
+    }
+
+    if (senescenceDeath) {
       this.removeCell(row, col);
-      stats.onDeath(cell, { row, col, cause: "senescence" });
+      stats.onDeath(cell, {
+        row,
+        col,
+        cause: "senescence",
+        hazard: senescenceHazard != null ? clamp(senescenceHazard, 0, 1) : undefined,
+      });
 
       return;
     }
@@ -2125,7 +2185,6 @@ export default class GridManager {
     }
 
     this.consumeEnergy(cell, row, col, densityGrid, densityEffectMultiplier);
-    const localDensity = densityGrid[row][col];
 
     const starved = cell.manageEnergy(row, col, {
       localDensity,

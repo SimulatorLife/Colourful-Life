@@ -1360,3 +1360,46 @@ test("strategyDriftRange expands for exploratory genomes", () => {
     "mutationally flexible genomes should allow broader strategy drift",
   );
 });
+
+test("computeSenescenceHazard blends age, resources, and density", () => {
+  const dna = new DNA(120, 140, 200);
+  const cell = new Cell(0, 0, dna, 8);
+
+  cell.lifespan = 100;
+  cell.age = 5;
+  const youthful = cell.computeSenescenceHazard({
+    ageFraction: cell.age / cell.lifespan,
+    energyFraction: 0.95,
+    localDensity: 0.1,
+    eventPressure: 0,
+  });
+
+  cell.age = 105;
+  const supported = cell.computeSenescenceHazard({
+    ageFraction: cell.age / cell.lifespan,
+    energyFraction: 0.9,
+    localDensity: 0.2,
+    eventPressure: 0.1,
+  });
+
+  const depleted = cell.computeSenescenceHazard({
+    ageFraction: cell.age / cell.lifespan,
+    energyFraction: 0.1,
+    localDensity: 0.95,
+    eventPressure: 0.9,
+  });
+
+  assert.ok(
+    youthful < 0.15,
+    "young, well-resourced cells should face little senescence risk",
+  );
+  assert.ok(
+    supported > youthful,
+    "aging should increase senescence risk even when conditions remain favourable",
+  );
+  assert.ok(
+    depleted > supported + 0.1,
+    "stressors like scarcity and crowding should amplify senescence hazard",
+  );
+  assert.ok(depleted > 0.5, "stacked stress should push hazard into failure territory");
+});
