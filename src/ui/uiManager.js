@@ -9,6 +9,9 @@ import {
 } from "./controlBuilders.js";
 import { clamp, clamp01, warnOnce, toPlainObject } from "../utils.js";
 
+const AUTO_PAUSE_DESCRIPTION =
+  "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
+
 /**
  * Formats numeric values that may occasionally be non-finite. When the value
  * fails the finite check the provided fallback is returned instead.
@@ -1620,6 +1623,16 @@ export default class UIManager {
     });
 
     this.#updateSpeedMultiplierUI(this.speedMultiplier);
+
+    this.autoPauseCheckbox = this.#addCheckbox(
+      body,
+      "Pause When Hidden",
+      { title: AUTO_PAUSE_DESCRIPTION, description: AUTO_PAUSE_DESCRIPTION },
+      this.autoPauseOnBlur,
+      (checked) => {
+        this.setAutoPauseOnBlur(checked);
+      },
+    );
   }
 
   #buildSliderGroups(body) {
@@ -1833,19 +1846,6 @@ export default class UIManager {
     generalConfigs
       .filter((cfg) => cfg.position === "beforeOverlays")
       .forEach((cfg) => renderSlider(cfg, generalGroup));
-
-    const autoPauseDescription =
-      "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
-
-    this.autoPauseCheckbox = this.#addCheckbox(
-      generalGroup,
-      "Pause When Hidden",
-      { title: autoPauseDescription, description: autoPauseDescription },
-      this.autoPauseOnBlur,
-      (checked) => {
-        this.setAutoPauseOnBlur(checked);
-      },
-    );
 
     return {
       renderSlider,
