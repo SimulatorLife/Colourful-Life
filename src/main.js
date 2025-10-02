@@ -300,7 +300,7 @@ export function createSimulation({
     typeof syncLowDiversity === "number" &&
     typeof uiManager?.setLowDiversityReproMultiplier === "function"
   ) {
-    uiManager.setLowDiversityReproMultiplier(syncLowDiversity);
+    uiManager.setLowDiversityReproMultiplier(syncLowDiversity, { notify: false });
   }
 
   const unsubscribers = [];
@@ -335,6 +335,15 @@ export function createSimulation({
           typeof uiManager.setAutoPauseOnBlur === "function"
         ) {
           uiManager.setAutoPauseOnBlur(changes.autoPauseOnBlur, { notify: false });
+        }
+        if (
+          changes?.lowDiversityReproMultiplier !== undefined &&
+          typeof uiManager.setLowDiversityReproMultiplier === "function"
+        ) {
+          uiManager.setLowDiversityReproMultiplier(
+            changes.lowDiversityReproMultiplier,
+            { notify: false },
+          );
         }
       }),
     );
