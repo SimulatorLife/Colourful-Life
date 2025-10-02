@@ -268,9 +268,34 @@ export default class SimulationEngine {
     }
 
     const { width, height } = ensureCanvasDimensions(resolvedCanvas, config);
-    const cellSize = config.cellSize ?? 5;
-    const rows = config.rows ?? Math.floor(height / cellSize);
-    const cols = config.cols ?? Math.floor(width / cellSize);
+    const toFinite = (value) => {
+      if (value == null) return null;
+
+      const numeric = Number(value);
+
+      return Number.isFinite(numeric) ? numeric : null;
+    };
+    const resolvePositiveInt = (value, fallback) => {
+      const numeric = toFinite(value);
+
+      if (numeric != null && numeric > 0) {
+        return Math.floor(numeric);
+      }
+
+      const fallbackNumeric = toFinite(fallback);
+
+      if (fallbackNumeric != null && fallbackNumeric > 0) {
+        return Math.floor(fallbackNumeric);
+      }
+
+      return 1;
+    };
+    const resolvedCellSize = toFinite(config.cellSize);
+    const cellSize = resolvedCellSize && resolvedCellSize > 0 ? resolvedCellSize : 5;
+    const baseRows = height / cellSize;
+    const baseCols = width / cellSize;
+    const rows = resolvePositiveInt(config.rows, baseRows);
+    const cols = resolvePositiveInt(config.cols, baseCols);
 
     this.window = win;
     this.document = doc;
