@@ -247,6 +247,16 @@ function drawObstacleMask(
   ctx.restore();
 }
 
+function formatAlpha(alpha) {
+  if (!(alpha > 0)) return "0";
+  if (alpha >= 1) return "1";
+
+  const safeAlpha = alpha < 0.001 ? 0.001 : alpha;
+  const formatted = safeAlpha.toFixed(3);
+
+  return formatted === "1.000" ? "1" : formatted;
+}
+
 function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = "0,0,0") {
   const rows = grid.rows;
   const cols = grid.cols;
@@ -257,7 +267,7 @@ function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = "0,0,0") {
       const alpha = clamp01(Number.isFinite(rawAlpha) ? rawAlpha : 0);
 
       if (alpha <= 0) continue;
-      ctx.fillStyle = `rgba(${color},${alpha.toFixed(3)})`;
+      ctx.fillStyle = `rgba(${color},${formatAlpha(alpha)})`;
       ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
     }
   }

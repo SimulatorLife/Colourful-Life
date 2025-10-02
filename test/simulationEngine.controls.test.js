@@ -6,6 +6,7 @@ import {
   loadSimulationModules,
   patchSimulationPrototypes,
 } from "./helpers/simulationEngine.js";
+import { drawOverlays as defaultDrawOverlays } from "../src/ui/overlays.js";
 
 function createEngine(modules) {
   const { SimulationEngine } = modules;
@@ -146,6 +147,63 @@ test("overlay visibility toggles mutate only requested flags", async () => {
       false,
       "overlay toggles do not schedule leaderboard work",
     );
+  } finally {
+    restore();
+  }
+});
+
+// Regression test: direct SimulationEngine constructions (like index.html) previously
+// defaulted to a noop overlay renderer, leaving UI toggles with no visible effect.
+test("SimulationEngine defaults to the shared overlay renderer", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    assert.is(engine.drawOverlays, defaultDrawOverlays);
+  } finally {
+    restore();
+  }
+});
+
+// Regression test: ensure overlay visibility flags flow into the renderer so toggles
+// actually change what is drawn on the simulation canvas.
+test("tick forwards overlay visibility flags to the renderer", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const overlayCalls = [];
+    const { SimulationEngine } = modules;
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      drawOverlays: (...args) => overlayCalls.push(args),
+    });
+
+    engine.setOverlayVisibility({
+      showEnergy: true,
+      showDensity: true,
+      showFitness: true,
+    });
+
+    engine.tick(0);
+
+    const lastCall = overlayCalls.at(-1);
+
+    assert.ok(lastCall, "overlay renderer was invoked during tick");
+
+    const [, , , options] = lastCall;
+
+    assert.is(options.showEnergy, true);
+    assert.is(options.showDensity, true);
+    assert.is(options.showFitness, true);
+    assert.is(options.showObstacles, true, "obstacles stay enabled by default");
+    assert.is(options.showCelebrationAuras, false);
   } finally {
     restore();
   }

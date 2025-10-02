@@ -2,6 +2,7 @@ import EventManager from "./events/eventManager.js";
 import GridManager from "./grid/gridManager.js";
 import Stats from "./stats.js";
 import { computeLeaderboard } from "./leaderboard.js";
+import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -10,8 +11,6 @@ import {
   resolveSimulationDefaults,
 } from "./config.js";
 import { OBSTACLE_PRESETS } from "./grid/obstaclePresets.js";
-
-const noop = () => {};
 
 function createSelectionManagerStub(rows, cols) {
   const state = { rows: Math.max(0, rows ?? 0), cols: Math.max(0, cols ?? 0) };
@@ -237,7 +236,8 @@ export default class SimulationEngine {
         : win && typeof win.cancelAnimationFrame === "function"
           ? win.cancelAnimationFrame.bind(win)
           : defaultCancelAnimationFrame;
-    this.drawOverlays = typeof drawOverlays === "function" ? drawOverlays : noop;
+    this.drawOverlays =
+      typeof drawOverlays === "function" ? drawOverlays : defaultDrawOverlays;
 
     const defaults = resolveSimulationDefaults(config);
 
