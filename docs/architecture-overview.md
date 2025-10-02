@@ -46,7 +46,7 @@ This document captures how the Colourful Life simulation composes its core syste
 
 ### Events
 
-- **EventManager** (`src/events/eventManager.js`) spawns periodic floods, droughts, heatwaves, and coldwaves. Events carry strength, duration, and a rectangular affected area. The manager exposes a colour resolver consumed by overlays and can be configured with custom event pools.
+- **EventManager** (`src/events/eventManager.js`) spawns periodic floods, droughts, heatwaves, and coldwaves. Events carry strength, duration, and a rectangular affected area. The manager exposes a color resolver consumed by overlays and can be configured with custom event pools.
 - **eventEffects** (`src/events/eventEffects.js`) maps event types to regeneration/drain modifiers and per-cell effects (energy loss, resistance genes).
 - **eventContext** (`src/events/eventContext.js`) exposes helpers used by the grid and energy systems to determine whether an event affects a tile. Headless consumers can reuse it to keep behaviour consistent without depending on DOM state.
 - Overlay rendering uses `EventManager.getColor` to shade the canvas and exposes `activeEvents` for analytics.
@@ -87,7 +87,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - `utils.js` houses deterministic helpers (`createRNG`, `createRankedBuffer`, `cloneTracePayload`, etc.) reused across the simulation, UI, and tests.
 
 - The overlay pipeline is orchestrated by `drawOverlays`, which delegates to granular helpers (`drawEventOverlays`,
-  `drawEnergyHeatmap`, `drawDensityHeatmap`, `drawFitnessHeatmap`) and reuses colour ramps such as `densityToRgba`. Each helper
+  `drawEnergyHeatmap`, `drawDensityHeatmap`, `drawFitnessHeatmap`) and reuses color ramps such as `densityToRgba`. Each helper
   exposes legends or palette selection so UI extensions can stay consistent without reimplementing scaling logic.
 - `drawSelectionZones` renders active reproduction zones using cached geometry from the selection manager, ensuring the mating UI
   and reproduction policy share exactly the same coordinates.

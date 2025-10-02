@@ -37,7 +37,7 @@ function createMockContext() {
   };
 }
 
-test("drawEventOverlays renders active rectangles using event colours", () => {
+test("drawEventOverlays renders active rectangles using event colors", () => {
   const ctx = createMockContext();
   const events = [
     {
