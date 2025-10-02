@@ -253,6 +253,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
   const expectedState = {
     paused: Boolean(defaults.paused),
     updatesPerSecond: Math.max(1, Math.round(defaults.updatesPerSecond)),
+    speedMultiplier: defaults.speedMultiplier,
     eventFrequencyMultiplier: defaults.eventFrequencyMultiplier,
     mutationMultiplier: defaults.mutationMultiplier,
     densityEffectMultiplier: defaults.densityEffectMultiplier,
