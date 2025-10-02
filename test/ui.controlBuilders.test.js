@@ -8,58 +8,16 @@ import {
   createSelectRow,
   createSliderRow,
 } from "../src/ui/controlBuilders.js";
-
-class MockElement {
-  constructor(tagName) {
-    this.tagName = tagName.toUpperCase();
-    this.children = [];
-    this.parentNode = null;
-    this.className = "";
-    this.textContent = "";
-    this.title = "";
-    this.value = "";
-    this.type = "";
-    this.eventListeners = Object.create(null);
-  }
-
-  appendChild(child) {
-    this.children.push(child);
-    child.parentNode = this;
-
-    return child;
-  }
-
-  addEventListener(event, handler) {
-    if (!this.eventListeners[event]) {
-      this.eventListeners[event] = [];
-    }
-    this.eventListeners[event].push(handler);
-  }
-
-  trigger(event) {
-    (this.eventListeners[event] || []).forEach((handler) => handler({ target: this }));
-  }
-}
-
-class MockDocument {
-  createElement(tagName) {
-    return new MockElement(tagName);
-  }
-}
+import { setupDom } from "./helpers/mockDom.js";
 
 function withMockDocument(run) {
-  const previousDocument = globalThis.document;
-  const mockDocument = new MockDocument();
+  const restore = setupDom();
+  const mockDocument = globalThis.document;
 
-  globalThis.document = mockDocument;
   try {
     return run(mockDocument);
   } finally {
-    if (previousDocument === undefined) {
-      delete globalThis.document;
-    } else {
-      globalThis.document = previousDocument;
-    }
+    restore();
   }
 }
 
