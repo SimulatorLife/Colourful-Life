@@ -8,6 +8,12 @@
   --color-text-subtle: #aaa;
   --color-accent: #2b2b2b;
   --color-accent-hover: #333;
+  --color-life-birth: #4caf50;
+  --color-life-death: #e74c3c;
+  --color-life-birth-soft: rgba(76, 175, 80, 0.25);
+  --color-life-death-soft: rgba(231, 76, 60, 0.25);
+  --color-life-birth-strong: rgba(76, 175, 80, 0.35);
+  --color-life-death-strong: rgba(231, 76, 60, 0.35);
 
   /* Radius */
   --radius-sm: 4px;
@@ -576,6 +582,74 @@ canvas {
   gap: var(--space-sm);
 }
 
+.life-events-summary {
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.life-events-summary__item {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 10px 12px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  min-height: 0;
+}
+
+.life-events-summary__item::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 3px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent;
+}
+
+.life-events-summary__item--birth::before {
+  background: var(--color-life-birth);
+}
+
+.life-events-summary__item--death::before {
+  background: var(--color-life-death);
+}
+
+.life-events-summary__item--muted {
+  opacity: 0.8;
+}
+
+.life-events-summary__item--muted::before {
+  background: var(--color-border);
+}
+
+.life-events-summary__item--muted .life-events-summary__count {
+  color: var(--color-text-subtle);
+}
+
+.life-events-summary__item--muted .life-events-summary__label {
+  color: var(--color-text-subtle);
+}
+
+.life-events-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.life-events-summary__count {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
 .life-event-empty {
   padding: var(--space-sm);
   border: 1px dashed var(--color-border);
@@ -616,11 +690,11 @@ canvas {
 }
 
 .life-event--birth {
-  border-color: rgba(76, 175, 80, 0.35);
+  border-color: var(--color-life-birth-strong);
 }
 
 .life-event--death {
-  border-color: rgba(231, 76, 60, 0.35);
+  border-color: var(--color-life-death-strong);
 }
 
 .life-event-header {
@@ -650,11 +724,11 @@ canvas {
 }
 
 .life-event-type--birth {
-  background: rgba(76, 175, 80, 0.25);
+  background: var(--color-life-birth-soft);
 }
 
 .life-event-type--death {
-  background: rgba(231, 76, 60, 0.25);
+  background: var(--color-life-death-soft);
 }
 
 .life-event-type--unknown {
