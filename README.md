@@ -19,7 +19,7 @@ npm run start    # Parcel dev server with hot reloading
 
 # Optional helpers
 npm run build    # Production bundle written to dist/
-npm run clean:parcel  # Remove dist/ and the Parcel cache when builds misbehave
+npm run clean    # Remove dist/ and the Parcel cache when builds misbehave
 npm run format   # Format code with Prettier
 npm run format:check  # Validate formatting without writing
 npm run test     # Node.js test suites
@@ -91,7 +91,6 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
   - `src/grid/` — Adaptors for interacting with the grid from other systems.
   - `src/ui/` — UI manager, control builders, overlays, and debugging helpers.
 - `scripts/` — Node scripts (e.g., performance profiling) that exercise the engine headlessly.
-- `scripts/clean-parcel.js` — Utility invoked by `npm run clean:parcel` to wipe the Parcel cache (`.parcel-cache/`) and `dist/` outputs when builds or hot reloads drift out of sync.
 - `test/` — Node.js test suites executed via `npm test`.
 - `docs/` — Architecture notes, developer guides, and background reading.
 - `index.html`, `styles.css` — Browser entry point and shared styles.
@@ -104,7 +103,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `npm run start`                           | Launches the Parcel development server with hot module replacement at `http://localhost:1234`. |
 | `npm run build`                           | Produces an optimized production bundle in `dist/`.                                            |
-| `npm run clean:parcel`                    | Removes `dist/` and `.parcel-cache/` to recover from stubborn Parcel caches.                   |
+| `npm run clean`                           | Removes `dist/` and `.parcel-cache/` to recover from stubborn Parcel caches.                   |
 | `npm run lint` / `npm run lint:fix`       | Runs ESLint across the codebase, optionally applying autofixes.                                |
 | `npm run format` / `npm run format:check` | Applies or verifies Prettier formatting for source, documentation, and configuration files.    |
 | `npm test`                                | Runs the Node.js test suites covering simulation and UI modules.                               |

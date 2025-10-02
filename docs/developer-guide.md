@@ -12,7 +12,7 @@ extending tests, or polishing docs.
 2. Clone the repository and install dependencies with `npm ci`.
 3. Run `npm run start` to launch the Parcel development server at
    `http://localhost:1234`.
-4. If Parcel ever becomes stuck, run `npm run clean:parcel` to remove `dist/`
+4. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/`
    and `.parcel-cache/` before restarting the dev server.
 
 > The in-app "Pause When Hidden" toggle now starts disabled so long-running
@@ -49,7 +49,7 @@ extending tests, or polishing docs.
 | Lint        | `npm run lint` / `npm run lint:fix`       | Run ESLint with the project ruleset. Use `:fix` to apply safe autofixes after addressing root issues.                                                                   |
 | Tests       | `npm test`                                | Run the Node.js test suites. Focused suites live beside their target modules in `test/`.                                                                                |
 | Profiling   | `node scripts/profile-energy.mjs`         | Benchmark the energy preparation loop. Configure dimensions with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and stub `cellSize` with `PERF_CELL_SIZE`. |
-| Cache reset | `npm run clean:parcel`                    | Delete `dist/` and `.parcel-cache/` when Parcel hot reloads or builds become inconsistent.                                                                              |
+| Cache reset | `npm run clean`                           | Delete `dist/` and `.parcel-cache/` when Parcel hot reloads or builds become inconsistent.                                                                              |
 
 Always run the formatter and linter before committing. Execute `npm test` when
 changing simulation logic, utilities, UI behaviour, or configuration that can
@@ -116,12 +116,10 @@ affect runtime outcomes.
 
 ## Helpful scripts
 
-- `npm run clean:parcel` — Clear Parcel caches when dev servers behave
+- `npm run clean` — Clear Parcel caches when dev servers behave
   strangely.
 - `node scripts/profile-energy.mjs` — Profile the energy preparation loop with
   configurable grid sizes.
-- `node scripts/clean-parcel.js` — Underpins the `clean:parcel` npm script and
-  can be run directly if you need to customise arguments in a local script.
 
 ## Support
 
