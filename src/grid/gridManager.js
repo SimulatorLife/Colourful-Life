@@ -2185,14 +2185,13 @@ export default class GridManager {
 
   spawnCell(row, col, { dna = DNA.random(), spawnEnergy, recordBirth = false } = {}) {
     if (this.isObstacle(row, col)) return null;
-    const energy = Math.min(
-      this.maxTileEnergy,
-      spawnEnergy ?? this.energyGrid[row][col],
-    );
+    const availableEnergy = Math.max(0, this.energyGrid?.[row]?.[col] ?? 0);
+    const requestedEnergy = spawnEnergy ?? availableEnergy;
+    const energy = Math.min(this.maxTileEnergy, requestedEnergy, availableEnergy);
     const cell = new Cell(row, col, dna, energy);
 
     this.setCell(row, col, cell);
-    const remainingEnergy = (this.energyGrid[row][col] ?? 0) - energy;
+    const remainingEnergy = availableEnergy - energy;
 
     this.energyGrid[row][col] = remainingEnergy > 0 ? remainingEnergy : 0;
 
