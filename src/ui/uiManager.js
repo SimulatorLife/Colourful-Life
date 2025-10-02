@@ -1372,7 +1372,25 @@ export default class UIManager {
       this.lifeEventList.appendChild(item);
     });
 
-    this.#updateLifeEventsSummary(birthCount, deathCount, events.length, trendSummary);
+    const summaryBirths =
+      Number.isFinite(trendSummary?.births) && trendSummary.births >= 0
+        ? trendSummary.births
+        : birthCount;
+    const summaryDeaths =
+      Number.isFinite(trendSummary?.deaths) && trendSummary.deaths >= 0
+        ? trendSummary.deaths
+        : deathCount;
+    const summaryTotal =
+      Number.isFinite(trendSummary?.total) && trendSummary.total >= 0
+        ? trendSummary.total
+        : events.length;
+
+    this.#updateLifeEventsSummary(
+      summaryBirths,
+      summaryDeaths,
+      summaryTotal,
+      trendSummary,
+    );
   }
 
   // Utility to create a collapsible panel with a header
