@@ -1,6 +1,6 @@
 import { clamp, createRNG, randomRange } from "./utils.js";
 import Brain, { NEURAL_GENE_BYTES } from "./brain.js";
-import { ACTIVITY_BASE_RATE } from "./config.js";
+import { ACTIVITY_BASE_RATE, MUTATION_CHANCE_BASELINE } from "./config.js";
 
 const ACTIVITY_RATE_SPAN = 0.7;
 
@@ -1784,7 +1784,12 @@ export class DNA {
     };
   }
 
-  reproduceWith(other, mutationChance = 0.15, mutationRange = 12, rngOverride) {
+  reproduceWith(
+    other,
+    mutationChance = MUTATION_CHANCE_BASELINE,
+    mutationRange = 12,
+    rngOverride,
+  ) {
     const parentSeed = (this.seed() ^ (other?.seed?.() ?? 0)) >>> 0;
     let rng = null;
 
