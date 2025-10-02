@@ -1290,7 +1290,7 @@ export default class UIManager {
 
     this.#buildOverlayToggles(body);
 
-    this.#buildObstacleControls(body, sliderContext);
+    this.#buildObstacleControls(body);
 
     this.#buildReproductiveZoneTools(body);
 
@@ -1738,7 +1738,7 @@ export default class UIManager {
     });
   }
 
-  #buildObstacleControls(body, sliderContext) {
+  #buildObstacleControls(body) {
     createSectionHeading(body, "Obstacles", { className: "overlay-header" });
 
     const obstacleGrid = createControlGrid(body, "control-grid--compact");
