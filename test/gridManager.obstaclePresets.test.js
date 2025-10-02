@@ -88,3 +88,65 @@ test("resetWorld randomize selects a non-empty obstacle preset", async () => {
     }
   }
 });
+
+test("corner islands preset preserves organisms in carved pockets", async () => {
+  const originalWindow = global.window;
+
+  if (typeof global.window === "undefined") {
+    global.window = {};
+  }
+
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  try {
+    const gm = new TestGridManager(12, 12, {
+      eventManager: { activeEvents: [] },
+      stats: {},
+      ctx: {},
+      cellSize: 1,
+    });
+
+    const survivors = [
+      { row: 3, col: 3, cell: { id: "tl" } },
+      { row: 4, col: 7, cell: { id: "tr" } },
+      { row: 7, col: 4, cell: { id: "bl" } },
+      { row: 7, col: 7, cell: { id: "br" } },
+    ];
+    const casualties = [
+      { row: 0, col: 0, cell: { id: "corner" } },
+      { row: 2, col: 2, cell: { id: "near-wall" } },
+      { row: 6, col: 9, cell: { id: "mid" } },
+      { row: 10, col: 10, cell: { id: "tail" } },
+    ];
+
+    survivors.forEach(({ row, col, cell }) => gm.placeCell(row, col, cell));
+    casualties.forEach(({ row, col, cell }) => gm.placeCell(row, col, cell));
+
+    gm.applyObstaclePreset("corner-islands", { clearExisting: true, evict: true });
+
+    survivors.forEach(({ row, col, cell }) => {
+      assert.is(gm.getCell(row, col), cell, "cells inside islands should survive");
+      assert.not.ok(gm.isObstacle(row, col), "island tiles should remain unblocked");
+      assert.is(
+        gm.energyGrid[row][col],
+        gm.maxTileEnergy / 2,
+        "carved tiles should be reset to base energy",
+      );
+    });
+
+    casualties.forEach(({ row, col }) => {
+      assert.not.ok(gm.getCell(row, col), "blocked tiles should evict existing cells");
+      assert.ok(gm.isObstacle(row, col), "non-island tiles should become obstacles");
+    });
+  } finally {
+    if (originalWindow === undefined) {
+      delete global.window;
+    } else {
+      global.window = originalWindow;
+    }
+  }
+});

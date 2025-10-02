@@ -39,6 +39,12 @@ where practical.
   stalls without materially lifting average reproduction odds, helping
   homogenised populations recover while keeping diversity pressure intact.
 
+### Fixed
+
+- Prevented the Corner Islands obstacle preset from evicting every organism by
+  recalculating the final layout before blocking tiles, preserving residents
+  inside the carved pockets while still sealing the surrounding terrain.
+
 ### Removed
 
 - Retired the "Draw Custom Zone" controls, simulation hooks, and documentation
