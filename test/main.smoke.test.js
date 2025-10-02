@@ -623,6 +623,66 @@ test("step control calls engine.step when using createSimulation", async () => {
     simulation.uiManager.stepButton.click();
 
     assert.is(stepCalls, 1, "clicking Step delegates to engine.step");
+
+    stepCalls = 0;
+
+    const keydownHandlers = mockDocument._listeners.get("keydown") || [];
+
+    assert.ok(keydownHandlers.length > 0, "UI manager registers keyboard hotkeys");
+
+    const pausedEvent = {
+      key: "s",
+      target: mockDocument.body,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      defaultPrevented: false,
+    };
+
+    keydownHandlers.forEach((handler) => handler(pausedEvent));
+
+    assert.is(
+      stepCalls,
+      1,
+      "pressing the step hotkey triggers a single step while paused",
+    );
+    assert.ok(
+      pausedEvent.defaultPrevented,
+      "hotkey prevents default behavior while paused",
+    );
+
+    stepCalls = 0;
+
+    const runningEvent = {
+      key: "s",
+      target: mockDocument.body,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      defaultPrevented: false,
+    };
+
+    simulation.engine.togglePause();
+    assert.ok(
+      !simulation.uiManager.isPaused(),
+      "simulation resumes before running hotkey test",
+    );
+
+    keydownHandlers.forEach((handler) => handler(runningEvent));
+
+    assert.is(
+      stepCalls,
+      1,
+      "pressing the step hotkey while running pauses and advances once",
+    );
+    assert.ok(
+      simulation.uiManager.isPaused(),
+      "hotkey leaves the simulation paused after stepping",
+    );
+    assert.ok(
+      runningEvent.defaultPrevented,
+      "hotkey prevents default behavior after resuming from running state",
+    );
   } finally {
     simulation?.destroy?.();
     global.window = originalWindow;

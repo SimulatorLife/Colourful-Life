@@ -81,6 +81,7 @@ export default class UIManager {
     this.pauseOverlayTitle = null;
     this.pauseOverlayHint = null;
     this.pauseOverlayAutopause = null;
+    this.stepHotkeySet = new Set();
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -130,8 +131,9 @@ export default class UIManager {
     this.#installPauseIndicator();
     this.mainRow.appendChild(this.sidebar);
 
-    // Allow callers to customize which keys toggle the pause state.
-    this.pauseHotkeySet = this.#resolveHotkeySet(layoutConfig.pauseHotkeys);
+    // Allow callers to customize which keys toggle the pause state or step once.
+    this.pauseHotkeySet = this.#resolveHotkeySet(layoutConfig.pauseHotkeys, ["p"]);
+    this.stepHotkeySet = this.#resolveHotkeySet(layoutConfig.stepHotkeys, ["s"]);
 
     const canvasEl =
       layoutConfig.canvasElement || this.#resolveNode(layoutConfig.canvasSelector);
@@ -152,31 +154,102 @@ export default class UIManager {
     this.dashboardGrid.appendChild(this.lifeEventsPanel);
 
     // Keyboard toggle
-    document.addEventListener("keydown", (e) => {
-      if (!e?.key) return;
+    document.addEventListener("keydown", (event) => {
+      if (!event?.key) return;
+      if (this.#shouldIgnoreHotkey(event)) return;
 
-      const key = e.key.toLowerCase();
+      const key = this.#normalizeHotkeyValue(event.key);
+
+      if (!key) return;
 
       if (this.pauseHotkeySet.has(key)) {
+        event.preventDefault();
         this.togglePause();
+
+        return;
+      }
+
+      if (this.stepHotkeySet.has(key)) {
+        event.preventDefault();
+
+        if (this.paused) {
+          this.#executeStep();
+        } else {
+          const nowPaused = this.togglePause();
+
+          if (nowPaused) {
+            this.#executeStep();
+          }
+        }
       }
     });
   }
 
-  #resolveHotkeySet(candidate) {
-    const fallback = ["p"];
+  #normalizeHotkeyValue(value) {
+    if (typeof value !== "string") return "";
+    if (value === " ") return " ";
+
+    const trimmed = value.trim().toLowerCase();
+
+    if (!trimmed) return "";
+
+    switch (trimmed) {
+      case "space":
+      case "spacebar":
+        return " ";
+      default:
+        break;
+    }
+
+    return trimmed.replace(/[-_\s]+/g, "");
+  }
+
+  #resolveHotkeySet(candidate, fallbackKeys = ["p"]) {
+    const fallbackList = Array.isArray(fallbackKeys)
+      ? fallbackKeys
+      : typeof fallbackKeys === "string" && fallbackKeys.length > 0
+        ? [fallbackKeys]
+        : ["p"];
+
+    const normalizedFallback = fallbackList
+      .map((value) => this.#normalizeHotkeyValue(value))
+      .filter((value) => value.length > 0);
+
+    if (normalizedFallback.length === 0) {
+      normalizedFallback.push("p");
+    }
 
     const values = Array.isArray(candidate)
       ? candidate
       : typeof candidate === "string" && candidate.length > 0
         ? [candidate]
-        : fallback;
+        : fallbackList;
 
     const normalized = values
-      .map((value) => (typeof value === "string" ? value.trim().toLowerCase() : ""))
+      .map((value) => this.#normalizeHotkeyValue(value))
       .filter((value) => value.length > 0);
 
-    return new Set(normalized.length > 0 ? normalized : fallback);
+    return new Set(normalized.length > 0 ? normalized : normalizedFallback);
+  }
+
+  #shouldIgnoreHotkey(event) {
+    if (!event || event.defaultPrevented) return true;
+    if (event.ctrlKey || event.metaKey || event.altKey) return true;
+
+    const target = event.target;
+
+    if (!target) return false;
+    if (target.isContentEditable) return true;
+
+    const tagName =
+      typeof target.tagName === "string" ? target.tagName.toLowerCase() : "";
+
+    return (
+      tagName === "input" ||
+      tagName === "textarea" ||
+      tagName === "select" ||
+      tagName === "button"
+    );
   }
 
   #resolveInitialObstaclePreset(actionFns = {}) {
@@ -276,17 +349,12 @@ export default class UIManager {
   }
 
   #formatHotkeyLabel(key) {
-    if (typeof key !== "string") return "";
+    const normalized = this.#normalizeHotkeyValue(key);
 
-    const trimmed = key.trim();
-
-    if (!trimmed) return "";
-
-    const normalized = trimmed.toLowerCase();
+    if (!normalized) return "";
 
     switch (normalized) {
       case " ":
-      case "space":
         return "Space";
       case "arrowup":
         return "Arrow Up";
@@ -302,6 +370,10 @@ export default class UIManager {
         return "Enter";
       case "return":
         return "Return";
+      case "pagedown":
+        return "Page Down";
+      case "pageup":
+        return "Page Up";
       default:
         break;
     }
@@ -310,24 +382,19 @@ export default class UIManager {
       return normalized.toUpperCase();
     }
 
-    return normalized
-      .split(/[-_\s]+/)
-      .filter(Boolean)
-      .map((segment) => segment[0].toUpperCase() + segment.slice(1))
-      .join(" ");
+    return normalized[0].toUpperCase() + normalized.slice(1);
   }
 
-  #formatPauseHotkeys() {
-    if (!this.pauseHotkeySet || this.pauseHotkeySet.size === 0) {
+  #formatHotkeyList(hotkeySet) {
+    if (!hotkeySet || hotkeySet.size === 0) {
       return "";
     }
 
-    const keys = Array.from(this.pauseHotkeySet, (key) =>
-      this.#formatHotkeyLabel(key),
-    ).filter((label) => label.length > 0);
+    const keys = Array.from(hotkeySet, (key) => this.#formatHotkeyLabel(key)).filter(
+      (label) => label.length > 0,
+    );
 
     if (keys.length === 0) return "";
-
     if (keys.length === 1) return keys[0];
     if (keys.length === 2) return `${keys[0]} or ${keys[1]}`;
 
@@ -335,6 +402,62 @@ export default class UIManager {
     const leading = keys.slice(0, -1).join(", ");
 
     return `${leading}, or ${last}`;
+  }
+
+  #formatPauseHotkeys() {
+    return this.#formatHotkeyList(this.pauseHotkeySet);
+  }
+
+  #formatStepHotkeys() {
+    return this.#formatHotkeyList(this.stepHotkeySet);
+  }
+
+  #formatAriaKeyShortcuts(hotkeySet) {
+    if (!hotkeySet || hotkeySet.size === 0) {
+      return "";
+    }
+
+    const entries = Array.from(hotkeySet, (key) => {
+      const normalized = this.#normalizeHotkeyValue(key);
+
+      if (!normalized) return "";
+
+      if (normalized === " ") return "Space";
+
+      const label = this.#formatHotkeyLabel(normalized);
+
+      return label.replace(/\s+/g, "");
+    }).filter((value) => value.length > 0);
+
+    return entries.join(" ");
+  }
+
+  #applyButtonHotkeys(button, hotkeySet) {
+    if (!button) return;
+
+    const shortcutValue = this.#formatAriaKeyShortcuts(hotkeySet);
+
+    if (shortcutValue.length > 0) {
+      button.setAttribute("aria-keyshortcuts", shortcutValue);
+    } else {
+      button.removeAttribute("aria-keyshortcuts");
+    }
+  }
+
+  #updateStepButtonState() {
+    if (!this.stepButton) return;
+
+    this.stepButton.disabled = !this.paused;
+
+    const hotkeyLabel = this.#formatStepHotkeys();
+    const hotkeySuffix = hotkeyLabel.length > 0 ? ` (shortcut: ${hotkeyLabel})` : "";
+    const pausedHint =
+      "Advance one tick while paused to inspect changes frame-by-frame";
+    const runningHint = "Pause the simulation to enable single-step playback";
+
+    this.stepButton.title = this.paused
+      ? `${pausedHint}${hotkeySuffix}.`
+      : `${runningHint}${hotkeySuffix}.`;
   }
 
   #updatePauseIndicator() {
@@ -359,8 +482,11 @@ export default class UIManager {
         ? `Press ${hotkeyText} to resume`
         : "Use the Resume button to continue";
       const buttonSuffix = hasHotkey ? " or use the Resume button." : ".";
+      const stepHotkeys = this.#formatStepHotkeys();
+      const showStepHint = this.#canStep() && stepHotkeys.length > 0;
+      const stepHint = showStepHint ? ` Press ${stepHotkeys} to step once.` : "";
 
-      this.pauseOverlayHint.textContent = `${resumeHint}${buttonSuffix}`;
+      this.pauseOverlayHint.textContent = `${resumeHint}${buttonSuffix}${stepHint}`;
     }
 
     if (this.pauseOverlayAutopause) {
@@ -418,6 +544,20 @@ export default class UIManager {
     ) {
       window.requestAnimationFrame(() => {});
     }
+  }
+
+  #canStep() {
+    return typeof this.simulationCallbacks?.step === "function";
+  }
+
+  #executeStep() {
+    if (!this.paused) return false;
+    if (!this.#canStep()) return false;
+
+    this.simulationCallbacks.step();
+    this.#scheduleUpdate();
+
+    return true;
   }
 
   #notifySettingChange(key, value) {
@@ -1160,23 +1300,30 @@ export default class UIManager {
       return button;
     };
 
+    const pauseHotkeys = this.#formatPauseHotkeys();
+    const pauseTitle =
+      pauseHotkeys.length > 0
+        ? `Pause/resume the simulation (shortcut: ${pauseHotkeys})`
+        : "Pause/resume the simulation.";
+
     this.pauseButton = addControlButton({
       id: "pauseButton",
       label: "Pause",
-      title: "Pause/resume the simulation (shortcut: P)",
+      title: pauseTitle,
       onClick: () => this.togglePause(),
     });
+    this.#applyButtonHotkeys(this.pauseButton, this.pauseHotkeySet);
 
     this.stepButton = addControlButton({
       id: "stepButton",
       label: "Step",
       title: "Advance one tick while paused to inspect changes frame-by-frame.",
       onClick: () => {
-        if (typeof this.simulationCallbacks?.step === "function") {
-          this.simulationCallbacks.step();
-        }
+        this.#executeStep();
       },
     });
+    this.#applyButtonHotkeys(this.stepButton, this.stepHotkeySet);
+    this.#updateStepButtonState();
 
     addControlButton({
       id: "burstButton",
@@ -1874,6 +2021,8 @@ export default class UIManager {
 
     this.setPauseState(nextPaused);
     if (!nextPaused) this.#scheduleUpdate();
+
+    return this.paused;
   }
 
   isPaused() {
@@ -1885,12 +2034,7 @@ export default class UIManager {
     if (this.pauseButton) {
       this.pauseButton.textContent = this.paused ? "Resume" : "Pause";
     }
-    if (this.stepButton) {
-      this.stepButton.disabled = !this.paused;
-      this.stepButton.title = this.paused
-        ? "Advance one tick while paused to inspect changes frame-by-frame."
-        : "Pause the simulation to enable single-step playback.";
-    }
+    this.#updateStepButtonState();
     this.#updatePauseIndicator();
   }
 
