@@ -1,3 +1,5 @@
+import { warnOnce } from "../utils.js";
+
 const DEFAULT_COLORS = [
   "rgba(80, 160, 255, 0.22)",
   "rgba(120, 220, 120, 0.22)",
@@ -9,6 +11,9 @@ const EMPTY_GEOMETRY = Object.freeze({
   rects: Object.freeze([]),
   bounds: null,
 });
+
+const ZONE_PREDICATE_WARNING =
+  "Selection zone predicate threw while checking tile membership; treating tile as outside.";
 
 /**
  * Tracks reproductive zone definitions. SelectionManager provides built-in
@@ -121,7 +126,9 @@ export default class SelectionManager {
   isInActiveZone(row, col) {
     const zones = this.getActiveZones();
 
-    return zones.length === 0 || zones.some((zone) => zone.contains(row, col));
+    return (
+      zones.length === 0 || zones.some((zone) => this.#safeZoneContains(zone, row, col))
+    );
   }
 
   validateReproductionArea({ parentA, parentB, spawn } = {}) {
@@ -151,7 +158,7 @@ export default class SelectionManager {
 
       const { row, col, role } = point;
 
-      if (!zones.some((zone) => zone.contains(row, col))) {
+      if (!zones.some((zone) => this.#safeZoneContains(zone, row, col))) {
         return {
           allowed: false,
           role,
@@ -248,6 +255,33 @@ export default class SelectionManager {
     return this.#computeGeometryFromContains(zone);
   }
 
+  #resolveZoneWarning(zone) {
+    if (!zone) return ZONE_PREDICATE_WARNING;
+
+    const label =
+      (typeof zone.name === "string" && zone.name.trim()) ||
+      (typeof zone.id === "string" && zone.id.trim()) ||
+      "";
+
+    return label
+      ? `Selection zone "${label}" predicate threw while checking tile membership; treating tile as outside.`
+      : ZONE_PREDICATE_WARNING;
+  }
+
+  #safeZoneContains(zone, row, col) {
+    if (!zone || typeof zone.contains !== "function") {
+      return false;
+    }
+
+    try {
+      return Boolean(zone.contains(row, col));
+    } catch (error) {
+      warnOnce(this.#resolveZoneWarning(zone), error);
+
+      return false;
+    }
+  }
+
   #computeGeometryFromContains(zone) {
     if (typeof zone.contains !== "function") {
       return EMPTY_GEOMETRY;
@@ -263,7 +297,7 @@ export default class SelectionManager {
       let startCol = null;
 
       for (let col = 0; col < this.cols; col++) {
-        const inside = zone.contains(row, col);
+        const inside = this.#safeZoneContains(zone, row, col);
 
         if (inside && startCol === null) {
           startCol = col;

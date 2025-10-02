@@ -199,3 +199,61 @@ test("geometry cache invalidates on toggles and dimension changes", () => {
     endCol: 9,
   });
 });
+
+test("zone contains predicates throwing are handled gracefully", () => {
+  const manager = createManager(3, 3);
+  const originalWarn = console.warn;
+  const warnings = [];
+
+  console.warn = (...args) => {
+    warnings.push(args);
+  };
+
+  manager.patterns.set("custom", {
+    id: "custom",
+    name: "Custom Zone",
+    color: "rgba(255,255,255,0.1)",
+    contains(row, col) {
+      if (row === 1 && col === 1) {
+        throw new Error("boom");
+      }
+
+      return row === col;
+    },
+    active: false,
+  });
+
+  try {
+    assert.is(manager.togglePattern("custom", true), true);
+
+    assert.is(
+      manager.isInActiveZone(1, 1),
+      false,
+      "thrown predicate results in tile treated as outside",
+    );
+
+    const renderData = manager.getActiveZoneRenderData();
+
+    assert.is(renderData.length, 1, "custom zone contributes render data");
+
+    const { geometry } = renderData[0];
+
+    assert.equal(
+      geometry.rects,
+      [
+        { row: 0, col: 0, rowSpan: 1, colSpan: 1 },
+        { row: 2, col: 2, rowSpan: 1, colSpan: 1 },
+      ],
+      "tiles throwing during evaluation are skipped",
+    );
+
+    assert.ok(warnings.length >= 1, "warnings emitted when predicate throws");
+    assert.match(
+      warnings[0][0],
+      /Selection zone "Custom Zone" predicate threw/,
+      "warning identifies the zone",
+    );
+  } finally {
+    console.warn = originalWarn;
+  }
+});
