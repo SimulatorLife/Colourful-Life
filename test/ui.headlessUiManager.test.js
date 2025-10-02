@@ -1,6 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import { createHeadlessUiManager } from "../src/ui/headlessUiManager.js";
 
 test("createHeadlessUiManager notifies observers only for sanitized updates", () => {
@@ -58,5 +56,3 @@ test("createHeadlessUiManager shouldRenderSlowUi enforces the cadence window", (
   assert.is(manager.shouldRenderSlowUi(400), false);
   assert.is(manager.shouldRenderSlowUi(501), true);
 });
-
-test.run();

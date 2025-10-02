@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 test("captureFromEntries falls back to cell neuron count when brain reports zero", async () => {
   const { default: BrainDebugger } = await import("../src/ui/brainDebugger.js");
@@ -147,5 +146,3 @@ test("captureFromEntries defaults decision telemetry to empty array when getter 
 
   BrainDebugger.update([]);
 });
-
-test.run();

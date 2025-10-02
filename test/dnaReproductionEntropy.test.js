@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 test("reproduceWith uses runtime entropy for crossover RNG", async () => {
   const { default: DNA } = await import("../src/genome.js");
@@ -31,5 +30,3 @@ test("reproduceWith uses runtime entropy for crossover RNG", async () => {
     Math.random = originalRandom;
   }
 });
-
-test.run();

@@ -1,6 +1,4 @@
-import { suite } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, suite } from "#tests/harness";
 import { drawCelebrationAuras, drawOverlays } from "../src/ui/overlays.js";
 
 const test = suite("ui overlays: celebration auras");
@@ -104,7 +102,3 @@ test("drawOverlays integrates celebration auras toggle", () => {
 
   assert.ok(ctx.gradients.length === 1, "overlay draws celebration aura when enabled");
 });
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  test.run();
-}

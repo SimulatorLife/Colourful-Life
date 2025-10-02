@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { MockCanvas } from "./helpers/simulationEngine.js";
 
 const configModulePromise = import("../src/config.js");
@@ -315,5 +314,3 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.ok(!ui.shouldRenderSlowUi(defaults.leaderboardIntervalMs - 1));
   assert.ok(ui.shouldRenderSlowUi(defaults.leaderboardIntervalMs));
 });
-
-test.run();

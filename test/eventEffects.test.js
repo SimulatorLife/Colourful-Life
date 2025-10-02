@@ -1,6 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import {
   EVENT_EFFECTS,
   EVENT_TYPES,
@@ -61,5 +59,3 @@ test("getEventEffect returns descriptors or null for unknown events", () => {
   assert.is(getEventEffect("solar-flare"), null);
   assert.is(getEventEffect(undefined), null);
 });
-
-test.run();

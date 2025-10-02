@@ -4,11 +4,15 @@
   "description": "",
   "private": true,
   "type": "module",
+  "imports": {
+    "#tests/harness": "./test/testHarness.js",
+    "#tests/assertions": "./test/helpers/assertions.js"
+  },
   "scripts": {
     "start": "parcel ./index.html",
     "clean": "node ./scripts/clean-parcel.js",
     "build": "parcel build ./index.html",
-    "test": "uvu ./test",
+    "test": "node --test test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "format:workflows": "prettier --ignore-path .gitignore --write \".github/workflows/**/*.yml\"",
@@ -51,7 +55,6 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.2.3",
     "parcel": "^2.16.0",
-    "prettier": "^3.6.2",
-    "uvu": "^0.5.6"
+    "prettier": "^3.6.2"
   }
 }

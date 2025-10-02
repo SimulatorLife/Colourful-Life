@@ -1,6 +1,4 @@
-import { suite } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, suite } from "#tests/harness";
 import { drawEventOverlays } from "../src/ui/overlays.js";
 
 const test = suite("ui overlays: event overlays");
@@ -154,7 +152,3 @@ test("drawEventOverlays skips rendering when no context or events are provided",
 
   assert.equal(ctx.calls, []);
 });
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  test.run();
-}

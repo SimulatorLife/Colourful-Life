@@ -1,6 +1,4 @@
-import { suite } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, suite } from "#tests/harness";
 import {
   createControlButtonRow,
   createControlGrid,

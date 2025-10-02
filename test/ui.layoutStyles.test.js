@@ -1,5 +1,4 @@
-import { suite } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, suite } from "#tests/harness";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -32,5 +31,3 @@ test("canvas container stays anchored to the top when sidebar grows", () => {
     "canvas container should opt out of sidebar stretching to avoid jumping",
   );
 });
-
-test.run();

@@ -1,5 +1,4 @@
-import { suite } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, suite } from "#tests/harness";
 import { MockCanvas, setupDom } from "./helpers/mockDom.js";
 
 const test = suite("ui obstacle controls");
@@ -111,5 +110,3 @@ test("layout preset control reflects current obstacle preset", async () => {
     restore();
   }
 });
-
-test.run();

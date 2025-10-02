@@ -1,6 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import { computeLeaderboard } from "../src/leaderboard.js";
 
 test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots", () => {
@@ -114,5 +112,3 @@ test("computeLeaderboard returns empty arrays when topN is zero or invalid snaps
   assert.equal(computeLeaderboard({}, 0), []);
   assert.equal(computeLeaderboard({ entries: [] }, -2), []);
 });
-
-test.run();

@@ -1,6 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
-
+import { assert, test } from "#tests/harness";
 import {
   MockCanvas,
   loadSimulationModules,
@@ -369,5 +367,3 @@ test("autoPauseOnBlur setter keeps engine state aligned", async () => {
     restore();
   }
 });
-
-test.run();

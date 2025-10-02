@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
 const computeFitnessModulePromise = import("../src/fitness.mjs");
@@ -105,5 +104,3 @@ test("computeFitness rewards diverse mating and penalizes similarity pressure", 
 
   approxEqual(result, expected, 1e-9);
 });
-
-test.run();

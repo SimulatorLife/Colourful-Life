@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
 const statsModulePromise = import("../src/stats.js");
@@ -540,5 +539,3 @@ test("setters sanitize non-finite mutation and diversity threshold inputs", asyn
   stats.setMutationMultiplier(Infinity);
   assert.is(stats.mutationMultiplier, 1);
 });
-
-test.run();

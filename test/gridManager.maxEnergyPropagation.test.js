@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 const baseOptions = {
   eventManager: { activeEvents: [] },
@@ -406,5 +405,3 @@ test("handleReproduction threads custom max tile energy through cell decisions",
     Math.random = originalRandom;
   }
 });
-
-test.run();

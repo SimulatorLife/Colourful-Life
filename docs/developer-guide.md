@@ -47,7 +47,7 @@ extending tests, or polishing docs.
 | ----------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Format      | `npm run format` / `npm run format:check` | Apply or verify Prettier formatting across source, documentation, and configuration files.                                                                              |
 | Lint        | `npm run lint` / `npm run lint:fix`       | Run ESLint with the project ruleset. Use `:fix` to apply safe autofixes after addressing root issues.                                                                   |
-| Tests       | `npm test`                                | Execute UVU suites under an esbuild loader. Focused suites live beside their target modules in `test/`.                                                                 |
+| Tests       | `npm test`                                | Run the Node.js test suites. Focused suites live beside their target modules in `test/`.                                                                                |
 | Profiling   | `node scripts/profile-energy.mjs`         | Benchmark the energy preparation loop. Configure dimensions with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and stub `cellSize` with `PERF_CELL_SIZE`. |
 | Cache reset | `npm run clean:parcel`                    | Delete `dist/` and `.parcel-cache/` when Parcel hot reloads or builds become inconsistent.                                                                              |
 
@@ -100,9 +100,9 @@ affect runtime outcomes.
 
 ## Testing expectations
 
-- Unit tests live under `test/` and use [UVU](https://github.com/lukeed/uvu).
-  Create new suites when broad systems are introduced and extend existing ones
-  for regressions.
+- Unit tests live under `test/` and run with the built-in
+  [Node.js test runner](https://nodejs.org/api/test.html). Create new suites
+  when broad systems are introduced and extend existing ones for regressions.
 - Simulation changes should document the manual and automated checks performed.
   Include a summary in the PR body and ensure the final commit message captures
   the intent.

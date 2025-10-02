@@ -1,5 +1,4 @@
-import { test } from "uvu";
-import * as assert from "uvu/assert";
+import { assert, test } from "#tests/harness";
 
 function snapshotObstacles(grid) {
   return grid.obstacles.map((row) => row.slice());
@@ -41,5 +40,3 @@ test("applyObstaclePreset ignores unknown ids without clearing existing obstacle
     }
   }
 });
-
-test.run();
