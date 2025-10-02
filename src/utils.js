@@ -50,6 +50,53 @@ export function clamp01(value) {
 }
 
 /**
+ * Normalizes arbitrary input into a finite number, optionally constraining the
+ * result to a range and applying rounding. Non-finite inputs (including
+ * `NaN`, `Infinity`, empty strings, etc.) return the provided fallback.
+ *
+ * @param {any} value - Candidate value supplied by callers.
+ * @param {Object} [options]
+ * @param {number} [options.fallback=Number.NaN] - Value returned when the
+ *   candidate fails the finite check.
+ * @param {number} [options.min=Number.NEGATIVE_INFINITY] - Lower bound applied
+ *   to the sanitized result when finite.
+ * @param {number} [options.max=Number.POSITIVE_INFINITY] - Upper bound applied
+ *   to the sanitized result when finite.
+ * @param {boolean|((value:number)=>number)} [options.round=false] - Either a
+ *   boolean that enables `Math.round` or a custom rounding function applied
+ *   before range constraints.
+ * @returns {number} Finite, sanitized number or the fallback when invalid.
+ */
+export function sanitizeNumber(
+  value,
+  {
+    fallback = Number.NaN,
+    min = Number.NEGATIVE_INFINITY,
+    max = Number.POSITIVE_INFINITY,
+    round = false,
+  } = {},
+) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) return fallback;
+
+  let sanitized = numeric;
+
+  if (round === true) {
+    sanitized = Math.round(sanitized);
+  } else if (typeof round === "function") {
+    sanitized = round(sanitized);
+  }
+
+  if (!Number.isFinite(sanitized)) return fallback;
+
+  if (Number.isFinite(min)) sanitized = Math.max(min, sanitized);
+  if (Number.isFinite(max)) sanitized = Math.min(max, sanitized);
+
+  return Number.isFinite(sanitized) ? sanitized : fallback;
+}
+
+/**
  * Normalizes an arbitrary candidate to a plain object. Non-object values are
  * coerced to an empty object so callers can safely destructure nested options
  * without additional guards.
