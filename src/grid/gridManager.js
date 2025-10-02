@@ -3300,36 +3300,72 @@ export default class GridManager {
       (a, b) => (b?.fitness ?? -Infinity) - (a?.fitness ?? -Infinity),
     );
 
-    for (let row = 0; row < this.rows; row++) {
-      for (let col = 0; col < this.cols; col++) {
-        const cell = this.grid[row][col];
+    const entries = snapshot.entries;
+    const activeCells = this.activeCells;
 
+    if (activeCells && activeCells.size > 0) {
+      for (const cell of activeCells) {
         if (!cell) continue;
 
-        const fitness = computeFitness(cell, cap);
+        let row = Number.isInteger(cell.row) ? cell.row : null;
+        let col = Number.isInteger(cell.col) ? cell.col : null;
 
-        snapshot.population++;
-        snapshot.totalEnergy += cell.energy;
-        snapshot.totalAge += cell.age;
-        snapshot.cells.push(cell);
+        if (
+          row == null ||
+          col == null ||
+          row < 0 ||
+          row >= this.rows ||
+          col < 0 ||
+          col >= this.cols ||
+          this.grid[row]?.[col] !== cell
+        ) {
+          let found = false;
+
+          for (let r = 0; r < this.rows && !found; r++) {
+            const gridRow = this.grid[r];
+
+            for (let c = 0; c < this.cols; c++) {
+              if (gridRow[c] === cell) {
+                row = r;
+                col = c;
+                found = true;
+                break;
+              }
+            }
+          }
+
+          if (!found) continue;
+        }
+
+        const energy = Number.isFinite(cell.energy) ? cell.energy : 0;
+        const age = Number.isFinite(cell.age) ? cell.age : 0;
+        const fitness = computeFitness(cell, cap);
         const entry = { row, col, cell, fitness };
 
-        snapshot.entries.push(entry);
+        snapshot.population += 1;
+        snapshot.totalEnergy += energy;
+        snapshot.totalAge += age;
+        entries.push(entry);
+
         if (Number.isFinite(entry.fitness)) {
           topBrainEntries.add(entry);
+          if (entry.fitness > snapshot.maxFitness) {
+            snapshot.maxFitness = entry.fitness;
+          }
         }
-        if (fitness > snapshot.maxFitness) snapshot.maxFitness = fitness;
       }
     }
+
+    snapshot.cells = entries.map((entry) => entry.cell);
 
     const ranked = topBrainEntries.getItems();
     const collector =
       this.brainSnapshotCollector ?? toBrainSnapshotCollector(GLOBAL.BrainDebugger);
     const collected = collector
-      ? collector(ranked, { limit: BRAIN_SNAPSHOT_LIMIT })
-      : [];
+      ? collector(ranked, { limit: BRAIN_SNAPSHOT_LIMIT, gridManager: this, snapshot })
+      : ranked;
 
-    snapshot.brainSnapshots = Array.isArray(collected) ? collected : [];
+    snapshot.brainSnapshots = Array.isArray(collected) ? collected : ranked;
 
     return snapshot;
   }
