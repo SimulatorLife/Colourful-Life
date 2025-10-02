@@ -97,3 +97,53 @@ test("GridManager respects dynamic max tile energy", async () => {
     GridManager.maxTileEnergy = originalMax;
   }
 });
+
+test("reseeding respects available tile energy reserves", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class ReseedTestGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new ReseedTestGridManager(10, 10, {
+    eventManager: { activeEvents: [] },
+    stats: { onBirth() {} },
+    ctx: {},
+    cellSize: 1,
+    rng: () => 0.5,
+  });
+
+  const baseTileReserve = gm.maxTileEnergy / 2;
+  const initialTotalTileEnergy = gm.energyGrid.reduce(
+    (sum, row) => sum + row.reduce((rowSum, value) => rowSum + value, 0),
+    0,
+  );
+
+  gm.activeCells.clear();
+  gm.seed(0, gm.minPopulation);
+
+  let tileEnergyAfter = 0;
+  let cellEnergyAfter = 0;
+
+  for (let row = 0; row < gm.rows; row++) {
+    for (let col = 0; col < gm.cols; col++) {
+      tileEnergyAfter += gm.energyGrid[row][col];
+      const cell = gm.grid[row][col];
+
+      if (cell) {
+        cellEnergyAfter += cell.energy;
+        assert.ok(
+          cell.energy <= baseTileReserve,
+          `Seeded cell energy should not exceed local tile reserves (received ${cell.energy})`,
+        );
+      }
+    }
+  }
+
+  const totalEnergyAfter = tileEnergyAfter + cellEnergyAfter;
+
+  assert.ok(
+    totalEnergyAfter <= initialTotalTileEnergy + 1e-6,
+    `Reseeding should not create energy (expected ≤ ${initialTotalTileEnergy}, received ${totalEnergyAfter})`,
+  );
+});

@@ -178,6 +178,16 @@ export default class GridManager {
     return row < 0 || row >= rows || col < 0 || col >= cols;
   }
 
+  static #computeMinPopulation(rows, cols) {
+    const area = Math.max(1, Math.floor(rows) * Math.floor(cols));
+
+    if (area < 100) return 0;
+
+    const fractionalFloor = Math.round(area * 0.025);
+
+    return Math.max(15, fractionalFloor);
+  }
+
   static #isObstacle(obstacles, row, col) {
     return Boolean(obstacles?.[row]?.[col]);
   }
@@ -904,7 +914,7 @@ export default class GridManager {
     this.matingDiversityThreshold = initialThreshold;
     // Raised alongside the config default so kin-heavy stretches still produce
     // offspring instead of stalling out when penalty math bottoms out.
-    this.lowDiversityReproMultiplier = 0.12;
+    this.lowDiversityReproMultiplier = 0.2;
     this.densityRadius = GridManager.DENSITY_RADIUS;
     this.densityCounts = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
@@ -912,6 +922,7 @@ export default class GridManager {
     this.densityGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.densityDirtyTiles = new Set();
     this.lastSnapshot = null;
+    this.minPopulation = GridManager.#computeMinPopulation(rows, cols);
     this.currentObstaclePreset = "none";
     this.tickCount = 0;
     this.rng = typeof rng === "function" ? rng : Math.random;
@@ -1552,6 +1563,7 @@ export default class GridManager {
     this.tickCount = 0;
     this.lastSnapshot = null;
     this.eventEffectCache?.clear?.();
+    this.minPopulation = GridManager.#computeMinPopulation(rowsInt, colsInt);
 
     if (this.selectionManager?.setDimensions) {
       this.selectionManager.setDimensions(rowsInt, colsInt);
@@ -1670,7 +1682,9 @@ export default class GridManager {
       const { r, c } = empty.splice(idx, 1)[0];
       const dna = DNA.random();
 
-      this.spawnCell(r, c, { dna });
+      const spawnEnergy = this.maxTileEnergy * 0.75;
+
+      this.spawnCell(r, c, { dna, spawnEnergy, recordBirth: true });
     }
   }
 
@@ -2171,14 +2185,15 @@ export default class GridManager {
 
   spawnCell(row, col, { dna = DNA.random(), spawnEnergy, recordBirth = false } = {}) {
     if (this.isObstacle(row, col)) return null;
-    const energy = Math.min(
-      this.maxTileEnergy,
-      spawnEnergy ?? this.energyGrid[row][col],
-    );
+    const availableEnergy = Math.max(0, this.energyGrid?.[row]?.[col] ?? 0);
+    const requestedEnergy = spawnEnergy ?? availableEnergy;
+    const energy = Math.min(this.maxTileEnergy, requestedEnergy, availableEnergy);
     const cell = new Cell(row, col, dna, energy);
 
     this.setCell(row, col, cell);
-    this.energyGrid[row][col] = 0;
+    const remainingEnergy = availableEnergy - energy;
+
+    this.energyGrid[row][col] = remainingEnergy > 0 ? remainingEnergy : 0;
 
     if (recordBirth) {
       this.stats?.onBirth?.(cell, {
@@ -2448,7 +2463,7 @@ export default class GridManager {
     const act =
       typeof cell.dna.activityRate === "function" ? cell.dna.activityRate() : 1;
 
-    if (this.#random() > act) {
+    if (act <= 0) {
       return;
     }
 
@@ -2466,6 +2481,10 @@ export default class GridManager {
         mutationMultiplier,
       })
     ) {
+      return;
+    }
+
+    if (this.#random() > act) {
       return;
     }
 
@@ -3276,6 +3295,14 @@ export default class GridManager {
         mutationMultiplier,
         combatEdgeSharpness: combatSharpness,
       });
+    }
+
+    if (
+      Number.isFinite(this.minPopulation) &&
+      this.minPopulation > 0 &&
+      this.activeCells.size < this.minPopulation
+    ) {
+      this.seed(this.activeCells.size, this.minPopulation);
     }
 
     this.lastSnapshot = this.buildSnapshot();

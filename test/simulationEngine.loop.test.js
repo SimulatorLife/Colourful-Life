@@ -8,6 +8,7 @@ import { approxEqual } from "./helpers/assertions.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
+  SIMULATION_DEFAULTS,
 } from "../src/config.js";
 
 test("start schedules a frame and ticking through RAF uses sanitized defaults", async () => {
@@ -59,7 +60,7 @@ test("start schedules a frame and ticking through RAF uses sanitized defaults", 
       energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
       mutationMultiplier: 1,
       matingDiversityThreshold: 0.42,
-      lowDiversityReproMultiplier: 0.12,
+      lowDiversityReproMultiplier: SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
       combatEdgeSharpness: 3.2,
     });
 
