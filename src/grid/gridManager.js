@@ -2941,6 +2941,7 @@ export default class GridManager {
       const rowsCount = this.rows;
       const colsCount = this.cols;
       const grid = this.grid;
+      const obstacles = this.obstacles; // Cache to avoid repeated property walks in the hot path.
       const addCandidate = (r, c) => {
         if (r < 0 || r >= rowsCount || c < 0 || c >= colsCount) return;
 
@@ -2949,7 +2950,12 @@ export default class GridManager {
         if (candidateSet.has(key)) return;
         candidateSet.add(key);
 
-        if (grid[r][c] || this.isObstacle(r, c)) return;
+        const rowCells = grid[r];
+        const obstacleRow = obstacles?.[r];
+
+        if (!rowCells || rowCells[c] || (obstacleRow && obstacleRow[c])) {
+          return;
+        }
 
         candidates.push({ r, c });
       };
