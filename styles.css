@@ -650,6 +650,62 @@ canvas {
   font-variant-numeric: tabular-nums;
 }
 
+.life-events-summary__trend {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.life-events-summary__trend-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.life-events-summary__trend-value {
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.life-events-summary__trend-rate {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+
+.life-events-summary__trend--positive {
+  border-style: solid;
+  border-color: var(--color-life-birth);
+  box-shadow: 0 0 0 1px var(--color-life-birth-soft);
+}
+
+.life-events-summary__trend--negative {
+  border-style: solid;
+  border-color: var(--color-life-death);
+  box-shadow: 0 0 0 1px var(--color-life-death-soft);
+}
+
+.life-events-summary__trend--neutral {
+  border-style: dashed;
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
 .life-event-empty {
   padding: var(--space-sm);
   border: 1px dashed var(--color-border);

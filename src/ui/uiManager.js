@@ -81,6 +81,9 @@ export default class UIManager {
     this.lifeEventsSummaryDeathItem = null;
     this.lifeEventsSummaryBirthCount = null;
     this.lifeEventsSummaryDeathCount = null;
+    this.lifeEventsSummaryTrend = null;
+    this.lifeEventsSummaryNet = null;
+    this.lifeEventsSummaryRate = null;
     this.playbackSpeedSlider = null;
     this.pauseOverlay = null;
     this.pauseOverlayTitle = null;
@@ -1053,7 +1056,7 @@ export default class UIManager {
     return valueEl;
   }
 
-  #updateLifeEventsSummary(birthCount = 0, deathCount = 0, totalCount) {
+  #updateLifeEventsSummary(birthCount = 0, deathCount = 0, totalCount, trend) {
     if (!this.lifeEventsSummary) return;
 
     const updateItem = (item, countEl, count) => {
@@ -1095,6 +1098,58 @@ export default class UIManager {
         : Math.max(0, (birthCount || 0) + (deathCount || 0));
 
     this.lifeEventsSummary.classList.toggle("life-events-summary--empty", total === 0);
+
+    const netSource = Number.isFinite(trend?.net)
+      ? Math.round(trend.net)
+      : Math.round((birthCount || 0) - (deathCount || 0));
+    const eventsPer100 = Number.isFinite(trend?.eventsPer100Ticks)
+      ? trend.eventsPer100Ticks
+      : 0;
+
+    if (this.lifeEventsSummaryTrend) {
+      this.lifeEventsSummaryTrend.classList.toggle(
+        "life-events-summary__trend--positive",
+        netSource > 0,
+      );
+      this.lifeEventsSummaryTrend.classList.toggle(
+        "life-events-summary__trend--negative",
+        netSource < 0,
+      );
+      this.lifeEventsSummaryTrend.classList.toggle(
+        "life-events-summary__trend--neutral",
+        netSource === 0,
+      );
+
+      const netLabel =
+        netSource > 0
+          ? `Net increase of ${netSource}`
+          : netSource < 0
+            ? `Net decrease of ${Math.abs(netSource)}`
+            : "Net change of 0";
+      const rateLabel =
+        Number.isFinite(eventsPer100) && eventsPer100 > 0
+          ? `${eventsPer100.toFixed(1)} events per 100 ticks`
+          : "No recent events per 100 ticks";
+
+      this.lifeEventsSummaryTrend.setAttribute(
+        "aria-label",
+        `${netLabel}; ${rateLabel}`,
+      );
+    }
+
+    if (this.lifeEventsSummaryNet) {
+      const formattedNet = netSource > 0 ? `+${netSource}` : String(netSource);
+
+      this.lifeEventsSummaryNet.textContent = formattedNet;
+    }
+
+    if (this.lifeEventsSummaryRate) {
+      if (Number.isFinite(eventsPer100) && eventsPer100 > 0) {
+        this.lifeEventsSummaryRate.textContent = `≈${eventsPer100.toFixed(1)} events / 100 ticks`;
+      } else {
+        this.lifeEventsSummaryRate.textContent = "No activity in window";
+      }
+    }
   }
 
   #renderLifeEvents(stats) {
@@ -1104,11 +1159,15 @@ export default class UIManager {
       typeof stats?.getRecentLifeEvents === "function"
         ? stats.getRecentLifeEvents(12)
         : [];
+    const trendSummary =
+      typeof stats?.getLifeEventRateSummary === "function"
+        ? stats.getLifeEventRateSummary()
+        : null;
 
     this.lifeEventList.innerHTML = "";
 
     if (!events || events.length === 0) {
-      this.#updateLifeEventsSummary(0, 0, 0);
+      this.#updateLifeEventsSummary(0, 0, 0, trendSummary);
       this.lifeEventList.hidden = true;
       if (this.lifeEventsEmptyState) {
         this.lifeEventsEmptyState.hidden = false;
@@ -1267,7 +1326,7 @@ export default class UIManager {
       this.lifeEventList.appendChild(item);
     });
 
-    this.#updateLifeEventsSummary(birthCount, deathCount, events.length);
+    this.#updateLifeEventsSummary(birthCount, deathCount, events.length, trendSummary);
   }
 
   // Utility to create a collapsible panel with a header
@@ -2113,6 +2172,38 @@ export default class UIManager {
 
     this.lifeEventsSummary.appendChild(birthsSummary.item);
     this.lifeEventsSummary.appendChild(deathsSummary.item);
+
+    const trendSummary = document.createElement("div");
+
+    trendSummary.className =
+      "life-events-summary__trend life-events-summary__trend--neutral";
+    trendSummary.setAttribute("role", "group");
+    trendSummary.setAttribute("aria-label", "Net population change and event cadence");
+
+    const trendLabel = document.createElement("span");
+
+    trendLabel.className = "life-events-summary__trend-label";
+    trendLabel.textContent = "Net change";
+
+    const trendValue = document.createElement("span");
+
+    trendValue.className = "life-events-summary__trend-value";
+    trendValue.textContent = "0";
+
+    const trendRate = document.createElement("span");
+
+    trendRate.className = "life-events-summary__trend-rate";
+    trendRate.textContent = "0 events / 100 ticks";
+
+    trendSummary.appendChild(trendLabel);
+    trendSummary.appendChild(trendValue);
+    trendSummary.appendChild(trendRate);
+
+    this.lifeEventsSummaryTrend = trendSummary;
+    this.lifeEventsSummaryNet = trendValue;
+    this.lifeEventsSummaryRate = trendRate;
+
+    this.lifeEventsSummary.appendChild(trendSummary);
     lifeBody.appendChild(this.lifeEventsSummary);
 
     this.lifeEventsEmptyState = document.createElement("div");
@@ -2132,7 +2223,7 @@ export default class UIManager {
     lifeEventsSection.appendChild(lifeBody);
     body.appendChild(lifeEventsSection);
 
-    this.#updateLifeEventsSummary(0, 0, 0);
+    this.#updateLifeEventsSummary(0, 0, 0, null);
 
     return panel;
   }
