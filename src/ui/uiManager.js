@@ -1,4 +1,4 @@
-import { resolveSimulationDefaults } from "../config.js";
+import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
 import { UI_SLIDER_CONFIG } from "./sliderConfig.js";
 import {
   createControlButtonRow,
@@ -95,6 +95,20 @@ export default class UIManager {
     this.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
     this.maxConcurrentEvents = defaults.maxConcurrentEvents;
     this.speedMultiplier = defaults.speedMultiplier;
+    const baseUpdatesCandidate =
+      Number.isFinite(this.speedMultiplier) && this.speedMultiplier > 0
+        ? defaults.updatesPerSecond / this.speedMultiplier
+        : defaults.updatesPerSecond;
+    const fallbackBase =
+      Number.isFinite(defaults.updatesPerSecond) && defaults.updatesPerSecond > 0
+        ? defaults.updatesPerSecond
+        : SIMULATION_DEFAULTS.updatesPerSecond;
+    const resolvedBase =
+      Number.isFinite(baseUpdatesCandidate) && baseUpdatesCandidate > 0
+        ? baseUpdatesCandidate
+        : fallbackBase;
+
+    this.baseUpdatesPerSecond = resolvedBase;
     this.densityEffectMultiplier = defaults.densityEffectMultiplier;
     this.mutationMultiplier = defaults.mutationMultiplier;
     this.combatEdgeSharpness = defaults.combatEdgeSharpness;
@@ -2165,9 +2179,14 @@ export default class UIManager {
   getEventStrengthMultiplier() {
     return this.eventStrengthMultiplier;
   }
-  // Returns effective updates/sec derived from 60 * speedMultiplier
+  // Returns effective updates/sec derived from the configured base cadence
   getUpdatesPerSecond() {
-    return Math.max(1, Math.round(60 * this.speedMultiplier));
+    const base =
+      Number.isFinite(this.baseUpdatesPerSecond) && this.baseUpdatesPerSecond > 0
+        ? this.baseUpdatesPerSecond
+        : SIMULATION_DEFAULTS.updatesPerSecond;
+
+    return Math.max(1, Math.round(base * this.speedMultiplier));
   }
   getDensityEffectMultiplier() {
     return this.densityEffectMultiplier;

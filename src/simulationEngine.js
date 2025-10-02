@@ -1309,9 +1309,16 @@ export default class SimulationEngine {
         break;
       case "speedMultiplier": {
         const numeric = Number(value);
-        const sanitized = Number.isFinite(numeric) ? Math.max(0.5, numeric) : 1;
 
-        this.setUpdatesPerSecond(60 * sanitized);
+        if (!Number.isFinite(numeric)) break;
+
+        const sanitized = Math.max(0.5, numeric);
+        const baseUpdates =
+          this.baseUpdatesPerSecond > 0
+            ? this.baseUpdatesPerSecond
+            : (SIMULATION_DEFAULTS.updatesPerSecond ?? 60);
+
+        this.setUpdatesPerSecond(baseUpdates * sanitized);
         break;
       }
       case "leaderboardIntervalMs":
