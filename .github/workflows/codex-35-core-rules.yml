@@ -18,8 +18,7 @@ jobs:
       pr_title: "Codex: Core Rule Validation"
       pr_body: "Seed PR for Codex to audit core simulation rules and land one targeted improvement."
       prompt: >
-        Review the Colourful Life codebase with the explicit goal of validating and reinforcing the core
-        simulation rules:
+        Review the Colourful Life codebase with the explicit goal of validating and reinforcing the "5 Simulation Laws":
           1) Only one organism may occupy a grid cell at any time; movement and spawning routines must
              prevent conflicts.
           2) Organisms may never teleport or be relocated discontinuously; any change in position must be
@@ -34,7 +33,8 @@ jobs:
              normal simulation dynamics.
         Audit current implementations, documentation, and tests against these rules. Identify the highest
         leverage gap—missing or outdated docs, drift in behaviour, inadequate safeguards, or missing
-        regression coverage—and deliver one focused fix. Acceptable scopes include tightening logic,
+        regression coverage—and deliver one focused fix–you will always be able to find SOMETHING to improve
+        with regards to the "5 Simulation Laws". Acceptable scopes include tightening logic,
         clarifying or expanding documentation, or adding/adjusting tests. Avoid broad project-wide 
         refactors; ensure changes are targeted and justified. Clearly record investigated evidence in 
         the commit message, reference the rule(s) touched, and ensure the change keeps the project's

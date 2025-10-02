@@ -65,7 +65,7 @@ The simulation runs on cooperating modules housed in `src/`:
 
 For an architectural deep dive—including subsystem hand-offs, data flow, and extension tips—see [`docs/architecture-overview.md`](docs/architecture-overview.md).
 
-## The 5 Simulation Core Laws
+## The 5 Simulation Laws
 
 1. Only one organism may occupy a grid cell at any time; movement and spawning routines must prevent conflicts.
 2. Organisms may never teleport or be relocated discontinuously; any change in position must be achieved through valid movement across adjacent cells.
