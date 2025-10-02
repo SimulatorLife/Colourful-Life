@@ -50,6 +50,50 @@ export class MockElement {
     this.id = "";
   }
 
+  #matchesSelector(selector) {
+    if (!selector) return false;
+
+    const selectors = selector
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    return selectors.some((candidate) => {
+      if (!candidate) return false;
+
+      if (candidate.startsWith(".")) {
+        const classTokens = candidate.slice(1).split(".").filter(Boolean);
+
+        if (classTokens.length === 0) return false;
+
+        return classTokens.every((token) => this.classList.contains(token));
+      }
+
+      if (candidate.startsWith("#")) {
+        return this.id === candidate.slice(1);
+      }
+
+      return this.tagName === candidate.toUpperCase();
+    });
+  }
+
+  matches(selector) {
+    return this.#matchesSelector(selector);
+  }
+
+  closest(selector) {
+    if (!selector) return null;
+
+    let current = this;
+
+    while (current) {
+      if (current.#matchesSelector(selector)) return current;
+      current = current.parentElement;
+    }
+
+    return null;
+  }
+
   get textContent() {
     if (!Array.isArray(this.children) || this.children.length === 0) {
       return this._textContent;
@@ -71,21 +115,7 @@ export class MockElement {
   querySelector(selector) {
     if (!selector) return null;
 
-    const matchesSelf = () => {
-      if (selector.startsWith(".")) {
-        const name = selector.slice(1);
-
-        return this.classList.contains(name);
-      }
-
-      if (selector.startsWith("#")) {
-        return this.id === selector.slice(1);
-      }
-
-      return false;
-    };
-
-    if (matchesSelf()) return this;
+    if (this.#matchesSelector(selector)) return this;
 
     for (const child of this.children) {
       if (typeof child.querySelector === "function") {
