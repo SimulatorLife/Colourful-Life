@@ -18,6 +18,7 @@ where practical.
 - Developer guide call-out pointing contributors to the overlay JSDoc style so future canvas helpers stay self-documenting.
 - Changelog tracking ongoing project evolution.
 - Life event dashboard summary combining births, deaths, and net population cadence derived from a new stats helper so observers can spot surges or collapses without scanning individual log entries.
+- Simulation law formalising energy exclusivity along with code and tests that ensure tiles occupied by organisms never report stored energy.
 - README guidance for embedding and headless automation, plus repository layout notes covering the engine environment adapters and shared utilities.
 - Architecture overview coverage for the environment adapters and life event summaries to keep subsystem documentation aligned with the current UI.
 - JSDoc coverage for the canvas/timing environment helpers so every exported function documents its contract for browser and headless consumers.

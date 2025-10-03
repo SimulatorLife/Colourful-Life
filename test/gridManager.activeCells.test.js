@@ -81,8 +81,13 @@ test("GridManager.resize preserves existing cells when reseed is false", async (
   assert.is(survivor.col, 1, "cell column coordinate should be preserved");
   assert.is(
     gm.energyGrid[1][1],
-    1.75,
-    "tile energy should carry over for preserved cells",
+    0,
+    "occupied tiles should not retain stored energy after resize",
+  );
+  assert.is(
+    survivor.energy,
+    4.25,
+    "preserved cells should absorb their former tile reserves",
   );
 
   const edgeCell = gm.spawnCell(4, 4);
