@@ -844,4 +844,98 @@ export function drawFitnessHeatmap(snapshot, ctx, cellSize, options = {}) {
     ctx.fillStyle = palette[paletteIndex];
     ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
   });
+
+  drawFitnessLegend(ctx, cellSize, cols, rows, palette, {
+    highlighted: topEntries.length,
+    total: sortedEntries.length,
+    requestedPercent: topPercentCandidate,
+    maxFitness: snapshot.maxFitness,
+  });
+}
+
+function drawFitnessLegend(
+  ctx,
+  cellSize,
+  cols,
+  rows,
+  palette,
+  {
+    highlighted = 0,
+    total = 0,
+    requestedPercent = DEFAULT_FITNESS_TOP_PERCENT,
+    maxFitness,
+  },
+) {
+  const safePalette = Array.isArray(palette) ? palette.filter(Boolean) : [];
+
+  if (!ctx || safePalette.length === 0) return;
+  if (!Number.isFinite(cols) || !Number.isFinite(rows) || !(cellSize > 0)) return;
+
+  const padding = 10;
+  const gradientHeight = 12;
+  const gradientWidth = clamp(cols * cellSize * 0.22, 120, 160);
+  const textLineHeight = 14;
+  const requestedPercentDisplay = clamp(requestedPercent * 100, 0, 100);
+  const coveragePercent =
+    total > 0 ? (highlighted / total) * 100 : requestedPercentDisplay;
+  const lines = [];
+
+  if (total > 0) {
+    lines.push(
+      `Highlighting ${highlighted}/${total} cells (~${coveragePercent.toFixed(1)}%)`,
+    );
+  } else {
+    lines.push("Highlighting top performers");
+  }
+
+  if (Math.abs(coveragePercent - requestedPercentDisplay) > 0.5) {
+    lines.push(`Requested top ${requestedPercentDisplay.toFixed(1)}% window`);
+  }
+
+  lines.push("Palette strongest → weaker");
+
+  if (Number.isFinite(maxFitness)) {
+    lines.push(`Peak fitness ${maxFitness.toFixed(2)}`);
+  }
+
+  const blockHeight =
+    gradientHeight + padding * 3 + textLineHeight * Math.max(1, lines.length);
+  const blockWidth = gradientWidth + padding * 2;
+  const x = cols * cellSize - blockWidth - padding;
+  const y = padding;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(x, y, blockWidth, blockHeight);
+
+  const gradientX = x + padding;
+  const gradientY = y + padding;
+  const gradient = ctx.createLinearGradient(
+    gradientX,
+    gradientY,
+    gradientX + gradientWidth,
+    gradientY,
+  );
+  const stopDenominator = Math.max(1, safePalette.length - 1);
+
+  safePalette.forEach((color, index) => {
+    gradient.addColorStop(index / stopDenominator, color);
+  });
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(gradientX, gradientY, gradientWidth, gradientHeight);
+
+  ctx.fillStyle = "#fff";
+  ctx.font = "12px sans-serif";
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left";
+
+  let textY = gradientY + gradientHeight + padding;
+
+  for (const line of lines) {
+    ctx.fillText(line, gradientX, textY);
+    textY += textLineHeight;
+  }
+
+  ctx.restore();
 }
