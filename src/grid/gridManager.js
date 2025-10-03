@@ -483,24 +483,35 @@ export default class GridManager {
     }
   }
 
-  static tryMove(gridArr, sr, sc, dr, dc, rows, cols, options = {}) {
+  static tryMove(
+    gridArr,
+    sourceRow,
+    sourceCol,
+    deltaRow,
+    deltaCol,
+    rowCount,
+    colCount,
+    options = {},
+  ) {
     const normalizedOptions = GridManager.#normalizeMoveOptions(options);
-    const moving = gridArr[sr]?.[sc] ?? null;
+    const moving = gridArr[sourceRow]?.[sourceCol] ?? null;
 
     if (!moving) return false;
 
     const attempt = {
-      fromRow: sr,
-      fromCol: sc,
-      toRow: sr + dr,
-      toCol: sc + dc,
+      fromRow: sourceRow,
+      fromCol: sourceCol,
+      toRow: sourceRow + deltaRow,
+      toCol: sourceCol + deltaCol,
     };
 
-    if (GridManager.#isOutOfBounds(attempt.toRow, attempt.toCol, rows, cols)) {
+    if (
+      GridManager.#isOutOfBounds(attempt.toRow, attempt.toCol, rowCount, colCount)
+    ) {
       GridManager.#notify(normalizedOptions.onBlocked, {
         reason: "bounds",
-        row: sr,
-        col: sc,
+        row: sourceRow,
+        col: sourceCol,
         nextRow: attempt.toRow,
         nextCol: attempt.toCol,
         mover: moving,
@@ -514,8 +525,8 @@ export default class GridManager {
     ) {
       GridManager.#notify(normalizedOptions.onBlocked, {
         reason: "obstacle",
-        row: sr,
-        col: sc,
+        row: sourceRow,
+        col: sourceCol,
         nextRow: attempt.toRow,
         nextCol: attempt.toCol,
         mover: moving,
@@ -940,8 +951,25 @@ export default class GridManager {
     });
     this.populationScarcitySignal = 0;
     this.brainSnapshotCollector = toBrainSnapshotCollector(brainSnapshotCollector);
-    this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
-      GridManager.tryMove(gridArr, sr, sc, dr, dc, rows, cols, this.#movementOptions());
+    this.boundTryMove = (
+      gridArr,
+      sourceRow,
+      sourceCol,
+      deltaRow,
+      deltaCol,
+      rowCount,
+      colCount,
+    ) =>
+      GridManager.tryMove(
+        gridArr,
+        sourceRow,
+        sourceCol,
+        deltaRow,
+        deltaCol,
+        rowCount,
+        colCount,
+        this.#movementOptions(),
+      );
     this.boundMoveToTarget = (gridArr, row, col, targetRow, targetCol, rows, cols) =>
       GridManager.moveToTarget(
         gridArr,
