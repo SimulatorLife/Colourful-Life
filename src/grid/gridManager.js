@@ -51,6 +51,21 @@ const PROFILING_MODE_ALWAYS = "always";
 const PROFILING_MODE_NEVER = "never";
 const PROFILING_MODE_AUTO = "auto";
 const similarityCache = new WeakMap();
+
+function convertThresholdToSquared(threshold) {
+  const clamped = Math.max(0, Math.min(1, Number(threshold) || 0));
+  const complement = 1 - clamped;
+
+  return 1 - complement * complement;
+}
+
+function resolveNormalizedFromSquared(value) {
+  const clamped = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+  const complement = Math.max(0, 1 - clamped);
+
+  return 1 - Math.sqrt(complement);
+}
+
 const defaultPerformanceNow =
   typeof GLOBAL.performance?.now === "function"
     ? GLOBAL.performance.now.bind(GLOBAL.performance)
@@ -151,8 +166,10 @@ function parseColorToRgba(color) {
   return result;
 }
 
-function getPairSimilarity(cellA, cellB) {
-  if (!cellA || !cellB) return 0;
+function getPairSimilarity(cellA, cellB, { metric = "normalized" } = {}) {
+  if (!cellA || !cellB) {
+    return metric === "squared" ? 0 : 0;
+  }
 
   let cacheA = similarityCache.get(cellA);
 
@@ -161,24 +178,43 @@ function getPairSimilarity(cellA, cellB) {
     similarityCache.set(cellA, cacheA);
   }
 
-  if (cacheA.has(cellB)) {
-    return cacheA.get(cellB);
+  let entry = cacheA.get(cellB);
+
+  if (!entry) {
+    entry = { squared: null, normalized: null };
+    cacheA.set(cellB, entry);
+
+    let cacheB = similarityCache.get(cellB);
+
+    if (!cacheB) {
+      cacheB = new WeakMap();
+      similarityCache.set(cellB, cacheB);
+    }
+
+    cacheB.set(cellA, entry);
   }
 
-  const value = cellA.similarityTo(cellB);
+  if (metric === "squared") {
+    if (entry.squared == null) {
+      const squared = cellA.similarityTo(cellB, { squared: true });
 
-  cacheA.set(cellB, value);
+      entry.squared = Math.max(0, Math.min(1, Number.isFinite(squared) ? squared : 0));
+    }
 
-  let cacheB = similarityCache.get(cellB);
-
-  if (!cacheB) {
-    cacheB = new WeakMap();
-    similarityCache.set(cellB, cacheB);
+    return entry.squared;
   }
 
-  cacheB.set(cellA, value);
+  if (entry.normalized == null) {
+    if (entry.squared == null) {
+      const squared = cellA.similarityTo(cellB, { squared: true });
 
-  return value;
+      entry.squared = Math.max(0, Math.min(1, Number.isFinite(squared) ? squared : 0));
+    }
+
+    entry.normalized = resolveNormalizedFromSquared(entry.squared);
+  }
+
+  return entry.normalized;
 }
 
 function toBrainSnapshotCollector(candidate) {
@@ -5466,6 +5502,8 @@ export default class GridManager {
       typeof cell.dna.enemyThreshold === "function"
         ? cell.dna.enemyThreshold()
         : enemySimilarity;
+    const allySquaredThreshold = convertThresholdToSquared(allyT);
+    const enemySquaredThreshold = convertThresholdToSquared(enemyT);
 
     const grid = this.grid;
     const rows = this.rows;
@@ -5510,9 +5548,13 @@ export default class GridManager {
         continue;
       }
 
-      const similarity = getPairSimilarity(cell, target);
+      const similaritySquared = getPairSimilarity(cell, target, {
+        metric: "squared",
+      });
 
-      if (similarity >= allyT) {
+      if (similaritySquared >= allySquaredThreshold) {
+        const similarity = getPairSimilarity(cell, target);
+
         society.push({
           row: newRow,
           col: newCol,
@@ -5521,7 +5563,7 @@ export default class GridManager {
           precomputedSimilarity: similarity,
         });
       } else if (
-        similarity <= enemyT ||
+        similaritySquared <= enemySquaredThreshold ||
         (() => {
           const hostilityRng =
             typeof cell.resolveSharedRng === "function"
@@ -5533,6 +5575,8 @@ export default class GridManager {
       ) {
         enemies.push({ row: newRow, col: newCol, target });
       } else {
+        const similarity = getPairSimilarity(cell, target);
+
         mates.push({
           row: newRow,
           col: newCol,
