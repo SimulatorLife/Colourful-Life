@@ -139,6 +139,43 @@ test("resetWorld randomize selects a non-empty obstacle preset", async () => {
   }
 });
 
+test("applyObstaclePreset normalizes the stored preset identifier", async () => {
+  const originalWindow = global.window;
+
+  if (typeof global.window === "undefined") {
+    global.window = {};
+  }
+
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  try {
+    const gm = new TestGridManager(8, 8, {
+      eventManager: { activeEvents: [] },
+      stats: {},
+      ctx: {},
+      cellSize: 1,
+    });
+
+    gm.applyObstaclePreset(" midline \t", { clearExisting: true });
+
+    assert.equal(
+      gm.currentObstaclePreset,
+      "midline",
+      "grid should retain the normalized preset identifier",
+    );
+  } finally {
+    if (originalWindow === undefined) {
+      delete global.window;
+    } else {
+      global.window = originalWindow;
+    }
+  }
+});
+
 test("corner islands preset preserves organisms in carved pockets", async () => {
   const originalWindow = global.window;
 

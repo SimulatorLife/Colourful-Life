@@ -1496,7 +1496,7 @@ export default class GridManager {
         break;
     }
 
-    this.currentObstaclePreset = presetId;
+    this.currentObstaclePreset = normalizedId;
   }
 
   init() {
