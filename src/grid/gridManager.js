@@ -1847,7 +1847,7 @@ export default class GridManager {
           1,
         );
         const currentEnergy = energyRow[c];
-        let regen = regenRate * (1 - currentEnergy / maxTileEnergy);
+        let regen = maxTileEnergy > 0 ? regenRate * (maxTileEnergy - currentEnergy) : 0;
 
         regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * effectiveDensity);
 
