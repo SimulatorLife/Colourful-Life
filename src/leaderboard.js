@@ -15,10 +15,11 @@ function sanitizeCoordinate(value) {
  * @returns {Array<Object>} Ranked list sorted by raw fitness.
  */
 export function computeLeaderboard(snapshot, topN = 5) {
-  const numericTopN = Number(topN);
-  const sanitizedTopN = Number.isFinite(numericTopN)
-    ? Math.max(0, Math.floor(numericTopN))
-    : 0;
+  const sanitizedTopN = sanitizeNumber(topN, {
+    fallback: 0,
+    min: 0,
+    round: Math.floor,
+  });
 
   if (sanitizedTopN === 0) {
     return [];
