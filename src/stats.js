@@ -258,6 +258,8 @@ const isCellLike = (candidate) => {
 export default class Stats {
   #historyRings;
   #traitHistoryRings;
+  #lifeEventTickBase;
+  #tickInProgress;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
    * @param {{traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>}} [options]
@@ -274,6 +276,8 @@ export default class Stats {
     this.totals = { ticks: 0, births: 0, deaths: 0, fights: 0, cooperations: 0 };
     this.traitHistory = { presence: {}, average: {} };
     this.#traitHistoryRings = { presence: {}, average: {} };
+    this.#lifeEventTickBase = this.totals.ticks;
+    this.#tickInProgress = false;
     this.matingDiversityThreshold = 0.42;
     this.lastMatingDebug = null;
     this.mutationMultiplier = 1;
@@ -329,6 +333,10 @@ export default class Stats {
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
     this.deathCausesTick = Object.create(null);
+    const currentTicks = Number.isFinite(this.totals?.ticks) ? this.totals.ticks : 0;
+
+    this.#lifeEventTickBase = currentTicks + 1;
+    this.#tickInProgress = true;
   }
 
   resetAll() {
@@ -353,6 +361,8 @@ export default class Stats {
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
     this.deathCauseTotals = Object.create(null);
+    this.#tickInProgress = false;
+    this.#lifeEventTickBase = this.totals.ticks;
   }
 
   setDiversityTarget(value) {
@@ -619,10 +629,11 @@ export default class Stats {
           .filter((value) => value)
       : null;
 
+    const currentTicks = Number.isFinite(this.totals?.ticks) ? this.totals.ticks : 0;
     const event = {
       id: ++this.lifeEventSequence,
       type,
-      tick: this.totals.ticks,
+      tick: this.#tickInProgress ? this.#lifeEventTickBase : currentTicks,
       row,
       col,
       energy,
@@ -842,6 +853,9 @@ export default class Stats {
       this.pushTraitHistory("presence", key, traitPresence.fractions[key] ?? 0);
       this.pushTraitHistory("average", key, traitPresence.averages[key] ?? 0);
     }
+
+    this.#tickInProgress = false;
+    this.#lifeEventTickBase = this.totals.ticks;
 
     return {
       population: pop,

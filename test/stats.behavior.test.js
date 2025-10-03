@@ -350,6 +350,43 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.5, 0.5, 0.5]);
 });
 
+test("life event ticks align with the active simulation tick", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+
+  stats.resetAll();
+  stats.resetTick();
+
+  const offspring = createCell({ row: 3, col: 4, energy: 5 });
+
+  stats.onBirth(offspring, {
+    row: offspring.row,
+    col: offspring.col,
+    energy: offspring.energy,
+  });
+
+  stats.updateFromSnapshot({
+    population: 1,
+    totalEnergy: offspring.energy,
+    totalAge: 0,
+    cells: [offspring],
+  });
+
+  const [birthEvent] = stats.getRecentLifeEvents(1);
+
+  assert.ok(birthEvent, "birth should be recorded");
+  assert.is(birthEvent.tick, stats.totals.ticks);
+
+  stats.resetAll();
+
+  stats.onDeath({ row: 1, col: 2, cause: "obstacle" });
+
+  const [deathEvent] = stats.getRecentLifeEvents(1);
+
+  assert.ok(deathEvent, "obstacle removal should be recorded");
+  assert.is(deathEvent.tick, stats.totals.ticks);
+});
+
 test("diversity pressure responds to behavioral stagnation and complementary success", async () => {
   const { default: Stats } = await statsModulePromise;
 
