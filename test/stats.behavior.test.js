@@ -786,3 +786,36 @@ test("setters sanitize non-finite mutation and diversity threshold inputs", asyn
   stats.setMutationMultiplier(Infinity);
   assert.is(stats.mutationMultiplier, 1);
 });
+
+test("recordPerformanceSummary tracks last tick values and aggregates totals", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+
+  stats.recordPerformanceSummary("grid", {
+    activeSnapshotCopyMs: { value: 1.5 },
+    findTargetsTotalMs: { value: 3, accumulate: true },
+    findTargetsCalls: { value: 4, count: 4, accumulate: true },
+    activeSnapshotReused: { value: 1, accumulate: false },
+  });
+
+  assert.equal(stats.performance.grid.lastTick.activeSnapshotCopyMs, 1.5);
+  assert.equal(stats.performance.grid.lastTick.findTargetsTotalMs, 3);
+  assert.equal(stats.performance.grid.lastTick.findTargetsCalls, 4);
+  assert.equal(stats.performance.grid.lastTick.activeSnapshotReused, 1);
+  assert.equal(stats.performance.grid.totals.findTargetsTotalMs, 3);
+  assert.equal(stats.performance.grid.samples.findTargetsCalls, 4);
+
+  stats.recordPerformanceSummary("grid", {
+    activeSnapshotCopyMs: { value: 2 },
+    findTargetsTotalMs: { value: 5, accumulate: true },
+    findTargetsCalls: { value: 2, count: 2, accumulate: true },
+    activeSnapshotReused: { value: 0, accumulate: false },
+  });
+
+  assert.equal(stats.performance.grid.lastTick.activeSnapshotCopyMs, 2);
+  assert.equal(stats.performance.grid.lastTick.findTargetsTotalMs, 5);
+  assert.equal(stats.performance.grid.lastTick.findTargetsCalls, 2);
+  assert.equal(stats.performance.grid.lastTick.activeSnapshotReused, 0);
+  assert.equal(stats.performance.grid.totals.findTargetsTotalMs, 8);
+  assert.equal(stats.performance.grid.samples.findTargetsCalls, 6);
+});
