@@ -22,7 +22,7 @@ npm run start            # Parcel dev server with hot reloading
 
 # Optional helpers
 npm run build            # Production bundle written to dist/
-npm run clean            # Remove dist/ and the Parcel cache when builds misbehave
+npm run clean            # Remove dist/ and the Parcel cache via scripts/clean-parcel.mjs
 npm run format           # Format code with Prettier
 npm run format:check     # Validate formatting without writing
 npm run format:workflows # Format GitHub workflow files (ignores .gitignore rules)
@@ -122,16 +122,16 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 ## Key scripts and commands
 
-| Command                                                                | Purpose                                                                                                              |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `npm run start`                                                        | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.                         |
-| `npm run build`                                                        | Produce an optimized production bundle in `dist/`.                                                                   |
-| `npm run clean`                                                        | Remove `dist/` and `.parcel-cache/` to reset Parcel caches.                                                          |
-| `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                       |
-| `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions. |
-| `npm test`                                                             | Execute the Node.js test suites covering simulation and UI modules.                                                  |
-| `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                               |
-| `node scripts/profile-energy.mjs`                                      | Benchmark the energy preparation loop with configurable grid sizes via environment variables.                        |
+| Command                                                                | Purpose                                                                                                                  |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `npm run start`                                                        | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.                             |
+| `npm run build`                                                        | Produce an optimized production bundle in `dist/`.                                                                       |
+| `npm run clean`                                                        | Remove `dist/` and `.parcel-cache/` via `scripts/clean-parcel.mjs`. Pass `--dry-run` to validate without deleting files. |
+| `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                           |
+| `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions.     |
+| `npm test`                                                             | Execute the Node.js test suites covering simulation and UI modules.                                                      |
+| `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                                   |
+| `node scripts/profile-energy.mjs`                                      | Benchmark the energy preparation loop with configurable grid sizes via environment variables.                            |
 
 ## Further reading
 
