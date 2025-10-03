@@ -5,12 +5,12 @@ import SelectionManager from "./grid/selectionManager.js";
 import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { createHeadlessUiManager } from "./ui/headlessUiManager.js";
 import { resolveSimulationDefaults } from "./config.js";
-import { toPlainObject, toFiniteNumber } from "./utils.js";
+import { toPlainObject, toFiniteOrNull } from "./utils.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
 function resolveHeadlessCanvasSize(config = {}) {
-  const toFinite = (value) => toFiniteNumber(value, { fallback: null });
+  const toFinite = toFiniteOrNull;
 
   const cellSize = toFinite(config?.cellSize) ?? 5;
   const rows = toFinite(config?.rows);

@@ -1,4 +1,4 @@
-import { toFiniteNumber } from "../utils.js";
+import { toFiniteOrNull } from "../utils.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
@@ -54,7 +54,7 @@ export function resolveCanvas(canvas, documentRef) {
  * @throws {Error} When no width/height can be resolved.
  */
 export function ensureCanvasDimensions(canvas, config) {
-  const toFiniteDimension = (value) => toFiniteNumber(value, { fallback: null });
+  const toFiniteDimension = toFiniteOrNull;
 
   const pickDimension = (candidates) => {
     for (const candidate of candidates) {
