@@ -55,6 +55,8 @@ const clampGene = (value) => {
 };
 
 export class DNA {
+  #genesTarget;
+
   constructor(rOrGenes = 0, g = 0, b = 0, options = {}) {
     let geneCount = options.geneCount ?? DEFAULT_TOTAL_GENE_COUNT;
     let genesInput = null;
@@ -72,20 +74,33 @@ export class DNA {
       genesInput = config.genes ?? genesInput;
     }
 
-    this.genes = new Uint8Array(geneCount);
+    this.#genesTarget = new Uint8Array(geneCount);
+    const genesProxy = this.#createGenesProxy(this.#genesTarget);
+
+    Object.defineProperty(this, "genes", {
+      configurable: false,
+      enumerable: true,
+      writable: false,
+      value: genesProxy,
+    });
     this._brainMetrics = null;
+    this._seed = null;
+    this._rngCache = new Map();
+    this._sharedRngCache = new Map();
 
     if (genesInput) {
       const limit = Math.min(genesInput.length ?? 0, geneCount);
 
       for (let i = 0; i < limit; i++) {
-        this.genes[i] = clampGene(genesInput[i]);
+        this.#genesTarget[i] = clampGene(genesInput[i]);
       }
     } else {
-      this.genes[GENE_LOCI.COLOR_R] = clampGene(rOrGenes);
-      this.genes[GENE_LOCI.COLOR_G] = clampGene(g);
-      this.genes[GENE_LOCI.COLOR_B] = clampGene(b);
+      this.#genesTarget[GENE_LOCI.COLOR_R] = clampGene(rOrGenes);
+      this.#genesTarget[GENE_LOCI.COLOR_G] = clampGene(g);
+      this.#genesTarget[GENE_LOCI.COLOR_B] = clampGene(b);
     }
+
+    this.#invalidateCaches();
   }
 
   static random(rng = Math.random, geneCount = DEFAULT_TOTAL_GENE_COUNT) {
@@ -139,6 +154,10 @@ export class DNA {
   }
 
   seed() {
+    if (Number.isInteger(this._seed)) {
+      return this._seed;
+    }
+
     let hash = 2166136261;
 
     for (let i = 0; i < this.genes.length; i++) {
@@ -146,33 +165,48 @@ export class DNA {
       hash = Math.imul(hash, 16777619);
     }
 
-    return hash >>> 0;
+    this._seed = hash >>> 0;
+
+    return this._seed;
   }
 
   // Deterministic per-trait RNG stream derived from DNA seed
   prngFor(tag) {
-    let h = (this.seed() ^ 2166136261) >>> 0; // FNV-1a like mix
+    const key = typeof tag === "string" && tag.length > 0 ? tag : "default";
 
-    for (let i = 0; i < tag.length; i++) {
-      h ^= tag.charCodeAt(i);
-      h = Math.imul(h, 16777619) >>> 0;
+    if (!this._rngCache.has(key)) {
+      let h = (this.seed() ^ 2166136261) >>> 0; // FNV-1a like mix
+
+      for (let i = 0; i < key.length; i++) {
+        h ^= key.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+
+      this._rngCache.set(key, h >>> 0);
     }
 
-    return createRNG(h >>> 0);
+    return createRNG(this._rngCache.get(key));
   }
 
   sharedRng(other, tag = "") {
     const otherSeed = other && typeof other.seed === "function" ? other.seed() : 0;
-    let h = (this.seed() ^ otherSeed ^ 0x9e3779b9) >>> 0;
+    const tagKey = typeof tag === "string" && tag.length > 0 ? tag : "";
+    const cacheKey = `${otherSeed}:${tagKey}`;
 
-    if (typeof tag === "string" && tag.length > 0) {
-      for (let i = 0; i < tag.length; i++) {
-        h ^= tag.charCodeAt(i);
-        h = Math.imul(h, 16777619) >>> 0;
+    if (!this._sharedRngCache.has(cacheKey)) {
+      let h = (this.seed() ^ otherSeed ^ 0x9e3779b9) >>> 0;
+
+      if (tagKey) {
+        for (let i = 0; i < tagKey.length; i++) {
+          h ^= tagKey.charCodeAt(i);
+          h = Math.imul(h, 16777619) >>> 0;
+        }
       }
+
+      this._sharedRngCache.set(cacheKey, h >>> 0);
     }
 
-    return createRNG(h >>> 0);
+    return createRNG(this._sharedRngCache.get(cacheKey));
   }
 
   isLegacyGenome() {
@@ -191,6 +225,46 @@ export class DNA {
     if (extraBytes < NEURAL_GENE_BYTES) return 0;
 
     return Math.floor(extraBytes / NEURAL_GENE_BYTES);
+  }
+
+  #invalidateCaches() {
+    this._seed = null;
+    if (this._rngCache) this._rngCache.clear();
+    if (this._sharedRngCache) this._sharedRngCache.clear();
+  }
+
+  #createGenesProxy(target) {
+    const owner = this;
+
+    const handler = {
+      get(obj, prop, receiver) {
+        if (prop === "length") {
+          return obj.length;
+        }
+
+        const value = Reflect.get(obj, prop, receiver);
+
+        if (typeof value === "function") {
+          return value.bind(obj);
+        }
+
+        return value;
+      },
+      set(obj, prop, value, receiver) {
+        const index = Number(prop);
+        const isIndex = Number.isInteger(index) && index >= 0 && index < obj.length;
+        const prev = isIndex ? obj[index] : undefined;
+        const result = Reflect.set(obj, prop, value, receiver);
+
+        if (result && isIndex && obj[index] !== prev) {
+          owner.#invalidateCaches();
+        }
+
+        return result;
+      },
+    };
+
+    return new Proxy(target, handler);
   }
 
   #decodeNeuralGene(index) {

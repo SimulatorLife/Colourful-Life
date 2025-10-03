@@ -8,6 +8,7 @@ import {
   cloneTracePayload,
   createRankedBuffer,
   createRNG,
+  invokeWithErrorBoundary,
   reportError,
   toFiniteOrNull,
   toPlainObject,
@@ -235,6 +236,65 @@ test("reportError logs errors and supports optional deduplication", () => {
     ],
   );
   assert.is(calls[0][1], calls[1][1]);
+});
+
+test("invokeWithErrorBoundary supports custom reporters and onError hooks", () => {
+  const reports = [];
+  let observedError;
+
+  const result = invokeWithErrorBoundary(
+    () => {
+      throw new Error("boom");
+    },
+    ["alpha"],
+    {
+      message: "custom warning",
+      reporter: (message, error) => {
+        reports.push([message, error]);
+      },
+      onError: (error) => {
+        observedError = error;
+      },
+    },
+  );
+
+  assert.is(result, undefined);
+  assert.is(reports.length, 1);
+  assert.is(reports[0][0], "custom warning");
+  assert.ok(reports[0][1] instanceof Error);
+  assert.ok(observedError instanceof Error);
+  assert.is(observedError?.message, "boom");
+});
+
+test("invokeWithErrorBoundary swallows errors thrown by onError handlers", () => {
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  const warnings = [];
+
+  console.warn = (...args) => {
+    warnings.push(args);
+  };
+  console.error = () => {};
+
+  try {
+    invokeWithErrorBoundary(
+      () => {
+        throw new Error("primary failure");
+      },
+      [],
+      {
+        onError: () => {
+          throw new Error("onError failure");
+        },
+      },
+    );
+  } finally {
+    console.warn = originalWarn;
+    console.error = originalError;
+  }
+
+  assert.is(warnings.length, 1);
+  assert.is(warnings[0][0], "Error boundary onError handler threw; ignoring.");
 });
 
 test("toPlainObject returns candidate objects and coerces primitives", () => {

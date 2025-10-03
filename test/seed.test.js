@@ -1,5 +1,5 @@
 import { assert, test } from "#tests/harness";
-import DNA from "../src/genome.js";
+import DNA, { GENE_LOCI } from "../src/genome.js";
 import { createRNG } from "../src/utils.js";
 
 function sampleGenome(seedValue, { sampleTag = "phenotype", sampleCount = 5 } = {}) {
@@ -60,4 +60,35 @@ test("DNA.random seeded with createRNG diverges across seeds", () => {
 
   assert.not.equal(first.genes, second.genes);
   assert.not.equal(first.seed, second.seed);
+});
+
+test("mutating genes after seeding invalidates cached randomness", () => {
+  const dna = new DNA(12, 34, 56);
+  const originalSeed = dna.seed();
+  const traitSamplesBefore = (() => {
+    const rng = dna.prngFor("phenotype");
+
+    return [rng(), rng(), rng()];
+  })();
+  const nextValue = (dna.genes[GENE_LOCI.COLOR_R] + 17) & 0xff;
+
+  dna.genes[GENE_LOCI.COLOR_R] =
+    nextValue === dna.genes[GENE_LOCI.COLOR_R] ? (nextValue + 1) & 0xff : nextValue;
+
+  const mutatedSeed = dna.seed();
+  const traitSamplesAfter = (() => {
+    const rng = dna.prngFor("phenotype");
+
+    return [rng(), rng(), rng()];
+  })();
+
+  assert.not.equal(
+    mutatedSeed,
+    originalSeed,
+    "gene mutations should update the derived DNA seed",
+  );
+  assert.ok(
+    traitSamplesAfter.some((value, index) => value !== traitSamplesBefore[index]),
+    "trait RNG sequences should reflect gene mutations",
+  );
 });
