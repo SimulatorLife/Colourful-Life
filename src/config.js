@@ -1,3 +1,5 @@
+import { sanitizeNumber } from "./utils.js";
+
 // Centralized simulation config defaults
 const DEFAULT_MAX_TILE_ENERGY = 6;
 const DEFAULT_REGEN_DENSITY_PENALTY = 0.5;
@@ -302,6 +304,18 @@ export function resolveSimulationDefaults(overrides = {}) {
 
   for (const key of BOOLEAN_DEFAULT_KEYS) {
     merged[key] = coerceBoolean(merged[key], defaults[key]);
+  }
+
+  if (
+    typeof merged.eventFrequencyMultiplier === "number" ||
+    typeof merged.eventFrequencyMultiplier === "string"
+  ) {
+    merged.eventFrequencyMultiplier = sanitizeNumber(merged.eventFrequencyMultiplier, {
+      fallback: defaults.eventFrequencyMultiplier,
+      min: 0,
+    });
+  } else {
+    merged.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
   }
 
   const concurrencyValue = Number(merged.maxConcurrentEvents);

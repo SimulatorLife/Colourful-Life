@@ -169,6 +169,30 @@ test("resolveSimulationDefaults coerces string boolean overrides", async () => {
   assert.is(defaults.updatesPerSecond, SIMULATION_DEFAULTS.updatesPerSecond);
 });
 
+test("resolveSimulationDefaults keeps event frequency overrides opt-in", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+
+  const booleanOverride = resolveSimulationDefaults({
+    eventFrequencyMultiplier: true,
+  });
+
+  assert.is(
+    booleanOverride.eventFrequencyMultiplier,
+    SIMULATION_DEFAULTS.eventFrequencyMultiplier,
+    "non-numeric overrides should fall back so events stay disabled",
+  );
+
+  const negativeOverride = resolveSimulationDefaults({
+    eventFrequencyMultiplier: -2,
+  });
+
+  assert.is(
+    negativeOverride.eventFrequencyMultiplier,
+    SIMULATION_DEFAULTS.eventFrequencyMultiplier,
+    "negative overrides clamp to the baseline instead of enabling events",
+  );
+});
+
 test("resolveSimulationDefaults derives cadence from speed overrides", async () => {
   const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
   const defaults = resolveSimulationDefaults({ speedMultiplier: 2 });
