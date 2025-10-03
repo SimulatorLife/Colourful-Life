@@ -505,9 +505,7 @@ export default class GridManager {
       toCol: sourceCol + deltaCol,
     };
 
-    if (
-      GridManager.#isOutOfBounds(attempt.toRow, attempt.toCol, rowCount, colCount)
-    ) {
+    if (GridManager.#isOutOfBounds(attempt.toRow, attempt.toCol, rowCount, colCount)) {
       GridManager.#notify(normalizedOptions.onBlocked, {
         reason: "bounds",
         row: sourceRow,
