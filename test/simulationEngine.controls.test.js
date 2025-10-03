@@ -240,6 +240,44 @@ test("setWorldGeometry resizes the grid and updates dependent systems", async ()
   }
 });
 
+test("setWorldGeometry honors reseed=false to avoid repopulating the grid", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+
+  const engine = new SimulationEngine({
+    canvas: new MockCanvas(200, 200),
+    autoStart: false,
+    performanceNow: () => 0,
+    requestAnimationFrame: () => {},
+    cancelAnimationFrame: () => {},
+  });
+
+  engine.resetWorld({ reseed: false });
+
+  assert.is(
+    engine.grid.activeCells.size,
+    0,
+    "baseline reset should leave the grid empty",
+  );
+
+  engine.setWorldGeometry({ rows: 50, cols: 50, reseed: false });
+
+  assert.is(
+    engine.grid.activeCells.size,
+    0,
+    "reseed=false should prevent new organisms when geometry changes",
+  );
+
+  engine.setWorldGeometry({ rows: 60, cols: 60, reseed: true });
+
+  assert.ok(
+    engine.grid.activeCells.size > 0,
+    "reseed=true should repopulate the world after resizing",
+  );
+
+  engine.destroy?.();
+});
+
 test("overlay visibility toggles mutate only requested flags", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
