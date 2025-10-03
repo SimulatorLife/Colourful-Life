@@ -44,6 +44,11 @@ The script performs the following steps:
 4. Commits the updated assets with a message referencing the source commit.
 5. Pushes the changes to the public repository.
 
+`rsync` is used when available to efficiently copy the build output into the
+temporary worktree. If it is missing (for example when running from a vanilla
+Windows shell), the script automatically falls back to portable `tar`/`cp`
+copies so you do not need to install extra tooling before publishing.
+
 Environment variables let you customise the behaviour without editing the
 script:
 
