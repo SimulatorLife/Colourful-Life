@@ -1,7 +1,7 @@
 name: Codex 03 – Improve Performance
 on:
   schedule:
-    - cron: "15 1,13 * * *" # twice daily at 01:15, 13:15 UTC
+    - cron: "15 0,6,12,18 * * *" # four times daily at 00:15, 06:15, 12:15, 18:15 UTC
   workflow_dispatch:
 
 permissions:
