@@ -228,7 +228,6 @@ export class MockCanvas extends MockElement {
     this.width = width;
     this.height = height;
     this.boundingRect = { left: 0, top: 0, width, height };
-    this.captured = new Set();
   }
 
   getContext(type) {
@@ -250,14 +249,6 @@ export class MockCanvas extends MockElement {
       fillText() {},
       strokeText() {},
     };
-  }
-
-  setPointerCapture(pointerId) {
-    this.captured.add(pointerId);
-  }
-
-  releasePointerCapture(pointerId) {
-    this.captured.delete(pointerId);
   }
 }
 
@@ -310,19 +301,6 @@ export class MockDocument {
   }
 }
 
-export class MockPointerEvent {
-  constructor({ clientX, clientY, pointerId = 1 }) {
-    this.clientX = clientX;
-    this.clientY = clientY;
-    this.pointerId = pointerId;
-    this.defaultPrevented = false;
-  }
-
-  preventDefault() {
-    this.defaultPrevented = true;
-  }
-}
-
 export function setupDom() {
   const originalDocument = global.document;
   const originalNode = global.Node;
@@ -368,6 +346,5 @@ export default {
   MockElement,
   MockCanvas,
   MockDocument,
-  MockPointerEvent,
   setupDom,
 };
