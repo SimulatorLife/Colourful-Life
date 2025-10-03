@@ -19,6 +19,7 @@ import InteractionSystem from "../interactionSystem.js";
 import GridInteractionAdapter from "./gridAdapter.js";
 import ReproductionZonePolicy from "./reproductionZonePolicy.js";
 import { OBSTACLE_PRESETS, resolveObstaclePresetCatalog } from "./obstaclePresets.js";
+import { resolvePopulationScarcityMultiplier } from "./populationScarcity.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -189,6 +190,25 @@ export default class GridManager {
     const fractionalFloor = Math.round(area * 0.025);
 
     return Math.max(15, fractionalFloor);
+  }
+
+  #computePopulationScarcitySignal() {
+    if (!Number.isFinite(this.minPopulation) || this.minPopulation <= 0) {
+      return 0;
+    }
+
+    const population = this.activeCells?.size ?? 0;
+
+    if (population >= this.minPopulation) {
+      return 0;
+    }
+
+    const area = Math.max(1, Math.floor(this.rows) * Math.floor(this.cols));
+    const occupancy = clamp(population / area, 0, 1);
+    const deficit = clamp((this.minPopulation - population) / this.minPopulation, 0, 1);
+    const scarcity = clamp(deficit * (0.6 + (1 - occupancy) * 0.4), 0, 1);
+
+    return scarcity;
   }
 
   static #isObstacle(obstacles, row, col) {
@@ -966,6 +986,7 @@ export default class GridManager {
     this.interactionSystem = new InteractionSystem({
       adapter: this.interactionAdapter,
     });
+    this.populationScarcitySignal = 0;
     this.brainSnapshotCollector = toBrainSnapshotCollector(brainSnapshotCollector);
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
       GridManager.tryMove(gridArr, sr, sc, dr, dc, rows, cols, this.#movementOptions());
@@ -2917,6 +2938,7 @@ export default class GridManager {
     });
 
     let effectiveReproProb = clamp(reproProb ?? 0, 0, 1);
+    let scarcityMultiplier = 1;
 
     if (diversity < pairDiversityThreshold) {
       penalizedForSimilarity = true;
@@ -3014,6 +3036,28 @@ export default class GridManager {
             (0.18 + diversityPressure * 0.22);
 
         effectiveReproProb = clamp(effectiveReproProb * complementBonus, 0, 1);
+      }
+    }
+
+    const scarcitySignal = clamp(this.populationScarcitySignal ?? 0, 0, 1);
+
+    if (scarcitySignal > 0 && effectiveReproProb > 0) {
+      const scarcityResult = resolvePopulationScarcityMultiplier({
+        parentA: cell,
+        parentB: bestMate.target,
+        scarcity: scarcitySignal,
+        baseProbability: effectiveReproProb,
+        minPopulation: this.minPopulation,
+        population: this.activeCells?.size ?? 0,
+      });
+
+      const resolvedMultiplier = scarcityResult?.multiplier;
+
+      if (Number.isFinite(resolvedMultiplier) && resolvedMultiplier > 0) {
+        scarcityMultiplier = clamp(resolvedMultiplier, 0.25, 2);
+        effectiveReproProb = clamp(effectiveReproProb * scarcityMultiplier, 0, 1);
+      } else {
+        scarcityMultiplier = 1;
       }
     }
 
@@ -3243,6 +3287,7 @@ export default class GridManager {
         strategyPenaltyMultiplier,
         strategyPressure,
         threshold: pairDiversityThreshold,
+        populationScarcityMultiplier: scarcityMultiplier,
       });
     }
 
@@ -3254,6 +3299,7 @@ export default class GridManager {
           penalized: penalizedForSimilarity,
           penaltyMultiplier,
           strategyPenaltyMultiplier,
+          populationScarcityMultiplier: scarcityMultiplier,
         });
       }
     };
@@ -3426,6 +3472,8 @@ export default class GridManager {
     this.lastSnapshot = null;
     this.tickCount += 1;
 
+    this.populationScarcitySignal = this.#computePopulationScarcitySignal();
+
     const { densityGrid } = this.prepareTick({
       eventManager,
       eventStrengthMultiplier,
@@ -3468,15 +3516,7 @@ export default class GridManager {
         combatEdgeSharpness: combatSharpness,
       });
     }
-
-    if (
-      Number.isFinite(this.minPopulation) &&
-      this.minPopulation > 0 &&
-      this.activeCells.size < this.minPopulation
-    ) {
-      this.seed(this.activeCells.size, this.minPopulation);
-    }
-
+    this.populationScarcitySignal = this.#computePopulationScarcitySignal();
     this.lastSnapshot = this.buildSnapshot();
 
     return this.lastSnapshot;
@@ -3565,6 +3605,13 @@ export default class GridManager {
       : ranked;
 
     snapshot.brainSnapshots = Array.isArray(collected) ? collected : ranked;
+    snapshot.populationScarcity = clamp(
+      Number.isFinite(this.populationScarcitySignal)
+        ? this.populationScarcitySignal
+        : 0,
+      0,
+      1,
+    );
 
     return snapshot;
   }
