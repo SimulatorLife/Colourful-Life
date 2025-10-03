@@ -38,6 +38,18 @@ const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 
+const PERFORMANCE_NOW =
+  typeof GLOBAL.performance?.now === "function"
+    ? GLOBAL.performance.now.bind(GLOBAL.performance)
+    : () => Date.now();
+const FULL_VISION_SCAN_RADIUS = 4;
+const DEFAULT_SCAN_BUDGET_BASE = 72;
+const DEFAULT_SCAN_BUDGET_PER_SIGHT = 14;
+const MAX_SCAN_BUDGET = 360;
+
+const PROFILING_MODE_ALWAYS = "always";
+const PROFILING_MODE_NEVER = "never";
+const PROFILING_MODE_AUTO = "auto";
 const similarityCache = new WeakMap();
 const defaultPerformanceNow =
   typeof GLOBAL.performance?.now === "function"
@@ -203,6 +215,21 @@ export default class GridManager {
   #segmentWindowScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
+  #activeSnapshotScratch = [];
+  #performanceNow = PERFORMANCE_NOW;
+  #profilingMode = PROFILING_MODE_AUTO;
+  #profilingScratch = {
+    activeSnapshotMs: 0,
+    activeSnapshotCount: 0,
+    activeSnapshotReused: true,
+    findTargetsMs: 0,
+    findTargetsCalls: 0,
+    findTargetsTiles: 0,
+    findTargetsAttempts: 0,
+    findTargetsBudgetSkips: 0,
+    findTargetsFullScans: 0,
+  };
+  #sightOffsetCache = new Map();
   #imageDataCanvas = null;
   #imageDataCtx = null;
   #imageData = null;
@@ -242,6 +269,20 @@ export default class GridManager {
     return Math.max(15, fractionalFloor);
   }
 
+  #now() {
+    let value;
+
+    try {
+      value = this.#performanceNow();
+    } catch (error) {
+      value = PERFORMANCE_NOW();
+    }
+
+    const numeric = Number(value);
+
+    return Number.isFinite(numeric) ? numeric : PERFORMANCE_NOW();
+  }
+
   #computePopulationScarcitySignal() {
     if (!Number.isFinite(this.minPopulation) || this.minPopulation <= 0) {
       return 0;
@@ -259,6 +300,242 @@ export default class GridManager {
     const scarcity = clamp(deficit * (0.6 + (1 - occupancy) * 0.4), 0, 1);
 
     return scarcity;
+  }
+
+  #normalizeProfilingMode(candidate) {
+    if (candidate === true) {
+      return PROFILING_MODE_ALWAYS;
+    }
+
+    if (candidate === false) {
+      return PROFILING_MODE_NEVER;
+    }
+
+    if (typeof candidate === "number") {
+      if (!Number.isFinite(candidate)) {
+        return PROFILING_MODE_AUTO;
+      }
+
+      if (candidate > 0) {
+        return PROFILING_MODE_ALWAYS;
+      }
+
+      if (candidate === 0) {
+        return PROFILING_MODE_NEVER;
+      }
+
+      return PROFILING_MODE_AUTO;
+    }
+
+    if (typeof candidate === "string") {
+      const normalized = candidate.trim().toLowerCase();
+
+      if (normalized.length === 0) {
+        return PROFILING_MODE_AUTO;
+      }
+
+      if (
+        normalized === "always" ||
+        normalized === "on" ||
+        normalized === "true" ||
+        normalized === "yes" ||
+        normalized === "enable" ||
+        normalized === "enabled" ||
+        normalized === "profile" ||
+        normalized === "profiling" ||
+        normalized === "metrics"
+      ) {
+        return PROFILING_MODE_ALWAYS;
+      }
+
+      if (
+        normalized === "never" ||
+        normalized === "off" ||
+        normalized === "false" ||
+        normalized === "no" ||
+        normalized === "disable" ||
+        normalized === "disabled"
+      ) {
+        return PROFILING_MODE_NEVER;
+      }
+
+      if (
+        normalized === "auto" ||
+        normalized === "automatic" ||
+        normalized === "default" ||
+        normalized === "stats"
+      ) {
+        return PROFILING_MODE_AUTO;
+      }
+    }
+
+    if (candidate == null) {
+      return PROFILING_MODE_AUTO;
+    }
+
+    return PROFILING_MODE_AUTO;
+  }
+
+  #shouldProfileGrid() {
+    if (this.#profilingMode === PROFILING_MODE_ALWAYS) {
+      return true;
+    }
+
+    if (this.#profilingMode === PROFILING_MODE_NEVER) {
+      return false;
+    }
+
+    return typeof this.stats?.recordPerformanceSummary === "function";
+  }
+
+  #resetProfilingScratch() {
+    const profiling = this.#profilingScratch;
+
+    profiling.activeSnapshotMs = 0;
+    profiling.activeSnapshotCount = 0;
+    profiling.activeSnapshotReused = true;
+    profiling.findTargetsMs = 0;
+    profiling.findTargetsCalls = 0;
+    profiling.findTargetsTiles = 0;
+    profiling.findTargetsAttempts = 0;
+    profiling.findTargetsBudgetSkips = 0;
+    profiling.findTargetsFullScans = 0;
+
+    return profiling;
+  }
+
+  #recordProfilingSummary(profiling) {
+    if (!profiling) return;
+
+    const findTargetsAvg =
+      profiling.findTargetsCalls > 0
+        ? profiling.findTargetsMs / profiling.findTargetsCalls
+        : 0;
+
+    if (this.stats?.recordPerformanceSummary) {
+      this.stats.recordPerformanceSummary("grid", {
+        activeSnapshotCopyMs: { value: profiling.activeSnapshotMs },
+        activeSnapshotSize: {
+          value: profiling.activeSnapshotCount,
+          accumulate: false,
+        },
+        activeSnapshotReused: {
+          value: profiling.activeSnapshotReused ? 1 : 0,
+          accumulate: false,
+        },
+        findTargetsTotalMs: { value: profiling.findTargetsMs },
+        findTargetsAvgMs: { value: findTargetsAvg, accumulate: false },
+        findTargetsCalls: {
+          value: profiling.findTargetsCalls,
+          count: profiling.findTargetsCalls,
+          accumulate: true,
+        },
+        findTargetsTiles: {
+          value: profiling.findTargetsTiles,
+          count: profiling.findTargetsCalls > 0 ? profiling.findTargetsCalls : 0,
+          accumulate: true,
+        },
+        findTargetsAttempts: {
+          value: profiling.findTargetsAttempts,
+          count: profiling.findTargetsCalls > 0 ? profiling.findTargetsCalls : 0,
+          accumulate: true,
+        },
+        findTargetsEarlyExits: {
+          value: profiling.findTargetsBudgetSkips,
+          count: profiling.findTargetsBudgetSkips,
+          accumulate: true,
+        },
+        findTargetsFullScans: {
+          value: profiling.findTargetsFullScans,
+          count: profiling.findTargetsFullScans,
+          accumulate: true,
+        },
+      });
+    }
+
+    this.lastGridProfiling = {
+      ...profiling,
+      findTargetsAvgMs: findTargetsAvg,
+    };
+  }
+
+  #resolveSightOffsets(sight) {
+    const radius = Math.max(0, Math.floor(Number.isFinite(sight) ? sight : 0));
+
+    if (this.#sightOffsetCache.has(radius)) {
+      return this.#sightOffsetCache.get(radius);
+    }
+
+    const offsets = [];
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx === 0 && dy === 0) continue;
+
+        const distance = Math.max(Math.abs(dy), Math.abs(dx));
+        const manhattan = Math.abs(dy) + Math.abs(dx);
+
+        offsets.push({ dy, dx, distance, manhattan });
+      }
+    }
+
+    offsets.sort((a, b) => {
+      if (a.distance === b.distance) {
+        if (a.manhattan === b.manhattan) {
+          if (a.dy === b.dy) return a.dx - b.dx;
+
+          return a.dy - b.dy;
+        }
+
+        return a.manhattan - b.manhattan;
+      }
+
+      return a.distance - b.distance;
+    });
+
+    const flat = new Array(offsets.length * 2);
+    const fullRadius = Math.min(radius, FULL_VISION_SCAN_RADIUS);
+    let outerStartIndex = flat.length;
+    let index = 0;
+
+    for (const entry of offsets) {
+      if (outerStartIndex === flat.length && entry.distance > fullRadius) {
+        outerStartIndex = index;
+      }
+
+      flat[index++] = entry.dy;
+      flat[index++] = entry.dx;
+    }
+
+    const cached = {
+      offsets: flat,
+      innerPairCount: outerStartIndex / 2,
+      totalPairs: offsets.length,
+    };
+
+    this.#sightOffsetCache.set(radius, cached);
+
+    return cached;
+  }
+
+  #resolveVisionBudgets(cell, totalPairs, innerPairs) {
+    const sight = Math.max(
+      0,
+      Math.floor(Number.isFinite(cell?.sight) ? cell.sight : 0),
+    );
+    const baseBudget = DEFAULT_SCAN_BUDGET_BASE + sight * DEFAULT_SCAN_BUDGET_PER_SIGHT;
+    const boundedBudget = Math.min(MAX_SCAN_BUDGET, baseBudget);
+    const scanBudget = Math.min(totalPairs, Math.max(innerPairs, boundedBudget));
+    const matePool = Math.min(scanBudget, Math.max(4, Math.round(3 + sight * 0.75)));
+    const enemyPool = Math.min(scanBudget, Math.max(3, Math.round(3 + sight * 0.6)));
+    const societyPool = Math.min(scanBudget, Math.max(3, Math.round(2 + sight * 0.5)));
+
+    return {
+      scanBudget,
+      mate: matePool,
+      enemy: enemyPool,
+      society: societyPool,
+    };
   }
 
   static #isObstacle(obstacles, row, col) {
@@ -1244,7 +1521,8 @@ export default class GridManager {
       obstaclePresets,
       rng,
       brainSnapshotCollector,
-      performanceNow,
+      performanceNow: performanceNowHook,
+      profileGridMetrics,
     } = options;
     const {
       eventManager: resolvedEventManager,
@@ -1272,8 +1550,13 @@ export default class GridManager {
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
     this.energyDirtyTiles = new Set();
+    const resolvedPerformanceNow =
+      typeof performanceNowHook === "function" ? performanceNowHook : PERFORMANCE_NOW;
+
     this.energyTimerNow =
-      typeof performanceNow === "function" ? performanceNow : defaultPerformanceNow;
+      typeof performanceNowHook === "function"
+        ? performanceNowHook
+        : defaultPerformanceNow;
     this.eventManager = resolvedEventManager;
     this.eventContext = createEventContext(eventContext);
     this.eventEffectCache = new Map();
@@ -1300,6 +1583,12 @@ export default class GridManager {
       timestamp: 0,
     };
     this.#resetImageDataBuffer();
+    this.lastGridProfiling = null;
+    this.#profilingMode = this.#normalizeProfilingMode(
+      profileGridMetrics ?? PROFILING_MODE_AUTO,
+    );
+    this.profileGridMetrics = this.#profilingMode;
+    this.#performanceNow = resolvedPerformanceNow;
     this.obstaclePresets = resolveObstaclePresetCatalog(obstaclePresets);
     this.#markAllEnergyDirty();
     const knownPresetIds = new Set(
@@ -1549,6 +1838,19 @@ export default class GridManager {
 
   setBrainSnapshotCollector(collector) {
     this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
+  }
+
+  setProfileGridMetrics(preference) {
+    const nextMode = this.#normalizeProfilingMode(preference);
+
+    this.#profilingMode = nextMode;
+    this.profileGridMetrics = nextMode;
+
+    if (nextMode === PROFILING_MODE_NEVER) {
+      this.lastGridProfiling = null;
+    }
+
+    return this.profileGridMetrics;
   }
 
   setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {
@@ -3889,6 +4191,7 @@ export default class GridManager {
       mutationMultiplier,
       combatEdgeSharpness,
       combatTerritoryEdgeFactor,
+      profiling,
     },
   ) {
     const cell = this.grid[row][col];
@@ -4066,6 +4369,7 @@ export default class GridManager {
       densityEffectMultiplier,
       societySimilarity,
       enemySimilarity,
+      profiling,
     });
 
     if (
@@ -4928,9 +5232,28 @@ export default class GridManager {
 
     this.densityGrid = densityGrid;
     const processed = new WeakSet();
-    const activeSnapshot = Array.from(this.activeCells);
+    const shouldProfile = this.#shouldProfileGrid();
+    const profiling = shouldProfile ? this.#resetProfilingScratch() : null;
+    const activeSnapshot = this.#activeSnapshotScratch;
 
-    for (const cell of activeSnapshot) {
+    activeSnapshot.length = 0;
+
+    const snapshotStart = profiling ? this.#now() : 0;
+
+    if (this.activeCells && this.activeCells.size > 0) {
+      for (const cell of this.activeCells) {
+        activeSnapshot.push(cell);
+      }
+    }
+
+    if (profiling) {
+      profiling.activeSnapshotMs = this.#now() - snapshotStart;
+      profiling.activeSnapshotCount = activeSnapshot.length;
+    }
+
+    for (let i = 0; i < activeSnapshot.length; i++) {
+      const cell = activeSnapshot[i];
+
       if (!cell) continue;
       const row = cell.row;
       const col = cell.col;
@@ -4959,8 +5282,11 @@ export default class GridManager {
         mutationMultiplier,
         combatEdgeSharpness: combatSharpness,
         combatTerritoryEdgeFactor: territoryFactor,
+        profiling,
       });
     }
+
+    activeSnapshot.length = 0;
 
     if (
       this.autoSeedEnabled &&
@@ -4978,6 +5304,11 @@ export default class GridManager {
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
     this.#enforceEnergyExclusivity();
     this.lastSnapshot = this.buildSnapshot();
+    if (!profiling) {
+      this.lastGridProfiling = null;
+    } else {
+      this.#recordProfilingSummary(profiling);
+    }
 
     return this.lastSnapshot;
   }
@@ -5102,7 +5433,12 @@ export default class GridManager {
     row,
     col,
     cell,
-    { densityEffectMultiplier = 1, societySimilarity = 1, enemySimilarity = 0 } = {},
+    {
+      densityEffectMultiplier = 1,
+      societySimilarity = 1,
+      enemySimilarity = 0,
+      profiling = null,
+    } = {},
   ) {
     const mates = [];
     const enemies = [];
@@ -5134,57 +5470,100 @@ export default class GridManager {
     const grid = this.grid;
     const rows = this.rows;
     const cols = this.cols;
-    const sight = cell.sight;
+    const { offsets, innerPairCount, totalPairs } = this.#resolveSightOffsets(
+      cell.sight,
+    );
+    const budgets = this.#resolveVisionBudgets(cell, totalPairs, innerPairCount);
+    let processed = 0;
+    let attempts = 0;
+    let earlyExit = false;
+    const timerStart = profiling ? this.#now() : 0;
 
-    for (let dy = -sight; dy <= sight; dy++) {
+    for (let i = 0; i < offsets.length; i += 2) {
+      attempts += 1;
+
+      const dy = offsets[i];
+      const dx = offsets[i + 1];
       const newRow = row + dy;
+      const newCol = col + dx;
 
-      if (newRow < 0 || newRow >= rows) continue;
+      if (newRow < 0 || newRow >= rows || newCol < 0 || newCol >= cols) {
+        continue;
+      }
 
-      const gridRow = grid[newRow];
+      processed += 1;
 
-      for (let dx = -sight; dx <= sight; dx++) {
-        if (dx === 0 && dy === 0) continue;
+      const target = grid[newRow][newCol];
 
-        const newCol = col + dx;
-
-        if (newCol < 0 || newCol >= cols) continue;
-
-        const target = gridRow[newCol];
-
-        if (!target) continue;
-
-        const similarity = getPairSimilarity(cell, target);
-
-        if (similarity >= allyT) {
-          society.push({
-            row: newRow,
-            col: newCol,
-            target,
-            classification: "society",
-            precomputedSimilarity: similarity,
-          });
-        } else if (
-          similarity <= enemyT ||
-          (() => {
-            const hostilityRng =
-              typeof cell.resolveSharedRng === "function"
-                ? cell.resolveSharedRng(target, "hostilityGate")
-                : Math.random;
-
-            return hostilityRng() < enemyBias;
-          })()
+      if (!target) {
+        if (
+          processed >= budgets.scanBudget &&
+          i >= innerPairCount * 2 &&
+          mates.length >= budgets.mate &&
+          enemies.length >= budgets.enemy &&
+          society.length >= budgets.society
         ) {
-          enemies.push({ row: newRow, col: newCol, target });
-        } else {
-          mates.push({
-            row: newRow,
-            col: newCol,
-            target,
-            classification: "mate",
-            precomputedSimilarity: similarity,
-          });
+          earlyExit = true;
+          break;
         }
+
+        continue;
+      }
+
+      const similarity = getPairSimilarity(cell, target);
+
+      if (similarity >= allyT) {
+        society.push({
+          row: newRow,
+          col: newCol,
+          target,
+          classification: "society",
+          precomputedSimilarity: similarity,
+        });
+      } else if (
+        similarity <= enemyT ||
+        (() => {
+          const hostilityRng =
+            typeof cell.resolveSharedRng === "function"
+              ? cell.resolveSharedRng(target, "hostilityGate")
+              : Math.random;
+
+          return hostilityRng() < enemyBias;
+        })()
+      ) {
+        enemies.push({ row: newRow, col: newCol, target });
+      } else {
+        mates.push({
+          row: newRow,
+          col: newCol,
+          target,
+          classification: "mate",
+          precomputedSimilarity: similarity,
+        });
+      }
+
+      if (
+        processed >= budgets.scanBudget &&
+        i >= innerPairCount * 2 &&
+        mates.length >= budgets.mate &&
+        enemies.length >= budgets.enemy &&
+        society.length >= budgets.society
+      ) {
+        earlyExit = true;
+        break;
+      }
+    }
+
+    if (profiling) {
+      profiling.findTargetsCalls += 1;
+      profiling.findTargetsTiles += processed;
+      profiling.findTargetsAttempts += attempts;
+      profiling.findTargetsMs += this.#now() - timerStart;
+
+      if (earlyExit) {
+        profiling.findTargetsBudgetSkips += 1;
+      } else if (attempts >= totalPairs) {
+        profiling.findTargetsFullScans += 1;
       }
     }
 

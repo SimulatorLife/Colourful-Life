@@ -334,12 +334,12 @@ export default class Stats {
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
     this.lifeEventSequence = 0;
     this.deathCauseTotals = Object.create(null);
-    this.performance = {
-      energy: {
-        lastTiming: null,
-        history: createHistoryRing(240),
-      },
+    this.performance = Object.create(null);
+    this.performance.energy = {
+      lastTiming: null,
+      history: createHistoryRing(240),
     };
+    this.starvationRateSmoothed = 0;
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -425,6 +425,12 @@ export default class Stats {
     }
     this.#tickInProgress = false;
     this.#lifeEventTickBase = this.totals.ticks;
+    this.performance = Object.create(null);
+    this.performance.energy = {
+      lastTiming: null,
+      history: createHistoryRing(240),
+    };
+    this.starvationRateSmoothed = 0;
   }
 
   setDiversityTarget(value) {
@@ -455,6 +461,95 @@ export default class Stats {
     const value = Number.isFinite(this.strategyPressure) ? this.strategyPressure : 0;
 
     return clamp01(value);
+  }
+
+  recordPerformanceSummary(domain, summary) {
+    if (!domain || typeof domain !== "string") return;
+    if (!summary || typeof summary !== "object") return;
+
+    if (!this.performance || typeof this.performance !== "object") {
+      this.performance = Object.create(null);
+    }
+
+    const bucket = (this.performance[domain] ??= {
+      lastTick: Object.create(null),
+      totals: Object.create(null),
+      samples: Object.create(null),
+    });
+    const lastTick = bucket.lastTick;
+
+    if (lastTick && typeof lastTick === "object") {
+      for (const key of Object.keys(lastTick)) {
+        delete lastTick[key];
+      }
+    }
+
+    for (const [metric, descriptor] of Object.entries(summary)) {
+      if (!metric) continue;
+
+      let value = null;
+      let accumulate = true;
+      let sampleCount = null;
+
+      if (
+        descriptor != null &&
+        typeof descriptor === "object" &&
+        !Array.isArray(descriptor)
+      ) {
+        if (descriptor.value != null) {
+          const numericValue = Number(descriptor.value);
+
+          if (Number.isFinite(numericValue)) {
+            value = numericValue;
+          }
+        } else {
+          const numericValue = Number(descriptor);
+
+          if (Number.isFinite(numericValue)) {
+            value = numericValue;
+          }
+        }
+
+        if (descriptor.accumulate === false) {
+          accumulate = false;
+        }
+
+        if (descriptor.count != null) {
+          const numericCount = Number(descriptor.count);
+
+          if (Number.isFinite(numericCount)) {
+            sampleCount = numericCount;
+          }
+        } else if (descriptor.samples != null) {
+          const numericSamples = Number(descriptor.samples);
+
+          if (Number.isFinite(numericSamples)) {
+            sampleCount = numericSamples;
+          }
+        }
+      } else {
+        const numericValue = Number(descriptor);
+
+        if (Number.isFinite(numericValue)) {
+          value = numericValue;
+        }
+      }
+
+      if (value != null) {
+        lastTick[metric] = value;
+
+        if (accumulate) {
+          bucket.totals[metric] = (bucket.totals[metric] ?? 0) + value;
+        }
+      }
+
+      const resolvedSampleCount =
+        sampleCount != null ? sampleCount : value != null ? 1 : null;
+
+      if (resolvedSampleCount != null) {
+        bucket.samples[metric] = (bucket.samples[metric] ?? 0) + resolvedSampleCount;
+      }
+    }
   }
 
   #updateDiversityPressure(
@@ -1060,9 +1155,20 @@ export default class Stats {
       this.pushHistory("mutationMultiplier", this.mutationMultiplier);
     }
     const starvationDeaths = this.deathCausesTick?.starvation ?? 0;
-    const starvationRate = this.deaths > 0 ? starvationDeaths / this.deaths : 0;
+    const starvationInstant = this.deaths > 0 ? starvationDeaths / this.deaths : 0;
+    const totalDeaths = this.totals?.deaths ?? 0;
+    const starvationCumulative =
+      totalDeaths > 0 && Number.isFinite(totalDeaths)
+        ? (this.deathCauseTotals?.starvation ?? 0) / totalDeaths
+        : 0;
+    const previousStarvation = Number.isFinite(this.starvationRateSmoothed)
+      ? this.starvationRateSmoothed
+      : 0;
+    const blendedStarvation =
+      previousStarvation * 0.6 + starvationCumulative * 0.25 + starvationInstant * 0.15;
 
-    this.pushHistory("starvationRate", starvationRate);
+    this.starvationRateSmoothed = clamp01(blendedStarvation);
+    this.pushHistory("starvationRate", this.starvationRateSmoothed);
 
     this.traitPresence = traitPresence;
     this.behavioralEvenness = behaviorEvenness;
@@ -1108,7 +1214,7 @@ export default class Stats {
       blockedMatings: mateStats.blocks || 0,
       lastBlockedReproduction: this.lastBlockedReproduction,
       deathBreakdown: this.deathCausesTick ? { ...this.deathCausesTick } : {},
-      starvationRate,
+      starvationRate: this.starvationRateSmoothed,
     };
   }
 
