@@ -47,6 +47,9 @@ where practical.
 - Removed horizontal scroll bars from sidebar panels by clamping their width
   and allowing controls to flex within the available space so each panel stays
   within a single view.
+- Realigned the Simulation Controls show/hide toggle by moving scrollbar
+  gutter spacing into the scrollable body so its header button lines up with
+  the other panel toggles.
 
 ### Removed
 

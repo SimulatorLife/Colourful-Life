@@ -212,10 +212,16 @@ canvas {
   position: sticky;
   top: var(--space-md);
   max-height: calc(100vh - var(--space-lg));
-  overflow-y: auto;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
   grid-column: 1 / -1;
   align-self: start;
+}
+
+.controls-panel .panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
   scrollbar-gutter: stable;
 }
 .controls-panel.expanded {
@@ -226,6 +232,9 @@ canvas {
   .controls-panel {
     position: static;
     max-height: none;
+  }
+
+  .controls-panel .panel-body {
     overflow: visible;
   }
 }

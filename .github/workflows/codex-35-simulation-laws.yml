@@ -18,10 +18,10 @@ jobs:
       pr_title: "Codex: Core Law Validation"
       pr_body: "Seed PR for Codex to audit core simulation laws and land one targeted improvement."
       prompt: >
-        Review the Colourful Life codebase with the explicit goal of validating and reinforcing the "Simulation Laws"
+        Create one targeted change to the codebase to reinforce/align with the "Simulation Laws"
         outlined in the README. These laws are fundamental to the integrity and realism of the simulation, and it is crucial
         that they are consistently upheld throughout the codebase. Audit current implementations, documentation, and 
-        tests against these rules. Identify the highest leverage gap—missing or outdated docs, drift in behaviour, inadequate 
+        tests against these rules to identify one area to target and improve. Identify the highest leverage gap—missing or outdated docs, drift in behaviour, inadequate 
         safeguards, or missing regression coverage—and deliver one focused fix–you will always be able to find SOMETHING to 
         improve with regards to the "Simulation Laws". Acceptable scopes include tightening logic, clarifying or expanding 
         documentation, or adding/adjusting tests. Avoid broad project-wide refactors; commit your changes/fixes, ensuring 
