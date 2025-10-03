@@ -8,7 +8,13 @@ import {
   createSelectRow,
   createSliderRow,
 } from "./controlBuilders.js";
-import { clamp, clamp01, reportError, warnOnce, toPlainObject } from "../utils.js";
+import {
+  clamp,
+  clamp01,
+  warnOnce,
+  toPlainObject,
+  invokeWithErrorBoundary,
+} from "../utils.js";
 
 const AUTO_PAUSE_DESCRIPTION =
   "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
@@ -1067,19 +1073,11 @@ export default class UIManager {
   #notifySettingChange(key, value) {
     const callback = this.simulationCallbacks?.onSettingChange;
 
-    if (typeof callback !== "function") {
-      return;
-    }
-
-    try {
-      callback(key, value);
-    } catch (error) {
-      reportError(
-        `UI onSettingChange callback threw while processing "${key}"; continuing without interruption.`,
-        error,
-        { once: true },
-      );
-    }
+    invokeWithErrorBoundary(callback, [key, value], {
+      message: (settingKey) =>
+        `UI onSettingChange callback threw while processing "${settingKey}"; continuing without interruption.`,
+      once: true,
+    });
   }
 
   #updateSetting(key, value) {

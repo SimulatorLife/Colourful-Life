@@ -11,7 +11,12 @@ import {
   resolveSimulationDefaults,
 } from "./config.js";
 import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
-import { clamp, reportError, sanitizeNumber, toFiniteOrNull } from "./utils.js";
+import {
+  clamp,
+  sanitizeNumber,
+  toFiniteOrNull,
+  invokeWithErrorBoundary,
+} from "./utils.js";
 import {
   ensureCanvasDimensions,
   resolveCanvas,
@@ -427,15 +432,11 @@ export default class SimulationEngine {
     if (!bucket) return;
 
     bucket.forEach((handler) => {
-      try {
-        handler(payload);
-      } catch (error) {
-        reportError(
+      invokeWithErrorBoundary(handler, [payload], {
+        message: () =>
           `SimulationEngine listener for "${event}" threw; continuing without interruption.`,
-          error,
-          { once: true },
-        );
-      }
+        once: true,
+      });
     });
   }
 
