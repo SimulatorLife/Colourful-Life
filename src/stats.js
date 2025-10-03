@@ -1,5 +1,5 @@
 import { TRAIT_ACTIVATION_THRESHOLD } from "./config.js";
-import { clamp, clamp01, warnOnce } from "./utils.js";
+import { clamp, clamp01, toFiniteOrNull, warnOnce } from "./utils.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;
@@ -572,21 +572,10 @@ export default class Stats {
 
     if (safeContext.cell) delete safeContext.cell;
 
-    const row = Number.isFinite(safeContext.row)
-      ? safeContext.row
-      : Number.isFinite(resolvedCell?.row)
-        ? resolvedCell.row
-        : null;
-    const col = Number.isFinite(safeContext.col)
-      ? safeContext.col
-      : Number.isFinite(resolvedCell?.col)
-        ? resolvedCell.col
-        : null;
-    const energy = Number.isFinite(safeContext.energy)
-      ? safeContext.energy
-      : Number.isFinite(resolvedCell?.energy)
-        ? resolvedCell.energy
-        : null;
+    const row = toFiniteOrNull(safeContext.row) ?? toFiniteOrNull(resolvedCell?.row);
+    const col = toFiniteOrNull(safeContext.col) ?? toFiniteOrNull(resolvedCell?.col);
+    const energy =
+      toFiniteOrNull(safeContext.energy) ?? toFiniteOrNull(resolvedCell?.energy);
     const colorCandidate = safeContext.color;
     const color =
       typeof colorCandidate === "string" && colorCandidate.length > 0
@@ -596,15 +585,10 @@ export default class Stats {
           : typeof resolvedCell?.color === "string"
             ? resolvedCell.color
             : null;
-    const mutationMultiplier = Number.isFinite(safeContext.mutationMultiplier)
-      ? safeContext.mutationMultiplier
-      : null;
-    const intensity = Number.isFinite(safeContext.intensity)
-      ? safeContext.intensity
-      : null;
-    const winChance = Number.isFinite(safeContext.winChance)
-      ? clamp01(safeContext.winChance)
-      : null;
+    const mutationMultiplier = toFiniteOrNull(safeContext.mutationMultiplier);
+    const intensity = toFiniteOrNull(safeContext.intensity);
+    const winChanceCandidate = toFiniteOrNull(safeContext.winChance);
+    const winChance = winChanceCandidate != null ? clamp01(winChanceCandidate) : null;
     const opponentColor =
       typeof safeContext.opponentColor === "string" &&
       safeContext.opponentColor.length > 0
