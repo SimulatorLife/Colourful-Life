@@ -80,4 +80,43 @@ test("autopause toggle updates pause indicator and notifies listeners", async ()
   }
 });
 
+test("setAutoPauseOnBlur sanitizes string inputs", async () => {
+  const restore = setupDom();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      { requestFrame: () => {} },
+      "#app",
+      {},
+      { initialSettings: { autoPauseOnBlur: false } },
+    );
+
+    uiManager.setPauseState(true);
+    uiManager.setAutoPauseOnBlur("true");
+
+    assert.is(uiManager.autoPauseOnBlur, true, "string 'true' enables auto pause");
+    assert.is(uiManager.autoPauseCheckbox?.checked, true);
+    assert.is(uiManager.pauseOverlayAutopause?.hidden, false);
+
+    uiManager.setAutoPauseOnBlur("false");
+    assert.is(uiManager.autoPauseOnBlur, false, "string 'false' disables auto pause");
+    assert.is(uiManager.autoPauseCheckbox?.checked, false);
+    assert.is(uiManager.pauseOverlayAutopause?.hidden, true);
+
+    uiManager.setAutoPauseOnBlur("1");
+    assert.is(uiManager.autoPauseOnBlur, true, "numeric string '1' enables auto pause");
+
+    uiManager.setAutoPauseOnBlur("0");
+    assert.is(
+      uiManager.autoPauseOnBlur,
+      false,
+      "numeric string '0' disables auto pause",
+    );
+  } finally {
+    restore();
+  }
+});
+
 test.run();
