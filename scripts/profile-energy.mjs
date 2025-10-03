@@ -1,10 +1,11 @@
 import { performance as nodePerformance } from "node:perf_hooks";
 
-const [{ createRNG }, { default: DNA }, { default: SimulationEngine }] = await Promise.all([
-  import("../src/utils.js"),
-  import("../src/genome.js"),
-  import("../src/simulationEngine.js"),
-]);
+const [{ createRNG }, { default: DNA }, { default: SimulationEngine }] =
+  await Promise.all([
+    import("../src/utils.js"),
+    import("../src/genome.js"),
+    import("../src/simulationEngine.js"),
+  ]);
 
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
@@ -35,7 +36,11 @@ const toPositiveInteger = (value, fallback, { min = 1 } = {}) => {
 const envNumber = (key, fallback, options) =>
   toPositiveInteger(RUNTIME_ENV?.[key], fallback, options);
 
-const envFloat = (key, fallback, { min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY } = {}) => {
+const envFloat = (
+  key,
+  fallback,
+  { min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY } = {},
+) => {
   const value = RUNTIME_ENV?.[key];
 
   if (value == null) return fallback;
