@@ -1,6 +1,6 @@
 import UIManager from "./uiManager.js";
 import { createHeadlessUiManager } from "./headlessUiManager.js";
-import { toPlainObject } from "../utils.js";
+import { reportError, toPlainObject } from "../utils.js";
 
 function normalizeLayoutOptions({ engine, uiOptions = {}, sanitizedDefaults = {} }) {
   const normalizedUi = toPlainObject(uiOptions);
@@ -33,17 +33,42 @@ function createHeadlessOptions({
     selectionManager: engine?.selectionManager ?? normalizedUi.selectionManager ?? null,
   };
   const userOnSettingChange = mergedOptions.onSettingChange;
+  const simulationOnSettingChange = simulationCallbacks.onSettingChange;
+
+  const invokeSettingChange = (callback, key, value, context) => {
+    if (typeof callback !== "function") {
+      return;
+    }
+
+    try {
+      callback(key, value);
+    } catch (error) {
+      reportError(
+        `${context} threw while handling "${key}" setting change; continuing without interruption.`,
+        error,
+        { once: true },
+      );
+    }
+  };
 
   mergedOptions.onSettingChange = (key, value) => {
     if (key === "updatesPerSecond") {
       engine?.setUpdatesPerSecond?.(value);
-    } else if (typeof simulationCallbacks.onSettingChange === "function") {
-      simulationCallbacks.onSettingChange(key, value);
+    } else {
+      invokeSettingChange(
+        simulationOnSettingChange,
+        key,
+        value,
+        "Headless simulation onSettingChange callback",
+      );
     }
 
-    if (typeof userOnSettingChange === "function") {
-      userOnSettingChange(key, value);
-    }
+    invokeSettingChange(
+      userOnSettingChange,
+      key,
+      value,
+      "Headless UI onSettingChange callback",
+    );
   };
 
   return mergedOptions;
