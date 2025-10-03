@@ -50,7 +50,9 @@ import { reportError, sanitizeNumber } from "../utils.js";
  *   getEnemySimilarity: () => number,
  *   getEventStrengthMultiplier: () => number,
  *   getEnergyRegenRate: () => number,
+ *   setEnergyRegenRate: (value: number) => void,
  *   getEnergyDiffusionRate: () => number,
+ *   setEnergyDiffusionRate: (value: number) => void,
  *   getMatingDiversityThreshold: () => number,
  *   setMatingDiversityThreshold: (value: number) => void,
  *   getLowDiversityReproMultiplier: () => number,
@@ -141,7 +143,17 @@ export function createHeadlessUiManager(options = {}) {
     getCombatEdgeSharpness: () => settings.combatEdgeSharpness,
     getCombatTerritoryEdgeFactor: () => settings.combatTerritoryEdgeFactor,
     getEnergyRegenRate: () => settings.energyRegenRate,
+    setEnergyRegenRate: (value) => {
+      if (updateIfFinite("energyRegenRate", value, { min: 0 })) {
+        notify("energyRegenRate", settings.energyRegenRate);
+      }
+    },
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
+    setEnergyDiffusionRate: (value) => {
+      if (updateIfFinite("energyDiffusionRate", value, { min: 0 })) {
+        notify("energyDiffusionRate", settings.energyDiffusionRate);
+      }
+    },
     getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
     setMatingDiversityThreshold: (value) => {
       if (updateIfFinite("matingDiversityThreshold", value, { min: 0, max: 1 })) {
