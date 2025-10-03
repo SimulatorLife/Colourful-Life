@@ -1569,6 +1569,8 @@ export default class GridManager {
         }
       }
     }
+
+    this.seed(this.activeCells.size, this.minPopulation);
   }
 
   resize(rows, cols, options = {}) {

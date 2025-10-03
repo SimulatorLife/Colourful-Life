@@ -181,3 +181,23 @@ test("population scarcity emits signal without forced reseeding", async () => {
     "snapshot should expose the scarcity indicator",
   );
 });
+
+test("init guarantees at least the minimum population", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  const rows = 24;
+  const cols = 24;
+  const gm = new GridManager(rows, cols, {
+    eventManager: { activeEvents: [] },
+    stats: { onBirth() {} },
+    ctx: {},
+    cellSize: 1,
+    rng: () => 0.99,
+  });
+
+  assert.is(
+    gm.activeCells.size,
+    gm.minPopulation,
+    "constructor seeding should top up to the minimum population",
+  );
+});
