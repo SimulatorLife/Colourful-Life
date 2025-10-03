@@ -1,5 +1,13 @@
 import { MAX_TILE_ENERGY } from "./config.js";
 
+function resolveMaxTileEnergy(candidate) {
+  if (Number.isFinite(candidate) && candidate > 0) {
+    return candidate;
+  }
+
+  return MAX_TILE_ENERGY;
+}
+
 /**
  * Calculates the leaderboard fitness score for a cell.
  *
@@ -13,13 +21,7 @@ import { MAX_TILE_ENERGY } from "./config.js";
  * @returns {number} Fitness score used by the leaderboard.
  */
 export function computeFitness(cell, maxTileEnergy) {
-  const gridManager =
-    typeof globalThis !== "undefined" ? globalThis.GridManager : undefined;
-  const maxEnergy =
-    maxTileEnergy ??
-    (gridManager && gridManager.maxTileEnergy != null
-      ? gridManager.maxTileEnergy
-      : MAX_TILE_ENERGY);
+  const maxEnergy = resolveMaxTileEnergy(maxTileEnergy);
 
   const fights = (cell.fightsWon - cell.fightsLost) * 0.5;
   const offspring = (cell.offspring || 0) * 1.5;

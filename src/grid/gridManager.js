@@ -21,6 +21,7 @@ import { clearTileEnergyBuffers } from "./energyUtils.js";
 import ReproductionZonePolicy from "./reproductionZonePolicy.js";
 import { OBSTACLE_PRESETS, resolveObstaclePresetCatalog } from "./obstaclePresets.js";
 import { resolvePopulationScarcityMultiplier } from "./populationScarcity.js";
+import { resolveGridEnvironment } from "./gridEnvironment.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -873,10 +874,8 @@ export default class GridManager {
     return this.#spawnCandidateScratch;
   }
 
-  constructor(
-    rows,
-    cols,
-    {
+  constructor(rows, cols, options = {}) {
+    const {
       eventManager,
       eventContext,
       ctx = null,
@@ -891,8 +890,14 @@ export default class GridManager {
       obstaclePresets,
       rng,
       brainSnapshotCollector,
-    } = {},
-  ) {
+    } = options;
+    const {
+      eventManager: resolvedEventManager,
+      ctx: resolvedCtx,
+      cellSize: resolvedCellSize,
+      stats: resolvedStats,
+    } = resolveGridEnvironment({ eventManager, ctx, cellSize, stats }, GLOBAL);
+
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
@@ -905,12 +910,12 @@ export default class GridManager {
     this.energyNext = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.energyDeltaGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
-    this.eventManager = eventManager || window.eventManager;
+    this.eventManager = resolvedEventManager;
     this.eventContext = createEventContext(eventContext);
     this.eventEffectCache = new Map();
-    this.ctx = ctx || window.ctx;
-    this.cellSize = cellSize || window.cellSize || 8;
-    this.stats = stats || window.stats;
+    this.ctx = resolvedCtx;
+    this.cellSize = resolvedCellSize;
+    this.stats = resolvedStats;
     this.obstaclePresets = resolveObstaclePresetCatalog(obstaclePresets);
     const knownPresetIds = new Set(
       this.obstaclePresets
