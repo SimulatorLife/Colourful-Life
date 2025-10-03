@@ -911,6 +911,18 @@ export default class UIManager {
     return clamp(numeric, lowerBound, upperBound);
   }
 
+  #formatSpeedDisplay(value) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return "—";
+
+    const rounded = Math.round(numeric * 10) / 10;
+    const isWhole = Math.abs(rounded - Math.round(rounded)) < 1e-9;
+    const displayValue = isWhole ? Math.round(rounded) : rounded.toFixed(1);
+
+    return `${displayValue}×`;
+  }
+
   #setSpeedMultiplier(value) {
     const sanitized = this.#sanitizeSpeedMultiplier(value);
 
@@ -1716,7 +1728,7 @@ export default class UIManager {
       step: speedStep,
       value: this.speedMultiplier,
       title: "Speed multiplier relative to 60 updates/sec (0.5x..100x)",
-      format: (v) => `${v.toFixed(1)}x`,
+      format: (v) => this.#formatSpeedDisplay(v),
       onInput: (value) => {
         this.#setSpeedMultiplier(value);
       },
@@ -1734,11 +1746,7 @@ export default class UIManager {
         ? this.baseUpdatesPerSecond
         : (SIMULATION_DEFAULTS.updatesPerSecond ?? 60);
     const describeSpeedPreset = (multiplier) => {
-      const display =
-        Number.isFinite(multiplier) &&
-        Math.abs(multiplier - Math.round(multiplier)) < 1e-9
-          ? `${Math.round(multiplier)}×`
-          : `${multiplier.toFixed(1)}×`;
+      const display = this.#formatSpeedDisplay(multiplier);
       const updates = Number.isFinite(baseUpdates)
         ? Math.round(baseUpdates * multiplier)
         : 0;
