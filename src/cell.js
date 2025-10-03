@@ -410,8 +410,10 @@ export default class Cell {
     return offspring;
   }
 
-  similarityTo(other) {
-    return this.dna.similarity(other.dna);
+  similarityTo(other, options = undefined) {
+    if (!other?.dna) return 0;
+
+    return this.dna.similarity(other.dna, options);
   }
 
   getReproductionCooldown() {

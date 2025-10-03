@@ -95,6 +95,7 @@ export class DNA {
     this._seed = null;
     this._rngCache = new Map();
     this._sharedRngCache = new Map();
+    this._inverseMaxDistanceCache = new Map();
 
     if (genesInput) {
       const limit = Math.min(genesInput.length ?? 0, geneCount);
@@ -239,6 +240,28 @@ export class DNA {
     this._seed = null;
     if (this._rngCache) this._rngCache.clear();
     if (this._sharedRngCache) this._sharedRngCache.clear();
+    if (this._inverseMaxDistanceCache) this._inverseMaxDistanceCache.clear();
+  }
+
+  #resolveInverseMaxDistance(geneCount) {
+    if (!(geneCount > 0)) {
+      return 0;
+    }
+
+    if (!this._inverseMaxDistanceCache) {
+      this._inverseMaxDistanceCache = new Map();
+    }
+
+    if (this._inverseMaxDistanceCache.has(geneCount)) {
+      return this._inverseMaxDistanceCache.get(geneCount);
+    }
+
+    const maxDist = Math.sqrt(geneCount * 255 * 255);
+    const inverse = maxDist > 0 ? 1 / maxDist : 0;
+
+    this._inverseMaxDistanceCache.set(geneCount, inverse);
+
+    return inverse;
   }
 
   #createGenesProxy(target) {
@@ -2043,22 +2066,39 @@ export class DNA {
     return new DNA({ genes, geneCount });
   }
 
-  similarity(other) {
+  similarity(other, options = {}) {
     if (!other) return 0;
 
-    const geneCount = Math.max(this.length, other.length ?? 0);
+    const { squared = false, inverseMaxDistance } = options ?? {};
+    const otherLength =
+      typeof other?.length === "number" ? other.length : (other?.genes?.length ?? 0);
+    const geneCount = Math.max(this.length, otherLength);
     let distSq = 0;
 
     for (let i = 0; i < geneCount; i++) {
-      const delta = this.geneAt(i) - (other.geneAt?.(i) ?? 0);
+      const delta = this.geneAt(i) - (other.geneAt?.(i) ?? other?.genes?.[i] ?? 0);
 
       distSq += delta * delta;
     }
 
-    const dist = Math.sqrt(distSq);
-    const maxDist = Math.sqrt(geneCount * 255 * 255);
+    if (geneCount === 0) {
+      return 1;
+    }
 
-    return geneCount === 0 ? 1 : 1 - dist / maxDist;
+    const invMax =
+      typeof inverseMaxDistance === "number" && Number.isFinite(inverseMaxDistance)
+        ? inverseMaxDistance
+        : this.#resolveInverseMaxDistance(geneCount);
+
+    if (squared) {
+      const invMaxSq = invMax * invMax;
+
+      return 1 - distSq * invMaxSq;
+    }
+
+    const dist = Math.sqrt(distSq);
+
+    return 1 - dist * invMax;
   }
 }
 
