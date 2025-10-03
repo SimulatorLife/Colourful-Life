@@ -135,6 +135,81 @@ test("buildSnapshot feeds sorted top entries to the brain snapshot collector", a
   }
 });
 
+test("GridManager brain snapshot limit is configurable per instance and globally", async () => {
+  const { default: GridManager } = await gridManagerModulePromise;
+  const originalInit = GridManager.prototype.init;
+  const originalDefaultLimit = GridManager.brainSnapshotLimit;
+
+  try {
+    let capturedEntries = null;
+    let capturedOptions = null;
+
+    GridManager.prototype.init = function initStub() {};
+    GridManager.brainSnapshotLimit = "6";
+
+    const gm = new GridManager(2, 3, {
+      eventManager: { activeEvents: [] },
+      ctx: { fillStyle: null, fillRect() {} },
+      cellSize: 1,
+      stats: { onBirth() {}, onDeath() {}, onFight() {}, onCooperate() {} },
+      brainSnapshotCollector: (entries, options) => {
+        capturedEntries = Array.isArray(entries)
+          ? entries.map((entry) => ({ ...entry }))
+          : entries;
+        capturedOptions = options;
+
+        return entries;
+      },
+      brainSnapshotLimit: 3,
+    });
+
+    const energies = [80, 30, 60, 40, 20, 50];
+    let index = 0;
+
+    for (let row = 0; row < gm.rows; row += 1) {
+      for (let col = 0; col < gm.cols; col += 1) {
+        const energy = energies[index] ?? 0;
+
+        gm.grid[row][col] = createStubCell({
+          energy,
+          age: 0,
+          fightsWon: index,
+          offspring: index % 3,
+          brain: {
+            snapshot() {
+              return {};
+            },
+            neuronCount: 1,
+            connectionCount: 1,
+          },
+        });
+        index += 1;
+      }
+    }
+
+    gm.rebuildActiveCells();
+
+    const snapshot = gm.buildSnapshot(100);
+
+    assert.is(gm.brainSnapshotLimit, 3);
+    assert.is(snapshot.brainSnapshots.length, 3);
+    assert.is(Array.isArray(capturedEntries) ? capturedEntries.length : 0, 3);
+    assert.is(capturedOptions?.limit, 3);
+
+    const gmDefault = new GridManager(1, 1, {
+      eventManager: { activeEvents: [] },
+      ctx: { fillStyle: null, fillRect() {} },
+      cellSize: 1,
+      stats: { onBirth() {}, onDeath() {}, onFight() {}, onCooperate() {} },
+    });
+
+    assert.is(gmDefault.brainSnapshotLimit, 6);
+  } finally {
+    GridManager.prototype.init = originalInit;
+    GridManager.brainSnapshotLimit = originalDefaultLimit;
+  }
+});
+
 test("computeLeaderboard returns top entries in descending fitness order", async () => {
   const { computeLeaderboard } = await leaderboardModulePromise;
 

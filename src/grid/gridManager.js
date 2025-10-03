@@ -34,7 +34,7 @@ import {
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
 } from "../config.js";
-const BRAIN_SNAPSHOT_LIMIT = 5;
+const DEFAULT_BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 
@@ -211,6 +211,18 @@ export default class GridManager {
   static maxTileEnergy = MAX_TILE_ENERGY;
   static combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT;
   static combatTerritoryEdgeFactor = COMBAT_TERRITORY_EDGE_FACTOR;
+  static #defaultBrainSnapshotLimit = DEFAULT_BRAIN_SNAPSHOT_LIMIT;
+  static get brainSnapshotLimit() {
+    return GridManager.#defaultBrainSnapshotLimit;
+  }
+
+  static set brainSnapshotLimit(value) {
+    GridManager.#defaultBrainSnapshotLimit = sanitizeNumber(value, {
+      fallback: DEFAULT_BRAIN_SNAPSHOT_LIMIT,
+      min: 0,
+      round: Math.floor,
+    });
+  }
   #spawnCandidateScratch = null;
   #segmentWindowScratch = null;
   #columnEventScratch = null;
@@ -234,6 +246,19 @@ export default class GridManager {
   #imageDataCtx = null;
   #imageData = null;
   #imageDataNeedsFullRefresh = false;
+  #brainSnapshotLimit = DEFAULT_BRAIN_SNAPSHOT_LIMIT;
+
+  get brainSnapshotLimit() {
+    return this.#brainSnapshotLimit;
+  }
+
+  set brainSnapshotLimit(value) {
+    this.#brainSnapshotLimit = sanitizeNumber(value, {
+      fallback: GridManager.brainSnapshotLimit,
+      min: 0,
+      round: Math.floor,
+    });
+  }
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -1644,6 +1669,11 @@ export default class GridManager {
     });
     this.populationScarcitySignal = 0;
     this.brainSnapshotCollector = toBrainSnapshotCollector(brainSnapshotCollector);
+    const snapshotLimitSource = Object.hasOwn(options, "brainSnapshotLimit")
+      ? options.brainSnapshotLimit
+      : GridManager.brainSnapshotLimit;
+
+    this.brainSnapshotLimit = snapshotLimitSource;
     this.boundTryMove = (
       gridArr,
       sourceRow,
@@ -5326,7 +5356,7 @@ export default class GridManager {
       entries: [],
     };
     const topBrainEntries = createRankedBuffer(
-      BRAIN_SNAPSHOT_LIMIT,
+      this.brainSnapshotLimit,
       (a, b) => (b?.fitness ?? -Infinity) - (a?.fitness ?? -Infinity),
     );
 
@@ -5392,7 +5422,11 @@ export default class GridManager {
     const collector =
       this.brainSnapshotCollector ?? toBrainSnapshotCollector(GLOBAL.BrainDebugger);
     const collected = collector
-      ? collector(ranked, { limit: BRAIN_SNAPSHOT_LIMIT, gridManager: this, snapshot })
+      ? collector(ranked, {
+          limit: this.brainSnapshotLimit,
+          gridManager: this,
+          snapshot,
+        })
       : ranked;
 
     snapshot.brainSnapshots = Array.isArray(collected) ? collected : ranked;

@@ -249,6 +249,9 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showFitness: false,
   showLifeEventMarkers: false,
   leaderboardIntervalMs: 750,
+  // Mirrors the historical hard limit on brain debugger samples while allowing
+  // embedders to widen (or disable) the capture window without editing the grid.
+  brainSnapshotLimit: 5,
   // Lowered from 0.45 after a 300-tick headless sample (60x60 grid, RNG seed
   // 12345) nudged mean diversity from ~0.27 to ~0.30 and bumped successful
   // matings from five to six without eliminating scarcity pressure. The softer
@@ -431,6 +434,16 @@ export function resolveSimulationDefaults(overrides = {}) {
   } else {
     merged.maxConcurrentEvents = Math.max(0, Math.floor(concurrencyValue));
   }
+
+  const baselineSnapshotLimit = Number.isFinite(defaults.brainSnapshotLimit)
+    ? defaults.brainSnapshotLimit
+    : SIMULATION_DEFAULTS.brainSnapshotLimit;
+
+  merged.brainSnapshotLimit = sanitizeNumber(merged.brainSnapshotLimit, {
+    fallback: baselineSnapshotLimit,
+    min: 0,
+    round: Math.floor,
+  });
 
   const hasUpdatesOverride = Object.hasOwn(overrides, "updatesPerSecond");
   const hasSpeedOverride = Object.hasOwn(overrides, "speedMultiplier");
