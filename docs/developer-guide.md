@@ -78,6 +78,15 @@ affect runtime outcomes.
   stats system uses when counting organisms as "active" for a trait. Lower
   values loosen the requirement so charts show broader participation, while
   higher values focus on strongly expressed behaviours.
+- `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` tempers or emphasises how much
+  territorial advantage influences combat outcomes. Values outside the 0–1
+  window fall back to the default defined in `src/config.js`.
+- `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` globally adjusts the baseline neural
+  activity genomes inherit before DNA modifiers apply, making it easy to calm or
+  energise every organism without editing source.
+- `COLOURFUL_LIFE_MUTATION_CHANCE` raises or lowers the default mutation
+  probability applied when genomes reproduce without an explicit DNA override,
+  allowing faster or slower evolutionary churn during experiments.
 - Non-finite or out-of-range values are ignored and fall back to the defaults
   resolved in [`src/config.js`](../src/config.js). The energy overlays pull the
   sanitized values so UI telemetry reflects the active configuration.

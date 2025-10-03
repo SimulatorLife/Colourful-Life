@@ -105,6 +105,16 @@ export function resolveConsumptionDensityPenalty(env = RUNTIME_ENV) {
  */
 export const CONSUMPTION_DENSITY_PENALTY = resolveConsumptionDensityPenalty(); // 1 - penalty * density
 
+/**
+ * Resolves how much territorial advantage influences combat odds. Environment
+ * overrides let deployments emphasise home-ground bonuses or flatten the
+ * effect entirely while keeping the final factor within the 0..1 range.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Territory advantage multiplier between 0 and 1.
+ */
 export function resolveCombatTerritoryEdgeFactor(env = RUNTIME_ENV) {
   const raw = env?.COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR;
   const parsed = Number.parseFloat(raw);

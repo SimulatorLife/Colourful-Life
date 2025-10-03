@@ -29,6 +29,11 @@ where practical.
 - Collapsed dashboard panels now defer metrics, life events, and leaderboard
   rendering work, cutting 50 closed-panel metrics refreshes from ~73.9 ms to
   ~0.84 ms by queueing the latest payload until the panel is reopened.
+- Documentation now calls out the `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR`,
+  `COLOURFUL_LIFE_ACTIVITY_BASE_RATE`, and `COLOURFUL_LIFE_MUTATION_CHANCE`
+  overrides across the README, developer guide, and architecture notes so
+  deployments know how to tune combat bias, neural energy, and mutation rates
+  without spelunking source.
 - Refreshed documentation across the README, developer guide, and architecture
   notes to highlight the UI bridge, fitness scoring module, Husky hook setup,
   and new formatting scripts so contributor workflows mirror the current code.
