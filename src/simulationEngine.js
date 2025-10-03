@@ -149,19 +149,11 @@ export default class SimulationEngine {
     const { width, height } = ensureCanvasDimensions(resolvedCanvas, config);
     const toFinite = toFiniteOrNull;
     const resolvePositiveInt = (value, fallback) => {
-      const numeric = toFinite(value);
+      const candidate = [value, fallback]
+        .map(toFinite)
+        .find((numeric) => numeric != null && numeric > 0);
 
-      if (numeric != null && numeric > 0) {
-        return Math.floor(numeric);
-      }
-
-      const fallbackNumeric = toFinite(fallback);
-
-      if (fallbackNumeric != null && fallbackNumeric > 0) {
-        return Math.floor(fallbackNumeric);
-      }
-
-      return 1;
+      return candidate != null ? Math.floor(candidate) : 1;
     };
     const resolvedCellSize = toFinite(config.cellSize);
     const cellSize = resolvedCellSize && resolvedCellSize > 0 ? resolvedCellSize : 5;
