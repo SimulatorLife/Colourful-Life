@@ -38,21 +38,23 @@ function resolveLifeEventColor(event, overridesInput) {
 
   const typeOverride = overrides[event?.type];
   const fallbackOverride = overrides.default ?? overrides.fallback ?? overrides.other;
-
-  const candidateColors = [
-    event?.highlight?.color,
-    event?.color,
-    typeof typeOverride === "string" && typeOverride.length > 0 ? typeOverride : null,
-    typeof fallbackOverride === "string" &&
-    fallbackOverride.length > 0 &&
-    fallbackOverride !== typeOverride
+  const isColor = (candidate) => typeof candidate === "string" && candidate.length > 0;
+  const typeColor = isColor(typeOverride) ? typeOverride : null;
+  const fallbackColor =
+    isColor(fallbackOverride) && fallbackOverride !== typeColor
       ? fallbackOverride
-      : null,
-    LIFE_EVENT_MARKER_DEFAULT_COLORS[event?.type],
-    LIFE_EVENT_MARKER_DEFAULT_COLORS.birth,
-  ].filter((candidate) => typeof candidate === "string" && candidate.length > 0);
+      : null;
 
-  return candidateColors[0] ?? LIFE_EVENT_MARKER_DEFAULT_COLORS.birth;
+  return (
+    [
+      event?.highlight?.color,
+      event?.color,
+      typeColor,
+      fallbackColor,
+      LIFE_EVENT_MARKER_DEFAULT_COLORS[event?.type],
+      LIFE_EVENT_MARKER_DEFAULT_COLORS.birth,
+    ].find(isColor) ?? LIFE_EVENT_MARKER_DEFAULT_COLORS.birth
+  );
 }
 
 function drawDeathMarker(ctx, centerX, centerY, radius, color) {
