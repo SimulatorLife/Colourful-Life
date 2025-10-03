@@ -45,8 +45,17 @@ test("GridManager keeps activeCells aligned with grid mutations", async () => {
   const manualCell = { row: 0, col: 0 };
 
   gm.grid[0][0] = manualCell;
+  manualCell.row = 2;
+  manualCell.col = 3;
   gm.rebuildActiveCells();
   assert.ok(gm.activeCells.has(manualCell), "rebuild should index manual grid edits");
+  assert.is(manualCell.row, 0, "rebuild should realign cell row metadata");
+  assert.is(manualCell.col, 0, "rebuild should realign cell column metadata");
+  assert.equal(
+    gm.cellPositions.get(manualCell),
+    { row: 0, col: 0 },
+    "position cache should store resolved coordinates",
+  );
 
   gm.clearCell(0, 0);
   assert.is(gm.activeCells.size, 0, "clearing a slot should purge active tracking");

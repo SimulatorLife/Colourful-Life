@@ -1171,7 +1171,6 @@ export default class GridManager {
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
     this.maxTileEnergy =
       typeof maxTileEnergy === "number" ? maxTileEnergy : GridManager.maxTileEnergy;
-    this.activeCells = new Set();
     this.autoSeedEnabled = Boolean(options.autoSeedEnabled);
     this.energyGrid = Array.from({ length: rows }, () =>
       Array.from(
@@ -1236,6 +1235,9 @@ export default class GridManager {
     this.currentObstaclePreset = "none";
     this.tickCount = 0;
     this.rng = typeof rng === "function" ? rng : Math.random;
+    this.activeCells = new Set();
+    this.cellPositions = new Map();
+    this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
     this.interactionAdapter = new GridInteractionAdapter({ gridManager: this });
     this.interactionSystem = new InteractionSystem({
@@ -1333,16 +1335,134 @@ export default class GridManager {
       obstacles: this.obstacles,
       onMove: this.onMoveCallback,
       activeCells: this.activeCells,
-      onCellMoved: (cell) => {
+      onCellMoved: (cell, _fromRow, _fromCol, toRow, toCol) => {
         if (!cell) return;
 
         this.activeCells.add(cell);
+        this.#trackCellPosition(cell, toRow, toCol);
       },
       densityAt: (r, c) => this.densityGrid?.[r]?.[c] ?? this.getDensityAt(r, c),
       energyAt: (r, c) => this.energyGrid?.[r]?.[c] ?? 0,
       maxTileEnergy: this.maxTileEnergy,
       clearDestinationEnergy: (r, c) => clearTileEnergyBuffers(this, r, c),
     };
+  }
+
+  #trackCellPosition(cell, row, col) {
+    if (
+      !cell ||
+      typeof cell !== "object" ||
+      !Number.isInteger(row) ||
+      !Number.isInteger(col)
+    ) {
+      if (cell) this.#untrackCell(cell);
+
+      return;
+    }
+
+    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) {
+      this.#untrackCell(cell);
+
+      return;
+    }
+
+    if ("row" in cell) cell.row = row;
+    if ("col" in cell) cell.col = col;
+
+    const existing = this.cellPositions.get(cell);
+
+    if (existing) {
+      existing.row = row;
+      existing.col = col;
+    } else {
+      this.cellPositions.set(cell, { row, col });
+    }
+  }
+
+  #untrackCell(cell) {
+    if (!cell) return;
+
+    this.cellPositions.delete(cell);
+  }
+
+  #clearTrackedPositions() {
+    this.cellPositions.clear();
+  }
+
+  #isValidLocation(row, col, cell) {
+    return (
+      Number.isInteger(row) &&
+      Number.isInteger(col) &&
+      row >= 0 &&
+      row < this.rows &&
+      col >= 0 &&
+      col < this.cols &&
+      this.grid[row]?.[col] === cell
+    );
+  }
+
+  #scanForCell(cell) {
+    for (let r = 0; r < this.rows; r++) {
+      const gridRow = this.grid[r];
+
+      if (!gridRow) continue;
+
+      for (let c = 0; c < this.cols; c++) {
+        if (gridRow[c] === cell) {
+          return { row: r, col: c };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  #recordCellPositionMismatch() {
+    if (!this.cellPositionTelemetry) {
+      this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
+    }
+
+    this.cellPositionTelemetry.mismatches += 1;
+    this.cellPositionTelemetry.lastTick = this.tickCount;
+    warnOnce(
+      "GridManager detected inconsistent cell coordinates; resynchronizing tracked positions.",
+    );
+  }
+
+  #resolveCellCoordinates(cell) {
+    if (!cell) return null;
+
+    const tracked = this.cellPositions.get(cell);
+
+    if (tracked && this.#isValidLocation(tracked.row, tracked.col, cell)) {
+      return { row: tracked.row, col: tracked.col };
+    }
+
+    if (tracked) {
+      this.#untrackCell(cell);
+    }
+
+    const directRow = Number.isInteger(cell.row) ? cell.row : null;
+    const directCol = Number.isInteger(cell.col) ? cell.col : null;
+
+    if (this.#isValidLocation(directRow, directCol, cell)) {
+      this.#trackCellPosition(cell, directRow, directCol);
+
+      return { row: directRow, col: directCol };
+    }
+
+    if (directRow != null || directCol != null) {
+      this.#untrackCell(cell);
+    }
+
+    const located = this.#scanForCell(cell);
+
+    if (!located) return null;
+
+    this.#recordCellPositionMismatch();
+    this.#trackCellPosition(cell, located.row, located.col);
+
+    return located;
   }
 
   #random() {
@@ -2058,7 +2178,9 @@ export default class GridManager {
     this.densityGrid = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
     this.densityDirtyTiles?.clear?.();
     this.activeCells.clear();
+    this.#clearTrackedPositions();
     this.tickCount = 0;
+    this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
     this.lastSnapshot = null;
     this.eventEffectCache?.clear?.();
     this.minPopulation = GridManager.#computeMinPopulation(rowsInt, colsInt);
@@ -2104,13 +2226,10 @@ export default class GridManager {
         if (this.grid[row][col]) continue;
 
         this.grid[row][col] = cell;
+        this.#trackCellPosition(cell, row, col);
 
-        if (cell && typeof cell === "object") {
-          if ("row" in cell) cell.row = row;
-          if ("col" in cell) cell.col = col;
-          if (typeof cell.energy === "number") {
-            cell.energy = clamp(cell.energy, 0, maxTileEnergy);
-          }
+        if (cell && typeof cell === "object" && typeof cell.energy === "number") {
+          cell.energy = clamp(cell.energy, 0, maxTileEnergy);
         }
 
         if (this.energyGrid?.[row]) {
@@ -2167,7 +2286,9 @@ export default class GridManager {
     }
 
     this.activeCells.clear();
+    this.#clearTrackedPositions();
     this.tickCount = 0;
+    this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
     this.lastSnapshot = null;
     this.densityDirtyTiles?.clear?.();
     this.eventEffectCache?.clear?.();
@@ -2745,10 +2866,7 @@ export default class GridManager {
 
     this.grid[row][col] = cell;
     clearTileEnergyBuffers(this, row, col);
-    if (cell && typeof cell === "object") {
-      if ("row" in cell) cell.row = row;
-      if ("col" in cell) cell.col = col;
-    }
+    this.#trackCellPosition(cell, row, col);
     this.activeCells.add(cell);
     this.#applyDensityDelta(row, col, 1);
 
@@ -2770,6 +2888,7 @@ export default class GridManager {
 
     this.grid[row][col] = null;
     this.activeCells.delete(current);
+    this.#untrackCell(current);
     this.#applyDensityDelta(row, col, -1);
 
     return current;
@@ -2779,23 +2898,23 @@ export default class GridManager {
     if (!cell || typeof cell !== "object") return;
 
     const provided = details && typeof details === "object" ? details : {};
-    const candidateRow = Number.isInteger(provided.row)
-      ? provided.row
-      : Number.isInteger(cell.row)
-        ? cell.row
-        : null;
-    const candidateCol = Number.isInteger(provided.col)
-      ? provided.col
-      : Number.isInteger(cell.col)
-        ? cell.col
-        : null;
+    let row = Number.isInteger(provided.row) ? provided.row : null;
+    let col = Number.isInteger(provided.col) ? provided.col : null;
 
-    if (!Number.isInteger(candidateRow) || !Number.isInteger(candidateCol)) {
-      return;
+    if (!Number.isInteger(row) || !Number.isInteger(col)) {
+      const location = this.#resolveCellCoordinates(cell);
+
+      if (location) {
+        ({ row, col } = location);
+      } else if (Number.isInteger(cell.row) && Number.isInteger(cell.col)) {
+        row = cell.row;
+        col = cell.col;
+      }
     }
 
-    const row = candidateRow;
-    const col = candidateCol;
+    if (!Number.isInteger(row) || !Number.isInteger(col)) {
+      return;
+    }
 
     if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) {
       return;
@@ -2843,10 +2962,7 @@ export default class GridManager {
     this.grid[toRow][toCol] = moving;
     this.grid[fromRow][fromCol] = null;
     clearTileEnergyBuffers(this, toRow, toCol, { preserveCurrent: true });
-    if (moving && typeof moving === "object") {
-      if ("row" in moving) moving.row = toRow;
-      if ("col" in moving) moving.col = toCol;
-    }
+    this.#trackCellPosition(moving, toRow, toCol);
     this.#applyDensityDelta(fromRow, fromCol, -1);
     this.#applyDensityDelta(toRow, toCol, 1);
     this.#applyEnergyExclusivityAt(toRow, toCol, moving, {
@@ -3013,11 +3129,15 @@ export default class GridManager {
 
   rebuildActiveCells() {
     this.activeCells.clear();
+    this.#clearTrackedPositions();
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         const cell = this.grid[row][col];
 
-        if (cell) this.activeCells.add(cell);
+        if (!cell) continue;
+
+        this.activeCells.add(cell);
+        this.#trackCellPosition(cell, row, col);
       }
     }
   }
@@ -4224,20 +4344,11 @@ export default class GridManager {
 
     for (const cell of activeSnapshot) {
       if (!cell) continue;
-      const row = cell.row;
-      const col = cell.col;
+      const location = this.#resolveCellCoordinates(cell);
 
-      if (
-        row == null ||
-        col == null ||
-        row < 0 ||
-        row >= this.rows ||
-        col < 0 ||
-        col >= this.cols ||
-        this.grid[row][col] !== cell
-      ) {
-        continue;
-      }
+      if (!location) continue;
+
+      const { row, col } = location;
 
       this.processCell(row, col, {
         stats,
@@ -4297,36 +4408,11 @@ export default class GridManager {
     if (activeCells && activeCells.size > 0) {
       for (const cell of activeCells) {
         if (!cell) continue;
+        const location = this.#resolveCellCoordinates(cell);
 
-        let row = Number.isInteger(cell.row) ? cell.row : null;
-        let col = Number.isInteger(cell.col) ? cell.col : null;
+        if (!location) continue;
 
-        if (
-          row == null ||
-          col == null ||
-          row < 0 ||
-          row >= this.rows ||
-          col < 0 ||
-          col >= this.cols ||
-          this.grid[row]?.[col] !== cell
-        ) {
-          let found = false;
-
-          for (let r = 0; r < this.rows && !found; r++) {
-            const gridRow = this.grid[r];
-
-            for (let c = 0; c < this.cols; c++) {
-              if (gridRow[c] === cell) {
-                row = r;
-                col = c;
-                found = true;
-                break;
-              }
-            }
-          }
-
-          if (!found) continue;
-        }
+        const { row, col } = location;
 
         const energy = Number.isFinite(cell.energy) ? cell.energy : 0;
         const age = Number.isFinite(cell.age) ? cell.age : 0;
