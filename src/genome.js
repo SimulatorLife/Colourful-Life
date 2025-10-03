@@ -48,6 +48,14 @@ const DEFAULT_NEURAL_CONNECTIONS = 16;
 const DEFAULT_TOTAL_GENE_COUNT =
   BASE_GENE_COUNT + DEFAULT_NEURAL_CONNECTIONS * NEURAL_GENE_BYTES;
 
+const MUTATING_TYPED_ARRAY_METHODS = new Set([
+  "copyWithin",
+  "fill",
+  "reverse",
+  "set",
+  "sort",
+]);
+
 const clampGene = (value) => {
   if (Number.isNaN(value)) return 0;
 
@@ -245,6 +253,16 @@ export class DNA {
         const value = Reflect.get(obj, prop, receiver);
 
         if (typeof value === "function") {
+          if (typeof prop === "string" && MUTATING_TYPED_ARRAY_METHODS.has(prop)) {
+            return (...args) => {
+              const result = value.apply(obj, args);
+
+              owner.#invalidateCaches();
+
+              return result;
+            };
+          }
+
           return value.bind(obj);
         }
 
