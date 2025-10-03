@@ -400,6 +400,29 @@ test("overlay visibility coercion handles string inputs", async () => {
   }
 });
 
+test("setAutoPauseOnBlur coerces string inputs", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.setAutoPauseOnBlur(true);
+    assert.is(engine.autoPauseOnBlur, true, "true boolean enables auto pause");
+
+    engine.setAutoPauseOnBlur("false");
+    assert.is(engine.autoPauseOnBlur, false, "string 'false' disables auto pause");
+
+    engine.setAutoPauseOnBlur("0");
+    assert.is(engine.autoPauseOnBlur, false, "numeric string '0' disables auto pause");
+
+    engine.setAutoPauseOnBlur("1");
+    assert.is(engine.autoPauseOnBlur, true, "numeric string '1' enables auto pause");
+  } finally {
+    restore();
+  }
+});
+
 test("SimulationEngine exposes a callable overlay renderer by default", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
