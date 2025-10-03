@@ -1,10 +1,193 @@
 import { assert, suite } from "#tests/harness";
-import { MockCanvas, setupDom } from "./helpers/mockDom.js";
+import { MockCanvas, MockElement, setupDom } from "./helpers/mockDom.js";
+
+if (!MockElement.prototype.hasChildNodes) {
+  MockElement.prototype.hasChildNodes = function hasChildNodes() {
+    return Array.isArray(this.children) && this.children.length > 0;
+  };
+}
+
+MockCanvas.prototype.getContext = function getContext(type) {
+  if (type !== "2d") return null;
+
+  return {
+    canvas: this,
+    clearRect() {},
+    moveTo() {},
+    lineTo() {},
+    beginPath() {},
+    stroke() {},
+    fillRect() {},
+    strokeRect() {},
+    save() {},
+    restore() {},
+    createLinearGradient() {
+      return {
+        addColorStop() {},
+      };
+    },
+    fillText() {},
+    strokeText() {},
+    lineWidth: 1,
+    strokeStyle: "#000",
+  };
+};
+
+function openPanel(panel) {
+  const header = panel?.querySelector?.(".panel-header");
+
+  header?.trigger?.("click");
+}
+
+function stubCanvasElements({ width = 220, height = 48 } = {}) {
+  const originalCreateElement = document.createElement.bind(document);
+
+  document.createElement = (tagName) => {
+    if (String(tagName).toLowerCase() === "canvas") {
+      return new MockCanvas(width, height);
+    }
+
+    return originalCreateElement(tagName);
+  };
+
+  return () => {
+    document.createElement = originalCreateElement;
+  };
+}
+
+function createMetricsStatsFixture() {
+  return {
+    totals: { fights: 4, cooperations: 6 },
+    history: {
+      population: [100, 105, 110],
+      diversity: [0.31, 0.33, 0.35],
+      energy: [2.2, 2.3, 2.4],
+      growth: [1, 2, 3],
+      eventStrength: [1, 1, 1],
+      mutationMultiplier: [1, 1, 1],
+      diversePairingRate: [0.2, 0.25, 0.3],
+      meanDiversityAppetite: [0.4, 0.45, 0.5],
+    },
+    traitPresence: {
+      population: 120,
+      counts: { cooperation: 80, fighting: 60, breeding: 40, sight: 90 },
+      fractions: { cooperation: 0.66, fighting: 0.5, breeding: 0.33, sight: 0.75 },
+    },
+    traitHistory: {
+      presence: {
+        cooperation: [0.6, 0.62, 0.64],
+        fighting: [0.4, 0.42, 0.44],
+        breeding: [0.3, 0.31, 0.32],
+        sight: [0.7, 0.72, 0.74],
+      },
+      intensity: {
+        cooperation: [0.55, 0.56, 0.57],
+        fighting: [0.35, 0.36, 0.37],
+        breeding: [0.28, 0.29, 0.3],
+        sight: [0.65, 0.66, 0.67],
+      },
+    },
+    getRecentLifeEvents: () => [],
+    getLifeEventRateSummary: () => ({
+      births: 0,
+      deaths: 0,
+      net: 0,
+      total: 0,
+      window: 120,
+      eventsPer100Ticks: 0,
+    }),
+  };
+}
+
+function createSnapshotFixture() {
+  return {
+    population: 140,
+    births: 5,
+    deaths: 3,
+    growth: 2,
+    mutationMultiplier: 1.1,
+    meanEnergy: 3.5,
+    meanAge: 9.8,
+    diversity: 0.45,
+    blockedMatings: 1,
+    lastBlockedReproduction: null,
+    mateChoices: 6,
+    successfulMatings: 4,
+    diverseChoiceRate: 0.3,
+    diverseMatingRate: 0.4,
+    meanDiversityAppetite: 0.5,
+    curiositySelections: 2,
+    behaviorEvenness: 0.6,
+  };
+}
+
+function createLifeEventStatsFixture() {
+  const base = createMetricsStatsFixture();
+
+  return {
+    ...base,
+    deathBreakdown: {
+      starvation: 5,
+      obstacle: 3,
+      combat: 2,
+    },
+    getRecentLifeEvents: () => [
+      {
+        type: "birth",
+        tick: 410,
+        row: 12,
+        col: 6,
+        energy: 4.2,
+      },
+      {
+        type: "death",
+        tick: 415,
+        cause: "combat",
+        row: 8,
+        col: 3,
+        energy: 2.4,
+        opponentColor: "#ff6b6b",
+      },
+    ],
+    getLifeEventRateSummary: () => ({
+      births: 6,
+      deaths: 4,
+      net: 2,
+      total: 10,
+      window: 120,
+      eventsPer100Ticks: 8.3,
+      birthsPer100Ticks: 5,
+      deathsPer100Ticks: 3.3,
+    }),
+  };
+}
+
+function createLeaderboardEntriesFixture() {
+  return [
+    {
+      fitness: 12.5,
+      color: "#a29bfe",
+      brain: { fitness: 10.2, neuronCount: 128, connectionCount: 356 },
+      offspring: 14,
+      fightsWon: 9,
+      age: 480,
+    },
+    {
+      fitness: 11.1,
+      color: "#74b9ff",
+      brain: { fitness: 9.6, neuronCount: 110, connectionCount: 300 },
+      offspring: 11,
+      fightsWon: 6,
+      age: 420,
+    },
+  ];
+}
 
 const test = suite("ui life events summary");
 
 test("life event summary reflects rate window totals", async () => {
   const restore = setupDom();
+  const restoreCanvas = stubCanvasElements();
 
   try {
     const { default: UIManager } = await import("../src/ui/uiManager.js");
@@ -22,6 +205,9 @@ test("life event summary reflects rate window totals", async () => {
       },
       { canvasElement: new MockCanvas(400, 400) },
     );
+
+    openPanel(uiManager.insightsPanel);
+    openPanel(uiManager.lifeEventsPanel);
 
     const events = [
       { type: "birth", tick: 101 },
@@ -107,12 +293,14 @@ test("life event summary reflects rate window totals", async () => {
       "rate label should use rate summary cadence",
     );
   } finally {
+    restoreCanvas();
     restore();
   }
 });
 
 test("life event death breakdown surfaces leading causes", async () => {
   const restore = setupDom();
+  const restoreCanvas = stubCanvasElements();
 
   try {
     const { default: UIManager } = await import("../src/ui/uiManager.js");
@@ -130,6 +318,9 @@ test("life event death breakdown surfaces leading causes", async () => {
       },
       { canvasElement: new MockCanvas(400, 400) },
     );
+
+    openPanel(uiManager.insightsPanel);
+    openPanel(uiManager.lifeEventsPanel);
 
     const events = [
       { type: "death", tick: 200, cause: "starvation" },
@@ -239,6 +430,176 @@ test("life event death breakdown surfaces leading causes", async () => {
       "aria-valuenow should reflect share of deaths for the top cause",
     );
   } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
+test("insights panel defers metrics work while collapsed", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        getCellSize: () => 5,
+      },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    const initialChildCount = uiManager.metricsBox.children.length;
+    const stats = createMetricsStatsFixture();
+    const snapshot = createSnapshotFixture();
+    const environment = { eventStrengthMultiplier: 1, activeEvents: [] };
+
+    uiManager.renderMetrics(stats, snapshot, environment);
+
+    assert.is(
+      uiManager.metricsBox.children.length,
+      initialChildCount,
+      "collapsed panel should retain its placeholder",
+    );
+    assert.ok(
+      uiManager._pendingMetrics,
+      "collapsed panel should queue metrics payload",
+    );
+
+    openPanel(uiManager.insightsPanel);
+
+    assert.ok(
+      uiManager.metricsBox.children.length > initialChildCount,
+      "expanding panel should render queued metrics",
+    );
+    assert.is(
+      uiManager._pendingMetrics,
+      null,
+      "metrics queue should clear after flush",
+    );
+  } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
+test("life events only render after the panel expands", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        getCellSize: () => 5,
+      },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    const stats = createLifeEventStatsFixture();
+    const snapshot = createSnapshotFixture();
+
+    uiManager.renderMetrics(stats, snapshot, {
+      eventStrengthMultiplier: 1,
+      activeEvents: [],
+    });
+
+    assert.is(
+      uiManager.lifeEventList.children.length,
+      0,
+      "collapsed life events panel should not render entries",
+    );
+    assert.is(
+      uiManager._pendingLifeEventsStats,
+      stats,
+      "life events stats should be cached while panel is collapsed",
+    );
+
+    openPanel(uiManager.lifeEventsPanel);
+
+    assert.ok(
+      uiManager.lifeEventList.children.length > 0,
+      "expanding panel should render queued life events",
+    );
+    assert.is(
+      uiManager._pendingLifeEventsStats,
+      null,
+      "life events queue should clear after rendering",
+    );
+  } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
+test("leaderboard waits to render until expanded", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        getCellSize: () => 5,
+      },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    const entries = createLeaderboardEntriesFixture();
+
+    uiManager.renderLeaderboard(entries);
+
+    assert.ok(
+      uiManager.leaderEntriesContainer,
+      "leaderboard container should be created",
+    );
+    assert.is(
+      uiManager.leaderEntriesContainer.children.length,
+      0,
+      "collapsed leaderboard should skip entry construction",
+    );
+    assert.equal(
+      uiManager._pendingLeaderboardEntries,
+      entries,
+      "leaderboard entries should queue while collapsed",
+    );
+
+    openPanel(uiManager.leaderPanel);
+
+    assert.ok(
+      uiManager.leaderEntriesContainer.children.length > 0,
+      "expanded leaderboard should render queued entries",
+    );
+    assert.is(
+      uiManager._pendingLeaderboardEntries,
+      null,
+      "leaderboard queue should clear after rendering",
+    );
+  } finally {
+    restoreCanvas();
     restore();
   }
 });

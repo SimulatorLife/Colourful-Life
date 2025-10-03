@@ -149,6 +149,9 @@ export default class UIManager {
     this.lifeEventsSummaryTrend = null;
     this.lifeEventsSummaryNet = null;
     this.lifeEventsSummaryRate = null;
+    this._pendingMetrics = null;
+    this._pendingLeaderboardEntries = null;
+    this._pendingLifeEventsStats = null;
     this.deathBreakdownList = null;
     this.deathBreakdownEmptyState = null;
     this.sparkMetricDescriptors = [];
@@ -1810,7 +1813,7 @@ export default class UIManager {
 
   // Utility to create a collapsible panel with a header
   #createPanel(title, options = {}) {
-    const { collapsed = false } = options;
+    const { collapsed = false, onToggle = null } = options;
 
     this._panelIdSequence = (this._panelIdSequence ?? 0) + 1;
     const headingId = `panel-${this._panelIdSequence}-title`;
@@ -1845,11 +1848,18 @@ export default class UIManager {
     body.setAttribute("aria-labelledby", headingId);
     panel.appendChild(body);
 
-    const setCollapsed = (shouldCollapse) => {
+    const setCollapsed = (shouldCollapse, { silent = false } = {}) => {
       panel.classList.toggle("collapsed", shouldCollapse);
       panel.classList.toggle("expanded", !shouldCollapse);
       toggle.textContent = shouldCollapse ? "+" : "–";
       toggle.setAttribute("aria-expanded", shouldCollapse ? "false" : "true");
+      if (!silent && typeof onToggle === "function") {
+        try {
+          onToggle(!shouldCollapse, panel);
+        } catch (error) {
+          warnOnce(`Panel toggle handler for "${title}" threw.`, error);
+        }
+      }
     };
 
     const toggleCollapsed = () => {
@@ -1864,9 +1874,41 @@ export default class UIManager {
       toggleCollapsed();
     });
 
-    setCollapsed(Boolean(collapsed));
+    setCollapsed(Boolean(collapsed), { silent: true });
 
     return { panel, header, heading, toggle, body };
+  }
+
+  #isPanelCollapsed(panel) {
+    return !panel || panel.classList.contains("collapsed");
+  }
+
+  #flushPendingMetrics() {
+    if (!this._pendingMetrics || this.#isPanelCollapsed(this.insightsPanel)) return;
+    const { stats, snapshot, environment } = this._pendingMetrics;
+
+    this._pendingMetrics = null;
+    this.renderMetrics(stats, snapshot, environment);
+  }
+
+  #flushPendingLeaderboard() {
+    if (!this._pendingLeaderboardEntries || this.#isPanelCollapsed(this.leaderPanel)) {
+      return;
+    }
+    const entries = this._pendingLeaderboardEntries;
+
+    this._pendingLeaderboardEntries = null;
+    this.renderLeaderboard(entries);
+  }
+
+  #flushPendingLifeEvents() {
+    if (!this._pendingLifeEventsStats || this.#isPanelCollapsed(this.lifeEventsPanel)) {
+      return;
+    }
+    const stats = this._pendingLifeEventsStats;
+
+    this._pendingLifeEventsStats = null;
+    this.#renderLifeEvents(stats);
   }
 
   #buildControlsPanel() {
@@ -2658,6 +2700,11 @@ export default class UIManager {
   #buildInsightsPanel() {
     const { panel, body } = this.#createPanel("Evolution Insights", {
       collapsed: true,
+      onToggle: (expanded) => {
+        if (expanded) {
+          this.#flushPendingMetrics();
+        }
+      },
     });
 
     const intro = document.createElement("p");
@@ -3033,6 +3080,11 @@ export default class UIManager {
   #buildLifeEventsPanel() {
     const { panel, body } = this.#createPanel("Life Event Log", {
       collapsed: true,
+      onToggle: (expanded) => {
+        if (expanded) {
+          this.#flushPendingLifeEvents();
+        }
+      },
     });
 
     const lifeEventsSection = document.createElement("section");
@@ -3329,7 +3381,17 @@ export default class UIManager {
   }
 
   renderMetrics(stats, snapshot, environment = {}) {
+    this.renderLifeEvents(stats);
+
     if (!this.metricsBox) return;
+
+    if (this.#isPanelCollapsed(this.insightsPanel)) {
+      this._pendingMetrics = { stats, snapshot, environment };
+
+      return;
+    }
+
+    this._pendingMetrics = null;
     const hasSnapshotData =
       snapshot &&
       typeof snapshot === "object" &&
@@ -3791,8 +3853,6 @@ export default class UIManager {
       traitSection.appendChild(traitGroup);
     }
 
-    this.#renderLifeEvents(stats);
-
     if (Array.isArray(this.sparkMetricDescriptors)) {
       this.sparkMetricDescriptors.forEach(
         ({ property, historyKey, colorVar, fallbackColor }) => {
@@ -3816,6 +3876,23 @@ export default class UIManager {
         },
       );
     }
+  }
+
+  renderLifeEvents(stats) {
+    if (!this.lifeEventsPanel) {
+      this._pendingLifeEventsStats = stats ?? null;
+
+      return;
+    }
+
+    if (this.#isPanelCollapsed(this.lifeEventsPanel)) {
+      this._pendingLifeEventsStats = stats ?? null;
+
+      return;
+    }
+
+    this._pendingLifeEventsStats = null;
+    this.#renderLifeEvents(stats);
   }
 
   drawSpark(canvas, data, color = "#88d") {
@@ -3846,7 +3923,14 @@ export default class UIManager {
 
   renderLeaderboard(top) {
     if (!this.leaderPanel) {
-      const { panel, body } = this.#createPanel("Leaderboard", { collapsed: true });
+      const { panel, body } = this.#createPanel("Leaderboard", {
+        collapsed: true,
+        onToggle: (expanded) => {
+          if (expanded) {
+            this.#flushPendingLeaderboard();
+          }
+        },
+      });
 
       panel.classList.add("leaderboard-panel");
       this.dashboardGrid?.appendChild(panel);
@@ -3861,10 +3945,22 @@ export default class UIManager {
     }
 
     const entries = Array.isArray(top) ? top.filter(Boolean) : [];
+
+    if (this.#isPanelCollapsed(this.leaderPanel)) {
+      this._pendingLeaderboardEntries = entries;
+
+      return;
+    }
+
     const target = this.leaderEntriesContainer || this.leaderBody;
 
-    if (!target) return;
+    if (!target) {
+      this._pendingLeaderboardEntries = entries;
 
+      return;
+    }
+
+    this._pendingLeaderboardEntries = null;
     target.innerHTML = "";
 
     if (entries.length === 0) {

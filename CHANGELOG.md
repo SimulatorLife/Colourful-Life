@@ -9,6 +9,8 @@ where practical.
 
 ### Added
 
+- Regression tests ensuring the insights, life events, and leaderboard panels
+  queue updates while collapsed so performance optimisations remain covered.
 - Documentation audit covering the README, developer guide, architecture overview, and changelog to highlight headless usage, cache-reset tooling, supporting modules such as the cell model, and the overlay rendering pipeline.
 - Regression guard for the `npm run clean` workflow: the clean script now supports `--dry-run` and is verified by automated tests so agentic changes cannot regress cache cleanup.
 - DNA-tuned opportunity memory that feeds a new `opportunitySignal` sensor, letting neural policies lean on real reward history and energy swings instead of scripted behaviour knobs.
@@ -22,6 +24,9 @@ where practical.
 
 ### Changed
 
+- Collapsed dashboard panels now defer metrics, life events, and leaderboard
+  rendering work, cutting 50 closed-panel metrics refreshes from ~73.9 ms to
+  ~0.84 ms by queueing the latest payload until the panel is reopened.
 - Refreshed documentation across the README, developer guide, and architecture
   notes to highlight the UI bridge, fitness scoring module, Husky hook setup,
   and new formatting scripts so contributor workflows mirror the current code.
