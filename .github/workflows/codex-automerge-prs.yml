@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - codex/**
+      - chore/auto-lint-format
 
 permissions:
   contents: write
@@ -19,7 +20,7 @@ concurrency:
 
 jobs:
   merge-if-ready:
-    if: ${{ startsWith(github.event_name, 'pull_request') || startsWith(github.ref, 'refs/heads/codex/') }}
+    if: ${{ startsWith(github.event_name, 'pull_request') || startsWith(github.ref, 'refs/heads/codex/') || github.ref == 'refs/heads/chore/auto-lint-format' }}
     runs-on: ubuntu-latest
 
     steps:
