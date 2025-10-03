@@ -211,7 +211,7 @@ test("GridManager applies senescence hazard probabilities", async () => {
   );
 });
 
-test("GridManager forces senescence death after the hard lifespan cap", async () => {
+test("GridManager accumulates senescence debt to expire over-aged cells", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
 
   class TestGridManager extends GridManager {
@@ -225,34 +225,73 @@ test("GridManager forces senescence death after the hard lifespan cap", async ()
     eventManager: { activeEvents: [] },
     ctx: {},
     cellSize: 1,
-    rng: () => 0.9,
+    rng: () => 0.95,
   });
 
   const lifespan = 10;
   const cell = {
     row: 0,
     col: 0,
-    age: lifespan * 3,
+    age: Math.round(lifespan * 2.2),
     lifespan,
-    energy: gm.maxTileEnergy * 0.5,
+    energy: gm.maxTileEnergy * 0.75,
     lastEventPressure: 0,
-    computeSenescenceHazard: () => 0,
+    _senescenceDebt: 0,
+    resolveSenescenceElasticity() {
+      return 3.5;
+    },
+    updateSenescenceDebt({ ageFraction = 0 }) {
+      if (ageFraction > 1) {
+        const overshoot = ageFraction - 1;
+
+        this._senescenceDebt += overshoot * (0.8 + this._senescenceDebt * 0.05);
+      }
+    },
+    getSenescenceDebt() {
+      return this._senescenceDebt || 0;
+    },
+    computeSenescenceHazard({ ageFraction = 0 }) {
+      const overshoot = Math.max(0, ageFraction - 1);
+      const debt = this.getSenescenceDebt();
+      const pressure = Math.log1p(debt) * 0.4 + overshoot * 0.35;
+
+      return Math.min(1, Math.max(0, pressure));
+    },
+    resolveRng() {
+      return () => 0.92;
+    },
     applyEventEffects() {},
     manageEnergy() {
       return false;
     },
     dna: {
       activityRate: () => 0,
+      recoveryRate: () => 0.5,
+      senescenceRate: () => 0.25,
     },
   };
 
   gm.setCell(0, 0, cell);
-  gm.update();
 
-  assert.is(gm.grid[0][0], null, "cells beyond the hard cap should be removed");
-  assert.is(stats.deaths.length, 1, "forced senescence death should be recorded");
+  for (let i = 0; i < 6 && gm.grid[0][0]; i++) {
+    gm.update();
+  }
+
+  assert.is(
+    gm.grid[0][0],
+    null,
+    "senescence debt should eventually remove over-aged cells",
+  );
+  assert.is(stats.deaths.length, 1, "senescence-driven expiry should be recorded once");
   const [{ details }] = stats.deaths;
 
-  assert.is(details.cause, "senescence", "forced expiry should be labelled senescence");
-  assert.is(details.hazard, 1, "forced expiry should report a hazard of one");
+  assert.is(
+    details.cause,
+    "senescence",
+    "debt-driven expiry should be labelled senescence",
+  );
+  assert.ok(
+    details.hazard > 0 && details.hazard <= 1,
+    "hazard reporting should reflect the emergent pressure",
+  );
 });
