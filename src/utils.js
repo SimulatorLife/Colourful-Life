@@ -322,13 +322,21 @@ export function warnOnce(message, error) {
  *   message?: string | ((...args: any[]) => string),
  *   once?: boolean,
  *   thisArg?: any,
+ *   reporter?: (message: string, error: Error, options?: { once?: boolean }) => void,
+ *   onError?: (error: Error) => void,
  * }} [options] - Error reporting behaviour.
  * @returns {T|undefined} Result of the callback when invoked successfully.
  */
 export function invokeWithErrorBoundary(callback, args = [], options = {}) {
   if (typeof callback !== "function") return undefined;
 
-  const { message, once = false, thisArg } = options ?? {};
+  const {
+    message,
+    once = false,
+    thisArg,
+    reporter = reportError,
+    onError,
+  } = options ?? {};
 
   try {
     return callback.apply(thisArg, args);
@@ -353,7 +361,21 @@ export function invokeWithErrorBoundary(callback, args = [], options = {}) {
         ? resolvedMessage
         : "Callback threw; continuing without interruption.";
 
-    reportError(fallbackMessage, error, { once });
+    const reporterFn = typeof reporter === "function" ? reporter : reportError;
+
+    reporterFn(fallbackMessage, error, { once });
+
+    if (typeof onError === "function") {
+      try {
+        onError(error);
+      } catch (onErrorError) {
+        logWithOptionalError(
+          "warn",
+          "Error boundary onError handler threw; ignoring.",
+          onErrorError,
+        );
+      }
+    }
   }
 
   return undefined;

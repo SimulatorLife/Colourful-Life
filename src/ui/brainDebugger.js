@@ -1,4 +1,4 @@
-import { warnOnce } from "../utils.js";
+import { warnOnce, invokeWithErrorBoundary } from "../utils.js";
 
 const DEBUG_PROPERTY = "__colourfulLifeBrains";
 const state = {
@@ -19,17 +19,19 @@ function safeInvoke(fn, warningKey, fallback) {
     return fallback;
   }
 
-  try {
-    return fn();
-  } catch (error) {
-    const message = WARNINGS[warningKey];
+  let didThrow = false;
+  const warningMessage = WARNINGS[warningKey];
 
-    if (message) {
-      warnOnce(message, error);
-    }
+  const result = invokeWithErrorBoundary(fn, [], {
+    message: warningMessage,
+    reporter: warningMessage ? warnOnce : undefined,
+    once: true,
+    onError: () => {
+      didThrow = true;
+    },
+  });
 
-    return fallback;
-  }
+  return didThrow ? fallback : result;
 }
 
 function getGlobalScope() {
