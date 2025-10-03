@@ -1044,7 +1044,8 @@ export default class Stats {
 
     let births = 0;
     let deaths = 0;
-    let earliestTick = latestTick;
+    // Track event counts within the requested window so quiet stretches are
+    // reflected in the per-100 tick rates.
 
     for (const event of values) {
       if (!event) continue;
@@ -1059,10 +1060,6 @@ export default class Stats {
         births += 1;
       } else if (event.type === "death") {
         deaths += 1;
-      }
-
-      if (tick < earliestTick) {
-        earliestTick = tick;
       }
     }
 
@@ -1081,9 +1078,8 @@ export default class Stats {
       };
     }
 
-    const spanStart = Math.min(earliestTick, latestTick);
-    const observedSpan = Math.max(1, latestTick - spanStart || 1);
-    const normalizedSpan = Math.max(1, Math.min(numericWindow, observedSpan));
+    const ticksObserved = Math.max(0, latestTick - windowStart);
+    const normalizedSpan = Math.max(1, Math.min(numericWindow, ticksObserved || 1));
 
     const birthsPer100Ticks = (births / normalizedSpan) * 100;
     const deathsPer100Ticks = (deaths / normalizedSpan) * 100;
