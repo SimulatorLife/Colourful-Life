@@ -215,7 +215,6 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showEnergy: false,
   showDensity: false,
   showFitness: false,
-  showCelebrationAuras: false,
   showLifeEventMarkers: false,
   leaderboardIntervalMs: 750,
   // Lowered from 0.45 after a 300-tick headless sample (60x60 grid, RNG seed
@@ -240,7 +239,6 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showEnergy",
   "showDensity",
   "showFitness",
-  "showCelebrationAuras",
   "showLifeEventMarkers",
   "autoPauseOnBlur",
 ]);

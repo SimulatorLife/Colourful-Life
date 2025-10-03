@@ -383,7 +383,6 @@ test("overlay visibility coercion handles string inputs", async () => {
       showEnergy: " ",
       showDensity: "TRUE",
       showFitness: "0",
-      showCelebrationAuras: "yes",
       showLifeEventMarkers: "on",
     });
 
@@ -395,7 +394,6 @@ test("overlay visibility coercion handles string inputs", async () => {
     );
     assert.is(engine.state.showDensity, true);
     assert.is(engine.state.showFitness, false);
-    assert.is(engine.state.showCelebrationAuras, true);
     assert.is(engine.state.showLifeEventMarkers, true);
   } finally {
     restore();
@@ -455,7 +453,6 @@ test("tick forwards overlay visibility flags to the renderer", async () => {
     assert.is(options.showDensity, true);
     assert.is(options.showFitness, true);
     assert.is(options.showObstacles, true, "obstacles stay enabled by default");
-    assert.is(options.showCelebrationAuras, false);
     assert.is(options.showLifeEventMarkers, true);
   } finally {
     restore();

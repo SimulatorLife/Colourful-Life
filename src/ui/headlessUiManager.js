@@ -35,7 +35,6 @@ import { sanitizeNumber } from "../utils.js";
  * @param {boolean} [options.showEnergy] Whether energy overlays are shown.
  * @param {boolean} [options.showDensity] Whether population density overlays are shown.
  * @param {boolean} [options.showFitness] Whether fitness overlays are shown.
- * @param {boolean} [options.showCelebrationAuras] Whether celebration glow overlays are shown.
  * @param {number} [options.leaderboardIntervalMs] Minimum time between leaderboard updates.
  * @param {Object} [options.selectionManager=null] Shared selection manager instance.
  * @returns {{
@@ -162,7 +161,6 @@ export function createHeadlessUiManager(options = {}) {
     getShowEnergy: () => settings.showEnergy,
     getShowDensity: () => settings.showDensity,
     getShowFitness: () => settings.showFitness,
-    getShowCelebrationAuras: () => settings.showCelebrationAuras,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
     shouldRenderSlowUi: (timestamp) => {
       if (!Number.isFinite(timestamp)) return false;

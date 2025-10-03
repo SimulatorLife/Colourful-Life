@@ -1,16 +1,9 @@
 import { MAX_TILE_ENERGY } from "../config.js";
-import { clamp, clamp01, lerp, warnOnce, createRankedBuffer } from "../utils.js";
+import { clamp, clamp01, lerp, warnOnce } from "../utils.js";
 
 const DEFAULT_FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
 const FITNESS_BASE_HUE = 52;
-const DEFAULT_CELEBRATION_PALETTE = Object.freeze([
-  { rgb: [255, 214, 137] },
-  { rgb: [172, 210, 255] },
-  { rgb: [255, 176, 208] },
-  { rgb: [198, 255, 214] },
-]);
-const MAX_CELEBRATION_HIGHLIGHTS = 4;
 const LIFE_EVENT_MARKER_MAX_COUNT = 24;
 const LIFE_EVENT_MARKER_FADE_TICKS = 36;
 const LIFE_EVENT_MARKER_MIN_ALPHA = 0.18;
@@ -19,131 +12,6 @@ const LIFE_EVENT_MARKER_DEFAULT_COLORS = Object.freeze({
   birth: "#7bed9f",
   death: "#ff6b6b",
 });
-
-function toCelebrationColor(rgb, alpha) {
-  if (!Array.isArray(rgb) || rgb.length < 3) return "rgba(255,255,255,0)";
-
-  const [r, g, b] = rgb;
-  const clamped = clamp01(Number.isFinite(alpha) ? alpha : 0);
-
-  return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${clamped.toFixed(3)})`;
-}
-
-function selectCelebrationHighlights(entries, limit = MAX_CELEBRATION_HIGHLIGHTS) {
-  if (!Array.isArray(entries) || entries.length === 0) return [];
-
-  const capped = Math.max(0, Math.min(limit, MAX_CELEBRATION_HIGHLIGHTS));
-
-  if (capped === 0) return [];
-
-  const ranked = createRankedBuffer(capped, (a, b) => b.score - a.score);
-
-  for (const entry of entries) {
-    if (!entry) continue;
-
-    const score = Number(entry.fitness);
-
-    if (!Number.isFinite(score)) continue;
-
-    ranked.add({ entry, score });
-  }
-
-  return ranked.getItems().map((item) => item.entry);
-}
-
-/**
- * Draws soft radial gradients around top-performing organisms highlighted by
- * the Celebration Glow overlay.
- *
- * @param {{entries?: Array, cells?: Array, maxFitness?: number}} snapshot
- *   Latest leaderboard snapshot supplied by {@link GridManager}.
- * @param {CanvasRenderingContext2D} ctx - Rendering context.
- * @param {number} cellSize - Size of a single grid cell in pixels.
- * @param {{palette?: Array, maxHighlights?: number}} [options]
- *   Rendering customisations.
- */
-export function drawCelebrationAuras(snapshot, ctx, cellSize, options = {}) {
-  if (!snapshot || !ctx || typeof ctx.createRadialGradient !== "function") return;
-  if (!(cellSize > 0)) return;
-
-  const entries = Array.isArray(snapshot.entries)
-    ? snapshot.entries
-    : Array.isArray(snapshot.cells)
-      ? snapshot.cells
-      : null;
-
-  if (!entries || entries.length === 0) return;
-
-  const palette =
-    Array.isArray(options.palette) && options.palette.length > 0
-      ? options.palette
-      : DEFAULT_CELEBRATION_PALETTE;
-  const limit = Math.max(
-    0,
-    Math.min(
-      Number.isFinite(options.maxHighlights) ? options.maxHighlights : palette.length,
-      palette.length,
-      MAX_CELEBRATION_HIGHLIGHTS,
-    ),
-  );
-
-  if (limit === 0) return;
-
-  const highlights = selectCelebrationHighlights(entries, limit);
-
-  if (highlights.length === 0) return;
-
-  const maxFitnessCandidate =
-    Number.isFinite(snapshot.maxFitness) && snapshot.maxFitness > 0
-      ? snapshot.maxFitness
-      : highlights.reduce(
-          (max, entry) =>
-            Number.isFinite(entry?.fitness) ? Math.max(max, entry.fitness) : max,
-          0,
-        );
-  const maxFitness = maxFitnessCandidate > 0 ? maxFitnessCandidate : 1;
-
-  ctx.save();
-
-  for (let i = 0; i < highlights.length; i++) {
-    const entry = highlights[i];
-
-    if (!entry) continue;
-
-    const { row, col } = entry;
-
-    if (!Number.isFinite(row) || !Number.isFinite(col)) continue;
-
-    const x = (col + 0.5) * cellSize;
-    const y = (row + 0.5) * cellSize;
-    const rawScore = Number.isFinite(entry.fitness) ? entry.fitness : 0;
-    const normalized = clamp01(rawScore / maxFitness);
-    const paletteEntry = palette[i % palette.length];
-    const rgb = Array.isArray(paletteEntry?.rgb)
-      ? paletteEntry.rgb
-      : Array.isArray(paletteEntry)
-        ? paletteEntry
-        : null;
-
-    if (!rgb) continue;
-
-    const outerRadius = Math.min(cellSize * (2.2 + normalized * 3.4), cellSize * 6.5);
-    const innerRadius = Math.max(cellSize * 0.4, outerRadius * 0.2);
-    const gradient = ctx.createRadialGradient(x, y, innerRadius, x, y, outerRadius);
-    const baseAlpha = 0.22 + normalized * 0.4;
-
-    gradient.addColorStop(0, toCelebrationColor(rgb, Math.min(0.8, baseAlpha + 0.18)));
-    gradient.addColorStop(0.5, toCelebrationColor(rgb, Math.min(0.55, baseAlpha)));
-    gradient.addColorStop(1, toCelebrationColor(rgb, 0));
-
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(x, y, outerRadius, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
-}
 
 function computeLifeEventAlpha(
   ageTicks,
@@ -773,7 +641,7 @@ export function drawSelectionZones(selectionManager, ctx, cellSize) {
 
 /**
  * High-level overlay renderer orchestrating density, energy, fitness, event,
- * celebration, and selection layers.
+ * and selection layers.
  *
  * @param {Object} grid - Grid snapshot from {@link GridManager}.
  * @param {CanvasRenderingContext2D} ctx - Rendering context.
@@ -787,7 +655,6 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showEnergy,
     showDensity,
     showFitness,
-    showCelebrationAuras,
     showLifeEventMarkers,
     showObstacles = true,
     maxTileEnergy = MAX_TILE_ENERGY,
@@ -796,7 +663,6 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     snapshot: providedSnapshot,
     selectionManager: explicitSelection,
     fitnessOverlayOptions,
-    celebrationAurasOptions,
     lifeEvents,
     currentTick: lifeEventCurrentTick,
     lifeEventFadeTicks,
@@ -816,16 +682,13 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
 
   if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);
   if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
-  if (showFitness || showCelebrationAuras) {
+  if (showFitness) {
     if (!snapshot && typeof grid?.getLastSnapshot === "function") {
       snapshot = grid.getLastSnapshot();
     }
   }
   if (showFitness) {
     drawFitnessHeatmap(snapshot, ctx, cellSize, fitnessOverlayOptions);
-  }
-  if (showCelebrationAuras) {
-    drawCelebrationAuras(snapshot, ctx, cellSize, celebrationAurasOptions);
   }
   if (showLifeEventMarkers && Array.isArray(lifeEvents) && lifeEvents.length > 0) {
     drawLifeEventMarkers(ctx, cellSize, lifeEvents, {

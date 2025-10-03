@@ -299,7 +299,6 @@ export default class SimulationEngine {
       showEnergy: defaults.showEnergy,
       showDensity: defaults.showDensity,
       showFitness: defaults.showFitness,
-      showCelebrationAuras: defaults.showCelebrationAuras,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
@@ -673,7 +672,6 @@ export default class SimulationEngine {
       showDensity: this.state.showDensity ?? false,
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
-      showCelebrationAuras: this.state.showCelebrationAuras ?? false,
       showLifeEventMarkers: includeLifeEventMarkers,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
@@ -1042,7 +1040,6 @@ export default class SimulationEngine {
       showDensity: this.state.showDensity ?? false,
       showFitness: this.state.showFitness ?? false,
       showObstacles,
-      showCelebrationAuras: this.state.showCelebrationAuras ?? false,
       showLifeEventMarkers: includeLifeEventMarkers,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
@@ -1252,7 +1249,6 @@ export default class SimulationEngine {
     showEnergy,
     showDensity,
     showFitness,
-    showCelebrationAuras,
     showLifeEventMarkers,
   }) {
     const coerceBoolean = (candidate, fallback) => {
@@ -1296,7 +1292,6 @@ export default class SimulationEngine {
       showEnergy,
       showDensity,
       showFitness,
-      showCelebrationAuras,
       showLifeEventMarkers,
     })
       .filter(([, value]) => value !== undefined)
@@ -1388,7 +1383,6 @@ export default class SimulationEngine {
       case "showEnergy":
       case "showDensity":
       case "showFitness":
-      case "showCelebrationAuras":
       case "showLifeEventMarkers":
         this.setOverlayVisibility({ [key]: value });
         break;

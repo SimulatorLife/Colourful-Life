@@ -166,7 +166,6 @@ export default class UIManager {
     this.showEnergy = defaults.showEnergy;
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
-    this.showCelebrationAuras = defaults.showCelebrationAuras;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
@@ -2392,13 +2391,6 @@ export default class UIManager {
         initial: this.showFitness,
       },
       {
-        key: "showCelebrationAuras",
-        label: "Celebration Glow",
-        title:
-          "Add a gentle aurora around the top-performing cells as a whimsical overlay",
-        initial: this.showCelebrationAuras,
-      },
-      {
         key: "showLifeEventMarkers",
         label: "Life Event Markers",
         title:
@@ -2915,9 +2907,6 @@ export default class UIManager {
   }
   getShowFitness() {
     return this.showFitness;
-  }
-  getShowCelebrationAuras() {
-    return this.showCelebrationAuras;
   }
   getShowObstacles() {
     return this.showObstacles;
