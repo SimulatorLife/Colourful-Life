@@ -720,7 +720,11 @@ export default class SimulationEngine {
     }
 
     if (scheduleNext) {
-      this.#scheduleNextFrame();
+      const shouldContinue = !paused || this.pendingSlowUiUpdate;
+
+      if (shouldContinue) {
+        this.#scheduleNextFrame();
+      }
     }
 
     return tickOccurred;
