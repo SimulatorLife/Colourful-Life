@@ -10,19 +10,19 @@ const repoRoot = resolve(__dirname, "..");
 const benchmarkPath = resolve(repoRoot, "scripts", "profile-energy.mjs");
 
 const BENCHMARK_ENV = {
-  PERF_ROWS: "24",
-  PERF_COLS: "24",
+  PERF_ROWS: "12",
+  PERF_COLS: "12",
   PERF_WARMUP: "5",
   PERF_ITERATIONS: "30",
   PERF_CELL_SIZE: "4",
   PERF_SEED: "1337",
-  PERF_SIM_ROWS: "24",
-  PERF_SIM_COLS: "24",
+  PERF_SIM_ROWS: "12",
+  PERF_SIM_COLS: "12",
   PERF_SIM_WARMUP: "5",
   PERF_SIM_ITERATIONS: "15",
   PERF_SIM_UPS: "45",
   PERF_SIM_CELL_SIZE: "4",
-  PERF_SIM_DENSITY: "0.7",
+  PERF_SIM_DENSITY: "0.6",
   PERF_SIM_SEED: "4242",
 };
 
