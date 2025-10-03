@@ -76,6 +76,12 @@ affect runtime outcomes.
   resolved in [`src/config.js`](../src/config.js). The energy overlays pull the
   sanitized values so UI telemetry reflects the active configuration.
 
+## UI layout options
+
+- `ui.layout.deathBreakdownMaxEntries` controls how many individual death causes
+  the life event dashboard lists before folding the remainder into an "Other"
+  bucket. Non-positive or non-numeric values fall back to the default of 4.
+
 ## Documentation conventions
 
 - Keep the README and architecture documents aligned with the current module
