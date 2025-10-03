@@ -2907,7 +2907,7 @@ export default class GridManager {
       }
     }
 
-    const processedTiles = [];
+    let processedTileCount = 0;
     const previousEvents = eventOptions ? eventOptions.events : null;
 
     for (const [r, columns] of dirtyRowMap.entries()) {
@@ -2928,10 +2928,10 @@ export default class GridManager {
       const activeSegments = rowSegments ? this.#getSegmentWindowScratch() : null;
       let nextSegmentIndex = 0;
 
+      processedTileCount += columns.length;
+
       for (let i = 0; i < columns.length; i++) {
         const c = columns[i];
-
-        processedTiles.push([r, c]);
 
         if (occupantRegenRow) occupantRegenRow[c] = 0;
 
@@ -3145,21 +3145,20 @@ export default class GridManager {
           }
         }
       }
+
+      if (nextRow && energyRow) {
+        for (let i = 0; i < columns.length; i++) {
+          const colIndex = columns[i];
+          const nextValue = nextRow[colIndex];
+
+          energyRow[colIndex] = Number.isFinite(nextValue) ? nextValue : 0;
+          nextRow[colIndex] = 0;
+        }
+      }
     }
 
     if (eventOptions) {
       eventOptions.events = previousEvents;
-    }
-
-    for (let i = 0; i < processedTiles.length; i++) {
-      const [rowIndex, colIndex] = processedTiles[i];
-      const nextRow = next[rowIndex];
-      const energyRow = energyGrid[rowIndex];
-
-      if (!nextRow || !energyRow) continue;
-
-      energyRow[colIndex] = Number.isFinite(nextRow[colIndex]) ? nextRow[colIndex] : 0;
-      nextRow[colIndex] = 0;
     }
 
     if (profileEnabled) {
@@ -3170,7 +3169,7 @@ export default class GridManager {
         density: densityTime,
         diffusion: diffusionTime,
         total: totalTime,
-        tileCount: processedTiles.length,
+        tileCount: processedTileCount,
         strategy: "dirty-regions",
       });
     }
