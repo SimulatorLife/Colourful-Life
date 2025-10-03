@@ -3865,6 +3865,87 @@ export default class Cell {
     return clamp(reach, minReach, maxReach);
   }
 
+  populationScarcityDrive({
+    scarcity = 0,
+    baseProbability = 0.5,
+    partner = null,
+    population = 0,
+    minPopulation = 0,
+  } = {}) {
+    const scarcityClamped = clamp(Number.isFinite(scarcity) ? scarcity : 0, 0, 1);
+
+    if (scarcityClamped <= 0) {
+      return 1;
+    }
+
+    const baseProb = clamp(
+      Number.isFinite(baseProbability) ? baseProbability : 0.5,
+      0,
+      1,
+    );
+    const fertility =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.FERTILITY)
+        : 0.5;
+    const parental =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.PARENTAL)
+        : 0.5;
+    const cohesion =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.COHESION)
+        : 0.5;
+    const exploration =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.EXPLORATION)
+        : 0.5;
+    const risk =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.RISK)
+        : 0.5;
+    const partnerSupport =
+      partner && typeof partner?.dna?.geneFraction === "function"
+        ? clamp(
+            0.25 +
+              0.3 * partner.dna.geneFraction(GENE_LOCI.PARENTAL) +
+              0.2 * partner.dna.geneFraction(GENE_LOCI.COHESION),
+            0.1,
+            0.95,
+          )
+        : 0.35;
+
+    const cooperativePull = clamp(
+      0.35 + 0.4 * cohesion + 0.25 * parental + partnerSupport * 0.3,
+      0.25,
+      1.2,
+    );
+    const fertilityDrive = clamp(0.3 + 0.5 * fertility, 0.2, 1.1);
+    const explorationPush = clamp(0.2 + 0.45 * exploration, 0.1, 0.85);
+    const deficitBoost = (() => {
+      const popCount = Number.isFinite(population) ? population : 0;
+      const minPop =
+        Number.isFinite(minPopulation) && minPopulation > 0 ? minPopulation : 0;
+
+      if (minPop <= 0) {
+        return 1;
+      }
+
+      const deficit = clamp((minPop - popCount) / minPop, 0, 1);
+
+      return 0.75 + deficit * 0.5;
+    })();
+
+    const scarcityImpulse = scarcityClamped * (0.4 + (1 - baseProb) * 0.6);
+    const urgency =
+      scarcityImpulse *
+      deficitBoost *
+      (cooperativePull * 0.6 + fertilityDrive * 0.25 + explorationPush * 0.15);
+    const caution = clamp(0.35 + (1 - risk) * 0.55, 0.2, 0.9);
+    const eagerness = clamp(urgency * (1 - caution), -0.35, 1.25);
+
+    return clamp(1 + eagerness, 0.5, 1.9);
+  }
+
   computeReproductionProbability(
     partner,
     {
