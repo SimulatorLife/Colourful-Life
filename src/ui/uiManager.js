@@ -30,7 +30,9 @@ const DEATH_CAUSE_COLOR_MAP = Object.freeze({
   unknown: "#e74c3c",
 });
 
-const DEATH_BREAKDOWN_MAX_ENTRIES = 4;
+// Default number of death causes surfaced before collapsing the remainder into
+// an "Other" bucket. Consumers can override via `ui.layout.deathBreakdownMaxEntries`.
+const DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES = 4;
 const DEATH_BREAKDOWN_OTHER_COLOR = "rgba(255, 255, 255, 0.28)";
 
 /**
@@ -125,6 +127,9 @@ export default class UIManager {
     this.leaderEntriesContainer = null;
     this.stepHotkeySet = new Set();
     this.geometryControls = null;
+    this.deathBreakdownMaxEntries = this.#resolveDeathBreakdownLimit(
+      layoutConfig.deathBreakdownMaxEntries,
+    );
 
     const initialDimensions = this.#readGridDimensions();
 
@@ -294,6 +299,18 @@ export default class UIManager {
       .filter((value) => value.length > 0);
 
     return new Set(normalized.length > 0 ? normalized : normalizedFallback);
+  }
+
+  #resolveDeathBreakdownLimit(candidate) {
+    const numeric = Number(candidate);
+
+    if (!Number.isFinite(numeric)) {
+      return DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES;
+    }
+
+    const floored = Math.floor(numeric);
+
+    return floored > 0 ? floored : DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES;
   }
 
   #resolveCssColor(variableName, fallbackColor) {
@@ -1377,7 +1394,12 @@ export default class UIManager {
       return;
     }
 
-    const visible = entries.slice(0, DEATH_BREAKDOWN_MAX_ENTRIES);
+    const limit =
+      Number.isFinite(this.deathBreakdownMaxEntries) &&
+      this.deathBreakdownMaxEntries > 0
+        ? this.deathBreakdownMaxEntries
+        : DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES;
+    const visible = entries.slice(0, limit);
     const visibleTotal = visible.reduce((sum, entry) => sum + entry.count, 0);
     const remainder = total - visibleTotal;
 
