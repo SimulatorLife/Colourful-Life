@@ -1,4 +1,4 @@
-name: Codex 18 – Clarity Improvements
+name: Codex 18 – Control-Flow Clarity
 on:
   schedule:
     - cron: "10 1,7,13,19 * * *" # four times daily at 01:10, 07:10, 13:10, 19:10 UTC
@@ -14,28 +14,15 @@ jobs:
     uses: ./.github/workflows/_codex-open-pr-and-ping.yml
     secrets: inherit
     with:
-      pr_title: "Codex: Clarity Improvements"
-      pr_body: "Seed PR for Codex to improve readability and clarity atop current master."
+      pr_title: "Codex: Control-Flow Clarity"
+      pr_body: "Seed PR for Codex to simplify control flow while preserving behaviour atop current master."
       prompt: >
-        Sweep the codebase and commit at least one concrete clarity improvement in a
-        single coherent area (module, small subsystem, function, file, or tight file
-        cluster) without changing behavior. You may not respond “no issues found.” If
-        major opportunities are scarce, choose a micro-target and improve it (e.g.,
-        rename a misleading identifier, replace a magic number with a named constant,
-        fix a spelling/grammar mistake in comments/docs, clarify an ambiguous comment,
-        or unnest a needlessly nested branch). Apply whichever options are most
-        impactful and appropriate for that area: rename
-        functions/variables/modules/files to reflect intent; fix spelling/grammar in
-        identifiers, comments, or documentation; add brief, high-signal comments only
-        where context is missing (explain why, not what); simplify control flow with
-        early returns/guard clauses; extract helpers from large or duplicated blocks to
-        improve readability and reuse, or inline trivial one-line wrappers that add no
-        value; clarify units/ranges/side effects; make parameters/return values
-        self-describing via renaming/reordering/grouping; standardize terminology across
-        touched files; and, if a function/file is clearly misplaced, move it to a
-        better-aligned directory/module to improve cohesion/discoverability. Keep the
-        blast radius small (aim for a tight diff), avoid API/behavior changes, add no
-        new dependencies, avoid style-only churn, and never delete tests. In your commit
-        message and PR body, include a short “Why this” justification describing the
-        chosen hotspot and the expected clarity gain, plus before/after examples for any
-        renames, fixes, or flow simplifications. Ensure npm run lint and npm test pass.
+        Locate a bite-sized logic path (function, reducer, effect handler, or small
+        module) where the control flow is harder to read than it needs to be, and
+        streamline it without changing behaviour. Favour guard clauses, early returns,
+        or extracted helpers to flatten nesting, eliminate duplicated branches, and make
+        intent immediately obvious. Keep naming/formatting tweaks to the style workflow;
+        here the mission is to untangle logic so future contributors can follow it at a
+        glance. Ship one concrete improvement, keep the diff minimal and well-tested,
+        and note the before/after reasoning in the commit message so reviewers see the
+        clarity win.

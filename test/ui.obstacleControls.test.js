@@ -1,5 +1,6 @@
 import { assert, suite } from "#tests/harness";
 import { MockCanvas, setupDom } from "./helpers/mockDom.js";
+import { findSelectByLabel } from "./helpers/controlQueries.js";
 
 const test = suite("ui obstacle controls");
 
@@ -88,21 +89,7 @@ test("layout preset control reflects current obstacle preset", async () => {
       "UI state should mirror grid preset",
     );
 
-    const findSelect = (node) => {
-      if (!node || typeof node !== "object") return null;
-      if (node.tagName === "SELECT") return node;
-      if (!Array.isArray(node.children)) return null;
-
-      for (const child of node.children) {
-        const match = findSelect(child);
-
-        if (match) return match;
-      }
-
-      return null;
-    };
-
-    const select = findSelect(uiManager.controlsPanel);
+    const select = findSelectByLabel(uiManager.controlsPanel, "Layout Preset");
 
     assert.ok(select, "layout preset select should exist");
     assert.is(select.value, "midline", "select value should match active preset");
@@ -143,21 +130,6 @@ test("clearing obstacles resets preset select to open field", async () => {
       { canvasElement: new MockCanvas(200, 200) },
     );
 
-    const findByTag = (root, tagName) => {
-      const target = tagName.toUpperCase();
-      const queue = [root];
-
-      while (queue.length > 0) {
-        const node = queue.shift();
-
-        if (!node) continue;
-        if (node.tagName === target) return node;
-        if (Array.isArray(node.children)) queue.push(...node.children);
-      }
-
-      return null;
-    };
-
     const findButtonByText = (root, text) => {
       const queue = [root];
 
@@ -172,7 +144,7 @@ test("clearing obstacles resets preset select to open field", async () => {
       return null;
     };
 
-    const presetSelect = findByTag(uiManager.controlsPanel, "select");
+    const presetSelect = findSelectByLabel(uiManager.controlsPanel, "Layout Preset");
 
     assert.ok(presetSelect, "obstacle preset dropdown should exist");
 

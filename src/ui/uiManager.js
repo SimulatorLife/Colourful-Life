@@ -215,6 +215,7 @@ export default class UIManager {
     this.energyRegenRate = defaults.energyRegenRate; // base logistic regen rate (0..0.2)
     this.energyDiffusionRate = defaults.energyDiffusionRate; // neighbor diffusion rate (0..0.5)
     this.leaderboardIntervalMs = defaults.leaderboardIntervalMs;
+    this.profileGridMetrics = defaults.profileGridMetrics;
     this._lastSlowUiRender = Number.NEGATIVE_INFINITY; // shared throttle for fast-updating UI bits
     this._lastInteractionTotals = { fights: 0, cooperations: 0 };
     this.showDensity = defaults.showDensity;
@@ -230,6 +231,7 @@ export default class UIManager {
       this.obstaclePreset = initialObstaclePreset;
     }
     this.autoPauseCheckbox = null;
+    this.profileGridSelect = null;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
 
@@ -2614,6 +2616,35 @@ export default class UIManager {
         }
       });
 
+    const profilingOptions = [
+      {
+        value: "auto",
+        label: "Auto",
+        description: "Capture profiling data when the dashboard requests metrics.",
+      },
+      {
+        value: "always",
+        label: "Always On",
+        description: "Always collect grid profiling metrics each tick.",
+      },
+      {
+        value: "never",
+        label: "Off",
+        description: "Disable grid profiling to minimise overhead.",
+      },
+    ];
+
+    this.profileGridSelect = createSelectRow(generalGroup, {
+      label: "Grid Profiling",
+      title:
+        "Controls how often grid-level profiling metrics are captured for the dashboard and insights panels.",
+      value: this.profileGridMetrics,
+      options: profilingOptions,
+      onChange: (value) => {
+        this.setProfileGridMetrics(value);
+      },
+    });
+
     return {
       renderSlider,
       withSliderConfig,
@@ -3374,6 +3405,24 @@ export default class UIManager {
     if (changed && notify) {
       this.#notifySettingChange("autoPauseOnBlur", this.autoPauseOnBlur);
     }
+  }
+
+  setProfileGridMetrics(preference, { notify = true } = {}) {
+    const normalized = resolveSimulationDefaults({
+      profileGridMetrics: preference,
+    }).profileGridMetrics;
+    const changed = this.profileGridMetrics !== normalized;
+
+    this.profileGridMetrics = normalized;
+    if (this.profileGridSelect) {
+      this.profileGridSelect.value = normalized;
+    }
+
+    if (changed && notify) {
+      this.#notifySettingChange("profileGridMetrics", this.profileGridMetrics);
+    }
+
+    return this.profileGridMetrics;
   }
 
   // Getters for simulation

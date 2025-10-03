@@ -15,10 +15,13 @@ jobs:
     secrets: inherit
     with:
       pr_title: "Codex: Dependency Hygiene"
-      pr_body: "Seed PR for Codex to streamline dependencies and build tooling atop current master."
+      pr_body: "Seed PR for Codex to streamline runtime and dev dependencies atop current master."
       prompt: >
-        Review dependencies, build scripts, and configurations. Remove unused or
-        outdated libraries, upgrade to stable versions, and replace deprecated APIs with
-        supported alternatives. Simplify build steps and eliminate fragile scripts to
-        keep the dependency graph lean and the build process robust. If there are no
-        dependencies to update, skip this step.
+        Audit package.json (and the lockfile) for outdated, unused, or redundant
+        dependencies. Remove packages that are no longer referenced, collapse duplicate
+        entries, align semver ranges with project policy, and upgrade to supported
+        versions when it is safe. Replace deprecated APIs with their modern
+        equivalents, adjust imports/usages accordingly, and document notable version
+        jumps in the commit message. Skip tooling/config changes—those live in the
+        configuration workflow. Keep the diff tight, avoid introducing new heavy
+        dependencies, and ensure builds/tests still succeed after the cleanup.

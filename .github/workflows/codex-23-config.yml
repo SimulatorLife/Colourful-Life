@@ -17,20 +17,12 @@ jobs:
       pr_title: "Codex: Config Improvement"
       pr_body: "Seed PR for Codex to refactor and improve a configuration surface atop current master."
       prompt: >
-        Identify and improve one configuration surface (e.g., package.json
-        scripts/fields, dependency hygiene, lockfile consistency,
-        ESLint/Prettier/EditorConfig settings, TypeScript/Babel config,
-        Browserslist/engines, minimization/uglification, or CI lint/test steps) that will make the project easier
-        to build, lint, secure, test, and maintain—without changing app behavior. Pick a single
-        coherent target and deliver one concrete fix. For example: normalize or clarify
-        npm scripts (add lint, lint:fix, format, test, build, start with accurate
-        commands), remove unused devDeps, fix incorrect/duplicated dependencies or
-        peer/optional deps, align ESLint/Prettier rules with project style and ensure
-        they don't fight each other, add/standardize engines/browserslist if
-        appropriate, set clear metadata (license, repository, homepage, bugs), mark
-        tree-shakable packages sideEffects:false when safe, prefer files allow-list over
-        .npmignore, ensure lockfile and dependency ranges are consistent, and tighten CI
-        so lint/format:check/test actually run. Keep the blast radius small: no heavy
-        new deps, no speculative rewrites, no behavior-affecting flags. In the commit
-        message, briefly justify the chosen target and summarize the before/after
-        impact.
+        Select one configuration surface that improves build, lint, or CI ergonomics
+        without touching application logic. Candidates include npm scripts, lint/format
+        configs, EditorConfig, TypeScript/Babel settings, Browserslist/engines fields,
+        bundler options, or CI workflows that orchestrate tests and checks. Deliver one
+        concrete upgrade such as clarifying npm script names, wiring a missing lint
+        check, aligning ESLint and Prettier to avoid conflicts, tightening CI triggers,
+        or documenting environment expectations. Leave dependency version churn to the
+        dedicated dependency workflow. Keep the change small, reversible, and thoroughly
+        justified in the commit message so reviewers understand the before/after impact.

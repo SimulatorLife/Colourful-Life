@@ -293,6 +293,7 @@ const simulationEngine = new SimulationEngine({
     showDensity: false,
     showEnergy: false,
     showFitness: false,
+    profileGridMetrics: "never",
   },
   rng: simulationRng,
   requestAnimationFrame: () => 0,

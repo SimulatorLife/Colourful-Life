@@ -80,3 +80,34 @@ export function findSliderByLabel(root, label) {
 
   return null;
 }
+
+export function findSelectByLabel(root, label) {
+  const queue = [root];
+
+  while (queue.length > 0) {
+    const node = queue.shift();
+
+    if (node && Array.isArray(node.children)) {
+      queue.push(...node.children);
+    }
+
+    if (!node || node.tagName !== "LABEL" || !Array.isArray(node.children)) {
+      continue;
+    }
+
+    const name = node.children.find((child) => child?.className === "control-name");
+    const line = node.children.find((child) => child?.className === "control-line");
+
+    if (!line || !Array.isArray(line.children)) continue;
+
+    const select = line.children.find((child) => child?.tagName === "SELECT");
+
+    if (!select) continue;
+
+    if (name && extractTextContent(name).trim() === label) {
+      return select;
+    }
+  }
+
+  return null;
+}
