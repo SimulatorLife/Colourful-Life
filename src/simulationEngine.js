@@ -299,7 +299,7 @@ export default class SimulationEngine {
       autoReseed: defaults.autoReseed,
       autoSeedEnabled: defaults.autoReseed !== false,
       performanceNow: this.now,
-      profileGridMetrics: config.profileGridMetrics,
+      profileGridMetrics: defaults.profileGridMetrics,
     });
 
     if (win) {
@@ -338,6 +338,7 @@ export default class SimulationEngine {
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
       autoPauseOnBlur: this.autoPauseOnBlur,
+      profileGridMetrics: defaults.profileGridMetrics,
       gridRows: rows,
       gridCols: cols,
       cellSize,
@@ -1379,6 +1380,9 @@ export default class SimulationEngine {
       case "lowDiversityReproMultiplier":
         this.setLowDiversityReproMultiplier(value);
         break;
+      case "profileGridMetrics":
+        this.setProfileGridMetrics(value);
+        break;
       case "speedMultiplier": {
         const sanitized = sanitizeNumber(value, {
           fallback: Number.isFinite(this.state.speedMultiplier)
@@ -1460,6 +1464,24 @@ export default class SimulationEngine {
     });
 
     this.#updateState({ lowDiversityReproMultiplier: clamped });
+  }
+
+  setProfileGridMetrics(value) {
+    if (!this.grid) return;
+
+    let mode = null;
+
+    if (typeof this.grid.setProfileGridMetrics === "function") {
+      mode = this.grid.setProfileGridMetrics(value);
+    }
+
+    if (typeof mode !== "string" && typeof this.grid.profileGridMetrics === "string") {
+      mode = this.grid.profileGridMetrics;
+    }
+
+    if (typeof mode === "string" && this.state.profileGridMetrics !== mode) {
+      this.#updateState({ profileGridMetrics: mode });
+    }
   }
 
   burstRandomCells(options = {}) {

@@ -195,6 +195,26 @@ test("resolveSimulationDefaults keeps event frequency overrides opt-in", async (
   );
 });
 
+test("resolveSimulationDefaults normalizes profileGridMetrics overrides", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+
+  const defaults = resolveSimulationDefaults();
+
+  assert.is(defaults.profileGridMetrics, SIMULATION_DEFAULTS.profileGridMetrics);
+
+  const enabled = resolveSimulationDefaults({ profileGridMetrics: "enabled" });
+  const autoAlias = resolveSimulationDefaults({ profileGridMetrics: "stats" });
+  const disabled = resolveSimulationDefaults({ profileGridMetrics: 0 });
+  const forced = resolveSimulationDefaults({ profileGridMetrics: true });
+  const unknown = resolveSimulationDefaults({ profileGridMetrics: "mystery" });
+
+  assert.is(enabled.profileGridMetrics, "always");
+  assert.is(forced.profileGridMetrics, "always");
+  assert.is(disabled.profileGridMetrics, "never");
+  assert.is(autoAlias.profileGridMetrics, "auto");
+  assert.is(unknown.profileGridMetrics, SIMULATION_DEFAULTS.profileGridMetrics);
+});
+
 test("resolveSimulationDefaults derives cadence from speed overrides", async () => {
   const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
   const defaults = resolveSimulationDefaults({ speedMultiplier: 2 });
@@ -300,6 +320,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     matingDiversityThreshold: defaults.matingDiversityThreshold,
     lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
     autoPauseOnBlur: defaults.autoPauseOnBlur,
+    profileGridMetrics: defaults.profileGridMetrics,
   };
 
   expectedState.gridRows = engine.rows;

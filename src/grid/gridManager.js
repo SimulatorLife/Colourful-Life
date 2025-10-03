@@ -46,6 +46,9 @@ const DEFAULT_SCAN_BUDGET_BASE = 72;
 const DEFAULT_SCAN_BUDGET_PER_SIGHT = 14;
 const MAX_SCAN_BUDGET = 360;
 
+const PROFILING_MODE_ALWAYS = "always";
+const PROFILING_MODE_NEVER = "never";
+const PROFILING_MODE_AUTO = "auto";
 const similarityCache = new WeakMap();
 const NEIGHBOR_OFFSETS = [
   [-1, -1],
@@ -134,6 +137,7 @@ export default class GridManager {
   #eventRowsScratch = null;
   #activeSnapshotScratch = [];
   #performanceNow = PERFORMANCE_NOW;
+  #profilingMode = PROFILING_MODE_AUTO;
   #profilingScratch = {
     activeSnapshotMs: 0,
     activeSnapshotCount: 0,
@@ -212,6 +216,92 @@ export default class GridManager {
     const scarcity = clamp(deficit * (0.6 + (1 - occupancy) * 0.4), 0, 1);
 
     return scarcity;
+  }
+
+  #normalizeProfilingMode(candidate) {
+    if (candidate === true) {
+      return PROFILING_MODE_ALWAYS;
+    }
+
+    if (candidate === false) {
+      return PROFILING_MODE_NEVER;
+    }
+
+    if (typeof candidate === "number") {
+      if (!Number.isFinite(candidate)) {
+        return PROFILING_MODE_AUTO;
+      }
+
+      if (candidate > 0) {
+        return PROFILING_MODE_ALWAYS;
+      }
+
+      if (candidate === 0) {
+        return PROFILING_MODE_NEVER;
+      }
+
+      return PROFILING_MODE_AUTO;
+    }
+
+    if (typeof candidate === "string") {
+      const normalized = candidate.trim().toLowerCase();
+
+      if (normalized.length === 0) {
+        return PROFILING_MODE_AUTO;
+      }
+
+      if (
+        normalized === "always" ||
+        normalized === "on" ||
+        normalized === "true" ||
+        normalized === "yes" ||
+        normalized === "enable" ||
+        normalized === "enabled" ||
+        normalized === "profile" ||
+        normalized === "profiling" ||
+        normalized === "metrics"
+      ) {
+        return PROFILING_MODE_ALWAYS;
+      }
+
+      if (
+        normalized === "never" ||
+        normalized === "off" ||
+        normalized === "false" ||
+        normalized === "no" ||
+        normalized === "disable" ||
+        normalized === "disabled"
+      ) {
+        return PROFILING_MODE_NEVER;
+      }
+
+      if (
+        normalized === "auto" ||
+        normalized === "automatic" ||
+        normalized === "default" ||
+        normalized === "stats"
+      ) {
+        return PROFILING_MODE_AUTO;
+      }
+    }
+
+    if (candidate == null) {
+      return PROFILING_MODE_AUTO;
+    }
+
+    return PROFILING_MODE_AUTO;
+  }
+
+  #shouldProfileGrid() {
+    if (this.#profilingMode === PROFILING_MODE_ALWAYS) {
+      return true;
+    }
+
+    if (this.#profilingMode === PROFILING_MODE_NEVER) {
+      return false;
+    }
+
+    return typeof this.stats?.recordPerformanceSummary === "function";
   }
 
   #resetProfilingScratch() {
@@ -1380,9 +1470,10 @@ export default class GridManager {
     this.cellSize = resolvedCellSize;
     this.stats = resolvedStats;
     this.lastGridProfiling = null;
-    this.profileGridMetrics =
-      profileGridMetrics ??
-      (typeof this.stats?.recordPerformanceSummary === "function" ? true : false);
+    this.#profilingMode = this.#normalizeProfilingMode(
+      profileGridMetrics ?? PROFILING_MODE_AUTO,
+    );
+    this.profileGridMetrics = this.#profilingMode;
     this.#performanceNow =
       typeof performanceNowHook === "function" ? performanceNowHook : PERFORMANCE_NOW;
     this.obstaclePresets = resolveObstaclePresetCatalog(obstaclePresets);
@@ -1633,6 +1724,19 @@ export default class GridManager {
 
   setBrainSnapshotCollector(collector) {
     this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
+  }
+
+  setProfileGridMetrics(preference) {
+    const nextMode = this.#normalizeProfilingMode(preference);
+
+    this.#profilingMode = nextMode;
+    this.profileGridMetrics = nextMode;
+
+    if (nextMode === PROFILING_MODE_NEVER) {
+      this.lastGridProfiling = null;
+    }
+
+    return this.profileGridMetrics;
   }
 
   setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {
@@ -4417,11 +4521,7 @@ export default class GridManager {
 
     this.densityGrid = densityGrid;
     const processed = new WeakSet();
-    const profilePreference = this.profileGridMetrics;
-    const shouldProfile =
-      profilePreference != null
-        ? Boolean(profilePreference)
-        : typeof this.stats?.recordPerformanceSummary === "function";
+    const shouldProfile = this.#shouldProfileGrid();
     const profiling = shouldProfile ? this.#resetProfilingScratch() : null;
     const activeSnapshot = this.#activeSnapshotScratch;
 

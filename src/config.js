@@ -240,6 +240,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   speedMultiplier: 1,
   autoPauseOnBlur: false,
   autoReseed: true,
+  profileGridMetrics: "auto",
 });
 
 const BOOLEAN_DEFAULT_KEYS = Object.freeze([
@@ -288,6 +289,71 @@ function coerceBoolean(candidate, fallback) {
   return Boolean(candidate);
 }
 
+const PROFILING_MODE_ALWAYS = "always";
+const PROFILING_MODE_NEVER = "never";
+const PROFILING_MODE_AUTO = "auto";
+
+const PROFILING_KEYWORD_MAP = Object.freeze({
+  always: PROFILING_MODE_ALWAYS,
+  auto: PROFILING_MODE_AUTO,
+  automatic: PROFILING_MODE_AUTO,
+  default: PROFILING_MODE_AUTO,
+  enable: PROFILING_MODE_ALWAYS,
+  enabled: PROFILING_MODE_ALWAYS,
+  disable: PROFILING_MODE_NEVER,
+  disabled: PROFILING_MODE_NEVER,
+  metrics: PROFILING_MODE_ALWAYS,
+  never: PROFILING_MODE_NEVER,
+  off: PROFILING_MODE_NEVER,
+  on: PROFILING_MODE_ALWAYS,
+  profile: PROFILING_MODE_ALWAYS,
+  profiling: PROFILING_MODE_ALWAYS,
+  stats: PROFILING_MODE_AUTO,
+  true: PROFILING_MODE_ALWAYS,
+  false: PROFILING_MODE_NEVER,
+  yes: PROFILING_MODE_ALWAYS,
+  no: PROFILING_MODE_NEVER,
+});
+
+function normalizeProfileGridMetrics(value, fallback = PROFILING_MODE_AUTO) {
+  const fallbackMode =
+    typeof fallback === "string" && fallback.length > 0
+      ? fallback
+      : PROFILING_MODE_AUTO;
+
+  if (value === true) return PROFILING_MODE_ALWAYS;
+  if (value === false) return PROFILING_MODE_NEVER;
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      return fallbackMode;
+    }
+
+    if (value > 0) return PROFILING_MODE_ALWAYS;
+    if (value === 0) return PROFILING_MODE_NEVER;
+
+    return fallbackMode;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    if (normalized.length === 0) {
+      return fallbackMode;
+    }
+
+    if (Object.hasOwn(PROFILING_KEYWORD_MAP, normalized)) {
+      return PROFILING_KEYWORD_MAP[normalized];
+    }
+  }
+
+  if (value == null) {
+    return fallbackMode;
+  }
+
+  return fallbackMode;
+}
+
 /**
  * Resolves simulation defaults while allowing selective overrides.
  *
@@ -326,6 +392,13 @@ export function resolveSimulationDefaults(overrides = {}) {
   }
 
   merged.autoReseed = coerceBoolean(overrides.autoReseed, defaults.autoReseed);
+
+  merged.profileGridMetrics = normalizeProfileGridMetrics(
+    Object.hasOwn(overrides, "profileGridMetrics")
+      ? overrides.profileGridMetrics
+      : merged.profileGridMetrics,
+    defaults.profileGridMetrics ?? PROFILING_MODE_AUTO,
+  );
 
   const concurrencyValue = Number(merged.maxConcurrentEvents);
 
