@@ -33,4 +33,8 @@ export function clearTileEnergyBuffers(source, row, col, options = {}) {
       deltaRow[normalizedCol] = 0;
     }
   }
+
+  if (typeof source?.markEnergyDirty === "function") {
+    source.markEnergyDirty(normalizedRow, normalizedCol, { radius: 1 });
+  }
 }

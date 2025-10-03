@@ -39,6 +39,11 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 
 const similarityCache = new WeakMap();
+const defaultPerformanceNow =
+  typeof GLOBAL.performance?.now === "function"
+    ? GLOBAL.performance.now.bind(GLOBAL.performance)
+    : () => Date.now();
+const ENERGY_DIRTY_EPSILON = 1e-6;
 const NEIGHBOR_OFFSETS = [
   [-1, -1],
   [-1, 0],
@@ -294,16 +299,6 @@ export default class GridManager {
     return clamp(drive * 0.7 + environment * 0.3, 0, 1);
   }
 
-  #getSegmentWindowScratch() {
-    if (!this.#segmentWindowScratch) {
-      this.#segmentWindowScratch = [];
-    }
-
-    this.#segmentWindowScratch.length = 0;
-
-    return this.#segmentWindowScratch;
-  }
-
   #getColumnEventScratch() {
     if (!this.#columnEventScratch) {
       this.#columnEventScratch = [];
@@ -312,6 +307,16 @@ export default class GridManager {
     this.#columnEventScratch.length = 0;
 
     return this.#columnEventScratch;
+  }
+
+  #getSegmentWindowScratch() {
+    if (!this.#segmentWindowScratch) {
+      this.#segmentWindowScratch = [];
+    }
+
+    this.#segmentWindowScratch.length = 0;
+
+    return this.#segmentWindowScratch;
   }
 
   #prepareEventsByRow(rowCount) {
@@ -1046,6 +1051,7 @@ export default class GridManager {
           energyRow[col] = before + deposit;
           this.#accumulateDecayDelta(row, col, deposit);
           remaining -= deposit;
+          this.#markEnergyDirty(row, col, { radius: 1 });
         }
       }
     }
@@ -1077,6 +1083,7 @@ export default class GridManager {
         neighborRow[c] = before + deposit;
         this.#accumulateDecayDelta(r, c, deposit);
         remaining -= deposit;
+        this.#markEnergyDirty(r, c, { radius: 1 });
       }
     }
 
@@ -1237,6 +1244,7 @@ export default class GridManager {
       obstaclePresets,
       rng,
       brainSnapshotCollector,
+      performanceNow,
     } = options;
     const {
       eventManager: resolvedEventManager,
@@ -1263,6 +1271,9 @@ export default class GridManager {
     this.pendingOccupantRegen = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
+    this.energyDirtyTiles = new Set();
+    this.energyTimerNow =
+      typeof performanceNow === "function" ? performanceNow : defaultPerformanceNow;
     this.eventManager = resolvedEventManager;
     this.eventContext = createEventContext(eventContext);
     this.eventEffectCache = new Map();
@@ -1290,6 +1301,7 @@ export default class GridManager {
     };
     this.#resetImageDataBuffer();
     this.obstaclePresets = resolveObstaclePresetCatalog(obstaclePresets);
+    this.#markAllEnergyDirty();
     const knownPresetIds = new Set(
       this.obstaclePresets
         .map((preset) => (typeof preset?.id === "string" ? preset.id : null))
@@ -1620,6 +1632,7 @@ export default class GridManager {
 
       energyRow[nCol] = before + deposit;
       remaining -= deposit;
+      this.#markEnergyDirty(nRow, nCol, { radius: 1 });
 
       const deltaRow = this.energyDeltaGrid?.[nRow];
 
@@ -1697,6 +1710,7 @@ export default class GridManager {
     }
 
     energyRow[col] = 0;
+    this.#markEnergyDirty(row, col, { radius: 1 });
 
     const deltaRow = this.energyDeltaGrid?.[row];
 
@@ -2150,6 +2164,7 @@ export default class GridManager {
     this.#initializeDecayBuffers(rowsInt, colsInt);
     this.obstacles = Array.from({ length: rowsInt }, () => Array(colsInt).fill(false));
     this.#resetImageDataBuffer();
+    this.energyDirtyTiles = new Set();
     this.densityCounts = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
     this.densityLiveGrid = Array.from({ length: rowsInt }, () =>
@@ -2157,6 +2172,7 @@ export default class GridManager {
     );
     this.densityGrid = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
     this.densityDirtyTiles?.clear?.();
+    this.#markAllEnergyDirty();
     this.activeCells.clear();
     this.tickCount = 0;
     this.lastSnapshot = null;
@@ -2274,6 +2290,8 @@ export default class GridManager {
     this.lastSnapshot = null;
     this.densityDirtyTiles?.clear?.();
     this.eventEffectCache?.clear?.();
+    this.energyDirtyTiles = new Set();
+    this.#markAllEnergyDirty();
     this.#initializeDecayBuffers(this.rows, this.cols);
 
     const shouldRandomize = Boolean(randomizeObstacles);
@@ -2428,6 +2446,7 @@ export default class GridManager {
 
     this.energyGrid[row][col] -= take;
     cell.energy = Math.min(this.maxTileEnergy, cell.energy + take);
+    this.#markEnergyDirty(row, col, { radius: 1 });
   }
 
   regenerateEnergyGrid(
@@ -2475,11 +2494,53 @@ export default class GridManager {
           effectCache,
         }
       : null;
+    const profileEnabled = typeof this.stats?.recordEnergyStageTimings === "function";
+    const now =
+      profileEnabled && typeof this.energyTimerNow === "function"
+        ? this.energyTimerNow
+        : profileEnabled
+          ? defaultPerformanceNow
+          : null;
+    const startTime = profileEnabled ? now() : 0;
+    let segmentationTime = 0;
+    let densityTime = 0;
+    let diffusionTime = 0;
+
+    const currentDirtySet = this.#ensureEnergyDirtySet();
+
+    this.#ensureOccupantTilesDirty(currentDirtySet);
+    if (hasEvents) this.#markEventAreasDirty(evs, currentDirtySet);
+
+    if (currentDirtySet.size === 0) {
+      if (profileEnabled) {
+        const totalTime = now() - startTime;
+
+        this.stats.recordEnergyStageTimings({
+          segmentation: 0,
+          density: 0,
+          diffusion: 0,
+          total: totalTime,
+          tileCount: 0,
+          strategy: "dirty-regions",
+        });
+      }
+
+      return;
+    }
+
+    const dirtyEntries = Array.from(currentDirtySet);
+    const nextDirty = new Set();
+
+    this.energyDirtyTiles = nextDirty;
+    const dirtyRowMap = this.#buildDirtyRowMap(dirtyEntries);
 
     let eventsByRow = null;
 
     if (hasEvents) {
+      const segStart = profileEnabled ? now() : 0;
+
       eventsByRow = this.#prepareEventsByRow(rows);
+      const targetRows = new Set(dirtyRowMap.keys());
 
       for (let i = 0; i < evs.length; i++) {
         const ev = evs[i];
@@ -2499,19 +2560,38 @@ export default class GridManager {
           if (startCol >= endCol) continue;
 
           for (let rr = startRow; rr < endRow; rr++) {
-            if (!eventsByRow[rr]) eventsByRow[rr] = [];
+            if (!targetRows.has(rr)) continue;
+
             eventsByRow[rr].push({ event: ev, startCol, endCol });
           }
         } else {
           for (let rr = startRow; rr < endRow; rr++) {
-            if (!eventsByRow[rr]) eventsByRow[rr] = [];
+            if (!targetRows.has(rr)) continue;
+
             eventsByRow[rr].push(ev);
           }
         }
       }
+
+      if (usingSegmentedEvents) {
+        for (const rowIndex of targetRows) {
+          const segments = eventsByRow[rowIndex];
+
+          if (segments && segments.length > 1) {
+            segments.sort((a, b) => a.startCol - b.startCol);
+          }
+        }
+      }
+
+      if (profileEnabled) {
+        segmentationTime = now() - segStart;
+      }
     }
 
-    for (let r = 0; r < rows; r++) {
+    const processedTiles = [];
+    const previousEvents = eventOptions ? eventOptions.events : null;
+
+    for (const [r, columns] of dirtyRowMap.entries()) {
       const energyRow = energyGrid[r];
       const nextRow = next[r];
       const deltaRow = deltaGrid ? deltaGrid[r] : null;
@@ -2525,186 +2605,26 @@ export default class GridManager {
       const occupantRegenRow = occupantRegenGrid ? occupantRegenGrid[r] : null;
       const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
       const rowHasEvents = Boolean(eventOptions && rowEvents.length > 0);
+      const rowSegments = rowHasEvents && usingSegmentedEvents ? rowEvents : null;
+      const activeSegments = rowSegments ? this.#getSegmentWindowScratch() : null;
+      let nextSegmentIndex = 0;
 
-      if (rowHasEvents && usingSegmentedEvents) {
-        const segments = rowEvents;
+      for (let i = 0; i < columns.length; i++) {
+        const c = columns[i];
 
-        if (segments.length > 1) {
-          segments.sort((a, b) => a.startCol - b.startCol);
-        }
+        processedTiles.push([r, c]);
 
-        const activeSegments = this.#getSegmentWindowScratch();
-        const columnEvents = this.#getColumnEventScratch();
-        const previousEvents = eventOptions.events;
-        let nextSegmentIndex = 0;
+        if (occupantRegenRow) occupantRegenRow[c] = 0;
 
-        for (let c = 0; c < cols; c++) {
-          const isObstacle = Boolean(obstacleRow?.[c]);
-
-          while (
-            nextSegmentIndex < segments.length &&
-            segments[nextSegmentIndex].startCol <= c
-          ) {
-            activeSegments.push(segments[nextSegmentIndex]);
-            nextSegmentIndex += 1;
-          }
-
-          let nextActiveCount = 0;
-          let eventCount = 0;
-
-          for (let i = 0; i < activeSegments.length; i++) {
-            const segment = activeSegments[i];
-
-            if (segment.endCol > c) {
-              activeSegments[nextActiveCount] = segment;
-              nextActiveCount += 1;
-
-              if (!isObstacle) {
-                columnEvents[eventCount] = segment.event;
-                eventCount += 1;
-              }
-            }
-          }
-
-          activeSegments.length = nextActiveCount;
-
-          if (isObstacle) {
-            columnEvents.length = 0;
-            nextRow[c] = 0;
-            if (energyRow[c] !== 0) energyRow[c] = 0;
-            if (deltaRow) deltaRow[c] = 0;
-            if (occupantRegenRow) occupantRegenRow[c] = 0;
-
-            continue;
-          }
-
-          columnEvents.length = eventCount;
-
-          const densityRowValue = densityRow ? densityRow[c] : null;
-          const baseDensity =
-            densityRowValue == null
-              ? this.localDensity(r, c, GridManager.DENSITY_RADIUS)
-              : densityRowValue;
-          let effectiveDensity = (baseDensity ?? 0) * normalizedDensityMultiplier;
-
-          if (effectiveDensity <= 0) {
-            effectiveDensity = 0;
-          } else if (effectiveDensity >= 1) {
-            effectiveDensity = 1;
-          }
-
-          const currentEnergy = Number.isFinite(energyRow?.[c]) ? energyRow[c] : 0;
-          let regen =
-            maxTileEnergy > 0 ? regenRate * (maxTileEnergy - currentEnergy) : 0;
-          const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
-
-          if (regenPenalty <= 0) {
-            regen = 0;
-          } else {
-            regen *= regenPenalty;
-          }
-
-          let regenMultiplier = 1;
-          let regenAdd = 0;
-          let drain = 0;
-
-          if (eventCount > 0) {
-            eventOptions.row = r;
-            eventOptions.col = c;
-            eventOptions.events = columnEvents;
-
-            const modifiers = accumulateEventModifiers(eventOptions);
-
-            if (modifiers) {
-              regenMultiplier = modifiers.regenMultiplier;
-              regenAdd = modifiers.regenAdd;
-              drain = modifiers.drainAdd;
-            }
-          }
-
-          regen = regen * regenMultiplier + regenAdd;
-
-          let neighborSum = 0;
-          let neighborCount = 0;
-
-          if (useDiffusion) {
-            if (upEnergyRow && (!upObstacleRow || !upObstacleRow[c])) {
-              neighborSum += upEnergyRow[c];
-              neighborCount += 1;
-            }
-
-            if (downEnergyRow && (!downObstacleRow || !downObstacleRow[c])) {
-              neighborSum += downEnergyRow[c];
-              neighborCount += 1;
-            }
-
-            if (c > 0 && (!obstacleRow || !obstacleRow[c - 1])) {
-              neighborSum += energyRow[c - 1];
-              neighborCount += 1;
-            }
-
-            if (c < cols - 1 && (!obstacleRow || !obstacleRow[c + 1])) {
-              neighborSum += energyRow[c + 1];
-              neighborCount += 1;
-            }
-          }
-
-          let diffusion = 0;
-
-          if (neighborCount > 0) {
-            diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
-          }
-
-          let nextEnergy = currentEnergy + regen - drain + diffusion;
-
-          if (nextEnergy <= 0) {
-            nextEnergy = 0;
-          } else if (nextEnergy >= maxTileEnergy) {
-            nextEnergy = maxTileEnergy;
-          }
-
-          if (occupantRegenRow) occupantRegenRow[c] = 0;
-
-          if (gridRow?.[c]) {
-            if (occupantRegenRow) occupantRegenRow[c] = nextEnergy;
-
-            nextRow[c] = 0;
-            if (energyRow[c] !== 0) energyRow[c] = 0;
-            if (deltaRow) deltaRow[c] = 0;
-
-            continue;
-          }
-
-          nextRow[c] = nextEnergy;
-
-          if (deltaRow) {
-            let normalizedDelta = (nextEnergy - currentEnergy) * invMaxTileEnergy;
-
-            if (normalizedDelta < -1) {
-              normalizedDelta = -1;
-            } else if (normalizedDelta > 1) {
-              normalizedDelta = 1;
-            }
-
-            deltaRow[c] = normalizedDelta;
-          }
-        }
-
-        eventOptions.events = previousEvents;
-
-        continue;
-      }
-
-      for (let c = 0; c < cols; c++) {
         if (obstacleRow?.[c]) {
-          nextRow[c] = 0;
-          if (energyRow[c] !== 0) energyRow[c] = 0;
+          if (nextRow) nextRow[c] = 0;
+          if (energyRow && energyRow[c] !== 0) energyRow[c] = 0;
           if (deltaRow) deltaRow[c] = 0;
-          if (occupantRegenRow) occupantRegenRow[c] = 0;
 
           continue;
         }
 
+        const densityStart = profileEnabled ? now() : 0;
         const densityRowValue = densityRow ? densityRow[c] : null;
         const baseDensity =
           densityRowValue == null
@@ -2716,6 +2636,10 @@ export default class GridManager {
           effectiveDensity = 0;
         } else if (effectiveDensity >= 1) {
           effectiveDensity = 1;
+        }
+
+        if (profileEnabled) {
+          densityTime += now() - densityStart;
         }
 
         const currentEnergy = Number.isFinite(energyRow?.[c]) ? energyRow[c] : 0;
@@ -2731,18 +2655,59 @@ export default class GridManager {
         let regenMultiplier = 1;
         let regenAdd = 0;
         let drain = 0;
+        let tileEvents = EMPTY_EVENT_LIST;
 
         if (rowHasEvents) {
-          eventOptions.row = r;
-          eventOptions.col = c;
-          eventOptions.events = rowEvents;
+          if (rowSegments) {
+            const columnEvents = this.#getColumnEventScratch();
 
-          const modifiers = accumulateEventModifiers(eventOptions);
+            let activeCount = 0;
 
-          if (modifiers) {
-            regenMultiplier = modifiers.regenMultiplier;
-            regenAdd = modifiers.regenAdd;
-            drain = modifiers.drainAdd;
+            for (let j = 0; j < activeSegments.length; j++) {
+              const segment = activeSegments[j];
+
+              if (segment.endCol > c) {
+                activeSegments[activeCount++] = segment;
+              }
+            }
+
+            activeSegments.length = activeCount;
+
+            while (
+              nextSegmentIndex < rowSegments.length &&
+              rowSegments[nextSegmentIndex].startCol <= c
+            ) {
+              activeSegments.push(rowSegments[nextSegmentIndex]);
+              nextSegmentIndex++;
+            }
+
+            for (let j = 0; j < activeSegments.length; j++) {
+              const segment = activeSegments[j];
+
+              if (segment.startCol <= c && segment.endCol > c) {
+                columnEvents.push(segment.event);
+              }
+            }
+
+            tileEvents = columnEvents;
+          } else {
+            tileEvents = rowEvents;
+          }
+
+          if (tileEvents.length > 0 && eventOptions) {
+            eventOptions.row = r;
+            eventOptions.col = c;
+            eventOptions.events = tileEvents;
+
+            const modifiers = accumulateEventModifiers(eventOptions);
+
+            if (modifiers) {
+              regenMultiplier = modifiers.regenMultiplier;
+              regenAdd = modifiers.regenAdd;
+              drain = modifiers.drainAdd;
+            }
+
+            eventOptions.events = previousEvents;
           }
         }
 
@@ -2752,6 +2717,8 @@ export default class GridManager {
         let neighborCount = 0;
 
         if (useDiffusion) {
+          const diffStart = profileEnabled ? now() : 0;
+
           if (upEnergyRow && (!upObstacleRow || !upObstacleRow[c])) {
             neighborSum += upEnergyRow[c];
             neighborCount += 1;
@@ -2771,6 +2738,10 @@ export default class GridManager {
             neighborSum += energyRow[c + 1];
             neighborCount += 1;
           }
+
+          if (profileEnabled) {
+            diffusionTime += now() - diffStart;
+          }
         }
 
         let diffusion = 0;
@@ -2787,18 +2758,36 @@ export default class GridManager {
           nextEnergy = maxTileEnergy;
         }
 
-        if (occupantRegenRow) occupantRegenRow[c] = 0;
-
         if (gridRow?.[c]) {
-          occupantRegenRow[c] = nextEnergy;
-          nextRow[c] = 0;
-          if (energyRow[c] !== 0) energyRow[c] = 0;
+          if (occupantRegenRow) occupantRegenRow[c] = nextEnergy;
+          if (nextRow) nextRow[c] = 0;
+          if (energyRow && energyRow[c] !== 0) energyRow[c] = 0;
           if (deltaRow) deltaRow[c] = 0;
+
+          this.#markEnergyDirty(r, c, { targetSet: nextDirty });
+
+          if (useDiffusion && Math.abs(diffusion) > ENERGY_DIRTY_EPSILON) {
+            if (r > 0 && (!upObstacleRow || !upObstacleRow[c])) {
+              this.#markEnergyDirty(r - 1, c, { targetSet: nextDirty });
+            }
+
+            if (r < rows - 1 && (!downObstacleRow || !downObstacleRow[c])) {
+              this.#markEnergyDirty(r + 1, c, { targetSet: nextDirty });
+            }
+
+            if (c > 0 && (!obstacleRow || !obstacleRow[c - 1])) {
+              this.#markEnergyDirty(r, c - 1, { targetSet: nextDirty });
+            }
+
+            if (c < cols - 1 && (!obstacleRow || !obstacleRow[c + 1])) {
+              this.#markEnergyDirty(r, c + 1, { targetSet: nextDirty });
+            }
+          }
 
           continue;
         }
 
-        nextRow[c] = nextEnergy;
+        if (nextRow) nextRow[c] = nextEnergy;
 
         if (deltaRow) {
           let normalizedDelta = (nextEnergy - currentEnergy) * invMaxTileEnergy;
@@ -2811,14 +2800,63 @@ export default class GridManager {
 
           deltaRow[c] = normalizedDelta;
         }
+
+        const energyDelta = Math.abs(nextEnergy - currentEnergy);
+
+        if (
+          energyDelta > ENERGY_DIRTY_EPSILON ||
+          nextEnergy < maxTileEnergy - ENERGY_DIRTY_EPSILON
+        ) {
+          this.#markEnergyDirty(r, c, { targetSet: nextDirty });
+        }
+
+        if (useDiffusion && Math.abs(diffusion) > ENERGY_DIRTY_EPSILON) {
+          if (r > 0 && (!upObstacleRow || !upObstacleRow[c])) {
+            this.#markEnergyDirty(r - 1, c, { targetSet: nextDirty });
+          }
+
+          if (r < rows - 1 && (!downObstacleRow || !downObstacleRow[c])) {
+            this.#markEnergyDirty(r + 1, c, { targetSet: nextDirty });
+          }
+
+          if (c > 0 && (!obstacleRow || !obstacleRow[c - 1])) {
+            this.#markEnergyDirty(r, c - 1, { targetSet: nextDirty });
+          }
+
+          if (c < cols - 1 && (!obstacleRow || !obstacleRow[c + 1])) {
+            this.#markEnergyDirty(r, c + 1, { targetSet: nextDirty });
+          }
+        }
       }
     }
 
-    // Swap buffers so the freshly computed grid becomes the active state.
-    const previous = this.energyGrid;
+    if (eventOptions) {
+      eventOptions.events = previousEvents;
+    }
 
-    this.energyGrid = next;
-    this.energyNext = previous;
+    for (let i = 0; i < processedTiles.length; i++) {
+      const [rowIndex, colIndex] = processedTiles[i];
+      const nextRow = next[rowIndex];
+      const energyRow = energyGrid[rowIndex];
+
+      if (!nextRow || !energyRow) continue;
+
+      energyRow[colIndex] = Number.isFinite(nextRow[colIndex]) ? nextRow[colIndex] : 0;
+      nextRow[colIndex] = 0;
+    }
+
+    if (profileEnabled) {
+      const totalTime = now() - startTime;
+
+      this.stats.recordEnergyStageTimings({
+        segmentation: segmentationTime,
+        density: densityTime,
+        diffusion: diffusionTime,
+        total: totalTime,
+        tileCount: processedTiles.length,
+        strategy: "dirty-regions",
+      });
+    }
   }
 
   getCell(row, col) {
@@ -2876,6 +2914,7 @@ export default class GridManager {
     this.#markTileDirty(row, col);
     this.activeCells.delete(current);
     this.#applyDensityDelta(row, col, -1);
+    this.#markEnergyDirty(row, col, { radius: 1 });
 
     return current;
   }
@@ -3097,6 +3136,169 @@ export default class GridManager {
     }
 
     this.densityDirtyTiles.clear();
+  }
+
+  #ensureEnergyDirtySet() {
+    if (!this.energyDirtyTiles) {
+      this.energyDirtyTiles = new Set();
+    }
+
+    return this.energyDirtyTiles;
+  }
+
+  #markEnergyRegionDirty(
+    startRow,
+    endRow,
+    startCol,
+    endCol,
+    { targetSet = null, includeObstacles = false } = {},
+  ) {
+    const set = targetSet ?? this.#ensureEnergyDirtySet();
+
+    if (!Number.isFinite(startRow) || !Number.isFinite(endRow)) return;
+    if (!Number.isFinite(startCol) || !Number.isFinite(endCol)) return;
+
+    const minRow = Math.max(0, Math.min(startRow, endRow));
+    const maxRow = Math.min(this.rows - 1, Math.max(startRow, endRow));
+    const minCol = Math.max(0, Math.min(startCol, endCol));
+    const maxCol = Math.min(this.cols - 1, Math.max(startCol, endCol));
+
+    if (minRow > maxRow || minCol > maxCol) return;
+
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        if (!includeObstacles && this.isObstacle(row, col)) continue;
+
+        set.add(row * this.cols + col);
+      }
+    }
+  }
+
+  #markEnergyDirty(row, col, options = {}) {
+    if (!Number.isFinite(row) || !Number.isFinite(col)) return;
+
+    const radius = Math.max(0, Math.floor(options.radius ?? 0));
+    const includeSelf = options.includeSelf !== false;
+    const targetSet = options.targetSet ?? this.#ensureEnergyDirtySet();
+    const baseRow = Math.floor(row);
+    const baseCol = Math.floor(col);
+
+    if (baseRow < 0 || baseRow >= this.rows || baseCol < 0 || baseCol >= this.cols) {
+      return;
+    }
+
+    const minRow = Math.max(0, baseRow - radius);
+    const maxRow = Math.min(this.rows - 1, baseRow + radius);
+    const minCol = Math.max(0, baseCol - radius);
+    const maxCol = Math.min(this.cols - 1, baseCol + radius);
+
+    for (let r = minRow; r <= maxRow; r++) {
+      for (let c = minCol; c <= maxCol; c++) {
+        if (!includeSelf && r === baseRow && c === baseCol) continue;
+        if (this.isObstacle(r, c)) continue;
+
+        targetSet.add(r * this.cols + c);
+      }
+    }
+  }
+
+  markEnergyDirty(row, col, options = {}) {
+    this.#markEnergyDirty(row, col, options);
+  }
+
+  #markAllEnergyDirty(targetSet = null) {
+    const set = targetSet ?? this.#ensureEnergyDirtySet();
+
+    set.clear();
+
+    for (let row = 0; row < this.rows; row++) {
+      for (let col = 0; col < this.cols; col++) {
+        if (this.isObstacle(row, col)) continue;
+
+        set.add(row * this.cols + col);
+      }
+    }
+  }
+
+  #ensureOccupantTilesDirty(targetSet = null) {
+    if (!this.activeCells || this.activeCells.size === 0) return;
+
+    const set = targetSet ?? this.#ensureEnergyDirtySet();
+
+    for (const cell of this.activeCells) {
+      if (!cell || typeof cell !== "object") continue;
+
+      const rowValue = typeof cell.row === "number" ? Math.floor(cell.row) : null;
+      const colValue = typeof cell.col === "number" ? Math.floor(cell.col) : null;
+
+      if (rowValue == null || colValue == null) continue;
+      if (rowValue < 0 || rowValue >= this.rows) continue;
+      if (colValue < 0 || colValue >= this.cols) continue;
+
+      set.add(rowValue * this.cols + colValue);
+    }
+  }
+
+  #markEventAreasDirty(events, targetSet = null) {
+    if (!Array.isArray(events) || events.length === 0) return;
+
+    for (let i = 0; i < events.length; i++) {
+      const area = events[i]?.affectedArea;
+
+      if (!area) continue;
+
+      const startRow = Math.max(0, Math.floor(area.y));
+      const endRowExclusive = Math.min(
+        this.rows,
+        Math.ceil(area.y + (Number.isFinite(area.height) ? area.height : 0)),
+      );
+      const startCol = Math.max(0, Math.floor(area.x));
+      const endColExclusive = Math.min(
+        this.cols,
+        Math.ceil(area.x + (Number.isFinite(area.width) ? area.width : 0)),
+      );
+
+      if (startRow >= endRowExclusive || startCol >= endColExclusive) continue;
+
+      this.#markEnergyRegionDirty(
+        startRow,
+        endRowExclusive - 1,
+        startCol,
+        endColExclusive - 1,
+        { targetSet, includeObstacles: true },
+      );
+    }
+  }
+
+  #buildDirtyRowMap(indexes) {
+    const map = new Map();
+
+    if (!Array.isArray(indexes) || indexes.length === 0) {
+      return map;
+    }
+
+    for (let i = 0; i < indexes.length; i++) {
+      const key = indexes[i];
+
+      if (!Number.isFinite(key)) continue;
+
+      const row = Math.floor(key / this.cols);
+      const col = key % this.cols;
+
+      if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) continue;
+
+      if (!map.has(row)) {
+        map.set(row, []);
+      }
+
+      map.get(row).push(col);
+    }
+
+    for (const columns of map.values()) {
+      columns.sort((a, b) => a - b);
+    }
+
+    return map;
   }
 
   recalculateDensityCounts(radius = this.densityRadius) {

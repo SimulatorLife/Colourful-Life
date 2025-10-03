@@ -41,3 +41,57 @@ test("energy regeneration scales with tile capacity", async () => {
     GridManager.prototype.init = originalInit;
   }
 });
+
+test("dirty regeneration recovers drained tiles and reports timings", async () => {
+  const { default: GridManager } = await gridManagerModulePromise;
+  const originalInit = GridManager.prototype.init;
+
+  try {
+    GridManager.prototype.init = function initStub() {};
+    const timings = [];
+    let timestamp = 0;
+    const gm = new GridManager(1, 2, {
+      eventManager: { activeEvents: [] },
+      ctx: createStubContext(),
+      cellSize: 1,
+      stats: {
+        onBirth() {},
+        onDeath() {},
+        onFight() {},
+        onCooperate() {},
+        recordEnergyStageTimings(entry) {
+          timings.push(entry);
+        },
+      },
+      performanceNow: () => {
+        timestamp += 1;
+
+        return timestamp;
+      },
+    });
+
+    gm.energyGrid[0][0] = gm.maxTileEnergy;
+    gm.energyGrid[0][1] = 0;
+    gm.markEnergyDirty(0, 0, { radius: 1 });
+    gm.markEnergyDirty(0, 1, { radius: 1 });
+
+    gm.regenerateEnergyGrid([], 1, 0.5, 0.25);
+
+    const afterFirst = gm.energyGrid[0][1];
+
+    assert.ok(
+      afterFirst > 0,
+      "drained tile should regain energy after targeted regeneration",
+    );
+
+    gm.regenerateEnergyGrid([], 1, 0.5, 0.25);
+
+    assert.ok(timings.length > 0, "timing hook should receive stage entries");
+    const latest = timings.at(-1);
+
+    assert.ok(Number.isFinite(latest.total), "timing entry should include total");
+    assert.ok(latest.tileCount >= 1, "timing entry should include tile count");
+  } finally {
+    GridManager.prototype.init = originalInit;
+  }
+});
