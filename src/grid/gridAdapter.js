@@ -1,4 +1,5 @@
 import { MAX_TILE_ENERGY } from "../config.js";
+import { clearTileEnergyBuffers } from "./energyUtils.js";
 
 /**
  * Thin adapter exposing a stable API for systems that need to query or mutate
@@ -38,6 +39,7 @@ export default class GridInteractionAdapter {
     if (!this.gridManager?.grid?.[row]) return null;
 
     this.gridManager.grid[row][col] = cell;
+    clearTileEnergyBuffers(this.gridManager, row, col);
 
     if (cell && typeof cell === "object") {
       if ("row" in cell) cell.row = row;
@@ -97,6 +99,7 @@ export default class GridInteractionAdapter {
 
     this.setCell(toRow, toCol, moving);
     this.removeCell(fromRow, fromCol);
+    clearTileEnergyBuffers(this.gridManager, toRow, toCol);
 
     return true;
   }
