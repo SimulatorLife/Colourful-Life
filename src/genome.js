@@ -40,6 +40,7 @@ export const GENE_LOCI = Object.freeze({
   DENSITY: 27,
   COOPERATION: 28,
   COURTSHIP: 29,
+  GESTATION_EFFICIENCY: 30,
 });
 
 const BASE_GENE_COUNT = Math.max(...Object.values(GENE_LOCI)) + 1;
@@ -436,6 +437,28 @@ export class DNA {
     const jitter = (rng() - 0.5) * 0.08; // deterministic per-genome wobble
 
     return clamp(base + jitter, 0.08, 0.55);
+  }
+
+  offspringEnergyTransferEfficiency() {
+    const rng = this.prngFor("offspringEnergyTransferEfficiency");
+    const gestation = this.geneFraction(GENE_LOCI.GESTATION_EFFICIENCY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const metabolicLean =
+      0.62 +
+      0.18 * efficiency +
+      0.12 * parental +
+      0.08 * recovery +
+      0.06 * fertility -
+      0.14 * risk;
+    const gestationAnchor = 0.6 + 0.35 * gestation;
+    const blended = 0.6 * gestationAnchor + 0.4 * metabolicLean;
+    const jitter = (rng() - 0.5) * 0.04;
+
+    return clamp(blended + jitter, 0.5, 0.96);
   }
 
   // How strongly aging increases maintenance costs and reduces fertility
