@@ -18,6 +18,8 @@
   --color-metric-diversity: #ff8c68;
   --color-metric-energy: #55efc4;
   --color-metric-growth: #f5c669;
+  --color-metric-births: #9bda64;
+  --color-metric-deaths: #ff6b81;
   --color-metric-event-strength: #b786ff;
   --color-metric-mutation: #ff6fb1;
   --color-metric-diverse-pairing: #76d6ff;

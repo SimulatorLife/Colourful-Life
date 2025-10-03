@@ -269,6 +269,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(result.births, 2);
   assert.is(result.deaths, 1);
   assert.is(result.growth, 1);
+  assert.is(result.birthsPerTick, 2);
+  assert.is(result.deathsPerTick, 1);
   assert.is(result.fights, 4);
   assert.is(result.cooperations, 3);
   assert.is(result.meanEnergy, 3);
@@ -301,6 +303,10 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(stats.history.diversityPressure.length, 1);
   assert.is(stats.history.energy.length, 1);
   assert.is(stats.history.growth.length, 1);
+  assert.is(stats.history.birthsPerTick.length, 1);
+  assert.is(stats.history.deathsPerTick.length, 1);
+  assert.is(stats.history.birthsPerTick[0], 2);
+  assert.is(stats.history.deathsPerTick[0], 1);
   assert.is(stats.history.diversePairingRate.length, 1);
   assert.is(stats.history.diversePairingRate[0], 0.5);
   assert.is(stats.history.meanDiversityAppetite.length, 1);
@@ -338,6 +344,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(stats.history.diversity.length, 3);
   assert.is(stats.history.energy.length, 3);
   assert.is(stats.history.growth.length, 3);
+  assert.is(stats.history.birthsPerTick.length, 3);
+  assert.is(stats.history.deathsPerTick.length, 3);
   assert.is(stats.history.diversePairingRate.length, 3);
   assert.is(stats.history.meanDiversityAppetite.length, 3);
   assert.is(stats.history.mutationMultiplier.length, 3);
@@ -346,6 +354,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
 
   assert.equal(stats.history.population, [1, 1, 1]);
   assert.equal(stats.history.diversity, [0.1, 0.2, 0.3]);
+  assert.equal(stats.history.birthsPerTick, [0, 1, 2]);
+  assert.equal(stats.history.deathsPerTick, [0, 0, 0]);
   assert.equal(stats.getHistorySeries("population"), [1, 1, 1]);
   assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.5, 0.5, 0.5]);
 });
@@ -628,6 +638,8 @@ test("updateFromSnapshot tolerates missing or invalid totals", async () => {
   assert.is(firstSummary.meanAge, 0);
   assert.equal(stats.history.energy, [0]);
   assert.equal(stats.history.population, [3]);
+  assert.equal(stats.history.birthsPerTick, [0]);
+  assert.equal(stats.history.deathsPerTick, [0]);
 
   const secondSummary = stats.updateFromSnapshot({
     population: 2,
@@ -640,6 +652,8 @@ test("updateFromSnapshot tolerates missing or invalid totals", async () => {
   assert.is(secondSummary.meanAge, 0);
   assert.equal(stats.history.energy, [0, 0]);
   assert.equal(stats.history.population, [3, 2]);
+  assert.equal(stats.history.birthsPerTick, [0, 0]);
+  assert.equal(stats.history.deathsPerTick, [0, 0]);
 });
 
 test("diversity pressure increases when diversity stays below target", async () => {
