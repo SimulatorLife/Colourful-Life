@@ -431,6 +431,76 @@ test("diversity pressure responds to behavioral stagnation and complementary suc
   assert.ok(relievedPressure < firstPressure);
 });
 
+test("strategy pressure intensifies when monotony escapes penalties", async () => {
+  const { default: Stats } = await statsModulePromise;
+
+  class DeterministicStats extends Stats {
+    constructor(size) {
+      super(size);
+      this.diversitySequence = [];
+    }
+
+    estimateDiversity() {
+      return this.diversitySequence.length ? this.diversitySequence.shift() : 0;
+    }
+  }
+
+  const monotoneCells = [
+    createCell({ interactionGenes: { cooperate: 0.95, fight: 0.05 }, sight: 0.2 }),
+    createCell({ interactionGenes: { cooperate: 0.94, fight: 0.04 }, sight: 0.1 }),
+    createCell({ interactionGenes: { cooperate: 0.93, fight: 0.03 }, sight: 0.1 }),
+  ];
+
+  const snapshot = {
+    population: monotoneCells.length,
+    totalEnergy: 0,
+    totalAge: 0,
+    cells: monotoneCells,
+  };
+
+  const unchecked = new DeterministicStats(3);
+
+  unchecked.diversitySequence.push(0.22);
+  unchecked.mating = {
+    choices: 1,
+    successes: 1,
+    diverseChoices: 0,
+    diverseSuccesses: 0,
+    appetiteSum: 0,
+    selectionModes: { curiosity: 0, preference: 1 },
+    poolSizeSum: 0,
+    complementaritySum: 0.15,
+    complementaritySuccessSum: 0.15,
+    strategyPenaltySum: 1,
+    strategyPressureSum: 0,
+  };
+  unchecked.updateFromSnapshot(snapshot);
+
+  const relieved = new DeterministicStats(3);
+
+  relieved.diversitySequence.push(0.22);
+  relieved.mating = {
+    choices: 1,
+    successes: 1,
+    diverseChoices: 0,
+    diverseSuccesses: 0,
+    appetiteSum: 0,
+    selectionModes: { curiosity: 0, preference: 1 },
+    poolSizeSum: 0,
+    complementaritySum: 0.15,
+    complementaritySuccessSum: 0.15,
+    strategyPenaltySum: 0.5,
+    strategyPressureSum: 0,
+  };
+  relieved.updateFromSnapshot(snapshot);
+
+  const uncheckedPressure = unchecked.getStrategyPressure();
+  const relievedPressure = relieved.getStrategyPressure();
+
+  assert.ok(uncheckedPressure > relievedPressure);
+  assert.ok(uncheckedPressure - relievedPressure > 0.01);
+});
+
 test("behavioral evenness drops when one trait dominates", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(2);
