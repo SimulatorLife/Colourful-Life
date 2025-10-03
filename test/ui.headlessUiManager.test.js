@@ -23,6 +23,10 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   manager.setMaxConcurrentEvents(-2.2);
   manager.setMaxConcurrentEvents("invalid");
 
+  manager.setEventFrequencyMultiplier(1.25);
+  manager.setEventFrequencyMultiplier(-0.1);
+  manager.setEventFrequencyMultiplier("oops");
+
   manager.setAutoPauseOnBlur(true);
 
   assert.equal(notifications, [
@@ -32,6 +36,8 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
     ["combatEdgeSharpness", 4.5],
     ["maxConcurrentEvents", 3],
     ["maxConcurrentEvents", 0],
+    ["eventFrequencyMultiplier", 1.25],
+    ["eventFrequencyMultiplier", 0],
     ["autoPauseOnBlur", true],
   ]);
 
@@ -40,6 +46,7 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   assert.is(manager.getLowDiversityReproMultiplier(), 0);
   assert.is(manager.getCombatEdgeSharpness(), 4.5);
   assert.is(manager.getMaxConcurrentEvents(), 0);
+  assert.is(manager.getEventFrequencyMultiplier(), 0);
   assert.is(manager.getAutoPauseOnBlur(), true);
 });
 
