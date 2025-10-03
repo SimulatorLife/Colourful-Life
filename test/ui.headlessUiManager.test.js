@@ -79,3 +79,23 @@ test("createHeadlessUiManager shouldRenderSlowUi enforces the cadence window", (
   assert.is(manager.shouldRenderSlowUi(400), false);
   assert.is(manager.shouldRenderSlowUi(501), true);
 });
+
+test("createHeadlessUiManager allows adjusting the mutation multiplier", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    mutationMultiplier: 0.75,
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  assert.type(manager.setMutationMultiplier, "function");
+
+  manager.setMutationMultiplier(-1);
+  manager.setMutationMultiplier("oops");
+  manager.setMutationMultiplier(1.5);
+
+  assert.equal(notifications, [
+    ["mutationMultiplier", 0],
+    ["mutationMultiplier", 1.5],
+  ]);
+  assert.is(manager.getMutationMultiplier(), 1.5);
+});

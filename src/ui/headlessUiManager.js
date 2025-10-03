@@ -131,6 +131,11 @@ export function createHeadlessUiManager(options = {}) {
     },
     getMaxConcurrentEvents: () => settings.maxConcurrentEvents,
     getMutationMultiplier: () => settings.mutationMultiplier,
+    setMutationMultiplier: (value) => {
+      if (updateIfFinite("mutationMultiplier", value, { min: 0 })) {
+        notify("mutationMultiplier", settings.mutationMultiplier);
+      }
+    },
     getDensityEffectMultiplier: () => settings.densityEffectMultiplier,
     getSocietySimilarity: () => settings.societySimilarity,
     getEnemySimilarity: () => settings.enemySimilarity,
