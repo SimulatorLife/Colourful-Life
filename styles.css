@@ -604,6 +604,19 @@ canvas {
   gap: var(--space-md);
 }
 
+.leaderboard-controls {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-accent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.leaderboard-controls .control-grid {
+  margin-bottom: 0;
+}
+
 .leaderboard-entries {
   display: grid;
   gap: var(--space-md);
