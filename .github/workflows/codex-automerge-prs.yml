@@ -1,4 +1,4 @@
-name: Auto-merge Codex PRs
+name: Request Codex review for PRs
 
 on:
   pull_request:
@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  merge-if-ready:
+  request-review:
     if: ${{ startsWith(github.event_name, 'pull_request') || startsWith(github.ref, 'refs/heads/codex/') || github.ref == 'refs/heads/chore/auto-lint-format' }}
     runs-on: ubuntu-latest
 
@@ -149,38 +149,35 @@ jobs:
             core.setOutput('head_ref', pr.head.ref);
             core.setOutput('number', String(n));
 
-      - name: Merge
-        if: ${{ steps.read.outputs.bail == 'false' && steps.read.outputs.mergeable == 'true' && steps.read.outputs.draft != 'true' && contains('clean,unstable,has_hooks', steps.read.outputs.state) }}
+      - name: Check for existing Codex review request
+        if: ${{ steps.read.outputs.bail == 'false' }}
+        id: review_requested
         uses: actions/github-script@v7
-        id: merge
         with:
           script: |
             const n = Number('${{ steps.read.outputs.number }}');
-            await github.rest.pulls.merge({
+            const marker = '@codex review the changes in this PR...';
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
-              repo:  context.repo.repo,
-              pull_number: n,
-              merge_method: 'squash'
+              repo: context.repo.repo,
+              issue_number: n,
+              per_page: 100,
             });
-            core.setOutput('merged','true');
 
-      - name: Delete branch
-        if: ${{ steps.merge.outputs.merged == 'true' }}
+            const alreadyRequested = comments.some(comment => (comment.body || '').trim().startsWith(marker));
+            core.setOutput('exists', alreadyRequested ? 'true' : 'false');
+
+      - name: Request Codex review
+        if: ${{ steps.read.outputs.bail == 'false' && steps.review_requested.outputs.exists != 'true' }}
         uses: actions/github-script@v7
         with:
           script: |
-            const headRef = '${{ steps.read.outputs.head_ref }}';
-            const protectedBranches = new Set(['master', 'main', 'mainline']);
+            const n = Number('${{ steps.read.outputs.number }}');
+            const body = `@codex review the changes in this PR... take a comprehensive pass.\n\nPlease evaluate the update with high expectations and call out anything that needs attention, including:\n- Simulation performance impacts (grid updates, rendering throughput, memory footprint).\n- Code style, clarity, and maintainability concerns.\n- Compliance with the Simulation Laws and any related safeguards.\n- Test coverage, automation signals, and documentation accuracy.\n- Risks to user experience, accessibility, or stability.\n\nProvide actionable feedback or explicit approval so we can proceed confidently.`;
 
-            if (protectedBranches.has(headRef)) {
-              core.info(`Skipping deletion of protected branch ${headRef}.`);
-              return;
-            }
-
-            const ref = `heads/${headRef}`;
-
-            try {
-              await github.rest.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref });
-            } catch (e) {
-              core.warning(`Branch deletion failed: ${e.message}`);
-            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: n,
+              body,
+            });
