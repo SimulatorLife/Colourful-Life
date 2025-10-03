@@ -17,6 +17,7 @@ import {
 import { accumulateEventModifiers } from "../energySystem.js";
 import InteractionSystem from "../interactionSystem.js";
 import GridInteractionAdapter from "./gridAdapter.js";
+import { clearTileEnergyBuffers } from "./energyUtils.js";
 import ReproductionZonePolicy from "./reproductionZonePolicy.js";
 import { OBSTACLE_PRESETS, resolveObstaclePresetCatalog } from "./obstaclePresets.js";
 import { resolvePopulationScarcityMultiplier } from "./populationScarcity.js";
@@ -170,6 +171,7 @@ export default class GridManager {
       onMove = null,
       activeCells = null,
       onCellMoved = null,
+      clearDestinationEnergy = null,
     } = options || {};
 
     return {
@@ -178,6 +180,7 @@ export default class GridManager {
       onMove,
       activeCells,
       onCellMoved,
+      clearDestinationEnergy,
     };
   }
 
@@ -460,11 +463,23 @@ export default class GridManager {
     cell.energy = Math.max(0, cell.energy - cost);
   }
 
-  static #completeMove({ gridArr, moving, attempt, onMove, onCellMoved, activeCells }) {
+  static #completeMove({
+    gridArr,
+    moving,
+    attempt,
+    onMove,
+    onCellMoved,
+    activeCells,
+    clearDestinationEnergy,
+  }) {
     const { fromRow, fromCol, toRow, toCol } = attempt;
 
     gridArr[toRow][toCol] = moving;
     gridArr[fromRow][fromCol] = null;
+
+    if (typeof clearDestinationEnergy === "function") {
+      clearDestinationEnergy(toRow, toCol);
+    }
 
     GridManager.#updateCellPosition(moving, toRow, toCol);
     GridManager.#applyMovementEnergyCost(moving);
@@ -542,6 +557,7 @@ export default class GridManager {
       onMove: normalizedOptions.onMove,
       onCellMoved: normalizedOptions.onCellMoved,
       activeCells: normalizedOptions.activeCells,
+      clearDestinationEnergy: normalizedOptions.clearDestinationEnergy,
     });
 
     return true;
@@ -1046,6 +1062,7 @@ export default class GridManager {
       densityAt: (r, c) => this.densityGrid?.[r]?.[c] ?? this.getDensityAt(r, c),
       energyAt: (r, c) => this.energyGrid?.[r]?.[c] ?? 0,
       maxTileEnergy: this.maxTileEnergy,
+      clearDestinationEnergy: (r, c) => clearTileEnergyBuffers(this, r, c),
     };
   }
 
@@ -1907,6 +1924,7 @@ export default class GridManager {
       const deltaRow = deltaGrid ? deltaGrid[r] : null;
       const densityRow = hasDensityGrid ? densityGrid[r] : null;
       const obstacleRow = obstacles[r];
+      const gridRow = this.grid[r];
       const upEnergyRow = r > 0 ? energyGrid[r - 1] : null;
       const downEnergyRow = r < rows - 1 ? energyGrid[r + 1] : null;
       const upObstacleRow = r > 0 ? obstacles[r - 1] : null;
@@ -1960,6 +1978,15 @@ export default class GridManager {
             columnEvents.length = 0;
             nextRow[c] = 0;
             if (energyRow[c] !== 0) energyRow[c] = 0;
+            if (deltaRow) deltaRow[c] = 0;
+
+            continue;
+          }
+
+          if (gridRow?.[c]) {
+            columnEvents.length = 0;
+            nextRow[c] = 0;
+            clearTileEnergyBuffers(this, r, c);
             if (deltaRow) deltaRow[c] = 0;
 
             continue;
@@ -2074,6 +2101,14 @@ export default class GridManager {
         if (obstacleRow?.[c]) {
           nextRow[c] = 0;
           if (energyRow[c] !== 0) energyRow[c] = 0;
+          if (deltaRow) deltaRow[c] = 0;
+
+          continue;
+        }
+
+        if (gridRow?.[c]) {
+          nextRow[c] = 0;
+          clearTileEnergyBuffers(this, r, c);
           if (deltaRow) deltaRow[c] = 0;
 
           continue;
@@ -2210,6 +2245,7 @@ export default class GridManager {
     if (current) this.removeCell(row, col);
 
     this.grid[row][col] = cell;
+    clearTileEnergyBuffers(this, row, col);
     if (cell && typeof cell === "object") {
       if ("row" in cell) cell.row = row;
       if ("col" in cell) cell.col = col;
@@ -2264,6 +2300,7 @@ export default class GridManager {
 
     this.grid[toRow][toCol] = moving;
     this.grid[fromRow][fromCol] = null;
+    clearTileEnergyBuffers(this, toRow, toCol);
     if (moving && typeof moving === "object") {
       if ("row" in moving) moving.row = toRow;
       if ("col" in moving) moving.col = toCol;
