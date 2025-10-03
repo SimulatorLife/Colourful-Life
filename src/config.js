@@ -335,14 +335,8 @@ export function resolveSimulationDefaults(overrides = {}) {
     merged.maxConcurrentEvents = Math.max(0, Math.floor(concurrencyValue));
   }
 
-  const hasUpdatesOverride = Object.prototype.hasOwnProperty.call(
-    overrides,
-    "updatesPerSecond",
-  );
-  const hasSpeedOverride = Object.prototype.hasOwnProperty.call(
-    overrides,
-    "speedMultiplier",
-  );
+  const hasUpdatesOverride = Object.hasOwn(overrides, "updatesPerSecond");
+  const hasSpeedOverride = Object.hasOwn(overrides, "speedMultiplier");
   const baseUpdates = Number.isFinite(defaults.updatesPerSecond)
     ? defaults.updatesPerSecond
     : SIMULATION_DEFAULTS.updatesPerSecond;
