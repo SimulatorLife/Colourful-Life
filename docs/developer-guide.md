@@ -48,7 +48,11 @@ extending tests, or polishing docs.
 - Keep functions focused. If a helper exceeds ~80 lines or multiple
   responsibilities, consider splitting it into composable units.
 - Use descriptive naming. Reflect the intent of behaviours—e.g.
-  `accumulateEventModifiers` instead of `applyEvents`.
+  `accumulateEventModifiers` instead of `applyEvents`. When profiling identifies
+  energy updates as a hotspot, reuse the helper's `result` buffer (and, when it
+  is safe to do so, disable applied-event collection via
+  `collectAppliedEvents: false`) to avoid unnecessary allocations inside tight
+  simulation loops.
 
 ## Tooling
 

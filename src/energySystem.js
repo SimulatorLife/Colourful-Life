@@ -90,18 +90,38 @@ export function accumulateEventModifiers({
   isEventAffecting,
   getEventEffect,
   effectCache: externalEffectCache,
-}) {
+  result: providedResult,
+  collectAppliedEvents = true,
+} = {}) {
+  const shouldCollect = collectAppliedEvents !== false;
   let regenMultiplier = 1;
   let regenAdd = 0;
   let drainAdd = 0;
   let appliedEvents = null;
 
   if (!Array.isArray(events) || events.length === 0) {
+    if (providedResult && typeof providedResult === "object") {
+      providedResult.regenMultiplier = 1;
+      providedResult.regenAdd = 0;
+      providedResult.drainAdd = 0;
+      if (shouldCollect) {
+        if (Array.isArray(providedResult.appliedEvents)) {
+          providedResult.appliedEvents.length = 0;
+        } else {
+          providedResult.appliedEvents = [];
+        }
+      } else {
+        providedResult.appliedEvents = EMPTY_APPLIED_EVENTS;
+      }
+
+      return providedResult;
+    }
+
     return {
       regenMultiplier,
       regenAdd,
       drainAdd,
-      appliedEvents: EMPTY_APPLIED_EVENTS,
+      appliedEvents: shouldCollect ? EMPTY_APPLIED_EVENTS : EMPTY_APPLIED_EVENTS,
     };
   }
 
@@ -161,18 +181,44 @@ export function accumulateEventModifiers({
       drainAdd += effectDrainAdd * strength;
     }
 
-    (appliedEvents ??= []).push({
-      event: eventInstance,
-      effect: eventEffect,
-      strength,
-    });
+    if (shouldCollect) {
+      (appliedEvents ??= []).push({
+        event: eventInstance,
+        effect: eventEffect,
+        strength,
+      });
+    }
+  }
+
+  if (providedResult && typeof providedResult === "object") {
+    providedResult.regenMultiplier = regenMultiplier;
+    providedResult.regenAdd = regenAdd;
+    providedResult.drainAdd = drainAdd;
+
+    if (shouldCollect) {
+      const targetEvents = Array.isArray(providedResult.appliedEvents)
+        ? providedResult.appliedEvents
+        : (providedResult.appliedEvents = []);
+
+      targetEvents.length = 0;
+
+      if (appliedEvents) {
+        targetEvents.push(...appliedEvents);
+      }
+    } else {
+      providedResult.appliedEvents = EMPTY_APPLIED_EVENTS;
+    }
+
+    return providedResult;
   }
 
   return {
     regenMultiplier,
     regenAdd,
     drainAdd,
-    appliedEvents: appliedEvents ?? EMPTY_APPLIED_EVENTS,
+    appliedEvents: shouldCollect
+      ? (appliedEvents ?? EMPTY_APPLIED_EVENTS)
+      : EMPTY_APPLIED_EVENTS,
   };
 }
 

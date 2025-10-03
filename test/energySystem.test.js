@@ -107,6 +107,54 @@ test("accumulateEventModifiers reuses provided effect cache", async () => {
   assert.is(resolveCount, 2);
 });
 
+test("accumulateEventModifiers reuses result buffers when skipping applied events", async () => {
+  const [{ accumulateEventModifiers }] = await Promise.all([
+    import("../src/energySystem.js"),
+  ]);
+
+  const resultBuffer = {
+    regenMultiplier: -1,
+    regenAdd: 999,
+    drainAdd: 42,
+    appliedEvents: ["stale"],
+  };
+
+  const baseOptions = {
+    row: 1,
+    col: 1,
+    isEventAffecting: () => true,
+    getEventEffect: () => ({
+      regenScale: { base: 1, change: 0.2, min: 0.1 },
+      regenAdd: 0.5,
+    }),
+    collectAppliedEvents: false,
+    result: resultBuffer,
+  };
+
+  const firstResult = accumulateEventModifiers({
+    ...baseOptions,
+    events: [{ eventType: "boost", strength: 0.5, affectedArea: baseArea }],
+  });
+
+  assert.is(firstResult, resultBuffer);
+  approxEqual(firstResult.regenMultiplier, 1.1, 1e-6);
+  approxEqual(firstResult.regenAdd, 0.25, 1e-6);
+  approxEqual(firstResult.drainAdd, 0, 1e-6);
+  assert.equal(firstResult.appliedEvents, []);
+
+  const secondResult = accumulateEventModifiers({
+    ...baseOptions,
+    events: [],
+  });
+
+  assert.is(secondResult, resultBuffer);
+  approxEqual(secondResult.regenMultiplier, 1, 1e-6);
+  approxEqual(secondResult.regenAdd, 0, 1e-6);
+  approxEqual(secondResult.drainAdd, 0, 1e-6);
+  assert.equal(secondResult.appliedEvents, []);
+  assert.is(secondResult.appliedEvents, firstResult.appliedEvents);
+});
+
 test("computeTileEnergyUpdate applies density penalties and diffusion", async () => {
   const [
     { computeTileEnergyUpdate },
