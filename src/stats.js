@@ -165,6 +165,16 @@ const createTraitValueMap = (definitions, initializer) => {
   );
 };
 
+const sanitizeInterval = (value, fallback) => {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.floor(numeric));
+};
+
 /**
  * Minimal fixed-capacity ring buffer used by chart history accessors.
  * Keeps insertion O(n) for deterministic order while bounding memory.
@@ -262,6 +272,18 @@ export default class Stats {
   #traitHistoryRings;
   #lifeEventTickBase;
   #tickInProgress;
+  #traitSums;
+  #traitActiveCounts;
+  #traitPresenceView;
+  #traitPopulation;
+  #needsTraitRebuild;
+  #traitPresenceDirty;
+  #nextTraitResampleTick;
+  #nextDiversitySampleTick;
+  #diversityPopulationBaseline;
+  #traitKeys;
+  #traitComputes;
+  #traitThresholds;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
    * @param {{traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>}} [options]
@@ -269,9 +291,30 @@ export default class Stats {
    */
   constructor(historySize = 10000, options = {}) {
     this.historySize = historySize;
-    const { traitDefinitions } = options ?? {};
+    const { traitDefinitions, traitResampleInterval, diversitySampleInterval } =
+      options ?? {};
 
     this.traitDefinitions = resolveTraitDefinitions(traitDefinitions);
+    this.traitPresence = createEmptyTraitPresence(this.traitDefinitions);
+    this.#traitPresenceView = this.traitPresence;
+    this.#traitKeys = this.traitDefinitions.map(({ key }) => key);
+    this.#traitComputes = this.traitDefinitions.map(({ compute }) => compute);
+    const thresholds = new Float64Array(this.traitDefinitions.length);
+
+    for (let i = 0; i < this.traitDefinitions.length; i += 1) {
+      thresholds[i] = this.traitDefinitions[i].threshold ?? TRAIT_THRESHOLD;
+    }
+
+    this.#traitThresholds = thresholds;
+    this.#traitSums = new Float64Array(this.traitDefinitions.length);
+    this.#traitActiveCounts = new Float64Array(this.traitDefinitions.length);
+    this.traitResampleInterval = sanitizeInterval(traitResampleInterval, 8);
+    this.diversitySampleInterval = sanitizeInterval(diversitySampleInterval, 4);
+    this.lastDiversitySample = 0;
+    this.#nextTraitResampleTick = 0;
+    this.#nextDiversitySampleTick = 0;
+    this.#diversityPopulationBaseline = 0;
+    this.#resetTraitAggregates();
     this.resetTick();
     this.history = {};
     this.#historyRings = {};
@@ -323,7 +366,7 @@ export default class Stats {
       });
     }
 
-    this.traitPresence = createEmptyTraitPresence(this.traitDefinitions);
+    this.traitPresence = this.#traitPresenceView;
   }
 
   resetTick() {
@@ -352,7 +395,12 @@ export default class Stats {
     Object.values(traitPresenceRings).forEach((ring) => ring?.clear?.());
     Object.values(traitAverageRings).forEach((ring) => ring?.clear?.());
 
-    this.traitPresence = createEmptyTraitPresence(this.traitDefinitions);
+    this.#resetTraitAggregates();
+    this.traitPresence = this.#traitPresenceView;
+    this.lastDiversitySample = 0;
+    this.#nextTraitResampleTick = this.totals.ticks;
+    this.#nextDiversitySampleTick = this.totals.ticks;
+    this.#diversityPopulationBaseline = 0;
     this.diversityPressure = 0;
     this.behavioralEvenness = 0;
     this.strategyPressure = 0;
@@ -519,6 +567,126 @@ export default class Stats {
     return { cell, context };
   }
 
+  #resetTraitAggregates() {
+    if (this.#traitSums) {
+      this.#traitSums.fill(0);
+    }
+    if (this.#traitActiveCounts) {
+      this.#traitActiveCounts.fill(0);
+    }
+
+    this.#traitPopulation = 0;
+    this.#needsTraitRebuild = true;
+    this.#traitPresenceDirty = true;
+
+    if (!this.#traitPresenceView) return;
+
+    const { averages, fractions, counts } = this.#traitPresenceView;
+
+    this.#traitPresenceView.population = 0;
+
+    if (!this.#traitKeys) return;
+
+    for (let i = 0; i < this.#traitKeys.length; i += 1) {
+      const key = this.#traitKeys[i];
+
+      averages[key] = 0;
+      fractions[key] = 0;
+      counts[key] = 0;
+    }
+  }
+
+  #applyTraitSample(cell, direction) {
+    if (!cell) {
+      this.#needsTraitRebuild = true;
+      this.#traitPresenceDirty = true;
+
+      return;
+    }
+
+    const sums = this.#traitSums;
+    const activeCounts = this.#traitActiveCounts;
+    const computes = this.#traitComputes;
+    const thresholds = this.#traitThresholds;
+
+    for (let i = 0; i < computes.length; i += 1) {
+      const compute = computes[i];
+      const threshold = thresholds[i];
+      const rawValue = compute ? compute(cell) : 0;
+      const value = Number.isFinite(rawValue) ? clamp01(rawValue) : 0;
+      const nextSum = sums[i] + value * direction;
+
+      sums[i] = nextSum >= 0 ? nextSum : 0;
+
+      if (value >= threshold) {
+        const nextCount = activeCounts[i] + direction;
+
+        activeCounts[i] = nextCount > 0 ? nextCount : 0;
+      }
+    }
+
+    this.#traitPresenceDirty = true;
+  }
+
+  #rebuildTraitAggregates(cells) {
+    const pool = Array.isArray(cells) ? cells : [];
+    const computes = this.#traitComputes;
+    const thresholds = this.#traitThresholds;
+
+    this.#traitSums.fill(0);
+    this.#traitActiveCounts.fill(0);
+
+    for (let i = 0; i < pool.length; i += 1) {
+      const cell = pool[i];
+
+      if (!cell) continue;
+
+      for (let t = 0; t < computes.length; t += 1) {
+        const compute = computes[t];
+        const threshold = thresholds[t];
+        const rawValue = compute ? compute(cell) : 0;
+        const value = Number.isFinite(rawValue) ? clamp01(rawValue) : 0;
+
+        this.#traitSums[t] += value;
+
+        if (value >= threshold) {
+          this.#traitActiveCounts[t] += 1;
+        }
+      }
+    }
+
+    this.#traitPopulation = pool.length;
+    this.#needsTraitRebuild = false;
+    this.#traitPresenceDirty = true;
+  }
+
+  #refreshTraitPresenceView(population = this.#traitPopulation) {
+    if (!this.#traitPresenceView) {
+      return createEmptyTraitPresence(this.traitDefinitions);
+    }
+
+    const resolvedPopulation = Math.max(0, Math.floor(Number(population) || 0));
+    const invPop = resolvedPopulation > 0 ? 1 / resolvedPopulation : 0;
+    const view = this.#traitPresenceView;
+
+    view.population = resolvedPopulation;
+
+    for (let i = 0; i < this.#traitKeys.length; i += 1) {
+      const key = this.#traitKeys[i];
+      const sum = this.#traitSums[i];
+      const count = this.#traitActiveCounts[i];
+      const normalizedCount = count > 0 ? count : 0;
+      const average = resolvedPopulation > 0 ? clamp01(sum * invPop) : 0;
+      const fraction = resolvedPopulation > 0 ? clamp01(normalizedCount * invPop) : 0;
+
+      view.averages[key] = average;
+      view.fractions[key] = fraction;
+      view.counts[key] = Math.max(0, Math.round(normalizedCount));
+    }
+
+    return view;
+  }
+
   #resolveInteractionHighlight(interactionGenes) {
     if (!interactionGenes || typeof interactionGenes !== "object") {
       return null;
@@ -666,11 +834,32 @@ export default class Stats {
   onBirth(primary, secondary) {
     this.births++;
     this.totals.births++;
+    const { cell } = this.#resolveLifeEventArgs(primary, secondary);
+
+    this.#traitPopulation += 1;
+
+    if (cell) {
+      this.#applyTraitSample(cell, 1);
+    } else {
+      this.#needsTraitRebuild = true;
+      this.#traitPresenceDirty = true;
+    }
+
     this.#recordLifeEvent("birth", primary, secondary);
   }
   onDeath(primary, secondary) {
     this.deaths++;
     this.totals.deaths++;
+    const { cell } = this.#resolveLifeEventArgs(primary, secondary);
+
+    if (cell) {
+      this.#applyTraitSample(cell, -1);
+    } else {
+      this.#needsTraitRebuild = true;
+      this.#traitPresenceDirty = true;
+    }
+
+    this.#traitPopulation = Math.max(0, this.#traitPopulation - 1);
     this.#recordLifeEvent("death", primary, secondary);
 
     const causeCandidate =
@@ -789,8 +978,38 @@ export default class Stats {
     const meanEnergy = pop > 0 ? totalEnergy / pop : 0;
     // Age is tracked in simulation ticks; convert with the active tick rate if seconds are needed.
     const meanAge = pop > 0 ? totalAge / pop : 0;
-    const diversity = this.estimateDiversity(cells);
-    const traitPresence = this.computeTraitPresence(cells);
+    const tick = this.totals.ticks;
+    const shouldRebuildTraits =
+      this.#needsTraitRebuild ||
+      this.#traitPopulation !== pop ||
+      tick >= this.#nextTraitResampleTick;
+
+    if (shouldRebuildTraits) {
+      this.#rebuildTraitAggregates(cells);
+      this.#nextTraitResampleTick = tick + this.traitResampleInterval;
+    }
+
+    let traitPresence;
+
+    if (shouldRebuildTraits || this.#traitPresenceDirty) {
+      traitPresence = this.#refreshTraitPresenceView();
+      this.traitPresence = traitPresence;
+      this.#traitPresenceDirty = false;
+    } else {
+      traitPresence = this.traitPresence;
+    }
+
+    const shouldSampleDiversity =
+      tick >= this.#nextDiversitySampleTick ||
+      this.#diversityPopulationBaseline !== pop;
+
+    if (shouldSampleDiversity) {
+      this.lastDiversitySample = this.estimateDiversity(cells);
+      this.#diversityPopulationBaseline = pop;
+      this.#nextDiversitySampleTick = tick + this.diversitySampleInterval;
+    }
+
+    const diversity = this.lastDiversitySample;
     const behaviorEvenness = this.#computeBehavioralEvenness(traitPresence);
     const mateStats = this.mating || createEmptyMatingSnapshot();
     const choiceCount = mateStats.choices || 0;

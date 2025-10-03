@@ -210,8 +210,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   const { default: Stats } = await statsModulePromise;
 
   class DeterministicStats extends Stats {
-    constructor(size) {
-      super(size);
+    constructor(size, options = {}) {
+      super(size, options);
       this.diversitySequence = [];
     }
 
@@ -220,7 +220,10 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
     }
   }
 
-  const stats = new DeterministicStats(3);
+  const stats = new DeterministicStats(3, {
+    diversitySampleInterval: 1,
+    traitResampleInterval: 1,
+  });
 
   stats.mating = {
     choices: 2,
@@ -360,6 +363,112 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.5, 0.5, 0.5]);
 });
 
+test("diversity sampling caches results between configured intervals", async () => {
+  const { default: Stats } = await statsModulePromise;
+  let calls = 0;
+
+  class CountingStats extends Stats {
+    constructor(options = {}) {
+      super(4, options);
+    }
+
+    estimateDiversity(cells) {
+      calls += 1;
+
+      return super.estimateDiversity(cells);
+    }
+  }
+
+  const stats = new CountingStats({
+    diversitySampleInterval: 3,
+    traitResampleInterval: 1,
+  });
+  const cells = [
+    createCell({ interactionGenes: { cooperate: 0.4, fight: 0.3 } }),
+    createCell({ interactionGenes: { cooperate: 0.6, fight: 0.2 } }),
+  ];
+  const snapshot = {
+    population: cells.length,
+    totalEnergy: 0,
+    totalAge: 0,
+    cells,
+  };
+
+  stats.updateFromSnapshot(snapshot);
+
+  assert.is(calls, 1);
+  assert.is(stats.history.diversity.length, 1);
+
+  for (let i = 0; i < 2; i += 1) {
+    stats.resetTick();
+    stats.updateFromSnapshot(snapshot);
+
+    assert.is(
+      calls,
+      1,
+      "diversity should stay cached before the sample interval elapses",
+    );
+  }
+
+  stats.resetTick();
+  stats.updateFromSnapshot(snapshot);
+
+  assert.is(calls, 2);
+  assert.is(stats.history.diversity.length, 4);
+  assert.is(stats.history.diversity[0], stats.history.diversity[1]);
+  assert.is(stats.history.diversity[1], stats.history.diversity[2]);
+});
+
+test("trait presence rebuild honors resample interval when events are absent", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(4, {
+    traitResampleInterval: 3,
+    diversitySampleInterval: 1,
+  });
+
+  const cooperativeA = [
+    createCell({ interactionGenes: { cooperate: 0.9, fight: 0.1 }, sight: 0.7 }),
+    createCell({ interactionGenes: { cooperate: 0.8, fight: 0.2 }, sight: 0.6 }),
+  ];
+  const cooperativeB = [
+    createCell({ interactionGenes: { cooperate: 0.2, fight: 0.8 }, sight: 0.4 }),
+    createCell({ interactionGenes: { cooperate: 0.1, fight: 0.9 }, sight: 0.3 }),
+  ];
+  const snapshotA = {
+    population: cooperativeA.length,
+    totalEnergy: 0,
+    totalAge: 0,
+    cells: cooperativeA,
+  };
+  const snapshotB = {
+    population: cooperativeB.length,
+    totalEnergy: 0,
+    totalAge: 0,
+    cells: cooperativeB,
+  };
+
+  stats.updateFromSnapshot(snapshotA);
+
+  approxEqual(stats.traitPresence.averages.cooperation, 0.85, 1e-9);
+
+  for (let i = 0; i < 2; i += 1) {
+    stats.resetTick();
+    stats.updateFromSnapshot(snapshotB);
+
+    approxEqual(
+      stats.traitPresence.averages.cooperation,
+      0.85,
+      1e-9,
+      "trait averages should remain cached before the resample interval expires",
+    );
+  }
+
+  stats.resetTick();
+  stats.updateFromSnapshot(snapshotB);
+
+  approxEqual(stats.traitPresence.averages.cooperation, 0.15, 1e-9);
+});
+
 test("life event ticks align with the active simulation tick", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats();
@@ -401,8 +510,8 @@ test("diversity pressure responds to behavioral stagnation and complementary suc
   const { default: Stats } = await statsModulePromise;
 
   class DeterministicStats extends Stats {
-    constructor(size) {
-      super(size);
+    constructor(size, options = {}) {
+      super(size, options);
       this.diversitySequence = [];
     }
 
@@ -411,7 +520,10 @@ test("diversity pressure responds to behavioral stagnation and complementary suc
     }
   }
 
-  const stats = new DeterministicStats(3);
+  const stats = new DeterministicStats(3, {
+    diversitySampleInterval: 1,
+    traitResampleInterval: 1,
+  });
 
   stats.diversitySequence.push(0.34, 0.34);
 
@@ -482,8 +594,8 @@ test("strategy pressure intensifies when monotony escapes penalties", async () =
   const { default: Stats } = await statsModulePromise;
 
   class DeterministicStats extends Stats {
-    constructor(size) {
-      super(size);
+    constructor(size, options = {}) {
+      super(size, options);
       this.diversitySequence = [];
     }
 
@@ -505,7 +617,10 @@ test("strategy pressure intensifies when monotony escapes penalties", async () =
     cells: monotoneCells,
   };
 
-  const unchecked = new DeterministicStats(3);
+  const unchecked = new DeterministicStats(3, {
+    diversitySampleInterval: 1,
+    traitResampleInterval: 1,
+  });
 
   unchecked.diversitySequence.push(0.22);
   unchecked.mating = {
@@ -523,7 +638,10 @@ test("strategy pressure intensifies when monotony escapes penalties", async () =
   };
   unchecked.updateFromSnapshot(snapshot);
 
-  const relieved = new DeterministicStats(3);
+  const relieved = new DeterministicStats(3, {
+    diversitySampleInterval: 1,
+    traitResampleInterval: 1,
+  });
 
   relieved.diversitySequence.push(0.22);
   relieved.mating = {
@@ -661,7 +779,10 @@ test("diversity pressure increases when diversity stays below target", async () 
 
   class PressureStats extends Stats {
     constructor() {
-      super();
+      super(undefined, {
+        diversitySampleInterval: 1,
+        traitResampleInterval: 1,
+      });
       this.mockDiversity = 0.1;
     }
 
