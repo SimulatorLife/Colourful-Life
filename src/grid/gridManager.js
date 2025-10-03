@@ -1236,7 +1236,7 @@ export default class GridManager {
     this.tickCount = 0;
     this.rng = typeof rng === "function" ? rng : Math.random;
     this.activeCells = new Set();
-    this.cellPositions = new Map();
+    this.cellPositions = new WeakMap();
     this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
     this.interactionAdapter = new GridInteractionAdapter({ gridManager: this });
@@ -1366,8 +1366,8 @@ export default class GridManager {
       return;
     }
 
-    if ("row" in cell) cell.row = row;
-    if ("col" in cell) cell.col = col;
+    cell.row = row;
+    cell.col = col;
 
     const existing = this.cellPositions.get(cell);
 
@@ -1386,7 +1386,7 @@ export default class GridManager {
   }
 
   #clearTrackedPositions() {
-    this.cellPositions.clear();
+    this.cellPositions = new WeakMap();
   }
 
   #isValidLocation(row, col, cell) {
