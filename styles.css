@@ -581,6 +581,11 @@ canvas {
   gap: var(--space-md);
 }
 
+.leaderboard-entries {
+  display: grid;
+  gap: var(--space-md);
+}
+
 .leaderboard-entry {
   --leaderboard-entry-color: transparent;
   display: grid;

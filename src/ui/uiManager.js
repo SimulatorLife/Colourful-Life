@@ -103,6 +103,8 @@ export default class UIManager {
     this.pauseOverlayTitle = null;
     this.pauseOverlayHint = null;
     this.pauseOverlayAutopause = null;
+    this.leaderBody = null;
+    this.leaderEntriesContainer = null;
     this.stepHotkeySet = new Set();
     this.geometryControls = null;
 
@@ -2145,7 +2147,7 @@ export default class UIManager {
 
     const insightConfigs = [
       withSliderConfig("leaderboardIntervalMs", {
-        label: "Insights Refresh Interval",
+        label: "Dashboard Refresh Interval",
         min: 100,
         max: 3000,
         step: 50,
@@ -2398,31 +2400,6 @@ export default class UIManager {
     intro.textContent =
       "Track population health, energy, and behavioral trends as the simulation unfolds.";
     body.appendChild(intro);
-
-    const sliderContext = this.sliderContext;
-
-    if (sliderContext?.insightConfigs?.length) {
-      const cadenceSection = document.createElement("section");
-
-      cadenceSection.className = "metrics-section";
-      const cadenceTitle = document.createElement("h4");
-
-      cadenceTitle.className = "metrics-section-title";
-      cadenceTitle.textContent = "Update Cadence";
-      cadenceSection.appendChild(cadenceTitle);
-
-      const cadenceBody = document.createElement("div");
-
-      cadenceBody.className = "metrics-section-body";
-      const cadenceGrid = createControlGrid(cadenceBody, "control-grid--compact");
-
-      sliderContext.insightConfigs.forEach((cfg) => {
-        sliderContext.renderSlider(cfg, cadenceGrid);
-      });
-
-      cadenceSection.appendChild(cadenceBody);
-      body.appendChild(cadenceSection);
-    }
 
     this.metricsBox = document.createElement("div");
     this.metricsBox.className = "metrics-box";
@@ -3308,19 +3285,56 @@ export default class UIManager {
       panel.classList.add("leaderboard-panel");
       this.dashboardGrid?.appendChild(panel);
       this.leaderPanel = panel;
-      this.leaderBody = body;
+      const sliderContext = this.sliderContext;
+      const cadenceConfigs = Array.isArray(sliderContext?.insightConfigs)
+        ? sliderContext.insightConfigs
+        : [];
+
+      if (cadenceConfigs.length > 0) {
+        const cadenceSection = document.createElement("section");
+
+        cadenceSection.className = "metrics-section leaderboard-cadence";
+        const cadenceTitle = document.createElement("h4");
+
+        cadenceTitle.className = "metrics-section-title";
+        cadenceTitle.textContent = "Refresh Cadence";
+        cadenceSection.appendChild(cadenceTitle);
+
+        const cadenceBody = document.createElement("div");
+
+        cadenceBody.className = "metrics-section-body";
+        const cadenceGrid = createControlGrid(cadenceBody, "control-grid--compact");
+
+        cadenceConfigs.forEach((cfg) => {
+          sliderContext.renderSlider(cfg, cadenceGrid);
+        });
+
+        cadenceSection.appendChild(cadenceBody);
+        body.appendChild(cadenceSection);
+      }
+
+      const entriesContainer = document.createElement("div");
+
+      entriesContainer.className = "leaderboard-entries";
+      body.appendChild(entriesContainer);
+
+      this.leaderBody = entriesContainer;
+      this.leaderEntriesContainer = entriesContainer;
     }
 
     const entries = Array.isArray(top) ? top.filter(Boolean) : [];
+    const target = this.leaderEntriesContainer || this.leaderBody;
 
-    this.leaderBody.innerHTML = "";
+    if (!target) return;
+
+    target.innerHTML = "";
 
     if (entries.length === 0) {
       const empty = document.createElement("div");
 
       empty.className = "leaderboard-empty-state";
       empty.textContent = "Run the simulation to populate the leaderboard.";
-      this.leaderBody.appendChild(empty);
+      target.appendChild(empty);
 
       return;
     }
@@ -3434,7 +3448,7 @@ export default class UIManager {
 
       card.title = tooltipParts.join(" | ");
       card.appendChild(statsContainer);
-      this.leaderBody.appendChild(card);
+      target.appendChild(card);
     });
   }
 }
