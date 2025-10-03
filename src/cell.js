@@ -1761,6 +1761,172 @@ export default class Cell {
         driftWeight,
       );
     }
+
+    if (
+      this.brain &&
+      this.brain.sensorPlasticity?.enabled &&
+      typeof this.brain.applyExperienceImprint === "function"
+    ) {
+      const baseAssimilation = clamp(assimilation * 0.35, 0.015, 0.45);
+      const resourceMemory = clamp(
+        Number.isFinite(this._riskMemory.resource) ? this._riskMemory.resource : 0,
+        -1,
+        1,
+      );
+      const scarcityMemory = clamp(-resourceMemory, -1, 1);
+      const eventMemory = clamp(
+        Number.isFinite(this._riskMemory.event) ? this._riskMemory.event : 0,
+        0,
+        1,
+      );
+      const confidenceMemory = clamp(
+        Number.isFinite(this._riskMemory.confidence) ? this._riskMemory.confidence : 0,
+        -1,
+        1,
+      );
+      const fatigueMemory = clamp(
+        Number.isFinite(this._riskMemory.fatigue) ? this._riskMemory.fatigue : 0,
+        -1,
+        1,
+      );
+      const adjustments = [];
+
+      if (Math.abs(resourceMemory) > 0.05) {
+        const resourceAssimilation = clamp(
+          Math.max(baseAssimilation, resourceAlpha * 0.6),
+          0.015,
+          0.6,
+        );
+        const energyAssimilation = clamp(
+          Math.max(baseAssimilation * 0.8, resourceAlpha * 0.45),
+          0.01,
+          0.5,
+        );
+        const energyUnit = clamp(0.5 + resourceMemory * 0.3, 0, 1);
+
+        adjustments.push({
+          sensor: "resourceTrend",
+          target: resourceMemory,
+          assimilation: resourceAssimilation,
+        });
+        adjustments.push({
+          sensor: "energy",
+          target: clamp(energyUnit * 2 - 1, -1, 1),
+          assimilation: energyAssimilation,
+        });
+      }
+
+      if (eventMemory > 0.05) {
+        const eventAssimilation = clamp(
+          Math.max(baseAssimilation * 0.85, eventAlpha * 0.65),
+          0.01,
+          0.5,
+        );
+
+        adjustments.push({
+          sensor: "eventPressure",
+          target: clamp(eventMemory * 2 - 1, -1, 1),
+          assimilation: eventAssimilation,
+        });
+      }
+
+      if (Math.abs(confidenceMemory) > 0.05) {
+        const baseRisk = clamp(
+          Number.isFinite(this.baseRiskTolerance) ? this.baseRiskTolerance : 0.5,
+          0,
+          1,
+        );
+        const adjustedRisk = clamp(
+          baseRisk + confidenceMemory * 0.35 - Math.max(0, scarcityMemory) * 0.25,
+          0,
+          1,
+        );
+        const riskAssimilation = clamp(
+          Math.max(baseAssimilation, confidenceAlpha * 0.55),
+          0.015,
+          0.5,
+        );
+        const opportunityAssimilation = clamp(
+          Math.max(baseAssimilation * 0.7, confidenceAlpha * 0.45),
+          0.01,
+          0.45,
+        );
+        const momentumAssimilation = clamp(
+          Math.max(baseAssimilation * 0.6, confidenceAlpha * 0.4),
+          0.01,
+          0.4,
+        );
+
+        adjustments.push({
+          sensor: "riskTolerance",
+          target: clamp(adjustedRisk * 2 - 1, -1, 1),
+          assimilation: riskAssimilation,
+        });
+        adjustments.push({
+          sensor: "opportunitySignal",
+          target: clamp(confidenceMemory - scarcityMemory * 0.25, -1, 1),
+          assimilation: opportunityAssimilation,
+        });
+        adjustments.push({
+          sensor: "interactionMomentum",
+          target: clamp(confidenceMemory * 0.6, -1, 1),
+          assimilation: momentumAssimilation,
+        });
+      }
+
+      if (Math.abs(fatigueMemory) > 0.05) {
+        const fatigueAssimilation = clamp(
+          Math.max(baseAssimilation * 0.8, fatigueAlpha * 0.5),
+          0.01,
+          0.45,
+        );
+        const fatigueUnit = clamp(0.5 + fatigueMemory * 0.25, 0, 1);
+
+        adjustments.push({
+          sensor: "neuralFatigue",
+          target: clamp(fatigueUnit * 2 - 1, -1, 1),
+          assimilation: fatigueAssimilation,
+        });
+      }
+
+      if (adjustments.length > 0) {
+        const scarcityDriveWeight = clamp(
+          Number.isFinite(profile.scarcityDrive) ? profile.scarcityDrive : 0.35,
+          0,
+          1.5,
+        );
+        const eventWeight = clamp(
+          Number.isFinite(profile.eventWeight) ? profile.eventWeight : 0.5,
+          0,
+          1.5,
+        );
+        const confidenceWeight = clamp(
+          Number.isFinite(profile.confidenceWeight) ? profile.confidenceWeight : 0.3,
+          0,
+          1.2,
+        );
+        const fatigueWeight = clamp(
+          Number.isFinite(profile.fatigueWeight) ? profile.fatigueWeight : 0.35,
+          0,
+          1.2,
+        );
+        const gainInfluence = clamp(
+          (Math.abs(resourceMemory) * scarcityDriveWeight +
+            eventMemory * eventWeight +
+            Math.abs(confidenceMemory) * confidenceWeight +
+            Math.abs(fatigueMemory) * fatigueWeight) /
+            2.5,
+          0,
+          1,
+        );
+
+        this.brain.applyExperienceImprint({
+          adjustments,
+          assimilation: baseAssimilation,
+          gainInfluence,
+        });
+      }
+    }
   }
 
   #riskMemorySensorValues() {
