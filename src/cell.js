@@ -798,6 +798,7 @@ export default class Cell {
     penalized = false,
     penaltyMultiplier = 1,
     strategyPenaltyMultiplier = 1,
+    behaviorComplementarity = 0,
   } = {}) {
     this.matingAttempts = (this.matingAttempts || 0) + 1;
 
@@ -805,6 +806,8 @@ export default class Cell {
       this.matingSuccesses = (this.matingSuccesses || 0) + 1;
       this.diverseMateScore =
         (this.diverseMateScore || 0) + clamp(diversity ?? 0, 0, 1);
+      this.complementaryMateScore =
+        (this.complementaryMateScore || 0) + clamp(behaviorComplementarity ?? 0, 0, 1);
     }
 
     if (penalized) {

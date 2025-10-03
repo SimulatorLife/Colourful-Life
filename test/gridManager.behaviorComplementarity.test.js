@@ -1,6 +1,6 @@
 import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
-import { computeBehaviorComplementarity } from "../src/grid/gridManager.js";
+import { computeBehaviorComplementarity } from "../src/behaviorComplementarity.js";
 
 const createCell = (genes = {}) => ({
   interactionGenes: { cooperate: 0.5, fight: 0.5, avoid: 0.5, ...genes },

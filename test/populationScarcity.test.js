@@ -94,3 +94,39 @@ test("population scarcity multiplier grows with fertile cooperative genomes", ()
     "absent scarcity the multiplier should remain neutral",
   );
 });
+
+test("population scarcity multiplier rewards complementary pairings", () => {
+  const supportiveDNA = buildDNA({ fertility: 0.9, parental: 0.85, cohesion: 0.8 });
+  const opportunistDNA = buildDNA({ fertility: 0.6, exploration: 0.95, risk: 0.85 });
+
+  const supportive = new Cell(0, 0, supportiveDNA, MAX_TILE_ENERGY);
+  const opportunist = new Cell(0, 1, opportunistDNA, MAX_TILE_ENERGY);
+
+  const scarcity = 0.7;
+  const baseProbability = 0.32;
+  const population = 8;
+  const minPopulation = 24;
+
+  const homogeneous = resolvePopulationScarcityMultiplier({
+    parentA: supportive,
+    parentB: supportive,
+    scarcity,
+    baseProbability,
+    population,
+    minPopulation,
+  });
+
+  const complementary = resolvePopulationScarcityMultiplier({
+    parentA: supportive,
+    parentB: opportunist,
+    scarcity,
+    baseProbability,
+    population,
+    minPopulation,
+  });
+
+  assert.ok(
+    complementary.multiplier > homogeneous.multiplier,
+    `complementary partners should receive a stronger scarcity lift (complementary=${complementary.multiplier}, homogeneous=${homogeneous.multiplier})`,
+  );
+});
