@@ -75,6 +75,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - DNA encodes an `offspringEnergyDemandFrac` that establishes a DNA-driven viability floor for reproduction. Parents refuse to spawn unless their combined energy investment clears the pickier genome's expectation, allowing nurturing lineages to favour fewer, well-funded offspring while opportunists tolerate lean births.
 - DNA's gestation locus now feeds `offspringEnergyTransferEfficiency`, blending metabolic, parental, and fertility traits with a heritable gestation efficiency gene. Offspring inherit only the delivered share of the parental investment, so lineages evolve toward thrifty or wasteful reproduction instead of assuming perfect energy transfer.
 - Neural mate selection blends brain forecasts with DNA courtship heuristics. Each cell now previews reproduction sensors for every visible partner, folds the brain's acceptance probability into the mate's weight, and scales the influence using DNA-programmed reinforcement and sampling profiles. Populations that evolve richer neural wiring can therefore favour mates their brains predict will reciprocate, while simpler genomes continue to lean on legacy similarity heuristics.
+- Baseline neural activity and mutation probability respond to the `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` and `COLOURFUL_LIFE_MUTATION_CHANCE` overrides, giving deployments coarse-grained levers for energising or calming populations and for tuning how quickly genomes mutate without editing DNA accessors.
 - Decision telemetry is available through `cell.getDecisionTelemetry`, which the debugger captures for UI display.
 
 ### InteractionSystem
@@ -82,6 +83,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - Consumes neural output (fight/cooperate/reproduce) and resolves the outcome using combat odds, kinship, density advantages, and configurable DNA traits.
 - Updates stats counters, applies energy costs, and notifies participating cells about interaction outcomes.
 - Works through a `GridInteractionAdapter` to avoid tightly coupling to `GridManager` internals—useful for testing or custom grids.
+- Territorial advantage in combat is governed by the `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` override. `resolveCombatTerritoryEdgeFactor` sanitizes the environment value into the 0–1 range before InteractionSystem applies it, keeping deployments from destabilising odds with extreme inputs.
 
 ### Stats and telemetry
 
