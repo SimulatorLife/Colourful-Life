@@ -214,6 +214,7 @@ export default class GridManager {
   #spawnCandidateScratch = null;
   #segmentWindowScratch = null;
   #columnEventScratch = null;
+  #eventModifierScratch = null;
   #eventRowsScratch = null;
   #activeSnapshotScratch = [];
   #performanceNow = PERFORMANCE_NOW;
@@ -584,6 +585,19 @@ export default class GridManager {
     this.#columnEventScratch.length = 0;
 
     return this.#columnEventScratch;
+  }
+
+  #getEventModifierScratch() {
+    if (!this.#eventModifierScratch) {
+      this.#eventModifierScratch = {
+        regenMultiplier: 1,
+        regenAdd: 0,
+        drainAdd: 0,
+        appliedEvents: EMPTY_EVENT_LIST,
+      };
+    }
+
+    return this.#eventModifierScratch;
   }
 
   #getSegmentWindowScratch() {
@@ -2785,6 +2799,7 @@ export default class GridManager {
     const effectCache = getEventEffect ? this.eventEffectCache : null;
     const usingSegmentedEvents =
       hasEvents && isEventAffecting === defaultIsEventAffecting;
+    const modifierScratch = hasEvents ? this.#getEventModifierScratch() : null;
     const eventOptions = hasEvents
       ? {
           events: evs,
@@ -2794,6 +2809,8 @@ export default class GridManager {
           isEventAffecting,
           getEventEffect,
           effectCache,
+          result: modifierScratch,
+          collectAppliedEvents: false,
         }
       : null;
     const profileEnabled = typeof this.stats?.recordEnergyStageTimings === "function";
@@ -3001,13 +3018,11 @@ export default class GridManager {
             eventOptions.col = c;
             eventOptions.events = tileEvents;
 
-            const modifiers = accumulateEventModifiers(eventOptions);
+            accumulateEventModifiers(eventOptions);
 
-            if (modifiers) {
-              regenMultiplier = modifiers.regenMultiplier;
-              regenAdd = modifiers.regenAdd;
-              drain = modifiers.drainAdd;
-            }
+            regenMultiplier = modifierScratch.regenMultiplier;
+            regenAdd = modifierScratch.regenAdd;
+            drain = modifierScratch.drainAdd;
 
             eventOptions.events = previousEvents;
           }
