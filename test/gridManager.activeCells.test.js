@@ -51,3 +51,50 @@ test("GridManager keeps activeCells aligned with grid mutations", async () => {
   gm.clearCell(0, 0);
   assert.is(gm.activeCells.size, 0, "clearing a slot should purge active tracking");
 });
+
+test("GridManager.resize preserves existing cells when reseed is false", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+    consumeEnergy() {}
+  }
+
+  const gm = new TestGridManager(3, 3, baseOptions);
+  const survivor = gm.spawnCell(1, 1);
+
+  survivor.energy = 2.5;
+  gm.energyGrid[1][1] = 1.75;
+
+  gm.resize(5, 5, { reseed: false });
+
+  assert.ok(
+    gm.activeCells.has(survivor),
+    "existing cell should remain active after resize",
+  );
+  assert.is(
+    gm.grid[1][1],
+    survivor,
+    "cell should keep its grid position when still in bounds",
+  );
+  assert.is(survivor.row, 1, "cell row coordinate should be preserved");
+  assert.is(survivor.col, 1, "cell column coordinate should be preserved");
+  assert.is(
+    gm.energyGrid[1][1],
+    1.75,
+    "tile energy should carry over for preserved cells",
+  );
+
+  const edgeCell = gm.spawnCell(4, 4);
+
+  gm.resize(2, 2, { reseed: false });
+
+  assert.ok(
+    gm.activeCells.has(survivor),
+    "in-bounds cell should survive shrinking the grid",
+  );
+  assert.not.ok(
+    edgeCell && gm.activeCells.has(edgeCell),
+    "out-of-bounds cell should be dropped",
+  );
+});
