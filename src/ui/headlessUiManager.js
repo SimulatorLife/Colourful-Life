@@ -117,6 +117,11 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getEventFrequencyMultiplier: () => settings.eventFrequencyMultiplier,
+    setEventFrequencyMultiplier: (value) => {
+      if (updateIfFinite("eventFrequencyMultiplier", value, { min: 0 })) {
+        notify("eventFrequencyMultiplier", settings.eventFrequencyMultiplier);
+      }
+    },
     getMaxConcurrentEvents: () => settings.maxConcurrentEvents,
     getMutationMultiplier: () => settings.mutationMultiplier,
     getDensityEffectMultiplier: () => settings.densityEffectMultiplier,
