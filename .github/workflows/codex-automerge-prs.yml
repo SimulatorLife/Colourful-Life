@@ -65,7 +65,7 @@ jobs:
             }
 
             // Bail early if nothing to merge yet (seed PR)
-            const hasRealChanges = (pr.commits || 0) > 1 && (pr.changed_files || 0) > 0;
+            const hasRealChanges = (pr.changed_files || 0) > 0;
             if (!hasRealChanges) {
               core.notice(`Bail: no real changes yet (commits=${pr.commits}, files=${pr.changed_files}).`);
               core.setOutput('bail','true');
