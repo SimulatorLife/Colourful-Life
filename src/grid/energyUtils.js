@@ -1,5 +1,7 @@
-export function clearTileEnergyBuffers(source, row, col) {
+export function clearTileEnergyBuffers(source, row, col, options = {}) {
   if (!source || row == null || col == null) return;
+
+  const preserveCurrent = options?.preserveCurrent === true;
 
   const normalizedRow = Number.isInteger(row) ? row : Math.floor(row);
   const normalizedCol = Number.isInteger(col) ? col : Math.floor(col);
@@ -8,7 +10,7 @@ export function clearTileEnergyBuffers(source, row, col) {
 
   const { energyGrid, energyNext, energyDeltaGrid } = source;
 
-  if (Array.isArray(energyGrid)) {
+  if (!preserveCurrent && Array.isArray(energyGrid)) {
     const energyRow = energyGrid[normalizedRow];
 
     if (Array.isArray(energyRow) && normalizedCol < energyRow.length) {
