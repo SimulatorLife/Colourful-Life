@@ -366,17 +366,10 @@ export default class Brain {
     let tracePayload = null;
 
     if (traceEnabled) {
-      tracePayload = {
-        sensors: sensorTrace ? sensorTrace.map((entry) => ({ ...entry })) : [],
-        nodes: traceEntries
-          ? traceEntries.map((entry) => ({
-              ...entry,
-              inputs: Array.isArray(entry.inputs)
-                ? entry.inputs.map((input) => ({ ...input }))
-                : [],
-            }))
-          : [],
-      };
+      tracePayload = cloneTracePayload({
+        sensors: sensorTrace ?? [],
+        nodes: traceEntries ?? [],
+      });
 
       result.trace = tracePayload;
     }
