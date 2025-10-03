@@ -175,3 +175,67 @@ test("DNA neural plasticity profile is deterministic and within expected bounds"
     "brain should enable plasticity when profile is present",
   );
 });
+
+test("experience imprints blend memory into sensor targets", () => {
+  const dna = new DNA(50, 140, 210);
+  const exploreNode = OUTPUT_GROUPS.movement.find((entry) => entry.key === "explore");
+  const resourceIndex = Brain.sensorIndex("resourceTrend");
+  const energyIndex = Brain.sensorIndex("energy");
+
+  assert.ok(exploreNode, "movement outputs should include explore");
+  assert.ok(
+    Number.isFinite(resourceIndex),
+    "resourceTrend sensor index should resolve",
+  );
+  assert.ok(Number.isFinite(energyIndex), "energy sensor index should resolve");
+
+  setNeuralGene(dna, 0, { source: 0, target: exploreNode.id, weight: 0.5 });
+
+  const brain = Brain.fromDNA(dna);
+
+  assert.ok(brain, "brain should instantiate for neural-enabled DNA");
+
+  const before = brain.snapshot();
+  const baseResourceTarget = before.sensorExperienceTargets?.[resourceIndex];
+  const baseEnergyTarget = before.sensorExperienceTargets?.[energyIndex];
+  const resourceGainBefore = before.sensorGains?.[resourceIndex];
+
+  brain.applyExperienceImprint({
+    adjustments: [
+      { sensor: "resourceTrend", target: -0.6, assimilation: 0.4 },
+      { sensor: "energy", target: -0.2, assimilation: 0.3 },
+    ],
+    gainInfluence: 0.5,
+  });
+
+  const after = brain.snapshot();
+  const learnedResource = after.sensorExperienceTargets?.[resourceIndex];
+  const learnedEnergy = after.sensorExperienceTargets?.[energyIndex];
+  const resourceGainAfter = after.sensorGains?.[resourceIndex];
+  const priorResource = Number.isFinite(baseResourceTarget)
+    ? baseResourceTarget
+    : (before.sensorTargets?.[resourceIndex] ?? 0);
+  const priorEnergy = Number.isFinite(baseEnergyTarget)
+    ? baseEnergyTarget
+    : (before.sensorTargets?.[energyIndex] ?? 0);
+
+  assert.ok(
+    Number.isFinite(learnedResource),
+    "imprint should create a resource target",
+  );
+  assert.ok(Number.isFinite(learnedEnergy), "imprint should update the energy target");
+  assert.ok(
+    Math.abs(learnedResource + 0.6) <= Math.abs(priorResource + 0.6) + 1e-6,
+    "resource target should move toward the imprinted preference",
+  );
+  assert.ok(
+    Math.abs(learnedEnergy + 0.2) <= Math.abs(priorEnergy + 0.2) + 1e-6,
+    "energy target should drift toward the imprint",
+  );
+  if (Number.isFinite(resourceGainBefore)) {
+    assert.ok(
+      Number.isFinite(resourceGainAfter) && resourceGainAfter !== resourceGainBefore,
+      "sensor gain should respond to the imprint influence",
+    );
+  }
+});

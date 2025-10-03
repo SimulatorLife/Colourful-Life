@@ -645,6 +645,49 @@ export default class Brain {
     }
   }
 
+  #ensureSensorModulationScaffolding() {
+    if (!this.sensorGainLimits) {
+      this.sensorGainLimits = { min: 0.5, max: 1.8 };
+    }
+
+    if (!this.sensorBaselines || this.sensorBaselines.length !== SENSOR_COUNT) {
+      this.sensorBaselines = this.#initSensorArray(
+        this.sensorBaselines,
+        1,
+        this.sensorGainLimits,
+      );
+    }
+
+    if (!this.sensorGains || this.sensorGains.length !== SENSOR_COUNT) {
+      this.sensorGains = new Float32Array(this.sensorBaselines);
+    }
+
+    if (!this.sensorTargets || this.sensorTargets.length !== SENSOR_COUNT) {
+      this.sensorTargets = this.#initSensorArray(this.sensorTargets, Number.NaN);
+
+      if (this.sensorTargets.length > 0) {
+        this.sensorTargets[0] = 1;
+      }
+    }
+
+    this.#enforceGainBounds();
+  }
+
+  #ensureSensorExperienceCapacity() {
+    if (
+      this.sensorExperienceTargets &&
+      this.sensorExperienceTargets.length === SENSOR_COUNT
+    ) {
+      return;
+    }
+
+    this.sensorExperienceTargets = new Float32Array(SENSOR_COUNT);
+
+    for (let i = 0; i < this.sensorExperienceTargets.length; i++) {
+      this.sensorExperienceTargets[i] = Number.NaN;
+    }
+  }
+
   applySensorFeedback({
     sensorVector,
     activationCount = 0,
@@ -656,6 +699,8 @@ export default class Brain {
     if (!this.sensorPlasticity?.enabled) return;
     if (!sensorVector || typeof sensorVector.length !== "number") return;
 
+    this.#ensureSensorModulationScaffolding();
+    this.#ensureSensorExperienceCapacity();
     this.#applyRetentionDecay();
 
     const normalizedCost = clamp(
@@ -708,17 +753,6 @@ export default class Brain {
     const minGain = this.sensorGainLimits?.min ?? 0.5;
     const maxGain = this.sensorGainLimits?.max ?? 1.8;
 
-    if (
-      !this.sensorExperienceTargets ||
-      this.sensorExperienceTargets.length !== SENSOR_COUNT
-    ) {
-      this.sensorExperienceTargets = new Float32Array(SENSOR_COUNT);
-
-      for (let i = 0; i < this.sensorExperienceTargets.length; i++) {
-        this.sensorExperienceTargets[i] = Number.NaN;
-      }
-    }
-
     const boundedMagnitude = Math.min(1, magnitude);
     const volatility = Math.min(1, this.sensorPlasticity.volatility || 0);
 
@@ -763,6 +797,123 @@ export default class Brain {
         const nextGain = clamp(baseGain + gainDelta, minGain, maxGain);
 
         this.sensorGains[i] = nextGain;
+      }
+    }
+  }
+
+  applyExperienceImprint({
+    adjustments = [],
+    assimilation = 0.1,
+    gainInfluence = 0,
+  } = {}) {
+    if (!this.sensorPlasticity?.enabled) return;
+    if (!Array.isArray(adjustments) || adjustments.length === 0) return;
+
+    this.#ensureSensorModulationScaffolding();
+    this.#ensureSensorExperienceCapacity();
+
+    const baseAssimilation = clamp(
+      Number.isFinite(assimilation) ? assimilation : 0.1,
+      0,
+      1,
+    );
+    const baseGainInfluence = clamp(
+      Number.isFinite(gainInfluence) ? gainInfluence : 0,
+      0,
+      1,
+    );
+    const minGain = this.sensorGainLimits?.min ?? 0.5;
+    const maxGain = this.sensorGainLimits?.max ?? 1.8;
+    const gainRange = Math.max(0, maxGain - minGain);
+
+    for (let i = 0; i < adjustments.length; i++) {
+      const adjustment = adjustments[i];
+
+      if (!adjustment || typeof adjustment !== "object") continue;
+
+      let index = Number.isFinite(adjustment.index) ? adjustment.index : null;
+
+      if (!Number.isFinite(index)) {
+        const key =
+          typeof adjustment.sensor === "string"
+            ? adjustment.sensor
+            : typeof adjustment.key === "string"
+              ? adjustment.key
+              : null;
+
+        if (key) {
+          index = Brain.sensorIndex(key);
+        }
+      }
+
+      if (!Number.isFinite(index) || index < 0 || index >= SENSOR_COUNT) continue;
+
+      const assimilationFactor = clamp(
+        Number.isFinite(adjustment.assimilation)
+          ? adjustment.assimilation
+          : baseAssimilation,
+        0,
+        1,
+      );
+
+      if (assimilationFactor <= 0) continue;
+
+      const target = Number.isFinite(adjustment.target)
+        ? clamp(adjustment.target, -1, 1)
+        : Number.NaN;
+      const fallback =
+        this.sensorTargets && index < this.sensorTargets.length
+          ? this.sensorTargets[index]
+          : Number.NaN;
+      const current =
+        this.sensorExperienceTargets && index < this.sensorExperienceTargets.length
+          ? this.sensorExperienceTargets[index]
+          : Number.NaN;
+      const start = Number.isFinite(current)
+        ? current
+        : Number.isFinite(fallback)
+          ? clamp(fallback, -1, 1)
+          : 0;
+
+      if (Number.isFinite(target)) {
+        const blended = mix(start, target, assimilationFactor);
+
+        this.sensorExperienceTargets[index] = clamp(blended, -1, 1);
+      }
+
+      if (!this.sensorGains || index >= this.sensorGains.length) continue;
+
+      const baseGain = Number.isFinite(this.sensorGains[index])
+        ? this.sensorGains[index]
+        : Number.isFinite(this.sensorBaselines?.[index])
+          ? this.sensorBaselines[index]
+          : 1;
+      const influenceScale = clamp(
+        Number.isFinite(adjustment.gainInfluence)
+          ? adjustment.gainInfluence
+          : baseGainInfluence,
+        0,
+        1,
+      );
+      const shift = Number.isFinite(adjustment.gainShift)
+        ? adjustment.gainShift
+        : Number.isFinite(target)
+          ? target * influenceScale * gainRange * 0.35
+          : 0;
+      const desiredGain = Number.isFinite(adjustment.gainTarget)
+        ? clamp(adjustment.gainTarget, minGain, maxGain)
+        : clamp(baseGain + shift, minGain, maxGain);
+      const gainBlend = clamp(
+        Number.isFinite(adjustment.gainBlend) ? adjustment.gainBlend : influenceScale,
+        0,
+        1,
+      );
+      const blendFactor = assimilationFactor * gainBlend;
+
+      if (blendFactor > 0) {
+        const nextGain = mix(baseGain, desiredGain, blendFactor);
+
+        this.sensorGains[index] = clamp(nextGain, minGain, maxGain);
       }
     }
   }
