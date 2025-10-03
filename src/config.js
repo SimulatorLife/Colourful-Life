@@ -1,4 +1,4 @@
-import { sanitizeNumber } from "./utils.js";
+import { clamp, sanitizeNumber } from "./utils.js";
 
 // Centralized simulation config defaults
 const DEFAULT_MAX_TILE_ENERGY = 6;
@@ -140,15 +140,7 @@ export function resolveTraitActivationThreshold(env = RUNTIME_ENV) {
     return DEFAULT_TRAIT_ACTIVATION_THRESHOLD;
   }
 
-  if (parsed <= 0) {
-    return 0;
-  }
-
-  if (parsed >= 1) {
-    return 1;
-  }
-
-  return parsed;
+  return clamp(parsed, 0, 1);
 }
 
 export const TRAIT_ACTIVATION_THRESHOLD = resolveTraitActivationThreshold();
@@ -172,15 +164,7 @@ export function resolveActivityBaseRate(env = RUNTIME_ENV) {
     return DEFAULT_ACTIVITY_BASE_RATE;
   }
 
-  if (parsed <= 0) {
-    return 0;
-  }
-
-  if (parsed >= 1) {
-    return 1;
-  }
-
-  return parsed;
+  return clamp(parsed, 0, 1);
 }
 
 export const ACTIVITY_BASE_RATE = resolveActivityBaseRate();
@@ -203,15 +187,7 @@ export function resolveMutationChance(env = RUNTIME_ENV) {
     return DEFAULT_MUTATION_CHANCE;
   }
 
-  if (parsed <= 0) {
-    return 0;
-  }
-
-  if (parsed >= 1) {
-    return 1;
-  }
-
-  return parsed;
+  return clamp(parsed, 0, 1);
 }
 
 export const MUTATION_CHANCE_BASELINE = resolveMutationChance();
