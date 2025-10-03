@@ -1291,14 +1291,16 @@ export default class GridManager {
     evict = true,
   } = {}) {
     const size = Math.max(1, Math.floor(tileSize));
+    const normalizeParity = (value) => ((value % 2) + 2) % 2;
+    const targetParity = normalizeParity(blockParity);
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         const tileR = Math.floor((r + offsetRow) / size);
         const tileC = Math.floor((c + offsetCol) / size);
-        const parity = (tileR + tileC) % 2;
+        const parity = normalizeParity(tileR + tileC);
 
-        if (parity === blockParity) this.setObstacle(r, c, true, { evict });
+        if (parity === targetParity) this.setObstacle(r, c, true, { evict });
       }
     }
   }
@@ -1369,7 +1371,8 @@ export default class GridManager {
         const tileSize = Math.max(1, Math.floor(options.tileSize ?? 2));
         const offsetRow = Math.floor(options.offsetRow ?? 0);
         const offsetCol = Math.floor(options.offsetCol ?? 0);
-        const blockParity = Math.floor(options.blockParity ?? 0) % 2;
+        const rawBlockParity = Math.floor(options.blockParity ?? 0);
+        const blockParity = ((rawBlockParity % 2) + 2) % 2;
 
         this.paintCheckerboard({ tileSize, offsetRow, offsetCol, blockParity, evict });
         break;

@@ -41,6 +41,56 @@ test("applyObstaclePreset ignores unknown ids without clearing existing obstacle
   }
 });
 
+test("checkerboard preset handles negative offsets without gaps", async () => {
+  const originalWindow = global.window;
+
+  if (typeof global.window === "undefined") {
+    global.window = {};
+  }
+
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  try {
+    const gm = new TestGridManager(6, 6, {
+      eventManager: { activeEvents: [] },
+      stats: {},
+      ctx: {},
+      cellSize: 1,
+    });
+
+    gm.applyObstaclePreset("checkerboard", {
+      clearExisting: true,
+      evict: true,
+      presetOptions: {
+        tileSize: 2,
+        offsetRow: -1,
+        offsetCol: -1,
+        blockParity: 1,
+      },
+    });
+
+    const pattern = gm.obstacles.map((row) =>
+      row.map((value) => (value ? "1" : "0")).join(""),
+    );
+
+    assert.equal(
+      pattern,
+      ["011001", "100110", "100110", "011001", "011001", "100110"],
+      "checkerboard should wrap offsets without dropping alternating tiles",
+    );
+  } finally {
+    if (originalWindow === undefined) {
+      delete global.window;
+    } else {
+      global.window = originalWindow;
+    }
+  }
+});
+
 test("resetWorld randomize selects a non-empty obstacle preset", async () => {
   const originalWindow = global.window;
 
