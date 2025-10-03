@@ -102,6 +102,38 @@ function subscribeEngineToUi(engine, uiManager) {
   return unsubscribers.filter(Boolean);
 }
 
+/**
+ * Connects a {@link SimulationEngine} instance to either the browser UI or the
+ * headless UI adapter, wiring metrics streams, leaderboard snapshots, and
+ * state synchronisation in both directions.
+ *
+ * The helper normalises layout defaults, ensures headless consumers receive a
+ * plain-object control surface with matching callbacks, and replays engine
+ * state (pause toggle, auto-pause preference, low-diversity multiplier) back
+ * into the UI on boot. When `headless` is false, the returned `uiManager`
+ * exposes the mounted {@link UIManager}; otherwise it yields the plain-object
+ * adapter produced by {@link createHeadlessUiManager}.
+ *
+ * @param {Object} options
+ * @param {import('../simulationEngine.js').default} options.engine - Active
+ *   simulation engine instance.
+ * @param {Object} [options.uiOptions] - UI configuration overrides forwarded to
+ *   either {@link UIManager} or the headless adapter.
+ * @param {Object} [options.sanitizedDefaults] - Base defaults resolved from
+ *   `config.ui.layout.initialSettings` and forwarded to the UI surface.
+ * @param {Object} [options.baseActions] - Built-in action callbacks (pause,
+ *   resume, reset) bound to the simulation.
+ * @param {Object} [options.simulationCallbacks] - Hooks invoked when the UI
+ *   emits events such as slider changes.
+ * @param {boolean} [options.headless=false] - When true, return a headless
+ *   control surface rather than mounting {@link UIManager}.
+ * @returns {{
+ *   uiManager: import('./uiManager.js').default | ReturnType<typeof createHeadlessUiManager>,
+ *   unsubscribers: Array<() => void>,
+ *   headlessOptions: Object|null,
+ *   layout: Object,
+ * }} Bridge context including the rendered/created UI manager and teardown hooks.
+ */
 export function bindSimulationToUi({
   engine,
   uiOptions = {},

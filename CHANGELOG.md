@@ -21,6 +21,9 @@ where practical.
 
 ### Changed
 
+- Refreshed documentation across the README, developer guide, and architecture
+  notes to highlight the UI bridge, fitness scoring module, Husky hook setup,
+  and new formatting scripts so contributor workflows mirror the current code.
 - Reproduction acceptance now blends neural policy intent with the genome's
   baseline instincts using DNA-tuned weights that react to opportunity,
   scarcity, neural fatigue, and network confidence, replacing the former

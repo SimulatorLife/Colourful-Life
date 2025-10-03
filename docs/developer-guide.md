@@ -20,6 +20,9 @@ extending tests, or polishing docs.
 > it beneath the playback controls at the top of the Simulation Controls panel
 > if you prefer the previous focus-dependent behaviour.
 
+> Tip: Run `npm run prepare` after cloning or pulling changes that touch the
+> `.husky/` directory to reinstall the Git hooks managed by Husky.
+
 > Tip: The Parcel server performs hot module replacement. If you need a clean
 > build, use `npm run build` to emit a production bundle in `dist/`.
 
@@ -43,13 +46,12 @@ extending tests, or polishing docs.
 
 ## Tooling
 
-| Purpose     | Command(s)                                | Notes                                                                                                                                                                   |
-| ----------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Format      | `npm run format` / `npm run format:check` | Apply or verify Prettier formatting across source, documentation, and configuration files.                                                                              |
-| Lint        | `npm run lint` / `npm run lint:fix`       | Run ESLint with the project ruleset. Use `:fix` to apply safe autofixes after addressing root issues.                                                                   |
-| Tests       | `npm test`                                | Run the Node.js test suites. Focused suites live beside their target modules in `test/`.                                                                                |
-| Profiling   | `node scripts/profile-energy.mjs`         | Benchmark the energy preparation loop. Configure dimensions with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and stub `cellSize` with `PERF_CELL_SIZE`. |
-| Cache reset | `npm run clean`                           | Delete `dist/` and `.parcel-cache/` when Parcel hot reloads or builds become inconsistent.                                                                              |
+- **Format** — Run `npm run format`, `npm run format:check`, or `npm run format:workflows` to apply Prettier across source, documentation, configuration files, and GitHub workflows.
+- **Lint** — Use `npm run lint` / `npm run lint:fix` to enforce the ESLint ruleset and apply safe autofixes.
+- **Tests** — Execute `npm test` to run the Node.js test suites. Focused suites live beside their target modules under `test/`.
+- **Profiling** — Run `node scripts/profile-energy.mjs` with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop.
+- **Cache reset** — Use `npm run clean` to clear `dist/` and `.parcel-cache/` when Parcel hot reloads become inconsistent.
+- **Hooks** — Run `npm run prepare` to reinstall Husky hooks after cloning or whenever `.husky/` contents change.
 
 Always run the formatter and linter before committing. Execute `npm test` when
 changing simulation logic, utilities, UI behaviour, or configuration that can
