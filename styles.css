@@ -862,6 +862,80 @@ canvas {
   box-shadow: none;
 }
 
+.life-events-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+}
+
+.life-events-breakdown__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.life-events-breakdown__hint {
+  margin: 0;
+}
+
+.death-breakdown-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.death-breakdown-item {
+  display: grid;
+  gap: 6px;
+}
+
+.death-breakdown-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.death-breakdown-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.death-breakdown-value {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.death-breakdown-meter {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.death-breakdown-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-life-death);
+  transition: width 200ms ease;
+}
+
+.death-breakdown-empty {
+  margin: 0;
+}
+
 .life-event-empty {
   padding: var(--space-sm);
   border: 1px dashed var(--color-border);
