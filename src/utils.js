@@ -135,6 +135,20 @@ export function toFiniteNumber(value, { fallback = null } = {}) {
 }
 
 /**
+ * Convenience wrapper around {@link toFiniteNumber} that normalizes values to a
+ * finite number or `null`. Useful when callers simply need to discard invalid
+ * inputs without repeatedly specifying the `{ fallback: null }` pattern.
+ *
+ * @param {any} value - Candidate value supplied by callers.
+ * @returns {number|null} Finite number or `null` when conversion fails.
+ */
+export function toFiniteOrNull(value) {
+  const numeric = toFiniteNumber(value, { fallback: null });
+
+  return numeric == null ? null : numeric;
+}
+
+/**
  * Normalizes an arbitrary candidate to a plain object. Non-object values are
  * coerced to an empty object so callers can safely destructure nested options
  * without additional guards.

@@ -10,7 +10,7 @@ import {
   resolveSimulationDefaults,
 } from "./config.js";
 import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
-import { clamp, reportError, sanitizeNumber, toFiniteNumber } from "./utils.js";
+import { clamp, reportError, sanitizeNumber, toFiniteOrNull } from "./utils.js";
 import {
   ensureCanvasDimensions,
   resolveCanvas,
@@ -147,7 +147,7 @@ export default class SimulationEngine {
     }
 
     const { width, height } = ensureCanvasDimensions(resolvedCanvas, config);
-    const toFinite = (value) => toFiniteNumber(value, { fallback: null });
+    const toFinite = toFiniteOrNull;
     const resolvePositiveInt = (value, fallback) => {
       const numeric = toFinite(value);
 
