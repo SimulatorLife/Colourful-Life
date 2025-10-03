@@ -183,7 +183,11 @@ export function cloneTracePayload(trace) {
  */
 export function createRankedBuffer(limit, compare) {
   // Sanitize the caller-provided limit so we never grow beyond a non-negative integer.
-  const capacity = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
+  const capacity = sanitizeNumber(limit, {
+    fallback: 0,
+    min: 0,
+    round: Math.floor,
+  });
   const comparator = typeof compare === "function" ? compare : () => 0;
   const entries = [];
 
