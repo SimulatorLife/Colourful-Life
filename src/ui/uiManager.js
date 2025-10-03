@@ -19,6 +19,20 @@ const GRID_GEOMETRY_BOUNDS = Object.freeze({
   cols: Object.freeze({ min: 40, max: 240, step: 1 }),
 });
 
+const DEATH_CAUSE_COLOR_MAP = Object.freeze({
+  starvation: "#f6c344",
+  combat: "#ff6b6b",
+  senescence: "#a0aec0",
+  reproduction: "#ff9f43",
+  obstacle: "#74b9ff",
+  seed: "#a29bfe",
+  "energy-collapse": "#45aaf2",
+  unknown: "#e74c3c",
+});
+
+const DEATH_BREAKDOWN_MAX_ENTRIES = 4;
+const DEATH_BREAKDOWN_OTHER_COLOR = "rgba(255, 255, 255, 0.28)";
+
 /**
  * Formats numeric values that may occasionally be non-finite. When the value
  * fails the finite check the provided fallback is returned instead.
@@ -97,6 +111,8 @@ export default class UIManager {
     this.lifeEventsSummaryTrend = null;
     this.lifeEventsSummaryNet = null;
     this.lifeEventsSummaryRate = null;
+    this.deathBreakdownList = null;
+    this.deathBreakdownEmptyState = null;
     this.playbackSpeedSlider = null;
     this.speedPresetButtons = [];
     this.pauseOverlay = null;
@@ -1265,6 +1281,125 @@ export default class UIManager {
     return valueEl;
   }
 
+  #resolveDeathCauseColor(causeKey) {
+    const fallback = DEATH_CAUSE_COLOR_MAP.unknown;
+
+    if (typeof causeKey !== "string") {
+      return fallback;
+    }
+
+    const normalized = causeKey.trim().toLowerCase();
+
+    return DEATH_CAUSE_COLOR_MAP[normalized] || fallback;
+  }
+
+  #updateDeathBreakdown(breakdown, fallbackTotal = 0) {
+    if (!this.deathBreakdownList || !this.deathBreakdownEmptyState) return;
+
+    this.deathBreakdownList.innerHTML = "";
+
+    const entries = [];
+
+    if (breakdown && typeof breakdown === "object") {
+      for (const [key, value] of Object.entries(breakdown)) {
+        const numeric = Number(value);
+
+        if (!Number.isFinite(numeric) || numeric <= 0) continue;
+
+        entries.push({ key, count: numeric });
+      }
+    }
+
+    entries.sort((a, b) => b.count - a.count);
+
+    const total = entries.reduce((sum, entry) => sum + entry.count, 0);
+
+    if (!(total > 0)) {
+      const fallback = Number.isFinite(fallbackTotal) ? fallbackTotal : 0;
+
+      this.deathBreakdownList.hidden = true;
+      this.deathBreakdownEmptyState.hidden = false;
+      this.deathBreakdownEmptyState.textContent =
+        fallback > 0
+          ? "Deaths recorded, but causes not classified yet."
+          : "No deaths recorded this tick.";
+
+      return;
+    }
+
+    const visible = entries.slice(0, DEATH_BREAKDOWN_MAX_ENTRIES);
+    const visibleTotal = visible.reduce((sum, entry) => sum + entry.count, 0);
+    const remainder = total - visibleTotal;
+
+    if (remainder > 0) {
+      visible.push({ key: "other", count: remainder, label: "Other causes" });
+    }
+
+    this.deathBreakdownEmptyState.hidden = true;
+    this.deathBreakdownList.hidden = false;
+
+    visible.forEach((entry) => {
+      const item = document.createElement("li");
+
+      item.className = "death-breakdown-item";
+      const ratio = total > 0 ? clamp01(entry.count / total) : 0;
+      const percent = ratio * 100;
+      const percentText =
+        percent >= 10 ? `${percent.toFixed(0)}%` : `${percent.toFixed(1)}%`;
+      const countText = entry.count.toLocaleString();
+      const labelText =
+        entry.label || this.#formatLifeEventCause({ type: "death", cause: entry.key });
+      const color =
+        entry.key === "other"
+          ? DEATH_BREAKDOWN_OTHER_COLOR
+          : this.#resolveDeathCauseColor(entry.key);
+      const row = document.createElement("div");
+
+      row.className = "death-breakdown-row";
+      const labelEl = document.createElement("span");
+
+      labelEl.className = "death-breakdown-label";
+      labelEl.textContent = labelText;
+      row.appendChild(labelEl);
+
+      const valueEl = document.createElement("span");
+
+      valueEl.className = "death-breakdown-value";
+      valueEl.textContent = `${countText} (${percentText})`;
+      row.appendChild(valueEl);
+
+      item.appendChild(row);
+
+      const meter = document.createElement("div");
+
+      meter.className = "death-breakdown-meter";
+      meter.setAttribute("role", "meter");
+      meter.setAttribute("aria-label", `${labelText} share of deaths`);
+      meter.setAttribute("aria-valuemin", "0");
+      meter.setAttribute("aria-valuemax", "1");
+      meter.setAttribute("aria-valuenow", ratio.toFixed(2));
+      meter.setAttribute("aria-valuetext", `${percentText} of deaths`);
+      meter.title = `${labelText} caused ${percentText} of deaths this tick.`;
+
+      const fill = document.createElement("div");
+
+      fill.className = "death-breakdown-fill";
+      const widthPercent = ratio > 0 ? Math.max(3, Math.min(100, percent)) : 0;
+
+      fill.style.width = `${widthPercent.toFixed(1)}%`;
+      fill.style.background = color;
+      meter.appendChild(fill);
+
+      item.appendChild(meter);
+      item.setAttribute(
+        "aria-label",
+        `${labelText}: ${countText} deaths (${percentText}) this tick`,
+      );
+
+      this.deathBreakdownList.appendChild(item);
+    });
+  }
+
   #updateLifeEventsSummary(birthCount = 0, deathCount = 0, totalCount, trend) {
     if (!this.lifeEventsSummary) return;
 
@@ -1372,10 +1507,17 @@ export default class UIManager {
       typeof stats?.getLifeEventRateSummary === "function"
         ? stats.getLifeEventRateSummary()
         : null;
+    const deathBreakdown = stats?.deathBreakdown;
 
     this.lifeEventList.innerHTML = "";
 
     if (!events || events.length === 0) {
+      const fallbackDeaths =
+        Number.isFinite(trendSummary?.deaths) && trendSummary.deaths >= 0
+          ? trendSummary.deaths
+          : 0;
+
+      this.#updateDeathBreakdown(deathBreakdown, fallbackDeaths);
       this.#updateLifeEventsSummary(0, 0, 0, trendSummary);
       this.lifeEventList.hidden = true;
       if (this.lifeEventsEmptyState) {
@@ -1534,6 +1676,8 @@ export default class UIManager {
       item.appendChild(details);
       this.lifeEventList.appendChild(item);
     });
+
+    this.#updateDeathBreakdown(deathBreakdown, deathCount);
 
     const summaryBirths =
       Number.isFinite(trendSummary?.births) && trendSummary.births >= 0
@@ -2598,6 +2742,44 @@ export default class UIManager {
 
     this.lifeEventsSummary.appendChild(trendSummary);
     lifeBody.appendChild(this.lifeEventsSummary);
+
+    const breakdownCard = document.createElement("div");
+
+    breakdownCard.className = "life-events-breakdown";
+    breakdownCard.setAttribute(
+      "aria-label",
+      "Breakdown of recent death causes for the latest tick",
+    );
+
+    const breakdownTitle = document.createElement("h5");
+
+    breakdownTitle.className = "life-events-breakdown__title";
+    breakdownTitle.textContent = "Death Causes (this tick)";
+    breakdownCard.appendChild(breakdownTitle);
+
+    const breakdownHint = document.createElement("p");
+
+    breakdownHint.className = "life-events-breakdown__hint control-hint";
+    breakdownHint.textContent =
+      "Highlights the leading reasons cells died during the most recent update.";
+    breakdownCard.appendChild(breakdownHint);
+
+    const breakdownList = document.createElement("ul");
+
+    breakdownList.className = "death-breakdown-list";
+    breakdownList.setAttribute("role", "list");
+    breakdownList.hidden = true;
+    breakdownCard.appendChild(breakdownList);
+    this.deathBreakdownList = breakdownList;
+
+    const breakdownEmpty = document.createElement("p");
+
+    breakdownEmpty.className = "death-breakdown-empty control-hint";
+    breakdownEmpty.textContent = "No deaths recorded this tick.";
+    breakdownCard.appendChild(breakdownEmpty);
+    this.deathBreakdownEmptyState = breakdownEmpty;
+
+    lifeBody.appendChild(breakdownCard);
 
     this.lifeEventsEmptyState = document.createElement("div");
     this.lifeEventsEmptyState.className = "life-event-empty";
