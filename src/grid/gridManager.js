@@ -3439,7 +3439,8 @@ export default class GridManager {
             partnerSimilarity: similarity,
           })
         : 1;
-    const effectiveReach = clamp((parentReach + mateReach) / 2, 0, 4);
+    const averageReach = clamp((parentReach + mateReach) / 2, 0, 4);
+    const effectiveReach = Math.max(1, averageReach);
 
     if (!blockedInfo && (separation === 0 || separation > effectiveReach)) {
       blockedInfo = {
