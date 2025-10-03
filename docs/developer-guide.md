@@ -59,13 +59,24 @@ extending tests, or polishing docs.
 - **Format** — Run `npm run format`, `npm run format:check`, or `npm run format:workflows` to apply Prettier across source, documentation, configuration files, and GitHub workflows.
 - **Lint** — Use `npm run lint` / `npm run lint:fix` to enforce the ESLint ruleset and apply safe autofixes.
 - **Tests** — Execute `npm test` to run the Node.js test suites. Focused suites live beside their target modules under `test/`.
-- **Profiling** — Run `node scripts/profile-energy.mjs` with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop.
+- **Profiling** — Run `node scripts/profile-energy.mjs` with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations.
 - **Cache reset** — Use `npm run clean` to clear `dist/` and `.parcel-cache/` when Parcel hot reloads become inconsistent.
 - **Hooks** — Run `npm run prepare` to reinstall Husky hooks after cloning or whenever `.husky/` contents change.
 
 Always run the formatter and linter before committing. Execute `npm test` when
 changing simulation logic, utilities, UI behaviour, or configuration that can
 affect runtime outcomes.
+
+### Performance budgets
+
+- `npm test` exercises `test/performance.profile-energy.test.js`, which parses
+  `scripts/profile-energy.mjs` output. The suite fails if energy preparation
+  exceeds roughly **5 ms per tick** or if the seeded `SimulationEngine`
+  surpasses **120 ms per tick** under the standard CI configuration
+  (24×24 grid, 70 % density). When a regression trips the threshold, re-run the
+  script locally with the same environment variables to compare `msPerTick`
+  values, dig into the `simulationBenchmark` payload, and capture before/after
+  numbers for the pull request discussion.
 
 ## Configuration overrides
 
@@ -85,6 +96,10 @@ affect runtime outcomes.
 - `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` tempers or emphasises how much
   territorial advantage influences combat outcomes. Values outside the 0–1
   window fall back to the default defined in `src/config.js`.
+- `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` adjusts how much of an organism's
+  remaining energy returns to the environment when it dies. Lower fractions
+  model harsher decay losses while higher values recycle more energy back into
+  nearby tiles.
 - `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` globally adjusts the baseline neural
   activity genomes inherit before DNA modifiers apply, making it easy to calm or
   energise every organism without editing source.

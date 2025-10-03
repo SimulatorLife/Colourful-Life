@@ -43,6 +43,7 @@ Tune baseline energy and density behaviour without editing source by setting env
 - `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` — Tunes the harvesting penalty applied when crowded organisms attempt to consume energy from a tile, allowing experiments with more competitive or laissez-faire ecosystems.
 - `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Adjusts the normalized cutoff the stats system uses when counting organisms as "active" for a trait, keeping telemetry aligned with looser or stricter interpretations of participation.
 - `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` — Scales how strongly territorial advantage influences combat odds. Values outside 0–1 fall back to the default defined in [`src/config.js`](src/config.js).
+- `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` — Controls what fraction of an organism's remaining energy returns to the environment when it dies, letting you explore harsher decay losses or more generous recycling without code changes.
 - `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` — Raises or lowers the baseline neural activity genomes inherit before their DNA modifiers apply, letting you globally calm or energise populations without editing source.
 - `COLOURFUL_LIFE_MUTATION_CHANCE` — Sets the default mutation probability applied when genomes reproduce without their own override, keeping evolutionary churn adjustable from the environment.
 

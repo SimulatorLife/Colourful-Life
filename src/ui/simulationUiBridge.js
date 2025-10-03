@@ -1,6 +1,6 @@
 import UIManager from "./uiManager.js";
 import { createHeadlessUiManager } from "./headlessUiManager.js";
-import { reportError, toPlainObject } from "../utils.js";
+import { toPlainObject, invokeWithErrorBoundary } from "../utils.js";
 
 function normalizeLayoutOptions({ engine, uiOptions = {}, sanitizedDefaults = {} }) {
   const normalizedUi = toPlainObject(uiOptions);
@@ -35,21 +35,12 @@ function createHeadlessOptions({
   const userOnSettingChange = mergedOptions.onSettingChange;
   const simulationOnSettingChange = simulationCallbacks.onSettingChange;
 
-  const invokeSettingChange = (callback, key, value, context) => {
-    if (typeof callback !== "function") {
-      return;
-    }
-
-    try {
-      callback(key, value);
-    } catch (error) {
-      reportError(
-        `${context} threw while handling "${key}" setting change; continuing without interruption.`,
-        error,
-        { once: true },
-      );
-    }
-  };
+  const invokeSettingChange = (callback, key, value, context) =>
+    invokeWithErrorBoundary(callback, [key, value], {
+      message: (settingKey) =>
+        `${context} threw while handling "${settingKey}" setting change; continuing without interruption.`,
+      once: true,
+    });
 
   mergedOptions.onSettingChange = (key, value) => {
     if (key === "updatesPerSecond") {
