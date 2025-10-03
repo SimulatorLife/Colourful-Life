@@ -1,48 +1,63 @@
 import { assert, test } from "#tests/harness";
+import DNA from "../src/genome.js";
 import { createRNG } from "../src/utils.js";
 
-class Cell {
-  static randomGenes(rng = Math.random) {
-    const genes = [];
-
-    for (let a = 0; a < 6; a++) {
-      const weights = [];
-
-      for (let i = 0; i < 5; i++) {
-        weights.push(rng() * 2 - 1);
-      }
-      genes.push(weights);
-    }
-
-    return genes;
-  }
-}
-
-const cellColors = ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"];
-
-function seedCell(seedValue) {
+function sampleGenome(seedValue, { sampleTag = "phenotype", sampleCount = 5 } = {}) {
   const rng = createRNG(seedValue);
+  const dna = DNA.random(rng);
+  const traitRng = dna.prngFor(sampleTag);
+  const traitSamples = Array.from({ length: sampleCount }, () => traitRng());
 
-  rng();
-  const genes = Cell.randomGenes(rng);
-  const preferences = cellColors.map(() => rng());
-  const neurons = Math.floor(rng() * 5) + 1;
-  const sight = Math.floor(rng() * 5) + 1;
-  const color = cellColors[Math.floor(rng() * cellColors.length)];
-
-  return { genes, preferences, neurons, sight, color };
+  return {
+    genes: Array.from(dna.genes),
+    color: dna.toColor(),
+    seed: dna.seed(),
+    traitSamples,
+  };
 }
 
-test("cells from identical seeds are identical", () => {
-  const a = seedCell(12345);
-  const b = seedCell(12345);
+test("DNA.random seeded with createRNG reproduces genomes and derived randomness", () => {
+  const first = sampleGenome(12345);
+  const second = sampleGenome(12345);
+  const different = sampleGenome(54321);
 
-  assert.equal(a, b);
+  assert.equal(
+    first.genes,
+    second.genes,
+    "identical seeds should produce identical gene sequences",
+  );
+  assert.is(
+    first.color,
+    second.color,
+    "phenotype color should be reproducible for identical genomes",
+  );
+  assert.is(
+    first.seed,
+    second.seed,
+    "derived DNA seed should be deterministic across matching genomes",
+  );
+  assert.equal(
+    first.traitSamples,
+    second.traitSamples,
+    "trait-specific RNG streams should align when derived from identical genomes",
+  );
+
+  assert.not.equal(
+    first.genes,
+    different.genes,
+    "different seeds should result in different gene sequences",
+  );
+  assert.not.equal(
+    first.traitSamples,
+    different.traitSamples,
+    "trait-specific RNG sequences should diverge for different genomes",
+  );
 });
 
-test("cells from different seeds differ", () => {
-  const a = seedCell(12345);
-  const b = seedCell(54321);
+test("DNA.random seeded with createRNG diverges across seeds", () => {
+  const first = sampleGenome(1);
+  const second = sampleGenome(2);
 
-  assert.not.equal(a, b);
+  assert.not.equal(first.genes, second.genes);
+  assert.not.equal(first.seed, second.seed);
 });
