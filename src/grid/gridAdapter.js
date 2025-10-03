@@ -24,9 +24,9 @@ export default class GridInteractionAdapter {
     return this.gridManager?.grid?.[row]?.[col] ?? null;
   }
 
-  setCell(row, col, cell) {
+  setCell(row, col, cell, options = {}) {
     if (this.#managerHas("setCell")) {
-      return this.gridManager.setCell(row, col, cell);
+      return this.gridManager.setCell(row, col, cell, options);
     }
 
     if (!cell) {
