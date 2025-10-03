@@ -50,29 +50,21 @@ function createHeadlessOptions({
 }
 
 function subscribeEngineToUi(engine, uiManager) {
-  const unsubscribers = [];
-
   if (!engine || !uiManager) {
-    return unsubscribers;
+    return [];
   }
 
-  unsubscribers.push(
+  return [
     engine.on?.("metrics", ({ stats, metrics, environment }) => {
       if (typeof uiManager.renderMetrics === "function") {
         uiManager.renderMetrics(stats, metrics, environment);
       }
     }),
-  );
-
-  unsubscribers.push(
     engine.on?.("leaderboard", ({ entries }) => {
       if (typeof uiManager.renderLeaderboard === "function") {
         uiManager.renderLeaderboard(entries);
       }
     }),
-  );
-
-  unsubscribers.push(
     engine.on?.("state", ({ changes }) => {
       if (
         changes?.paused !== undefined &&
@@ -97,9 +89,7 @@ function subscribeEngineToUi(engine, uiManager) {
         });
       }
     }),
-  );
-
-  return unsubscribers.filter(Boolean);
+  ].filter(Boolean);
 }
 
 /**
