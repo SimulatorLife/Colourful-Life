@@ -333,3 +333,32 @@ test("speed multiplier updates respect the engine's base cadence", async () => {
     restore();
   }
 });
+
+test("speed multiplier supports slow motion down to the configured floor", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  let engine;
+
+  try {
+    engine = new SimulationEngine({
+      canvas: new MockCanvas(16, 16),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+    });
+
+    engine.stop();
+    engine.baseUpdatesPerSecond = 60;
+    engine.setUpdatesPerSecond(60);
+
+    engine.updateSetting("speedMultiplier", 0.1);
+
+    assert.is(engine.state.updatesPerSecond, 6);
+    approxEqual(engine.state.speedMultiplier, 0.1, 1e-9);
+  } finally {
+    restore();
+  }
+});

@@ -1377,11 +1377,15 @@ export default class SimulationEngine {
         this.setLowDiversityReproMultiplier(value);
         break;
       case "speedMultiplier": {
-        const numeric = Number(value);
+        const sanitized = sanitizeNumber(value, {
+          fallback: Number.isFinite(this.state.speedMultiplier)
+            ? this.state.speedMultiplier
+            : 1,
+          min: 0.1,
+        });
 
-        if (!Number.isFinite(numeric)) break;
+        if (!Number.isFinite(sanitized)) break;
 
-        const sanitized = Math.max(0.5, numeric);
         const baseUpdates =
           this.baseUpdatesPerSecond > 0
             ? this.baseUpdatesPerSecond
