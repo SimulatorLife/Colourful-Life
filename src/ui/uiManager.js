@@ -154,6 +154,7 @@ export default class UIManager {
     this.lifeEventsSummaryDeathCount = null;
     this.lifeEventsSummaryTrend = null;
     this.lifeEventsSummaryNet = null;
+    this.lifeEventsSummaryDirection = null;
     this.lifeEventsSummaryRate = null;
     this._pendingMetrics = null;
     this._pendingLeaderboardEntries = null;
@@ -1633,16 +1634,31 @@ export default class UIManager {
         (typeof item.getAttribute === "function" && item.getAttribute("data-label")) ||
         item.dataset?.label ||
         "";
+      const singular =
+        (typeof item.getAttribute === "function" &&
+          item.getAttribute("data-singular")) ||
+        item.dataset?.singular ||
+        label;
       const safeCount = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+      const displayCount = safeCount.toLocaleString();
 
-      countEl.textContent = String(safeCount);
+      countEl.textContent = displayCount;
       item.classList.toggle("life-events-summary__item--muted", safeCount === 0);
 
       if (label) {
         const labelLower = label.toLowerCase();
         const plural = labelLower.endsWith("s") ? labelLower : `${labelLower}s`;
+        const singularLower =
+          typeof singular === "string" && singular.length > 0
+            ? singular.toLowerCase()
+            : labelLower;
+        const word = safeCount === 1 ? singularLower : plural;
+        const accessibleText = `${displayCount} ${word} recorded during the latest tick`;
+        const titleText =
+          accessibleText.charAt(0).toUpperCase() + accessibleText.slice(1);
 
-        item.setAttribute("aria-label", `${safeCount} recent ${plural}`);
+        item.setAttribute("aria-label", accessibleText);
+        item.title = `${titleText}.`;
       } else if (typeof item.removeAttribute === "function") {
         item.removeAttribute("aria-label");
       }
@@ -1674,18 +1690,18 @@ export default class UIManager {
       : 0;
 
     if (this.lifeEventsSummaryTrend) {
-      this.lifeEventsSummaryTrend.classList.toggle(
-        "life-events-summary__trend--positive",
-        netSource > 0,
-      );
-      this.lifeEventsSummaryTrend.classList.toggle(
-        "life-events-summary__trend--negative",
-        netSource < 0,
-      );
-      this.lifeEventsSummaryTrend.classList.toggle(
-        "life-events-summary__trend--neutral",
-        netSource === 0,
-      );
+      const trendEl = this.lifeEventsSummaryTrend;
+
+      trendEl.classList.toggle("life-events-summary__trend--positive", netSource > 0);
+      trendEl.classList.toggle("life-events-summary__trend--negative", netSource < 0);
+      trendEl.classList.toggle("life-events-summary__trend--neutral", netSource === 0);
+
+      const directionText =
+        netSource > 0 ? "Growing" : netSource < 0 ? "Declining" : "Stable";
+
+      if (this.lifeEventsSummaryDirection) {
+        this.lifeEventsSummaryDirection.textContent = directionText;
+      }
 
       const netLabel =
         netSource > 0
@@ -1698,23 +1714,25 @@ export default class UIManager {
           ? `${eventsPer100.toFixed(1)} events per 100 ticks`
           : "No recent events per 100 ticks";
 
-      this.lifeEventsSummaryTrend.setAttribute(
-        "aria-label",
-        `${netLabel}; ${rateLabel}`,
-      );
+      trendEl.setAttribute("aria-label", `${netLabel}; ${rateLabel}`);
+      trendEl.title = `${netLabel}. ${rateLabel}.`;
     }
 
     if (this.lifeEventsSummaryNet) {
-      const formattedNet = netSource > 0 ? `+${netSource}` : String(netSource);
+      const formattedNet = Number.isFinite(netSource)
+        ? netSource > 0
+          ? `+${netSource.toLocaleString()}`
+          : netSource.toLocaleString()
+        : "0";
 
       this.lifeEventsSummaryNet.textContent = formattedNet;
     }
 
     if (this.lifeEventsSummaryRate) {
       if (Number.isFinite(eventsPer100) && eventsPer100 > 0) {
-        this.lifeEventsSummaryRate.textContent = `≈${eventsPer100.toFixed(1)} events / 100 ticks`;
+        this.lifeEventsSummaryRate.textContent = `Rolling 100-tick avg: ≈${eventsPer100.toFixed(1)} events`;
       } else {
-        this.lifeEventsSummaryRate.textContent = "No activity in window";
+        this.lifeEventsSummaryRate.textContent = "Rolling 100-tick avg: no events";
       }
     }
   }
@@ -3234,22 +3252,51 @@ export default class UIManager {
 
     lifeBody.className = "metrics-section-body life-events-body";
 
-    const createSummaryItem = (label, modifierClass) => {
+    const createSummaryItem = (label, modifierClass, description) => {
       const item = document.createElement("div");
+      const normalizedClass = ["life-events-summary__item", modifierClass]
+        .filter(Boolean)
+        .join(" ");
 
-      item.className = `life-events-summary__item ${modifierClass}`;
+      item.className = normalizedClass;
       if (typeof item.setAttribute === "function") {
-        item.setAttribute("data-label", label);
+        if (typeof label === "string" && label.length > 0) {
+          item.setAttribute("data-label", label);
+          const singularCandidate = label.toLowerCase().endsWith("s")
+            ? label.slice(0, -1)
+            : label;
+
+          item.setAttribute("data-singular", singularCandidate.toLowerCase());
+        }
+        if (description) {
+          item.setAttribute("data-description", description);
+        }
       }
+
+      if (description) {
+        item.title = description;
+      }
+
+      const textGroup = document.createElement("div");
+
+      textGroup.className = "life-events-summary__text";
       const labelEl = document.createElement("span");
 
       labelEl.className = "life-events-summary__label";
       labelEl.textContent = label;
+      const periodEl = document.createElement("span");
+
+      periodEl.className = "life-events-summary__period";
+      periodEl.textContent = "Latest tick";
+      textGroup.appendChild(labelEl);
+      textGroup.appendChild(periodEl);
+
       const countEl = document.createElement("span");
 
       countEl.className = "life-events-summary__count";
       countEl.textContent = "0";
-      item.appendChild(labelEl);
+
+      item.appendChild(textGroup);
       item.appendChild(countEl);
 
       return { item, countEl };
@@ -3259,15 +3306,20 @@ export default class UIManager {
     this.lifeEventsSummary.className = "life-events-summary";
     this.lifeEventsSummary.setAttribute("role", "status");
     this.lifeEventsSummary.setAttribute("aria-live", "polite");
-    this.lifeEventsSummary.setAttribute("aria-label", "Recent birth and death counts");
+    this.lifeEventsSummary.setAttribute(
+      "aria-label",
+      "Latest tick birth and death counts",
+    );
 
     const birthsSummary = createSummaryItem(
       "Births",
       "life-events-summary__item--birth",
+      "Births recorded during the latest tick.",
     );
     const deathsSummary = createSummaryItem(
       "Deaths",
       "life-events-summary__item--death",
+      "Deaths recorded during the latest tick.",
     );
 
     this.lifeEventsSummaryBirthItem = birthsSummary.item;
@@ -3283,29 +3335,45 @@ export default class UIManager {
     trendSummary.className =
       "life-events-summary__trend life-events-summary__trend--neutral";
     trendSummary.setAttribute("role", "group");
+    trendSummary.setAttribute("aria-live", "polite");
     trendSummary.setAttribute("aria-label", "Net population change and event cadence");
 
+    const trendHeader = document.createElement("div");
+
+    trendHeader.className = "life-events-summary__trend-header";
     const trendLabel = document.createElement("span");
 
     trendLabel.className = "life-events-summary__trend-label";
     trendLabel.textContent = "Net change";
+    const trendDirection = document.createElement("span");
 
+    trendDirection.className = "life-events-summary__trend-direction";
+    trendDirection.textContent = "Stable";
+    trendHeader.appendChild(trendLabel);
+    trendHeader.appendChild(trendDirection);
+
+    const trendValues = document.createElement("div");
+
+    trendValues.className = "life-events-summary__trend-values";
     const trendValue = document.createElement("span");
 
     trendValue.className = "life-events-summary__trend-value";
-    trendValue.textContent = "0";
+    trendValue.textContent = "+0";
 
     const trendRate = document.createElement("span");
 
     trendRate.className = "life-events-summary__trend-rate";
-    trendRate.textContent = "0 events / 100 ticks";
+    trendRate.textContent = "Rolling 100-tick avg: none yet";
 
-    trendSummary.appendChild(trendLabel);
-    trendSummary.appendChild(trendValue);
-    trendSummary.appendChild(trendRate);
+    trendValues.appendChild(trendValue);
+    trendValues.appendChild(trendRate);
+
+    trendSummary.appendChild(trendHeader);
+    trendSummary.appendChild(trendValues);
 
     this.lifeEventsSummaryTrend = trendSummary;
     this.lifeEventsSummaryNet = trendValue;
+    this.lifeEventsSummaryDirection = trendDirection;
     this.lifeEventsSummaryRate = trendRate;
 
     this.lifeEventsSummary.appendChild(trendSummary);
