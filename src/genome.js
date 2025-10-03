@@ -670,6 +670,73 @@ export class DNA {
     return clamp(base, 0.006, 0.03);
   }
 
+  scarcityReliefProfile() {
+    const rng = this.prngFor("scarcityReliefProfile");
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const drought = this.geneFraction(GENE_LOCI.RESIST_DROUGHT);
+    const heat = this.geneFraction(GENE_LOCI.RESIST_HEAT);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
+    const preparedness = (drought + heat) / 2;
+    const scarcity = 1 - preparedness;
+    const inefficiency = 1 - efficiency;
+    const fragility = 1 - recovery;
+    const baseline = clamp(
+      0.12 +
+        0.24 * inefficiency +
+        0.15 * fragility +
+        0.12 * scarcity +
+        0.1 * risk +
+        0.08 * movement +
+        (rng() - 0.5) * 0.04,
+      0.04,
+      0.5,
+    );
+    const taper = clamp(
+      0.35 +
+        0.3 * inefficiency +
+        0.2 * fragility +
+        0.14 * scarcity +
+        0.18 * risk +
+        0.1 * movement +
+        (rng() - 0.5) * 0.05,
+      0.2,
+      0.95,
+    );
+    const curvature = clamp(
+      0.6 +
+        0.4 * inefficiency +
+        0.25 * risk +
+        0.12 * movement -
+        0.2 * recovery -
+        0.1 * preparedness +
+        (rng() - 0.5) * 0.25,
+      0.3,
+      1.8,
+    );
+
+    return { baseline, taper, curvature };
+  }
+
+  energyScarcityRelief(energyFraction = 0, profile = null) {
+    const resolvedEnergy = clamp(
+      Number.isFinite(energyFraction) ? energyFraction : 0,
+      0,
+      1,
+    );
+    const data =
+      profile && typeof profile === "object" ? profile : this.scarcityReliefProfile();
+    const baseline = clamp(data?.baseline ?? 0.15, 0.05, 0.6);
+    const taper = clamp(data?.taper ?? 0.85, 0.2, 1.05);
+    const curvature = clamp(data?.curvature ?? 1, 0.25, 2);
+    const curved = Math.pow(resolvedEnergy, curvature);
+    const eased = Math.min(1, curved * taper);
+    const relief = baseline + (1 - baseline) * eased;
+
+    return clamp(relief, 0.05, 1);
+  }
+
   metabolicProfile() {
     const rng = this.prngFor("metabolicProfile");
     const activity = this.geneFraction(GENE_LOCI.ACTIVITY);

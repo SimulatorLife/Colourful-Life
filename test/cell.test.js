@@ -143,7 +143,10 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   const crowdPenalty = 1 + effDensity * (cell.metabolicCrowdingTax ?? 0);
   const baseLoss = dna.energyLossBase();
   const energyFraction = clamp(initialEnergy / maxTileEnergy, 0, 1);
-  const scarcityRelief = 0.15 + energyFraction * 0.85;
+  const scarcityRelief = dna.energyScarcityRelief(
+    energyFraction,
+    cell.scarcityReliefProfile,
+  );
   const energyLoss =
     baseLoss *
     dna.baseEnergyLossScale() *
@@ -161,6 +164,71 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   approxEqual(cell.energy, expectedEnergy, 1e-12, "energy after management");
   assert.ok(cell.energy < initialEnergy, "energy should decrease");
   assert.is(starving, expectedEnergy <= starvationThreshold);
+});
+
+test("energy scarcity relief profile rewards efficient, cautious genomes", () => {
+  const efficientDNA = new DNA(0, 0, 0);
+
+  efficientDNA.genes[GENE_LOCI.ENERGY_EFFICIENCY] = 240;
+  efficientDNA.genes[GENE_LOCI.RECOVERY] = 220;
+  efficientDNA.genes[GENE_LOCI.RESIST_DROUGHT] = 210;
+  efficientDNA.genes[GENE_LOCI.RESIST_HEAT] = 200;
+  efficientDNA.genes[GENE_LOCI.PARENTAL] = 180;
+
+  const recklessDNA = new DNA(0, 0, 0);
+
+  recklessDNA.genes[GENE_LOCI.ENERGY_EFFICIENCY] = 20;
+  recklessDNA.genes[GENE_LOCI.RISK] = 230;
+  recklessDNA.genes[GENE_LOCI.MOVEMENT] = 210;
+
+  const efficient = new Cell(0, 0, efficientDNA, 0.9);
+  const reckless = new Cell(0, 0, recklessDNA, 0.9);
+  const zeroComponents = () => ({ baseline: 0, dynamic: 0 });
+
+  efficient.dna.cognitiveCostComponents = zeroComponents;
+  efficient.dna.cognitiveCost = () => 0;
+  reckless.dna.cognitiveCostComponents = zeroComponents;
+  reckless.dna.cognitiveCost = () => 0;
+
+  const baseLoss = 0.01;
+
+  efficient.dna.energyLossBase = () => baseLoss;
+  reckless.dna.energyLossBase = () => baseLoss;
+  efficient.dna.baseEnergyLossScale = () => 1;
+  reckless.dna.baseEnergyLossScale = () => 1;
+  efficient.metabolism = reckless.metabolism = 0.4;
+  efficient.metabolicCrowdingTax = reckless.metabolicCrowdingTax = 0.2;
+
+  const maxTileEnergy = 10;
+  const energyFraction = clamp(efficient.energy / maxTileEnergy, 0, 1);
+  const efficientRelief = efficientDNA.energyScarcityRelief(
+    energyFraction,
+    efficient.scarcityReliefProfile,
+  );
+  const recklessRelief = recklessDNA.energyScarcityRelief(
+    energyFraction,
+    reckless.scarcityReliefProfile,
+  );
+
+  assert.ok(
+    efficientRelief < recklessRelief,
+    "efficient genomes should throttle metabolism harder under scarcity",
+  );
+
+  const context = { localDensity: 0.25, densityEffectMultiplier: 1, maxTileEnergy };
+  const efficientBefore = efficient.energy;
+  const recklessBefore = reckless.energy;
+
+  efficient.manageEnergy(0, 0, context);
+  reckless.manageEnergy(0, 0, context);
+
+  const efficientLoss = efficientBefore - efficient.energy;
+  const recklessLoss = recklessBefore - reckless.energy;
+
+  assert.ok(
+    efficientLoss < recklessLoss,
+    "scarcity relief should reduce upkeep for thrifty genomes",
+  );
 });
 
 test("DNA metabolic profile reduces crowd losses for crowd-tolerant genomes", () => {

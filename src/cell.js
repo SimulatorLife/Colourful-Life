@@ -247,6 +247,10 @@ export default class Cell {
       crowdingTax: this.metabolicCrowdingTax,
       neuralSignature,
     };
+    this.scarcityReliefProfile =
+      typeof this.dna.scarcityReliefProfile === "function"
+        ? this.dna.scarcityReliefProfile()
+        : null;
     this.offspring = 0;
     this.fightsWon = 0;
     this.fightsLost = 0;
@@ -3401,6 +3405,20 @@ export default class Cell {
     }
   }
 
+  #resolveScarcityRelief(energyFraction) {
+    const normalized = clamp(
+      Number.isFinite(energyFraction) ? energyFraction : 0,
+      0,
+      1,
+    );
+
+    if (typeof this.dna?.energyScarcityRelief === "function") {
+      return this.dna.energyScarcityRelief(normalized, this.scarcityReliefProfile);
+    }
+
+    return 0.15 + normalized * 0.85;
+  }
+
   #calculateMetabolicEnergyLoss(effectiveDensity, maxTileEnergy = MAX_TILE_ENERGY) {
     const energyLossConfig = this.density?.energyLoss ?? { min: 1, max: 1 };
     const minLoss = Number.isFinite(energyLossConfig.min) ? energyLossConfig.min : 1;
@@ -3429,7 +3447,7 @@ export default class Cell {
       0,
       1,
     );
-    const scarcityRelief = 0.15 + energyFraction * 0.85; // soften upkeep near starvation
+    const scarcityRelief = this.#resolveScarcityRelief(energyFraction);
 
     return baseLoss * lossScale * agingPenalty * scarcityRelief;
   }
