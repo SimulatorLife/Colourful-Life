@@ -1,4 +1,8 @@
-import { COMBAT_EDGE_SHARPNESS_DEFAULT, SIMULATION_DEFAULTS } from "../config.js";
+import {
+  COMBAT_EDGE_SHARPNESS_DEFAULT,
+  COMBAT_TERRITORY_EDGE_FACTOR,
+  SIMULATION_DEFAULTS,
+} from "../config.js";
 
 // UI defaults and slider bounds derived from canonical simulation defaults.
 export const UI_SLIDER_CONFIG = Object.freeze({
@@ -71,6 +75,13 @@ export const UI_SLIDER_CONFIG = Object.freeze({
     max: 6,
     step: 0.1,
     floor: 0.1,
+  },
+  combatTerritoryEdgeFactor: {
+    default: COMBAT_TERRITORY_EDGE_FACTOR,
+    min: 0,
+    max: 1,
+    step: 0.05,
+    floor: 0,
   },
   energyRegenRate: {
     min: 0,

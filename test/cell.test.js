@@ -12,17 +12,35 @@ let InteractionSystem;
 let Brain;
 let OUTPUT_GROUPS;
 
-function investmentFor(energy, investFrac, starvation, demandFrac, maxTileEnergy) {
+function investmentFor(
+  energy,
+  investFrac,
+  starvation,
+  demandFrac,
+  maxTileEnergy,
+  requiredShare = 0,
+) {
   const safeMax = Number.isFinite(maxTileEnergy)
     ? maxTileEnergy
     : (window.GridManager?.maxTileEnergy ?? 12);
   const targetEnergy =
     safeMax * clamp(Number.isFinite(demandFrac) ? demandFrac : 0.22, 0, 1);
   const desiredBase = Math.max(0, Math.min(energy, energy * investFrac));
-  const desired = Math.max(desiredBase, targetEnergy);
+  const desired = Math.max(desiredBase, targetEnergy, requiredShare);
   const maxSpend = Math.max(0, energy - starvation);
 
   return Math.min(desired, maxSpend);
+}
+
+function combinedTransferEfficiency(dnaA, dnaB) {
+  const resolve = (dna) =>
+    typeof dna?.offspringEnergyTransferEfficiency === "function"
+      ? dna.offspringEnergyTransferEfficiency()
+      : 0.85;
+  const effA = clamp(resolve(dnaA), 0.1, 1);
+  const effB = clamp(resolve(dnaB), 0.1, 1);
+
+  return clamp((effA + effB) / 2, 0.1, 1);
 }
 
 function withMockedRandom(sequence, fn) {
@@ -109,7 +127,11 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   const initialEnergy = 5;
   const maxTileEnergy = 12;
   const cell = new Cell(2, 3, dna, initialEnergy);
-  const context = { localDensity: 0.3, densityEffectMultiplier: 2, maxTileEnergy: 12 };
+  const context = {
+    localDensity: 0.3,
+    densityEffectMultiplier: 2,
+    maxTileEnergy,
+  };
   const effDensity = clamp(
     context.localDensity * context.densityEffectMultiplier,
     0,
@@ -120,7 +142,7 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   const metabolism = cell.metabolism;
   const crowdPenalty = 1 + effDensity * (cell.metabolicCrowdingTax ?? 0);
   const baseLoss = dna.energyLossBase();
-  const energyFraction = clamp(initialEnergy / context.maxTileEnergy, 0, 1);
+  const energyFraction = clamp(initialEnergy / maxTileEnergy, 0, 1);
   const scarcityRelief = 0.55 + energyFraction * 0.45;
   const energyLoss =
     baseLoss *
@@ -134,7 +156,7 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
 
   const starving = cell.manageEnergy(cell.row, cell.col, context);
   const expectedEnergy = initialEnergy - (energyLoss + cognitiveLoss);
-  const starvationThreshold = dna.starvationThresholdFrac() * context.maxTileEnergy;
+  const starvationThreshold = dna.starvationThresholdFrac() * maxTileEnergy;
 
   approxEqual(cell.energy, expectedEnergy, 1e-12, "energy after management");
   assert.ok(cell.energy < initialEnergy, "energy should decrease");
@@ -473,12 +495,20 @@ test("breed spends parental investment energy without creating extra energy", ()
   const starvationB = parentB.starvationThreshold(maxTileEnergy);
   const demandFracA = dnaA.offspringEnergyDemandFrac();
   const demandFracB = dnaB.offspringEnergyDemandFrac();
+  const transferEfficiency = combinedTransferEfficiency(dnaA, dnaB);
+  const viabilityThreshold = maxTileEnergy * Math.max(demandFracA, demandFracB);
+  const requiredTotalInvestment =
+    viabilityThreshold / Math.max(transferEfficiency, 1e-6);
+  const weightSum = Math.max(1e-6, Math.abs(investFracA) + Math.abs(investFracB));
+  const requiredShareA = requiredTotalInvestment * (Math.abs(investFracA) / weightSum);
+  const requiredShareB = requiredTotalInvestment * (Math.abs(investFracB) / weightSum);
   const investA = investmentFor(
     energyBeforeA,
     investFracA,
     starvationA,
     demandFracA,
     maxTileEnergy,
+    requiredShareA,
   );
   const investB = investmentFor(
     energyBeforeB,
@@ -486,6 +516,7 @@ test("breed spends parental investment energy without creating extra energy", ()
     starvationB,
     demandFracB,
     maxTileEnergy,
+    requiredShareB,
   );
   const totalInvestment = investA + investB;
 
@@ -493,7 +524,8 @@ test("breed spends parental investment energy without creating extra energy", ()
     Cell.breed(parentA, parentB),
   );
 
-  const expectedEnergy = totalInvestment;
+  const expectedEnergy = totalInvestment * transferEfficiency;
+  const expectedWaste = totalInvestment - expectedEnergy;
 
   assert.ok(child instanceof Cell, "breed should return a Cell");
   assert.is(child.row, parentA.row);
@@ -507,8 +539,9 @@ test("breed spends parental investment energy without creating extra energy", ()
     1e-12,
     "investments match energy spent",
   );
+  assert.ok(expectedWaste >= 0, "transfer efficiency never creates energy");
   assert.ok(
-    child.energy >= maxTileEnergy * Math.max(demandFracA, demandFracB) - 1e-9,
+    child.energy >= viabilityThreshold - 1e-9,
     "offspring meets viability energy floor",
   );
   assert.is(parentA.offspring, 1);
@@ -727,19 +760,30 @@ test("breed clamps investment so parents stop at starvation threshold", () => {
   const energyBeforeB = parentB.energy;
   const demandFracA = dnaA.offspringEnergyDemandFrac();
   const demandFracB = dnaB.offspringEnergyDemandFrac();
+  const transferEfficiency = combinedTransferEfficiency(dnaA, dnaB);
+  const viabilityThreshold = reproductionMax * Math.max(demandFracA, demandFracB);
+  const requiredTotalInvestment =
+    viabilityThreshold / Math.max(transferEfficiency, 1e-6);
+  const investFracA = dnaA.parentalInvestmentFrac();
+  const investFracB = dnaB.parentalInvestmentFrac();
+  const weightSum = Math.max(1e-6, Math.abs(investFracA) + Math.abs(investFracB));
+  const requiredShareA = requiredTotalInvestment * (Math.abs(investFracA) / weightSum);
+  const requiredShareB = requiredTotalInvestment * (Math.abs(investFracB) / weightSum);
   const expectedInvestA = investmentFor(
     energyBeforeA,
-    dnaA.parentalInvestmentFrac(),
+    investFracA,
     starvationA,
     demandFracA,
     reproductionMax,
+    requiredShareA,
   );
   const expectedInvestB = investmentFor(
     energyBeforeB,
-    dnaB.parentalInvestmentFrac(),
+    investFracB,
     starvationB,
     demandFracB,
     reproductionMax,
+    requiredShareB,
   );
 
   assert.ok(starvationA > 0, "starvation threshold should be positive");
@@ -772,12 +816,12 @@ test("breed clamps investment so parents stop at starvation threshold", () => {
   );
   approxEqual(
     child.energy,
-    expectedInvestA + expectedInvestB,
+    (expectedInvestA + expectedInvestB) * transferEfficiency,
     1e-12,
-    "child energy equals combined investments",
+    "child energy equals combined investments after transfer efficiency",
   );
   assert.ok(
-    child.energy >= reproductionMax * Math.max(demandFracA, demandFracB) - 1e-9,
+    child.energy >= viabilityThreshold - 1e-9,
     "offspring energy respects viability requirement",
   );
 });
@@ -807,21 +851,30 @@ test("breed aborts when combined investment misses DNA viability floor", () => {
   const starvationB = parentB.starvationThreshold(maxTileEnergy);
   const demandFracA = dnaA.offspringEnergyDemandFrac();
   const demandFracB = dnaB.offspringEnergyDemandFrac();
+  const transferEfficiency = combinedTransferEfficiency(dnaA, dnaB);
+  const viabilityFloor = maxTileEnergy * Math.max(demandFracA, demandFracB);
+  const requiredTotalInvestment = viabilityFloor / Math.max(transferEfficiency, 1e-6);
+  const investFracA = dnaA.parentalInvestmentFrac();
+  const investFracB = dnaB.parentalInvestmentFrac();
+  const weightSum = Math.max(1e-6, Math.abs(investFracA) + Math.abs(investFracB));
+  const requiredShareA = requiredTotalInvestment * (Math.abs(investFracA) / weightSum);
+  const requiredShareB = requiredTotalInvestment * (Math.abs(investFracB) / weightSum);
   const investA = investmentFor(
     energyBeforeA,
-    dnaA.parentalInvestmentFrac(),
+    investFracA,
     starvationA,
     demandFracA,
     maxTileEnergy,
+    requiredShareA,
   );
   const investB = investmentFor(
     energyBeforeB,
-    dnaB.parentalInvestmentFrac(),
+    investFracB,
     starvationB,
     demandFracB,
     maxTileEnergy,
+    requiredShareB,
   );
-  const viabilityFloor = maxTileEnergy * Math.max(demandFracA, demandFracB);
 
   assert.ok(investA > 0 && investB > 0, "parents contribute energy toward offspring");
   assert.ok(
@@ -845,6 +898,114 @@ test("breed aborts when combined investment misses DNA viability floor", () => {
     energyBeforeB,
     1e-12,
     "parent B keeps energy after abort",
+  );
+});
+
+test("gestation efficiency genes modulate delivered offspring energy", () => {
+  const configureGenome = (geneValue) => {
+    const dna = new DNA(90, 140, 210);
+
+    dna.genes[GENE_LOCI.PARENTAL] = 200;
+    dna.genes[GENE_LOCI.FERTILITY] = 180;
+    dna.genes[GENE_LOCI.ENERGY_EFFICIENCY] = 210;
+    dna.genes[GENE_LOCI.RECOVERY] = 160;
+    dna.genes[GENE_LOCI.RISK] = 80;
+    dna.genes[GENE_LOCI.GESTATION_EFFICIENCY] = geneValue;
+
+    return dna;
+  };
+
+  const lowDnaA = configureGenome(15);
+  const lowDnaB = configureGenome(25);
+  const highDnaA = configureGenome(240);
+  const highDnaB = configureGenome(250);
+  const maxTileEnergy = window.GridManager.maxTileEnergy;
+  const lowParentA = new Cell(1, 1, lowDnaA, 8);
+  const lowParentB = new Cell(1, 1, lowDnaB, 8);
+  const highParentA = new Cell(1, 1, highDnaA, 8);
+  const highParentB = new Cell(1, 1, highDnaB, 8);
+  const lowDemandA = lowDnaA.offspringEnergyDemandFrac();
+  const lowDemandB = lowDnaB.offspringEnergyDemandFrac();
+  const highDemandA = highDnaA.offspringEnergyDemandFrac();
+  const highDemandB = highDnaB.offspringEnergyDemandFrac();
+  const lowEfficiency = combinedTransferEfficiency(lowDnaA, lowDnaB);
+  const highEfficiency = combinedTransferEfficiency(highDnaA, highDnaB);
+  const lowRequiredTotal =
+    (maxTileEnergy * Math.max(lowDemandA, lowDemandB)) / Math.max(lowEfficiency, 1e-6);
+  const highRequiredTotal =
+    (maxTileEnergy * Math.max(highDemandA, highDemandB)) /
+    Math.max(highEfficiency, 1e-6);
+  const lowFracA = lowDnaA.parentalInvestmentFrac();
+  const lowFracB = lowDnaB.parentalInvestmentFrac();
+  const highFracA = highDnaA.parentalInvestmentFrac();
+  const highFracB = highDnaB.parentalInvestmentFrac();
+  const lowWeight = Math.max(1e-6, Math.abs(lowFracA) + Math.abs(lowFracB));
+  const highWeight = Math.max(1e-6, Math.abs(highFracA) + Math.abs(highFracB));
+  const lowRequiredShareA = lowRequiredTotal * (Math.abs(lowFracA) / lowWeight);
+  const lowRequiredShareB = lowRequiredTotal * (Math.abs(lowFracB) / lowWeight);
+  const highRequiredShareA = highRequiredTotal * (Math.abs(highFracA) / highWeight);
+  const highRequiredShareB = highRequiredTotal * (Math.abs(highFracB) / highWeight);
+  const lowInvestA = investmentFor(
+    8,
+    lowFracA,
+    lowParentA.starvationThreshold(maxTileEnergy),
+    lowDemandA,
+    maxTileEnergy,
+    lowRequiredShareA,
+  );
+  const lowInvestB = investmentFor(
+    8,
+    lowFracB,
+    lowParentB.starvationThreshold(maxTileEnergy),
+    lowDemandB,
+    maxTileEnergy,
+    lowRequiredShareB,
+  );
+  const highInvestA = investmentFor(
+    8,
+    highFracA,
+    highParentA.starvationThreshold(maxTileEnergy),
+    highDemandA,
+    maxTileEnergy,
+    highRequiredShareA,
+  );
+  const highInvestB = investmentFor(
+    8,
+    highFracB,
+    highParentB.starvationThreshold(maxTileEnergy),
+    highDemandB,
+    maxTileEnergy,
+    highRequiredShareB,
+  );
+
+  const lowChild = withMockedRandom([0.4, 0.6, 0.3, 0.5], () =>
+    Cell.breed(lowParentA, lowParentB),
+  );
+  const highChild = withMockedRandom([0.4, 0.6, 0.3, 0.5], () =>
+    Cell.breed(highParentA, highParentB),
+  );
+
+  assert.ok(lowChild instanceof Cell, "low efficiency lineage should reproduce");
+  assert.ok(highChild instanceof Cell, "high efficiency lineage should reproduce");
+  approxEqual(
+    lowChild.energy,
+    (lowInvestA + lowInvestB) * lowEfficiency,
+    1e-12,
+    "low-efficiency offspring energy matches expectation",
+  );
+  approxEqual(
+    highChild.energy,
+    (highInvestA + highInvestB) * highEfficiency,
+    1e-12,
+    "high-efficiency offspring energy matches expectation",
+  );
+  assert.ok(
+    highEfficiency > lowEfficiency,
+    "gestation efficiency genes raise transfer efficiency",
+  );
+  assert.ok(
+    highChild.energy > lowChild.energy,
+    "offspring from efficient parents receive more energy",
   );
 });
 

@@ -141,6 +141,10 @@ test("resolveSimulationDefaults returns expected baseline configuration", async 
     UI_SLIDER_CONFIG.lowDiversityReproMultiplier.default,
     SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
   );
+  assert.is(
+    UI_SLIDER_CONFIG.combatTerritoryEdgeFactor.default,
+    SIMULATION_DEFAULTS.combatTerritoryEdgeFactor,
+  );
 });
 
 test("resolveSimulationDefaults coerces string boolean overrides", async () => {
@@ -151,7 +155,6 @@ test("resolveSimulationDefaults coerces string boolean overrides", async () => {
     showEnergy: "true",
     showDensity: "0",
     showFitness: "1",
-    showCelebrationAuras: "yes",
     showLifeEventMarkers: "on",
     autoPauseOnBlur: "off",
   });
@@ -161,12 +164,35 @@ test("resolveSimulationDefaults coerces string boolean overrides", async () => {
   assert.is(defaults.showEnergy, true);
   assert.is(defaults.showDensity, false);
   assert.is(defaults.showFitness, true);
-  assert.is(defaults.showCelebrationAuras, true);
   assert.is(defaults.showLifeEventMarkers, true);
   assert.is(defaults.autoPauseOnBlur, false);
 
   // Non-boolean defaults remain untouched when not overridden.
   assert.is(defaults.updatesPerSecond, SIMULATION_DEFAULTS.updatesPerSecond);
+});
+
+test("resolveSimulationDefaults keeps event frequency overrides opt-in", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+
+  const booleanOverride = resolveSimulationDefaults({
+    eventFrequencyMultiplier: true,
+  });
+
+  assert.is(
+    booleanOverride.eventFrequencyMultiplier,
+    SIMULATION_DEFAULTS.eventFrequencyMultiplier,
+    "non-numeric overrides should fall back so events stay disabled",
+  );
+
+  const negativeOverride = resolveSimulationDefaults({
+    eventFrequencyMultiplier: -2,
+  });
+
+  assert.is(
+    negativeOverride.eventFrequencyMultiplier,
+    SIMULATION_DEFAULTS.eventFrequencyMultiplier,
+    "negative overrides clamp to the baseline instead of enabling events",
+  );
 });
 
 test("resolveSimulationDefaults derives cadence from speed overrides", async () => {
@@ -216,6 +242,7 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.densityEffectMultiplier, defaults.densityEffectMultiplier);
   assert.is(uiManager.mutationMultiplier, defaults.mutationMultiplier);
   assert.is(uiManager.combatEdgeSharpness, defaults.combatEdgeSharpness);
+  assert.is(uiManager.combatTerritoryEdgeFactor, defaults.combatTerritoryEdgeFactor);
   assert.is(uiManager.matingDiversityThreshold, defaults.matingDiversityThreshold);
   assert.is(
     uiManager.lowDiversityReproMultiplier,
@@ -228,7 +255,6 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.showEnergy, defaults.showEnergy);
   assert.is(uiManager.showDensity, defaults.showDensity);
   assert.is(uiManager.showFitness, defaults.showFitness);
-  assert.is(uiManager.showCelebrationAuras, defaults.showCelebrationAuras);
   assert.is(uiManager.showLifeEventMarkers, defaults.showLifeEventMarkers);
   assert.is(uiManager.autoPauseOnBlur, defaults.autoPauseOnBlur);
 
@@ -264,11 +290,11 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     energyRegenRate: defaults.energyRegenRate,
     energyDiffusionRate: defaults.energyDiffusionRate,
     combatEdgeSharpness: defaults.combatEdgeSharpness,
+    combatTerritoryEdgeFactor: defaults.combatTerritoryEdgeFactor,
     showObstacles: defaults.showObstacles,
     showEnergy: defaults.showEnergy,
     showDensity: defaults.showDensity,
     showFitness: defaults.showFitness,
-    showCelebrationAuras: defaults.showCelebrationAuras,
     showLifeEventMarkers: defaults.showLifeEventMarkers,
     leaderboardIntervalMs: defaults.leaderboardIntervalMs,
     matingDiversityThreshold: defaults.matingDiversityThreshold,
@@ -300,19 +326,21 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.is(ui.getEnemySimilarity(), defaults.enemySimilarity);
   assert.is(ui.getEventStrengthMultiplier(), defaults.eventStrengthMultiplier);
   assert.is(ui.getCombatEdgeSharpness(), defaults.combatEdgeSharpness);
+  assert.is(ui.getCombatTerritoryEdgeFactor(), defaults.combatTerritoryEdgeFactor);
   assert.is(ui.getEnergyRegenRate(), defaults.energyRegenRate);
   assert.is(ui.getEnergyDiffusionRate(), defaults.energyDiffusionRate);
   assert.is(ui.getMatingDiversityThreshold(), defaults.matingDiversityThreshold);
   assert.is(ui.getLowDiversityReproMultiplier(), defaults.lowDiversityReproMultiplier);
   ui.setCombatEdgeSharpness(4.2);
   assert.is(ui.getCombatEdgeSharpness(), 4.2);
+  ui.setCombatTerritoryEdgeFactor(0.55);
+  assert.is(ui.getCombatTerritoryEdgeFactor(), 0.55);
   ui.setMaxConcurrentEvents(5.6);
   assert.is(ui.getMaxConcurrentEvents(), 5);
   assert.is(ui.getShowObstacles(), defaults.showObstacles);
   assert.is(ui.getShowEnergy(), defaults.showEnergy);
   assert.is(ui.getShowDensity(), defaults.showDensity);
   assert.is(ui.getShowFitness(), defaults.showFitness);
-  assert.is(ui.getShowCelebrationAuras(), defaults.showCelebrationAuras);
   assert.is(ui.getShowLifeEventMarkers(), defaults.showLifeEventMarkers);
   assert.is(ui.getAutoPauseOnBlur(), defaults.autoPauseOnBlur);
   assert.ok(ui.shouldRenderSlowUi(0));

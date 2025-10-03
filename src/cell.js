@@ -297,9 +297,41 @@ export default class Cell {
       0.05,
       0.85,
     );
-    const calculateInvestment = (parent, starvation, demandFrac) => {
-      const fracFn = parent.dna?.parentalInvestmentFrac;
-      const investFrac = typeof fracFn === "function" ? fracFn.call(parent.dna) : 0.4;
+    const efficiencyA = clamp(
+      typeof parentA.dna?.offspringEnergyTransferEfficiency === "function"
+        ? parentA.dna.offspringEnergyTransferEfficiency()
+        : 0.85,
+      0.1,
+      1,
+    );
+    const efficiencyB = clamp(
+      typeof parentB.dna?.offspringEnergyTransferEfficiency === "function"
+        ? parentB.dna.offspringEnergyTransferEfficiency()
+        : 0.85,
+      0.1,
+      1,
+    );
+    const transferEfficiency = clamp((efficiencyA + efficiencyB) / 2, 0.1, 1);
+    const viabilityThreshold =
+      resolvedMaxTileEnergy * Math.max(demandFracA, demandFracB); // honor the pickier parent's viability floor
+    const minimumTransfer = Math.max(transferEfficiency, 1e-6);
+    const requiredTotalInvestment = viabilityThreshold / minimumTransfer;
+    const fracFnA = parentA.dna?.parentalInvestmentFrac;
+    const fracFnB = parentB.dna?.parentalInvestmentFrac;
+    const investFracA = typeof fracFnA === "function" ? fracFnA.call(parentA.dna) : 0.4;
+    const investFracB = typeof fracFnB === "function" ? fracFnB.call(parentB.dna) : 0.4;
+    const weightSum = Math.max(1e-6, Math.abs(investFracA) + Math.abs(investFracB));
+    const requiredShareA =
+      requiredTotalInvestment * (Math.abs(investFracA) / weightSum);
+    const requiredShareB =
+      requiredTotalInvestment * (Math.abs(investFracB) / weightSum);
+    const calculateInvestment = (
+      parent,
+      starvation,
+      demandFrac,
+      investFrac,
+      requiredShare,
+    ) => {
       const desiredBase = Math.max(
         0,
         Math.min(parent.energy, parent.energy * investFrac),
@@ -307,21 +339,32 @@ export default class Cell {
       const targetEnergy =
         resolvedMaxTileEnergy *
         clamp(Number.isFinite(demandFrac) ? demandFrac : 0.22, 0, 1);
-      const desired = Math.max(desiredBase, targetEnergy);
+      const desired = Math.max(desiredBase, targetEnergy, requiredShare);
       const maxSpend = Math.max(0, parent.energy - starvation);
 
       return Math.min(desired, maxSpend);
     };
     const starvationA = parentA.starvationThreshold(resolvedMaxTileEnergy);
     const starvationB = parentB.starvationThreshold(resolvedMaxTileEnergy);
-    const investA = calculateInvestment(parentA, starvationA, demandFracA);
-    const investB = calculateInvestment(parentB, starvationB, demandFracB);
+    const investA = calculateInvestment(
+      parentA,
+      starvationA,
+      demandFracA,
+      investFracA,
+      requiredShareA,
+    );
+    const investB = calculateInvestment(
+      parentB,
+      starvationB,
+      demandFracB,
+      investFracB,
+      requiredShareB,
+    );
 
     if (investA <= 0 || investB <= 0) return null;
 
-    const offspringEnergy = investA + investB;
-    const viabilityThreshold =
-      resolvedMaxTileEnergy * Math.max(demandFracA, demandFracB); // honor the pickier parent's viability floor
+    const totalInvestment = investA + investB;
+    const offspringEnergy = totalInvestment * transferEfficiency;
 
     if (offspringEnergy + EPSILON < viabilityThreshold) {
       return null;
@@ -507,8 +550,14 @@ export default class Cell {
       0,
       1,
     );
+    const { probability } = this.#blendReproductionProbability({
+      baseProbability: baseProb,
+      neuralProbability: acceptProb,
+      sensors,
+      evaluation: preview,
+    });
 
-    return clamp((baseProb + acceptProb) / 2, 0, 1);
+    return probability;
   }
 
   scorePotentialMates(potentialMates = [], context = {}) {
@@ -2557,6 +2606,176 @@ export default class Cell {
     };
   }
 
+  #resolveReproductionNeuralBlend({
+    baseProbability = 0,
+    neuralProbability = 0,
+    sensors = {},
+    evaluation = null,
+  } = {}) {
+    const geneFraction = (locus, fallback = 0.5) => {
+      if (typeof this.dna?.geneFraction === "function") {
+        const value = this.dna.geneFraction(locus);
+
+        if (Number.isFinite(value)) {
+          return clamp(value, 0, 1);
+        }
+      }
+
+      return clamp(fallback, 0, 1);
+    };
+    const reinforcement = this.neuralReinforcementProfile || {};
+    const plasticity = this.neuralPlasticityProfile || {};
+    const neuralGene = geneFraction(GENE_LOCI.NEURAL);
+    const strategyGene = geneFraction(GENE_LOCI.STRATEGY);
+    const fertilityGene = geneFraction(GENE_LOCI.FERTILITY);
+    const parentalGene = geneFraction(GENE_LOCI.PARENTAL);
+    const reinforcementWeight = clamp(
+      Number.isFinite(reinforcement.reproductionWeight)
+        ? reinforcement.reproductionWeight
+        : 0.4,
+      0.05,
+      1.1,
+    );
+    const reinforcementSignal = reinforcementWeight / 1.1;
+    let weight =
+      0.2 +
+      neuralGene * 0.2 +
+      strategyGene * 0.12 +
+      fertilityGene * 0.1 +
+      parentalGene * 0.08 +
+      reinforcementSignal * 0.3;
+
+    weight = clamp(weight, 0.12, 0.88);
+
+    const evaluationActivation = Number.isFinite(evaluation?.activationCount)
+      ? evaluation.activationCount
+      : 0;
+    const neuronBase =
+      Number.isFinite(this.neurons) && this.neurons > 0 ? this.neurons : 24;
+    const normalizedActivation = clamp(
+      evaluationActivation / Math.max(1, neuronBase),
+      0,
+      1,
+    );
+
+    if (normalizedActivation > 0) {
+      weight *= 1 + normalizedActivation * 0.3;
+    }
+
+    const resolvedSensors = sensors && typeof sensors === "object" ? sensors : {};
+    const neuralFatigue = clamp(
+      Number.isFinite(resolvedSensors.neuralFatigue)
+        ? resolvedSensors.neuralFatigue
+        : this.#currentNeuralFatigue(),
+      0,
+      1,
+    );
+    const fatiguePenalty = clamp(
+      1 - neuralFatigue * (0.45 - 0.15 * neuralGene),
+      0.25,
+      1,
+    );
+
+    weight *= fatiguePenalty;
+
+    const scarcityMemory = clamp(
+      Number.isFinite(resolvedSensors.scarcityMemory)
+        ? resolvedSensors.scarcityMemory
+        : 0,
+      -1,
+      1,
+    );
+
+    if (scarcityMemory > 0) {
+      weight *= clamp(
+        1 - scarcityMemory * (0.25 + 0.15 * (1 - fertilityGene)),
+        0.35,
+        1,
+      );
+    } else if (scarcityMemory < 0) {
+      weight *= 1 + -scarcityMemory * 0.08 * fertilityGene;
+    }
+
+    const confidenceMemory = clamp(
+      Number.isFinite(resolvedSensors.confidenceMemory)
+        ? resolvedSensors.confidenceMemory
+        : 0,
+      -1,
+      1,
+    );
+
+    weight *= clamp(1 + confidenceMemory * 0.18, 0.65, 1.45);
+
+    const opportunitySignal = clamp(
+      Number.isFinite(resolvedSensors.opportunitySignal)
+        ? resolvedSensors.opportunitySignal
+        : this.#currentOpportunitySignal(),
+      -1,
+      1,
+    );
+
+    weight *= clamp(1 + opportunitySignal * (0.2 + 0.1 * strategyGene), 0.5, 1.6);
+
+    const resourceTrend = clamp(
+      Number.isFinite(resolvedSensors.resourceTrend)
+        ? resolvedSensors.resourceTrend
+        : 0,
+      -1,
+      1,
+    );
+
+    if (resourceTrend < 0) {
+      weight *= 1 - Math.abs(resourceTrend) * 0.18;
+    }
+
+    const assimilation = clamp(
+      Number.isFinite(plasticity.learningRate) ? plasticity.learningRate * 0.8 : 0.18,
+      0.05,
+      0.6,
+    );
+    const neuralDelta = clamp(neuralProbability - baseProbability, -1, 1);
+
+    if (neuralDelta > 0) {
+      weight += neuralDelta * assimilation * (0.5 + confidenceMemory * 0.2);
+    } else if (neuralDelta < 0) {
+      const scarcityPenalty = 0.3 + clamp(scarcityMemory, 0, 1) * 0.2;
+
+      weight += neuralDelta * assimilation * scarcityPenalty;
+    }
+
+    weight = clamp(weight, 0.05, 0.95);
+
+    return { weight, neuralDelta };
+  }
+
+  #blendReproductionProbability({
+    baseProbability = 0,
+    neuralProbability = 0,
+    sensors = {},
+    evaluation = null,
+  } = {}) {
+    const safeBase = clamp(
+      Number.isFinite(baseProbability) ? baseProbability : 0,
+      0,
+      1,
+    );
+    const safeNeural = clamp(
+      Number.isFinite(neuralProbability) ? neuralProbability : 0,
+      0,
+      1,
+    );
+    const resolvedSensors = sensors && typeof sensors === "object" ? sensors : {};
+    const { weight, neuralDelta } = this.#resolveReproductionNeuralBlend({
+      baseProbability: safeBase,
+      neuralProbability: safeNeural,
+      sensors: resolvedSensors,
+      evaluation,
+    });
+    const probability = clamp(safeBase * (1 - weight) + safeNeural * weight, 0, 1);
+
+    return { probability, weight, neuralDelta };
+  }
+
   #targetingSensors(enemies = [], { maxTileEnergy = MAX_TILE_ENERGY } = {}) {
     const energyCap = maxTileEnergy > 0 ? maxTileEnergy : MAX_TILE_ENERGY || 1;
     const resolvedEnemies = Array.isArray(enemies) ? enemies : [];
@@ -3646,6 +3865,87 @@ export default class Cell {
     return clamp(reach, minReach, maxReach);
   }
 
+  populationScarcityDrive({
+    scarcity = 0,
+    baseProbability = 0.5,
+    partner = null,
+    population = 0,
+    minPopulation = 0,
+  } = {}) {
+    const scarcityClamped = clamp(Number.isFinite(scarcity) ? scarcity : 0, 0, 1);
+
+    if (scarcityClamped <= 0) {
+      return 1;
+    }
+
+    const baseProb = clamp(
+      Number.isFinite(baseProbability) ? baseProbability : 0.5,
+      0,
+      1,
+    );
+    const fertility =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.FERTILITY)
+        : 0.5;
+    const parental =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.PARENTAL)
+        : 0.5;
+    const cohesion =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.COHESION)
+        : 0.5;
+    const exploration =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.EXPLORATION)
+        : 0.5;
+    const risk =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.RISK)
+        : 0.5;
+    const partnerSupport =
+      partner && typeof partner?.dna?.geneFraction === "function"
+        ? clamp(
+            0.25 +
+              0.3 * partner.dna.geneFraction(GENE_LOCI.PARENTAL) +
+              0.2 * partner.dna.geneFraction(GENE_LOCI.COHESION),
+            0.1,
+            0.95,
+          )
+        : 0.35;
+
+    const cooperativePull = clamp(
+      0.35 + 0.4 * cohesion + 0.25 * parental + partnerSupport * 0.3,
+      0.25,
+      1.2,
+    );
+    const fertilityDrive = clamp(0.3 + 0.5 * fertility, 0.2, 1.1);
+    const explorationPush = clamp(0.2 + 0.45 * exploration, 0.1, 0.85);
+    const deficitBoost = (() => {
+      const popCount = Number.isFinite(population) ? population : 0;
+      const minPop =
+        Number.isFinite(minPopulation) && minPopulation > 0 ? minPopulation : 0;
+
+      if (minPop <= 0) {
+        return 1;
+      }
+
+      const deficit = clamp((minPop - popCount) / minPop, 0, 1);
+
+      return 0.75 + deficit * 0.5;
+    })();
+
+    const scarcityImpulse = scarcityClamped * (0.4 + (1 - baseProb) * 0.6);
+    const urgency =
+      scarcityImpulse *
+      deficitBoost *
+      (cooperativePull * 0.6 + fertilityDrive * 0.25 + explorationPush * 0.15);
+    const caution = clamp(0.35 + (1 - risk) * 0.55, 0.2, 0.9);
+    const eagerness = clamp(urgency * (1 - caution), -0.35, 1.25);
+
+    return clamp(1 + eagerness, 0.5, 1.9);
+  }
+
   computeReproductionProbability(
     partner,
     {
@@ -3769,23 +4069,39 @@ export default class Cell {
       tileEnergy,
       tileEnergyDelta,
     });
-    const values = this.#evaluateBrainGroup("reproduction", sensors);
+    const outputs = this.#evaluateBrainGroup("reproduction", sensors);
 
-    if (!values) {
+    if (!outputs) {
       return { probability: baseProbability, usedNetwork: false };
     }
 
     const entries = OUTPUT_GROUPS.reproduction;
-    const logits = entries.map(({ key }) => values[key] ?? 0);
+    const logits = entries.map(({ key }) => outputs[key] ?? 0);
     const probs = softmax(logits);
     const acceptIndex = entries.findIndex((entry) => entry.key === "accept");
     const yes = acceptIndex >= 0 ? clamp(probs[acceptIndex] ?? 0, 0, 1) : 0;
-    const probability = clamp((baseProbability + yes) / 2, 0, 1);
+    const evaluation =
+      this.brain?.lastEvaluation?.group === "reproduction"
+        ? this.brain.lastEvaluation
+        : null;
+    const {
+      probability,
+      weight: neuralBlendWeight,
+      neuralDelta,
+    } = this.#blendReproductionProbability({
+      baseProbability,
+      neuralProbability: yes,
+      sensors,
+      evaluation,
+    });
 
     this.#assignDecisionOutcome("reproduction", {
       probability,
       usedNetwork: true,
       baseProbability,
+      neuralProbability: yes,
+      neuralBlendWeight,
+      neuralDelta,
       logits: entries.reduce((acc, { key }, idx) => {
         acc[key] = logits[idx] ?? 0;
 

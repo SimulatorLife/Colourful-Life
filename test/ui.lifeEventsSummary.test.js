@@ -110,3 +110,135 @@ test("life event summary reflects rate window totals", async () => {
     restore();
   }
 });
+
+test("life event death breakdown surfaces leading causes", async () => {
+  const restore = setupDom();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        getCellSize: () => 5,
+      },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    const events = [
+      { type: "death", tick: 200, cause: "starvation" },
+      { type: "birth", tick: 201 },
+      { type: "death", tick: 202, cause: "combat" },
+    ];
+
+    const rateSummary = {
+      births: 4,
+      deaths: 12,
+      net: -8,
+      total: 16,
+      window: 120,
+      eventsPer100Ticks: 10.2,
+      birthsPer100Ticks: 3.4,
+      deathsPer100Ticks: 6.8,
+    };
+
+    const stats = {
+      totals: { fights: 0, cooperations: 0 },
+      history: {
+        population: [],
+        diversity: [],
+        energy: [],
+        growth: [],
+        eventStrength: [],
+        mutationMultiplier: [],
+        diversePairingRate: [],
+        meanDiversityAppetite: [],
+      },
+      traitPresence: {
+        population: 0,
+        counts: { cooperation: 0, fighting: 0, breeding: 0, sight: 0 },
+        fractions: { cooperation: 0, fighting: 0, breeding: 0, sight: 0 },
+      },
+      traitHistory: {},
+      deathBreakdown: {
+        starvation: 5,
+        obstacle: 3,
+        combat: 2,
+        reproduction: 1,
+        seed: 1,
+      },
+      getRecentLifeEvents: () => events,
+      getLifeEventRateSummary: () => rateSummary,
+    };
+
+    const snapshot = {
+      population: 80,
+      births: 2,
+      deaths: 3,
+      growth: -1,
+      mutationMultiplier: 1,
+      meanEnergy: 2.1,
+      meanAge: 8.5,
+      diversity: 0.31,
+      blockedMatings: 0,
+      lastBlockedReproduction: null,
+      mateChoices: 2,
+      successfulMatings: 1,
+      diverseChoiceRate: 0.25,
+      diverseMatingRate: 0.5,
+      meanDiversityAppetite: 0.4,
+      curiositySelections: 1,
+      behaviorEvenness: 0.4,
+    };
+
+    uiManager.renderMetrics(stats, snapshot, {
+      eventStrengthMultiplier: 1,
+      activeEvents: [],
+    });
+
+    assert.ok(uiManager.deathBreakdownList, "death breakdown list should be available");
+    assert.equal(
+      uiManager.deathBreakdownList.hidden,
+      false,
+      "death breakdown should be visible when counts are supplied",
+    );
+    const items = uiManager.deathBreakdownList.querySelectorAll(
+      ".death-breakdown-item",
+    );
+
+    assert.equal(
+      items.length,
+      5,
+      "should render top causes plus an 'Other causes' bucket",
+    );
+    const topLabel = items[0]?.querySelector(".death-breakdown-label")?.textContent;
+
+    assert.is(topLabel, "Starvation", "highest death cause should surface first");
+
+    const otherLabel = items[items.length - 1]?.querySelector(
+      ".death-breakdown-label",
+    )?.textContent;
+
+    assert.is(
+      otherLabel,
+      "Other causes",
+      "remaining categories should collapse into an 'Other' row",
+    );
+
+    const meter = items[0]?.querySelector(".death-breakdown-meter");
+
+    assert.is(
+      meter?.getAttribute("aria-valuenow"),
+      "0.42",
+      "aria-valuenow should reflect share of deaths for the top cause",
+    );
+  } finally {
+    restore();
+  }
+});

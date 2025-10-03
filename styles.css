@@ -14,6 +14,22 @@
   --color-life-death-soft: rgba(231, 76, 60, 0.25);
   --color-life-birth-strong: rgba(76, 175, 80, 0.35);
   --color-life-death-strong: rgba(231, 76, 60, 0.35);
+  --color-metric-population: #4c9dff;
+  --color-metric-diversity: #ff8c68;
+  --color-metric-energy: #55efc4;
+  --color-metric-growth: #f5c669;
+  --color-metric-event-strength: #b786ff;
+  --color-metric-mutation: #ff6fb1;
+  --color-metric-diverse-pairing: #76d6ff;
+  --color-metric-diversity-appetite: #7edc8c;
+  --color-trait-cooperation-presence: #74b9ff;
+  --color-trait-cooperation-intensity: #a0c4ff;
+  --color-trait-fighting-presence: #ff7675;
+  --color-trait-fighting-intensity: #ff9aa2;
+  --color-trait-breeding-presence: #f6c177;
+  --color-trait-breeding-intensity: #fcd29f;
+  --color-trait-sight-presence: #55efc4;
+  --color-trait-sight-intensity: #81f4d0;
 
   /* Radius */
   --radius-sm: 4px;
@@ -586,6 +602,11 @@ canvas {
   gap: var(--space-md);
 }
 
+.leaderboard-entries {
+  display: grid;
+  gap: var(--space-md);
+}
+
 .leaderboard-entry {
   --leaderboard-entry-color: transparent;
   display: grid;
@@ -860,6 +881,80 @@ canvas {
   border-style: dashed;
   border-color: var(--color-border);
   box-shadow: none;
+}
+
+.life-events-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+}
+
+.life-events-breakdown__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.life-events-breakdown__hint {
+  margin: 0;
+}
+
+.death-breakdown-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.death-breakdown-item {
+  display: grid;
+  gap: 6px;
+}
+
+.death-breakdown-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.death-breakdown-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.death-breakdown-value {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.death-breakdown-meter {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.death-breakdown-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-life-death);
+  transition: width 200ms ease;
+}
+
+.death-breakdown-empty {
+  margin: 0;
 }
 
 .life-event-empty {
@@ -1156,21 +1251,72 @@ canvas {
 .sparkline-grid {
   display: grid;
   gap: var(--space-md);
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: stretch;
   margin-top: var(--space-md);
-  grid-auto-rows: 1fr;
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+.sparkline-grid--traits {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .sparkline-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  padding: var(--space-sm);
+  padding: var(--space-md);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-accent);
   min-height: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.sparkline-card--trait {
+  gap: var(--space-md);
+  background: var(--color-surface);
+}
+
+.sparkline-trait-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.sparkline-trait-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.sparkline-trait-context {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-subtle);
+}
+
+.sparkline-trait-row {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.sparkline-trait-row--separated {
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.sparkline-caption--trait {
+  justify-content: flex-start;
+}
+
+.sparkline-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  line-height: 1.5;
 }
 
 .sparkline-caption {
@@ -1198,7 +1344,7 @@ canvas {
 
 .sparkline {
   width: 100%;
-  height: auto;
+  height: 48px;
   display: block;
   margin: 0;
   box-sizing: border-box;
@@ -1206,4 +1352,10 @@ canvas {
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   flex: 1 1 auto;
+}
+
+.sparkline--trait {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.02);
 }

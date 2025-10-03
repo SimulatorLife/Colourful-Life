@@ -97,55 +97,40 @@ export function sanitizeNumber(
 }
 
 /**
- * Converts an arbitrary value to a finite `number` or returns the provided
- * fallback when the conversion fails. Useful when normalizing configuration
- * options that may arrive as strings, BigInts, or other primitives.
- *
- * @param {any} value - Candidate value supplied by callers.
- * @param {{fallback?: any}} [options]
- * @param {any} [options.fallback=null] - Value returned when conversion fails.
- * @returns {number|any} Finite number or the fallback when invalid.
- */
-export function toFiniteNumber(value, { fallback = null } = {}) {
-  if (value == null) return fallback;
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : fallback;
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-
-    if (trimmed.length === 0) return fallback;
-
-    const parsed = Number.parseFloat(trimmed);
-
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-
-  if (typeof value === "bigint") {
-    const numeric = Number(value);
-
-    return Number.isFinite(numeric) ? numeric : fallback;
-  }
-
-  const numeric = Number(value);
-
-  return Number.isFinite(numeric) ? numeric : fallback;
-}
-
-/**
- * Convenience wrapper around {@link toFiniteNumber} that normalizes values to a
- * finite number or `null`. Useful when callers simply need to discard invalid
- * inputs without repeatedly specifying the `{ fallback: null }` pattern.
+ * Converts an arbitrary value to a finite `number` or `null` when conversion
+ * fails. Useful when callers need to discard invalid inputs such as `NaN`,
+ * infinities, empty strings, or non-numeric primitives before applying further
+ * normalization.
  *
  * @param {any} value - Candidate value supplied by callers.
  * @returns {number|null} Finite number or `null` when conversion fails.
  */
 export function toFiniteOrNull(value) {
-  const numeric = toFiniteNumber(value, { fallback: null });
+  if (value == null) return null;
 
-  return numeric == null ? null : numeric;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+
+    if (trimmed.length === 0) return null;
+
+    const parsed = Number.parseFloat(trimmed);
+
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (typeof value === "bigint") {
+    const numeric = Number(value);
+
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  const numeric = Number(value);
+
+  return Number.isFinite(numeric) ? numeric : null;
 }
 
 /**
@@ -197,20 +182,22 @@ export function cloneTracePayload(trace) {
  * @returns {{add:Function,getItems:Function}} Ranked buffer helpers.
  */
 export function createRankedBuffer(limit, compare) {
-  const maxSize = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
+  // Sanitize the caller-provided limit so we never grow beyond a non-negative integer.
+  const capacity = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
   const comparator = typeof compare === "function" ? compare : () => 0;
-  const buffer = [];
+  const entries = [];
 
   return {
     add(entry) {
-      if (entry == null || maxSize === 0) return;
+      if (entry == null || capacity === 0) return;
 
       let low = 0;
-      let high = buffer.length;
+      let high = entries.length;
 
+      // Binary-search insertion keeps the collection sorted without re-sorting after each push.
       while (low < high) {
         const mid = (low + high) >> 1;
-        const comparison = comparator(entry, buffer[mid]);
+        const comparison = comparator(entry, entries[mid]);
 
         if (comparison < 0) {
           high = mid;
@@ -219,16 +206,18 @@ export function createRankedBuffer(limit, compare) {
         }
       }
 
-      if (low >= maxSize && buffer.length >= maxSize) return;
+      const insertionIndex = low;
 
-      buffer.splice(low, 0, entry);
+      if (insertionIndex >= capacity && entries.length >= capacity) return;
 
-      if (buffer.length > maxSize) {
-        buffer.length = maxSize;
+      entries.splice(insertionIndex, 0, entry);
+
+      if (entries.length > capacity) {
+        entries.length = capacity;
       }
     },
     getItems() {
-      return buffer.slice();
+      return entries.slice();
     },
   };
 }
@@ -264,6 +253,15 @@ export function createRNG(seed) {
 const warnedMessages = new Set();
 const reportedErrors = new Set();
 
+function logWithOptionalError(method, message, error) {
+  const consoleRef = globalThis.console;
+  const logger = consoleRef?.[method];
+
+  if (typeof logger !== "function") return;
+
+  logger.call(consoleRef, message, ...(error ? [error] : []));
+}
+
 /**
  * Reports an error to the console with an optional deduplication toggle so
  * recoverable failures can surface diagnostic details without spamming logs.
@@ -284,13 +282,7 @@ export function reportError(message, error, options = {}) {
     reportedErrors.add(errorKey);
   }
 
-  if (typeof console !== "undefined" && typeof console.error === "function") {
-    if (error) {
-      console.error(message, error);
-    } else {
-      console.error(message);
-    }
-  }
+  logWithOptionalError("error", message, error);
 }
 
 /**
@@ -310,11 +302,5 @@ export function warnOnce(message, error) {
   if (warnedMessages.has(warningKey)) return;
   warnedMessages.add(warningKey);
 
-  if (typeof console !== "undefined" && typeof console.warn === "function") {
-    if (error) {
-      console.warn(message, error);
-    } else {
-      console.warn(message);
-    }
-  }
+  logWithOptionalError("warn", message, error);
 }

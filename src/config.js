@@ -1,7 +1,14 @@
+import { sanitizeNumber } from "./utils.js";
+
 // Centralized simulation config defaults
 const DEFAULT_MAX_TILE_ENERGY = 6;
-const DEFAULT_REGEN_DENSITY_PENALTY = 0.5;
+// Relaxed slightly from 0.5 after a dense-tile probe (energy 2.4, density 0.85)
+// showed regeneration recovering ~7% more energy per tick (0.0036 → 0.0039).
+// The softer clamp cushions high-traffic hubs without eliminating the density
+// pressure that keeps sparse foragers advantaged.
+const DEFAULT_REGEN_DENSITY_PENALTY = 0.45;
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.5;
+const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Slightly calmer baseline keeps resting viable when resources tighten.
 const DEFAULT_ACTIVITY_BASE_RATE = 0.28;
@@ -39,6 +46,7 @@ export const ENERGY_REGEN_RATE_DEFAULT = 0.0105;
 export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.06; // smoothing between tiles (per tick)
 export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
+export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();
 
 /**
  * Resolves the density penalty applied during tile regeneration. Allows
@@ -96,6 +104,21 @@ export function resolveConsumptionDensityPenalty(env = RUNTIME_ENV) {
  * overrides from destabilizing tests or overlays.
  */
 export const CONSUMPTION_DENSITY_PENALTY = resolveConsumptionDensityPenalty(); // 1 - penalty * density
+
+export function resolveCombatTerritoryEdgeFactor(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR;
+  const parsed = Number.parseFloat(raw);
+
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR;
+  }
+
+  return sanitizeNumber(parsed, {
+    fallback: DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR,
+    min: 0,
+    max: 1,
+  });
+}
 
 /**
  * Resolves the minimum normalized trait value required for stats to count an
@@ -209,11 +232,11 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   energyRegenRate: ENERGY_REGEN_RATE_DEFAULT,
   energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
   combatEdgeSharpness: COMBAT_EDGE_SHARPNESS_DEFAULT,
+  combatTerritoryEdgeFactor: COMBAT_TERRITORY_EDGE_FACTOR,
   showObstacles: true,
   showEnergy: false,
   showDensity: false,
   showFitness: false,
-  showCelebrationAuras: false,
   showLifeEventMarkers: false,
   leaderboardIntervalMs: 750,
   // Lowered from 0.45 after a 300-tick headless sample (60x60 grid, RNG seed
@@ -238,7 +261,6 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showEnergy",
   "showDensity",
   "showFitness",
-  "showCelebrationAuras",
   "showLifeEventMarkers",
   "autoPauseOnBlur",
 ]);
@@ -302,6 +324,18 @@ export function resolveSimulationDefaults(overrides = {}) {
 
   for (const key of BOOLEAN_DEFAULT_KEYS) {
     merged[key] = coerceBoolean(merged[key], defaults[key]);
+  }
+
+  if (
+    typeof merged.eventFrequencyMultiplier === "number" ||
+    typeof merged.eventFrequencyMultiplier === "string"
+  ) {
+    merged.eventFrequencyMultiplier = sanitizeNumber(merged.eventFrequencyMultiplier, {
+      fallback: defaults.eventFrequencyMultiplier,
+      min: 0,
+    });
+  } else {
+    merged.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
   }
 
   const concurrencyValue = Number(merged.maxConcurrentEvents);

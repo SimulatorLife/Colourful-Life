@@ -1,5 +1,5 @@
 import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
-import { sanitizeNumber } from "../utils.js";
+import { reportError, sanitizeNumber } from "../utils.js";
 
 /**
  * Creates a lightweight {@link UIManager}-compatible adapter for environments
@@ -29,13 +29,13 @@ import { sanitizeNumber } from "../utils.js";
  * @param {number} [options.energyRegenRate] Baseline energy regeneration.
  * @param {number} [options.energyDiffusionRate] Ambient energy spread.
  * @param {number} [options.combatEdgeSharpness] Sharpness multiplier for combat odds.
+ * @param {number} [options.combatTerritoryEdgeFactor] Territory influence multiplier for combat odds.
  * @param {number} [options.matingDiversityThreshold] Genetic similarity tolerance for mating.
  * @param {number} [options.lowDiversityReproMultiplier] Reproduction multiplier applied when diversity is low.
  * @param {boolean} [options.showObstacles] Whether obstacle overlays are shown.
  * @param {boolean} [options.showEnergy] Whether energy overlays are shown.
  * @param {boolean} [options.showDensity] Whether population density overlays are shown.
  * @param {boolean} [options.showFitness] Whether fitness overlays are shown.
- * @param {boolean} [options.showCelebrationAuras] Whether celebration glow overlays are shown.
  * @param {number} [options.leaderboardIntervalMs] Minimum time between leaderboard updates.
  * @param {Object} [options.selectionManager=null] Shared selection manager instance.
  * @returns {{
@@ -97,8 +97,18 @@ export function createHeadlessUiManager(options = {}) {
     return true;
   };
   const notify = (key, value) => {
-    if (typeof onSettingChange === "function") {
+    if (typeof onSettingChange !== "function") {
+      return;
+    }
+
+    try {
       onSettingChange(key, value);
+    } catch (error) {
+      reportError(
+        `Headless UI onSettingChange handler threw while processing "${key}"; continuing without interruption.`,
+        error,
+        { once: true },
+      );
     }
   };
 
@@ -117,6 +127,11 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getEventFrequencyMultiplier: () => settings.eventFrequencyMultiplier,
+    setEventFrequencyMultiplier: (value) => {
+      if (updateIfFinite("eventFrequencyMultiplier", value, { min: 0 })) {
+        notify("eventFrequencyMultiplier", settings.eventFrequencyMultiplier);
+      }
+    },
     getMaxConcurrentEvents: () => settings.maxConcurrentEvents,
     getMutationMultiplier: () => settings.mutationMultiplier,
     getDensityEffectMultiplier: () => settings.densityEffectMultiplier,
@@ -124,6 +139,7 @@ export function createHeadlessUiManager(options = {}) {
     getEnemySimilarity: () => settings.enemySimilarity,
     getEventStrengthMultiplier: () => settings.eventStrengthMultiplier,
     getCombatEdgeSharpness: () => settings.combatEdgeSharpness,
+    getCombatTerritoryEdgeFactor: () => settings.combatTerritoryEdgeFactor,
     getEnergyRegenRate: () => settings.energyRegenRate,
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
     getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
@@ -143,6 +159,11 @@ export function createHeadlessUiManager(options = {}) {
         notify("combatEdgeSharpness", settings.combatEdgeSharpness);
       }
     },
+    setCombatTerritoryEdgeFactor: (value) => {
+      if (updateIfFinite("combatTerritoryEdgeFactor", value, { min: 0, max: 1 })) {
+        notify("combatTerritoryEdgeFactor", settings.combatTerritoryEdgeFactor);
+      }
+    },
     setMaxConcurrentEvents: (value) => {
       if (
         updateIfFinite("maxConcurrentEvents", value, {
@@ -157,7 +178,6 @@ export function createHeadlessUiManager(options = {}) {
     getShowEnergy: () => settings.showEnergy,
     getShowDensity: () => settings.showDensity,
     getShowFitness: () => settings.showFitness,
-    getShowCelebrationAuras: () => settings.showCelebrationAuras,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
     shouldRenderSlowUi: (timestamp) => {
       if (!Number.isFinite(timestamp)) return false;

@@ -8,7 +8,7 @@ import {
   createSelectRow,
   createSliderRow,
 } from "./controlBuilders.js";
-import { clamp, clamp01, warnOnce, toPlainObject } from "../utils.js";
+import { clamp, clamp01, reportError, warnOnce, toPlainObject } from "../utils.js";
 
 const AUTO_PAUSE_DESCRIPTION =
   "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
@@ -18,6 +18,22 @@ const GRID_GEOMETRY_BOUNDS = Object.freeze({
   rows: Object.freeze({ min: 40, max: 240, step: 1 }),
   cols: Object.freeze({ min: 40, max: 240, step: 1 }),
 });
+
+const DEATH_CAUSE_COLOR_MAP = Object.freeze({
+  starvation: "#f6c344",
+  combat: "#ff6b6b",
+  senescence: "#a0aec0",
+  reproduction: "#ff9f43",
+  obstacle: "#74b9ff",
+  seed: "#a29bfe",
+  "energy-collapse": "#45aaf2",
+  unknown: "#e74c3c",
+});
+
+// Default number of death causes surfaced before collapsing the remainder into
+// an "Other" bucket. Consumers can override via `ui.layout.deathBreakdownMaxEntries`.
+const DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES = 4;
+const DEATH_BREAKDOWN_OTHER_COLOR = "rgba(255, 255, 255, 0.28)";
 
 /**
  * Formats numeric values that may occasionally be non-finite. When the value
@@ -97,14 +113,23 @@ export default class UIManager {
     this.lifeEventsSummaryTrend = null;
     this.lifeEventsSummaryNet = null;
     this.lifeEventsSummaryRate = null;
+    this.deathBreakdownList = null;
+    this.deathBreakdownEmptyState = null;
+    this.sparkMetricDescriptors = [];
+    this.traitSparkDescriptors = [];
     this.playbackSpeedSlider = null;
     this.speedPresetButtons = [];
     this.pauseOverlay = null;
     this.pauseOverlayTitle = null;
     this.pauseOverlayHint = null;
     this.pauseOverlayAutopause = null;
+    this.leaderBody = null;
+    this.leaderEntriesContainer = null;
     this.stepHotkeySet = new Set();
     this.geometryControls = null;
+    this.deathBreakdownMaxEntries = this.#resolveDeathBreakdownLimit(
+      layoutConfig.deathBreakdownMaxEntries,
+    );
 
     const initialDimensions = this.#readGridDimensions();
 
@@ -136,6 +161,7 @@ export default class UIManager {
     this.densityEffectMultiplier = defaults.densityEffectMultiplier;
     this.mutationMultiplier = defaults.mutationMultiplier;
     this.combatEdgeSharpness = defaults.combatEdgeSharpness;
+    this.combatTerritoryEdgeFactor = defaults.combatTerritoryEdgeFactor;
     this.matingDiversityThreshold = defaults.matingDiversityThreshold;
     this.lowDiversityReproMultiplier = defaults.lowDiversityReproMultiplier;
     this.lowDiversitySlider = null;
@@ -148,7 +174,6 @@ export default class UIManager {
     this.showEnergy = defaults.showEnergy;
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
-    this.showCelebrationAuras = defaults.showCelebrationAuras;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
@@ -274,6 +299,38 @@ export default class UIManager {
       .filter((value) => value.length > 0);
 
     return new Set(normalized.length > 0 ? normalized : normalizedFallback);
+  }
+
+  #resolveDeathBreakdownLimit(candidate) {
+    const numeric = Number(candidate);
+
+    if (!Number.isFinite(numeric)) {
+      return DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES;
+    }
+
+    const floored = Math.floor(numeric);
+
+    return floored > 0 ? floored : DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES;
+  }
+
+  #resolveCssColor(variableName, fallbackColor) {
+    if (typeof variableName !== "string" || variableName.length === 0) {
+      return fallbackColor;
+    }
+
+    try {
+      const root = document?.documentElement;
+
+      if (!root) return fallbackColor;
+
+      const value = getComputedStyle(root).getPropertyValue(variableName).trim();
+
+      return value || fallbackColor;
+    } catch (error) {
+      warnOnce("Failed to resolve CSS variable color", error);
+
+      return fallbackColor;
+    }
   }
 
   #shouldIgnoreHotkey(event) {
@@ -790,6 +847,22 @@ export default class UIManager {
     }
   }
 
+  #updatePauseButtonState() {
+    if (!this.pauseButton) return;
+
+    const hotkeyLabel = this.#formatPauseHotkeys();
+    const isPaused = this.paused;
+    const actionLabel = isPaused ? "Resume" : "Pause";
+    const description = isPaused ? "Resume the simulation" : "Pause the simulation";
+    const hotkeySuffix = hotkeyLabel.length > 0 ? ` Shortcut: ${hotkeyLabel}.` : "";
+    const announcement = `${description}.${hotkeySuffix}`.trim();
+
+    this.pauseButton.textContent = actionLabel;
+    this.pauseButton.setAttribute("aria-pressed", isPaused ? "true" : "false");
+    this.pauseButton.setAttribute("aria-label", announcement);
+    this.pauseButton.title = announcement;
+  }
+
   #updateStepButtonState() {
     if (!this.stepButton) return;
 
@@ -887,8 +960,20 @@ export default class UIManager {
   }
 
   #notifySettingChange(key, value) {
-    if (typeof this.simulationCallbacks?.onSettingChange === "function") {
-      this.simulationCallbacks.onSettingChange(key, value);
+    const callback = this.simulationCallbacks?.onSettingChange;
+
+    if (typeof callback !== "function") {
+      return;
+    }
+
+    try {
+      callback(key, value);
+    } catch (error) {
+      reportError(
+        `UI onSettingChange callback threw while processing "${key}"; continuing without interruption.`,
+        error,
+        { once: true },
+      );
     }
   }
 
@@ -909,6 +994,18 @@ export default class UIManager {
     if (!Number.isFinite(numeric)) return null;
 
     return clamp(numeric, lowerBound, upperBound);
+  }
+
+  #formatSpeedDisplay(value) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return "—";
+
+    const rounded = Math.round(numeric * 10) / 10;
+    const isWhole = Math.abs(rounded - Math.round(rounded)) < 1e-9;
+    const displayValue = isWhole ? Math.round(rounded) : rounded.toFixed(1);
+
+    return `${displayValue}×`;
   }
 
   #setSpeedMultiplier(value) {
@@ -1251,6 +1348,130 @@ export default class UIManager {
     return valueEl;
   }
 
+  #resolveDeathCauseColor(causeKey) {
+    const fallback = DEATH_CAUSE_COLOR_MAP.unknown;
+
+    if (typeof causeKey !== "string") {
+      return fallback;
+    }
+
+    const normalized = causeKey.trim().toLowerCase();
+
+    return DEATH_CAUSE_COLOR_MAP[normalized] || fallback;
+  }
+
+  #updateDeathBreakdown(breakdown, fallbackTotal = 0) {
+    if (!this.deathBreakdownList || !this.deathBreakdownEmptyState) return;
+
+    this.deathBreakdownList.innerHTML = "";
+
+    const entries = [];
+
+    if (breakdown && typeof breakdown === "object") {
+      for (const [key, value] of Object.entries(breakdown)) {
+        const numeric = Number(value);
+
+        if (!Number.isFinite(numeric) || numeric <= 0) continue;
+
+        entries.push({ key, count: numeric });
+      }
+    }
+
+    entries.sort((a, b) => b.count - a.count);
+
+    const total = entries.reduce((sum, entry) => sum + entry.count, 0);
+
+    if (!(total > 0)) {
+      const fallback = Number.isFinite(fallbackTotal) ? fallbackTotal : 0;
+
+      this.deathBreakdownList.hidden = true;
+      this.deathBreakdownEmptyState.hidden = false;
+      this.deathBreakdownEmptyState.textContent =
+        fallback > 0
+          ? "Deaths recorded, but causes not classified yet."
+          : "No deaths recorded this tick.";
+
+      return;
+    }
+
+    const limit =
+      Number.isFinite(this.deathBreakdownMaxEntries) &&
+      this.deathBreakdownMaxEntries > 0
+        ? this.deathBreakdownMaxEntries
+        : DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES;
+    const visible = entries.slice(0, limit);
+    const visibleTotal = visible.reduce((sum, entry) => sum + entry.count, 0);
+    const remainder = total - visibleTotal;
+
+    if (remainder > 0) {
+      visible.push({ key: "other", count: remainder, label: "Other causes" });
+    }
+
+    this.deathBreakdownEmptyState.hidden = true;
+    this.deathBreakdownList.hidden = false;
+
+    visible.forEach((entry) => {
+      const item = document.createElement("li");
+
+      item.className = "death-breakdown-item";
+      const ratio = total > 0 ? clamp01(entry.count / total) : 0;
+      const percent = ratio * 100;
+      const percentText =
+        percent >= 10 ? `${percent.toFixed(0)}%` : `${percent.toFixed(1)}%`;
+      const countText = entry.count.toLocaleString();
+      const labelText =
+        entry.label || this.#formatLifeEventCause({ type: "death", cause: entry.key });
+      const color =
+        entry.key === "other"
+          ? DEATH_BREAKDOWN_OTHER_COLOR
+          : this.#resolveDeathCauseColor(entry.key);
+      const row = document.createElement("div");
+
+      row.className = "death-breakdown-row";
+      const labelEl = document.createElement("span");
+
+      labelEl.className = "death-breakdown-label";
+      labelEl.textContent = labelText;
+      row.appendChild(labelEl);
+
+      const valueEl = document.createElement("span");
+
+      valueEl.className = "death-breakdown-value";
+      valueEl.textContent = `${countText} (${percentText})`;
+      row.appendChild(valueEl);
+
+      item.appendChild(row);
+
+      const meter = document.createElement("div");
+
+      meter.className = "death-breakdown-meter";
+      meter.setAttribute("role", "meter");
+      meter.setAttribute("aria-label", `${labelText} share of deaths`);
+      meter.setAttribute("aria-valuemin", "0");
+      meter.setAttribute("aria-valuemax", "1");
+      meter.setAttribute("aria-valuenow", ratio.toFixed(2));
+      meter.setAttribute("aria-valuetext", `${percentText} of deaths`);
+      meter.title = `${labelText} caused ${percentText} of deaths this tick.`;
+
+      const fill = document.createElement("div");
+
+      fill.className = "death-breakdown-fill";
+      const widthPercent = ratio > 0 ? Math.max(3, Math.min(100, percent)) : 0;
+
+      fill.style.width = `${widthPercent.toFixed(1)}%`;
+      fill.style.background = color;
+      meter.appendChild(fill);
+
+      item.appendChild(meter);
+      item.setAttribute(
+        "aria-label",
+        `${labelText}: ${countText} deaths (${percentText}) this tick`,
+      );
+
+      this.deathBreakdownList.appendChild(item);
+    });
+  }
+
   #updateLifeEventsSummary(birthCount = 0, deathCount = 0, totalCount, trend) {
     if (!this.lifeEventsSummary) return;
 
@@ -1358,10 +1579,17 @@ export default class UIManager {
       typeof stats?.getLifeEventRateSummary === "function"
         ? stats.getLifeEventRateSummary()
         : null;
+    const deathBreakdown = stats?.deathBreakdown;
 
     this.lifeEventList.innerHTML = "";
 
     if (!events || events.length === 0) {
+      const fallbackDeaths =
+        Number.isFinite(trendSummary?.deaths) && trendSummary.deaths >= 0
+          ? trendSummary.deaths
+          : 0;
+
+      this.#updateDeathBreakdown(deathBreakdown, fallbackDeaths);
       this.#updateLifeEventsSummary(0, 0, 0, trendSummary);
       this.lifeEventList.hidden = true;
       if (this.lifeEventsEmptyState) {
@@ -1521,6 +1749,8 @@ export default class UIManager {
       this.lifeEventList.appendChild(item);
     });
 
+    this.#updateDeathBreakdown(deathBreakdown, deathCount);
+
     const summaryBirths =
       Number.isFinite(trendSummary?.births) && trendSummary.births >= 0
         ? trendSummary.births
@@ -1660,6 +1890,7 @@ export default class UIManager {
       onClick: () => this.togglePause(),
     });
     this.#applyButtonHotkeys(this.pauseButton, this.pauseHotkeySet);
+    this.#updatePauseButtonState();
 
     this.stepButton = addControlButton({
       id: "stepButton",
@@ -1716,7 +1947,7 @@ export default class UIManager {
       step: speedStep,
       value: this.speedMultiplier,
       title: "Speed multiplier relative to 60 updates/sec (0.5x..100x)",
-      format: (v) => `${v.toFixed(1)}x`,
+      format: (v) => this.#formatSpeedDisplay(v),
       onInput: (value) => {
         this.#setSpeedMultiplier(value);
       },
@@ -1734,11 +1965,7 @@ export default class UIManager {
         ? this.baseUpdatesPerSecond
         : (SIMULATION_DEFAULTS.updatesPerSecond ?? 60);
     const describeSpeedPreset = (multiplier) => {
-      const display =
-        Number.isFinite(multiplier) &&
-        Math.abs(multiplier - Math.round(multiplier)) < 1e-9
-          ? `${Math.round(multiplier)}×`
-          : `${multiplier.toFixed(1)}×`;
+      const display = this.#formatSpeedDisplay(multiplier);
       const updates = Number.isFinite(baseUpdates)
         ? Math.round(baseUpdates * multiplier)
         : 0;
@@ -2140,12 +2367,24 @@ export default class UIManager {
         setValue: (v) => this.#updateSetting("combatEdgeSharpness", v),
         position: "beforeOverlays",
       }),
+      withSliderConfig("combatTerritoryEdgeFactor", {
+        label: "Territory Edge Influence",
+        min: 0,
+        max: 1,
+        step: 0.05,
+        title:
+          "Scales how strongly density advantages sway combat outcomes (0 disables territory edge)",
+        format: (v) => v.toFixed(2),
+        getValue: () => this.combatTerritoryEdgeFactor,
+        setValue: (v) => this.#updateSetting("combatTerritoryEdgeFactor", v),
+        position: "beforeOverlays",
+      }),
       lowDiversitySliderConfig,
     ];
 
     const insightConfigs = [
       withSliderConfig("leaderboardIntervalMs", {
-        label: "Insights Refresh Interval",
+        label: "Dashboard Refresh Interval",
         min: 100,
         max: 3000,
         step: 50,
@@ -2219,13 +2458,6 @@ export default class UIManager {
         label: "Show Fitness Heatmap",
         title: "Overlay cell fitness as a heatmap",
         initial: this.showFitness,
-      },
-      {
-        key: "showCelebrationAuras",
-        label: "Celebration Glow",
-        title:
-          "Add a gentle aurora around the top-performing cells as a whimsical overlay",
-        initial: this.showCelebrationAuras,
       },
       {
         key: "showLifeEventMarkers",
@@ -2400,23 +2632,28 @@ export default class UIManager {
     body.appendChild(intro);
 
     const sliderContext = this.sliderContext;
+    const insightConfigs = Array.isArray(sliderContext?.insightConfigs)
+      ? sliderContext.insightConfigs
+      : [];
 
-    if (sliderContext?.insightConfigs?.length) {
+    if (insightConfigs.length > 0) {
       const cadenceSection = document.createElement("section");
 
-      cadenceSection.className = "metrics-section";
+      cadenceSection.className = "metrics-section insights-cadence";
+
       const cadenceTitle = document.createElement("h4");
 
       cadenceTitle.className = "metrics-section-title";
-      cadenceTitle.textContent = "Update Cadence";
+      cadenceTitle.textContent = "Refresh Cadence";
       cadenceSection.appendChild(cadenceTitle);
 
       const cadenceBody = document.createElement("div");
 
       cadenceBody.className = "metrics-section-body";
+
       const cadenceGrid = createControlGrid(cadenceBody, "control-grid--compact");
 
-      sliderContext.insightConfigs.forEach((cfg) => {
+      insightConfigs.forEach((cfg) => {
         sliderContext.renderSlider(cfg, cadenceGrid);
       });
 
@@ -2431,89 +2668,328 @@ export default class UIManager {
     this.#showMetricsPlaceholder("Run the simulation to populate these metrics.");
     body.appendChild(this.metricsBox);
 
+    const sparkSection = document.createElement("section");
+
+    sparkSection.className = "metrics-section metrics-section--sparklines";
+    sparkSection.setAttribute("aria-label", "Key population and energy trends");
+    const sparkHeading = document.createElement("h4");
+
+    sparkHeading.className = "metrics-section-title";
+    sparkHeading.textContent = "Key Dynamics";
+    sparkSection.appendChild(sparkHeading);
+
+    const sparkHint = document.createElement("p");
+
+    sparkHint.className = "sparkline-hint";
+    sparkHint.textContent =
+      "Monitor overall population, diversity, energy, and pacing as the world evolves.";
+    sparkSection.appendChild(sparkHint);
+
     const sparkGrid = document.createElement("div");
 
     sparkGrid.className = "sparkline-grid";
-    sparkGrid.setAttribute("role", "group");
-    sparkGrid.setAttribute("aria-label", "Historical trend sparklines");
-    body.appendChild(sparkGrid);
-
-    // Sparklines canvases
-    const traitDescriptors = [
-      { key: "cooperation", name: "Cooperation" },
-      { key: "fighting", name: "Fighting" },
-      { key: "breeding", name: "Breeding" },
-      { key: "sight", name: "Sight" },
-    ];
-
-    const traitSparkDescriptors = traitDescriptors.flatMap(({ key, name }) => [
-      {
-        label: `${name} Activity (presence %)`,
-        property: `sparkTrait${name}Presence`,
-        traitKey: key,
-        traitType: "presence",
-        color: "#f39c12",
-      },
-      {
-        label: `${name} Intensity (avg level)`,
-        property: `sparkTrait${name}Average`,
-        traitKey: key,
-        traitType: "average",
-        color: "#3498db",
-      },
-    ]);
+    sparkSection.appendChild(sparkGrid);
+    body.appendChild(sparkSection);
 
     const sparkDescriptors = [
-      { label: "Population", property: "sparkPop", color: "#88d" },
-      { label: "Diversity", property: "sparkDiv2Canvas", color: "#d88" },
-      { label: "Mean Energy", property: "sparkEnergy", color: "#8d8" },
-      { label: "Growth", property: "sparkGrowth", color: "#dd8" },
-      { label: "Event Strength", property: "sparkEvent", color: "#b85" },
-      { label: "Mutation Multiplier", property: "sparkMutation", color: "#6c5ce7" },
+      {
+        label: "Population",
+        property: "sparkPop",
+        historyKey: "population",
+        colorVar: "--color-metric-population",
+        fallbackColor: "#4c9dff",
+        description: "Total living cells over recent ticks.",
+      },
+      {
+        label: "Diversity",
+        property: "sparkDiv2Canvas",
+        historyKey: "diversity",
+        colorVar: "--color-metric-diversity",
+        fallbackColor: "#ff8c68",
+        description: "Genetic variety (Shannon diversity index).",
+      },
+      {
+        label: "Mean Energy",
+        property: "sparkEnergy",
+        historyKey: "energy",
+        colorVar: "--color-metric-energy",
+        fallbackColor: "#55efc4",
+        description: "Average cell energy reserves.",
+      },
+      {
+        label: "Growth",
+        property: "sparkGrowth",
+        historyKey: "growth",
+        colorVar: "--color-metric-growth",
+        fallbackColor: "#f5c669",
+        description: "Births minus deaths per tick.",
+      },
+      {
+        label: "Event Strength",
+        property: "sparkEvent",
+        historyKey: "eventStrength",
+        colorVar: "--color-metric-event-strength",
+        fallbackColor: "#b786ff",
+        description: "Magnitude of current environmental events.",
+      },
+      {
+        label: "Mutation Multiplier",
+        property: "sparkMutation",
+        historyKey: "mutationMultiplier",
+        colorVar: "--color-metric-mutation",
+        fallbackColor: "#ff6fb1",
+        description: "Live mutation scaling factor.",
+      },
       {
         label: "Diverse Pairing Rate",
         property: "sparkDiversePairing",
-        color: "#9b59b6",
+        historyKey: "diversePairingRate",
+        colorVar: "--color-metric-diverse-pairing",
+        fallbackColor: "#76d6ff",
+        description: "Share of mating pairs exceeding the diversity threshold.",
       },
       {
         label: "Mean Diversity Appetite",
         property: "sparkDiversityAppetite",
-        color: "#1abc9c",
+        historyKey: "meanDiversityAppetite",
+        colorVar: "--color-metric-diversity-appetite",
+        fallbackColor: "#7edc8c",
+        description: "Average desire for genetically novel partners.",
       },
-      ...traitSparkDescriptors,
     ];
 
-    this.traitSparkDescriptors = traitSparkDescriptors;
+    this.sparkMetricDescriptors = sparkDescriptors.map(
+      ({ property, historyKey, colorVar, fallbackColor }) => ({
+        property,
+        historyKey,
+        colorVar,
+        fallbackColor,
+      }),
+    );
 
-    sparkDescriptors.forEach(({ label, property, color }) => {
+    sparkDescriptors.forEach(
+      ({ label, property, colorVar, fallbackColor, description }) => {
+        const card = document.createElement("div");
+        const caption = document.createElement("div");
+        const colorDot = document.createElement("span");
+        const captionText = document.createElement("span");
+
+        card.className = "sparkline-card";
+        card.setAttribute("role", "group");
+        card.setAttribute("aria-label", `${label} trend`);
+        if (description) card.title = description;
+        caption.className = "sparkline-caption";
+        colorDot.className = "sparkline-color-dot";
+        if (colorVar) {
+          colorDot.style.background = `var(${colorVar}, ${fallbackColor})`;
+        } else if (fallbackColor) {
+          colorDot.style.background = fallbackColor;
+        }
+        captionText.className = "sparkline-caption-text";
+        captionText.textContent = label;
+        caption.appendChild(colorDot);
+        caption.appendChild(captionText);
+
+        const canvas = document.createElement("canvas");
+
+        canvas.className = "sparkline";
+        canvas.width = 220;
+        canvas.height = 48;
+        canvas.setAttribute("role", "img");
+        canvas.setAttribute("aria-label", `${label} trend over time`);
+        if (description) {
+          canvas.title = description;
+        }
+
+        card.appendChild(caption);
+        card.appendChild(canvas);
+        sparkGrid.appendChild(card);
+
+        this[property] = canvas;
+      },
+    );
+
+    const traitSection = document.createElement("section");
+
+    traitSection.className = "metrics-section metrics-section--sparklines";
+    traitSection.setAttribute("aria-label", "Trait expression trends");
+    const traitHeading = document.createElement("h4");
+
+    traitHeading.className = "metrics-section-title";
+    traitHeading.textContent = "Trait Expressions";
+    traitSection.appendChild(traitHeading);
+
+    const traitHint = document.createElement("p");
+
+    traitHint.className = "sparkline-hint";
+    traitHint.textContent =
+      "Compare how many cells embrace each trait against their average intensity.";
+    traitSection.appendChild(traitHint);
+
+    const traitGrid = document.createElement("div");
+
+    traitGrid.className = "sparkline-grid sparkline-grid--traits";
+    traitSection.appendChild(traitGrid);
+    body.appendChild(traitSection);
+
+    const traitConfigs = [
+      {
+        key: "cooperation",
+        name: "Cooperation",
+        colors: {
+          presence: {
+            colorVar: "--color-trait-cooperation-presence",
+            fallbackColor: "#74b9ff",
+          },
+          intensity: {
+            colorVar: "--color-trait-cooperation-intensity",
+            fallbackColor: "#a0c4ff",
+          },
+        },
+      },
+      {
+        key: "fighting",
+        name: "Fighting",
+        colors: {
+          presence: {
+            colorVar: "--color-trait-fighting-presence",
+            fallbackColor: "#ff7675",
+          },
+          intensity: {
+            colorVar: "--color-trait-fighting-intensity",
+            fallbackColor: "#ff9aa2",
+          },
+        },
+      },
+      {
+        key: "breeding",
+        name: "Breeding",
+        colors: {
+          presence: {
+            colorVar: "--color-trait-breeding-presence",
+            fallbackColor: "#f6c177",
+          },
+          intensity: {
+            colorVar: "--color-trait-breeding-intensity",
+            fallbackColor: "#fcd29f",
+          },
+        },
+      },
+      {
+        key: "sight",
+        name: "Sight",
+        colors: {
+          presence: {
+            colorVar: "--color-trait-sight-presence",
+            fallbackColor: "#55efc4",
+          },
+          intensity: {
+            colorVar: "--color-trait-sight-intensity",
+            fallbackColor: "#81f4d0",
+          },
+        },
+      },
+    ];
+
+    const traitSparkDescriptors = [];
+
+    traitConfigs.forEach((trait) => {
       const card = document.createElement("div");
-      const caption = document.createElement("div");
-      const colorDot = document.createElement("span");
-      const captionText = document.createElement("span");
 
-      card.className = "sparkline-card";
-      caption.className = "sparkline-caption";
-      colorDot.className = "sparkline-color-dot";
-      if (color) colorDot.style.background = color;
-      captionText.className = "sparkline-caption-text";
-      captionText.textContent = label;
-      caption.appendChild(colorDot);
-      caption.appendChild(captionText);
+      card.className = "sparkline-card sparkline-card--trait";
+      card.setAttribute("role", "group");
+      card.setAttribute("aria-label", `${trait.name} trait trends`);
+      card.setAttribute("data-trait", trait.key);
 
-      const canvas = document.createElement("canvas");
+      const header = document.createElement("div");
 
-      canvas.className = "sparkline";
-      canvas.width = 220;
-      canvas.height = 40;
-      canvas.setAttribute("role", "img");
-      canvas.setAttribute("aria-label", `${label} trend over time`);
+      header.className = "sparkline-trait-header";
+      const nameEl = document.createElement("span");
 
-      card.appendChild(caption);
-      card.appendChild(canvas);
-      sparkGrid.appendChild(card);
+      nameEl.className = "sparkline-trait-name";
+      nameEl.textContent = trait.name;
+      header.appendChild(nameEl);
 
-      this[property] = canvas;
+      const contextEl = document.createElement("span");
+
+      contextEl.className = "sparkline-trait-context";
+      contextEl.textContent = "Presence vs intensity";
+      header.appendChild(contextEl);
+
+      card.appendChild(header);
+
+      const metrics = [
+        {
+          label: "Activity (presence %)",
+          property: `sparkTrait${trait.name}Presence`,
+          traitKey: trait.key,
+          traitType: "presence",
+          colorVar: trait.colors.presence.colorVar,
+          fallbackColor: trait.colors.presence.fallbackColor,
+          ariaLabel: `${trait.name} presence trend over time`,
+        },
+        {
+          label: "Intensity (avg level)",
+          property: `sparkTrait${trait.name}Average`,
+          traitKey: trait.key,
+          traitType: "average",
+          colorVar: trait.colors.intensity.colorVar,
+          fallbackColor: trait.colors.intensity.fallbackColor,
+          ariaLabel: `${trait.name} intensity trend over time`,
+        },
+      ];
+
+      metrics.forEach((metric, index) => {
+        const row = document.createElement("div");
+
+        row.className = "sparkline-trait-row";
+        if (index > 0) row.classList.add("sparkline-trait-row--separated");
+
+        const rowCaption = document.createElement("div");
+
+        rowCaption.className = "sparkline-caption sparkline-caption--trait";
+        const dot = document.createElement("span");
+
+        dot.className = "sparkline-color-dot";
+        if (metric.colorVar) {
+          dot.style.background = `var(${metric.colorVar}, ${metric.fallbackColor})`;
+        } else if (metric.fallbackColor) {
+          dot.style.background = metric.fallbackColor;
+        }
+        const labelText = document.createElement("span");
+
+        labelText.className = "sparkline-caption-text";
+        labelText.textContent = metric.label;
+        rowCaption.appendChild(dot);
+        rowCaption.appendChild(labelText);
+
+        const canvas = document.createElement("canvas");
+
+        canvas.className = "sparkline sparkline--trait";
+        canvas.width = 220;
+        canvas.height = 48;
+        canvas.setAttribute("role", "img");
+        canvas.setAttribute("aria-label", metric.ariaLabel);
+        canvas.title = metric.label;
+
+        row.appendChild(rowCaption);
+        row.appendChild(canvas);
+        card.appendChild(row);
+
+        this[metric.property] = canvas;
+        traitSparkDescriptors.push({
+          property: metric.property,
+          traitKey: metric.traitKey,
+          traitType: metric.traitType,
+          colorVar: metric.colorVar,
+          fallbackColor: metric.fallbackColor,
+        });
+      });
+
+      traitGrid.appendChild(card);
     });
+
+    this.traitSparkDescriptors = traitSparkDescriptors;
 
     return panel;
   }
@@ -2614,6 +3090,44 @@ export default class UIManager {
     this.lifeEventsSummary.appendChild(trendSummary);
     lifeBody.appendChild(this.lifeEventsSummary);
 
+    const breakdownCard = document.createElement("div");
+
+    breakdownCard.className = "life-events-breakdown";
+    breakdownCard.setAttribute(
+      "aria-label",
+      "Breakdown of recent death causes for the latest tick",
+    );
+
+    const breakdownTitle = document.createElement("h5");
+
+    breakdownTitle.className = "life-events-breakdown__title";
+    breakdownTitle.textContent = "Death Causes (this tick)";
+    breakdownCard.appendChild(breakdownTitle);
+
+    const breakdownHint = document.createElement("p");
+
+    breakdownHint.className = "life-events-breakdown__hint control-hint";
+    breakdownHint.textContent =
+      "Highlights the leading reasons cells died during the most recent update.";
+    breakdownCard.appendChild(breakdownHint);
+
+    const breakdownList = document.createElement("ul");
+
+    breakdownList.className = "death-breakdown-list";
+    breakdownList.setAttribute("role", "list");
+    breakdownList.hidden = true;
+    breakdownCard.appendChild(breakdownList);
+    this.deathBreakdownList = breakdownList;
+
+    const breakdownEmpty = document.createElement("p");
+
+    breakdownEmpty.className = "death-breakdown-empty control-hint";
+    breakdownEmpty.textContent = "No deaths recorded this tick.";
+    breakdownCard.appendChild(breakdownEmpty);
+    this.deathBreakdownEmptyState = breakdownEmpty;
+
+    lifeBody.appendChild(breakdownCard);
+
     this.lifeEventsEmptyState = document.createElement("div");
     this.lifeEventsEmptyState.className = "life-event-empty";
     this.lifeEventsEmptyState.textContent =
@@ -2652,9 +3166,7 @@ export default class UIManager {
 
   setPauseState(paused) {
     this.paused = Boolean(paused);
-    if (this.pauseButton) {
-      this.pauseButton.textContent = this.paused ? "Resume" : "Pause";
-    }
+    this.#updatePauseButtonState();
     this.#updateStepButtonState();
     this.#updatePauseIndicator();
   }
@@ -2733,9 +3245,6 @@ export default class UIManager {
   }
   getShowFitness() {
     return this.showFitness;
-  }
-  getShowCelebrationAuras() {
-    return this.showCelebrationAuras;
   }
   getShowObstacles() {
     return this.showObstacles;
@@ -3248,30 +3757,28 @@ export default class UIManager {
 
     this.#renderLifeEvents(stats);
 
-    this.drawSpark(this.sparkPop, stats.history.population, "#88d");
-    this.drawSpark(this.sparkDiv2Canvas, stats.history.diversity, "#d88");
-    this.drawSpark(this.sparkEnergy, stats.history.energy, "#8d8");
-    this.drawSpark(this.sparkGrowth, stats.history.growth, "#dd8");
-    this.drawSpark(this.sparkEvent, stats.history.eventStrength, "#b85");
-    this.drawSpark(this.sparkMutation, stats.history.mutationMultiplier, "#6c5ce7");
-    this.drawSpark(
-      this.sparkDiversePairing,
-      stats.history.diversePairingRate,
-      "#9b59b6",
-    );
-    this.drawSpark(
-      this.sparkDiversityAppetite,
-      stats.history.meanDiversityAppetite,
-      "#1abc9c",
-    );
+    if (Array.isArray(this.sparkMetricDescriptors)) {
+      this.sparkMetricDescriptors.forEach(
+        ({ property, historyKey, colorVar, fallbackColor }) => {
+          const canvas = this[property];
+          const data = stats?.history?.[historyKey];
+          const color = this.#resolveCssColor(colorVar, fallbackColor);
+
+          this.drawSpark(canvas, Array.isArray(data) ? data : [], color);
+        },
+      );
+    }
 
     if (Array.isArray(this.traitSparkDescriptors)) {
-      this.traitSparkDescriptors.forEach(({ property, traitKey, traitType, color }) => {
-        const canvas = this[property];
-        const data = stats?.traitHistory?.[traitType]?.[traitKey];
+      this.traitSparkDescriptors.forEach(
+        ({ property, traitKey, traitType, colorVar, fallbackColor }) => {
+          const canvas = this[property];
+          const data = stats?.traitHistory?.[traitType]?.[traitKey];
+          const color = this.#resolveCssColor(colorVar, fallbackColor);
 
-        this.drawSpark(canvas, Array.isArray(data) ? data : [], color);
-      });
+          this.drawSpark(canvas, Array.isArray(data) ? data : [], color);
+        },
+      );
     }
   }
 
@@ -3308,19 +3815,28 @@ export default class UIManager {
       panel.classList.add("leaderboard-panel");
       this.dashboardGrid?.appendChild(panel);
       this.leaderPanel = panel;
-      this.leaderBody = body;
+      const entriesContainer = document.createElement("div");
+
+      entriesContainer.className = "leaderboard-entries";
+      body.appendChild(entriesContainer);
+
+      this.leaderBody = entriesContainer;
+      this.leaderEntriesContainer = entriesContainer;
     }
 
     const entries = Array.isArray(top) ? top.filter(Boolean) : [];
+    const target = this.leaderEntriesContainer || this.leaderBody;
 
-    this.leaderBody.innerHTML = "";
+    if (!target) return;
+
+    target.innerHTML = "";
 
     if (entries.length === 0) {
       const empty = document.createElement("div");
 
       empty.className = "leaderboard-empty-state";
       empty.textContent = "Run the simulation to populate the leaderboard.";
-      this.leaderBody.appendChild(empty);
+      target.appendChild(empty);
 
       return;
     }
@@ -3434,7 +3950,7 @@ export default class UIManager {
 
       card.title = tooltipParts.join(" | ");
       card.appendChild(statsContainer);
-      this.leaderBody.appendChild(card);
+      target.appendChild(card);
     });
   }
 }

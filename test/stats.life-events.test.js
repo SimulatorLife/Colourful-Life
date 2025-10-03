@@ -73,3 +73,19 @@ test("getLifeEventRateSummary returns zeros for invalid input", async () => {
     deathsPer100Ticks: 0,
   });
 });
+
+test("getLifeEventRateSummary spans quiet periods within the window", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+
+  stats.totals.ticks = 100;
+  stats.onBirth({ color: "#123" });
+  stats.totals.ticks = 150;
+
+  const summary = stats.getLifeEventRateSummary(100);
+
+  assert.is(summary.window, 100);
+  approxEqual(summary.eventsPer100Ticks, 1, 1e-9);
+  approxEqual(summary.birthsPer100Ticks, 1, 1e-9);
+  approxEqual(summary.deathsPer100Ticks, 0, 1e-9);
+});

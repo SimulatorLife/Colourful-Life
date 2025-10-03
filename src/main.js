@@ -1,9 +1,8 @@
-import UIManager from "./ui/uiManager.js";
 import BrainDebugger from "./ui/brainDebugger.js";
 import SimulationEngine from "./simulationEngine.js";
 import SelectionManager from "./grid/selectionManager.js";
 import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
-import { createHeadlessUiManager } from "./ui/headlessUiManager.js";
+import { bindSimulationToUi } from "./ui/simulationUiBridge.js";
 import { resolveSimulationDefaults } from "./config.js";
 import { toPlainObject, toFiniteOrNull } from "./utils.js";
 
@@ -12,38 +11,34 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 function resolveHeadlessCanvasSize(config = {}) {
   const toFinite = toFiniteOrNull;
 
-  const cellSize = toFinite(config?.cellSize) ?? 5;
-  const rows = toFinite(config?.rows);
-  const cols = toFinite(config?.cols);
+  const rawCellSize = toFinite(config?.cellSize);
+  const cellSize = rawCellSize != null && rawCellSize > 0 ? rawCellSize : 5;
+  const rawRows = toFinite(config?.rows);
+  const rawCols = toFinite(config?.cols);
+  const rows = rawRows != null && rawRows > 0 ? rawRows : null;
+  const cols = rawCols != null && rawCols > 0 ? rawCols : null;
   const defaultWidth = (cols ?? 120) * cellSize;
   const defaultHeight = (rows ?? 120) * cellSize;
-  const pickFirstFinite = (candidates, fallback) => {
-    for (const candidate of candidates) {
-      const normalized = toFinite(candidate);
-
-      if (normalized != null) {
-        return normalized;
-      }
-    }
-
-    return fallback;
-  };
+  const pickFirstPositive = (candidates, fallback) =>
+    candidates
+      .map((candidate) => toFinite(candidate))
+      .find((value) => value != null && value > 0) ?? fallback;
 
   return {
-    width: pickFirstFinite(
+    width: pickFirstPositive(
       [
-        toFinite(config?.width),
-        toFinite(config?.canvasWidth),
-        toFinite(config?.canvasSize?.width),
+        config?.width,
+        config?.canvasWidth,
+        config?.canvasSize?.width,
         cols != null ? cols * cellSize : null,
       ],
       defaultWidth,
     ),
-    height: pickFirstFinite(
+    height: pickFirstPositive(
       [
-        toFinite(config?.height),
-        toFinite(config?.canvasHeight),
-        toFinite(config?.canvasSize?.height),
+        config?.height,
+        config?.canvasHeight,
+        config?.canvasSize?.height,
         rows != null ? rows * cellSize : null,
       ],
       defaultHeight,
@@ -186,7 +181,7 @@ export function createSimulation({
 
   config = toPlainObject(config);
   const layoutInitialSettings = toPlainObject(config?.ui?.layout?.initialSettings);
-  const configWithLayoutDefaults = { ...layoutInitialSettings, ...config };
+  let configWithLayoutDefaults = { ...layoutInitialSettings, ...config };
 
   if (win) {
     win.BrainDebugger = BrainDebugger;
@@ -195,9 +190,56 @@ export function createSimulation({
   }
 
   let resolvedCanvas = canvas;
+  const headlessCanvasSize = headless
+    ? resolveHeadlessCanvasSize(configWithLayoutDefaults)
+    : null;
 
   if (headless && !resolvedCanvas) {
-    resolvedCanvas = createHeadlessCanvas(configWithLayoutDefaults);
+    const sizeOverrides = headlessCanvasSize ?? {};
+    const canvasSizeConfig = {
+      ...toPlainObject(configWithLayoutDefaults.canvasSize),
+    };
+
+    if (sizeOverrides.width > 0) {
+      canvasSizeConfig.width = sizeOverrides.width;
+    }
+
+    if (sizeOverrides.height > 0) {
+      canvasSizeConfig.height = sizeOverrides.height;
+    }
+
+    resolvedCanvas = createHeadlessCanvas({
+      ...configWithLayoutDefaults,
+      width: sizeOverrides.width,
+      height: sizeOverrides.height,
+      canvasWidth: sizeOverrides.width,
+      canvasHeight: sizeOverrides.height,
+      canvasSize: canvasSizeConfig,
+    });
+  }
+
+  if (headless && headlessCanvasSize) {
+    const sizeOverrides = headlessCanvasSize;
+    const canvasSizeConfig = {
+      ...toPlainObject(configWithLayoutDefaults.canvasSize),
+    };
+
+    if (sizeOverrides.width > 0) {
+      canvasSizeConfig.width = sizeOverrides.width;
+    }
+
+    if (sizeOverrides.height > 0) {
+      canvasSizeConfig.height = sizeOverrides.height;
+    }
+
+    configWithLayoutDefaults = {
+      ...configWithLayoutDefaults,
+      width: sizeOverrides.width,
+      height: sizeOverrides.height,
+      canvasWidth: sizeOverrides.width,
+      canvasHeight: sizeOverrides.height,
+      canvasSize: canvasSizeConfig,
+    };
   }
 
   const selectionManagerFactory =
@@ -227,16 +269,6 @@ export function createSimulation({
   });
 
   const uiOptions = config.ui ?? {};
-  const userLayout = toPlainObject(uiOptions.layout);
-  const mergedInitialSettings = {
-    ...sanitizedDefaults,
-    ...toPlainObject(userLayout.initialSettings),
-  };
-  const uiLayoutOptions = {
-    canvasElement: engine.canvas,
-    ...userLayout,
-    initialSettings: mergedInitialSettings,
-  };
   const baseActions = {
     burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
@@ -257,99 +289,20 @@ export function createSimulation({
     resetWorld: (options) => engine.resetWorld(options),
   };
 
-  let headlessOptions = null;
-
-  if (headless) {
-    headlessOptions = {
-      ...sanitizedDefaults,
-      ...uiOptions,
-      selectionManager: engine.selectionManager,
-    };
-    const userOnSettingChange = headlessOptions.onSettingChange;
-
-    headlessOptions.onSettingChange = (key, value) => {
-      if (key === "updatesPerSecond") {
-        engine.setUpdatesPerSecond(value);
-      } else if (typeof simulationCallbacks.onSettingChange === "function") {
-        simulationCallbacks.onSettingChange(key, value);
-      }
-      if (typeof userOnSettingChange === "function") {
-        userOnSettingChange(key, value);
-      }
-    };
-  }
-
-  const uiManager = headless
-    ? createHeadlessUiManager(headlessOptions)
-    : new UIManager(
-        simulationCallbacks,
-        uiOptions.mountSelector ?? "#app",
-        baseActions,
-        uiLayoutOptions,
-      );
-
-  if (!headless) {
-    uiManager.setPauseState?.(engine.isPaused());
-  }
+  const { uiManager, unsubscribers: uiUnsubscribers } = bindSimulationToUi({
+    engine,
+    uiOptions,
+    sanitizedDefaults,
+    baseActions,
+    simulationCallbacks,
+    headless,
+  });
 
   if (win) {
     win.uiManager = uiManager;
   }
 
-  const syncLowDiversity = engine.state?.lowDiversityReproMultiplier;
-
-  if (
-    typeof syncLowDiversity === "number" &&
-    typeof uiManager?.setLowDiversityReproMultiplier === "function"
-  ) {
-    uiManager.setLowDiversityReproMultiplier(syncLowDiversity, { notify: false });
-  }
-
-  const unsubscribers = [];
-
-  if (!headless && uiManager) {
-    unsubscribers.push(
-      engine.on("metrics", ({ stats, metrics, environment }) => {
-        if (typeof uiManager.renderMetrics === "function") {
-          uiManager.renderMetrics(stats, metrics, environment);
-        }
-      }),
-    );
-
-    unsubscribers.push(
-      engine.on("leaderboard", ({ entries }) => {
-        if (typeof uiManager.renderLeaderboard === "function") {
-          uiManager.renderLeaderboard(entries);
-        }
-      }),
-    );
-
-    unsubscribers.push(
-      engine.on("state", ({ changes }) => {
-        if (
-          changes?.paused !== undefined &&
-          typeof uiManager.setPauseState === "function"
-        ) {
-          uiManager.setPauseState(changes.paused);
-        }
-        if (
-          changes?.autoPauseOnBlur !== undefined &&
-          typeof uiManager.setAutoPauseOnBlur === "function"
-        ) {
-          uiManager.setAutoPauseOnBlur(changes.autoPauseOnBlur, { notify: false });
-        }
-        if (
-          changes?.lowDiversityReproMultiplier !== undefined &&
-          typeof uiManager.setLowDiversityReproMultiplier === "function"
-        ) {
-          uiManager.setLowDiversityReproMultiplier(
-            changes.lowDiversityReproMultiplier,
-            { notify: false },
-          );
-        }
-      }),
-    );
-  }
+  const unsubscribers = Array.isArray(uiUnsubscribers) ? [...uiUnsubscribers] : [];
 
   const startPaused = Boolean(sanitizedDefaults.paused);
 
@@ -392,4 +345,5 @@ export function createSimulation({
 
 export default createSimulation;
 
-export { SimulationEngine, createHeadlessUiManager };
+export { SimulationEngine };
+export { createHeadlessUiManager } from "./ui/headlessUiManager.js";

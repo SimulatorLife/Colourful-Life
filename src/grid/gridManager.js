@@ -19,12 +19,14 @@ import InteractionSystem from "../interactionSystem.js";
 import GridInteractionAdapter from "./gridAdapter.js";
 import ReproductionZonePolicy from "./reproductionZonePolicy.js";
 import { OBSTACLE_PRESETS, resolveObstaclePresetCatalog } from "./obstaclePresets.js";
+import { resolvePopulationScarcityMultiplier } from "./populationScarcity.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
   ENERGY_DIFFUSION_RATE_DEFAULT,
   DENSITY_RADIUS_DEFAULT,
   COMBAT_EDGE_SHARPNESS_DEFAULT,
+  COMBAT_TERRITORY_EDGE_FACTOR,
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
 } from "../config.js";
@@ -153,8 +155,12 @@ export default class GridManager {
   static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
   static maxTileEnergy = MAX_TILE_ENERGY;
   static combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT;
+  static combatTerritoryEdgeFactor = COMBAT_TERRITORY_EDGE_FACTOR;
   #spawnCandidateScratch = null;
   #eventScratch = null;
+  #segmentWindowScratch = null;
+  #columnEventScratch = null;
+  #eventRowsScratch = null;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -186,6 +192,25 @@ export default class GridManager {
     const fractionalFloor = Math.round(area * 0.025);
 
     return Math.max(15, fractionalFloor);
+  }
+
+  #computePopulationScarcitySignal() {
+    if (!Number.isFinite(this.minPopulation) || this.minPopulation <= 0) {
+      return 0;
+    }
+
+    const population = this.activeCells?.size ?? 0;
+
+    if (population >= this.minPopulation) {
+      return 0;
+    }
+
+    const area = Math.max(1, Math.floor(this.rows) * Math.floor(this.cols));
+    const occupancy = clamp(population / area, 0, 1);
+    const deficit = clamp((this.minPopulation - population) / this.minPopulation, 0, 1);
+    const scarcity = clamp(deficit * (0.6 + (1 - occupancy) * 0.4), 0, 1);
+
+    return scarcity;
   }
 
   static #isObstacle(obstacles, row, col) {
@@ -234,6 +259,38 @@ export default class GridManager {
     this.#eventScratch.length = 0;
 
     return this.#eventScratch;
+  }
+
+  #getSegmentWindowScratch() {
+    if (!this.#segmentWindowScratch) {
+      this.#segmentWindowScratch = [];
+    }
+
+    this.#segmentWindowScratch.length = 0;
+
+    return this.#segmentWindowScratch;
+  }
+
+  #getColumnEventScratch() {
+    if (!this.#columnEventScratch) {
+      this.#columnEventScratch = [];
+    }
+
+    this.#columnEventScratch.length = 0;
+
+    return this.#columnEventScratch;
+  }
+
+  #prepareEventsByRow(rowCount) {
+    if (!this.#eventRowsScratch || this.#eventRowsScratch.length !== rowCount) {
+      this.#eventRowsScratch = Array.from({ length: rowCount }, () => []);
+    } else {
+      for (let i = 0; i < this.#eventRowsScratch.length; i++) {
+        this.#eventRowsScratch[i].length = 0;
+      }
+    }
+
+    return this.#eventRowsScratch;
   }
 
   #resolveEventModifiers({ row, col, rowEvents, eventOptions, useSegmentedEvents }) {
@@ -930,7 +987,9 @@ export default class GridManager {
     this.interactionAdapter = new GridInteractionAdapter({ gridManager: this });
     this.interactionSystem = new InteractionSystem({
       adapter: this.interactionAdapter,
+      combatTerritoryEdgeFactor: GridManager.combatTerritoryEdgeFactor,
     });
+    this.populationScarcitySignal = 0;
     this.brainSnapshotCollector = toBrainSnapshotCollector(brainSnapshotCollector);
     this.boundTryMove = (gridArr, sr, sc, dr, dc, rows, cols) =>
       GridManager.tryMove(gridArr, sr, sc, dr, dc, rows, cols, this.#movementOptions());
@@ -1291,14 +1350,16 @@ export default class GridManager {
     evict = true,
   } = {}) {
     const size = Math.max(1, Math.floor(tileSize));
+    const normalizeParity = (value) => ((value % 2) + 2) % 2;
+    const targetParity = normalizeParity(blockParity);
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         const tileR = Math.floor((r + offsetRow) / size);
         const tileC = Math.floor((c + offsetCol) / size);
-        const parity = (tileR + tileC) % 2;
+        const parity = normalizeParity(tileR + tileC);
 
-        if (parity === blockParity) this.setObstacle(r, c, true, { evict });
+        if (parity === targetParity) this.setObstacle(r, c, true, { evict });
       }
     }
   }
@@ -1369,7 +1430,8 @@ export default class GridManager {
         const tileSize = Math.max(1, Math.floor(options.tileSize ?? 2));
         const offsetRow = Math.floor(options.offsetRow ?? 0);
         const offsetCol = Math.floor(options.offsetCol ?? 0);
-        const blockParity = Math.floor(options.blockParity ?? 0) % 2;
+        const rawBlockParity = Math.floor(options.blockParity ?? 0);
+        const blockParity = ((rawBlockParity % 2) + 2) % 2;
 
         this.paintCheckerboard({ tileSize, offsetRow, offsetCol, blockParity, evict });
         break;
@@ -1493,7 +1555,7 @@ export default class GridManager {
         break;
     }
 
-    this.currentObstaclePreset = presetId;
+    this.currentObstaclePreset = normalizedId;
   }
 
   init() {
@@ -1507,6 +1569,8 @@ export default class GridManager {
         }
       }
     }
+
+    this.seed(this.activeCells.size, this.minPopulation);
   }
 
   resize(rows, cols, options = {}) {
@@ -1540,6 +1604,26 @@ export default class GridManager {
     const cellSizeValue = Math.max(1, Math.floor(nextCellSize));
     const baseEnergy = this.maxTileEnergy / 2;
     const shouldReseed = opts.reseed !== false;
+    const preservePopulation = !shouldReseed;
+    let preservedCells = null;
+
+    if (preservePopulation) {
+      preservedCells = [];
+
+      for (let row = 0; row < this.rows; row++) {
+        for (let col = 0; col < this.cols; col++) {
+          const cell = this.grid?.[row]?.[col];
+
+          if (!cell) continue;
+
+          const tileEnergy = Number.isFinite(this.energyGrid?.[row]?.[col])
+            ? this.energyGrid[row][col]
+            : baseEnergy;
+
+          preservedCells.push({ cell, row, col, tileEnergy });
+        }
+      }
+    }
 
     this.rows = rowsInt;
     this.cols = colsInt;
@@ -1595,6 +1679,35 @@ export default class GridManager {
       });
     } else {
       this.currentObstaclePreset = "none";
+    }
+
+    if (preservePopulation && preservedCells?.length) {
+      const maxTileEnergy =
+        this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
+
+      for (const { cell, row, col, tileEnergy } of preservedCells) {
+        if (row >= rowsInt || col >= colsInt) continue;
+        if (this.isObstacle(row, col)) continue;
+        if (this.grid[row][col]) continue;
+
+        this.grid[row][col] = cell;
+
+        if (cell && typeof cell === "object") {
+          if ("row" in cell) cell.row = row;
+          if ("col" in cell) cell.col = col;
+          if (typeof cell.energy === "number") {
+            cell.energy = clamp(cell.energy, 0, maxTileEnergy);
+          }
+        }
+
+        if (this.energyGrid?.[row]) {
+          const sanitizedEnergy = Number.isFinite(tileEnergy)
+            ? clamp(tileEnergy, 0, maxTileEnergy)
+            : baseEnergy;
+
+          this.energyGrid[row][col] = sanitizedEnergy;
+        }
+      }
     }
 
     if (shouldReseed) {
@@ -1781,7 +1894,7 @@ export default class GridManager {
     let eventsByRow = null;
 
     if (hasEvents) {
-      eventsByRow = new Array(rows);
+      eventsByRow = this.#prepareEventsByRow(rows);
 
       for (let i = 0; i < evs.length; i++) {
         const ev = evs[i];
@@ -1826,6 +1939,141 @@ export default class GridManager {
       const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
       const rowHasEvents = Boolean(eventOptions && rowEvents.length > 0);
 
+      if (rowHasEvents && usingSegmentedEvents) {
+        const segments = rowEvents;
+
+        if (segments.length > 1) {
+          segments.sort((a, b) => a.startCol - b.startCol);
+        }
+
+        const activeSegments = this.#getSegmentWindowScratch();
+        const columnEvents = this.#getColumnEventScratch();
+        const previousEvents = eventOptions.events;
+        let nextSegmentIndex = 0;
+
+        for (let c = 0; c < cols; c++) {
+          const isObstacle = Boolean(obstacleRow?.[c]);
+
+          while (
+            nextSegmentIndex < segments.length &&
+            segments[nextSegmentIndex].startCol <= c
+          ) {
+            activeSegments.push(segments[nextSegmentIndex]);
+            nextSegmentIndex += 1;
+          }
+
+          columnEvents.length = 0;
+
+          let activeCount = 0;
+
+          for (let i = 0; i < activeSegments.length; i++) {
+            const segment = activeSegments[i];
+
+            if (c < segment.endCol) {
+              if (!isObstacle) {
+                columnEvents.push(segment.event);
+              }
+
+              activeSegments[activeCount] = segment;
+              activeCount += 1;
+            }
+          }
+
+          activeSegments.length = activeCount;
+
+          if (isObstacle) {
+            nextRow[c] = 0;
+            if (energyRow[c] !== 0) energyRow[c] = 0;
+            if (deltaRow) deltaRow[c] = 0;
+
+            continue;
+          }
+
+          let densityValue = hasDensityGrid ? densityRow?.[c] : null;
+
+          if (densityValue == null) {
+            densityValue = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
+          }
+
+          const effectiveDensity = clamp(
+            (densityValue ?? 0) * normalizedDensityMultiplier,
+            0,
+            1,
+          );
+          const currentEnergy = energyRow[c];
+          let regen =
+            maxTileEnergy > 0 ? regenRate * (maxTileEnergy - currentEnergy) : 0;
+
+          regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * effectiveDensity);
+
+          let regenMultiplier = 1;
+          let regenAdd = 0;
+          let drain = 0;
+
+          if (columnEvents.length > 0) {
+            eventOptions.row = r;
+            eventOptions.col = c;
+            eventOptions.events = columnEvents;
+
+            const modifiers = accumulateEventModifiers(eventOptions);
+
+            if (modifiers) {
+              regenMultiplier = modifiers.regenMultiplier;
+              regenAdd = modifiers.regenAdd;
+              drain = modifiers.drainAdd;
+            }
+
+            columnEvents.length = 0;
+          }
+
+          regen = regen * regenMultiplier + regenAdd;
+
+          let neighborSum = 0;
+          let neighborCount = 0;
+
+          if (useDiffusion) {
+            if (upEnergyRow && (!upObstacleRow || !upObstacleRow[c])) {
+              neighborSum += upEnergyRow[c];
+              neighborCount += 1;
+            }
+
+            if (downEnergyRow && (!downObstacleRow || !downObstacleRow[c])) {
+              neighborSum += downEnergyRow[c];
+              neighborCount += 1;
+            }
+
+            if (c > 0 && (!obstacleRow || !obstacleRow[c - 1])) {
+              neighborSum += energyRow[c - 1];
+              neighborCount += 1;
+            }
+
+            if (c < cols - 1 && (!obstacleRow || !obstacleRow[c + 1])) {
+              neighborSum += energyRow[c + 1];
+              neighborCount += 1;
+            }
+          }
+
+          let diffusion = 0;
+
+          if (neighborCount > 0) {
+            diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
+          }
+
+          let nextEnergy = currentEnergy + regen - drain + diffusion;
+
+          nextEnergy = clamp(nextEnergy, 0, maxTileEnergy);
+          nextRow[c] = nextEnergy;
+
+          if (deltaRow) {
+            deltaRow[c] = clamp((nextEnergy - currentEnergy) * invMaxTileEnergy, -1, 1);
+          }
+        }
+
+        eventOptions.events = previousEvents;
+
+        continue;
+      }
+
       for (let c = 0; c < cols; c++) {
         if (obstacleRow?.[c]) {
           nextRow[c] = 0;
@@ -1847,7 +2095,7 @@ export default class GridManager {
           1,
         );
         const currentEnergy = energyRow[c];
-        let regen = regenRate * (1 - currentEnergy / maxTileEnergy);
+        let regen = maxTileEnergy > 0 ? regenRate * (maxTileEnergy - currentEnergy) : 0;
 
         regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * effectiveDensity);
 
@@ -1919,15 +2167,11 @@ export default class GridManager {
       }
     }
 
-    // Swap buffers and clear the buffer for next tick writes
+    // Swap buffers so the freshly computed grid becomes the active state.
     const previous = this.energyGrid;
 
     this.energyGrid = next;
     this.energyNext = previous;
-
-    for (let r = 0; r < rows; r++) {
-      this.energyNext[r].fill(0);
-    }
   }
 
   getCell(row, col) {
@@ -2359,6 +2603,7 @@ export default class GridManager {
       eventStrengthMultiplier,
       mutationMultiplier,
       combatEdgeSharpness,
+      combatTerritoryEdgeFactor,
     },
   ) {
     const cell = this.grid[row][col];
@@ -2497,6 +2742,7 @@ export default class GridManager {
         densityEffectMultiplier,
         densityGrid,
         combatEdgeSharpness,
+        combatTerritoryEdgeFactor,
       })
     ) {
       return;
@@ -2748,6 +2994,7 @@ export default class GridManager {
     });
 
     let effectiveReproProb = clamp(reproProb ?? 0, 0, 1);
+    let scarcityMultiplier = 1;
 
     if (diversity < pairDiversityThreshold) {
       penalizedForSimilarity = true;
@@ -2845,6 +3092,28 @@ export default class GridManager {
             (0.18 + diversityPressure * 0.22);
 
         effectiveReproProb = clamp(effectiveReproProb * complementBonus, 0, 1);
+      }
+    }
+
+    const scarcitySignal = clamp(this.populationScarcitySignal ?? 0, 0, 1);
+
+    if (scarcitySignal > 0 && effectiveReproProb > 0) {
+      const scarcityResult = resolvePopulationScarcityMultiplier({
+        parentA: cell,
+        parentB: bestMate.target,
+        scarcity: scarcitySignal,
+        baseProbability: effectiveReproProb,
+        minPopulation: this.minPopulation,
+        population: this.activeCells?.size ?? 0,
+      });
+
+      const resolvedMultiplier = scarcityResult?.multiplier;
+
+      if (Number.isFinite(resolvedMultiplier) && resolvedMultiplier > 0) {
+        scarcityMultiplier = clamp(resolvedMultiplier, 0.25, 2);
+        effectiveReproProb = clamp(effectiveReproProb * scarcityMultiplier, 0, 1);
+      } else {
+        scarcityMultiplier = 1;
       }
     }
 
@@ -3074,6 +3343,7 @@ export default class GridManager {
         strategyPenaltyMultiplier,
         strategyPressure,
         threshold: pairDiversityThreshold,
+        populationScarcityMultiplier: scarcityMultiplier,
       });
     }
 
@@ -3085,6 +3355,7 @@ export default class GridManager {
           penalized: penalizedForSimilarity,
           penaltyMultiplier,
           strategyPenaltyMultiplier,
+          populationScarcityMultiplier: scarcityMultiplier,
         });
       }
     };
@@ -3100,7 +3371,13 @@ export default class GridManager {
     col,
     cell,
     { enemies, society = [] },
-    { stats, densityEffectMultiplier, densityGrid, combatEdgeSharpness },
+    {
+      stats,
+      densityEffectMultiplier,
+      densityGrid,
+      combatEdgeSharpness,
+      combatTerritoryEdgeFactor,
+    },
   ) {
     if (!Array.isArray(enemies) || enemies.length === 0) return false;
 
@@ -3156,6 +3433,7 @@ export default class GridManager {
             densityGrid,
             densityEffectMultiplier,
             combatEdgeSharpness,
+            combatTerritoryEdgeFactor,
           });
       } else {
         this.boundMoveToTarget(
@@ -3239,12 +3517,16 @@ export default class GridManager {
     matingDiversityThreshold,
     lowDiversityReproMultiplier,
     combatEdgeSharpness = GridManager.combatEdgeSharpness,
+    combatTerritoryEdgeFactor = GridManager.combatTerritoryEdgeFactor,
   } = {}) {
     const stats = this.stats;
     const eventManager = this.eventManager;
     const combatSharpness = Number.isFinite(combatEdgeSharpness)
       ? combatEdgeSharpness
       : GridManager.combatEdgeSharpness;
+    const territoryFactor = Number.isFinite(combatTerritoryEdgeFactor)
+      ? clamp(combatTerritoryEdgeFactor, 0, 1)
+      : GridManager.combatTerritoryEdgeFactor;
 
     this.setMatingDiversityOptions({
       threshold:
@@ -3256,6 +3538,8 @@ export default class GridManager {
 
     this.lastSnapshot = null;
     this.tickCount += 1;
+
+    this.populationScarcitySignal = this.#computePopulationScarcitySignal();
 
     const { densityGrid } = this.prepareTick({
       eventManager,
@@ -3297,17 +3581,10 @@ export default class GridManager {
         eventStrengthMultiplier,
         mutationMultiplier,
         combatEdgeSharpness: combatSharpness,
+        combatTerritoryEdgeFactor: territoryFactor,
       });
     }
-
-    if (
-      Number.isFinite(this.minPopulation) &&
-      this.minPopulation > 0 &&
-      this.activeCells.size < this.minPopulation
-    ) {
-      this.seed(this.activeCells.size, this.minPopulation);
-    }
-
+    this.populationScarcitySignal = this.#computePopulationScarcitySignal();
     this.lastSnapshot = this.buildSnapshot();
 
     return this.lastSnapshot;
@@ -3396,6 +3673,13 @@ export default class GridManager {
       : ranked;
 
     snapshot.brainSnapshots = Array.isArray(collected) ? collected : ranked;
+    snapshot.populationScarcity = clamp(
+      Number.isFinite(this.populationScarcitySignal)
+        ? this.populationScarcitySignal
+        : 0,
+      0,
+      1,
+    );
 
     return snapshot;
   }

@@ -1,5 +1,5 @@
 import { TRAIT_ACTIVATION_THRESHOLD } from "./config.js";
-import { clamp, clamp01, warnOnce } from "./utils.js";
+import { clamp, clamp01, toFiniteOrNull, warnOnce } from "./utils.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;
@@ -258,6 +258,8 @@ const isCellLike = (candidate) => {
 export default class Stats {
   #historyRings;
   #traitHistoryRings;
+  #lifeEventTickBase;
+  #tickInProgress;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
    * @param {{traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>}} [options]
@@ -274,6 +276,8 @@ export default class Stats {
     this.totals = { ticks: 0, births: 0, deaths: 0, fights: 0, cooperations: 0 };
     this.traitHistory = { presence: {}, average: {} };
     this.#traitHistoryRings = { presence: {}, average: {} };
+    this.#lifeEventTickBase = this.totals.ticks;
+    this.#tickInProgress = false;
     this.matingDiversityThreshold = 0.42;
     this.lastMatingDebug = null;
     this.mutationMultiplier = 1;
@@ -329,6 +333,10 @@ export default class Stats {
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
     this.deathCausesTick = Object.create(null);
+    const currentTicks = Number.isFinite(this.totals?.ticks) ? this.totals.ticks : 0;
+
+    this.#lifeEventTickBase = currentTicks + 1;
+    this.#tickInProgress = true;
   }
 
   resetAll() {
@@ -353,6 +361,8 @@ export default class Stats {
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
     this.deathCauseTotals = Object.create(null);
+    this.#tickInProgress = false;
+    this.#lifeEventTickBase = this.totals.ticks;
   }
 
   setDiversityTarget(value) {
@@ -389,6 +399,7 @@ export default class Stats {
     observedDiversity = 0,
     behaviorEvenness = 0,
     successfulComplementarity = 0,
+    meanStrategyPenalty = 1,
   ) {
     const target = clamp01(this.diversityTarget ?? DIVERSITY_TARGET_DEFAULT);
 
@@ -407,6 +418,11 @@ export default class Stats {
     const complementValue = clamp01(
       Number.isFinite(successfulComplementarity) ? successfulComplementarity : 0,
     );
+    const penaltyAverage = clamp01(
+      Number.isFinite(meanStrategyPenalty) ? meanStrategyPenalty : 1,
+    );
+    const penaltySlack = penaltyAverage;
+    const penaltyRelief = clamp01(1 - penaltyAverage);
 
     const geneticShortfall = clamp01((target - diversityValue) / target);
     const evennessShortfall = clamp01(1 - evennessValue);
@@ -422,10 +438,10 @@ export default class Stats {
     this.diversityPressure = clamp01(next);
 
     const monotonyDemand = clamp01(
-      evennessShortfall * (0.45 + geneticShortfall * 0.35),
+      evennessShortfall * (0.45 + geneticShortfall * 0.35) * (0.7 + penaltySlack * 0.6),
     );
     const complementReliefStrategy = clamp01(
-      complementValue * (0.25 + geneticShortfall * 0.3),
+      complementValue * (0.25 + geneticShortfall * 0.3) * (0.8 + penaltyRelief * 0.4),
     );
     const rawStrategyPressure = clamp01(monotonyDemand - complementReliefStrategy);
     const prevStrategy = Number.isFinite(this.strategyPressure)
@@ -556,21 +572,10 @@ export default class Stats {
 
     if (safeContext.cell) delete safeContext.cell;
 
-    const row = Number.isFinite(safeContext.row)
-      ? safeContext.row
-      : Number.isFinite(resolvedCell?.row)
-        ? resolvedCell.row
-        : null;
-    const col = Number.isFinite(safeContext.col)
-      ? safeContext.col
-      : Number.isFinite(resolvedCell?.col)
-        ? resolvedCell.col
-        : null;
-    const energy = Number.isFinite(safeContext.energy)
-      ? safeContext.energy
-      : Number.isFinite(resolvedCell?.energy)
-        ? resolvedCell.energy
-        : null;
+    const row = toFiniteOrNull(safeContext.row) ?? toFiniteOrNull(resolvedCell?.row);
+    const col = toFiniteOrNull(safeContext.col) ?? toFiniteOrNull(resolvedCell?.col);
+    const energy =
+      toFiniteOrNull(safeContext.energy) ?? toFiniteOrNull(resolvedCell?.energy);
     const colorCandidate = safeContext.color;
     const color =
       typeof colorCandidate === "string" && colorCandidate.length > 0
@@ -580,15 +585,10 @@ export default class Stats {
           : typeof resolvedCell?.color === "string"
             ? resolvedCell.color
             : null;
-    const mutationMultiplier = Number.isFinite(safeContext.mutationMultiplier)
-      ? safeContext.mutationMultiplier
-      : null;
-    const intensity = Number.isFinite(safeContext.intensity)
-      ? safeContext.intensity
-      : null;
-    const winChance = Number.isFinite(safeContext.winChance)
-      ? clamp01(safeContext.winChance)
-      : null;
+    const mutationMultiplier = toFiniteOrNull(safeContext.mutationMultiplier);
+    const intensity = toFiniteOrNull(safeContext.intensity);
+    const winChanceCandidate = toFiniteOrNull(safeContext.winChance);
+    const winChance = winChanceCandidate != null ? clamp01(winChanceCandidate) : null;
     const opponentColor =
       typeof safeContext.opponentColor === "string" &&
       safeContext.opponentColor.length > 0
@@ -613,10 +613,11 @@ export default class Stats {
           .filter((value) => value)
       : null;
 
+    const currentTicks = Number.isFinite(this.totals?.ticks) ? this.totals.ticks : 0;
     const event = {
       id: ++this.lifeEventSequence,
       type,
-      tick: this.totals.ticks,
+      tick: this.#tickInProgress ? this.#lifeEventTickBase : currentTicks,
       row,
       col,
       energy,
@@ -810,6 +811,7 @@ export default class Stats {
       diversity,
       behaviorEvenness,
       successfulComplementarity,
+      meanStrategyPenalty,
     );
 
     this.pushHistory("population", pop);
@@ -835,6 +837,9 @@ export default class Stats {
       this.pushTraitHistory("presence", key, traitPresence.fractions[key] ?? 0);
       this.pushTraitHistory("average", key, traitPresence.averages[key] ?? 0);
     }
+
+    this.#tickInProgress = false;
+    this.#lifeEventTickBase = this.totals.ticks;
 
     return {
       population: pop,
@@ -1044,7 +1049,8 @@ export default class Stats {
 
     let births = 0;
     let deaths = 0;
-    let earliestTick = latestTick;
+    // Track event counts within the requested window so quiet stretches are
+    // reflected in the per-100 tick rates.
 
     for (const event of values) {
       if (!event) continue;
@@ -1059,10 +1065,6 @@ export default class Stats {
         births += 1;
       } else if (event.type === "death") {
         deaths += 1;
-      }
-
-      if (tick < earliestTick) {
-        earliestTick = tick;
       }
     }
 
@@ -1081,9 +1083,8 @@ export default class Stats {
       };
     }
 
-    const spanStart = Math.min(earliestTick, latestTick);
-    const observedSpan = Math.max(1, latestTick - spanStart || 1);
-    const normalizedSpan = Math.max(1, Math.min(numericWindow, observedSpan));
+    const ticksObserved = Math.max(0, latestTick - windowStart);
+    const normalizedSpan = Math.max(1, Math.min(numericWindow, ticksObserved || 1));
 
     const birthsPer100Ticks = (births / normalizedSpan) * 100;
     const deathsPer100Ticks = (deaths / normalizedSpan) * 100;

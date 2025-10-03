@@ -1,7 +1,10 @@
 import { clamp } from "./utils.js";
 
 const EMPTY_APPLIED_EVENTS = Object.freeze([]);
-const NO_EVENT_MODIFIERS = Object.freeze({
+// Used when no events apply so downstream calculations always receive a
+// consistent modifier object. Keeping it frozen avoids accidental mutation in
+// tight loops that reuse the baseline reference.
+const DEFAULT_EVENT_MODIFIERS = Object.freeze({
   regenMultiplier: 1,
   regenAdd: 0,
   drainAdd: 0,
@@ -236,7 +239,7 @@ export function computeTileEnergyUpdate(
 
   regen *= Math.max(0, 1 - (regenDensityPenalty ?? 0) * effectiveDensity);
 
-  const modifiers =
+  const eventModifiers =
     Array.isArray(events) && events.length > 0
       ? accumulateEventModifiers({
           events,
@@ -247,12 +250,12 @@ export function computeTileEnergyUpdate(
           getEventEffect,
           effectCache,
         })
-      : NO_EVENT_MODIFIERS;
+      : DEFAULT_EVENT_MODIFIERS;
 
-  regen *= modifiers.regenMultiplier;
-  regen += modifiers.regenAdd;
+  regen *= eventModifiers.regenMultiplier;
+  regen += eventModifiers.regenAdd;
 
-  const drain = modifiers.drainAdd;
+  const drain = eventModifiers.drainAdd;
 
   const neighborAverage = resolveNeighborAverage({
     neighborSum,
@@ -273,10 +276,10 @@ export function computeTileEnergyUpdate(
   if (out && typeof out === "object") {
     out.nextEnergy = nextEnergy;
     out.drain = drain;
-    out.appliedEvents = modifiers.appliedEvents;
+    out.appliedEvents = eventModifiers.appliedEvents;
 
     return out;
   }
 
-  return { nextEnergy, drain, appliedEvents: modifiers.appliedEvents };
+  return { nextEnergy, drain, appliedEvents: eventModifiers.appliedEvents };
 }

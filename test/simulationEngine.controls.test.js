@@ -278,6 +278,66 @@ test("setWorldGeometry honors reseed=false to avoid repopulating the grid", asyn
   engine.destroy?.();
 });
 
+test("pausing stops the animation loop until work is requested", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+
+  const callbacks = [];
+  let nextHandle = 1;
+  const raf = (cb) => {
+    callbacks.push(cb);
+
+    return nextHandle++;
+  };
+  const caf = () => {};
+
+  const engine = new SimulationEngine({
+    canvas: new MockCanvas(200, 200),
+    autoStart: true,
+    performanceNow: () => 0,
+    requestAnimationFrame: raf,
+    cancelAnimationFrame: caf,
+  });
+
+  assert.is(callbacks.length, 1, "start schedules an initial frame");
+
+  engine.pause();
+
+  const pausedFrame = callbacks.shift();
+
+  pausedFrame?.(16);
+
+  assert.is(
+    callbacks.length,
+    0,
+    "paused loops should not enqueue another frame automatically",
+  );
+
+  engine.requestFrame();
+
+  assert.is(
+    callbacks.length,
+    1,
+    "manual frame requests still schedule work while paused",
+  );
+
+  const requestedFrame = callbacks.shift();
+
+  requestedFrame?.(32);
+
+  assert.is(
+    callbacks.length,
+    0,
+    "requested work should render once without rearming the loop",
+  );
+
+  engine.resume();
+
+  assert.is(callbacks.length, 1, "resuming restarts the animation loop");
+
+  engine.destroy?.();
+});
+
 test("overlay visibility toggles mutate only requested flags", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
@@ -323,7 +383,6 @@ test("overlay visibility coercion handles string inputs", async () => {
       showEnergy: " ",
       showDensity: "TRUE",
       showFitness: "0",
-      showCelebrationAuras: "yes",
       showLifeEventMarkers: "on",
     });
 
@@ -335,8 +394,30 @@ test("overlay visibility coercion handles string inputs", async () => {
     );
     assert.is(engine.state.showDensity, true);
     assert.is(engine.state.showFitness, false);
-    assert.is(engine.state.showCelebrationAuras, true);
     assert.is(engine.state.showLifeEventMarkers, true);
+  } finally {
+    restore();
+  }
+});
+
+test("setAutoPauseOnBlur coerces string inputs", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.setAutoPauseOnBlur(true);
+    assert.is(engine.autoPauseOnBlur, true, "true boolean enables auto pause");
+
+    engine.setAutoPauseOnBlur("false");
+    assert.is(engine.autoPauseOnBlur, false, "string 'false' disables auto pause");
+
+    engine.setAutoPauseOnBlur("0");
+    assert.is(engine.autoPauseOnBlur, false, "numeric string '0' disables auto pause");
+
+    engine.setAutoPauseOnBlur("1");
+    assert.is(engine.autoPauseOnBlur, true, "numeric string '1' enables auto pause");
   } finally {
     restore();
   }
@@ -395,7 +476,6 @@ test("tick forwards overlay visibility flags to the renderer", async () => {
     assert.is(options.showDensity, true);
     assert.is(options.showFitness, true);
     assert.is(options.showObstacles, true, "obstacles stay enabled by default");
-    assert.is(options.showCelebrationAuras, false);
     assert.is(options.showLifeEventMarkers, true);
   } finally {
     restore();

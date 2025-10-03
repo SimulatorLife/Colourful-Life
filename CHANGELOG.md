@@ -21,11 +21,21 @@ where practical.
 
 ### Changed
 
+- Refreshed documentation across the README, developer guide, and architecture
+  notes to highlight the UI bridge, fitness scoring module, Husky hook setup,
+  and new formatting scripts so contributor workflows mirror the current code.
+- Reproduction acceptance now blends neural policy intent with the genome's
+  baseline instincts using DNA-tuned weights that react to opportunity,
+  scarcity, neural fatigue, and network confidence, replacing the former
+  fixed average so reproductive behaviour adapts dynamically per organism.
 - Expanded inline documentation for maintenance scripts to clarify intent and
   usage.
 - Expanded JSDoc coverage for overlay helpers (celebration glow, life events,
   density/energy/fitness heatmaps, selection zones) so exported drawing
   utilities remain self-documenting.
+- Repositioned the dashboard refresh slider into the Evolution Insights panel so
+  cadence controls live alongside the metrics they affect while continuing to
+  drive leaderboard updates.
 - Raised the default energy regeneration rate from `0.007` to `0.0075` after a
   200-tick headless run showed populations crashing to ~60 survivors (avg tile
   energy ~0.88) versus roughly 300 organisms and ~1.08 average energy with the
@@ -62,9 +72,6 @@ where practical.
   ~0.27 to ~0.30 and raised successful matings from 5/241 to 6/269, easing
   reproduction stalls while preserving the diversity incentive in crowded
   stretches.
-- Relocated the leaderboard refresh slider into the Evolution Insights panel,
-  renaming it "Insights Refresh Interval" so cadence controls live alongside
-  the metrics and leaderboard they influence.
 - Relocated the "Pause When Hidden" toggle beneath the playback controls so the
   auto-pause behaviour lives alongside the Pause/Step actions it complements
   while remaining easy to discover, and kept it disabled by default so

@@ -16,7 +16,6 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       showDensity: true,
       showEnergy: true,
       showFitness: true,
-      showCelebrationAuras: true,
       showLifeEventMarkers: true,
     };
 
@@ -32,7 +31,6 @@ test("createSimulation aligns UI controls with config defaults", async () => {
     assert.is(uiManager.showDensity, true);
     assert.is(uiManager.showEnergy, true);
     assert.is(uiManager.showFitness, true);
-    assert.is(uiManager.showCelebrationAuras, true);
     assert.is(uiManager.showLifeEventMarkers, true);
     assert.is(uiManager.autoPauseOnBlur, false);
 
@@ -52,10 +50,6 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       uiManager.controlsPanel,
       "Show Fitness Heatmap",
     );
-    const celebrationInput = findCheckboxByLabel(
-      uiManager.controlsPanel,
-      "Celebration Glow",
-    );
     const lifeEventInput = findCheckboxByLabel(
       uiManager.controlsPanel,
       "Life Event Markers",
@@ -65,14 +59,12 @@ test("createSimulation aligns UI controls with config defaults", async () => {
     assert.ok(densityInput, "density toggle should exist");
     assert.ok(energyInput, "energy toggle should exist");
     assert.ok(fitnessInput, "fitness toggle should exist");
-    assert.ok(celebrationInput, "celebration toggle should exist");
     assert.ok(lifeEventInput, "life event marker toggle should exist");
 
     assert.is(obstaclesInput.checked, false);
     assert.is(densityInput.checked, true);
     assert.is(energyInput.checked, true);
     assert.is(fitnessInput.checked, true);
-    assert.is(celebrationInput.checked, true);
     assert.is(lifeEventInput.checked, true);
 
     const playbackSlider = findSliderByLabel(
@@ -132,7 +124,6 @@ test("createSimulation honours layout initial settings overrides", async () => {
               showEnergy: true,
               showDensity: true,
               showFitness: true,
-              showCelebrationAuras: true,
               showLifeEventMarkers: true,
               autoPauseOnBlur: true,
               updatesPerSecond: 48,
@@ -148,7 +139,6 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.is(uiManager.showEnergy, true);
     assert.is(uiManager.showDensity, true);
     assert.is(uiManager.showFitness, true);
-    assert.is(uiManager.showCelebrationAuras, true);
     assert.is(uiManager.showLifeEventMarkers, true);
     assert.is(uiManager.autoPauseOnBlur, true);
 
@@ -164,10 +154,6 @@ test("createSimulation honours layout initial settings overrides", async () => {
       uiManager.controlsPanel,
       "Show Fitness Heatmap",
     );
-    const celebrationToggle = findCheckboxByLabel(
-      uiManager.controlsPanel,
-      "Celebration Glow",
-    );
     const lifeEventToggle = findCheckboxByLabel(
       uiManager.controlsPanel,
       "Life Event Markers",
@@ -180,14 +166,12 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.ok(energyToggle, "energy toggle should render");
     assert.ok(densityToggle, "density toggle should render");
     assert.ok(fitnessToggle, "fitness toggle should render");
-    assert.ok(celebrationToggle, "celebration toggle should render");
     assert.ok(lifeEventToggle, "life event toggle should render");
     assert.ok(autoPauseToggle, "auto-pause toggle should render");
 
     assert.is(energyToggle.checked, true);
     assert.is(densityToggle.checked, true);
     assert.is(fitnessToggle.checked, true);
-    assert.is(celebrationToggle.checked, true);
     assert.is(lifeEventToggle.checked, true);
     assert.is(autoPauseToggle.checked, true);
     assert.is(uiManager.getUpdatesPerSecond(), 48);
@@ -199,7 +183,6 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.is(state.showEnergy, true);
     assert.is(state.showDensity, true);
     assert.is(state.showFitness, true);
-    assert.is(state.showCelebrationAuras, true);
     assert.is(state.showLifeEventMarkers, true);
     assert.is(state.autoPauseOnBlur, true);
     assert.is(simulation.engine.isPaused(), true);

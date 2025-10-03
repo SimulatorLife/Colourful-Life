@@ -14,18 +14,22 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 ## Quick start
 
+Colourful Life targets **Node.js 18 or newer**. After cloning the repository:
+
 ```bash
 npm ci
-npm run start    # Parcel dev server with hot reloading
+npm run start            # Parcel dev server with hot reloading
 
 # Optional helpers
-npm run build    # Production bundle written to dist/
-npm run clean    # Remove dist/ and the Parcel cache when builds misbehave
-npm run format   # Format code with Prettier
-npm run format:check  # Validate formatting without writing
-npm run test     # Node.js test suites
-npm run lint     # ESLint across JS modules and inline HTML
-npm run lint:fix # ESLint with autofix enabled
+npm run build            # Production bundle written to dist/
+npm run clean            # Remove dist/ and the Parcel cache when builds misbehave
+npm run format           # Format code with Prettier
+npm run format:check     # Validate formatting without writing
+npm run format:workflows # Format GitHub workflow files (ignores .gitignore rules)
+npm run lint             # ESLint across JS modules and inline HTML
+npm run lint:fix         # ESLint with autofix enabled
+npm test                 # Node.js test suites
+npm run prepare          # Reinstall Husky hooks when the .husky folder changes
 ```
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
@@ -40,10 +44,6 @@ Tune baseline energy and density behaviour without editing source by setting env
 - `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Adjusts the normalized cutoff the stats system uses when counting organisms as "active" for a trait, keeping telemetry aligned with looser or stricter interpretations of participation.
 
 Values outside their accepted ranges fall back to the defaults defined in [`src/config.js`](src/config.js) so experiments remain predictable across environments and overlays stay aligned with the active configuration.
-
-### Optional celebration glow overlay
-
-Flip on the **Celebration Glow** checkbox in the Overlays panel to surround the most successful organisms with a soft aurora. The highlight quietly layers on top of the existing canvas without changing simulation mechanics, respects motion-sensitive setups (no flashing or animation), and avoids obscuring other overlays by using gentle transparency. Toggle it off at any time to return to the standard presentation.
 
 ### Life event marker overlay
 
@@ -65,7 +65,9 @@ The simulation runs on cooperating modules housed in `src/`:
 - **Interaction system** (`src/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
 - **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and color overlays.
 - **Stats & leaderboard** (`src/stats.js`, `src/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface active environmental event summaries (intensity, coverage, and remaining duration), and select the top-performing organisms. Organism age readings surfaced here and in the UI are measured in simulation ticks so observers can translate them into seconds using the active tick rate.
+- **Fitness scoring** (`src/fitness.mjs`) — Computes composite organism fitness used by the leaderboard, overlays, and telemetry, blending survival, reproduction, and energy trends.
 - **UI manager** (`src/ui/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/ui/headlessUiManager.js` mirrors the interface for tests and Node scripts.
+- **UI bridge** (`src/ui/simulationUiBridge.js`) — Wires the simulation engine to either the full UI or the headless adapter, keeping metrics streams, pause state, reproduction multipliers, and slider updates in sync across environments.
 - **Selection tooling** (`src/grid/selectionManager.js`, `src/grid/reproductionZonePolicy.js`) — Defines preset mating zones, keeps geometry caches in sync with grid dimensions, and exposes helpers consumed by UI controls and reproduction policies.
 - **Engine environment adapters** (`src/engine/environment.js`) — Normalize canvas lookups, sizing, and timing providers so the simulation can run inside browsers, tests, and offscreen contexts without bespoke wiring.
 - **Utility helpers** (`src/utils.js`) — Shared math, RNG, ranking, error-reporting, and cloning helpers consumed by the engine, UI, and tests.
@@ -79,6 +81,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 - Resolve or create a canvas using [`resolveCanvas`](src/engine/environment.js) and [`ensureCanvasDimensions`](src/engine/environment.js).
 - Construct the grid, stats, selection manager, and event manager, exposing them on the returned controller (`{ grid, stats, selectionManager, eventManager }`).
 - Mount the full UI via [`UIManager`](src/ui/uiManager.js) or build a headless adapter with [`createHeadlessUiManager`](src/ui/headlessUiManager.js).
+- Link the engine and UI through [`bindSimulationToUi`](src/ui/simulationUiBridge.js) so pause state, reproduction multipliers, metrics streams, and leaderboard updates stay synchronised across browser and headless contexts.
 
 Headless consumers can call `controller.tick()` to advance the simulation one step, `controller.resetWorld()` to reseed organisms with optional overrides, and subscribe to `SimulationEngine` events (`tick`, `metrics`, `leaderboard`, `state`) for instrumentation.
 
@@ -106,12 +109,12 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 ## Repository layout
 
 - `src/` — Simulation engine, UI construction, and supporting utilities.
-  - `src/engine/` — Canvas/timing adapters consumed by the engine and headless entry points.
+  - `src/engine/` — Canvas/timing adapters (e.g., `resolveCanvas`, `ensureCanvasDimensions`, `resolveTimingProviders`) and helpers consumed by the engine and headless entry points.
   - `src/events/` — Event configuration, context helpers, and presets.
-  - `src/grid/` — Adaptors for interacting with the grid from other systems.
-  - `src/ui/` — UI manager, control builders, overlays, and debugging helpers.
+  - `src/grid/` — Grid orchestration, obstacle presets, and selection tooling exposed to other systems.
+  - `src/ui/` — UI manager, control builders, overlays, the UI bridge, and debugging helpers.
 - `scripts/` — Node scripts (e.g., performance profiling) that exercise the engine headlessly.
-- `test/` — Node.js test suites executed via `npm test`.
+- `test/` — Node.js test suites executed via `npm test` plus shared harness utilities accessed through the `#tests/*` import aliases in `package.json`.
 - `docs/` — Architecture notes, developer guides, and background reading.
 - `index.html`, `styles.css` — Browser entry point and shared styles.
 - `eslint.config.mjs`, `package.json` — Tooling and dependency configuration.
@@ -119,26 +122,27 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 ## Key scripts and commands
 
-| Command                                   | Purpose                                                                                       |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `npm run start`                           | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.  |
-| `npm run build`                           | Produce an optimized production bundle in `dist/`.                                            |
-| `npm run clean`                           | Remove `dist/` and `.parcel-cache/` to reset Parcel caches.                                   |
-| `npm run lint` / `npm run lint:fix`       | Run ESLint across the codebase, optionally applying autofixes.                                |
-| `npm run format` / `npm run format:check` | Apply or verify Prettier formatting for source, documentation, and configuration files.       |
-| `npm test`                                | Execute the Node.js test suites covering simulation and UI modules.                           |
-| `node scripts/profile-energy.mjs`         | Benchmark the energy preparation loop with configurable grid sizes via environment variables. |
+| Command                                                                | Purpose                                                                                                              |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `npm run start`                                                        | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.                         |
+| `npm run build`                                                        | Produce an optimized production bundle in `dist/`.                                                                   |
+| `npm run clean`                                                        | Remove `dist/` and `.parcel-cache/` to reset Parcel caches.                                                          |
+| `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                       |
+| `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions. |
+| `npm test`                                                             | Execute the Node.js test suites covering simulation and UI modules.                                                  |
+| `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                               |
+| `node scripts/profile-energy.mjs`                                      | Benchmark the energy preparation loop with configurable grid sizes via environment variables.                        |
 
 ## Further reading
 
-- [`docs/architecture-overview.md`](docs/architecture-overview.md) — Component responsibilities and data flow diagrams.
-- [`docs/architecture-overview.md`](docs/architecture-overview.md#headless-and-scripted-usage) — Notes on embedding the engine without the browser UI.
-- [`docs/developer-guide.md`](docs/developer-guide.md) — Conventions for contributors, testing expectations, and documentation tips.
+- [`docs/architecture-overview.md`](docs/architecture-overview.md) — Component responsibilities, UI/headless interactions, and data flow diagrams.
+- [`docs/developer-guide.md`](docs/developer-guide.md) — Conventions for contributors, testing expectations, documentation tips, and tooling.
+- [`CHANGELOG.md`](CHANGELOG.md) — Ongoing log of notable behavioural, tooling, and documentation changes.
 - Inline JSDoc and comments throughout `src/` describing exported functions, complex routines, and configuration helpers.
 - Environment variable reference in [`src/config.js`](src/config.js) for tuning energy caps and regeneration penalties without patching source.
 
 ## Documentation map
 
-- [`docs/architecture-overview.md`](docs/architecture-overview.md) details module boundaries, update loops, and subsystem hand-offs.
+- [`docs/architecture-overview.md`](docs/architecture-overview.md) details module boundaries, update loops, subsystem hand-offs, and the UI bridge.
 - [`docs/developer-guide.md`](docs/developer-guide.md) covers environment setup, workflow practices, and expectations for testing and documentation.
 - [`CHANGELOG.md`](CHANGELOG.md) captures notable changes between releases so contributors can track evolution over time.

@@ -6,6 +6,7 @@ import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
   COMBAT_EDGE_SHARPNESS_DEFAULT,
+  COMBAT_TERRITORY_EDGE_FACTOR,
   SIMULATION_DEFAULTS,
   resolveSimulationDefaults,
 } from "./config.js";
@@ -70,6 +71,42 @@ const MAX_CONCURRENT_EVENTS_FALLBACK = Math.max(
 );
 
 const noop = () => {};
+
+function coerceBoolean(candidate, fallback = false) {
+  if (typeof candidate === "boolean") {
+    return candidate;
+  }
+
+  if (candidate == null) {
+    return fallback;
+  }
+
+  if (typeof candidate === "number") {
+    return Number.isFinite(candidate) ? candidate !== 0 : fallback;
+  }
+
+  if (typeof candidate === "string") {
+    const normalized = candidate.trim().toLowerCase();
+
+    if (normalized.length === 0) return fallback;
+    if (normalized === "true" || normalized === "yes" || normalized === "on") {
+      return true;
+    }
+    if (normalized === "false" || normalized === "no" || normalized === "off") {
+      return false;
+    }
+
+    const numeric = Number(normalized);
+
+    if (!Number.isNaN(numeric)) {
+      return numeric !== 0;
+    }
+
+    return fallback;
+  }
+
+  return Boolean(candidate);
+}
 
 function sanitizeMaxConcurrentEvents(value, fallback = MAX_CONCURRENT_EVENTS_FALLBACK) {
   return sanitizeNumber(value, {
@@ -149,19 +186,11 @@ export default class SimulationEngine {
     const { width, height } = ensureCanvasDimensions(resolvedCanvas, config);
     const toFinite = toFiniteOrNull;
     const resolvePositiveInt = (value, fallback) => {
-      const numeric = toFinite(value);
+      const candidate = [value, fallback]
+        .map(toFinite)
+        .find((numeric) => numeric != null && numeric > 0);
 
-      if (numeric != null && numeric > 0) {
-        return Math.floor(numeric);
-      }
-
-      const fallbackNumeric = toFinite(fallback);
-
-      if (fallbackNumeric != null && fallbackNumeric > 0) {
-        return Math.floor(fallbackNumeric);
-      }
-
-      return 1;
+      return candidate != null ? Math.floor(candidate) : 1;
     };
     const resolvedCellSize = toFinite(config.cellSize);
     const cellSize = resolvedCellSize && resolvedCellSize > 0 ? resolvedCellSize : 5;
@@ -295,11 +324,11 @@ export default class SimulationEngine {
       energyRegenRate: defaults.energyRegenRate,
       energyDiffusionRate: defaults.energyDiffusionRate,
       combatEdgeSharpness: defaults.combatEdgeSharpness,
+      combatTerritoryEdgeFactor: defaults.combatTerritoryEdgeFactor,
       showObstacles: defaults.showObstacles,
       showEnergy: defaults.showEnergy,
       showDensity: defaults.showDensity,
       showFitness: defaults.showFitness,
-      showCelebrationAuras: defaults.showCelebrationAuras,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
@@ -637,6 +666,8 @@ export default class SimulationEngine {
           SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
         combatEdgeSharpness:
           this.state.combatEdgeSharpness ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
+        combatTerritoryEdgeFactor:
+          this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
       });
 
       this.lastSnapshot = snapshot;
@@ -673,7 +704,6 @@ export default class SimulationEngine {
       showDensity: this.state.showDensity ?? false,
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
-      showCelebrationAuras: this.state.showCelebrationAuras ?? false,
       showLifeEventMarkers: includeLifeEventMarkers,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
@@ -708,6 +738,8 @@ export default class SimulationEngine {
               )
                 ? this.state.eventStrengthMultiplier
                 : 1,
+              combatTerritoryEdgeFactor:
+                this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
             },
           });
         }
@@ -720,7 +752,11 @@ export default class SimulationEngine {
     }
 
     if (scheduleNext) {
-      this.#scheduleNextFrame();
+      const shouldContinue = !paused || this.pendingSlowUiUpdate;
+
+      if (shouldContinue) {
+        this.#scheduleNextFrame();
+      }
     }
 
     return tickOccurred;
@@ -1004,6 +1040,8 @@ export default class SimulationEngine {
       eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
         ? this.state.eventStrengthMultiplier
         : 1,
+      combatTerritoryEdgeFactor:
+        this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
     };
 
     if (this.lastMetrics) {
@@ -1038,7 +1076,6 @@ export default class SimulationEngine {
       showDensity: this.state.showDensity ?? false,
       showFitness: this.state.showFitness ?? false,
       showObstacles,
-      showCelebrationAuras: this.state.showCelebrationAuras ?? false,
       showLifeEventMarkers: includeLifeEventMarkers,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
@@ -1170,6 +1207,16 @@ export default class SimulationEngine {
     this.#updateStateAndFlag({ combatEdgeSharpness: sanitized });
   }
 
+  setCombatTerritoryEdgeFactor(value) {
+    const sanitized = sanitizeNumber(value, {
+      fallback: this.state.combatTerritoryEdgeFactor,
+      min: 0,
+      max: 1,
+    });
+
+    this.#updateStateAndFlag({ combatTerritoryEdgeFactor: sanitized });
+  }
+
   setDensityEffectMultiplier(value) {
     const sanitized = sanitizeNumber(value, {
       fallback: this.state.densityEffectMultiplier,
@@ -1248,51 +1295,13 @@ export default class SimulationEngine {
     showEnergy,
     showDensity,
     showFitness,
-    showCelebrationAuras,
     showLifeEventMarkers,
   }) {
-    const coerceBoolean = (candidate, fallback) => {
-      if (typeof candidate === "boolean") {
-        return candidate;
-      }
-
-      if (candidate == null) {
-        return fallback;
-      }
-
-      if (typeof candidate === "number") {
-        return Number.isFinite(candidate) ? candidate !== 0 : fallback;
-      }
-
-      if (typeof candidate === "string") {
-        const normalized = candidate.trim().toLowerCase();
-
-        if (normalized.length === 0) return fallback;
-        if (normalized === "true" || normalized === "yes" || normalized === "on") {
-          return true;
-        }
-        if (normalized === "false" || normalized === "no" || normalized === "off") {
-          return false;
-        }
-
-        const numeric = Number(normalized);
-
-        if (!Number.isNaN(numeric)) {
-          return numeric !== 0;
-        }
-
-        return fallback;
-      }
-
-      return Boolean(candidate);
-    };
-
     const entries = Object.entries({
       showObstacles,
       showEnergy,
       showDensity,
       showFitness,
-      showCelebrationAuras,
       showLifeEventMarkers,
     })
       .filter(([, value]) => value !== undefined)
@@ -1309,7 +1318,7 @@ export default class SimulationEngine {
   }
 
   setAutoPauseOnBlur(value) {
-    const enabled = Boolean(value);
+    const enabled = coerceBoolean(value, this.autoPauseOnBlur);
 
     if (this.autoPauseOnBlur === enabled) return;
 
@@ -1341,6 +1350,9 @@ export default class SimulationEngine {
         break;
       case "combatEdgeSharpness":
         this.setCombatEdgeSharpness(value);
+        break;
+      case "combatTerritoryEdgeFactor":
+        this.setCombatTerritoryEdgeFactor(value);
         break;
       case "updatesPerSecond":
         this.setUpdatesPerSecond(value);
@@ -1384,7 +1396,6 @@ export default class SimulationEngine {
       case "showEnergy":
       case "showDensity":
       case "showFitness":
-      case "showCelebrationAuras":
       case "showLifeEventMarkers":
         this.setOverlayVisibility({ [key]: value });
         break;

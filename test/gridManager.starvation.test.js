@@ -147,3 +147,57 @@ test("reseeding respects available tile energy reserves", async () => {
     `Reseeding should not create energy (expected ≤ ${initialTotalTileEnergy}, received ${totalEnergyAfter})`,
   );
 });
+
+test("population scarcity emits signal without forced reseeding", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class SparseGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new SparseGridManager(12, 12, {
+    eventManager: { activeEvents: [] },
+    stats: {},
+    ctx: {},
+    cellSize: 1,
+    rng: () => 1,
+  });
+
+  gm.activeCells.clear();
+  gm.grid.forEach((row, r) => {
+    row.fill(null);
+    gm.energyGrid[r].fill(gm.maxTileEnergy / 2);
+  });
+
+  const result = gm.update();
+
+  assert.is(gm.activeCells.size, 0, "grid should remain empty without hard reseeding");
+  assert.ok(
+    gm.populationScarcitySignal > 0,
+    "scarcity signal should reflect that population is below the minimum",
+  );
+  assert.ok(
+    result.populationScarcity > 0,
+    "snapshot should expose the scarcity indicator",
+  );
+});
+
+test("init guarantees at least the minimum population", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  const rows = 24;
+  const cols = 24;
+  const gm = new GridManager(rows, cols, {
+    eventManager: { activeEvents: [] },
+    stats: { onBirth() {} },
+    ctx: {},
+    cellSize: 1,
+    rng: () => 0.99,
+  });
+
+  assert.is(
+    gm.activeCells.size,
+    gm.minPopulation,
+    "constructor seeding should top up to the minimum population",
+  );
+});

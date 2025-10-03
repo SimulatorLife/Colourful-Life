@@ -67,7 +67,8 @@ controls("createSliderRow wires live formatting and change callbacks", () => {
   withMockDocument(() => {
     const parent = document.createElement("div");
     let receivedValue = null;
-    const input = createSliderRow(parent, {
+
+    createSliderRow(parent, {
       label: "Energy",
       min: 0,
       max: 10,
@@ -129,7 +130,6 @@ controls("createSelectRow renders dropdowns and invokes change callbacks", () =>
     });
 
     const row = parent.children[0];
-    const [, line] = row.children;
 
     assert.is(row.tagName, "LABEL");
     assert.is(row.title, "Pick a climate preset");
