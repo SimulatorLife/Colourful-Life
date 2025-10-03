@@ -753,10 +753,11 @@ export default class UIManager {
     return `${head}, and ${tail}`;
   }
 
-  #applyWorldGeometry(values = {}) {
+  #applyWorldGeometry(values = {}, options = {}) {
     if (typeof this.setWorldGeometry !== "function") return null;
 
-    const request = this.#normalizeGeometryValues(values);
+    const normalized = this.#normalizeGeometryValues(values);
+    const request = { ...normalized, ...options };
     let result = null;
 
     try {
@@ -766,7 +767,7 @@ export default class UIManager {
       result = request;
     }
 
-    const applied = this.#normalizeGeometryValues(result, request);
+    const applied = this.#normalizeGeometryValues(result, normalized);
 
     this.#updateGeometryInputs(applied);
     this.#scheduleUpdate();
@@ -2258,12 +2259,17 @@ export default class UIManager {
     applyButton.type = "button";
     applyButton.textContent = "Apply Geometry";
     applyButton.title = "Resize the grid using the values above.";
-    applyButton.addEventListener("click", () => {
-      this.#applyWorldGeometry({
-        cellSize: Number.parseFloat(cellSizeInput.value),
-        rows: Number.parseFloat(rowsInput.value),
-        cols: Number.parseFloat(colsInput.value),
-      });
+    applyButton.addEventListener("click", (event) => {
+      this.#applyWorldGeometry(
+        {
+          cellSize: Number.parseFloat(cellSizeInput.value),
+          rows: Number.parseFloat(rowsInput.value),
+          cols: Number.parseFloat(colsInput.value),
+        },
+        {
+          reseed: Boolean(event?.shiftKey),
+        },
+      );
     });
     buttonRow.appendChild(applyButton);
     applyButton.disabled = true;
