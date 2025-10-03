@@ -1196,7 +1196,6 @@ export default class GridManager {
       obstaclePresets,
       rng,
       brainSnapshotCollector,
-      autoReseed = false,
     } = options;
     const {
       eventManager: resolvedEventManager,
@@ -1244,7 +1243,6 @@ export default class GridManager {
         ? sanitizedRandomPool
         : null;
     this.reproductionZones = new ReproductionZonePolicy();
-    this.autoReseed = Boolean(autoReseed);
     Object.defineProperty(this, "selectionManager", {
       configurable: true,
       enumerable: true,
@@ -4187,10 +4185,6 @@ export default class GridManager {
     this.tickCount += 1;
 
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
-
-    if (this.autoReseed && this.activeCells.size < this.minPopulation) {
-      this.seed(this.activeCells.size, this.minPopulation);
-    }
 
     const { densityGrid } = this.prepareTick({
       eventManager,
