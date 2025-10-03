@@ -8,6 +8,7 @@ import {
   createRankedBuffer,
   createRNG,
   reportError,
+  toFiniteOrNull,
   warnOnce,
 } from "../src/utils.js";
 
@@ -203,4 +204,19 @@ test("reportError logs errors and supports optional deduplication", () => {
     ],
   );
   assert.is(calls[0][1], calls[1][1]);
+});
+
+test("toFiniteOrNull converts numeric-like values and discards invalid input", () => {
+  assert.is(toFiniteOrNull(42), 42);
+  assert.is(toFiniteOrNull(3.14), 3.14);
+  assert.is(toFiniteOrNull("7.5"), 7.5);
+  assert.is(toFiniteOrNull("  12  "), 12);
+  assert.is(toFiniteOrNull(BigInt(8)), 8);
+
+  assert.is(toFiniteOrNull(null), null);
+  assert.is(toFiniteOrNull(undefined), null);
+  assert.is(toFiniteOrNull(""), null);
+  assert.is(toFiniteOrNull("abc"), null);
+  assert.is(toFiniteOrNull(Number.POSITIVE_INFINITY), null);
+  assert.is(toFiniteOrNull(Number.NaN), null);
 });
