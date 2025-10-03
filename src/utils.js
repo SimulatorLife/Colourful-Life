@@ -249,6 +249,15 @@ export function createRNG(seed) {
 const warnedMessages = new Set();
 const reportedErrors = new Set();
 
+function logWithOptionalError(method, message, error) {
+  const consoleRef = globalThis.console;
+  const logger = consoleRef?.[method];
+
+  if (typeof logger !== "function") return;
+
+  logger.call(consoleRef, message, ...(error ? [error] : []));
+}
+
 /**
  * Reports an error to the console with an optional deduplication toggle so
  * recoverable failures can surface diagnostic details without spamming logs.
@@ -269,13 +278,7 @@ export function reportError(message, error, options = {}) {
     reportedErrors.add(errorKey);
   }
 
-  if (typeof console !== "undefined" && typeof console.error === "function") {
-    if (error) {
-      console.error(message, error);
-    } else {
-      console.error(message);
-    }
-  }
+  logWithOptionalError("error", message, error);
 }
 
 /**
@@ -295,11 +298,5 @@ export function warnOnce(message, error) {
   if (warnedMessages.has(warningKey)) return;
   warnedMessages.add(warningKey);
 
-  if (typeof console !== "undefined" && typeof console.warn === "function") {
-    if (error) {
-      console.warn(message, error);
-    } else {
-      console.warn(message);
-    }
-  }
+  logWithOptionalError("warn", message, error);
 }
