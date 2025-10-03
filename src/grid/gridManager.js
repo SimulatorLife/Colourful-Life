@@ -157,7 +157,6 @@ export default class GridManager {
   static combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT;
   static combatTerritoryEdgeFactor = COMBAT_TERRITORY_EDGE_FACTOR;
   #spawnCandidateScratch = null;
-  #eventScratch = null;
   #segmentWindowScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
@@ -251,16 +250,6 @@ export default class GridManager {
     return clamp(drive * 0.7 + environment * 0.3, 0, 1);
   }
 
-  #getEventScratch() {
-    if (!this.#eventScratch) {
-      this.#eventScratch = [];
-    }
-
-    this.#eventScratch.length = 0;
-
-    return this.#eventScratch;
-  }
-
   #getSegmentWindowScratch() {
     if (!this.#segmentWindowScratch) {
       this.#segmentWindowScratch = [];
@@ -291,48 +280,6 @@ export default class GridManager {
     }
 
     return this.#eventRowsScratch;
-  }
-
-  #resolveEventModifiers({ row, col, rowEvents, eventOptions, useSegmentedEvents }) {
-    if (!eventOptions || !rowEvents || rowEvents.length === 0) {
-      return null;
-    }
-
-    let previousEvents = null;
-
-    if (useSegmentedEvents) {
-      const scratch = this.#getEventScratch();
-
-      for (let i = 0; i < rowEvents.length; i++) {
-        const entry = rowEvents[i];
-
-        if (col < entry.startCol || col >= entry.endCol) continue;
-
-        scratch.push(entry.event);
-      }
-
-      if (scratch.length === 0) {
-        return null;
-      }
-
-      previousEvents = eventOptions.events;
-      eventOptions.events = scratch;
-    } else {
-      previousEvents = eventOptions.events;
-      eventOptions.events = rowEvents;
-    }
-
-    eventOptions.row = row;
-    eventOptions.col = col;
-    const modifiers = accumulateEventModifiers(eventOptions);
-
-    eventOptions.events = previousEvents;
-
-    if (useSegmentedEvents) {
-      this.#eventScratch.length = 0;
-    }
-
-    return modifiers;
   }
 
   static #computePairDiversityThreshold({
@@ -1962,26 +1909,27 @@ export default class GridManager {
             nextSegmentIndex += 1;
           }
 
-          columnEvents.length = 0;
-
-          let activeCount = 0;
+          let nextActiveCount = 0;
+          let eventCount = 0;
 
           for (let i = 0; i < activeSegments.length; i++) {
             const segment = activeSegments[i];
 
-            if (c < segment.endCol) {
-              if (!isObstacle) {
-                columnEvents.push(segment.event);
-              }
+            if (segment.endCol > c) {
+              activeSegments[nextActiveCount] = segment;
+              nextActiveCount += 1;
 
-              activeSegments[activeCount] = segment;
-              activeCount += 1;
+              if (!isObstacle) {
+                columnEvents[eventCount] = segment.event;
+                eventCount += 1;
+              }
             }
           }
 
-          activeSegments.length = activeCount;
+          activeSegments.length = nextActiveCount;
 
           if (isObstacle) {
+            columnEvents.length = 0;
             nextRow[c] = 0;
             if (energyRow[c] !== 0) energyRow[c] = 0;
             if (deltaRow) deltaRow[c] = 0;
@@ -1989,28 +1937,37 @@ export default class GridManager {
             continue;
           }
 
-          let densityValue = hasDensityGrid ? densityRow?.[c] : null;
+          columnEvents.length = eventCount;
 
-          if (densityValue == null) {
-            densityValue = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
+          const densityRowValue = densityRow ? densityRow[c] : null;
+          const baseDensity =
+            densityRowValue == null
+              ? this.localDensity(r, c, GridManager.DENSITY_RADIUS)
+              : densityRowValue;
+          let effectiveDensity = (baseDensity ?? 0) * normalizedDensityMultiplier;
+
+          if (effectiveDensity <= 0) {
+            effectiveDensity = 0;
+          } else if (effectiveDensity >= 1) {
+            effectiveDensity = 1;
           }
 
-          const effectiveDensity = clamp(
-            (densityValue ?? 0) * normalizedDensityMultiplier,
-            0,
-            1,
-          );
           const currentEnergy = energyRow[c];
           let regen =
             maxTileEnergy > 0 ? regenRate * (maxTileEnergy - currentEnergy) : 0;
+          const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
 
-          regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * effectiveDensity);
+          if (regenPenalty <= 0) {
+            regen = 0;
+          } else {
+            regen *= regenPenalty;
+          }
 
           let regenMultiplier = 1;
           let regenAdd = 0;
           let drain = 0;
 
-          if (columnEvents.length > 0) {
+          if (eventCount > 0) {
             eventOptions.row = r;
             eventOptions.col = c;
             eventOptions.events = columnEvents;
@@ -2022,8 +1979,6 @@ export default class GridManager {
               regenAdd = modifiers.regenAdd;
               drain = modifiers.drainAdd;
             }
-
-            columnEvents.length = 0;
           }
 
           regen = regen * regenMultiplier + regenAdd;
@@ -2061,11 +2016,24 @@ export default class GridManager {
 
           let nextEnergy = currentEnergy + regen - drain + diffusion;
 
-          nextEnergy = clamp(nextEnergy, 0, maxTileEnergy);
+          if (nextEnergy <= 0) {
+            nextEnergy = 0;
+          } else if (nextEnergy >= maxTileEnergy) {
+            nextEnergy = maxTileEnergy;
+          }
+
           nextRow[c] = nextEnergy;
 
           if (deltaRow) {
-            deltaRow[c] = clamp((nextEnergy - currentEnergy) * invMaxTileEnergy, -1, 1);
+            let normalizedDelta = (nextEnergy - currentEnergy) * invMaxTileEnergy;
+
+            if (normalizedDelta < -1) {
+              normalizedDelta = -1;
+            } else if (normalizedDelta > 1) {
+              normalizedDelta = 1;
+            }
+
+            deltaRow[c] = normalizedDelta;
           }
         }
 
@@ -2083,43 +2051,44 @@ export default class GridManager {
           continue;
         }
 
-        let densityValue = hasDensityGrid ? densityRow?.[c] : null;
+        const densityRowValue = densityRow ? densityRow[c] : null;
+        const baseDensity =
+          densityRowValue == null
+            ? this.localDensity(r, c, GridManager.DENSITY_RADIUS)
+            : densityRowValue;
+        let effectiveDensity = (baseDensity ?? 0) * normalizedDensityMultiplier;
 
-        if (densityValue == null) {
-          densityValue = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
+        if (effectiveDensity <= 0) {
+          effectiveDensity = 0;
+        } else if (effectiveDensity >= 1) {
+          effectiveDensity = 1;
         }
 
-        const effectiveDensity = clamp(
-          (densityValue ?? 0) * normalizedDensityMultiplier,
-          0,
-          1,
-        );
         const currentEnergy = energyRow[c];
         let regen = maxTileEnergy > 0 ? regenRate * (maxTileEnergy - currentEnergy) : 0;
+        const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
 
-        regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * effectiveDensity);
+        if (regenPenalty <= 0) {
+          regen = 0;
+        } else {
+          regen *= regenPenalty;
+        }
 
         let regenMultiplier = 1;
         let regenAdd = 0;
         let drain = 0;
 
         if (rowHasEvents) {
-          const modifiers = this.#resolveEventModifiers({
-            row: r,
-            col: c,
-            rowEvents,
-            eventOptions,
-            useSegmentedEvents: usingSegmentedEvents,
-          });
+          eventOptions.row = r;
+          eventOptions.col = c;
+          eventOptions.events = rowEvents;
+
+          const modifiers = accumulateEventModifiers(eventOptions);
 
           if (modifiers) {
             regenMultiplier = modifiers.regenMultiplier;
             regenAdd = modifiers.regenAdd;
             drain = modifiers.drainAdd;
-          } else {
-            regenMultiplier = 1;
-            regenAdd = 0;
-            drain = 0;
           }
         }
 
@@ -2158,11 +2127,24 @@ export default class GridManager {
 
         let nextEnergy = currentEnergy + regen - drain + diffusion;
 
-        nextEnergy = clamp(nextEnergy, 0, maxTileEnergy);
+        if (nextEnergy <= 0) {
+          nextEnergy = 0;
+        } else if (nextEnergy >= maxTileEnergy) {
+          nextEnergy = maxTileEnergy;
+        }
+
         nextRow[c] = nextEnergy;
 
         if (deltaRow) {
-          deltaRow[c] = clamp((nextEnergy - currentEnergy) * invMaxTileEnergy, -1, 1);
+          let normalizedDelta = (nextEnergy - currentEnergy) * invMaxTileEnergy;
+
+          if (normalizedDelta < -1) {
+            normalizedDelta = -1;
+          } else if (normalizedDelta > 1) {
+            normalizedDelta = 1;
+          }
+
+          deltaRow[c] = normalizedDelta;
         }
       }
     }
