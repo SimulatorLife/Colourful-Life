@@ -154,6 +154,7 @@ export default class UIManager {
     this.densityEffectMultiplier = defaults.densityEffectMultiplier;
     this.mutationMultiplier = defaults.mutationMultiplier;
     this.combatEdgeSharpness = defaults.combatEdgeSharpness;
+    this.combatTerritoryEdgeFactor = defaults.combatTerritoryEdgeFactor;
     this.matingDiversityThreshold = defaults.matingDiversityThreshold;
     this.lowDiversityReproMultiplier = defaults.lowDiversityReproMultiplier;
     this.lowDiversitySlider = null;
@@ -2308,6 +2309,18 @@ export default class UIManager {
         format: (v) => v.toFixed(2),
         getValue: () => this.combatEdgeSharpness,
         setValue: (v) => this.#updateSetting("combatEdgeSharpness", v),
+        position: "beforeOverlays",
+      }),
+      withSliderConfig("combatTerritoryEdgeFactor", {
+        label: "Territory Edge Influence",
+        min: 0,
+        max: 1,
+        step: 0.05,
+        title:
+          "Scales how strongly density advantages sway combat outcomes (0 disables territory edge)",
+        format: (v) => v.toFixed(2),
+        getValue: () => this.combatTerritoryEdgeFactor,
+        setValue: (v) => this.#updateSetting("combatTerritoryEdgeFactor", v),
         position: "beforeOverlays",
       }),
       lowDiversitySliderConfig,

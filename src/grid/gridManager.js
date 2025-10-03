@@ -26,6 +26,7 @@ import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   DENSITY_RADIUS_DEFAULT,
   COMBAT_EDGE_SHARPNESS_DEFAULT,
+  COMBAT_TERRITORY_EDGE_FACTOR,
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
 } from "../config.js";
@@ -154,6 +155,7 @@ export default class GridManager {
   static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
   static maxTileEnergy = MAX_TILE_ENERGY;
   static combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT;
+  static combatTerritoryEdgeFactor = COMBAT_TERRITORY_EDGE_FACTOR;
   #spawnCandidateScratch = null;
   #eventScratch = null;
   #segmentWindowScratch = null;
@@ -985,6 +987,7 @@ export default class GridManager {
     this.interactionAdapter = new GridInteractionAdapter({ gridManager: this });
     this.interactionSystem = new InteractionSystem({
       adapter: this.interactionAdapter,
+      combatTerritoryEdgeFactor: GridManager.combatTerritoryEdgeFactor,
     });
     this.populationScarcitySignal = 0;
     this.brainSnapshotCollector = toBrainSnapshotCollector(brainSnapshotCollector);
@@ -2549,6 +2552,7 @@ export default class GridManager {
       eventStrengthMultiplier,
       mutationMultiplier,
       combatEdgeSharpness,
+      combatTerritoryEdgeFactor,
     },
   ) {
     const cell = this.grid[row][col];
@@ -2687,6 +2691,7 @@ export default class GridManager {
         densityEffectMultiplier,
         densityGrid,
         combatEdgeSharpness,
+        combatTerritoryEdgeFactor,
       })
     ) {
       return;
@@ -3315,7 +3320,13 @@ export default class GridManager {
     col,
     cell,
     { enemies, society = [] },
-    { stats, densityEffectMultiplier, densityGrid, combatEdgeSharpness },
+    {
+      stats,
+      densityEffectMultiplier,
+      densityGrid,
+      combatEdgeSharpness,
+      combatTerritoryEdgeFactor,
+    },
   ) {
     if (!Array.isArray(enemies) || enemies.length === 0) return false;
 
@@ -3371,6 +3382,7 @@ export default class GridManager {
             densityGrid,
             densityEffectMultiplier,
             combatEdgeSharpness,
+            combatTerritoryEdgeFactor,
           });
       } else {
         this.boundMoveToTarget(
@@ -3454,12 +3466,16 @@ export default class GridManager {
     matingDiversityThreshold,
     lowDiversityReproMultiplier,
     combatEdgeSharpness = GridManager.combatEdgeSharpness,
+    combatTerritoryEdgeFactor = GridManager.combatTerritoryEdgeFactor,
   } = {}) {
     const stats = this.stats;
     const eventManager = this.eventManager;
     const combatSharpness = Number.isFinite(combatEdgeSharpness)
       ? combatEdgeSharpness
       : GridManager.combatEdgeSharpness;
+    const territoryFactor = Number.isFinite(combatTerritoryEdgeFactor)
+      ? clamp(combatTerritoryEdgeFactor, 0, 1)
+      : GridManager.combatTerritoryEdgeFactor;
 
     this.setMatingDiversityOptions({
       threshold:
@@ -3514,6 +3530,7 @@ export default class GridManager {
         eventStrengthMultiplier,
         mutationMultiplier,
         combatEdgeSharpness: combatSharpness,
+        combatTerritoryEdgeFactor: territoryFactor,
       });
     }
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
