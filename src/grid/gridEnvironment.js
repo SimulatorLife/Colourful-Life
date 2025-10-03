@@ -1,13 +1,7 @@
 const GLOBAL_SCOPE = typeof globalThis !== "undefined" ? globalThis : {};
 
 function pickDefined(...candidates) {
-  for (const candidate of candidates) {
-    if (candidate !== undefined) {
-      return candidate;
-    }
-  }
-
-  return undefined;
+  return candidates.find((candidate) => candidate !== undefined);
 }
 
 function resolveEventManager(options, fallback) {
@@ -49,17 +43,11 @@ function resolveCellSize(options, fallback) {
       ? options.environment
       : null;
 
-  const candidates = [options.cellSize, environment?.cellSize, fallback?.cellSize];
+  const resolvedSize = [options.cellSize, environment?.cellSize, fallback?.cellSize]
+    .map((candidate) => Number(candidate))
+    .find((numeric) => Number.isFinite(numeric) && numeric > 0);
 
-  for (const candidate of candidates) {
-    const numeric = Number(candidate);
-
-    if (Number.isFinite(numeric) && numeric > 0) {
-      return numeric;
-    }
-  }
-
-  return 8;
+  return resolvedSize ?? 8;
 }
 
 /**
