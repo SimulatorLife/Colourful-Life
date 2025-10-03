@@ -303,6 +303,10 @@ let simulationBenchmark = {
 
 if (includeSimulationBenchmark && SimulationEngine && DNA) {
   const simulationConfig = configuration.simulation;
+
+  console.error(
+    `[profile-energy] Running SimulationEngine benchmark (${simulationConfig.iterations} ticks @ density ${simulationConfig.seedDensity}). This can take a minute...`,
+  );
   const simulationCanvas = createCanvasStub(
     simulationConfig.cols * simulationConfig.cellSize,
     simulationConfig.rows * simulationConfig.cellSize,
@@ -378,6 +382,14 @@ if (includeSimulationBenchmark && SimulationEngine && DNA) {
   };
 
   simulationEngine.destroy?.();
+
+  console.error(
+    `[profile-energy] SimulationEngine benchmark finished in ${simulationDurationMs.toFixed(0)}ms (${executedTicks} ticks).`,
+  );
+} else if (includeSimulationBenchmark) {
+  console.error(
+    "[profile-energy] SimulationEngine modules unavailable; skipping benchmark.",
+  );
 }
 
 const scriptEnd = performanceApi.now();

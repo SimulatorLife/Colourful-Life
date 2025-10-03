@@ -138,16 +138,16 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 ## Key scripts and commands
 
-| Command                                                                | Purpose                                                                                                                  |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `npm run start`                                                        | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.                             |
-| `npm run build`                                                        | Produce an optimized production bundle in `dist/`.                                                                       |
-| `npm run clean`                                                        | Remove `dist/` and `.parcel-cache/` via `scripts/clean-parcel.mjs`. Pass `--dry-run` to validate without deleting files. |
-| `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                           |
-| `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions.     |
-| `npm test`                                                             | Execute the Node.js test suites covering simulation and UI modules.                                                      |
-| `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                                   |
-| `node scripts/profile-energy.mjs`                                      | Benchmark the energy preparation loop with configurable grid sizes via environment variables.                            |
+| Command                                                                | Purpose                                                                                                                                                |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run start`                                                        | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.                                                           |
+| `npm run build`                                                        | Produce an optimized production bundle in `dist/`.                                                                                                     |
+| `npm run clean`                                                        | Remove `dist/` and `.parcel-cache/` via `scripts/clean-parcel.mjs`. Pass `--dry-run` to validate without deleting files.                               |
+| `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                                                         |
+| `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions.                                   |
+| `npm test`                                                             | Execute the Node.js test suites covering simulation and UI modules.                                                                                    |
+| `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                                                                 |
+| `node scripts/profile-energy.mjs`                                      | Benchmark the energy preparation loop with configurable grid sizes via environment variables; add `PERF_INCLUDE_SIM=1` to time SimulationEngine ticks. |
 
 ## Further reading
 
