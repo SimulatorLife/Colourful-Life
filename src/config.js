@@ -42,7 +42,7 @@ export function resolveMaxTileEnergy(env = RUNTIME_ENV) {
 export const MAX_TILE_ENERGY = resolveMaxTileEnergy();
 // Elevated baseline regen/diffusion to keep population energy budgets viable and prevent
 // early simulation collapses while still enforcing per-action energy costs.
-export const ENERGY_REGEN_RATE_DEFAULT = 0.0105;
+export const ENERGY_REGEN_RATE_DEFAULT = 0.03;
 export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.06; // smoothing between tiles (per tick)
 export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
@@ -253,6 +253,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   lowDiversityReproMultiplier: 0.2,
   speedMultiplier: 1,
   autoPauseOnBlur: false,
+  autoMaintainPopulation: false,
 });
 
 const BOOLEAN_DEFAULT_KEYS = Object.freeze([
@@ -263,6 +264,7 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showFitness",
   "showLifeEventMarkers",
   "autoPauseOnBlur",
+  "autoMaintainPopulation",
 ]);
 
 function coerceBoolean(candidate, fallback) {

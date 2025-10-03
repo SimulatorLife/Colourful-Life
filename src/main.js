@@ -184,6 +184,13 @@ export function createSimulation({
   const layoutInitialSettings = toPlainObject(config?.ui?.layout?.initialSettings);
   let configWithLayoutDefaults = { ...layoutInitialSettings, ...config };
 
+  if (headless && configWithLayoutDefaults.autoMaintainPopulation == null) {
+    configWithLayoutDefaults = {
+      ...configWithLayoutDefaults,
+      autoMaintainPopulation: true,
+    };
+  }
+
   if (win) {
     win.BrainDebugger = BrainDebugger;
   } else {

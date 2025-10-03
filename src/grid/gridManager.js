@@ -969,6 +969,7 @@ export default class GridManager {
       combatTerritoryEdgeFactor: GridManager.combatTerritoryEdgeFactor,
     });
     this.populationScarcitySignal = 0;
+    this.autoMaintainPopulation = false;
     this.brainSnapshotCollector = toBrainSnapshotCollector(brainSnapshotCollector);
     this.boundTryMove = (
       gridArr,
@@ -1164,6 +1165,10 @@ export default class GridManager {
 
   setBrainSnapshotCollector(collector) {
     this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
+  }
+
+  setAutoMaintainPopulation(value = false) {
+    this.autoMaintainPopulation = Boolean(value);
   }
 
   setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {
@@ -3845,6 +3850,12 @@ export default class GridManager {
     }
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
     this.#enforceEnergyExclusivity();
+
+    if (this.autoMaintainPopulation) {
+      this.seed(this.activeCells.size, this.minPopulation);
+      this.populationScarcitySignal = this.#computePopulationScarcitySignal();
+    }
+
     this.lastSnapshot = this.buildSnapshot();
 
     return this.lastSnapshot;

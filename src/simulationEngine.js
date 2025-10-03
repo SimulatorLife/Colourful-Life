@@ -297,6 +297,8 @@ export default class SimulationEngine {
       rng,
       brainSnapshotCollector,
     });
+    this.autoMaintainPopulation = Boolean(defaults.autoMaintainPopulation);
+    this.grid.setAutoMaintainPopulation(this.autoMaintainPopulation);
 
     if (win) {
       win.grid = this.grid;
@@ -1405,6 +1407,11 @@ export default class SimulationEngine {
       default:
         break;
     }
+  }
+
+  setAutoMaintainPopulation(value) {
+    this.autoMaintainPopulation = Boolean(value);
+    this.grid?.setAutoMaintainPopulation(this.autoMaintainPopulation);
   }
 
   setMatingDiversityThreshold(value) {
