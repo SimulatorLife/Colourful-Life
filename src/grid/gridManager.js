@@ -48,8 +48,6 @@ const NEIGHBOR_OFFSETS = [
   [1, 0],
   [1, 1],
 ];
-// Hard cap to guarantee mortality even if hazard logic is neutralized.
-const FORCED_SENESCENCE_FRACTION = 3;
 const DECAY_RETURN_FRACTION = 0.9;
 const DECAY_IMMEDIATE_SHARE = 0.25;
 const DECAY_RELEASE_BASE = 0.12;
@@ -3239,7 +3237,30 @@ export default class GridManager {
     const rawAgeFraction = Number.isFinite(senescenceAgeFraction)
       ? senescenceAgeFraction
       : fallbackAgeFraction;
-    const ageFraction = clamp(rawAgeFraction, 0, FORCED_SENESCENCE_FRACTION);
+
+    if (typeof cell.updateSenescenceDebt === "function") {
+      cell.updateSenescenceDebt({
+        ageFraction: rawAgeFraction,
+        energyFraction,
+        localDensity,
+        scarcitySignal,
+        eventPressure: cell.lastEventPressure ?? 0,
+      });
+    }
+    let ageFractionLimit = 3;
+
+    if (typeof cell.resolveSenescenceElasticity === "function") {
+      const elasticity = cell.resolveSenescenceElasticity({
+        localDensity,
+        energyFraction,
+        scarcitySignal,
+      });
+
+      if (Number.isFinite(elasticity)) {
+        ageFractionLimit = Math.max(1.2, elasticity);
+      }
+    }
+    const ageFraction = clamp(rawAgeFraction, 0, ageFractionLimit);
     let senescenceHazard = null;
     let senescenceDeath = false;
 
@@ -3250,6 +3271,7 @@ export default class GridManager {
         localDensity,
         densityEffectMultiplier,
         eventPressure: cell.lastEventPressure ?? 0,
+        scarcitySignal,
       };
 
       senescenceHazard = cell.computeSenescenceHazard(context);
@@ -3275,11 +3297,6 @@ export default class GridManager {
 
     if (!senescenceDeath && senescenceHazard == null && cell.age >= cell.lifespan) {
       senescenceDeath = true;
-    }
-
-    if (!senescenceDeath && rawAgeFraction >= FORCED_SENESCENCE_FRACTION) {
-      senescenceDeath = true;
-      senescenceHazard = 1;
     }
 
     if (senescenceDeath) {
