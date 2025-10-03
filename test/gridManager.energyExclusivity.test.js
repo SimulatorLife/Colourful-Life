@@ -11,7 +11,7 @@ const baseOptions = {
   cellSize: 1,
 };
 
-test("relocateCell + update clears destination tile energy", async () => {
+test("relocateCell immediately clears destination tile energy", async () => {
   const [{ default: GridManager }, { default: DNA }] = await Promise.all([
     import("../src/grid/gridManager.js"),
     import("../src/genome.js"),
@@ -31,17 +31,10 @@ test("relocateCell + update clears destination tile energy", async () => {
 
   assert.ok(relocated, "relocateCell should succeed when destination is empty");
 
-  gm.update({
-    energyRegenRate: 0,
-    energyDiffusionRate: 0,
-    eventStrengthMultiplier: 1,
-    densityEffectMultiplier: 1,
-  });
-
   assert.is(
     gm.energyGrid[0][1],
     0,
-    "destination tile energy should be cleared after update",
+    "destination tile energy should be cleared immediately",
   );
   assert.ok(
     cell.energy >= gm.maxTileEnergy / 2,
