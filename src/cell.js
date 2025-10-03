@@ -433,6 +433,14 @@ export default class Cell {
     this._reproductionCooldown = Math.max(0, this._reproductionCooldown - 1);
   }
 
+  reduceReproductionCooldown(amount = 0) {
+    const relief = Math.max(0, Math.round(Number(amount)));
+
+    if (!relief) return;
+
+    this._reproductionCooldown = Math.max(0, this.getReproductionCooldown() - relief);
+  }
+
   // Lifespan is fully DNA-dictated via genome.lifespanDNA()
 
   evaluateMateCandidate(mate = {}) {
@@ -3255,7 +3263,7 @@ export default class Cell {
       0,
       1,
     );
-    const scarcityRelief = 0.55 + energyFraction * 0.45; // soften upkeep near starvation
+    const scarcityRelief = 0.15 + energyFraction * 0.85; // soften upkeep near starvation
 
     return baseLoss * lossScale * agingPenalty * scarcityRelief;
   }
@@ -3305,7 +3313,11 @@ export default class Cell {
     };
   }
 
-  manageEnergy(row, col, { localDensity, densityEffectMultiplier, maxTileEnergy }) {
+  manageEnergy(
+    row,
+    col,
+    { localDensity, densityEffectMultiplier, maxTileEnergy, scarcityRelief = 1 },
+  ) {
     const effectiveDensity = clamp(localDensity * densityEffectMultiplier, 0, 1);
     const energyLoss = this.#calculateMetabolicEnergyLoss(
       effectiveDensity,
@@ -3314,8 +3326,14 @@ export default class Cell {
     const { baselineCost, dynamicCost, cognitiveLoss, dynamicLoad, baselineNeurons } =
       this.#calculateCognitiveCosts(effectiveDensity);
     const energyBefore = this.energy;
+    const scarcityFactor = clamp(
+      Number.isFinite(scarcityRelief) ? scarcityRelief : 1,
+      0.05,
+      1,
+    );
+    const adjustedEnergyLoss = energyLoss * scarcityFactor;
 
-    this.energy -= energyLoss + cognitiveLoss;
+    this.energy -= adjustedEnergyLoss + cognitiveLoss;
     this.lastEventPressure = Math.max(0, (this.lastEventPressure || 0) * 0.9);
 
     const fatigueSnapshot = this.#updateNeuralFatigueState({
@@ -3331,20 +3349,21 @@ export default class Cell {
     this.#finalizeDecisionContexts({
       energyBefore,
       energyAfter: this.energy,
-      energyLoss,
+      energyLoss: adjustedEnergyLoss,
       cognitiveLoss,
       baselineCost,
       dynamicCost,
       dynamicLoad,
       baselineNeurons,
-      totalLoss: energyLoss + cognitiveLoss,
+      totalLoss: adjustedEnergyLoss + cognitiveLoss,
       neuralFatigueSnapshot: fatigueSnapshot,
       maxTileEnergy,
     });
 
     this._neuralLoad = 0;
+    const starvationThreshold = this.starvationThreshold(maxTileEnergy);
 
-    return this.energy <= this.starvationThreshold(maxTileEnergy);
+    return this.energy <= starvationThreshold;
   }
 
   resolveHarvestCrowdingPenalty({

@@ -75,11 +75,12 @@ export function resolvePopulationScarcityMultiplier({
   const averageDrive = clamp(((driveA || 1) + (driveB || 1)) / 2, 0.3, 2);
 
   const scarcityLift =
-    1 + scarcitySignal * (0.25 + (1 - baseProb) * 0.45 + scarcityDeficit * 0.35);
+    1 + scarcitySignal * (0.5 + (1 - baseProb) * 0.9 + scarcityDeficit * 0.6);
+  const maxBoost = 1 + scarcitySignal * 3.5;
   const multiplier = clamp(
     averageDrive * scarcityLift,
     1 - scarcitySignal * 0.35,
-    1 + scarcitySignal * 1.1,
+    maxBoost,
   );
 
   return { multiplier, drives: [driveA, driveB] };

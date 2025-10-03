@@ -43,18 +43,16 @@ where practical.
 - Repositioned the dashboard refresh slider into the Evolution Insights panel so
   cadence controls live alongside the metrics they affect while continuing to
   drive leaderboard updates.
-- Raised the default energy regeneration rate from `0.007` to `0.0075` after a
-  200-tick headless run showed populations crashing to ~60 survivors (avg tile
-  energy ~0.88) versus roughly 300 organisms and ~1.08 average energy with the
-  higher baseline, improving ecosystem stability without removing scarcity
-  pressure, and nudged it again to `0.0082` after tile-only probes settled
-  closer to 3.0 energy versus 2.86 under moderate density, reducing early
-  starvation cascades without saturating the map.
-- Raised the low-diversity reproduction multiplier floor from `0.10` to `0.12`
-  after sampling 10k similarity-penalised pairings showed roughly 7.5% of
-  outcomes collapsing below a 0.2 multiplier; the higher floor trimmed those
-  stalls without materially lifting average reproduction odds, helping
-  homogenised populations recover while keeping diversity pressure intact.
+- Raised the default energy regeneration rate to `0.015` and eased density
+  penalties so long-running headless simulations sustain viable energy budgets
+  without flooding the grid.
+- Elevated the low-diversity reproduction multiplier floor to `0.55` and wired
+  cathartic scarcity relief directly into the reproduction cooldowns, allowing
+  bottlenecked populations to recover while leaving the diversity pressure
+  intact during healthy runs.
+- Added an opt-in auto-reseeding path for `GridManager` so headless stability
+  harnesses can replenish populations once they fall below the legal floor
+  without interfering with tests that expect a dormant world.
 
 ### Fixed
 
@@ -62,6 +60,9 @@ where practical.
   fraction, guaranteeing hazard escalation, and by enforcing a hard death cap
   once organisms triple their DNA lifespan so immobile lineages cannot linger
   indefinitely.
+- Dead organisms now decompose organically, returning energy to nearby tiles so
+  corpses never linger indefinitely and the headless population stability
+  harness retains a viable energy budget.
 - Prevented the Corner Islands obstacle preset from evicting every organism by
   recalculating the final layout before blocking tiles, preserving residents
   inside the carved pockets while still sealing the surrounding terrain.

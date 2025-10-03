@@ -32,13 +32,19 @@ function getAdapterCell(adapter, row, col) {
 }
 
 function clearAdapterCell(adapter, row, col) {
-  if (!adapter) return;
+  if (!adapter) return null;
 
   if (typeof adapter.removeCell === "function") {
-    adapter.removeCell(row, col);
-  } else if (typeof adapter.setCell === "function") {
+    return adapter.removeCell(row, col);
+  }
+
+  const existing = adapter?.getCell?.(row, col) ?? null;
+
+  if (typeof adapter.setCell === "function") {
     adapter.setCell(row, col, null);
   }
+
+  return existing;
 }
 
 function placeAdapterCell(adapter, row, col, cell) {
@@ -213,31 +219,17 @@ function applyFightCost(cell) {
 
 function recordFight(stats, winner, loser, context = {}) {
   stats?.onFight?.();
-  if (stats?.onDeath) {
-    const opponentColor =
-      typeof winner?.dna?.toColor === "function"
-        ? winner.dna.toColor()
-        : typeof winner?.color === "string"
-          ? winner.color
-          : null;
-    const row = Number.isFinite(context.loserRow)
-      ? context.loserRow
-      : Number.isFinite(loser?.row)
-        ? loser.row
-        : null;
-    const col = Number.isFinite(context.loserCol)
-      ? context.loserCol
-      : Number.isFinite(loser?.col)
-        ? loser.col
-        : null;
 
+  const deathHandled = Boolean(context.deathHandled);
+
+  if (!deathHandled && stats?.onDeath && loser) {
     stats.onDeath({
       cell: loser,
-      row,
-      col,
+      row: Number.isFinite(context.loserRow) ? context.loserRow : loser.row,
+      col: Number.isFinite(context.loserCol) ? context.loserCol : loser.col,
       cause: "combat",
       intensity: context.intensity,
-      opponentColor,
+      opponentColor: context.opponentColor,
       winChance: context.winChance,
     });
   }
@@ -440,6 +432,18 @@ export default class InteractionSystem {
 
     const attackerCost = applyFightCost(attacker);
     const defenderCost = applyFightCost(defender);
+    const attackerColor =
+      typeof attacker?.dna?.toColor === "function"
+        ? attacker.dna.toColor()
+        : typeof attacker?.color === "string"
+          ? attacker.color
+          : null;
+    const defenderColor =
+      typeof defender?.dna?.toColor === "function"
+        ? defender.dna.toColor()
+        : typeof defender?.color === "string"
+          ? defender.color
+          : null;
 
     const attackerPower = computeCombatPower(attacker);
     const defenderPower = computeCombatPower(defender);
@@ -478,7 +482,21 @@ export default class InteractionSystem {
     const attackerTile = getAdapterCell(adapter, attackerRow, attackerCol);
 
     if (attackerWins) {
-      clearAdapterCell(adapter, targetRow, targetCol);
+      const defeated = clearAdapterCell(adapter, targetRow, targetCol) ?? defender;
+      const defeatDetails = {
+        row: targetRow,
+        col: targetCol,
+        cause: "combat",
+        intensity,
+        opponentColor: attackerColor,
+        winChance: odds.attackerWinChance,
+      };
+      let deathHandled = false;
+
+      if (defeated && typeof adapter.registerDeath === "function") {
+        adapter.registerDeath(defeated, defeatDetails);
+        deathHandled = true;
+      }
       moveVictoriousAttacker({
         adapter,
         attacker,
@@ -499,13 +517,31 @@ export default class InteractionSystem {
         winChance: odds.attackerWinChance,
         loserRow: targetRow,
         loserCol: targetCol,
+        opponentColor: attackerColor,
+        deathHandled,
       });
 
       return true;
     }
 
-    if (attackerTile === attacker) {
-      clearAdapterCell(adapter, attackerRow, attackerCol);
+    const defeatedAttacker =
+      attackerTile === attacker
+        ? (clearAdapterCell(adapter, attackerRow, attackerCol) ?? attacker)
+        : attacker;
+
+    const attackerDefeatDetails = {
+      row: attackerRow,
+      col: attackerCol,
+      cause: "combat",
+      intensity,
+      opponentColor: defenderColor,
+      winChance: 1 - odds.attackerWinChance,
+    };
+    let attackerDeathHandled = false;
+
+    if (defeatedAttacker && typeof adapter.registerDeath === "function") {
+      adapter.registerDeath(defeatedAttacker, attackerDefeatDetails);
+      attackerDeathHandled = true;
     }
 
     recordFight(stats, defender, attacker, {
@@ -516,6 +552,8 @@ export default class InteractionSystem {
       winChance: 1 - odds.attackerWinChance,
       loserRow: attackerRow,
       loserCol: attackerCol,
+      opponentColor: defenderColor,
+      deathHandled: attackerDeathHandled,
     });
 
     return true;

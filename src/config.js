@@ -6,8 +6,8 @@ const DEFAULT_MAX_TILE_ENERGY = 6;
 // showed regeneration recovering ~7% more energy per tick (0.0036 → 0.0039).
 // The softer clamp cushions high-traffic hubs without eliminating the density
 // pressure that keeps sparse foragers advantaged.
-const DEFAULT_REGEN_DENSITY_PENALTY = 0.45;
-const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.5;
+const DEFAULT_REGEN_DENSITY_PENALTY = 0.3;
+const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.3;
 const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Slightly calmer baseline keeps resting viable when resources tighten.
@@ -42,7 +42,7 @@ export function resolveMaxTileEnergy(env = RUNTIME_ENV) {
 export const MAX_TILE_ENERGY = resolveMaxTileEnergy();
 // Elevated baseline regen/diffusion to keep population energy budgets viable and prevent
 // early simulation collapses while still enforcing per-action energy costs.
-export const ENERGY_REGEN_RATE_DEFAULT = 0.0105;
+export const ENERGY_REGEN_RATE_DEFAULT = 0.015;
 export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.06; // smoothing between tiles (per tick)
 export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
@@ -247,12 +247,13 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   matingDiversityThreshold: 0.42,
   // Raised from 0.12 after the population stability harness exposed sporadic
   // collapses in smaller headless runs where kin-heavy pairings dominated.
-  // A 0.2 floor keeps similarity penalties meaningful while guaranteeing the
+  // A 0.55 floor keeps similarity penalties meaningful while guaranteeing the
   // ecosystem can recover instead of sliding into extinction spirals when
   // diversity temporarily stalls.
-  lowDiversityReproMultiplier: 0.2,
+  lowDiversityReproMultiplier: 0.55,
   speedMultiplier: 1,
   autoPauseOnBlur: false,
+  autoReseed: true,
 });
 
 const BOOLEAN_DEFAULT_KEYS = Object.freeze([
@@ -337,6 +338,8 @@ export function resolveSimulationDefaults(overrides = {}) {
   } else {
     merged.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
   }
+
+  merged.autoReseed = coerceBoolean(overrides.autoReseed, defaults.autoReseed);
 
   const concurrencyValue = Number(merged.maxConcurrentEvents);
 

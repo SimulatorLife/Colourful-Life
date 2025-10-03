@@ -665,9 +665,9 @@ export class DNA {
     const risk = this.geneFraction(GENE_LOCI.RISK);
     const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
     const drivePenalty = 0.45 * risk + 0.2 * (1 - movement);
-    const base = 0.014 + 0.015 * (1 - efficiency) + 0.008 * drivePenalty;
+    const base = 0.008 + 0.008 * (1 - efficiency) + 0.0045 * drivePenalty;
 
-    return clamp(base, 0.009, 0.042);
+    return clamp(base, 0.006, 0.03);
   }
 
   metabolicProfile() {
@@ -1513,9 +1513,9 @@ export class DNA {
     const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
     const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
     let threshold =
-      0.28 + 0.3 * (1 - efficiency) + 0.18 * fertility - 0.08 * cooperation;
+      0.2 + 0.25 * (1 - efficiency) + 0.16 * fertility - 0.08 * cooperation;
 
-    return clamp(threshold, 0.22, 0.7);
+    return clamp(threshold, 0.16, 0.7);
   }
 
   reproductionReachProfile() {

@@ -206,7 +206,7 @@ test("neural evaluation contributes to cognitive maintenance cost", () => {
   const crowdPenalty = 1 + effDensity * (cell.metabolicCrowdingTax ?? 0);
   const passiveAgePenalty = cell.ageEnergyMultiplier();
   const energyFraction = clamp(cell.energy / context.maxTileEnergy, 0, 1);
-  const scarcityRelief = 0.55 + energyFraction * 0.45;
+  const scarcityRelief = 0.15 + energyFraction * 0.85;
   const energyLoss =
     dna.energyLossBase() *
     dna.baseEnergyLossScale() *
@@ -407,7 +407,7 @@ test("brains enforce minimum neuron floor while pruning unreachable connections"
   const baseLoss = cell.dna.energyLossBase();
   const crowdPenalty = 1 + effDensity * (cell.metabolicCrowdingTax ?? 0);
   const energyFraction = clamp(cell.energy / context.maxTileEnergy, 0, 1);
-  const scarcityRelief = 0.55 + energyFraction * 0.45;
+  const scarcityRelief = 0.15 + energyFraction * 0.85;
   const energyLoss =
     baseLoss *
     cell.dna.baseEnergyLossScale() *

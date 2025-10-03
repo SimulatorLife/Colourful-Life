@@ -143,7 +143,7 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   const crowdPenalty = 1 + effDensity * (cell.metabolicCrowdingTax ?? 0);
   const baseLoss = dna.energyLossBase();
   const energyFraction = clamp(initialEnergy / maxTileEnergy, 0, 1);
-  const scarcityRelief = 0.55 + energyFraction * 0.45;
+  const scarcityRelief = 0.15 + energyFraction * 0.85;
   const energyLoss =
     baseLoss *
     dna.baseEnergyLossScale() *

@@ -63,6 +63,23 @@ export default class GridInteractionAdapter {
     return current;
   }
 
+  registerDeath(cell, details = {}) {
+    if (this.#managerHas("registerDeath")) {
+      this.gridManager.registerDeath(cell, details);
+
+      return;
+    }
+
+    const row = Number.isInteger(details?.row) ? details.row : cell?.row;
+    const col = Number.isInteger(details?.col) ? details.col : cell?.col;
+
+    if (this.gridManager?.stats?.onDeath && cell) {
+      const metadata = { ...(details || {}), row, col };
+
+      this.gridManager.stats.onDeath(cell, metadata);
+    }
+  }
+
   relocateCell(fromRow, fromCol, toRow, toCol) {
     if (this.#managerHas("relocateCell")) {
       return this.gridManager.relocateCell(fromRow, fromCol, toRow, toCol);

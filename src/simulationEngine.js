@@ -296,6 +296,7 @@ export default class SimulationEngine {
       obstaclePresets: this._obstaclePresets,
       rng,
       brainSnapshotCollector,
+      autoReseed: defaults.autoReseed,
     });
 
     if (win) {
