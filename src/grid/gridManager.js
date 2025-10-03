@@ -44,6 +44,8 @@ const NEIGHBOR_OFFSETS = [
   [1, 0],
   [1, 1],
 ];
+// Hard cap to guarantee mortality even if hazard logic is neutralized.
+const FORCED_SENESCENCE_FRACTION = 3;
 
 function getPairSimilarity(cellA, cellB) {
   if (!cellA || !cellB) return 0;
@@ -2380,15 +2382,18 @@ export default class GridManager {
       0,
       1,
     );
-    const ageFraction = clamp(
-      typeof cell.getAgeFraction === "function"
-        ? cell.getAgeFraction()
-        : Number.isFinite(cell.lifespan) && cell.lifespan > 0
-          ? cell.age / cell.lifespan
-          : 0,
-      0,
-      3,
-    );
+    const fallbackAgeFraction =
+      Number.isFinite(cell.lifespan) && cell.lifespan > 0
+        ? cell.age / cell.lifespan
+        : 0;
+    const senescenceAgeFraction =
+      typeof cell.getSenescenceAgeFraction === "function"
+        ? cell.getSenescenceAgeFraction()
+        : fallbackAgeFraction;
+    const rawAgeFraction = Number.isFinite(senescenceAgeFraction)
+      ? senescenceAgeFraction
+      : fallbackAgeFraction;
+    const ageFraction = clamp(rawAgeFraction, 0, FORCED_SENESCENCE_FRACTION);
     let senescenceHazard = null;
     let senescenceDeath = false;
 
@@ -2424,6 +2429,11 @@ export default class GridManager {
 
     if (!senescenceDeath && senescenceHazard == null && cell.age >= cell.lifespan) {
       senescenceDeath = true;
+    }
+
+    if (!senescenceDeath && rawAgeFraction >= FORCED_SENESCENCE_FRACTION) {
+      senescenceDeath = true;
+      senescenceHazard = 1;
     }
 
     if (senescenceDeath) {

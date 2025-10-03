@@ -2695,10 +2695,20 @@ export default class Cell {
     }
   }
 
-  getAgeFraction() {
+  getSenescenceAgeFraction() {
     if (!Number.isFinite(this.lifespan) || this.lifespan <= 0) return 0;
 
-    return clamp(this.age / this.lifespan, 0, 1);
+    return this.age / this.lifespan;
+  }
+
+  getAgeFraction({ clamp: shouldClamp = true } = {}) {
+    const fraction = this.getSenescenceAgeFraction();
+
+    if (!shouldClamp) {
+      return fraction;
+    }
+
+    return clamp(fraction, 0, 1);
   }
 
   resolveRng(tag, fallback = Math.random) {
