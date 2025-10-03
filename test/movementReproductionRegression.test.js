@@ -317,6 +317,119 @@ test("handleReproduction requires parents to be adjacent before spawning", async
   assert.is(gm.getCell(0, 5), mate);
 });
 
+test("handleReproduction enforces reproduction energy thresholds", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  let births = 0;
+  const stats = {
+    onBirth: () => {
+      births += 1;
+    },
+    onDeath() {},
+    recordMateChoice() {},
+  };
+
+  const gm = new TestGridManager(2, 3, {
+    eventManager: { activeEvents: [] },
+    stats,
+  });
+
+  gm.rebuildActiveCells();
+
+  const densityGrid = Array.from({ length: 2 }, () =>
+    Array.from({ length: 3 }, () => 0),
+  );
+
+  const dnaA = new DNA(0, 0, 0);
+  const dnaB = new DNA(0, 0, 0);
+
+  dnaA.reproductionThresholdFrac = () => 0.6;
+  dnaB.reproductionThresholdFrac = () => 0.3;
+  dnaA.parentalInvestmentFrac = () => 0.5;
+  dnaB.parentalInvestmentFrac = () => 0.5;
+  dnaA.starvationThresholdFrac = () => 0.05;
+  dnaB.starvationThresholdFrac = () => 0.05;
+
+  const parent = new Cell(0, 1, dnaA, MAX_TILE_ENERGY * 0.55);
+  const mate = new Cell(0, 2, dnaB, MAX_TILE_ENERGY * 0.75);
+  const parentEnergyBefore = parent.energy;
+  const mateEnergyBefore = mate.energy;
+
+  parent.computeReproductionProbability = () => 1;
+  parent.decideReproduction = () => ({ probability: 1 });
+
+  const mateEntry = parent.evaluateMateCandidate({
+    row: mate.row,
+    col: mate.col,
+    target: mate,
+  }) || {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 1,
+    diversity: 0,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  parent.selectMateWeighted = () => ({
+    chosen: mateEntry,
+    evaluated: [mateEntry],
+    mode: "preference",
+  });
+  parent.findBestMate = () => mateEntry;
+
+  gm.setCell(0, 1, parent);
+  gm.setCell(0, 2, mate);
+
+  const originalRandom = Math.random;
+
+  Math.random = () => 0;
+
+  let reproduced;
+
+  try {
+    reproduced = gm.handleReproduction(
+      0,
+      1,
+      parent,
+      {
+        mates: [mateEntry],
+        society: [],
+      },
+      {
+        stats,
+        densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 1,
+      },
+    );
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.is(reproduced, false);
+  assert.is(births, 0);
+
+  const energyTolerance = MAX_TILE_ENERGY * 0.01; // reproduction failure should not drain meaningful energy
+
+  assert.ok(
+    Math.abs(parent.energy - parentEnergyBefore) <= energyTolerance,
+    "parent energy should stay near the pre-check level",
+  );
+  assert.ok(
+    Math.abs(mate.energy - mateEnergyBefore) <= energyTolerance,
+    "mate energy should stay near the pre-check level",
+  );
+});
+
 test("handleReproduction succeeds when DNA grants extended reach", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
