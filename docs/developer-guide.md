@@ -20,6 +20,11 @@ extending tests, or polishing docs.
 > it beneath the playback controls at the top of the Simulation Controls panel
 > if you prefer the previous focus-dependent behaviour.
 
+> Adjust the "Dashboard Refresh Interval" slider inside the Leaderboard panel to
+> tune how often both the leaderboard and Evolution Insights dashboard request
+> fresh data. The cadence control moved from Evolution Insights so observers can
+> tweak scoreboard updates without hunting through the metrics panel.
+
 > Tip: Run `npm run prepare` after cloning or pulling changes that touch the
 > `.husky/` directory to reinstall the Git hooks managed by Husky.
 

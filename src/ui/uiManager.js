@@ -158,6 +158,8 @@ export default class UIManager {
     this.traitSparkDescriptors = [];
     this.playbackSpeedSlider = null;
     this.speedPresetButtons = [];
+    this.leaderboardIntervalSlider = null;
+    this.leaderboardCadenceConfig = null;
     this.pauseOverlay = null;
     this.pauseOverlayTitle = null;
     this.pauseOverlayHint = null;
@@ -2571,19 +2573,17 @@ export default class UIManager {
       lowDiversitySliderConfig,
     ];
 
-    const insightConfigs = [
-      withSliderConfig("leaderboardIntervalMs", {
-        label: "Dashboard Refresh Interval",
-        min: 100,
-        max: 3000,
-        step: 50,
-        title:
-          "Delay between updating evolution insights and leaderboard summaries in milliseconds (100..3000)",
-        format: (v) => `${Math.round(v)} ms`,
-        getValue: () => this.leaderboardIntervalMs,
-        setValue: (v) => this.#updateSetting("leaderboardIntervalMs", v),
-      }),
-    ];
+    this.leaderboardCadenceConfig = withSliderConfig("leaderboardIntervalMs", {
+      label: "Dashboard Refresh Interval",
+      min: 100,
+      max: 3000,
+      step: 50,
+      title:
+        "Delay between updating evolution insights and leaderboard summaries in milliseconds (100..3000)",
+      format: (v) => `${Math.round(v)} ms`,
+      getValue: () => this.leaderboardIntervalMs,
+      setValue: (v) => this.#updateSetting("leaderboardIntervalMs", v),
+    });
 
     createSectionHeading(body, "Similarity Thresholds");
     const thresholdsGroup = createControlGrid(body);
@@ -2614,7 +2614,6 @@ export default class UIManager {
       energyConfigs,
       generalConfigs,
       generalGroup,
-      insightConfigs,
     };
   }
 
@@ -2824,36 +2823,6 @@ export default class UIManager {
     intro.textContent =
       "Track population health, energy, and behavioral trends as the simulation unfolds.";
     body.appendChild(intro);
-
-    const sliderContext = this.sliderContext;
-    const insightConfigs = Array.isArray(sliderContext?.insightConfigs)
-      ? sliderContext.insightConfigs
-      : [];
-
-    if (insightConfigs.length > 0) {
-      const cadenceSection = document.createElement("section");
-
-      cadenceSection.className = "metrics-section insights-cadence";
-
-      const cadenceTitle = document.createElement("h4");
-
-      cadenceTitle.className = "metrics-section-title";
-      cadenceTitle.textContent = "Refresh Cadence";
-      cadenceSection.appendChild(cadenceTitle);
-
-      const cadenceBody = document.createElement("div");
-
-      cadenceBody.className = "metrics-section-body";
-
-      const cadenceGrid = createControlGrid(cadenceBody, "control-grid--compact");
-
-      insightConfigs.forEach((cfg) => {
-        sliderContext.renderSlider(cfg, cadenceGrid);
-      });
-
-      cadenceSection.appendChild(cadenceBody);
-      body.appendChild(cadenceSection);
-    }
 
     this.metricsBox = document.createElement("div");
     this.metricsBox.className = "metrics-box";
@@ -4062,6 +4031,41 @@ export default class UIManager {
       panel.classList.add("leaderboard-panel");
       this.dashboardGrid?.appendChild(panel);
       this.leaderPanel = panel;
+
+      const controlsWrapper = document.createElement("div");
+
+      controlsWrapper.className = "leaderboard-controls";
+      body.appendChild(controlsWrapper);
+
+      createSectionHeading(controlsWrapper, "Update Frequency");
+
+      const cadenceGrid = createControlGrid(controlsWrapper, "control-grid--compact");
+      const cadenceConfig = this.leaderboardCadenceConfig;
+
+      this.leaderboardIntervalSlider = null;
+
+      if (cadenceConfig) {
+        const slider = createSliderRow(cadenceGrid, {
+          label: cadenceConfig.label,
+          min: cadenceConfig.min,
+          max: cadenceConfig.max,
+          step: cadenceConfig.step,
+          value: cadenceConfig.getValue(),
+          title: cadenceConfig.title,
+          format: cadenceConfig.format,
+          onInput: cadenceConfig.setValue,
+        });
+
+        this.leaderboardIntervalSlider = slider;
+      }
+
+      const cadenceHint = document.createElement("p");
+
+      cadenceHint.className = "control-hint";
+      cadenceHint.textContent =
+        "Applies to both Evolution Insights and this leaderboard, refreshing them together.";
+      controlsWrapper.appendChild(cadenceHint);
+
       const entriesContainer = document.createElement("div");
 
       entriesContainer.className = "leaderboard-entries";
@@ -4069,6 +4073,10 @@ export default class UIManager {
 
       this.leaderBody = entriesContainer;
       this.leaderEntriesContainer = entriesContainer;
+    }
+
+    if (this.leaderboardIntervalSlider?.updateDisplay) {
+      this.leaderboardIntervalSlider.updateDisplay(this.leaderboardIntervalMs);
     }
 
     const entries = Array.isArray(top) ? top.filter(Boolean) : [];
