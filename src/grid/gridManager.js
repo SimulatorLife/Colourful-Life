@@ -127,6 +127,7 @@ export default class GridManager {
   #spawnCandidateScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
+  #segmentWindowScratch = null;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -227,6 +228,16 @@ export default class GridManager {
     this.#columnEventScratch.length = 0;
 
     return this.#columnEventScratch;
+  }
+
+  #getSegmentWindowScratch() {
+    if (!this.#segmentWindowScratch) {
+      this.#segmentWindowScratch = [];
+    }
+
+    this.#segmentWindowScratch.length = 0;
+
+    return this.#segmentWindowScratch;
   }
 
   #prepareEventsByRow(rowCount) {
@@ -2459,6 +2470,16 @@ export default class GridManager {
         }
       }
 
+      if (usingSegmentedEvents) {
+        for (const rowIndex of targetRows) {
+          const segments = eventsByRow[rowIndex];
+
+          if (segments && segments.length > 1) {
+            segments.sort((a, b) => a.startCol - b.startCol);
+          }
+        }
+      }
+
       if (profileEnabled) {
         segmentationTime = now() - segStart;
       }
@@ -2481,6 +2502,9 @@ export default class GridManager {
       const occupantRegenRow = occupantRegenGrid ? occupantRegenGrid[r] : null;
       const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
       const rowHasEvents = Boolean(eventOptions && rowEvents.length > 0);
+      const rowSegments = rowHasEvents && usingSegmentedEvents ? rowEvents : null;
+      const activeSegments = rowSegments ? this.#getSegmentWindowScratch() : null;
+      let nextSegmentIndex = 0;
 
       for (let i = 0; i < columns.length; i++) {
         const c = columns[i];
@@ -2531,11 +2555,31 @@ export default class GridManager {
         let tileEvents = EMPTY_EVENT_LIST;
 
         if (rowHasEvents) {
-          if (usingSegmentedEvents) {
+          if (rowSegments) {
             const columnEvents = this.#getColumnEventScratch();
 
-            for (let j = 0; j < rowEvents.length; j++) {
-              const segment = rowEvents[j];
+            let activeCount = 0;
+
+            for (let j = 0; j < activeSegments.length; j++) {
+              const segment = activeSegments[j];
+
+              if (segment.endCol > c) {
+                activeSegments[activeCount++] = segment;
+              }
+            }
+
+            activeSegments.length = activeCount;
+
+            while (
+              nextSegmentIndex < rowSegments.length &&
+              rowSegments[nextSegmentIndex].startCol <= c
+            ) {
+              activeSegments.push(rowSegments[nextSegmentIndex]);
+              nextSegmentIndex++;
+            }
+
+            for (let j = 0; j < activeSegments.length; j++) {
+              const segment = activeSegments[j];
 
               if (segment.startCol <= c && segment.endCol > c) {
                 columnEvents.push(segment.event);
