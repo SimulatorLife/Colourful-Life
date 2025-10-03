@@ -9,6 +9,7 @@ const DEFAULT_MAX_TILE_ENERGY = 6;
 const DEFAULT_REGEN_DENSITY_PENALTY = 0.3;
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.3;
 const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
+const DEFAULT_DECAY_RETURN_FRACTION = 0.9;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Slightly calmer baseline keeps resting viable when resources tighten.
 const DEFAULT_ACTIVITY_BASE_RATE = 0.28;
@@ -47,6 +48,7 @@ export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.06; // smoothing between tiles (p
 export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();
+export const DECAY_RETURN_FRACTION = resolveDecayReturnFraction();
 
 /**
  * Resolves the density penalty applied during tile regeneration. Allows
@@ -128,6 +130,28 @@ export function resolveCombatTerritoryEdgeFactor(env = RUNTIME_ENV) {
     min: 0,
     max: 1,
   });
+}
+
+/**
+ * Resolves how much energy returns to the environment when an organism decays.
+ * Environment overrides allow deployments to explore harsher decay losses or
+ * more generous recycling without touching simulation code. The helper clamps
+ * values into the 0..1 range so overrides remain stable during tests.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Fraction of remaining energy returned to the environment.
+ */
+export function resolveDecayReturnFraction(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_DECAY_RETURN_FRACTION;
+  const parsed = Number.parseFloat(raw);
+
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_DECAY_RETURN_FRACTION;
+  }
+
+  return clamp(parsed, 0, 1);
 }
 
 /**

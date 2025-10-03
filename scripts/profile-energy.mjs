@@ -323,6 +323,7 @@ if (simulationConfig.warmup > 0) {
 
 const executionTracker = { executed: 0 };
 const simulationBenchmarkStart = performanceApi.now();
+
 stepEngine(simulationConfig.iterations, executionTracker);
 const simulationBenchmarkEnd = performanceApi.now();
 

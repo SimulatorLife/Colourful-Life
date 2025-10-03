@@ -96,6 +96,10 @@ affect runtime outcomes.
 - `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` tempers or emphasises how much
   territorial advantage influences combat outcomes. Values outside the 0–1
   window fall back to the default defined in `src/config.js`.
+- `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` adjusts how much of an organism's
+  remaining energy returns to the environment when it dies. Lower fractions
+  model harsher decay losses while higher values recycle more energy back into
+  nearby tiles.
 - `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` globally adjusts the baseline neural
   activity genomes inherit before DNA modifiers apply, making it easy to calm or
   energise every organism without editing source.
