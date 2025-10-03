@@ -62,6 +62,7 @@ test("start schedules a frame and ticking through RAF uses sanitized defaults", 
       matingDiversityThreshold: 0.42,
       lowDiversityReproMultiplier: SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
       combatEdgeSharpness: 3.2,
+      combatTerritoryEdgeFactor: SIMULATION_DEFAULTS.combatTerritoryEdgeFactor,
     });
 
     assert.is(engine.lastSnapshot, snapshot, "snapshot from update stored on engine");

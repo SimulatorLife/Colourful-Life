@@ -29,6 +29,7 @@ import { sanitizeNumber } from "../utils.js";
  * @param {number} [options.energyRegenRate] Baseline energy regeneration.
  * @param {number} [options.energyDiffusionRate] Ambient energy spread.
  * @param {number} [options.combatEdgeSharpness] Sharpness multiplier for combat odds.
+ * @param {number} [options.combatTerritoryEdgeFactor] Territory influence multiplier for combat odds.
  * @param {number} [options.matingDiversityThreshold] Genetic similarity tolerance for mating.
  * @param {number} [options.lowDiversityReproMultiplier] Reproduction multiplier applied when diversity is low.
  * @param {boolean} [options.showObstacles] Whether obstacle overlays are shown.
@@ -128,6 +129,7 @@ export function createHeadlessUiManager(options = {}) {
     getEnemySimilarity: () => settings.enemySimilarity,
     getEventStrengthMultiplier: () => settings.eventStrengthMultiplier,
     getCombatEdgeSharpness: () => settings.combatEdgeSharpness,
+    getCombatTerritoryEdgeFactor: () => settings.combatTerritoryEdgeFactor,
     getEnergyRegenRate: () => settings.energyRegenRate,
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
     getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
@@ -145,6 +147,11 @@ export function createHeadlessUiManager(options = {}) {
     setCombatEdgeSharpness: (value) => {
       if (updateIfFinite("combatEdgeSharpness", value)) {
         notify("combatEdgeSharpness", settings.combatEdgeSharpness);
+      }
+    },
+    setCombatTerritoryEdgeFactor: (value) => {
+      if (updateIfFinite("combatTerritoryEdgeFactor", value, { min: 0, max: 1 })) {
+        notify("combatTerritoryEdgeFactor", settings.combatTerritoryEdgeFactor);
       }
     },
     setMaxConcurrentEvents: (value) => {

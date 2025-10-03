@@ -6,6 +6,7 @@ import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
   COMBAT_EDGE_SHARPNESS_DEFAULT,
+  COMBAT_TERRITORY_EDGE_FACTOR,
   SIMULATION_DEFAULTS,
   resolveSimulationDefaults,
 } from "./config.js";
@@ -287,6 +288,7 @@ export default class SimulationEngine {
       energyRegenRate: defaults.energyRegenRate,
       energyDiffusionRate: defaults.energyDiffusionRate,
       combatEdgeSharpness: defaults.combatEdgeSharpness,
+      combatTerritoryEdgeFactor: defaults.combatTerritoryEdgeFactor,
       showObstacles: defaults.showObstacles,
       showEnergy: defaults.showEnergy,
       showDensity: defaults.showDensity,
@@ -628,6 +630,8 @@ export default class SimulationEngine {
           SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
         combatEdgeSharpness:
           this.state.combatEdgeSharpness ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
+        combatTerritoryEdgeFactor:
+          this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
       });
 
       this.lastSnapshot = snapshot;
@@ -698,6 +702,8 @@ export default class SimulationEngine {
               )
                 ? this.state.eventStrengthMultiplier
                 : 1,
+              combatTerritoryEdgeFactor:
+                this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
             },
           });
         }
@@ -998,6 +1004,8 @@ export default class SimulationEngine {
       eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
         ? this.state.eventStrengthMultiplier
         : 1,
+      combatTerritoryEdgeFactor:
+        this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
     };
 
     if (this.lastMetrics) {
@@ -1161,6 +1169,16 @@ export default class SimulationEngine {
     });
 
     this.#updateStateAndFlag({ combatEdgeSharpness: sanitized });
+  }
+
+  setCombatTerritoryEdgeFactor(value) {
+    const sanitized = sanitizeNumber(value, {
+      fallback: this.state.combatTerritoryEdgeFactor,
+      min: 0,
+      max: 1,
+    });
+
+    this.#updateStateAndFlag({ combatTerritoryEdgeFactor: sanitized });
   }
 
   setDensityEffectMultiplier(value) {
@@ -1332,6 +1350,9 @@ export default class SimulationEngine {
         break;
       case "combatEdgeSharpness":
         this.setCombatEdgeSharpness(value);
+        break;
+      case "combatTerritoryEdgeFactor":
+        this.setCombatTerritoryEdgeFactor(value);
         break;
       case "updatesPerSecond":
         this.setUpdatesPerSecond(value);

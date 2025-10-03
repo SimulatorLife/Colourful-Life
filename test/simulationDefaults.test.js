@@ -141,6 +141,10 @@ test("resolveSimulationDefaults returns expected baseline configuration", async 
     UI_SLIDER_CONFIG.lowDiversityReproMultiplier.default,
     SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
   );
+  assert.is(
+    UI_SLIDER_CONFIG.combatTerritoryEdgeFactor.default,
+    SIMULATION_DEFAULTS.combatTerritoryEdgeFactor,
+  );
 });
 
 test("resolveSimulationDefaults coerces string boolean overrides", async () => {
@@ -238,6 +242,7 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.densityEffectMultiplier, defaults.densityEffectMultiplier);
   assert.is(uiManager.mutationMultiplier, defaults.mutationMultiplier);
   assert.is(uiManager.combatEdgeSharpness, defaults.combatEdgeSharpness);
+  assert.is(uiManager.combatTerritoryEdgeFactor, defaults.combatTerritoryEdgeFactor);
   assert.is(uiManager.matingDiversityThreshold, defaults.matingDiversityThreshold);
   assert.is(
     uiManager.lowDiversityReproMultiplier,
@@ -285,6 +290,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     energyRegenRate: defaults.energyRegenRate,
     energyDiffusionRate: defaults.energyDiffusionRate,
     combatEdgeSharpness: defaults.combatEdgeSharpness,
+    combatTerritoryEdgeFactor: defaults.combatTerritoryEdgeFactor,
     showObstacles: defaults.showObstacles,
     showEnergy: defaults.showEnergy,
     showDensity: defaults.showDensity,
@@ -320,12 +326,15 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.is(ui.getEnemySimilarity(), defaults.enemySimilarity);
   assert.is(ui.getEventStrengthMultiplier(), defaults.eventStrengthMultiplier);
   assert.is(ui.getCombatEdgeSharpness(), defaults.combatEdgeSharpness);
+  assert.is(ui.getCombatTerritoryEdgeFactor(), defaults.combatTerritoryEdgeFactor);
   assert.is(ui.getEnergyRegenRate(), defaults.energyRegenRate);
   assert.is(ui.getEnergyDiffusionRate(), defaults.energyDiffusionRate);
   assert.is(ui.getMatingDiversityThreshold(), defaults.matingDiversityThreshold);
   assert.is(ui.getLowDiversityReproMultiplier(), defaults.lowDiversityReproMultiplier);
   ui.setCombatEdgeSharpness(4.2);
   assert.is(ui.getCombatEdgeSharpness(), 4.2);
+  ui.setCombatTerritoryEdgeFactor(0.55);
+  assert.is(ui.getCombatTerritoryEdgeFactor(), 0.55);
   ui.setMaxConcurrentEvents(5.6);
   assert.is(ui.getMaxConcurrentEvents(), 5);
   assert.is(ui.getShowObstacles(), defaults.showObstacles);
