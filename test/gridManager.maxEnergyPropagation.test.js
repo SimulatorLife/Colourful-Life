@@ -201,6 +201,33 @@ test("GridManager passes custom max tile energy to combat and movement helpers",
   );
 });
 
+test("handleCombat tolerates missing target groups", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class HooksGrid extends GridManager {
+    init() {}
+  }
+
+  const gm = new HooksGrid(1, 1, baseOptions);
+  let moved = false;
+  const cell = {
+    chooseInteractionAction() {
+      return "avoid";
+    },
+  };
+
+  gm.boundMoveAwayFromTarget = () => {
+    moved = true;
+
+    return true;
+  };
+
+  const result = gm.handleCombat(0, 0, cell, undefined, {});
+
+  assert.is(result, false, "combat should report no action when there are no enemies");
+  assert.is(moved, false, "combat should not attempt movement without targets");
+});
+
 test("density effect multiplier scales harvesting and regeneration penalties", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
 

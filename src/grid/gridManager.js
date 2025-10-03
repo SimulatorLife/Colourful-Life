@@ -5051,14 +5051,14 @@ export default class GridManager {
     row,
     col,
     cell,
-    { enemies, society = [] },
+    { enemies, society = [] } = {},
     {
       stats,
       densityEffectMultiplier,
       densityGrid,
       combatEdgeSharpness,
       combatTerritoryEdgeFactor,
-    },
+    } = {},
   ) {
     if (!Array.isArray(enemies) || enemies.length === 0) return false;
 
