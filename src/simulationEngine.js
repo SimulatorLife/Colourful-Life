@@ -848,6 +848,7 @@ export default class SimulationEngine {
       randomizeObstacles,
       obstaclePreset,
       presetOptions,
+      reseed,
     });
 
     const shouldStartWithEvent =
@@ -894,7 +895,7 @@ export default class SimulationEngine {
         randomizeObstacles,
         obstaclePreset,
         presetOptions,
-        reseed: true,
+        reseed,
         clearCustomZones: true,
       });
     }

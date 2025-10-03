@@ -1528,6 +1528,7 @@ export default class GridManager {
     const colsInt = Math.max(1, Math.floor(nextCols));
     const cellSizeValue = Math.max(1, Math.floor(nextCellSize));
     const baseEnergy = this.maxTileEnergy / 2;
+    const shouldReseed = opts.reseed !== false;
 
     this.rows = rowsInt;
     this.cols = colsInt;
@@ -1584,7 +1585,9 @@ export default class GridManager {
       this.currentObstaclePreset = "none";
     }
 
-    this.init();
+    if (shouldReseed) {
+      this.init();
+    }
     this.recalculateDensityCounts();
     this.rebuildActiveCells();
 
