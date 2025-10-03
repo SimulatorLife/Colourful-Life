@@ -2852,6 +2852,9 @@ export default class GridManager {
     }
     this.#applyDensityDelta(fromRow, fromCol, -1);
     this.#applyDensityDelta(toRow, toCol, 1);
+    this.#applyEnergyExclusivityAt(toRow, toCol, moving, {
+      previousEnergyGrid: this.energyNext,
+    });
 
     return true;
   }
