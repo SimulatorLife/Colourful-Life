@@ -2765,7 +2765,7 @@ export default class UIManager {
 
     sparkHint.className = "sparkline-hint";
     sparkHint.textContent =
-      "Monitor overall population, diversity, energy, and pacing as the world evolves.";
+      "Monitor overall population, birth and death cadence, diversity, energy, and pacing as the world evolves.";
     sparkSection.appendChild(sparkHint);
 
     const sparkGrid = document.createElement("div");
@@ -2782,6 +2782,22 @@ export default class UIManager {
         colorVar: "--color-metric-population",
         fallbackColor: "#4c9dff",
         description: "Total living cells over recent ticks.",
+      },
+      {
+        label: "Birth Cadence",
+        property: "sparkBirths",
+        historyKey: "birthsPerTick",
+        colorVar: "--color-metric-births",
+        fallbackColor: "#9bda64",
+        description: "Births recorded each tick.",
+      },
+      {
+        label: "Death Cadence",
+        property: "sparkDeaths",
+        historyKey: "deathsPerTick",
+        colorVar: "--color-metric-deaths",
+        fallbackColor: "#ff6b81",
+        description: "Deaths recorded each tick.",
       },
       {
         label: "Diversity",
