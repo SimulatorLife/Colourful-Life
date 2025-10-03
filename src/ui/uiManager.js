@@ -242,6 +242,17 @@ export default class UIManager {
     // Allow callers to customize which keys toggle the pause state or step once.
     this.pauseHotkeySet = this.#resolveHotkeySet(layoutConfig.pauseHotkeys, ["p"]);
     this.stepHotkeySet = this.#resolveHotkeySet(layoutConfig.stepHotkeys, ["s"]);
+    this.speedIncreaseHotkeySet = this.#resolveHotkeySet(
+      layoutConfig.speedIncreaseHotkeys,
+      ["]", "="],
+    );
+    this.speedDecreaseHotkeySet = this.#resolveHotkeySet(
+      layoutConfig.speedDecreaseHotkeys,
+      ["[", "-"],
+    );
+    this.speedResetHotkeySet = this.#resolveHotkeySet(layoutConfig.speedResetHotkeys, [
+      "0",
+    ]);
 
     const canvasEl =
       layoutConfig.canvasElement || this.#resolveNode(layoutConfig.canvasSelector);
@@ -289,6 +300,33 @@ export default class UIManager {
             this.#executeStep();
           }
         }
+
+        return;
+      }
+
+      if (this.speedIncreaseHotkeySet.has(key)) {
+        event.preventDefault();
+        const steps = event.shiftKey ? 5 : 1;
+
+        this.#bumpSpeedMultiplier(steps);
+
+        return;
+      }
+
+      if (this.speedDecreaseHotkeySet.has(key)) {
+        event.preventDefault();
+        const steps = event.shiftKey ? 5 : 1;
+
+        this.#bumpSpeedMultiplier(-steps);
+
+        return;
+      }
+
+      if (this.speedResetHotkeySet.has(key)) {
+        event.preventDefault();
+        this.#resetSpeedMultiplier();
+
+        return;
       }
     });
   }
@@ -309,7 +347,20 @@ export default class UIManager {
         break;
     }
 
-    return trimmed.replace(/[-_\s]+/g, "");
+    const aliasMap = {
+      "{": "[",
+      "}": "]",
+      "+": "=",
+      _: "-",
+      ")": "0",
+    };
+    const normalized = aliasMap[trimmed] ?? trimmed;
+
+    if (normalized.length === 1) {
+      return normalized;
+    }
+
+    return normalized.replace(/[-_\s]+/g, "");
   }
 
   #resolveHotkeySet(candidate, fallbackKeys = ["p"]) {
@@ -854,6 +905,18 @@ export default class UIManager {
     return this.#formatHotkeyList(this.stepHotkeySet);
   }
 
+  #formatSpeedIncreaseHotkeys() {
+    return this.#formatHotkeyList(this.speedIncreaseHotkeySet);
+  }
+
+  #formatSpeedDecreaseHotkeys() {
+    return this.#formatHotkeyList(this.speedDecreaseHotkeySet);
+  }
+
+  #formatSpeedResetHotkeys() {
+    return this.#formatHotkeyList(this.speedResetHotkeySet);
+  }
+
   #formatAriaKeyShortcuts(hotkeySet) {
     if (!hotkeySet || hotkeySet.size === 0) {
       return "";
@@ -1047,6 +1110,34 @@ export default class UIManager {
     return `${displayValue}×`;
   }
 
+  #buildSpeedHotkeyHint() {
+    const baseHint = "Speed multiplier relative to 60 updates/sec (0.5×..100×).";
+    const pieces = [];
+    const increase = this.#formatSpeedIncreaseHotkeys();
+    const decrease = this.#formatSpeedDecreaseHotkeys();
+    const reset = this.#formatSpeedResetHotkeys();
+
+    if (increase) {
+      pieces.push(`Press ${increase} to speed up`);
+    }
+
+    if (decrease) {
+      pieces.push(`Press ${decrease} to slow down`);
+    }
+
+    if (reset) {
+      pieces.push(`Press ${reset} to reset to 1×`);
+    }
+
+    const hint = pieces.length > 0 ? `${baseHint} ${pieces.join(" ")}` : baseHint;
+    const shiftNote =
+      pieces.length > 0
+        ? " Hold Shift with the shortcuts to jump five steps at a time."
+        : "";
+
+    return `${hint}${shiftNote}`.trim();
+  }
+
   #setSpeedMultiplier(value) {
     const sanitized = this.#sanitizeSpeedMultiplier(value);
 
@@ -1054,6 +1145,22 @@ export default class UIManager {
 
     this.#updateSetting("speedMultiplier", sanitized);
     this.#updateSpeedMultiplierUI(sanitized);
+  }
+
+  #bumpSpeedMultiplier(stepCount = 1) {
+    const baseStep =
+      Number.isFinite(this.speedStep) && this.speedStep > 0 ? this.speedStep : 0.5;
+    const current =
+      Number.isFinite(this.speedMultiplier) && this.speedMultiplier > 0
+        ? this.speedMultiplier
+        : 1;
+    const next = current + baseStep * stepCount;
+
+    this.#setSpeedMultiplier(next);
+  }
+
+  #resetSpeedMultiplier() {
+    this.#setSpeedMultiplier(1);
   }
 
   #updateSpeedMultiplierUI(value) {
@@ -2017,19 +2124,23 @@ export default class UIManager {
     const speedMin = speedBounds.min ?? 0.5;
     const speedMax = speedBounds.max ?? 100;
     const speedStep = speedBounds.step ?? 0.5;
+    const normalizedSpeedStep =
+      Number.isFinite(speedStep) && speedStep > 0 ? speedStep : 0.5;
+    const speedHotkeyHint = this.#buildSpeedHotkeyHint();
 
     this.playbackSpeedSlider = createSliderRow(body, {
       label: "Playback Speed ×",
       min: speedMin,
       max: speedMax,
-      step: speedStep,
+      step: normalizedSpeedStep,
       value: this.speedMultiplier,
-      title: "Speed multiplier relative to 60 updates/sec (0.5x..100x)",
+      title: speedHotkeyHint,
       format: (v) => this.#formatSpeedDisplay(v),
       onInput: (value) => {
         this.#setSpeedMultiplier(value);
       },
     });
+    this.speedStep = normalizedSpeedStep;
 
     const speedPresetRow = createControlButtonRow(body, {
       className: "control-button-row control-button-row--compact",
