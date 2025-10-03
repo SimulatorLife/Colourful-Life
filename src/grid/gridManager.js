@@ -1210,6 +1210,158 @@ export default class GridManager {
     }
   }
 
+  #redistributeEnergyToNeighbors(row, col, amount, { previousEnergyGrid = null } = {}) {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return 0;
+    }
+
+    const cap = this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
+
+    if (!(cap > 0)) {
+      return 0;
+    }
+
+    const neighbors = [
+      [row - 1, col],
+      [row + 1, col],
+      [row, col - 1],
+      [row, col + 1],
+    ];
+
+    let remaining = amount;
+
+    for (const [nRow, nCol] of neighbors) {
+      if (!Number.isInteger(nRow) || !Number.isInteger(nCol)) continue;
+      if (nRow < 0 || nRow >= this.rows || nCol < 0 || nCol >= this.cols) continue;
+      if (this.isObstacle(nRow, nCol)) continue;
+      if (this.grid?.[nRow]?.[nCol]) continue;
+
+      const energyRow = this.energyGrid?.[nRow];
+
+      if (!energyRow) continue;
+
+      const before = Number.isFinite(energyRow[nCol]) ? energyRow[nCol] : 0;
+      const capacity = Math.max(0, cap - before);
+
+      if (capacity <= 0) continue;
+
+      const deposit = Math.min(capacity, remaining);
+
+      if (deposit <= 0) continue;
+
+      energyRow[nCol] = before + deposit;
+      remaining -= deposit;
+
+      const deltaRow = this.energyDeltaGrid?.[nRow];
+
+      if (deltaRow) {
+        const previous = previousEnergyGrid?.[nRow]?.[nCol];
+
+        if (Number.isFinite(previous)) {
+          deltaRow[nCol] = clamp((energyRow[nCol] - previous) / cap, -1, 1);
+        } else {
+          deltaRow[nCol] = clamp(energyRow[nCol] / cap, -1, 1);
+        }
+      }
+
+      if (remaining <= 0) break;
+    }
+
+    return remaining;
+  }
+
+  #applyEnergyExclusivityAt(
+    row,
+    col,
+    cell,
+    { previousEnergyGrid = null, absorb = true } = {},
+  ) {
+    const energyRow = this.energyGrid?.[row];
+
+    if (!energyRow) return;
+
+    const storedBefore = Number.isFinite(energyRow[col]) ? energyRow[col] : 0;
+
+    if (storedBefore <= 0) {
+      if (storedBefore !== 0) energyRow[col] = 0;
+      const deltaRow = this.energyDeltaGrid?.[row];
+
+      if (deltaRow && Number.isFinite(deltaRow[col])) {
+        const cap = this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
+
+        if (cap > 0) {
+          const previous = previousEnergyGrid?.[row]?.[col];
+
+          if (Number.isFinite(previous)) {
+            deltaRow[col] = clamp((energyRow[col] - previous) / cap, -1, 1);
+          } else {
+            deltaRow[col] = clamp(energyRow[col] / cap, -1, 1);
+          }
+        }
+      }
+
+      return;
+    }
+
+    const cap = this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
+
+    let remaining = storedBefore;
+
+    if (absorb && cell && typeof cell === "object" && typeof cell.energy === "number") {
+      const currentEnergy = Number.isFinite(cell.energy) ? cell.energy : 0;
+      const availableCapacity = Math.max(0, cap - currentEnergy);
+
+      if (availableCapacity > 0) {
+        const absorbed = Math.min(availableCapacity, remaining);
+
+        if (absorbed > 0) {
+          cell.energy = clamp(currentEnergy + absorbed, 0, cap);
+          remaining -= absorbed;
+        }
+      }
+    }
+
+    if (remaining > 0) {
+      remaining = this.#redistributeEnergyToNeighbors(row, col, remaining, {
+        previousEnergyGrid,
+      });
+    }
+
+    energyRow[col] = 0;
+
+    const deltaRow = this.energyDeltaGrid?.[row];
+
+    if (deltaRow) {
+      const previous = previousEnergyGrid?.[row]?.[col];
+
+      if (Number.isFinite(previous) && cap > 0) {
+        deltaRow[col] = clamp((0 - previous) / cap, -1, 1);
+      } else if (cap > 0) {
+        deltaRow[col] = clamp(-storedBefore / cap, -1, 0);
+      } else {
+        deltaRow[col] = 0;
+      }
+    }
+  }
+
+  #enforceEnergyExclusivity({ previousEnergyGrid = null } = {}) {
+    if (!this.grid || !this.energyGrid) return;
+
+    for (let row = 0; row < this.rows; row++) {
+      const gridRow = this.grid[row];
+
+      if (!gridRow) continue;
+
+      for (let col = 0; col < this.cols; col++) {
+        const cell = gridRow[col];
+
+        if (!cell) continue;
+
+        this.#applyEnergyExclusivityAt(row, col, cell, { previousEnergyGrid });
+      }
+    }
+  }
+
   clearObstacles() {
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
@@ -1707,6 +1859,7 @@ export default class GridManager {
     }
     this.recalculateDensityCounts();
     this.rebuildActiveCells();
+    this.#enforceEnergyExclusivity({ previousEnergyGrid: null });
 
     return { rows: this.rows, cols: this.cols, cellSize: this.cellSize };
   }
@@ -2223,21 +2376,21 @@ export default class GridManager {
     return this.grid[row][col];
   }
 
-  setCell(row, col, cell) {
+  setCell(row, col, cell, options = {}) {
     if (!cell) {
       this.removeCell(row, col);
 
       return null;
     }
 
-    return this.placeCell(row, col, cell);
+    return this.placeCell(row, col, cell, options);
   }
 
   clearCell(row, col) {
     this.removeCell(row, col);
   }
 
-  placeCell(row, col, cell) {
+  placeCell(row, col, cell, options = {}) {
     if (!cell) return null;
     const current = this.grid[row][col];
 
@@ -2252,6 +2405,14 @@ export default class GridManager {
     }
     this.activeCells.add(cell);
     this.#applyDensityDelta(row, col, 1);
+
+    const absorbTileEnergy = Boolean(options?.absorbTileEnergy);
+
+    if (absorbTileEnergy) {
+      this.#applyEnergyExclusivityAt(row, col, cell, {
+        previousEnergyGrid: this.energyNext,
+      });
+    }
 
     return cell;
   }
@@ -2484,7 +2645,7 @@ export default class GridManager {
     const energy = Math.min(this.maxTileEnergy, requestedEnergy, availableEnergy);
     const cell = new Cell(row, col, dna, energy);
 
-    this.setCell(row, col, cell);
+    this.setCell(row, col, cell, { absorbTileEnergy: false });
     const remainingEnergy = availableEnergy - energy;
 
     this.energyGrid[row][col] = remainingEnergy > 0 ? remainingEnergy : 0;
@@ -3640,6 +3801,7 @@ export default class GridManager {
       });
     }
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
+    this.#enforceEnergyExclusivity();
     this.lastSnapshot = this.buildSnapshot();
 
     return this.lastSnapshot;
