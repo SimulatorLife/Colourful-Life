@@ -69,8 +69,8 @@ test("controls panel body manages scrolling and gutter spacing", () => {
   );
   assert.match(
     match[0],
-    /overflow\s*:\s*auto\s*;/,
-    "panel body should scroll independently so the header alignment stays fixed",
+    /overflow-y\s*:\s*auto\s*;/,
+    "panel body should scroll vertically so the header alignment stays fixed",
   );
   assert.match(
     match[0],
@@ -79,7 +79,39 @@ test("controls panel body manages scrolling and gutter spacing", () => {
   );
   assert.match(
     match[0],
+    /overflow-x\s*:\s*hidden\s*;/,
+    "panel body should prevent horizontal scrolling entirely",
+  );
+  assert.match(
+    match[0],
     /min-height\s*:\s*0\s*;/,
     "panel body should allow flexbox to shrink it for scrolling",
+  );
+});
+
+test("generic panel bodies hide horizontal overflow and reserve gutter space", () => {
+  const css = loadStyles();
+  const match = css.match(/\.panel\s*\.panel-body\s*\{[^}]*\}/s);
+
+  assert.ok(match, "expected to locate the generic panel body rule in styles.css");
+  assert.match(
+    match[0],
+    /max-width\s*:\s*100%\s*;/,
+    "panel bodies should never exceed their container width",
+  );
+  assert.match(
+    match[0],
+    /overflow-x\s*:\s*hidden\s*;/,
+    "panel bodies should hide horizontal overflow globally",
+  );
+  assert.match(
+    match[0],
+    /overflow-y\s*:\s*auto\s*;/,
+    "panel bodies should manage vertical scrolling consistently",
+  );
+  assert.match(
+    match[0],
+    /scrollbar-gutter\s*:\s*stable\s*;/,
+    "panel bodies should reserve a stable gutter when scrollbars appear",
   );
 });

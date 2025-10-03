@@ -202,6 +202,10 @@ canvas {
 }
 .panel .panel-body {
   margin-top: var(--space-md);
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .panel.collapsed .panel-body {
   display: none;
@@ -221,7 +225,8 @@ canvas {
 .controls-panel .panel-body {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-gutter: stable;
 }
 .controls-panel.expanded {
