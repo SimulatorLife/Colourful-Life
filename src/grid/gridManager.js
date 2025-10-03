@@ -48,8 +48,6 @@ const NEIGHBOR_OFFSETS = [
   [1, 0],
   [1, 1],
 ];
-// Hard cap to guarantee mortality even if hazard logic is neutralized.
-const FORCED_SENESCENCE_FRACTION = 3;
 const DECAY_RETURN_FRACTION = 0.9;
 const DECAY_IMMEDIATE_SHARE = 0.25;
 const DECAY_RELEASE_BASE = 0.12;
@@ -58,6 +56,83 @@ const DECAY_MAX_AGE = 240;
 const DECAY_EPSILON = 1e-4;
 const DECAY_SPAWN_MIN_ENERGY = 1.2;
 const INITIAL_TILE_ENERGY_FRACTION = 0.5;
+
+const COLOR_CACHE = new Map();
+const RGB_PATTERN =
+  /rgba?\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)(?:\s*,\s*([0-9.]+)\s*)?\)/i;
+const HEX_PATTERN = /^#([0-9a-f]{3,8})$/i;
+const EMPTY_RGBA = Object.freeze([0, 0, 0, 0]);
+const TIMESTAMP_NOW =
+  typeof performance !== "undefined" && typeof performance.now === "function"
+    ? () => performance.now()
+    : () => Date.now();
+
+function parseColorToRgba(color) {
+  if (typeof color !== "string") {
+    return EMPTY_RGBA;
+  }
+
+  const normalized = color.trim();
+
+  if (COLOR_CACHE.has(normalized)) {
+    return COLOR_CACHE.get(normalized);
+  }
+
+  let result = EMPTY_RGBA;
+
+  if (normalized.startsWith("#")) {
+    const match = HEX_PATTERN.exec(normalized);
+
+    if (match) {
+      const hex = match[1];
+      const expandNibble = (value) => value + value;
+      const resolveHexPair = (pair) => parseInt(pair, 16);
+
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 255;
+
+      if (hex.length === 3 || hex.length === 4) {
+        const [hr, hg, hb, ha] = hex.split("");
+
+        r = resolveHexPair(expandNibble(hr));
+        g = resolveHexPair(expandNibble(hg));
+        b = resolveHexPair(expandNibble(hb));
+
+        if (ha) {
+          a = Math.round((resolveHexPair(expandNibble(ha)) / 255) * 255);
+        }
+      } else if (hex.length === 6 || hex.length === 8) {
+        r = resolveHexPair(hex.slice(0, 2));
+        g = resolveHexPair(hex.slice(2, 4));
+        b = resolveHexPair(hex.slice(4, 6));
+
+        if (hex.length === 8) {
+          a = Math.round((resolveHexPair(hex.slice(6, 8)) / 255) * 255);
+        }
+      }
+
+      result = Object.freeze([r, g, b, clamp(Math.round(a), 0, 255)]);
+    }
+  } else {
+    const match = RGB_PATTERN.exec(normalized);
+
+    if (match) {
+      const r = clamp(parseInt(match[1], 10) || 0, 0, 255);
+      const g = clamp(parseInt(match[2], 10) || 0, 0, 255);
+      const b = clamp(parseInt(match[3], 10) || 0, 0, 255);
+      const alpha = match[4] != null ? Number.parseFloat(match[4]) : 1;
+      const a = clamp(Math.round((Number.isFinite(alpha) ? alpha : 1) * 255), 0, 255);
+
+      result = Object.freeze([r, g, b, a]);
+    }
+  }
+
+  COLOR_CACHE.set(normalized, result);
+
+  return result;
+}
 
 function getPairSimilarity(cellA, cellB) {
   if (!cellA || !cellB) return 0;
@@ -123,6 +198,10 @@ export default class GridManager {
   #segmentWindowScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
+  #imageDataCanvas = null;
+  #imageDataCtx = null;
+  #imageData = null;
+  #imageDataNeedsFullRefresh = false;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -1189,6 +1268,26 @@ export default class GridManager {
     this.ctx = resolvedCtx;
     this.cellSize = resolvedCellSize;
     this.stats = resolvedStats;
+    this.renderStrategy =
+      typeof options?.renderStrategy === "string" ? options.renderStrategy : "auto";
+    this.renderDirtyTiles = new Set();
+    this.renderStats = {
+      frameCount: 0,
+      lastFrameMs: 0,
+      avgFrameMs: 0,
+      lastCellLoopMs: 0,
+      avgCellLoopMs: 0,
+      lastObstacleLoopMs: 0,
+      avgObstacleLoopMs: 0,
+      fps: 0,
+      mode: "canvas",
+      lastDirtyTileCount: 0,
+      lastProcessedTiles: 0,
+      lastPaintedCells: 0,
+      refreshType: "none",
+      timestamp: 0,
+    };
+    this.#resetImageDataBuffer();
     this.obstaclePresets = resolveObstaclePresetCatalog(obstaclePresets);
     const knownPresetIds = new Set(
       this.obstaclePresets
@@ -2170,6 +2269,7 @@ export default class GridManager {
     );
     this.#initializeDecayBuffers(rowsInt, colsInt);
     this.obstacles = Array.from({ length: rowsInt }, () => Array(colsInt).fill(false));
+    this.#resetImageDataBuffer();
     this.densityCounts = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
     this.densityLiveGrid = Array.from({ length: rowsInt }, () =>
@@ -2227,6 +2327,7 @@ export default class GridManager {
 
         this.grid[row][col] = cell;
         this.#trackCellPosition(cell, row, col);
+        this.#markTileDirty(row, col);
 
         if (cell && typeof cell === "object" && typeof cell.energy === "number") {
           cell.energy = clamp(cell.energy, 0, maxTileEnergy);
@@ -2259,6 +2360,8 @@ export default class GridManager {
     reseed = true,
   } = {}) {
     const baseEnergy = this.maxTileEnergy * INITIAL_TILE_ENERGY_FRACTION;
+
+    this.#markAllTilesDirty();
 
     for (let row = 0; row < this.rows; row++) {
       const gridRow = this.grid[row];
@@ -2865,6 +2968,7 @@ export default class GridManager {
     if (current) this.removeCell(row, col);
 
     this.grid[row][col] = cell;
+    this.#markTileDirty(row, col);
     clearTileEnergyBuffers(this, row, col);
     this.#trackCellPosition(cell, row, col);
     this.activeCells.add(cell);
@@ -2887,6 +2991,7 @@ export default class GridManager {
     if (!current) return null;
 
     this.grid[row][col] = null;
+    this.#markTileDirty(row, col);
     this.activeCells.delete(current);
     this.#untrackCell(current);
     this.#applyDensityDelta(row, col, -1);
@@ -2961,6 +3066,8 @@ export default class GridManager {
 
     this.grid[toRow][toCol] = moving;
     this.grid[fromRow][fromCol] = null;
+    this.#markTileDirty(fromRow, fromCol);
+    this.#markTileDirty(toRow, toCol);
     clearTileEnergyBuffers(this, toRow, toCol, { preserveCurrent: true });
     this.#trackCellPosition(moving, toRow, toCol);
     this.#applyDensityDelta(fromRow, fromCol, -1);
@@ -2973,6 +3080,8 @@ export default class GridManager {
   }
 
   #handleCellMoved({ fromRow, fromCol, toRow, toCol }) {
+    this.#markTileDirty(fromRow, fromCol);
+    this.#markTileDirty(toRow, toCol);
     this.#applyDensityDelta(fromRow, fromCol, -1);
     this.#applyDensityDelta(toRow, toCol, 1);
   }
@@ -3039,6 +3148,35 @@ export default class GridManager {
     if (!this.densityDirtyTiles) this.densityDirtyTiles = new Set();
 
     this.densityDirtyTiles.add(row * this.cols + col);
+  }
+
+  #markTileDirty(row, col) {
+    if (!Number.isInteger(row) || !Number.isInteger(col)) return;
+    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return;
+
+    if (!this.renderDirtyTiles) {
+      this.renderDirtyTiles = new Set();
+    }
+
+    this.renderDirtyTiles.add(row * this.cols + col);
+  }
+
+  #markAllTilesDirty() {
+    if (!this.renderDirtyTiles) {
+      this.renderDirtyTiles = new Set();
+    } else {
+      this.renderDirtyTiles.clear();
+    }
+
+    this.#imageDataNeedsFullRefresh = true;
+  }
+
+  #resetImageDataBuffer() {
+    this.#imageDataCanvas = null;
+    this.#imageDataCtx = null;
+    this.#imageData = null;
+    this.#imageDataNeedsFullRefresh = true;
+    this.renderDirtyTiles = new Set();
   }
 
   #syncDensitySnapshot(force = false) {
@@ -3237,14 +3375,330 @@ export default class GridManager {
     return total > 0 ? count / total : 0;
   }
 
+  #ensureImageDataBuffer() {
+    const width = Math.max(0, Math.floor(this.cols));
+    const height = Math.max(0, Math.floor(this.rows));
+
+    if (width === 0 || height === 0) {
+      return false;
+    }
+
+    const existingCanvas = this.#imageDataCanvas;
+    const needsRebuild =
+      !existingCanvas ||
+      existingCanvas.width !== width ||
+      existingCanvas.height !== height ||
+      !this.#imageDataCtx ||
+      !this.#imageData;
+
+    if (!needsRebuild) {
+      return true;
+    }
+
+    let canvas = existingCanvas;
+
+    if (!canvas || canvas.width !== width || canvas.height !== height) {
+      if (typeof OffscreenCanvas === "function") {
+        canvas = new OffscreenCanvas(width, height);
+      } else if (
+        typeof document !== "undefined" &&
+        typeof document.createElement === "function"
+      ) {
+        canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+      } else {
+        this.#resetImageDataBuffer();
+
+        return false;
+      }
+    } else {
+      if (canvas.width !== width) canvas.width = width;
+      if (canvas.height !== height) canvas.height = height;
+    }
+
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+
+    if (!context || typeof context.createImageData !== "function") {
+      this.#resetImageDataBuffer();
+
+      return false;
+    }
+
+    this.#imageDataCanvas = canvas;
+    this.#imageDataCtx = context;
+    this.#imageData = context.createImageData(width, height);
+    this.#imageDataNeedsFullRefresh = true;
+
+    return true;
+  }
+
+  #populateImageDataFull() {
+    if (!this.#imageData || !this.#imageDataCtx) return;
+
+    const { data } = this.#imageData;
+    const rows = this.rows;
+    const cols = this.cols;
+    let offset = 0;
+
+    for (let row = 0; row < rows; row++) {
+      const gridRow = this.grid[row];
+
+      for (let col = 0; col < cols; col++) {
+        const cell = gridRow ? gridRow[col] : null;
+        const rgba = cell ? parseColorToRgba(cell.color) : EMPTY_RGBA;
+
+        data[offset] = rgba[0];
+        data[offset + 1] = rgba[1];
+        data[offset + 2] = rgba[2];
+        data[offset + 3] = rgba[3];
+        offset += 4;
+      }
+    }
+
+    this.#imageDataCtx.putImageData(this.#imageData, 0, 0);
+    this.#imageDataNeedsFullRefresh = false;
+  }
+
+  #applyDirtyTilesToImageData(dirtyTiles) {
+    if (!this.#imageData || !this.#imageDataCtx) {
+      return null;
+    }
+
+    const { data } = this.#imageData;
+    const cols = this.cols;
+    const rows = this.rows;
+    let minRow = rows;
+    let minCol = cols;
+    let maxRow = -1;
+    let maxCol = -1;
+
+    for (const key of dirtyTiles) {
+      const row = Math.floor(key / cols);
+      const col = key % cols;
+
+      if (row < 0 || row >= rows || col < 0 || col >= cols) continue;
+
+      const cell = this.grid[row]?.[col] ?? null;
+      const rgba = cell ? parseColorToRgba(cell.color) : EMPTY_RGBA;
+      const index = (row * cols + col) * 4;
+
+      data[index] = rgba[0];
+      data[index + 1] = rgba[1];
+      data[index + 2] = rgba[2];
+      data[index + 3] = rgba[3];
+
+      if (row < minRow) minRow = row;
+      if (row > maxRow) maxRow = row;
+      if (col < minCol) minCol = col;
+      if (col > maxCol) maxCol = col;
+    }
+
+    if (maxRow >= minRow && maxCol >= minCol) {
+      const dirtyWidth = maxCol - minCol + 1;
+      const dirtyHeight = maxRow - minRow + 1;
+
+      this.#imageDataCtx.putImageData(
+        this.#imageData,
+        0,
+        0,
+        minCol,
+        minRow,
+        dirtyWidth,
+        dirtyHeight,
+      );
+      this.#imageDataNeedsFullRefresh = false;
+    }
+
+    return { minRow, minCol, maxRow, maxCol };
+  }
+
+  #drawCellsWithCanvas(ctx, cellSize) {
+    let paintedCells = 0;
+    const totalTiles = this.rows * this.cols;
+
+    for (let row = 0; row < this.rows; row++) {
+      const gridRow = this.grid[row];
+
+      for (let col = 0; col < this.cols; col++) {
+        const cell = gridRow ? gridRow[col] : null;
+
+        if (!cell) continue;
+
+        ctx.fillStyle = cell.color;
+        ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+        paintedCells++;
+      }
+    }
+
+    if (this.renderDirtyTiles) {
+      this.renderDirtyTiles.clear();
+    }
+    this.#imageDataNeedsFullRefresh = true;
+
+    return {
+      processedTiles: totalTiles,
+      paintedCells,
+      dirtyCount: totalTiles,
+      refreshType: "canvas",
+    };
+  }
+
+  #drawCellsWithImageData(ctx) {
+    if (!this.#ensureImageDataBuffer()) {
+      return null;
+    }
+
+    const totalTiles = this.rows * this.cols;
+    const dirtyTiles = this.renderDirtyTiles ?? new Set();
+    let dirtyCount = dirtyTiles.size;
+    let processedTiles = 0;
+    let refreshType = "cached";
+
+    if (this.#imageDataNeedsFullRefresh || dirtyCount >= totalTiles * 0.6) {
+      this.#populateImageDataFull();
+      processedTiles = totalTiles;
+      dirtyCount = totalTiles;
+      refreshType = "full";
+    } else if (dirtyCount > 0) {
+      this.#applyDirtyTilesToImageData(dirtyTiles);
+      processedTiles = dirtyCount;
+      refreshType = "partial";
+    }
+
+    if (this.renderDirtyTiles) {
+      this.renderDirtyTiles.clear();
+    }
+
+    const previousSmoothing = ctx.imageSmoothingEnabled;
+
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      this.#imageDataCanvas,
+      0,
+      0,
+      this.cols,
+      this.rows,
+      0,
+      0,
+      this.cols * this.cellSize,
+      this.rows * this.cellSize,
+    );
+    ctx.imageSmoothingEnabled = previousSmoothing;
+
+    return {
+      processedTiles,
+      paintedCells: this.activeCells?.size ?? 0,
+      dirtyCount,
+      refreshType,
+    };
+  }
+
+  #updateRenderStats({
+    total,
+    cellLoopMs,
+    obstacleLoopMs,
+    mode,
+    processedTiles = 0,
+    paintedCells = 0,
+    dirtyCount = 0,
+    refreshType = "none",
+  }) {
+    if (!this.renderStats) {
+      this.renderStats = {
+        frameCount: 0,
+        lastFrameMs: 0,
+        avgFrameMs: 0,
+        lastCellLoopMs: 0,
+        avgCellLoopMs: 0,
+        lastObstacleLoopMs: 0,
+        avgObstacleLoopMs: 0,
+        fps: 0,
+        mode: mode ?? "canvas",
+        lastDirtyTileCount: 0,
+        lastProcessedTiles: 0,
+        lastPaintedCells: 0,
+        refreshType: "none",
+        timestamp: 0,
+      };
+    }
+
+    const stats = this.renderStats;
+
+    stats.frameCount += 1;
+    stats.lastFrameMs = total;
+    stats.lastCellLoopMs = cellLoopMs;
+    stats.lastObstacleLoopMs = obstacleLoopMs;
+    stats.mode = mode;
+    stats.lastProcessedTiles = processedTiles;
+    stats.lastPaintedCells = paintedCells;
+    stats.lastDirtyTileCount = dirtyCount;
+    stats.refreshType = refreshType;
+    stats.timestamp = TIMESTAMP_NOW();
+
+    const smoothingWindow = Math.min(stats.frameCount, 60);
+
+    stats.avgFrameMs += (total - stats.avgFrameMs) / smoothingWindow;
+    stats.avgCellLoopMs += (cellLoopMs - stats.avgCellLoopMs) / smoothingWindow;
+    stats.avgObstacleLoopMs +=
+      (obstacleLoopMs - stats.avgObstacleLoopMs) / smoothingWindow;
+    stats.fps = stats.avgFrameMs > 0 ? 1000 / stats.avgFrameMs : 0;
+
+    return stats;
+  }
+
+  getRenderStats() {
+    if (!this.renderStats) {
+      return null;
+    }
+
+    return { ...this.renderStats };
+  }
+
   draw(options = {}) {
     const ctx = this.ctx;
     const cellSize = this.cellSize;
-    const { showObstacles = true } = options ?? {};
+    const { showObstacles = true, renderStrategy } = options ?? {};
+    const preferredStrategy =
+      typeof renderStrategy === "string"
+        ? renderStrategy
+        : (this.renderStrategy ?? "auto");
 
-    // Clear full canvas once
+    if (typeof renderStrategy === "string") {
+      this.renderStrategy = renderStrategy;
+    }
+
+    const frameStart = TIMESTAMP_NOW();
+    let obstacleLoopMs = 0;
+    let cellLoopMs = 0;
+    let modeUsed = "canvas";
+    let cellStats = {
+      processedTiles: 0,
+      paintedCells: this.activeCells?.size ?? 0,
+      dirtyCount: this.renderDirtyTiles?.size ?? 0,
+      refreshType: "none",
+    };
+
+    if (!ctx) {
+      this.#updateRenderStats({
+        total: 0,
+        cellLoopMs: 0,
+        obstacleLoopMs: 0,
+        mode: "headless",
+        processedTiles: cellStats.processedTiles,
+        paintedCells: cellStats.paintedCells,
+        dirtyCount: cellStats.dirtyCount,
+        refreshType: cellStats.refreshType,
+      });
+
+      return this.getRenderStats();
+    }
+
     ctx.clearRect(0, 0, this.cols * cellSize, this.rows * cellSize);
+
     if (showObstacles && this.obstacles) {
+      const obstacleStart = TIMESTAMP_NOW();
+
       ctx.fillStyle = "rgba(40,40,55,0.9)";
       for (let row = 0; row < this.rows; row++) {
         for (let col = 0; col < this.cols; col++) {
@@ -3265,17 +3719,50 @@ export default class GridManager {
           );
         }
       }
-    }
-    // Draw cells only
-    for (let row = 0; row < this.rows; row++) {
-      for (let col = 0; col < this.cols; col++) {
-        const cell = this.getCell(row, col);
 
-        if (!cell) continue;
-        ctx.fillStyle = cell.color;
-        ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-      }
+      obstacleLoopMs = TIMESTAMP_NOW() - obstacleStart;
     }
+
+    const tryImageData = preferredStrategy !== "canvas";
+
+    if (tryImageData) {
+      const imageStart = TIMESTAMP_NOW();
+      const imageStats = this.#drawCellsWithImageData(ctx);
+
+      cellLoopMs += TIMESTAMP_NOW() - imageStart;
+
+      if (imageStats) {
+        modeUsed = "image-data";
+        cellStats = imageStats;
+      } else {
+        const fallbackStart = TIMESTAMP_NOW();
+
+        cellStats = this.#drawCellsWithCanvas(ctx, cellSize);
+        cellLoopMs += TIMESTAMP_NOW() - fallbackStart;
+        modeUsed = "canvas";
+      }
+    } else {
+      const canvasStart = TIMESTAMP_NOW();
+
+      cellStats = this.#drawCellsWithCanvas(ctx, cellSize);
+      cellLoopMs = TIMESTAMP_NOW() - canvasStart;
+      modeUsed = "canvas";
+    }
+
+    const total = TIMESTAMP_NOW() - frameStart;
+
+    this.#updateRenderStats({
+      total,
+      cellLoopMs,
+      obstacleLoopMs,
+      mode: modeUsed,
+      processedTiles: cellStats.processedTiles,
+      paintedCells: cellStats.paintedCells,
+      dirtyCount: cellStats.dirtyCount,
+      refreshType: cellStats.refreshType,
+    });
+
+    return this.getRenderStats();
   }
 
   prepareTick({
@@ -3359,7 +3846,30 @@ export default class GridManager {
     const rawAgeFraction = Number.isFinite(senescenceAgeFraction)
       ? senescenceAgeFraction
       : fallbackAgeFraction;
-    const ageFraction = clamp(rawAgeFraction, 0, FORCED_SENESCENCE_FRACTION);
+
+    if (typeof cell.updateSenescenceDebt === "function") {
+      cell.updateSenescenceDebt({
+        ageFraction: rawAgeFraction,
+        energyFraction,
+        localDensity,
+        scarcitySignal,
+        eventPressure: cell.lastEventPressure ?? 0,
+      });
+    }
+    let ageFractionLimit = 3;
+
+    if (typeof cell.resolveSenescenceElasticity === "function") {
+      const elasticity = cell.resolveSenescenceElasticity({
+        localDensity,
+        energyFraction,
+        scarcitySignal,
+      });
+
+      if (Number.isFinite(elasticity)) {
+        ageFractionLimit = Math.max(1.2, elasticity);
+      }
+    }
+    const ageFraction = clamp(rawAgeFraction, 0, ageFractionLimit);
     let senescenceHazard = null;
     let senescenceDeath = false;
 
@@ -3370,6 +3880,7 @@ export default class GridManager {
         localDensity,
         densityEffectMultiplier,
         eventPressure: cell.lastEventPressure ?? 0,
+        scarcitySignal,
       };
 
       senescenceHazard = cell.computeSenescenceHazard(context);
@@ -3395,11 +3906,6 @@ export default class GridManager {
 
     if (!senescenceDeath && senescenceHazard == null && cell.age >= cell.lifespan) {
       senescenceDeath = true;
-    }
-
-    if (!senescenceDeath && rawAgeFraction >= FORCED_SENESCENCE_FRACTION) {
-      senescenceDeath = true;
-      senescenceHazard = 1;
     }
 
     if (senescenceDeath) {

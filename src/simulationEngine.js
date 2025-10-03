@@ -356,6 +356,7 @@ export default class SimulationEngine {
     // Flag signalling that leaderboard/metrics should be recalculated once the throttle allows it.
     this.pendingSlowUiUpdate = false;
     this.lastMetrics = null;
+    this.lastRenderStats = null;
     this.lastSnapshot = this.grid.getLastSnapshot();
     this.lastSlowUiRender = Number.NEGATIVE_INFINITY;
     this.lastUpdateTime = 0;
@@ -689,7 +690,17 @@ export default class SimulationEngine {
       });
     }
 
-    this.grid.draw({ showObstacles: this.state.showObstacles ?? true });
+    const renderSnapshot = this.grid.draw({
+      showObstacles: this.state.showObstacles ?? true,
+    });
+
+    if (renderSnapshot) {
+      this.lastRenderStats = renderSnapshot;
+
+      if (this.lastMetrics) {
+        this.lastMetrics = { ...this.lastMetrics, rendering: renderSnapshot };
+      }
+    }
 
     const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
     const recentLifeEvents =

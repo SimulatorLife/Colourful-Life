@@ -158,6 +158,7 @@ export default class Cell {
       fatigue: 0,
       confidence: 0,
     };
+    this._senescenceDebt = 0;
     this.resourceTrendAdaptation =
       typeof this.dna.resourceTrendAdaptation === "function"
         ? this.dna.resourceTrendAdaptation()
@@ -3095,6 +3096,116 @@ export default class Cell {
     }
   }
 
+  getSenescenceDebt() {
+    const debt = this._senescenceDebt;
+
+    if (!Number.isFinite(debt) || debt <= 0) {
+      return 0;
+    }
+
+    return debt;
+  }
+
+  resolveSenescenceElasticity({
+    localDensity = 0,
+    energyFraction = null,
+    scarcitySignal = 0,
+  } = {}) {
+    const longevityGene =
+      typeof this.dna?.geneFraction === "function"
+        ? this.dna.geneFraction(GENE_LOCI.SENESCENCE)
+        : 0.5;
+    const longevity = clamp(Number.isFinite(longevityGene) ? longevityGene : 0.5, 0, 1);
+    const resilience = clamp(this.dna?.recoveryRate?.() ?? 0.35, 0, 1);
+    const adaptation = clamp(this.resourceTrendAdaptation ?? 0.35, 0, 1);
+    const vitality = clamp(resilience * 0.65 + adaptation * 0.35, 0, 1);
+    const density = clamp(Number.isFinite(localDensity) ? localDensity : 0, 0, 1);
+    const scarcity = clamp(Number.isFinite(scarcitySignal) ? scarcitySignal : 0, 0, 1);
+    const fallbackCap =
+      Number.isFinite(MAX_TILE_ENERGY) && MAX_TILE_ENERGY > 0 ? MAX_TILE_ENERGY : 1;
+    const normalizedEnergy = clamp(
+      Number.isFinite(energyFraction)
+        ? energyFraction
+        : (Number.isFinite(this.energy) ? this.energy : 0) / fallbackCap,
+      0,
+      1,
+    );
+    const stress = clamp(
+      0.35 + density * 0.35 + scarcity * 0.3 + (1 - normalizedEnergy) * 0.45,
+      0.15,
+      1.4,
+    );
+    const baseElasticity = 2 + longevity * 1.6 + vitality * 1.1;
+    const stressDrag = 1 - Math.min(0.75, stress * (0.4 + (1 - vitality) * 0.35));
+
+    return clamp(baseElasticity * stressDrag, 1.2, 4.6);
+  }
+
+  updateSenescenceDebt({
+    ageFraction = this.getAgeFraction({ clamp: false }),
+    energyFraction = null,
+    localDensity = 0,
+    scarcitySignal = 0,
+    eventPressure = this.lastEventPressure ?? 0,
+  } = {}) {
+    const fallbackCap =
+      Number.isFinite(MAX_TILE_ENERGY) && MAX_TILE_ENERGY > 0 ? MAX_TILE_ENERGY : 1;
+    const normalizedEnergy = clamp(
+      Number.isFinite(energyFraction)
+        ? energyFraction
+        : (Number.isFinite(this.energy) ? this.energy : 0) / fallbackCap,
+      0,
+      1,
+    );
+    const normalizedAge = Math.max(0, Number.isFinite(ageFraction) ? ageFraction : 0);
+    const density = clamp(Number.isFinite(localDensity) ? localDensity : 0, 0, 1);
+    const scarcity = clamp(Number.isFinite(scarcitySignal) ? scarcitySignal : 0, 0, 1);
+    const pressure = clamp(Number.isFinite(eventPressure) ? eventPressure : 0, 0, 1);
+    const senescenceRate = clamp(
+      typeof this.dna?.senescenceRate === "function" ? this.dna.senescenceRate() : 0.25,
+      0.05,
+      1.25,
+    );
+    const resilience = clamp(this.dna?.recoveryRate?.() ?? 0.35, 0, 1);
+    const adaptation = clamp(this.resourceTrendAdaptation ?? 0.35, 0, 1);
+    const vitality = clamp(resilience * 0.65 + adaptation * 0.35, 0, 1);
+    const baseStress =
+      (1 - normalizedEnergy) * (0.5 + senescenceRate * 0.25) +
+      density * 0.35 +
+      scarcity * 0.3 +
+      pressure * 0.25;
+    const mitigation = 0.25 + vitality * 0.45;
+
+    if (normalizedAge > 1) {
+      const overAge = normalizedAge - 1;
+      const elasticity = this.resolveSenescenceElasticity({
+        localDensity,
+        energyFraction: normalizedEnergy,
+        scarcitySignal,
+      });
+      const normalizedOver = overAge / Math.max(1, elasticity - 1);
+      const growthDriver = Math.max(
+        0,
+        baseStress + senescenceRate * 0.4 - mitigation * 0.6,
+      );
+      const gain = overAge * (0.45 + senescenceRate) * (0.4 + growthDriver);
+      const compounding =
+        (1 + Math.log1p(Math.max(0, this._senescenceDebt ?? 0)) * 0.15) *
+        (0.6 + normalizedOver * 0.8);
+      const delta = Math.max(0, gain * compounding);
+
+      this._senescenceDebt = (this._senescenceDebt ?? 0) + delta;
+    } else {
+      const reliefBase = Math.max(0, mitigation - baseStress * 0.35);
+      const relief = (1 - normalizedAge) * (0.2 + reliefBase * 0.5);
+      const decay = relief + Math.max(0, vitality * 0.1);
+
+      this._senescenceDebt = Math.max(0, (this._senescenceDebt ?? 0) - decay);
+    }
+
+    return this._senescenceDebt;
+  }
+
   getSenescenceAgeFraction() {
     if (!Number.isFinite(this.lifespan) || this.lifespan <= 0) return 0;
 
@@ -3164,7 +3275,9 @@ export default class Cell {
   }
 
   ageEnergyMultiplier(load = 1) {
-    const ageFrac = this.getAgeFraction();
+    const ageFracRaw = this.getAgeFraction({ clamp: false });
+    const ageElasticity = this.resolveSenescenceElasticity();
+    const ageFrac = clamp(ageFracRaw, 0, Math.max(1.2, ageElasticity));
 
     if (ageFrac <= 0) return 1;
 
@@ -3173,7 +3286,11 @@ export default class Cell {
     const basePull = 0.12 + Math.max(0, senescence);
     const linear = 1 + ageFrac * basePull;
     const curvature = 1 + ageFrac * ageFrac * (0.25 + Math.max(0, senescence) * 1.1);
-    const combined = linear * curvature;
+    const debt = this.getSenescenceDebt();
+    const debtPressure = 1 + Math.log1p(debt) * 0.2;
+    const overshootDrag =
+      1 + Math.max(0, ageFracRaw - 1) * (0.35 + Math.max(0, senescence) * 0.5);
+    const combined = linear * curvature * debtPressure * overshootDrag;
     const loadFactor = clamp(Number.isFinite(load) ? load : 1, 0, 3);
 
     return 1 + (combined - 1) * loadFactor;
@@ -3186,17 +3303,8 @@ export default class Cell {
     densityEffectMultiplier = 1,
     eventPressure = this.lastEventPressure ?? 0,
     crowdingPreference = this.baseCrowdingTolerance ?? 0.5,
+    scarcitySignal = 0,
   } = {}) {
-    const normalizedAge = clamp(
-      Number.isFinite(ageFraction) ? ageFraction : this.getAgeFraction(),
-      0,
-      3,
-    );
-
-    if (normalizedAge <= 0) {
-      return 0;
-    }
-
     const fallbackEnergyCap =
       Number.isFinite(MAX_TILE_ENERGY) && MAX_TILE_ENERGY > 0 ? MAX_TILE_ENERGY : 1;
     const normalizedEnergy = clamp(
@@ -3206,6 +3314,23 @@ export default class Cell {
       0,
       1,
     );
+    const elasticity = this.resolveSenescenceElasticity({
+      localDensity,
+      energyFraction: normalizedEnergy,
+      scarcitySignal,
+    });
+    const normalizedAge = clamp(
+      Number.isFinite(ageFraction)
+        ? ageFraction
+        : this.getAgeFraction({ clamp: false }),
+      0,
+      Math.max(1.2, elasticity),
+    );
+
+    if (normalizedAge <= 0) {
+      return 0;
+    }
+
     const densityScale = Number.isFinite(densityEffectMultiplier)
       ? densityEffectMultiplier
       : 1;
@@ -3221,6 +3346,7 @@ export default class Cell {
       0,
       1,
     );
+    const scarcity = clamp(Number.isFinite(scarcitySignal) ? scarcitySignal : 0, 0, 1);
     const densityStress = Math.max(0, normalizedDensity - comfort);
     const energyStress = 1 - normalizedEnergy;
     const pressureStress = clamp(
@@ -3242,9 +3368,13 @@ export default class Cell {
     const stressCurve =
       energyStress * (1.5 - vitality * 1.05) +
       densityStress * (1.3 - vitality * 0.85) +
-      pressureStress * (1.4 - vitality * 0.7);
+      pressureStress * (1.4 - vitality * 0.7) +
+      scarcity * (1.1 - vitality * 0.6);
     const mitigation = vitality * 1.25;
-    const hazardInput = baseCurve + overshootCurve + stressCurve - mitigation - 1.1;
+    const debtPressure =
+      Math.log1p(this.getSenescenceDebt()) * (0.55 + senescence * 0.45);
+    const hazardInput =
+      baseCurve + overshootCurve + stressCurve + debtPressure - mitigation - 1.1;
     const logisticInput = clamp(hazardInput, -12, 12);
     const hazard = 1 / (1 + Math.exp(-logisticInput));
 
