@@ -144,19 +144,12 @@ export default class GridInteractionAdapter {
   }
 
   maxTileEnergy() {
-    const managerValue = this.gridManager?.maxTileEnergy;
+    const positiveOverride = [
+      this.gridManager?.maxTileEnergy,
+      globalThis?.GridManager?.maxTileEnergy,
+    ].find((value) => Number.isFinite(value) && value > 0);
 
-    if (Number.isFinite(managerValue) && managerValue > 0) {
-      return managerValue;
-    }
-
-    const globalValue = globalThis?.GridManager?.maxTileEnergy;
-
-    if (Number.isFinite(globalValue) && globalValue > 0) {
-      return globalValue;
-    }
-
-    return MAX_TILE_ENERGY;
+    return positiveOverride ?? MAX_TILE_ENERGY;
   }
 
   densityAt(row, col, { densityGrid } = {}) {
