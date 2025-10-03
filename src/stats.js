@@ -389,6 +389,7 @@ export default class Stats {
     observedDiversity = 0,
     behaviorEvenness = 0,
     successfulComplementarity = 0,
+    meanStrategyPenalty = 1,
   ) {
     const target = clamp01(this.diversityTarget ?? DIVERSITY_TARGET_DEFAULT);
 
@@ -407,6 +408,11 @@ export default class Stats {
     const complementValue = clamp01(
       Number.isFinite(successfulComplementarity) ? successfulComplementarity : 0,
     );
+    const penaltyAverage = clamp01(
+      Number.isFinite(meanStrategyPenalty) ? meanStrategyPenalty : 1,
+    );
+    const penaltySlack = penaltyAverage;
+    const penaltyRelief = clamp01(1 - penaltyAverage);
 
     const geneticShortfall = clamp01((target - diversityValue) / target);
     const evennessShortfall = clamp01(1 - evennessValue);
@@ -422,10 +428,10 @@ export default class Stats {
     this.diversityPressure = clamp01(next);
 
     const monotonyDemand = clamp01(
-      evennessShortfall * (0.45 + geneticShortfall * 0.35),
+      evennessShortfall * (0.45 + geneticShortfall * 0.35) * (0.7 + penaltySlack * 0.6),
     );
     const complementReliefStrategy = clamp01(
-      complementValue * (0.25 + geneticShortfall * 0.3),
+      complementValue * (0.25 + geneticShortfall * 0.3) * (0.8 + penaltyRelief * 0.4),
     );
     const rawStrategyPressure = clamp01(monotonyDemand - complementReliefStrategy);
     const prevStrategy = Number.isFinite(this.strategyPressure)
@@ -810,6 +816,7 @@ export default class Stats {
       diversity,
       behaviorEvenness,
       successfulComplementarity,
+      meanStrategyPenalty,
     );
 
     this.pushHistory("population", pop);
