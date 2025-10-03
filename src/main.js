@@ -11,30 +11,41 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 function resolveHeadlessCanvasSize(config = {}) {
   const toFinite = toFiniteOrNull;
 
-  const cellSize = toFinite(config?.cellSize) ?? 5;
-  const rows = toFinite(config?.rows);
-  const cols = toFinite(config?.cols);
+  const rawCellSize = toFinite(config?.cellSize);
+  const cellSize = rawCellSize != null && rawCellSize > 0 ? rawCellSize : 5;
+  const rawRows = toFinite(config?.rows);
+  const rawCols = toFinite(config?.cols);
+  const rows = rawRows != null && rawRows > 0 ? rawRows : null;
+  const cols = rawCols != null && rawCols > 0 ? rawCols : null;
   const defaultWidth = (cols ?? 120) * cellSize;
   const defaultHeight = (rows ?? 120) * cellSize;
-  const pickFirstFinite = (candidates, fallback) =>
-    candidates.reduce((selected, candidate) => selected ?? toFinite(candidate), null) ??
-    fallback;
+  const pickFirstPositive = (candidates, fallback) => {
+    for (const candidate of candidates) {
+      const numeric = toFinite(candidate);
+
+      if (numeric != null && numeric > 0) {
+        return numeric;
+      }
+    }
+
+    return fallback;
+  };
 
   return {
-    width: pickFirstFinite(
+    width: pickFirstPositive(
       [
-        toFinite(config?.width),
-        toFinite(config?.canvasWidth),
-        toFinite(config?.canvasSize?.width),
+        config?.width,
+        config?.canvasWidth,
+        config?.canvasSize?.width,
         cols != null ? cols * cellSize : null,
       ],
       defaultWidth,
     ),
-    height: pickFirstFinite(
+    height: pickFirstPositive(
       [
-        toFinite(config?.height),
-        toFinite(config?.canvasHeight),
-        toFinite(config?.canvasSize?.height),
+        config?.height,
+        config?.canvasHeight,
+        config?.canvasSize?.height,
         rows != null ? rows * cellSize : null,
       ],
       defaultHeight,
@@ -177,7 +188,7 @@ export function createSimulation({
 
   config = toPlainObject(config);
   const layoutInitialSettings = toPlainObject(config?.ui?.layout?.initialSettings);
-  const configWithLayoutDefaults = { ...layoutInitialSettings, ...config };
+  let configWithLayoutDefaults = { ...layoutInitialSettings, ...config };
 
   if (win) {
     win.BrainDebugger = BrainDebugger;
@@ -186,9 +197,56 @@ export function createSimulation({
   }
 
   let resolvedCanvas = canvas;
+  const headlessCanvasSize = headless
+    ? resolveHeadlessCanvasSize(configWithLayoutDefaults)
+    : null;
 
   if (headless && !resolvedCanvas) {
-    resolvedCanvas = createHeadlessCanvas(configWithLayoutDefaults);
+    const sizeOverrides = headlessCanvasSize ?? {};
+    const canvasSizeConfig = {
+      ...toPlainObject(configWithLayoutDefaults.canvasSize),
+    };
+
+    if (sizeOverrides.width > 0) {
+      canvasSizeConfig.width = sizeOverrides.width;
+    }
+
+    if (sizeOverrides.height > 0) {
+      canvasSizeConfig.height = sizeOverrides.height;
+    }
+
+    resolvedCanvas = createHeadlessCanvas({
+      ...configWithLayoutDefaults,
+      width: sizeOverrides.width,
+      height: sizeOverrides.height,
+      canvasWidth: sizeOverrides.width,
+      canvasHeight: sizeOverrides.height,
+      canvasSize: canvasSizeConfig,
+    });
+  }
+
+  if (headless && headlessCanvasSize) {
+    const sizeOverrides = headlessCanvasSize;
+    const canvasSizeConfig = {
+      ...toPlainObject(configWithLayoutDefaults.canvasSize),
+    };
+
+    if (sizeOverrides.width > 0) {
+      canvasSizeConfig.width = sizeOverrides.width;
+    }
+
+    if (sizeOverrides.height > 0) {
+      canvasSizeConfig.height = sizeOverrides.height;
+    }
+
+    configWithLayoutDefaults = {
+      ...configWithLayoutDefaults,
+      width: sizeOverrides.width,
+      height: sizeOverrides.height,
+      canvasWidth: sizeOverrides.width,
+      canvasHeight: sizeOverrides.height,
+      canvasSize: canvasSizeConfig,
+    };
   }
 
   const selectionManagerFactory =

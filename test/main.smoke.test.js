@@ -116,6 +116,22 @@ test("headless canvas ignores blank dimension strings", async () => {
   simulation.destroy();
 });
 
+test("headless canvas sanitizes invalid dimension overrides", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    config: { cellSize: -4, width: -200, height: 0 },
+  });
+
+  assert.is(simulation.engine.canvas.width, 600);
+  assert.is(simulation.engine.canvas.height, 600);
+  assert.is(simulation.engine.cellSize, 5);
+
+  simulation.destroy();
+});
+
 test("createSimulation respects low diversity multiplier overrides in headless mode", async () => {
   const { createSimulation } = await simulationModulePromise;
   const configuredMultiplier = 0.24;
