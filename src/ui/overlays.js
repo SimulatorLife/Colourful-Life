@@ -1,5 +1,5 @@
 import { MAX_TILE_ENERGY } from "../config.js";
-import { clamp, clamp01, lerp, warnOnce } from "../utils.js";
+import { clamp, clamp01, lerp, toPlainObject, warnOnce } from "../utils.js";
 
 const DEFAULT_FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
@@ -33,24 +33,23 @@ function computeLifeEventAlpha(
   return LIFE_EVENT_MARKER_MIN_ALPHA + span * (1 - normalized * normalized);
 }
 
-function resolveLifeEventColor(event, overrides) {
+function resolveLifeEventColor(event, overridesInput) {
   const candidateColors = [event?.highlight?.color, event?.color];
+  const overrides = toPlainObject(overridesInput);
 
-  if (overrides && typeof overrides === "object") {
-    const typeOverride = overrides[event?.type];
-    const fallbackOverride = overrides.default ?? overrides.fallback ?? overrides.other;
+  const typeOverride = overrides[event?.type];
+  const fallbackOverride = overrides.default ?? overrides.fallback ?? overrides.other;
 
-    if (typeof typeOverride === "string" && typeOverride.length > 0) {
-      candidateColors.push(typeOverride);
-    }
+  if (typeof typeOverride === "string" && typeOverride.length > 0) {
+    candidateColors.push(typeOverride);
+  }
 
-    if (
-      typeof fallbackOverride === "string" &&
-      fallbackOverride.length > 0 &&
-      fallbackOverride !== typeOverride
-    ) {
-      candidateColors.push(fallbackOverride);
-    }
+  if (
+    typeof fallbackOverride === "string" &&
+    fallbackOverride.length > 0 &&
+    fallbackOverride !== typeOverride
+  ) {
+    candidateColors.push(fallbackOverride);
   }
 
   candidateColors.push(LIFE_EVENT_MARKER_DEFAULT_COLORS[event?.type]);
