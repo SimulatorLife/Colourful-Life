@@ -21,6 +21,7 @@ import { clearTileEnergyBuffers } from "./energyUtils.js";
 import ReproductionZonePolicy from "./reproductionZonePolicy.js";
 import { OBSTACLE_PRESETS, resolveObstaclePresetCatalog } from "./obstaclePresets.js";
 import { resolvePopulationScarcityMultiplier } from "./populationScarcity.js";
+import { resolveGridEnvironment } from "./gridEnvironment.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -881,6 +882,83 @@ export default class GridManager {
     return this.#spawnCandidateScratch;
   }
 
+  #enqueueDecay(row, col, cell) {
+    if (!cell || typeof cell !== "object") return;
+    if (!Number.isInteger(row) || !Number.isInteger(col)) return;
+    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return;
+
+    const energy = Number.isFinite(cell.energy) ? cell.energy : 0;
+
+    if (energy <= DECAY_EPSILON) return;
+
+    if (!this.decayAmount || this.decayAmount.length !== this.rows) {
+      this.#initializeDecayBuffers(this.rows, this.cols);
+    }
+
+    const returned = energy * DECAY_RETURN_FRACTION;
+
+    if (returned <= DECAY_EPSILON) return;
+
+    let reserve = returned * (1 - DECAY_IMMEDIATE_SHARE);
+    const immediate = returned - reserve;
+
+    if (immediate > DECAY_EPSILON) {
+      const leftover = this.#distributeEnergy(row, col, immediate);
+
+      if (leftover > DECAY_EPSILON) {
+        reserve += leftover;
+      }
+    }
+
+    if (reserve <= DECAY_EPSILON) return;
+
+    const rowStore = this.decayAmount[row];
+    const ageRow = this.decayAge[row];
+
+    if (!rowStore || !ageRow) return;
+
+    rowStore[col] = (rowStore[col] || 0) + reserve;
+    ageRow[col] = 0;
+    this.decayActive.add(row * this.cols + col);
+  }
+
+  #applyDecayDeltas() {
+    if (!this.decayDeltaPending || this.decayDeltaPending.size === 0) return;
+
+    const deltaGrid = this.energyDeltaGrid;
+    const cap = this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
+
+    if (!deltaGrid || cap <= 0) {
+      this.decayDeltaPending.clear();
+
+      return;
+    }
+
+    const invCap = 1 / cap;
+
+    for (const [key, amount] of this.decayDeltaPending.entries()) {
+      const row = Math.floor(key / this.cols);
+      const col = key % this.cols;
+
+      if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) continue;
+
+      const rowDeltas = deltaGrid[row];
+
+      if (!rowDeltas) continue;
+
+      const normalized = clamp(amount * invCap, -1, 1);
+      const prior = Number.isFinite(rowDeltas[col]) ? rowDeltas[col] : 0;
+      let next = prior + normalized;
+
+      if (next < -1) next = -1;
+      else if (next > 1) next = 1;
+
+      rowDeltas[col] = next;
+    }
+
+    this.decayDeltaPending.clear();
+  }
+
   #initializeDecayBuffers(rows, cols) {
     const rowCount = Math.max(0, Math.floor(rows));
     const colCount = Math.max(0, Math.floor(cols));
@@ -962,46 +1040,6 @@ export default class GridManager {
     }
 
     return remaining;
-  }
-
-  #enqueueDecay(row, col, cell) {
-    if (!cell || typeof cell !== "object") return;
-    if (!Number.isInteger(row) || !Number.isInteger(col)) return;
-    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return;
-
-    const energy = Number.isFinite(cell.energy) ? cell.energy : 0;
-
-    if (energy <= DECAY_EPSILON) return;
-
-    if (!this.decayAmount || this.decayAmount.length !== this.rows) {
-      this.#initializeDecayBuffers(this.rows, this.cols);
-    }
-
-    const returned = energy * DECAY_RETURN_FRACTION;
-
-    if (returned <= DECAY_EPSILON) return;
-
-    let reserve = returned * (1 - DECAY_IMMEDIATE_SHARE);
-    const immediate = returned - reserve;
-
-    if (immediate > DECAY_EPSILON) {
-      const leftover = this.#distributeEnergy(row, col, immediate);
-
-      if (leftover > DECAY_EPSILON) {
-        reserve += leftover;
-      }
-    }
-
-    if (reserve <= DECAY_EPSILON) return;
-
-    const rowStore = this.decayAmount[row];
-    const ageRow = this.decayAge[row];
-
-    if (!rowStore || !ageRow) return;
-
-    rowStore[col] = (rowStore[col] || 0) + reserve;
-    ageRow[col] = 0;
-    this.decayActive.add(row * this.cols + col);
   }
 
   #processDecay() {
@@ -1142,47 +1180,8 @@ export default class GridManager {
     this.decayActive = nextActive;
   }
 
-  #applyDecayDeltas() {
-    if (!this.decayDeltaPending || this.decayDeltaPending.size === 0) return;
-
-    const deltaGrid = this.energyDeltaGrid;
-    const cap = this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
-
-    if (!deltaGrid || cap <= 0) {
-      this.decayDeltaPending.clear();
-
-      return;
-    }
-
-    const invCap = 1 / cap;
-
-    for (const [key, amount] of this.decayDeltaPending.entries()) {
-      const row = Math.floor(key / this.cols);
-      const col = key % this.cols;
-
-      if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) continue;
-
-      const rowDeltas = deltaGrid[row];
-
-      if (!rowDeltas) continue;
-
-      const normalized = clamp(amount * invCap, -1, 1);
-      const prior = Number.isFinite(rowDeltas[col]) ? rowDeltas[col] : 0;
-      let next = prior + normalized;
-
-      if (next < -1) next = -1;
-      else if (next > 1) next = 1;
-
-      rowDeltas[col] = next;
-    }
-
-    this.decayDeltaPending.clear();
-  }
-
-  constructor(
-    rows,
-    cols,
-    {
+  constructor(rows, cols, options = {}) {
+    const {
       eventManager,
       eventContext,
       ctx = null,
@@ -1198,8 +1197,14 @@ export default class GridManager {
       rng,
       brainSnapshotCollector,
       autoReseed = false,
-    } = {},
-  ) {
+    } = options;
+    const {
+      eventManager: resolvedEventManager,
+      ctx: resolvedCtx,
+      cellSize: resolvedCellSize,
+      stats: resolvedStats,
+    } = resolveGridEnvironment({ eventManager, ctx, cellSize, stats }, GLOBAL);
+
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
@@ -1216,12 +1221,12 @@ export default class GridManager {
     this.energyDeltaGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
-    this.eventManager = eventManager || window.eventManager;
+    this.eventManager = resolvedEventManager;
     this.eventContext = createEventContext(eventContext);
     this.eventEffectCache = new Map();
-    this.ctx = ctx || window.ctx;
-    this.cellSize = cellSize || window.cellSize || 8;
-    this.stats = stats || window.stats;
+    this.ctx = resolvedCtx;
+    this.cellSize = resolvedCellSize;
+    this.stats = resolvedStats;
     this.obstaclePresets = resolveObstaclePresetCatalog(obstaclePresets);
     const knownPresetIds = new Set(
       this.obstaclePresets
@@ -1471,15 +1476,6 @@ export default class GridManager {
 
   setBrainSnapshotCollector(collector) {
     this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
-  }
-
-  setEventContext(eventContext) {
-    this.eventContext = createEventContext(eventContext);
-    this.eventEffectCache?.clear();
-  }
-
-  getEventContext() {
-    return this.eventContext;
   }
 
   setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {

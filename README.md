@@ -53,6 +53,16 @@ Enable **Life Event Markers** in the Overlays panel to spotlight where births an
 
 Select a **Layout Preset** in the Obstacles panel to immediately swap the grid's obstacle mask. The dropdown now applies changes as soon as you choose a preset, streamlining the workflow when experimenting with layouts. Use **Clear Obstacles** to reset the field if you need a blank slate again.
 
+### Keyboard shortcuts
+
+Speed through experiments without reaching for the mouse:
+
+- **P** — Pause or resume the simulation.
+- **S** — Step forward a single tick while paused.
+- **[** or **-** — Slow down playback speed by the configured increment. Hold **Shift** to apply a larger change.
+- **]** or **=** — Increase playback speed with the same step logic.
+- **0** — Snap playback speed back to the 1× default.
+
 ## Core systems
 
 The simulation runs on cooperating modules housed in `src/`:

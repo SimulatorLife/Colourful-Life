@@ -13,6 +13,8 @@ const HISTORY_SERIES_KEYS = [
   "diversityPressure",
   "energy",
   "growth",
+  "birthsPerTick",
+  "deathsPerTick",
   "eventStrength",
   "diversePairingRate",
   "meanDiversityAppetite",
@@ -819,6 +821,8 @@ export default class Stats {
     this.pushHistory("diversityPressure", this.diversityPressure);
     this.pushHistory("energy", meanEnergy);
     this.pushHistory("growth", this.births - this.deaths);
+    this.pushHistory("birthsPerTick", this.births);
+    this.pushHistory("deathsPerTick", this.deaths);
     this.pushHistory("diversePairingRate", diverseChoiceRate);
     this.pushHistory("meanDiversityAppetite", meanAppetite);
     if (typeof this.mutationMultiplier === "number") {
@@ -846,6 +850,8 @@ export default class Stats {
       births: this.births,
       deaths: this.deaths,
       growth: this.births - this.deaths,
+      birthsPerTick: this.births,
+      deathsPerTick: this.deaths,
       fights: this.fights,
       cooperations: this.cooperations,
       meanEnergy,
