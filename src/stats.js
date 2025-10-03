@@ -292,6 +292,7 @@ export default class Stats {
     this.lifeEventSequence = 0;
     this.deathCauseTotals = Object.create(null);
     this.performance = Object.create(null);
+    this.starvationRateSmoothed = 0;
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -367,6 +368,7 @@ export default class Stats {
     this.#tickInProgress = false;
     this.#lifeEventTickBase = this.totals.ticks;
     this.performance = Object.create(null);
+    this.starvationRateSmoothed = 0;
   }
 
   setDiversityTarget(value) {
@@ -920,9 +922,20 @@ export default class Stats {
       this.pushHistory("mutationMultiplier", this.mutationMultiplier);
     }
     const starvationDeaths = this.deathCausesTick?.starvation ?? 0;
-    const starvationRate = this.deaths > 0 ? starvationDeaths / this.deaths : 0;
+    const starvationInstant = this.deaths > 0 ? starvationDeaths / this.deaths : 0;
+    const totalDeaths = this.totals?.deaths ?? 0;
+    const starvationCumulative =
+      totalDeaths > 0 && Number.isFinite(totalDeaths)
+        ? (this.deathCauseTotals?.starvation ?? 0) / totalDeaths
+        : 0;
+    const previousStarvation = Number.isFinite(this.starvationRateSmoothed)
+      ? this.starvationRateSmoothed
+      : 0;
+    const blendedStarvation =
+      previousStarvation * 0.6 + starvationCumulative * 0.25 + starvationInstant * 0.15;
 
-    this.pushHistory("starvationRate", starvationRate);
+    this.starvationRateSmoothed = clamp01(blendedStarvation);
+    this.pushHistory("starvationRate", this.starvationRateSmoothed);
 
     this.traitPresence = traitPresence;
     this.behavioralEvenness = behaviorEvenness;
@@ -968,7 +981,7 @@ export default class Stats {
       blockedMatings: mateStats.blocks || 0,
       lastBlockedReproduction: this.lastBlockedReproduction,
       deathBreakdown: this.deathCausesTick ? { ...this.deathCausesTick } : {},
-      starvationRate,
+      starvationRate: this.starvationRateSmoothed,
     };
   }
 

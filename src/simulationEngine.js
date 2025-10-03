@@ -298,6 +298,8 @@ export default class SimulationEngine {
       brainSnapshotCollector,
       autoReseed: defaults.autoReseed,
       autoSeedEnabled: defaults.autoReseed !== false,
+      performanceNow: this.now,
+      profileGridMetrics: config.profileGridMetrics,
     });
 
     if (win) {

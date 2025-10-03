@@ -133,6 +133,7 @@ export default class GridManager {
   #columnEventScratch = null;
   #eventRowsScratch = null;
   #activeSnapshotScratch = [];
+  #performanceNow = PERFORMANCE_NOW;
   #profilingScratch = {
     activeSnapshotMs: 0,
     activeSnapshotCount: 0,
@@ -180,8 +181,18 @@ export default class GridManager {
     return Math.max(15, fractionalFloor);
   }
 
-  static #now() {
-    return PERFORMANCE_NOW();
+  #now() {
+    let value;
+
+    try {
+      value = this.#performanceNow();
+    } catch (error) {
+      value = PERFORMANCE_NOW();
+    }
+
+    const numeric = Number(value);
+
+    return Number.isFinite(numeric) ? numeric : PERFORMANCE_NOW();
   }
 
   #computePopulationScarcitySignal() {
@@ -1334,6 +1345,8 @@ export default class GridManager {
       obstaclePresets,
       rng,
       brainSnapshotCollector,
+      performanceNow: performanceNowHook,
+      profileGridMetrics,
     } = options;
     const {
       eventManager: resolvedEventManager,
@@ -1367,6 +1380,11 @@ export default class GridManager {
     this.cellSize = resolvedCellSize;
     this.stats = resolvedStats;
     this.lastGridProfiling = null;
+    this.profileGridMetrics =
+      profileGridMetrics ??
+      (typeof this.stats?.recordPerformanceSummary === "function" ? true : false);
+    this.#performanceNow =
+      typeof performanceNowHook === "function" ? performanceNowHook : PERFORMANCE_NOW;
     this.obstaclePresets = resolveObstaclePresetCatalog(obstaclePresets);
     const knownPresetIds = new Set(
       this.obstaclePresets
@@ -4399,12 +4417,17 @@ export default class GridManager {
 
     this.densityGrid = densityGrid;
     const processed = new WeakSet();
-    const profiling = this.#resetProfilingScratch();
+    const profilePreference = this.profileGridMetrics;
+    const shouldProfile =
+      profilePreference != null
+        ? Boolean(profilePreference)
+        : typeof this.stats?.recordPerformanceSummary === "function";
+    const profiling = shouldProfile ? this.#resetProfilingScratch() : null;
     const activeSnapshot = this.#activeSnapshotScratch;
 
     activeSnapshot.length = 0;
 
-    const snapshotStart = GridManager.#now();
+    const snapshotStart = profiling ? this.#now() : 0;
 
     if (this.activeCells && this.activeCells.size > 0) {
       for (const cell of this.activeCells) {
@@ -4412,8 +4435,10 @@ export default class GridManager {
       }
     }
 
-    profiling.activeSnapshotMs = GridManager.#now() - snapshotStart;
-    profiling.activeSnapshotCount = activeSnapshot.length;
+    if (profiling) {
+      profiling.activeSnapshotMs = this.#now() - snapshotStart;
+      profiling.activeSnapshotCount = activeSnapshot.length;
+    }
 
     for (let i = 0; i < activeSnapshot.length; i++) {
       const cell = activeSnapshot[i];
@@ -4468,7 +4493,11 @@ export default class GridManager {
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
     this.#enforceEnergyExclusivity();
     this.lastSnapshot = this.buildSnapshot();
-    this.#recordProfilingSummary(profiling);
+    if (!profiling) {
+      this.lastGridProfiling = null;
+    } else {
+      this.#recordProfilingSummary(profiling);
+    }
 
     return this.lastSnapshot;
   }
@@ -4637,7 +4666,7 @@ export default class GridManager {
     let processed = 0;
     let attempts = 0;
     let earlyExit = false;
-    const timerStart = profiling ? GridManager.#now() : 0;
+    const timerStart = profiling ? this.#now() : 0;
 
     for (let i = 0; i < offsets.length; i += 2) {
       attempts += 1;
@@ -4718,7 +4747,7 @@ export default class GridManager {
       profiling.findTargetsCalls += 1;
       profiling.findTargetsTiles += processed;
       profiling.findTargetsAttempts += attempts;
-      profiling.findTargetsMs += GridManager.#now() - timerStart;
+      profiling.findTargetsMs += this.#now() - timerStart;
 
       if (earlyExit) {
         profiling.findTargetsBudgetSkips += 1;

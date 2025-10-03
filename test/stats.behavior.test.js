@@ -819,3 +819,33 @@ test("recordPerformanceSummary tracks last tick values and aggregates totals", a
   assert.equal(stats.performance.grid.totals.findTargetsTotalMs, 8);
   assert.equal(stats.performance.grid.samples.findTargetsCalls, 6);
 });
+
+test("starvation rate smoothing blends instant and cumulative signals", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+
+  stats.deaths = 1;
+  stats.deathCausesTick = { starvation: 1 };
+  stats.totals.deaths = 10;
+  stats.deathCauseTotals.starvation = 4;
+
+  stats.updateFromSnapshot({ population: 5, cells: [], totalEnergy: 0, totalAge: 0 });
+
+  const firstRate = stats.getHistorySeries("starvationRate").at(-1);
+  const expectedFirst = 0.25;
+
+  approxEqual(firstRate, expectedFirst, 1e-9);
+
+  stats.deaths = 2;
+  stats.deathCausesTick = { starvation: 0 };
+  stats.totals.deaths = 12;
+  stats.deathCauseTotals.starvation = 4;
+
+  stats.updateFromSnapshot({ population: 5, cells: [], totalEnergy: 0, totalAge: 0 });
+
+  const secondRate = stats.getHistorySeries("starvationRate").at(-1);
+  const expectedSecond = 0.2333333333333333;
+
+  approxEqual(secondRate, expectedSecond, 1e-9);
+  assert.ok(secondRate < firstRate);
+});
