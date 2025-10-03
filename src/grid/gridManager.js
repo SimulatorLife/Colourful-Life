@@ -2138,6 +2138,29 @@ export default class GridManager {
 
           if (gridRow?.[c]) {
             columnEvents.length = 0;
+            const occupant = gridRow[c];
+            const stored = Number.isFinite(energyRow?.[c]) ? energyRow[c] : 0;
+
+            if (stored > 0 && occupant && typeof occupant.energy === "number") {
+              const cap =
+                this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
+
+              if (cap > 0) {
+                const currentEnergy = Number.isFinite(occupant.energy)
+                  ? occupant.energy
+                  : 0;
+                const capacity = Math.max(0, cap - currentEnergy);
+
+                if (capacity > 0) {
+                  const absorbed = Math.min(capacity, stored);
+
+                  if (absorbed > 0) {
+                    occupant.energy = clamp(currentEnergy + absorbed, 0, cap);
+                  }
+                }
+              }
+            }
+
             nextRow[c] = 0;
             clearTileEnergyBuffers(this, r, c);
             if (deltaRow) deltaRow[c] = 0;
@@ -2260,6 +2283,29 @@ export default class GridManager {
         }
 
         if (gridRow?.[c]) {
+          const occupant = gridRow[c];
+          const stored = Number.isFinite(energyRow?.[c]) ? energyRow[c] : 0;
+
+          if (stored > 0 && occupant && typeof occupant.energy === "number") {
+            const cap =
+              this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
+
+            if (cap > 0) {
+              const currentEnergy = Number.isFinite(occupant.energy)
+                ? occupant.energy
+                : 0;
+              const capacity = Math.max(0, cap - currentEnergy);
+
+              if (capacity > 0) {
+                const absorbed = Math.min(capacity, stored);
+
+                if (absorbed > 0) {
+                  occupant.energy = clamp(currentEnergy + absorbed, 0, cap);
+                }
+              }
+            }
+          }
+
           nextRow[c] = 0;
           clearTileEnergyBuffers(this, r, c);
           if (deltaRow) deltaRow[c] = 0;
@@ -2461,7 +2507,7 @@ export default class GridManager {
 
     this.grid[toRow][toCol] = moving;
     this.grid[fromRow][fromCol] = null;
-    clearTileEnergyBuffers(this, toRow, toCol);
+    clearTileEnergyBuffers(this, toRow, toCol, { preserveCurrent: true });
     if (moving && typeof moving === "object") {
       if ("row" in moving) moving.row = toRow;
       if ("col" in moving) moving.col = toCol;
