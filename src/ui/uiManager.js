@@ -1172,7 +1172,9 @@ export default class UIManager {
 
     if (!Array.isArray(this.speedPresetButtons)) return;
 
-    const tolerance = 0.001;
+    const stepSize =
+      Number.isFinite(this.speedStep) && this.speedStep > 0 ? this.speedStep : 0.5;
+    const tolerance = Math.max(0.001, stepSize * 0.05);
 
     this.speedPresetButtons.forEach(({ value: presetValue, button }) => {
       if (!button) return;
