@@ -18,13 +18,4 @@ jobs:
       pr_title: "Codex: Core Law Validation"
       pr_body: "Seed PR for Codex to audit core simulation laws and land one targeted improvement."
       prompt: >
-        Create one targeted change to the codebase to reinforce/align with the "Simulation Laws"
-        outlined in the README. These laws are fundamental to the integrity and realism of the simulation, and it is crucial
-        that they are consistently upheld throughout the codebase. Audit current implementations, documentation, and 
-        tests against these rules to identify one area to target and improve. Identify the highest leverage gap—missing or outdated docs, drift in behaviour, inadequate 
-        safeguards, or missing regression coverage—and deliver one focused fix–you will always be able to find SOMETHING to 
-        improve with regards to the "Simulation Laws". Acceptable scopes include tightening logic, clarifying or expanding 
-        documentation, or adding/adjusting tests. Avoid broad project-wide refactors; commit your changes/fixes, ensuring 
-        they are targeted and justified. Clearly record investigated evidence in the commit message, reference the law(s) 
-        as justification for the change, and ensure the change keeps the project's performance and accessibility expectations 
-        intact.
+        Create one targeted change to the codebase that strengthens alignment with the Simulation Laws defined in the README, which are essential to maintaining the integrity and realism of the simulation. Audit the existing code, documentation, and tests to identify the highest-priority gap, such as outdated or missing documentation, behavior drift, insufficient safeguards, or missing regression coverage. You must always be able to identify some improvement opportunity related to these laws. The change should be narrow in scope—for example, tightening logic, clarifying or expanding documentation, or adding or adjusting tests—and should avoid broad refactors. Commit the change with a clear explanation of the evidence you investigated, a direct reference to the relevant Simulation Law(s) as justification, and confirmation that the update preserves the project's performance and accessibility expectations.
