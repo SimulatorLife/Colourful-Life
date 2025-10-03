@@ -4,11 +4,13 @@ import {
   lerp,
   clamp,
   clamp01,
+  sanitizeNumber,
   cloneTracePayload,
   createRankedBuffer,
   createRNG,
   reportError,
   toFiniteOrNull,
+  toPlainObject,
   warnOnce,
 } from "../src/utils.js";
 
@@ -69,6 +71,35 @@ test("cloneTracePayload performs deep copies of sensors and nodes", () => {
   assert.is(trace.sensors[0].value, 0.5);
   assert.is(trace.nodes[0].inputs[0].weight, 0.2);
   assert.is(cloneTracePayload(null), null);
+});
+
+test("sanitizeNumber normalizes input with bounds and rounding strategies", () => {
+  assert.is(
+    sanitizeNumber("17.2", { min: 10, max: 20 }),
+    17.2,
+    "accepts numeric-like strings",
+  );
+  assert.is(
+    sanitizeNumber("oops", { fallback: -1 }),
+    -1,
+    "returns fallback for non-numeric input",
+  );
+  assert.is(sanitizeNumber(25, { max: 10 }), 10, "enforces upper bound");
+  assert.is(sanitizeNumber(-4, { min: 0 }), 0, "enforces lower bound");
+  assert.is(sanitizeNumber(3.6, { round: true }), 4, "round=true applies Math.round");
+  assert.is(
+    sanitizeNumber(6.8, { round: Math.floor }),
+    6,
+    "accepts custom rounding functions",
+  );
+  assert.is(
+    sanitizeNumber("9.1", {
+      round: () => Number.POSITIVE_INFINITY,
+      fallback: 42,
+    }),
+    42,
+    "falls back when rounding produces non-finite values",
+  );
 });
 
 test("createRankedBuffer maintains sorted order and honors capacity limits", () => {
@@ -204,6 +235,23 @@ test("reportError logs errors and supports optional deduplication", () => {
     ],
   );
   assert.is(calls[0][1], calls[1][1]);
+});
+
+test("toPlainObject returns candidate objects and coerces primitives", () => {
+  const objectCandidate = { alpha: 1 };
+  const arrayCandidate = [1, 2, 3];
+
+  assert.is(toPlainObject(objectCandidate), objectCandidate);
+  assert.is(toPlainObject(arrayCandidate), arrayCandidate);
+  assert.equal(toPlainObject(null), {});
+  assert.equal(toPlainObject(undefined), {});
+  assert.equal(toPlainObject(""), {});
+  assert.equal(toPlainObject(7), {});
+  assert.equal(
+    toPlainObject(() => {}),
+    {},
+    "functions are coerced to empty objects",
+  );
 });
 
 test("toFiniteOrNull converts numeric-like values and discards invalid input", () => {
