@@ -12,6 +12,9 @@ set -euo pipefail
 #
 # The script will create a temporary git worktree for the public repository branch,
 # copy the Parcel build output (dist/) into it, commit the changes, and push.
+#
+# If `rsync` is unavailable the script falls back to `tar` or `cp` so it can run
+# on environments like Windows shells without additional dependencies.
 
 PUBLIC_REMOTE_NAME=${PUBLIC_REMOTE_NAME:-public}
 PUBLIC_BRANCH=${PUBLIC_BRANCH:-gh-pages}
@@ -63,7 +66,37 @@ cd "$WORKTREE_PATH"
 find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
 
 # Copy build output into worktree
-rsync -a --delete "$ROOT_DIR/$BUILD_DIR/" ./
+
+copy_build_output() {
+  local source_dir="$ROOT_DIR/$BUILD_DIR"
+
+  if command -v rsync >/dev/null 2>&1; then
+    printf 'Copying build output with rsync...\n'
+    rsync -a --delete "$source_dir/" ./
+    return
+  fi
+
+  if command -v tar >/dev/null 2>&1; then
+    printf 'rsync not found; falling back to tar-based copy...\n'
+    tar -C "$source_dir" -cf - . | tar -xf -
+    return
+  fi
+
+  if command -v cp >/dev/null 2>&1; then
+    printf 'rsync and tar not found; using portable cp fallback...\n'
+    if cp -a "$source_dir"/. ./ 2>/dev/null; then
+      return
+    fi
+
+    cp -R "$source_dir"/. ./
+    return
+  fi
+
+  echo "Error: unable to copy build output. Install rsync or tar." >&2
+  exit 1
+}
+
+copy_build_output
 
 if [ -z "$(git status --porcelain)" ]; then
   echo "No changes to publish."
