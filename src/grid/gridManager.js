@@ -1602,6 +1602,26 @@ export default class GridManager {
     const cellSizeValue = Math.max(1, Math.floor(nextCellSize));
     const baseEnergy = this.maxTileEnergy / 2;
     const shouldReseed = opts.reseed !== false;
+    const preservePopulation = !shouldReseed;
+    let preservedCells = null;
+
+    if (preservePopulation) {
+      preservedCells = [];
+
+      for (let row = 0; row < this.rows; row++) {
+        for (let col = 0; col < this.cols; col++) {
+          const cell = this.grid?.[row]?.[col];
+
+          if (!cell) continue;
+
+          const tileEnergy = Number.isFinite(this.energyGrid?.[row]?.[col])
+            ? this.energyGrid[row][col]
+            : baseEnergy;
+
+          preservedCells.push({ cell, row, col, tileEnergy });
+        }
+      }
+    }
 
     this.rows = rowsInt;
     this.cols = colsInt;
@@ -1657,6 +1677,35 @@ export default class GridManager {
       });
     } else {
       this.currentObstaclePreset = "none";
+    }
+
+    if (preservePopulation && preservedCells?.length) {
+      const maxTileEnergy =
+        this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
+
+      for (const { cell, row, col, tileEnergy } of preservedCells) {
+        if (row >= rowsInt || col >= colsInt) continue;
+        if (this.isObstacle(row, col)) continue;
+        if (this.grid[row][col]) continue;
+
+        this.grid[row][col] = cell;
+
+        if (cell && typeof cell === "object") {
+          if ("row" in cell) cell.row = row;
+          if ("col" in cell) cell.col = col;
+          if (typeof cell.energy === "number") {
+            cell.energy = clamp(cell.energy, 0, maxTileEnergy);
+          }
+        }
+
+        if (this.energyGrid?.[row]) {
+          const sanitizedEnergy = Number.isFinite(tileEnergy)
+            ? clamp(tileEnergy, 0, maxTileEnergy)
+            : baseEnergy;
+
+          this.energyGrid[row][col] = sanitizedEnergy;
+        }
+      }
     }
 
     if (shouldReseed) {
