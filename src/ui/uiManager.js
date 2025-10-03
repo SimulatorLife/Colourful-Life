@@ -808,6 +808,22 @@ export default class UIManager {
     }
   }
 
+  #updatePauseButtonState() {
+    if (!this.pauseButton) return;
+
+    const hotkeyLabel = this.#formatPauseHotkeys();
+    const isPaused = this.paused;
+    const actionLabel = isPaused ? "Resume" : "Pause";
+    const description = isPaused ? "Resume the simulation" : "Pause the simulation";
+    const hotkeySuffix = hotkeyLabel.length > 0 ? ` Shortcut: ${hotkeyLabel}.` : "";
+    const announcement = `${description}.${hotkeySuffix}`.trim();
+
+    this.pauseButton.textContent = actionLabel;
+    this.pauseButton.setAttribute("aria-pressed", isPaused ? "true" : "false");
+    this.pauseButton.setAttribute("aria-label", announcement);
+    this.pauseButton.title = announcement;
+  }
+
   #updateStepButtonState() {
     if (!this.stepButton) return;
 
@@ -1818,6 +1834,7 @@ export default class UIManager {
       onClick: () => this.togglePause(),
     });
     this.#applyButtonHotkeys(this.pauseButton, this.pauseHotkeySet);
+    this.#updatePauseButtonState();
 
     this.stepButton = addControlButton({
       id: "stepButton",
@@ -2819,9 +2836,7 @@ export default class UIManager {
 
   setPauseState(paused) {
     this.paused = Boolean(paused);
-    if (this.pauseButton) {
-      this.pauseButton.textContent = this.paused ? "Resume" : "Pause";
-    }
+    this.#updatePauseButtonState();
     this.#updateStepButtonState();
     this.#updatePauseIndicator();
   }
