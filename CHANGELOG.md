@@ -21,6 +21,10 @@ where practical.
 
 ### Changed
 
+- Reproduction acceptance now blends neural policy intent with the genome's
+  baseline instincts using DNA-tuned weights that react to opportunity,
+  scarcity, neural fatigue, and network confidence, replacing the former
+  fixed average so reproductive behaviour adapts dynamically per organism.
 - Expanded inline documentation for maintenance scripts to clarify intent and
   usage.
 - Expanded JSDoc coverage for overlay helpers (celebration glow, life events,
