@@ -291,6 +291,12 @@ export default class Stats {
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
     this.lifeEventSequence = 0;
     this.deathCauseTotals = Object.create(null);
+    this.performance = {
+      energy: {
+        lastTiming: null,
+        history: createHistoryRing(240),
+      },
+    };
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -363,6 +369,12 @@ export default class Stats {
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
     this.deathCauseTotals = Object.create(null);
+    if (this.performance?.energy?.history?.clear) {
+      this.performance.energy.history.clear();
+    }
+    if (this.performance?.energy) {
+      this.performance.energy.lastTiming = null;
+    }
     this.#tickInProgress = false;
     this.#lifeEventTickBase = this.totals.ticks;
   }
@@ -979,6 +991,50 @@ export default class Stats {
       spawn,
       tick: this.totals.ticks,
     };
+  }
+
+  recordEnergyStageTimings({
+    segmentation = 0,
+    density = 0,
+    diffusion = 0,
+    total = 0,
+    tileCount = 0,
+    strategy = "dirty-regions",
+  } = {}) {
+    if (!this.performance || typeof this.performance !== "object") {
+      this.performance = {
+        energy: {
+          lastTiming: null,
+          history: createHistoryRing(240),
+        },
+      };
+    }
+
+    if (!this.performance.energy) {
+      this.performance.energy = {
+        lastTiming: null,
+        history: createHistoryRing(240),
+      };
+    }
+
+    const bucket = this.performance.energy;
+
+    if (!bucket.history || typeof bucket.history.push !== "function") {
+      bucket.history = createHistoryRing(240);
+    }
+
+    const entry = {
+      segmentation,
+      density,
+      diffusion,
+      total,
+      tileCount,
+      strategy,
+      timestamp: Date.now(),
+    };
+
+    bucket.lastTiming = entry;
+    bucket.history.push(entry);
   }
 
   logEvent(event, multiplier = 1) {
