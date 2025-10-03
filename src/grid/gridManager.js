@@ -2834,7 +2834,9 @@ export default class GridManager {
     const nextDirty = new Set();
 
     this.energyDirtyTiles = nextDirty;
-    const dirtyRowMap = this.#buildDirtyRowMap(dirtyEntries);
+    const dirtyRowMap = this.#buildDirtyRowMap(dirtyEntries, {
+      sortColumns: usingSegmentedEvents,
+    });
 
     let eventsByRow = null;
 
@@ -2842,7 +2844,6 @@ export default class GridManager {
       const segStart = profileEnabled ? now() : 0;
 
       eventsByRow = this.#prepareEventsByRow(rows);
-      const targetRows = new Set(dirtyRowMap.keys());
 
       for (let i = 0; i < evs.length; i++) {
         const ev = evs[i];
@@ -2862,13 +2863,17 @@ export default class GridManager {
           if (startCol >= endCol) continue;
 
           for (let rr = startRow; rr < endRow; rr++) {
-            if (!targetRows.has(rr)) continue;
+            const columnsForRow = dirtyRowMap.get(rr);
+
+            if (!columnsForRow || columnsForRow.length === 0) continue;
 
             eventsByRow[rr].push({ event: ev, startCol, endCol });
           }
         } else {
           for (let rr = startRow; rr < endRow; rr++) {
-            if (!targetRows.has(rr)) continue;
+            const columnsForRow = dirtyRowMap.get(rr);
+
+            if (!columnsForRow || columnsForRow.length === 0) continue;
 
             eventsByRow[rr].push(ev);
           }
@@ -2876,7 +2881,7 @@ export default class GridManager {
       }
 
       if (usingSegmentedEvents) {
-        for (const rowIndex of targetRows) {
+        for (const rowIndex of dirtyRowMap.keys()) {
           const segments = eventsByRow[rowIndex];
 
           if (segments && segments.length > 1) {
@@ -3572,7 +3577,7 @@ export default class GridManager {
     }
   }
 
-  #buildDirtyRowMap(indexes) {
+  #buildDirtyRowMap(indexes, { sortColumns = true } = {}) {
     const map = new Map();
 
     if (!Array.isArray(indexes) || indexes.length === 0) {
@@ -3596,8 +3601,12 @@ export default class GridManager {
       map.get(row).push(col);
     }
 
-    for (const columns of map.values()) {
-      columns.sort((a, b) => a - b);
+    if (sortColumns) {
+      for (const columns of map.values()) {
+        if (columns.length > 1) {
+          columns.sort((a, b) => a - b);
+        }
+      }
     }
 
     return map;
