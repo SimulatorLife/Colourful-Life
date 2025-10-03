@@ -44,6 +44,9 @@ where practical.
 - Prevented the Corner Islands obstacle preset from evicting every organism by
   recalculating the final layout before blocking tiles, preserving residents
   inside the carved pockets while still sealing the surrounding terrain.
+- Realigned the Simulation Controls show/hide toggle by moving scrollbar
+  gutter spacing into the scrollable body so its header button lines up with
+  the other panel toggles.
 
 ### Removed
 
