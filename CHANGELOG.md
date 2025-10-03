@@ -33,9 +33,9 @@ where practical.
 - Expanded JSDoc coverage for overlay helpers (celebration glow, life events,
   density/energy/fitness heatmaps, selection zones) so exported drawing
   utilities remain self-documenting.
-- Moved the dashboard refresh slider into the Leaderboard panel, renaming it
-  "Dashboard Refresh Interval" so cadence controls sit beside the rankings they
-  influence while still governing evolution insights updates.
+- Repositioned the dashboard refresh slider into the Evolution Insights panel so
+  cadence controls live alongside the metrics they affect while continuing to
+  drive leaderboard updates.
 - Raised the default energy regeneration rate from `0.007` to `0.0075` after a
   200-tick headless run showed populations crashing to ~60 survivors (avg tile
   energy ~0.88) versus roughly 300 organisms and ~1.08 average energy with the
