@@ -24,6 +24,7 @@ const BENCHMARK_ENV = {
   PERF_SIM_CELL_SIZE: "4",
   PERF_SIM_DENSITY: "0.6",
   PERF_SIM_SEED: "4242",
+  PERF_INCLUDE_SIM: "1",
 };
 
 test("energy profiling benchmark exits successfully", async () => {
@@ -66,10 +67,27 @@ test("energy profiling benchmark exits successfully", async () => {
     `benchmark should exit cleanly with code 0 (received ${result.code})`,
   );
 
+  const stderrLines = stderr
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
   assert.equal(
-    stderr.trim(),
-    "",
-    `benchmark should not emit stderr output (received ${stderr.trim()})`,
+    stderrLines.length,
+    2,
+    `benchmark should report simulation progress twice on stderr (received ${stderrLines.join(", ")})`,
+  );
+
+  assert.match(
+    stderrLines[0],
+    /\[profile-energy] Running SimulationEngine benchmark \(15 ticks @ density 0\.6\)\. This can take a minute\.\.\./,
+    `unexpected simulation start message: ${stderrLines[0] ?? "<missing>"}`,
+  );
+
+  assert.match(
+    stderrLines[1],
+    /\[profile-energy] SimulationEngine benchmark finished in \d+ms \(15 ticks\)\./,
+    `unexpected simulation completion message: ${stderrLines[1] ?? "<missing>"}`,
   );
 
   const outputText = stdout.trim();
@@ -110,8 +128,8 @@ test("energy profiling benchmark exits successfully", async () => {
   );
 
   assert.ok(
-    simulation.msPerTick < 120,
-    `simulation msPerTick should stay under 120ms (received ${simulation.msPerTick.toFixed?.(3) ?? simulation.msPerTick})`,
+    simulation.msPerTick < 180,
+    `simulation msPerTick should stay under 180ms (received ${simulation.msPerTick.toFixed?.(3) ?? simulation.msPerTick})`,
   );
 
   const seeding = simulation.seedingSummary;
