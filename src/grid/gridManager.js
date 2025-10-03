@@ -9,6 +9,7 @@ import {
 import DNA from "../genome.js";
 import Cell from "../cell.js";
 import { computeFitness } from "../fitness.mjs";
+import { computeBehaviorComplementarity } from "../behaviorComplementarity.js";
 import {
   createEventContext,
   defaultEventContext,
@@ -37,7 +38,6 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 
 const similarityCache = new WeakMap();
-const INTERACTION_KEYS = ["cooperate", "fight", "avoid"];
 const NEIGHBOR_OFFSETS = [
   [-1, -1],
   [-1, 0],
@@ -87,55 +87,6 @@ function getPairSimilarity(cellA, cellB) {
   cacheB.set(cellA, value);
 
   return value;
-}
-
-function normalizeInteractionGene(genes, key) {
-  if (!genes || typeof genes !== "object") return null;
-
-  const raw = genes[key];
-
-  if (raw == null) return null;
-
-  const value = Number(raw);
-
-  if (!Number.isFinite(value)) return null;
-
-  return clamp(value, 0, 1);
-}
-
-/**
- * Measures how dissimilar two parents' interaction genes are, returning a
- * normalized complementarity score used to encourage diverse pairings during
- * reproduction.
- *
- * @param {import('../cell.js').default} parentA - First parent cell.
- * @param {import('../cell.js').default} parentB - Second parent cell.
- * @returns {number} Complementarity score between 0 (identical) and 1 (maximally different).
- */
-export function computeBehaviorComplementarity(parentA, parentB) {
-  if (!parentA || !parentB) return 0;
-
-  const genesA = parentA.interactionGenes;
-  const genesB = parentB.interactionGenes;
-
-  if (!genesA || !genesB) return 0;
-
-  let sum = 0;
-  let count = 0;
-
-  for (const key of INTERACTION_KEYS) {
-    const valueA = normalizeInteractionGene(genesA, key);
-    const valueB = normalizeInteractionGene(genesB, key);
-
-    if (valueA == null || valueB == null) continue;
-
-    sum += Math.abs(valueA - valueB);
-    count++;
-  }
-
-  if (count === 0) return 0;
-
-  return clamp(sum / count, 0, 1);
 }
 
 function toBrainSnapshotCollector(candidate) {
@@ -304,6 +255,8 @@ export default class GridManager {
     tileEnergy = 0.5,
     tileEnergyDelta = 0,
     diversityPressure = 0,
+    behaviorComplementarity = 0,
+    scarcity = 0,
   } = {}) {
     const baseline = clamp(Number.isFinite(baseThreshold) ? baseThreshold : 0, 0, 1);
     const appetiteNeutral = 0.35;
@@ -345,6 +298,12 @@ export default class GridManager {
       0,
       1,
     );
+    const complementValue = clamp(
+      Number.isFinite(behaviorComplementarity) ? behaviorComplementarity : 0,
+      0,
+      1,
+    );
+    const scarcityValue = clamp(Number.isFinite(scarcity) ? scarcity : 0, 0, 1);
     const appetiteShift =
       appetiteDelta * (0.3 + environmentUrgency * 0.3 + pressure * 0.2);
     const cautionShift = cautionDelta * (0.18 + environmentUrgency * 0.22);
@@ -352,9 +311,12 @@ export default class GridManager {
       noveltyBias * (0.15 + environmentUrgency * 0.25 + pressure * 0.2);
     const kinShift = kinBias * (0.2 - environmentUrgency * 0.1 - pressure * 0.05);
     const pressureShift = pressure * 0.08;
+    const complementRelief =
+      complementValue *
+      (0.2 + pressure * 0.25 + environmentUrgency * 0.2 + scarcityValue * 0.3);
     const delta =
       appetiteShift + cautionShift + noveltyShift + pressureShift - kinShift;
-    const rawThreshold = clamp(baseline + delta, 0, 1);
+    const rawThreshold = clamp(baseline + delta - complementRelief, 0, 1);
     const smoothing = clamp(0.25 + environmentUrgency * 0.35 + pressure * 0.25, 0, 1);
 
     return clamp(baseline * (1 - smoothing) + rawThreshold * smoothing, 0, 1);
@@ -1210,6 +1172,7 @@ export default class GridManager {
     this.maxTileEnergy =
       typeof maxTileEnergy === "number" ? maxTileEnergy : GridManager.maxTileEnergy;
     this.activeCells = new Set();
+    this.autoSeedEnabled = Boolean(options.autoSeedEnabled);
     this.energyGrid = Array.from({ length: rows }, () =>
       Array.from(
         { length: cols },
@@ -2232,23 +2195,86 @@ export default class GridManager {
 
   seed(currentPopulation, minPopulation) {
     if (currentPopulation >= minPopulation) return;
-    const empty = [];
+
+    const scarcitySignal = clamp(
+      Number.isFinite(this.populationScarcitySignal)
+        ? this.populationScarcitySignal
+        : this.#computePopulationScarcitySignal(),
+      0,
+      1,
+    );
+    const minEnergyThreshold = this.maxTileEnergy * (0.05 + scarcitySignal * 0.05);
+    const maxSpawnEnergy = this.maxTileEnergy * (0.3 + scarcitySignal * 0.2);
+    const empties = [];
+    const viable = [];
 
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        if (!this.getCell(r, c) && !this.isObstacle(r, c)) empty.push({ r, c });
+        if (this.getCell(r, c) || this.isObstacle(r, c)) continue;
+
+        const availableEnergy = Math.max(0, this.energyGrid?.[r]?.[c] ?? 0);
+        const normalizedEnergy =
+          this.maxTileEnergy > 0
+            ? clamp(availableEnergy / this.maxTileEnergy, 0, 1)
+            : 0;
+        const density = clamp(this.getDensityAt(r, c) ?? 0, 0, 1);
+        const entry = {
+          row: r,
+          col: c,
+          availableEnergy,
+          score: normalizedEnergy * 0.7 + (1 - density) * 0.3,
+        };
+
+        empties.push(entry);
+
+        if (availableEnergy >= minEnergyThreshold) {
+          viable.push(entry);
+        }
       }
     }
-    const toSeed = Math.min(minPopulation - currentPopulation, empty.length);
 
-    for (let i = 0; i < toSeed; i++) {
-      const idx = empty.length > 0 ? Math.floor(this.#random() * empty.length) : 0;
-      const { r, c } = empty.splice(idx, 1)[0];
-      const dna = DNA.random();
-      const availableEnergy = Math.max(0, this.energyGrid?.[r]?.[c] ?? 0);
-      const spawnEnergy = Math.min(this.maxTileEnergy / 2, availableEnergy);
+    if (empties.length === 0) return;
 
-      this.spawnCell(r, c, { dna, spawnEnergy, recordBirth: true });
+    viable.sort((a, b) => b.score - a.score);
+
+    const seedsNeeded = Math.min(minPopulation - currentPopulation, empties.length);
+
+    for (let i = 0; i < seedsNeeded; i++) {
+      const pool = viable.length > 0 ? viable : empties;
+      const bandSize =
+        pool === viable
+          ? Math.max(1, Math.min(pool.length, Math.ceil(pool.length * 0.2)))
+          : pool.length;
+      const pickIndex = Math.min(
+        pool.length - 1,
+        Math.floor(this.#random() * bandSize),
+      );
+      const candidate = pool.splice(pickIndex, 1)[0];
+
+      if (pool !== empties) {
+        const emptyIndex = empties.indexOf(candidate);
+
+        if (emptyIndex !== -1) {
+          empties.splice(emptyIndex, 1);
+        }
+      }
+
+      if (pool !== viable) {
+        const viableIndex = viable.indexOf(candidate);
+
+        if (viableIndex !== -1) {
+          viable.splice(viableIndex, 1);
+        }
+      }
+
+      const { row, col, availableEnergy } = candidate;
+      const spawnEnergy = Math.min(availableEnergy, maxSpawnEnergy);
+
+      this.spawnCell(row, col, {
+        dna: DNA.random(),
+        spawnEnergy,
+        recordBirth: true,
+      });
     }
   }
 
@@ -3613,6 +3639,7 @@ export default class GridManager {
       tileEnergy,
       tileEnergyDelta,
     });
+    const scarcitySignal = clamp(this.populationScarcitySignal ?? 0, 0, 1);
 
     const pairDiversityThreshold = GridManager.#computePairDiversityThreshold({
       parentA: cell,
@@ -3620,13 +3647,14 @@ export default class GridManager {
       baseThreshold: diversityThresholdBaseline,
       localDensity,
       tileEnergy,
+      behaviorComplementarity,
+      scarcity: scarcitySignal,
       tileEnergyDelta,
       diversityPressure,
     });
 
     let effectiveReproProb = clamp(reproProb ?? 0, 0, 1);
     let scarcityMultiplier = 1;
-    const scarcitySignal = clamp(this.populationScarcitySignal ?? 0, 0, 1);
 
     if (diversity < pairDiversityThreshold) {
       penalizedForSimilarity = true;
@@ -3986,6 +4014,7 @@ export default class GridManager {
           success: reproduced,
           penalized: penalizedForSimilarity,
           penaltyMultiplier,
+          behaviorComplementarity,
           strategyPenaltyMultiplier,
           populationScarcityMultiplier: scarcityMultiplier,
         });
@@ -4231,6 +4260,19 @@ export default class GridManager {
         combatEdgeSharpness: combatSharpness,
         combatTerritoryEdgeFactor: territoryFactor,
       });
+    }
+
+    if (
+      this.autoSeedEnabled &&
+      this.activeCells?.size < this.minPopulation &&
+      (this.populationScarcitySignal ?? 0) > 0.2
+    ) {
+      const targetPopulation = Math.max(
+        this.minPopulation,
+        Math.ceil(this.minPopulation * 1.25),
+      );
+
+      this.seed(this.activeCells.size, targetPopulation);
     }
 
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();

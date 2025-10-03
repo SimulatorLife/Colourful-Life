@@ -1,4 +1,5 @@
 import { clamp, warnOnce } from "../utils.js";
+import { computeBehaviorComplementarity } from "../behaviorComplementarity.js";
 
 function resolveDrive(
   cell,
@@ -73,12 +74,21 @@ export function resolvePopulationScarcityMultiplier({
     minPop,
   );
   const averageDrive = clamp(((driveA || 1) + (driveB || 1)) / 2, 0.3, 2);
+  const complementStrength = clamp(
+    computeBehaviorComplementarity(parentA, parentB),
+    0,
+    1,
+  );
+  const complementLift =
+    scarcitySignal > 0
+      ? 1 + scarcitySignal * (0.45 + scarcityDeficit * 0.65 + complementStrength * 1.4)
+      : 1;
 
   const scarcityLift =
-    1 + scarcitySignal * (0.5 + (1 - baseProb) * 0.9 + scarcityDeficit * 0.6);
-  const maxBoost = 1 + scarcitySignal * 3.5;
+    1 + scarcitySignal * (0.9 + (1 - baseProb) * 1.2 + scarcityDeficit * 1.1);
+  const maxBoost = 1 + scarcitySignal * (6 + complementStrength * 3);
   const multiplier = clamp(
-    averageDrive * scarcityLift,
+    averageDrive * scarcityLift * complementLift,
     1 - scarcitySignal * 0.35,
     maxBoost,
   );

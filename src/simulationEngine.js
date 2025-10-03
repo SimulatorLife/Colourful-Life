@@ -297,6 +297,7 @@ export default class SimulationEngine {
       rng,
       brainSnapshotCollector,
       autoReseed: defaults.autoReseed,
+      autoSeedEnabled: defaults.autoReseed !== false,
     });
 
     if (win) {

@@ -148,6 +148,58 @@ test("reseeding respects available tile energy reserves", async () => {
   );
 });
 
+test("auto reseed prioritizes energetic, low-crowding tiles", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class AutoSeedGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new AutoSeedGridManager(4, 4, {
+    eventManager: { activeEvents: [] },
+    stats: { onBirth() {} },
+    ctx: {},
+    cellSize: 1,
+    rng: () => 0,
+  });
+
+  gm.activeCells.clear();
+  gm.grid.forEach((row) => row.fill(null));
+  gm.energyGrid.forEach((row) => row.fill(0));
+
+  gm.energyGrid[0][0] = gm.maxTileEnergy * 0.6;
+  gm.energyGrid[1][1] = gm.maxTileEnergy * 0.55;
+  gm.energyGrid[2][2] = gm.maxTileEnergy * 0.4;
+  gm.energyGrid[3][3] = gm.maxTileEnergy * 0.02;
+
+  gm.minPopulation = 3;
+
+  gm.seed(0, gm.minPopulation);
+
+  const seeded = [];
+
+  gm.grid.forEach((row, r) => {
+    row.forEach((cell, c) => {
+      if (cell) {
+        seeded.push({ r, c, energy: cell.energy });
+      }
+    });
+  });
+
+  assert.deepEqual(
+    seeded.map(({ r, c }) => `${r}:${c}`).sort(),
+    ["0:0", "1:1", "2:2"],
+    "auto seeding should prioritize the richest available tiles",
+  );
+
+  seeded.forEach(({ energy }) => {
+    assert.ok(
+      energy >= gm.maxTileEnergy * 0.25,
+      `seeded cells should begin with a survivable reserve (received ${energy})`,
+    );
+  });
+});
+
 test("population scarcity emits signal without forced reseeding", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
 
