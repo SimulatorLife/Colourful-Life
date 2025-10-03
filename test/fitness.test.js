@@ -4,9 +4,11 @@ import { approxEqual } from "./helpers/assertions.js";
 const computeFitnessModulePromise = import("../src/fitness.mjs");
 const configModulePromise = import("../src/config.js");
 
-test("computeFitness defaults to GridManager maxTileEnergy", async () => {
-  global.GridManager = { maxTileEnergy: 8 };
-  const { computeFitness } = await computeFitnessModulePromise;
+test("computeFitness defaults to config maxTileEnergy", async () => {
+  const [{ computeFitness }, { MAX_TILE_ENERGY }] = await Promise.all([
+    computeFitnessModulePromise,
+    configModulePromise,
+  ]);
   const cell = {
     fightsWon: 2,
     fightsLost: 1,
@@ -20,15 +22,13 @@ test("computeFitness defaults to GridManager maxTileEnergy", async () => {
   const expected =
     (cell.fightsWon - cell.fightsLost) * 0.5 +
     (cell.offspring || 0) * 1.5 +
-    cell.energy / global.GridManager.maxTileEnergy +
+    cell.energy / MAX_TILE_ENERGY +
     cell.age / cell.lifespan;
 
   assert.is(result, expected);
-  delete global.GridManager;
 });
 
 test("computeFitness uses provided maxTileEnergy parameter", async () => {
-  global.GridManager = { maxTileEnergy: 2 };
   const { computeFitness } = await computeFitnessModulePromise;
   const cell = {
     fightsWon: 1,
@@ -43,7 +43,6 @@ test("computeFitness uses provided maxTileEnergy parameter", async () => {
   const expected = (1 - 0) * 0.5 + 2 * 1.5 + 1 / 4 + cell.age / cell.lifespan;
 
   assert.is(result, expected);
-  delete global.GridManager;
 });
 
 test("computeFitness handles minimal stats with explicit max energy", async () => {
@@ -63,7 +62,6 @@ test("computeFitness handles minimal stats with explicit max energy", async () =
 });
 
 test("computeFitness falls back to config default max energy when no manager is available", async () => {
-  delete global.GridManager;
   const [{ computeFitness }, { MAX_TILE_ENERGY }] = await Promise.all([
     computeFitnessModulePromise,
     configModulePromise,
