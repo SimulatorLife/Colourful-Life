@@ -108,6 +108,10 @@ affect runtime outcomes.
 - `COLOURFUL_LIFE_MUTATION_CHANCE` raises or lowers the default mutation
   probability applied when genomes reproduce without an explicit DNA override,
   allowing faster or slower evolutionary churn during experiments.
+- Set `brainSnapshotLimit` inside the simulation config (for example,
+  `createSimulation({ config: { brainSnapshotLimit: 10 } })`) to widen the pool
+  of organisms forwarded to the brain debugger and leaderboard each tick. Use 0
+  to disable snapshot forwarding entirely.
 - Non-finite or out-of-range values are ignored and fall back to the defaults
   resolved in [`src/config.js`](../src/config.js). The energy overlays pull the
   sanitized values so UI telemetry reflects the active configuration.
