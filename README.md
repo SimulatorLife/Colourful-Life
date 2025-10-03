@@ -137,6 +137,7 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 - [`docs/architecture-overview.md`](docs/architecture-overview.md) — Component responsibilities, UI/headless interactions, and data flow diagrams.
 - [`docs/developer-guide.md`](docs/developer-guide.md) — Conventions for contributors, testing expectations, documentation tips, and tooling.
+- [`docs/public-hosting.md`](docs/public-hosting.md) — Step-by-step instructions for publishing compiled builds to a public repository for GitHub Pages hosting.
 - [`CHANGELOG.md`](CHANGELOG.md) — Ongoing log of notable behavioural, tooling, and documentation changes.
 - Inline JSDoc and comments throughout `src/` describing exported functions, complex routines, and configuration helpers.
 - Environment variable reference in [`src/config.js`](src/config.js) for tuning energy caps and regeneration penalties without patching source.

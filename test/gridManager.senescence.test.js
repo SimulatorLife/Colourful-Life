@@ -101,6 +101,64 @@ test("GridManager supplies senescence context to cells", async () => {
   assert.is(gm.grid[0][0], cell, "cell should remain when hazard reports zero");
 });
 
+test("GridManager forwards unclamped senescence age fraction", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+    consumeEnergy() {}
+  }
+
+  const stats = new StubStats();
+  const gm = new TestGridManager(1, 1, {
+    stats,
+    eventManager: { activeEvents: [] },
+    ctx: {},
+    cellSize: 1,
+    rng: () => 0.5,
+  });
+
+  const contexts = [];
+  const lifespan = 40;
+  const initialAge = Math.floor(lifespan * 1.8);
+  const cell = {
+    row: 0,
+    col: 0,
+    age: initialAge,
+    lifespan,
+    energy: gm.maxTileEnergy * 0.75,
+    lastEventPressure: 0,
+    computeSenescenceHazard(context) {
+      contexts.push(context);
+
+      return 0;
+    },
+    applyEventEffects() {},
+    manageEnergy() {
+      return false;
+    },
+    dna: {
+      activityRate: () => 0,
+    },
+  };
+
+  gm.setCell(0, 0, cell);
+  gm.update();
+
+  assert.is(contexts.length, 1, "senescence hazard should still be evaluated");
+  const [{ ageFraction }] = contexts;
+  const expected = (initialAge + 1) / lifespan;
+
+  assert.ok(
+    ageFraction > 1,
+    "age fraction should exceed one once cells surpass their DNA lifespan",
+  );
+  assert.ok(
+    Math.abs(ageFraction - expected) < 1e-6,
+    "age fraction should reflect the unclamped ratio",
+  );
+});
+
 test("GridManager applies senescence hazard probabilities", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
 
@@ -151,4 +209,50 @@ test("GridManager applies senescence hazard probabilities", async () => {
     Math.abs(details.hazard - hazardValue) < 1e-6,
     "reported hazard should match the computed probability",
   );
+});
+
+test("GridManager forces senescence death after the hard lifespan cap", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+    consumeEnergy() {}
+  }
+
+  const stats = new StubStats();
+  const gm = new TestGridManager(1, 1, {
+    stats,
+    eventManager: { activeEvents: [] },
+    ctx: {},
+    cellSize: 1,
+    rng: () => 0.9,
+  });
+
+  const lifespan = 10;
+  const cell = {
+    row: 0,
+    col: 0,
+    age: lifespan * 3,
+    lifespan,
+    energy: gm.maxTileEnergy * 0.5,
+    lastEventPressure: 0,
+    computeSenescenceHazard: () => 0,
+    applyEventEffects() {},
+    manageEnergy() {
+      return false;
+    },
+    dna: {
+      activityRate: () => 0,
+    },
+  };
+
+  gm.setCell(0, 0, cell);
+  gm.update();
+
+  assert.is(gm.grid[0][0], null, "cells beyond the hard cap should be removed");
+  assert.is(stats.deaths.length, 1, "forced senescence death should be recorded");
+  const [{ details }] = stats.deaths;
+
+  assert.is(details.cause, "senescence", "forced expiry should be labelled senescence");
+  assert.is(details.hazard, 1, "forced expiry should report a hazard of one");
 });

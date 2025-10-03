@@ -52,6 +52,10 @@ where practical.
 
 ### Fixed
 
+- Ensured senescence always progresses by feeding GridManager the unclamped age
+  fraction, guaranteeing hazard escalation, and by enforcing a hard death cap
+  once organisms triple their DNA lifespan so immobile lineages cannot linger
+  indefinitely.
 - Prevented the Corner Islands obstacle preset from evicting every organism by
   recalculating the final layout before blocking tiles, preserving residents
   inside the carved pockets while still sealing the surrounding terrain.

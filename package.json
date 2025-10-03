@@ -18,6 +18,7 @@
     "format:workflows": "prettier --ignore-path .gitignore --write \".github/workflows/**/*.yml\"",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "deploy:public": "./scripts/publish-public-build.sh",
     "prepare": "husky"
   },
   "repository": {
