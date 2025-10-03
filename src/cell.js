@@ -297,9 +297,41 @@ export default class Cell {
       0.05,
       0.85,
     );
-    const calculateInvestment = (parent, starvation, demandFrac) => {
-      const fracFn = parent.dna?.parentalInvestmentFrac;
-      const investFrac = typeof fracFn === "function" ? fracFn.call(parent.dna) : 0.4;
+    const efficiencyA = clamp(
+      typeof parentA.dna?.offspringEnergyTransferEfficiency === "function"
+        ? parentA.dna.offspringEnergyTransferEfficiency()
+        : 0.85,
+      0.1,
+      1,
+    );
+    const efficiencyB = clamp(
+      typeof parentB.dna?.offspringEnergyTransferEfficiency === "function"
+        ? parentB.dna.offspringEnergyTransferEfficiency()
+        : 0.85,
+      0.1,
+      1,
+    );
+    const transferEfficiency = clamp((efficiencyA + efficiencyB) / 2, 0.1, 1);
+    const viabilityThreshold =
+      resolvedMaxTileEnergy * Math.max(demandFracA, demandFracB); // honor the pickier parent's viability floor
+    const minimumTransfer = Math.max(transferEfficiency, 1e-6);
+    const requiredTotalInvestment = viabilityThreshold / minimumTransfer;
+    const fracFnA = parentA.dna?.parentalInvestmentFrac;
+    const fracFnB = parentB.dna?.parentalInvestmentFrac;
+    const investFracA = typeof fracFnA === "function" ? fracFnA.call(parentA.dna) : 0.4;
+    const investFracB = typeof fracFnB === "function" ? fracFnB.call(parentB.dna) : 0.4;
+    const weightSum = Math.max(1e-6, Math.abs(investFracA) + Math.abs(investFracB));
+    const requiredShareA =
+      requiredTotalInvestment * (Math.abs(investFracA) / weightSum);
+    const requiredShareB =
+      requiredTotalInvestment * (Math.abs(investFracB) / weightSum);
+    const calculateInvestment = (
+      parent,
+      starvation,
+      demandFrac,
+      investFrac,
+      requiredShare,
+    ) => {
       const desiredBase = Math.max(
         0,
         Math.min(parent.energy, parent.energy * investFrac),
@@ -307,21 +339,32 @@ export default class Cell {
       const targetEnergy =
         resolvedMaxTileEnergy *
         clamp(Number.isFinite(demandFrac) ? demandFrac : 0.22, 0, 1);
-      const desired = Math.max(desiredBase, targetEnergy);
+      const desired = Math.max(desiredBase, targetEnergy, requiredShare);
       const maxSpend = Math.max(0, parent.energy - starvation);
 
       return Math.min(desired, maxSpend);
     };
     const starvationA = parentA.starvationThreshold(resolvedMaxTileEnergy);
     const starvationB = parentB.starvationThreshold(resolvedMaxTileEnergy);
-    const investA = calculateInvestment(parentA, starvationA, demandFracA);
-    const investB = calculateInvestment(parentB, starvationB, demandFracB);
+    const investA = calculateInvestment(
+      parentA,
+      starvationA,
+      demandFracA,
+      investFracA,
+      requiredShareA,
+    );
+    const investB = calculateInvestment(
+      parentB,
+      starvationB,
+      demandFracB,
+      investFracB,
+      requiredShareB,
+    );
 
     if (investA <= 0 || investB <= 0) return null;
 
-    const offspringEnergy = investA + investB;
-    const viabilityThreshold =
-      resolvedMaxTileEnergy * Math.max(demandFracA, demandFracB); // honor the pickier parent's viability floor
+    const totalInvestment = investA + investB;
+    const offspringEnergy = totalInvestment * transferEfficiency;
 
     if (offspringEnergy + EPSILON < viabilityThreshold) {
       return null;
