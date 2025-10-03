@@ -176,6 +176,7 @@ export function createSimulation({
   performanceNow: injectedNow,
   window: injectedWindow,
   document: injectedDocument,
+  brainSnapshotCollector: injectedBrainSnapshotCollector,
 } = {}) {
   const win = injectedWindow ?? (typeof window !== "undefined" ? window : undefined);
 
@@ -250,6 +251,12 @@ export function createSimulation({
     typeof configWithLayoutDefaults.drawOverlays === "function"
       ? configWithLayoutDefaults.drawOverlays
       : defaultDrawOverlays;
+  const brainSnapshotCollector =
+    injectedBrainSnapshotCollector !== undefined
+      ? injectedBrainSnapshotCollector
+      : configWithLayoutDefaults.brainSnapshotCollector;
+  const resolvedBrainSnapshotCollector =
+    brainSnapshotCollector === undefined ? BrainDebugger : brainSnapshotCollector;
 
   const sanitizedDefaults = resolveSimulationDefaults(configWithLayoutDefaults);
 
@@ -263,7 +270,7 @@ export function createSimulation({
     window: injectedWindow,
     document: injectedDocument,
     autoStart: false,
-    brainSnapshotCollector: BrainDebugger,
+    brainSnapshotCollector: resolvedBrainSnapshotCollector,
     drawOverlays: overlayRenderer,
     selectionManagerFactory,
   });
