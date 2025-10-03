@@ -30,7 +30,6 @@ import {
   DENSITY_RADIUS_DEFAULT,
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   COMBAT_TERRITORY_EDGE_FACTOR,
-  DECAY_RETURN_FRACTION,
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
 } from "../config.js";
@@ -38,24 +37,7 @@ const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 
-const PERFORMANCE_NOW =
-  typeof GLOBAL.performance?.now === "function"
-    ? GLOBAL.performance.now.bind(GLOBAL.performance)
-    : () => Date.now();
-const FULL_VISION_SCAN_RADIUS = 4;
-const DEFAULT_SCAN_BUDGET_BASE = 72;
-const DEFAULT_SCAN_BUDGET_PER_SIGHT = 14;
-const MAX_SCAN_BUDGET = 360;
-
-const PROFILING_MODE_ALWAYS = "always";
-const PROFILING_MODE_NEVER = "never";
-const PROFILING_MODE_AUTO = "auto";
 const similarityCache = new WeakMap();
-const defaultPerformanceNow =
-  typeof GLOBAL.performance?.now === "function"
-    ? GLOBAL.performance.now.bind(GLOBAL.performance)
-    : () => Date.now();
-const ENERGY_DIRTY_EPSILON = 1e-6;
 const NEIGHBOR_OFFSETS = [
   [-1, -1],
   [-1, 0],
@@ -66,6 +48,7 @@ const NEIGHBOR_OFFSETS = [
   [1, 0],
   [1, 1],
 ];
+const DECAY_RETURN_FRACTION = 0.9;
 const DECAY_IMMEDIATE_SHARE = 0.25;
 const DECAY_RELEASE_BASE = 0.12;
 const DECAY_RELEASE_RATE = 0.18;
@@ -215,21 +198,6 @@ export default class GridManager {
   #segmentWindowScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
-  #activeSnapshotScratch = [];
-  #performanceNow = PERFORMANCE_NOW;
-  #profilingMode = PROFILING_MODE_AUTO;
-  #profilingScratch = {
-    activeSnapshotMs: 0,
-    activeSnapshotCount: 0,
-    activeSnapshotReused: true,
-    findTargetsMs: 0,
-    findTargetsCalls: 0,
-    findTargetsTiles: 0,
-    findTargetsAttempts: 0,
-    findTargetsBudgetSkips: 0,
-    findTargetsFullScans: 0,
-  };
-  #sightOffsetCache = new Map();
   #imageDataCanvas = null;
   #imageDataCtx = null;
   #imageData = null;
@@ -269,20 +237,6 @@ export default class GridManager {
     return Math.max(15, fractionalFloor);
   }
 
-  #now() {
-    let value;
-
-    try {
-      value = this.#performanceNow();
-    } catch (error) {
-      value = PERFORMANCE_NOW();
-    }
-
-    const numeric = Number(value);
-
-    return Number.isFinite(numeric) ? numeric : PERFORMANCE_NOW();
-  }
-
   #computePopulationScarcitySignal() {
     if (!Number.isFinite(this.minPopulation) || this.minPopulation <= 0) {
       return 0;
@@ -300,242 +254,6 @@ export default class GridManager {
     const scarcity = clamp(deficit * (0.6 + (1 - occupancy) * 0.4), 0, 1);
 
     return scarcity;
-  }
-
-  #normalizeProfilingMode(candidate) {
-    if (candidate === true) {
-      return PROFILING_MODE_ALWAYS;
-    }
-
-    if (candidate === false) {
-      return PROFILING_MODE_NEVER;
-    }
-
-    if (typeof candidate === "number") {
-      if (!Number.isFinite(candidate)) {
-        return PROFILING_MODE_AUTO;
-      }
-
-      if (candidate > 0) {
-        return PROFILING_MODE_ALWAYS;
-      }
-
-      if (candidate === 0) {
-        return PROFILING_MODE_NEVER;
-      }
-
-      return PROFILING_MODE_AUTO;
-    }
-
-    if (typeof candidate === "string") {
-      const normalized = candidate.trim().toLowerCase();
-
-      if (normalized.length === 0) {
-        return PROFILING_MODE_AUTO;
-      }
-
-      if (
-        normalized === "always" ||
-        normalized === "on" ||
-        normalized === "true" ||
-        normalized === "yes" ||
-        normalized === "enable" ||
-        normalized === "enabled" ||
-        normalized === "profile" ||
-        normalized === "profiling" ||
-        normalized === "metrics"
-      ) {
-        return PROFILING_MODE_ALWAYS;
-      }
-
-      if (
-        normalized === "never" ||
-        normalized === "off" ||
-        normalized === "false" ||
-        normalized === "no" ||
-        normalized === "disable" ||
-        normalized === "disabled"
-      ) {
-        return PROFILING_MODE_NEVER;
-      }
-
-      if (
-        normalized === "auto" ||
-        normalized === "automatic" ||
-        normalized === "default" ||
-        normalized === "stats"
-      ) {
-        return PROFILING_MODE_AUTO;
-      }
-    }
-
-    if (candidate == null) {
-      return PROFILING_MODE_AUTO;
-    }
-
-    return PROFILING_MODE_AUTO;
-  }
-
-  #shouldProfileGrid() {
-    if (this.#profilingMode === PROFILING_MODE_ALWAYS) {
-      return true;
-    }
-
-    if (this.#profilingMode === PROFILING_MODE_NEVER) {
-      return false;
-    }
-
-    return typeof this.stats?.recordPerformanceSummary === "function";
-  }
-
-  #resetProfilingScratch() {
-    const profiling = this.#profilingScratch;
-
-    profiling.activeSnapshotMs = 0;
-    profiling.activeSnapshotCount = 0;
-    profiling.activeSnapshotReused = true;
-    profiling.findTargetsMs = 0;
-    profiling.findTargetsCalls = 0;
-    profiling.findTargetsTiles = 0;
-    profiling.findTargetsAttempts = 0;
-    profiling.findTargetsBudgetSkips = 0;
-    profiling.findTargetsFullScans = 0;
-
-    return profiling;
-  }
-
-  #recordProfilingSummary(profiling) {
-    if (!profiling) return;
-
-    const findTargetsAvg =
-      profiling.findTargetsCalls > 0
-        ? profiling.findTargetsMs / profiling.findTargetsCalls
-        : 0;
-
-    if (this.stats?.recordPerformanceSummary) {
-      this.stats.recordPerformanceSummary("grid", {
-        activeSnapshotCopyMs: { value: profiling.activeSnapshotMs },
-        activeSnapshotSize: {
-          value: profiling.activeSnapshotCount,
-          accumulate: false,
-        },
-        activeSnapshotReused: {
-          value: profiling.activeSnapshotReused ? 1 : 0,
-          accumulate: false,
-        },
-        findTargetsTotalMs: { value: profiling.findTargetsMs },
-        findTargetsAvgMs: { value: findTargetsAvg, accumulate: false },
-        findTargetsCalls: {
-          value: profiling.findTargetsCalls,
-          count: profiling.findTargetsCalls,
-          accumulate: true,
-        },
-        findTargetsTiles: {
-          value: profiling.findTargetsTiles,
-          count: profiling.findTargetsCalls > 0 ? profiling.findTargetsCalls : 0,
-          accumulate: true,
-        },
-        findTargetsAttempts: {
-          value: profiling.findTargetsAttempts,
-          count: profiling.findTargetsCalls > 0 ? profiling.findTargetsCalls : 0,
-          accumulate: true,
-        },
-        findTargetsEarlyExits: {
-          value: profiling.findTargetsBudgetSkips,
-          count: profiling.findTargetsBudgetSkips,
-          accumulate: true,
-        },
-        findTargetsFullScans: {
-          value: profiling.findTargetsFullScans,
-          count: profiling.findTargetsFullScans,
-          accumulate: true,
-        },
-      });
-    }
-
-    this.lastGridProfiling = {
-      ...profiling,
-      findTargetsAvgMs: findTargetsAvg,
-    };
-  }
-
-  #resolveSightOffsets(sight) {
-    const radius = Math.max(0, Math.floor(Number.isFinite(sight) ? sight : 0));
-
-    if (this.#sightOffsetCache.has(radius)) {
-      return this.#sightOffsetCache.get(radius);
-    }
-
-    const offsets = [];
-
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        if (dx === 0 && dy === 0) continue;
-
-        const distance = Math.max(Math.abs(dy), Math.abs(dx));
-        const manhattan = Math.abs(dy) + Math.abs(dx);
-
-        offsets.push({ dy, dx, distance, manhattan });
-      }
-    }
-
-    offsets.sort((a, b) => {
-      if (a.distance === b.distance) {
-        if (a.manhattan === b.manhattan) {
-          if (a.dy === b.dy) return a.dx - b.dx;
-
-          return a.dy - b.dy;
-        }
-
-        return a.manhattan - b.manhattan;
-      }
-
-      return a.distance - b.distance;
-    });
-
-    const flat = new Array(offsets.length * 2);
-    const fullRadius = Math.min(radius, FULL_VISION_SCAN_RADIUS);
-    let outerStartIndex = flat.length;
-    let index = 0;
-
-    for (const entry of offsets) {
-      if (outerStartIndex === flat.length && entry.distance > fullRadius) {
-        outerStartIndex = index;
-      }
-
-      flat[index++] = entry.dy;
-      flat[index++] = entry.dx;
-    }
-
-    const cached = {
-      offsets: flat,
-      innerPairCount: outerStartIndex / 2,
-      totalPairs: offsets.length,
-    };
-
-    this.#sightOffsetCache.set(radius, cached);
-
-    return cached;
-  }
-
-  #resolveVisionBudgets(cell, totalPairs, innerPairs) {
-    const sight = Math.max(
-      0,
-      Math.floor(Number.isFinite(cell?.sight) ? cell.sight : 0),
-    );
-    const baseBudget = DEFAULT_SCAN_BUDGET_BASE + sight * DEFAULT_SCAN_BUDGET_PER_SIGHT;
-    const boundedBudget = Math.min(MAX_SCAN_BUDGET, baseBudget);
-    const scanBudget = Math.min(totalPairs, Math.max(innerPairs, boundedBudget));
-    const matePool = Math.min(scanBudget, Math.max(4, Math.round(3 + sight * 0.75)));
-    const enemyPool = Math.min(scanBudget, Math.max(3, Math.round(3 + sight * 0.6)));
-    const societyPool = Math.min(scanBudget, Math.max(3, Math.round(2 + sight * 0.5)));
-
-    return {
-      scanBudget,
-      mate: matePool,
-      enemy: enemyPool,
-      society: societyPool,
-    };
   }
 
   static #isObstacle(obstacles, row, col) {
@@ -576,16 +294,6 @@ export default class GridManager {
     return clamp(drive * 0.7 + environment * 0.3, 0, 1);
   }
 
-  #getColumnEventScratch() {
-    if (!this.#columnEventScratch) {
-      this.#columnEventScratch = [];
-    }
-
-    this.#columnEventScratch.length = 0;
-
-    return this.#columnEventScratch;
-  }
-
   #getSegmentWindowScratch() {
     if (!this.#segmentWindowScratch) {
       this.#segmentWindowScratch = [];
@@ -594,6 +302,16 @@ export default class GridManager {
     this.#segmentWindowScratch.length = 0;
 
     return this.#segmentWindowScratch;
+  }
+
+  #getColumnEventScratch() {
+    if (!this.#columnEventScratch) {
+      this.#columnEventScratch = [];
+    }
+
+    this.#columnEventScratch.length = 0;
+
+    return this.#columnEventScratch;
   }
 
   #prepareEventsByRow(rowCount) {
@@ -1328,7 +1046,6 @@ export default class GridManager {
           energyRow[col] = before + deposit;
           this.#accumulateDecayDelta(row, col, deposit);
           remaining -= deposit;
-          this.#markEnergyDirty(row, col, { radius: 1 });
         }
       }
     }
@@ -1360,7 +1077,6 @@ export default class GridManager {
         neighborRow[c] = before + deposit;
         this.#accumulateDecayDelta(r, c, deposit);
         remaining -= deposit;
-        this.#markEnergyDirty(r, c, { radius: 1 });
       }
     }
 
@@ -1521,8 +1237,6 @@ export default class GridManager {
       obstaclePresets,
       rng,
       brainSnapshotCollector,
-      performanceNow: performanceNowHook,
-      profileGridMetrics,
     } = options;
     const {
       eventManager: resolvedEventManager,
@@ -1536,7 +1250,6 @@ export default class GridManager {
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
     this.maxTileEnergy =
       typeof maxTileEnergy === "number" ? maxTileEnergy : GridManager.maxTileEnergy;
-    this.activeCells = new Set();
     this.autoSeedEnabled = Boolean(options.autoSeedEnabled);
     this.energyGrid = Array.from({ length: rows }, () =>
       Array.from(
@@ -1549,14 +1262,6 @@ export default class GridManager {
     this.pendingOccupantRegen = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
-    this.energyDirtyTiles = new Set();
-    const resolvedPerformanceNow =
-      typeof performanceNowHook === "function" ? performanceNowHook : PERFORMANCE_NOW;
-
-    this.energyTimerNow =
-      typeof performanceNowHook === "function"
-        ? performanceNowHook
-        : defaultPerformanceNow;
     this.eventManager = resolvedEventManager;
     this.eventContext = createEventContext(eventContext);
     this.eventEffectCache = new Map();
@@ -1583,14 +1288,12 @@ export default class GridManager {
       timestamp: 0,
     };
     this.#resetImageDataBuffer();
-    this.lastGridProfiling = null;
-    this.#profilingMode = this.#normalizeProfilingMode(
-      profileGridMetrics ?? PROFILING_MODE_AUTO,
-    );
-    this.profileGridMetrics = this.#profilingMode;
-    this.#performanceNow = resolvedPerformanceNow;
+    this.energyDirtyTiles = new Set();
+    this.energyTimerNow =
+      typeof options?.performanceNow === "function"
+        ? options.performanceNow
+        : TIMESTAMP_NOW;
     this.obstaclePresets = resolveObstaclePresetCatalog(obstaclePresets);
-    this.#markAllEnergyDirty();
     const knownPresetIds = new Set(
       this.obstaclePresets
         .map((preset) => (typeof preset?.id === "string" ? preset.id : null))
@@ -1636,6 +1339,9 @@ export default class GridManager {
     this.currentObstaclePreset = "none";
     this.tickCount = 0;
     this.rng = typeof rng === "function" ? rng : Math.random;
+    this.activeCells = new Set();
+    this.cellPositions = new WeakMap();
+    this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
     this.interactionAdapter = new GridInteractionAdapter({ gridManager: this });
     this.interactionSystem = new InteractionSystem({
@@ -1733,16 +1439,134 @@ export default class GridManager {
       obstacles: this.obstacles,
       onMove: this.onMoveCallback,
       activeCells: this.activeCells,
-      onCellMoved: (cell) => {
+      onCellMoved: (cell, _fromRow, _fromCol, toRow, toCol) => {
         if (!cell) return;
 
         this.activeCells.add(cell);
+        this.#trackCellPosition(cell, toRow, toCol);
       },
       densityAt: (r, c) => this.densityGrid?.[r]?.[c] ?? this.getDensityAt(r, c),
       energyAt: (r, c) => this.energyGrid?.[r]?.[c] ?? 0,
       maxTileEnergy: this.maxTileEnergy,
       clearDestinationEnergy: (r, c) => clearTileEnergyBuffers(this, r, c),
     };
+  }
+
+  #trackCellPosition(cell, row, col) {
+    if (
+      !cell ||
+      typeof cell !== "object" ||
+      !Number.isInteger(row) ||
+      !Number.isInteger(col)
+    ) {
+      if (cell) this.#untrackCell(cell);
+
+      return;
+    }
+
+    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) {
+      this.#untrackCell(cell);
+
+      return;
+    }
+
+    cell.row = row;
+    cell.col = col;
+
+    const existing = this.cellPositions.get(cell);
+
+    if (existing) {
+      existing.row = row;
+      existing.col = col;
+    } else {
+      this.cellPositions.set(cell, { row, col });
+    }
+  }
+
+  #untrackCell(cell) {
+    if (!cell) return;
+
+    this.cellPositions.delete(cell);
+  }
+
+  #clearTrackedPositions() {
+    this.cellPositions = new WeakMap();
+  }
+
+  #isValidLocation(row, col, cell) {
+    return (
+      Number.isInteger(row) &&
+      Number.isInteger(col) &&
+      row >= 0 &&
+      row < this.rows &&
+      col >= 0 &&
+      col < this.cols &&
+      this.grid[row]?.[col] === cell
+    );
+  }
+
+  #scanForCell(cell) {
+    for (let r = 0; r < this.rows; r++) {
+      const gridRow = this.grid[r];
+
+      if (!gridRow) continue;
+
+      for (let c = 0; c < this.cols; c++) {
+        if (gridRow[c] === cell) {
+          return { row: r, col: c };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  #recordCellPositionMismatch() {
+    if (!this.cellPositionTelemetry) {
+      this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
+    }
+
+    this.cellPositionTelemetry.mismatches += 1;
+    this.cellPositionTelemetry.lastTick = this.tickCount;
+    warnOnce(
+      "GridManager detected inconsistent cell coordinates; resynchronizing tracked positions.",
+    );
+  }
+
+  #resolveCellCoordinates(cell) {
+    if (!cell) return null;
+
+    const tracked = this.cellPositions.get(cell);
+
+    if (tracked && this.#isValidLocation(tracked.row, tracked.col, cell)) {
+      return { row: tracked.row, col: tracked.col };
+    }
+
+    if (tracked) {
+      this.#untrackCell(cell);
+    }
+
+    const directRow = Number.isInteger(cell.row) ? cell.row : null;
+    const directCol = Number.isInteger(cell.col) ? cell.col : null;
+
+    if (this.#isValidLocation(directRow, directCol, cell)) {
+      this.#trackCellPosition(cell, directRow, directCol);
+
+      return { row: directRow, col: directCol };
+    }
+
+    if (directRow != null || directCol != null) {
+      this.#untrackCell(cell);
+    }
+
+    const located = this.#scanForCell(cell);
+
+    if (!located) return null;
+
+    this.#recordCellPositionMismatch();
+    this.#trackCellPosition(cell, located.row, located.col);
+
+    return located;
   }
 
   #random() {
@@ -1840,19 +1664,6 @@ export default class GridManager {
     this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
   }
 
-  setProfileGridMetrics(preference) {
-    const nextMode = this.#normalizeProfilingMode(preference);
-
-    this.#profilingMode = nextMode;
-    this.profileGridMetrics = nextMode;
-
-    if (nextMode === PROFILING_MODE_NEVER) {
-      this.lastGridProfiling = null;
-    }
-
-    return this.profileGridMetrics;
-  }
-
   setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {
     if (threshold !== undefined) {
       const numeric = Number(threshold);
@@ -1934,7 +1745,6 @@ export default class GridManager {
 
       energyRow[nCol] = before + deposit;
       remaining -= deposit;
-      this.#markEnergyDirty(nRow, nCol, { radius: 1 });
 
       const deltaRow = this.energyDeltaGrid?.[nRow];
 
@@ -2012,7 +1822,6 @@ export default class GridManager {
     }
 
     energyRow[col] = 0;
-    this.#markEnergyDirty(row, col, { radius: 1 });
 
     const deltaRow = this.energyDeltaGrid?.[row];
 
@@ -2466,7 +2275,6 @@ export default class GridManager {
     this.#initializeDecayBuffers(rowsInt, colsInt);
     this.obstacles = Array.from({ length: rowsInt }, () => Array(colsInt).fill(false));
     this.#resetImageDataBuffer();
-    this.energyDirtyTiles = new Set();
     this.densityCounts = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
     this.densityLiveGrid = Array.from({ length: rowsInt }, () =>
@@ -2474,9 +2282,10 @@ export default class GridManager {
     );
     this.densityGrid = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
     this.densityDirtyTiles?.clear?.();
-    this.#markAllEnergyDirty();
     this.activeCells.clear();
+    this.#clearTrackedPositions();
     this.tickCount = 0;
+    this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
     this.lastSnapshot = null;
     this.eventEffectCache?.clear?.();
     this.minPopulation = GridManager.#computeMinPopulation(rowsInt, colsInt);
@@ -2522,14 +2331,11 @@ export default class GridManager {
         if (this.grid[row][col]) continue;
 
         this.grid[row][col] = cell;
+        this.#trackCellPosition(cell, row, col);
         this.#markTileDirty(row, col);
 
-        if (cell && typeof cell === "object") {
-          if ("row" in cell) cell.row = row;
-          if ("col" in cell) cell.col = col;
-          if (typeof cell.energy === "number") {
-            cell.energy = clamp(cell.energy, 0, maxTileEnergy);
-          }
+        if (cell && typeof cell === "object" && typeof cell.energy === "number") {
+          cell.energy = clamp(cell.energy, 0, maxTileEnergy);
         }
 
         if (this.energyGrid?.[row]) {
@@ -2588,12 +2394,12 @@ export default class GridManager {
     }
 
     this.activeCells.clear();
+    this.#clearTrackedPositions();
     this.tickCount = 0;
+    this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
     this.lastSnapshot = null;
     this.densityDirtyTiles?.clear?.();
     this.eventEffectCache?.clear?.();
-    this.energyDirtyTiles = new Set();
-    this.#markAllEnergyDirty();
     this.#initializeDecayBuffers(this.rows, this.cols);
 
     const shouldRandomize = Boolean(randomizeObstacles);
@@ -2748,7 +2554,7 @@ export default class GridManager {
 
     this.energyGrid[row][col] -= take;
     cell.energy = Math.min(this.maxTileEnergy, cell.energy + take);
-    this.#markEnergyDirty(row, col, { radius: 1 });
+    this.markEnergyDirty(row, col, { radius: 1 });
   }
 
   regenerateEnergyGrid(
@@ -2801,48 +2607,14 @@ export default class GridManager {
       profileEnabled && typeof this.energyTimerNow === "function"
         ? this.energyTimerNow
         : profileEnabled
-          ? defaultPerformanceNow
+          ? TIMESTAMP_NOW
           : null;
     const startTime = profileEnabled ? now() : 0;
-    let segmentationTime = 0;
-    let densityTime = 0;
-    let diffusionTime = 0;
-
-    const currentDirtySet = this.#ensureEnergyDirtySet();
-
-    this.#ensureOccupantTilesDirty(currentDirtySet);
-    if (hasEvents) this.#markEventAreasDirty(evs, currentDirtySet);
-
-    if (currentDirtySet.size === 0) {
-      if (profileEnabled) {
-        const totalTime = now() - startTime;
-
-        this.stats.recordEnergyStageTimings({
-          segmentation: 0,
-          density: 0,
-          diffusion: 0,
-          total: totalTime,
-          tileCount: 0,
-          strategy: "dirty-regions",
-        });
-      }
-
-      return;
-    }
-
-    const dirtyEntries = Array.from(currentDirtySet);
-    const nextDirty = new Set();
-
-    this.energyDirtyTiles = nextDirty;
-    const dirtyRowMap = this.#buildDirtyRowMap(dirtyEntries);
 
     let eventsByRow = null;
 
     if (hasEvents) {
-      const segStart = profileEnabled ? now() : 0;
-
       eventsByRow = this.#prepareEventsByRow(rows);
-      const targetRows = new Set(dirtyRowMap.keys());
 
       for (let i = 0; i < evs.length; i++) {
         const ev = evs[i];
@@ -2862,38 +2634,19 @@ export default class GridManager {
           if (startCol >= endCol) continue;
 
           for (let rr = startRow; rr < endRow; rr++) {
-            if (!targetRows.has(rr)) continue;
-
+            if (!eventsByRow[rr]) eventsByRow[rr] = [];
             eventsByRow[rr].push({ event: ev, startCol, endCol });
           }
         } else {
           for (let rr = startRow; rr < endRow; rr++) {
-            if (!targetRows.has(rr)) continue;
-
+            if (!eventsByRow[rr]) eventsByRow[rr] = [];
             eventsByRow[rr].push(ev);
           }
         }
       }
-
-      if (usingSegmentedEvents) {
-        for (const rowIndex of targetRows) {
-          const segments = eventsByRow[rowIndex];
-
-          if (segments && segments.length > 1) {
-            segments.sort((a, b) => a.startCol - b.startCol);
-          }
-        }
-      }
-
-      if (profileEnabled) {
-        segmentationTime = now() - segStart;
-      }
     }
 
-    const processedTiles = [];
-    const previousEvents = eventOptions ? eventOptions.events : null;
-
-    for (const [r, columns] of dirtyRowMap.entries()) {
+    for (let r = 0; r < rows; r++) {
       const energyRow = energyGrid[r];
       const nextRow = next[r];
       const deltaRow = deltaGrid ? deltaGrid[r] : null;
@@ -2907,26 +2660,186 @@ export default class GridManager {
       const occupantRegenRow = occupantRegenGrid ? occupantRegenGrid[r] : null;
       const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
       const rowHasEvents = Boolean(eventOptions && rowEvents.length > 0);
-      const rowSegments = rowHasEvents && usingSegmentedEvents ? rowEvents : null;
-      const activeSegments = rowSegments ? this.#getSegmentWindowScratch() : null;
-      let nextSegmentIndex = 0;
 
-      for (let i = 0; i < columns.length; i++) {
-        const c = columns[i];
+      if (rowHasEvents && usingSegmentedEvents) {
+        const segments = rowEvents;
 
-        processedTiles.push([r, c]);
+        if (segments.length > 1) {
+          segments.sort((a, b) => a.startCol - b.startCol);
+        }
 
-        if (occupantRegenRow) occupantRegenRow[c] = 0;
+        const activeSegments = this.#getSegmentWindowScratch();
+        const columnEvents = this.#getColumnEventScratch();
+        const previousEvents = eventOptions.events;
+        let nextSegmentIndex = 0;
 
+        for (let c = 0; c < cols; c++) {
+          const isObstacle = Boolean(obstacleRow?.[c]);
+
+          while (
+            nextSegmentIndex < segments.length &&
+            segments[nextSegmentIndex].startCol <= c
+          ) {
+            activeSegments.push(segments[nextSegmentIndex]);
+            nextSegmentIndex += 1;
+          }
+
+          let nextActiveCount = 0;
+          let eventCount = 0;
+
+          for (let i = 0; i < activeSegments.length; i++) {
+            const segment = activeSegments[i];
+
+            if (segment.endCol > c) {
+              activeSegments[nextActiveCount] = segment;
+              nextActiveCount += 1;
+
+              if (!isObstacle) {
+                columnEvents[eventCount] = segment.event;
+                eventCount += 1;
+              }
+            }
+          }
+
+          activeSegments.length = nextActiveCount;
+
+          if (isObstacle) {
+            columnEvents.length = 0;
+            nextRow[c] = 0;
+            if (energyRow[c] !== 0) energyRow[c] = 0;
+            if (deltaRow) deltaRow[c] = 0;
+            if (occupantRegenRow) occupantRegenRow[c] = 0;
+
+            continue;
+          }
+
+          columnEvents.length = eventCount;
+
+          const densityRowValue = densityRow ? densityRow[c] : null;
+          const baseDensity =
+            densityRowValue == null
+              ? this.localDensity(r, c, GridManager.DENSITY_RADIUS)
+              : densityRowValue;
+          let effectiveDensity = (baseDensity ?? 0) * normalizedDensityMultiplier;
+
+          if (effectiveDensity <= 0) {
+            effectiveDensity = 0;
+          } else if (effectiveDensity >= 1) {
+            effectiveDensity = 1;
+          }
+
+          const currentEnergy = Number.isFinite(energyRow?.[c]) ? energyRow[c] : 0;
+          let regen =
+            maxTileEnergy > 0 ? regenRate * (maxTileEnergy - currentEnergy) : 0;
+          const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
+
+          if (regenPenalty <= 0) {
+            regen = 0;
+          } else {
+            regen *= regenPenalty;
+          }
+
+          let regenMultiplier = 1;
+          let regenAdd = 0;
+          let drain = 0;
+
+          if (eventCount > 0) {
+            eventOptions.row = r;
+            eventOptions.col = c;
+            eventOptions.events = columnEvents;
+
+            const modifiers = accumulateEventModifiers(eventOptions);
+
+            if (modifiers) {
+              regenMultiplier = modifiers.regenMultiplier;
+              regenAdd = modifiers.regenAdd;
+              drain = modifiers.drainAdd;
+            }
+          }
+
+          regen = regen * regenMultiplier + regenAdd;
+
+          let neighborSum = 0;
+          let neighborCount = 0;
+
+          if (useDiffusion) {
+            if (upEnergyRow && (!upObstacleRow || !upObstacleRow[c])) {
+              neighborSum += upEnergyRow[c];
+              neighborCount += 1;
+            }
+
+            if (downEnergyRow && (!downObstacleRow || !downObstacleRow[c])) {
+              neighborSum += downEnergyRow[c];
+              neighborCount += 1;
+            }
+
+            if (c > 0 && (!obstacleRow || !obstacleRow[c - 1])) {
+              neighborSum += energyRow[c - 1];
+              neighborCount += 1;
+            }
+
+            if (c < cols - 1 && (!obstacleRow || !obstacleRow[c + 1])) {
+              neighborSum += energyRow[c + 1];
+              neighborCount += 1;
+            }
+          }
+
+          let diffusion = 0;
+
+          if (neighborCount > 0) {
+            diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
+          }
+
+          let nextEnergy = currentEnergy + regen - drain + diffusion;
+
+          if (nextEnergy <= 0) {
+            nextEnergy = 0;
+          } else if (nextEnergy >= maxTileEnergy) {
+            nextEnergy = maxTileEnergy;
+          }
+
+          if (occupantRegenRow) occupantRegenRow[c] = 0;
+
+          if (gridRow?.[c]) {
+            if (occupantRegenRow) occupantRegenRow[c] = nextEnergy;
+
+            nextRow[c] = 0;
+            if (energyRow[c] !== 0) energyRow[c] = 0;
+            if (deltaRow) deltaRow[c] = 0;
+
+            continue;
+          }
+
+          nextRow[c] = nextEnergy;
+
+          if (deltaRow) {
+            let normalizedDelta = (nextEnergy - currentEnergy) * invMaxTileEnergy;
+
+            if (normalizedDelta < -1) {
+              normalizedDelta = -1;
+            } else if (normalizedDelta > 1) {
+              normalizedDelta = 1;
+            }
+
+            deltaRow[c] = normalizedDelta;
+          }
+        }
+
+        eventOptions.events = previousEvents;
+
+        continue;
+      }
+
+      for (let c = 0; c < cols; c++) {
         if (obstacleRow?.[c]) {
-          if (nextRow) nextRow[c] = 0;
-          if (energyRow && energyRow[c] !== 0) energyRow[c] = 0;
+          nextRow[c] = 0;
+          if (energyRow[c] !== 0) energyRow[c] = 0;
           if (deltaRow) deltaRow[c] = 0;
+          if (occupantRegenRow) occupantRegenRow[c] = 0;
 
           continue;
         }
 
-        const densityStart = profileEnabled ? now() : 0;
         const densityRowValue = densityRow ? densityRow[c] : null;
         const baseDensity =
           densityRowValue == null
@@ -2938,10 +2851,6 @@ export default class GridManager {
           effectiveDensity = 0;
         } else if (effectiveDensity >= 1) {
           effectiveDensity = 1;
-        }
-
-        if (profileEnabled) {
-          densityTime += now() - densityStart;
         }
 
         const currentEnergy = Number.isFinite(energyRow?.[c]) ? energyRow[c] : 0;
@@ -2957,59 +2866,18 @@ export default class GridManager {
         let regenMultiplier = 1;
         let regenAdd = 0;
         let drain = 0;
-        let tileEvents = EMPTY_EVENT_LIST;
 
         if (rowHasEvents) {
-          if (rowSegments) {
-            const columnEvents = this.#getColumnEventScratch();
+          eventOptions.row = r;
+          eventOptions.col = c;
+          eventOptions.events = rowEvents;
 
-            let activeCount = 0;
+          const modifiers = accumulateEventModifiers(eventOptions);
 
-            for (let j = 0; j < activeSegments.length; j++) {
-              const segment = activeSegments[j];
-
-              if (segment.endCol > c) {
-                activeSegments[activeCount++] = segment;
-              }
-            }
-
-            activeSegments.length = activeCount;
-
-            while (
-              nextSegmentIndex < rowSegments.length &&
-              rowSegments[nextSegmentIndex].startCol <= c
-            ) {
-              activeSegments.push(rowSegments[nextSegmentIndex]);
-              nextSegmentIndex++;
-            }
-
-            for (let j = 0; j < activeSegments.length; j++) {
-              const segment = activeSegments[j];
-
-              if (segment.startCol <= c && segment.endCol > c) {
-                columnEvents.push(segment.event);
-              }
-            }
-
-            tileEvents = columnEvents;
-          } else {
-            tileEvents = rowEvents;
-          }
-
-          if (tileEvents.length > 0 && eventOptions) {
-            eventOptions.row = r;
-            eventOptions.col = c;
-            eventOptions.events = tileEvents;
-
-            const modifiers = accumulateEventModifiers(eventOptions);
-
-            if (modifiers) {
-              regenMultiplier = modifiers.regenMultiplier;
-              regenAdd = modifiers.regenAdd;
-              drain = modifiers.drainAdd;
-            }
-
-            eventOptions.events = previousEvents;
+          if (modifiers) {
+            regenMultiplier = modifiers.regenMultiplier;
+            regenAdd = modifiers.regenAdd;
+            drain = modifiers.drainAdd;
           }
         }
 
@@ -3019,8 +2887,6 @@ export default class GridManager {
         let neighborCount = 0;
 
         if (useDiffusion) {
-          const diffStart = profileEnabled ? now() : 0;
-
           if (upEnergyRow && (!upObstacleRow || !upObstacleRow[c])) {
             neighborSum += upEnergyRow[c];
             neighborCount += 1;
@@ -3040,10 +2906,6 @@ export default class GridManager {
             neighborSum += energyRow[c + 1];
             neighborCount += 1;
           }
-
-          if (profileEnabled) {
-            diffusionTime += now() - diffStart;
-          }
         }
 
         let diffusion = 0;
@@ -3060,36 +2922,18 @@ export default class GridManager {
           nextEnergy = maxTileEnergy;
         }
 
+        if (occupantRegenRow) occupantRegenRow[c] = 0;
+
         if (gridRow?.[c]) {
-          if (occupantRegenRow) occupantRegenRow[c] = nextEnergy;
-          if (nextRow) nextRow[c] = 0;
-          if (energyRow && energyRow[c] !== 0) energyRow[c] = 0;
+          occupantRegenRow[c] = nextEnergy;
+          nextRow[c] = 0;
+          if (energyRow[c] !== 0) energyRow[c] = 0;
           if (deltaRow) deltaRow[c] = 0;
-
-          this.#markEnergyDirty(r, c, { targetSet: nextDirty });
-
-          if (useDiffusion && Math.abs(diffusion) > ENERGY_DIRTY_EPSILON) {
-            if (r > 0 && (!upObstacleRow || !upObstacleRow[c])) {
-              this.#markEnergyDirty(r - 1, c, { targetSet: nextDirty });
-            }
-
-            if (r < rows - 1 && (!downObstacleRow || !downObstacleRow[c])) {
-              this.#markEnergyDirty(r + 1, c, { targetSet: nextDirty });
-            }
-
-            if (c > 0 && (!obstacleRow || !obstacleRow[c - 1])) {
-              this.#markEnergyDirty(r, c - 1, { targetSet: nextDirty });
-            }
-
-            if (c < cols - 1 && (!obstacleRow || !obstacleRow[c + 1])) {
-              this.#markEnergyDirty(r, c + 1, { targetSet: nextDirty });
-            }
-          }
 
           continue;
         }
 
-        if (nextRow) nextRow[c] = nextEnergy;
+        nextRow[c] = nextEnergy;
 
         if (deltaRow) {
           let normalizedDelta = (nextEnergy - currentEnergy) * invMaxTileEnergy;
@@ -3102,63 +2946,35 @@ export default class GridManager {
 
           deltaRow[c] = normalizedDelta;
         }
-
-        const energyDelta = Math.abs(nextEnergy - currentEnergy);
-
-        if (
-          energyDelta > ENERGY_DIRTY_EPSILON ||
-          nextEnergy < maxTileEnergy - ENERGY_DIRTY_EPSILON
-        ) {
-          this.#markEnergyDirty(r, c, { targetSet: nextDirty });
-        }
-
-        if (useDiffusion && Math.abs(diffusion) > ENERGY_DIRTY_EPSILON) {
-          if (r > 0 && (!upObstacleRow || !upObstacleRow[c])) {
-            this.#markEnergyDirty(r - 1, c, { targetSet: nextDirty });
-          }
-
-          if (r < rows - 1 && (!downObstacleRow || !downObstacleRow[c])) {
-            this.#markEnergyDirty(r + 1, c, { targetSet: nextDirty });
-          }
-
-          if (c > 0 && (!obstacleRow || !obstacleRow[c - 1])) {
-            this.#markEnergyDirty(r, c - 1, { targetSet: nextDirty });
-          }
-
-          if (c < cols - 1 && (!obstacleRow || !obstacleRow[c + 1])) {
-            this.#markEnergyDirty(r, c + 1, { targetSet: nextDirty });
-          }
-        }
       }
-    }
-
-    if (eventOptions) {
-      eventOptions.events = previousEvents;
-    }
-
-    for (let i = 0; i < processedTiles.length; i++) {
-      const [rowIndex, colIndex] = processedTiles[i];
-      const nextRow = next[rowIndex];
-      const energyRow = energyGrid[rowIndex];
-
-      if (!nextRow || !energyRow) continue;
-
-      energyRow[colIndex] = Number.isFinite(nextRow[colIndex]) ? nextRow[colIndex] : 0;
-      nextRow[colIndex] = 0;
     }
 
     if (profileEnabled) {
       const totalTime = now() - startTime;
+      const tileCount =
+        this.energyDirtyTiles && this.energyDirtyTiles.size > 0
+          ? this.energyDirtyTiles.size
+          : rows * cols;
 
       this.stats.recordEnergyStageTimings({
-        segmentation: segmentationTime,
-        density: densityTime,
-        diffusion: diffusionTime,
+        segmentation: 0,
+        density: 0,
+        diffusion: 0,
         total: totalTime,
-        tileCount: processedTiles.length,
-        strategy: "dirty-regions",
+        tileCount,
+        strategy: "full-scan",
       });
     }
+
+    if (this.energyDirtyTiles) {
+      this.energyDirtyTiles.clear();
+    }
+
+    // Swap buffers so the freshly computed grid becomes the active state.
+    const previous = this.energyGrid;
+
+    this.energyGrid = next;
+    this.energyNext = previous;
   }
 
   getCell(row, col) {
@@ -3189,10 +3005,7 @@ export default class GridManager {
     this.grid[row][col] = cell;
     this.#markTileDirty(row, col);
     clearTileEnergyBuffers(this, row, col);
-    if (cell && typeof cell === "object") {
-      if ("row" in cell) cell.row = row;
-      if ("col" in cell) cell.col = col;
-    }
+    this.#trackCellPosition(cell, row, col);
     this.activeCells.add(cell);
     this.#applyDensityDelta(row, col, 1);
 
@@ -3215,8 +3028,9 @@ export default class GridManager {
     this.grid[row][col] = null;
     this.#markTileDirty(row, col);
     this.activeCells.delete(current);
+    this.#untrackCell(current);
     this.#applyDensityDelta(row, col, -1);
-    this.#markEnergyDirty(row, col, { radius: 1 });
+    this.markEnergyDirty(row, col, { radius: 1 });
 
     return current;
   }
@@ -3225,23 +3039,23 @@ export default class GridManager {
     if (!cell || typeof cell !== "object") return;
 
     const provided = details && typeof details === "object" ? details : {};
-    const candidateRow = Number.isInteger(provided.row)
-      ? provided.row
-      : Number.isInteger(cell.row)
-        ? cell.row
-        : null;
-    const candidateCol = Number.isInteger(provided.col)
-      ? provided.col
-      : Number.isInteger(cell.col)
-        ? cell.col
-        : null;
+    let row = Number.isInteger(provided.row) ? provided.row : null;
+    let col = Number.isInteger(provided.col) ? provided.col : null;
 
-    if (!Number.isInteger(candidateRow) || !Number.isInteger(candidateCol)) {
-      return;
+    if (!Number.isInteger(row) || !Number.isInteger(col)) {
+      const location = this.#resolveCellCoordinates(cell);
+
+      if (location) {
+        ({ row, col } = location);
+      } else if (Number.isInteger(cell.row) && Number.isInteger(cell.col)) {
+        row = cell.row;
+        col = cell.col;
+      }
     }
 
-    const row = candidateRow;
-    const col = candidateCol;
+    if (!Number.isInteger(row) || !Number.isInteger(col)) {
+      return;
+    }
 
     if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) {
       return;
@@ -3291,10 +3105,7 @@ export default class GridManager {
     this.#markTileDirty(fromRow, fromCol);
     this.#markTileDirty(toRow, toCol);
     clearTileEnergyBuffers(this, toRow, toCol, { preserveCurrent: true });
-    if (moving && typeof moving === "object") {
-      if ("row" in moving) moving.row = toRow;
-      if ("col" in moving) moving.col = toCol;
-    }
+    this.#trackCellPosition(moving, toRow, toCol);
     this.#applyDensityDelta(fromRow, fromCol, -1);
     this.#applyDensityDelta(toRow, toCol, 1);
     this.#applyEnergyExclusivityAt(toRow, toCol, moving, {
@@ -3375,6 +3186,36 @@ export default class GridManager {
     this.densityDirtyTiles.add(row * this.cols + col);
   }
 
+  #markEnergyDirty(row, col, options = {}) {
+    if (!Number.isInteger(row) || !Number.isInteger(col)) return;
+    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return;
+
+    const targetSet =
+      options?.targetSet instanceof Set ? options.targetSet : this.energyDirtyTiles;
+
+    if (!targetSet) return;
+
+    const radius = Math.max(0, Math.floor(options?.radius ?? 0));
+
+    const add = (r, c) => targetSet.add(r * this.cols + c);
+
+    if (radius <= 0) {
+      add(row, col);
+
+      return;
+    }
+
+    for (let rr = row - radius; rr <= row + radius; rr++) {
+      if (rr < 0 || rr >= this.rows) continue;
+
+      for (let cc = col - radius; cc <= col + radius; cc++) {
+        if (cc < 0 || cc >= this.cols) continue;
+
+        add(rr, cc);
+      }
+    }
+  }
+
   #markTileDirty(row, col) {
     if (!Number.isInteger(row) || !Number.isInteger(col)) return;
     if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return;
@@ -3384,6 +3225,14 @@ export default class GridManager {
     }
 
     this.renderDirtyTiles.add(row * this.cols + col);
+  }
+
+  markEnergyDirty(row, col, options = {}) {
+    if (!this.energyDirtyTiles) {
+      this.energyDirtyTiles = new Set();
+    }
+
+    this.#markEnergyDirty(row, col, options);
   }
 
   #markAllTilesDirty() {
@@ -3440,169 +3289,6 @@ export default class GridManager {
     this.densityDirtyTiles.clear();
   }
 
-  #ensureEnergyDirtySet() {
-    if (!this.energyDirtyTiles) {
-      this.energyDirtyTiles = new Set();
-    }
-
-    return this.energyDirtyTiles;
-  }
-
-  #markEnergyRegionDirty(
-    startRow,
-    endRow,
-    startCol,
-    endCol,
-    { targetSet = null, includeObstacles = false } = {},
-  ) {
-    const set = targetSet ?? this.#ensureEnergyDirtySet();
-
-    if (!Number.isFinite(startRow) || !Number.isFinite(endRow)) return;
-    if (!Number.isFinite(startCol) || !Number.isFinite(endCol)) return;
-
-    const minRow = Math.max(0, Math.min(startRow, endRow));
-    const maxRow = Math.min(this.rows - 1, Math.max(startRow, endRow));
-    const minCol = Math.max(0, Math.min(startCol, endCol));
-    const maxCol = Math.min(this.cols - 1, Math.max(startCol, endCol));
-
-    if (minRow > maxRow || minCol > maxCol) return;
-
-    for (let row = minRow; row <= maxRow; row++) {
-      for (let col = minCol; col <= maxCol; col++) {
-        if (!includeObstacles && this.isObstacle(row, col)) continue;
-
-        set.add(row * this.cols + col);
-      }
-    }
-  }
-
-  #markEnergyDirty(row, col, options = {}) {
-    if (!Number.isFinite(row) || !Number.isFinite(col)) return;
-
-    const radius = Math.max(0, Math.floor(options.radius ?? 0));
-    const includeSelf = options.includeSelf !== false;
-    const targetSet = options.targetSet ?? this.#ensureEnergyDirtySet();
-    const baseRow = Math.floor(row);
-    const baseCol = Math.floor(col);
-
-    if (baseRow < 0 || baseRow >= this.rows || baseCol < 0 || baseCol >= this.cols) {
-      return;
-    }
-
-    const minRow = Math.max(0, baseRow - radius);
-    const maxRow = Math.min(this.rows - 1, baseRow + radius);
-    const minCol = Math.max(0, baseCol - radius);
-    const maxCol = Math.min(this.cols - 1, baseCol + radius);
-
-    for (let r = minRow; r <= maxRow; r++) {
-      for (let c = minCol; c <= maxCol; c++) {
-        if (!includeSelf && r === baseRow && c === baseCol) continue;
-        if (this.isObstacle(r, c)) continue;
-
-        targetSet.add(r * this.cols + c);
-      }
-    }
-  }
-
-  markEnergyDirty(row, col, options = {}) {
-    this.#markEnergyDirty(row, col, options);
-  }
-
-  #markAllEnergyDirty(targetSet = null) {
-    const set = targetSet ?? this.#ensureEnergyDirtySet();
-
-    set.clear();
-
-    for (let row = 0; row < this.rows; row++) {
-      for (let col = 0; col < this.cols; col++) {
-        if (this.isObstacle(row, col)) continue;
-
-        set.add(row * this.cols + col);
-      }
-    }
-  }
-
-  #ensureOccupantTilesDirty(targetSet = null) {
-    if (!this.activeCells || this.activeCells.size === 0) return;
-
-    const set = targetSet ?? this.#ensureEnergyDirtySet();
-
-    for (const cell of this.activeCells) {
-      if (!cell || typeof cell !== "object") continue;
-
-      const rowValue = typeof cell.row === "number" ? Math.floor(cell.row) : null;
-      const colValue = typeof cell.col === "number" ? Math.floor(cell.col) : null;
-
-      if (rowValue == null || colValue == null) continue;
-      if (rowValue < 0 || rowValue >= this.rows) continue;
-      if (colValue < 0 || colValue >= this.cols) continue;
-
-      set.add(rowValue * this.cols + colValue);
-    }
-  }
-
-  #markEventAreasDirty(events, targetSet = null) {
-    if (!Array.isArray(events) || events.length === 0) return;
-
-    for (let i = 0; i < events.length; i++) {
-      const area = events[i]?.affectedArea;
-
-      if (!area) continue;
-
-      const startRow = Math.max(0, Math.floor(area.y));
-      const endRowExclusive = Math.min(
-        this.rows,
-        Math.ceil(area.y + (Number.isFinite(area.height) ? area.height : 0)),
-      );
-      const startCol = Math.max(0, Math.floor(area.x));
-      const endColExclusive = Math.min(
-        this.cols,
-        Math.ceil(area.x + (Number.isFinite(area.width) ? area.width : 0)),
-      );
-
-      if (startRow >= endRowExclusive || startCol >= endColExclusive) continue;
-
-      this.#markEnergyRegionDirty(
-        startRow,
-        endRowExclusive - 1,
-        startCol,
-        endColExclusive - 1,
-        { targetSet, includeObstacles: true },
-      );
-    }
-  }
-
-  #buildDirtyRowMap(indexes) {
-    const map = new Map();
-
-    if (!Array.isArray(indexes) || indexes.length === 0) {
-      return map;
-    }
-
-    for (let i = 0; i < indexes.length; i++) {
-      const key = indexes[i];
-
-      if (!Number.isFinite(key)) continue;
-
-      const row = Math.floor(key / this.cols);
-      const col = key % this.cols;
-
-      if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) continue;
-
-      if (!map.has(row)) {
-        map.set(row, []);
-      }
-
-      map.get(row).push(col);
-    }
-
-    for (const columns of map.values()) {
-      columns.sort((a, b) => a - b);
-    }
-
-    return map;
-  }
-
   recalculateDensityCounts(radius = this.densityRadius) {
     const normalizedRadius = Math.max(0, Math.floor(radius));
     const targetRadius = normalizedRadius > 0 ? normalizedRadius : this.densityRadius;
@@ -3655,11 +3341,15 @@ export default class GridManager {
 
   rebuildActiveCells() {
     this.activeCells.clear();
+    this.#clearTrackedPositions();
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         const cell = this.grid[row][col];
 
-        if (cell) this.activeCells.add(cell);
+        if (!cell) continue;
+
+        this.activeCells.add(cell);
+        this.#trackCellPosition(cell, row, col);
       }
     }
   }
@@ -4191,7 +3881,6 @@ export default class GridManager {
       mutationMultiplier,
       combatEdgeSharpness,
       combatTerritoryEdgeFactor,
-      profiling,
     },
   ) {
     const cell = this.grid[row][col];
@@ -4369,7 +4058,6 @@ export default class GridManager {
       densityEffectMultiplier,
       societySimilarity,
       enemySimilarity,
-      profiling,
     });
 
     if (
@@ -5051,15 +4739,17 @@ export default class GridManager {
     row,
     col,
     cell,
-    { enemies, society = [] } = {},
+    targetGroups = {},
     {
       stats,
       densityEffectMultiplier,
       densityGrid,
       combatEdgeSharpness,
       combatTerritoryEdgeFactor,
-    } = {},
+    },
   ) {
+    const { enemies, society = [] } = targetGroups ?? {};
+
     if (!Array.isArray(enemies) || enemies.length === 0) return false;
 
     const targetEnemy =
@@ -5232,43 +4922,15 @@ export default class GridManager {
 
     this.densityGrid = densityGrid;
     const processed = new WeakSet();
-    const shouldProfile = this.#shouldProfileGrid();
-    const profiling = shouldProfile ? this.#resetProfilingScratch() : null;
-    const activeSnapshot = this.#activeSnapshotScratch;
+    const activeSnapshot = Array.from(this.activeCells);
 
-    activeSnapshot.length = 0;
-
-    const snapshotStart = profiling ? this.#now() : 0;
-
-    if (this.activeCells && this.activeCells.size > 0) {
-      for (const cell of this.activeCells) {
-        activeSnapshot.push(cell);
-      }
-    }
-
-    if (profiling) {
-      profiling.activeSnapshotMs = this.#now() - snapshotStart;
-      profiling.activeSnapshotCount = activeSnapshot.length;
-    }
-
-    for (let i = 0; i < activeSnapshot.length; i++) {
-      const cell = activeSnapshot[i];
-
+    for (const cell of activeSnapshot) {
       if (!cell) continue;
-      const row = cell.row;
-      const col = cell.col;
+      const location = this.#resolveCellCoordinates(cell);
 
-      if (
-        row == null ||
-        col == null ||
-        row < 0 ||
-        row >= this.rows ||
-        col < 0 ||
-        col >= this.cols ||
-        this.grid[row][col] !== cell
-      ) {
-        continue;
-      }
+      if (!location) continue;
+
+      const { row, col } = location;
 
       this.processCell(row, col, {
         stats,
@@ -5282,11 +4944,8 @@ export default class GridManager {
         mutationMultiplier,
         combatEdgeSharpness: combatSharpness,
         combatTerritoryEdgeFactor: territoryFactor,
-        profiling,
       });
     }
-
-    activeSnapshot.length = 0;
 
     if (
       this.autoSeedEnabled &&
@@ -5304,11 +4963,6 @@ export default class GridManager {
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
     this.#enforceEnergyExclusivity();
     this.lastSnapshot = this.buildSnapshot();
-    if (!profiling) {
-      this.lastGridProfiling = null;
-    } else {
-      this.#recordProfilingSummary(profiling);
-    }
 
     return this.lastSnapshot;
   }
@@ -5336,36 +4990,11 @@ export default class GridManager {
     if (activeCells && activeCells.size > 0) {
       for (const cell of activeCells) {
         if (!cell) continue;
+        const location = this.#resolveCellCoordinates(cell);
 
-        let row = Number.isInteger(cell.row) ? cell.row : null;
-        let col = Number.isInteger(cell.col) ? cell.col : null;
+        if (!location) continue;
 
-        if (
-          row == null ||
-          col == null ||
-          row < 0 ||
-          row >= this.rows ||
-          col < 0 ||
-          col >= this.cols ||
-          this.grid[row]?.[col] !== cell
-        ) {
-          let found = false;
-
-          for (let r = 0; r < this.rows && !found; r++) {
-            const gridRow = this.grid[r];
-
-            for (let c = 0; c < this.cols; c++) {
-              if (gridRow[c] === cell) {
-                row = r;
-                col = c;
-                found = true;
-                break;
-              }
-            }
-          }
-
-          if (!found) continue;
-        }
+        const { row, col } = location;
 
         const energy = Number.isFinite(cell.energy) ? cell.energy : 0;
         const age = Number.isFinite(cell.age) ? cell.age : 0;
@@ -5433,12 +5062,7 @@ export default class GridManager {
     row,
     col,
     cell,
-    {
-      densityEffectMultiplier = 1,
-      societySimilarity = 1,
-      enemySimilarity = 0,
-      profiling = null,
-    } = {},
+    { densityEffectMultiplier = 1, societySimilarity = 1, enemySimilarity = 0 } = {},
   ) {
     const mates = [];
     const enemies = [];
@@ -5470,100 +5094,57 @@ export default class GridManager {
     const grid = this.grid;
     const rows = this.rows;
     const cols = this.cols;
-    const { offsets, innerPairCount, totalPairs } = this.#resolveSightOffsets(
-      cell.sight,
-    );
-    const budgets = this.#resolveVisionBudgets(cell, totalPairs, innerPairCount);
-    let processed = 0;
-    let attempts = 0;
-    let earlyExit = false;
-    const timerStart = profiling ? this.#now() : 0;
+    const sight = cell.sight;
 
-    for (let i = 0; i < offsets.length; i += 2) {
-      attempts += 1;
-
-      const dy = offsets[i];
-      const dx = offsets[i + 1];
+    for (let dy = -sight; dy <= sight; dy++) {
       const newRow = row + dy;
-      const newCol = col + dx;
 
-      if (newRow < 0 || newRow >= rows || newCol < 0 || newCol >= cols) {
-        continue;
-      }
+      if (newRow < 0 || newRow >= rows) continue;
 
-      processed += 1;
+      const gridRow = grid[newRow];
 
-      const target = grid[newRow][newCol];
+      for (let dx = -sight; dx <= sight; dx++) {
+        if (dx === 0 && dy === 0) continue;
 
-      if (!target) {
-        if (
-          processed >= budgets.scanBudget &&
-          i >= innerPairCount * 2 &&
-          mates.length >= budgets.mate &&
-          enemies.length >= budgets.enemy &&
-          society.length >= budgets.society
+        const newCol = col + dx;
+
+        if (newCol < 0 || newCol >= cols) continue;
+
+        const target = gridRow[newCol];
+
+        if (!target) continue;
+
+        const similarity = getPairSimilarity(cell, target);
+
+        if (similarity >= allyT) {
+          society.push({
+            row: newRow,
+            col: newCol,
+            target,
+            classification: "society",
+            precomputedSimilarity: similarity,
+          });
+        } else if (
+          similarity <= enemyT ||
+          (() => {
+            const hostilityRng =
+              typeof cell.resolveSharedRng === "function"
+                ? cell.resolveSharedRng(target, "hostilityGate")
+                : Math.random;
+
+            return hostilityRng() < enemyBias;
+          })()
         ) {
-          earlyExit = true;
-          break;
+          enemies.push({ row: newRow, col: newCol, target });
+        } else {
+          mates.push({
+            row: newRow,
+            col: newCol,
+            target,
+            classification: "mate",
+            precomputedSimilarity: similarity,
+          });
         }
-
-        continue;
-      }
-
-      const similarity = getPairSimilarity(cell, target);
-
-      if (similarity >= allyT) {
-        society.push({
-          row: newRow,
-          col: newCol,
-          target,
-          classification: "society",
-          precomputedSimilarity: similarity,
-        });
-      } else if (
-        similarity <= enemyT ||
-        (() => {
-          const hostilityRng =
-            typeof cell.resolveSharedRng === "function"
-              ? cell.resolveSharedRng(target, "hostilityGate")
-              : Math.random;
-
-          return hostilityRng() < enemyBias;
-        })()
-      ) {
-        enemies.push({ row: newRow, col: newCol, target });
-      } else {
-        mates.push({
-          row: newRow,
-          col: newCol,
-          target,
-          classification: "mate",
-          precomputedSimilarity: similarity,
-        });
-      }
-
-      if (
-        processed >= budgets.scanBudget &&
-        i >= innerPairCount * 2 &&
-        mates.length >= budgets.mate &&
-        enemies.length >= budgets.enemy &&
-        society.length >= budgets.society
-      ) {
-        earlyExit = true;
-        break;
-      }
-    }
-
-    if (profiling) {
-      profiling.findTargetsCalls += 1;
-      profiling.findTargetsTiles += processed;
-      profiling.findTargetsAttempts += attempts;
-      profiling.findTargetsMs += this.#now() - timerStart;
-
-      if (earlyExit) {
-        profiling.findTargetsBudgetSkips += 1;
-      } else if (attempts >= totalPairs) {
-        profiling.findTargetsFullScans += 1;
       }
     }
 

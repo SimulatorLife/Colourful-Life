@@ -171,6 +171,7 @@ jobs:
         if: ${{ steps.read.outputs.bail == 'false' && steps.review_requested.outputs.exists != 'true' }}
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GH_USER_TOKEN }}
           script: |
             const n = Number('${{ steps.read.outputs.number }}');
             const body = `@codex review the changes in this PR... take a comprehensive pass.\n\nPlease evaluate the update with high expectations and call out anything that needs attention, including:\n- Simulation performance impacts (grid updates, rendering throughput, memory footprint).\n- Code style, clarity, and maintainability concerns.\n- Compliance with the Simulation Laws and any related safeguards.\n- Test coverage, automation signals, and documentation accuracy.\n- Risks to user experience, accessibility, or stability.\n\nProvide actionable feedback or explicit approval so we can proceed confidently.`;
