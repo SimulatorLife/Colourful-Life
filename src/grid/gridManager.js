@@ -1161,15 +1161,6 @@ export default class GridManager {
     this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
   }
 
-  setEventContext(eventContext) {
-    this.eventContext = createEventContext(eventContext);
-    this.eventEffectCache?.clear();
-  }
-
-  getEventContext() {
-    return this.eventContext;
-  }
-
   setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {
     if (threshold !== undefined) {
       const numeric = Number(threshold);
