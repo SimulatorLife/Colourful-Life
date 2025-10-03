@@ -113,6 +113,8 @@ export default class UIManager {
     this.lifeEventsSummaryRate = null;
     this.deathBreakdownList = null;
     this.deathBreakdownEmptyState = null;
+    this.sparkMetricDescriptors = [];
+    this.traitSparkDescriptors = [];
     this.playbackSpeedSlider = null;
     this.speedPresetButtons = [];
     this.pauseOverlay = null;
@@ -292,6 +294,26 @@ export default class UIManager {
       .filter((value) => value.length > 0);
 
     return new Set(normalized.length > 0 ? normalized : normalizedFallback);
+  }
+
+  #resolveCssColor(variableName, fallbackColor) {
+    if (typeof variableName !== "string" || variableName.length === 0) {
+      return fallbackColor;
+    }
+
+    try {
+      const root = document?.documentElement;
+
+      if (!root) return fallbackColor;
+
+      const value = getComputedStyle(root).getPropertyValue(variableName).trim();
+
+      return value || fallbackColor;
+    } catch (error) {
+      warnOnce("Failed to resolve CSS variable color", error);
+
+      return fallbackColor;
+    }
   }
 
   #shouldIgnoreHotkey(event) {
@@ -2624,89 +2646,328 @@ export default class UIManager {
     this.#showMetricsPlaceholder("Run the simulation to populate these metrics.");
     body.appendChild(this.metricsBox);
 
+    const sparkSection = document.createElement("section");
+
+    sparkSection.className = "metrics-section metrics-section--sparklines";
+    sparkSection.setAttribute("aria-label", "Key population and energy trends");
+    const sparkHeading = document.createElement("h4");
+
+    sparkHeading.className = "metrics-section-title";
+    sparkHeading.textContent = "Key Dynamics";
+    sparkSection.appendChild(sparkHeading);
+
+    const sparkHint = document.createElement("p");
+
+    sparkHint.className = "sparkline-hint";
+    sparkHint.textContent =
+      "Monitor overall population, diversity, energy, and pacing as the world evolves.";
+    sparkSection.appendChild(sparkHint);
+
     const sparkGrid = document.createElement("div");
 
     sparkGrid.className = "sparkline-grid";
-    sparkGrid.setAttribute("role", "group");
-    sparkGrid.setAttribute("aria-label", "Historical trend sparklines");
-    body.appendChild(sparkGrid);
-
-    // Sparklines canvases
-    const traitDescriptors = [
-      { key: "cooperation", name: "Cooperation" },
-      { key: "fighting", name: "Fighting" },
-      { key: "breeding", name: "Breeding" },
-      { key: "sight", name: "Sight" },
-    ];
-
-    const traitSparkDescriptors = traitDescriptors.flatMap(({ key, name }) => [
-      {
-        label: `${name} Activity (presence %)`,
-        property: `sparkTrait${name}Presence`,
-        traitKey: key,
-        traitType: "presence",
-        color: "#f39c12",
-      },
-      {
-        label: `${name} Intensity (avg level)`,
-        property: `sparkTrait${name}Average`,
-        traitKey: key,
-        traitType: "average",
-        color: "#3498db",
-      },
-    ]);
+    sparkSection.appendChild(sparkGrid);
+    body.appendChild(sparkSection);
 
     const sparkDescriptors = [
-      { label: "Population", property: "sparkPop", color: "#88d" },
-      { label: "Diversity", property: "sparkDiv2Canvas", color: "#d88" },
-      { label: "Mean Energy", property: "sparkEnergy", color: "#8d8" },
-      { label: "Growth", property: "sparkGrowth", color: "#dd8" },
-      { label: "Event Strength", property: "sparkEvent", color: "#b85" },
-      { label: "Mutation Multiplier", property: "sparkMutation", color: "#6c5ce7" },
+      {
+        label: "Population",
+        property: "sparkPop",
+        historyKey: "population",
+        colorVar: "--color-metric-population",
+        fallbackColor: "#4c9dff",
+        description: "Total living cells over recent ticks.",
+      },
+      {
+        label: "Diversity",
+        property: "sparkDiv2Canvas",
+        historyKey: "diversity",
+        colorVar: "--color-metric-diversity",
+        fallbackColor: "#ff8c68",
+        description: "Genetic variety (Shannon diversity index).",
+      },
+      {
+        label: "Mean Energy",
+        property: "sparkEnergy",
+        historyKey: "energy",
+        colorVar: "--color-metric-energy",
+        fallbackColor: "#55efc4",
+        description: "Average cell energy reserves.",
+      },
+      {
+        label: "Growth",
+        property: "sparkGrowth",
+        historyKey: "growth",
+        colorVar: "--color-metric-growth",
+        fallbackColor: "#f5c669",
+        description: "Births minus deaths per tick.",
+      },
+      {
+        label: "Event Strength",
+        property: "sparkEvent",
+        historyKey: "eventStrength",
+        colorVar: "--color-metric-event-strength",
+        fallbackColor: "#b786ff",
+        description: "Magnitude of current environmental events.",
+      },
+      {
+        label: "Mutation Multiplier",
+        property: "sparkMutation",
+        historyKey: "mutationMultiplier",
+        colorVar: "--color-metric-mutation",
+        fallbackColor: "#ff6fb1",
+        description: "Live mutation scaling factor.",
+      },
       {
         label: "Diverse Pairing Rate",
         property: "sparkDiversePairing",
-        color: "#9b59b6",
+        historyKey: "diversePairingRate",
+        colorVar: "--color-metric-diverse-pairing",
+        fallbackColor: "#76d6ff",
+        description: "Share of mating pairs exceeding the diversity threshold.",
       },
       {
         label: "Mean Diversity Appetite",
         property: "sparkDiversityAppetite",
-        color: "#1abc9c",
+        historyKey: "meanDiversityAppetite",
+        colorVar: "--color-metric-diversity-appetite",
+        fallbackColor: "#7edc8c",
+        description: "Average desire for genetically novel partners.",
       },
-      ...traitSparkDescriptors,
     ];
 
-    this.traitSparkDescriptors = traitSparkDescriptors;
+    this.sparkMetricDescriptors = sparkDescriptors.map(
+      ({ property, historyKey, colorVar, fallbackColor }) => ({
+        property,
+        historyKey,
+        colorVar,
+        fallbackColor,
+      }),
+    );
 
-    sparkDescriptors.forEach(({ label, property, color }) => {
+    sparkDescriptors.forEach(
+      ({ label, property, colorVar, fallbackColor, description }) => {
+        const card = document.createElement("div");
+        const caption = document.createElement("div");
+        const colorDot = document.createElement("span");
+        const captionText = document.createElement("span");
+
+        card.className = "sparkline-card";
+        card.setAttribute("role", "group");
+        card.setAttribute("aria-label", `${label} trend`);
+        if (description) card.title = description;
+        caption.className = "sparkline-caption";
+        colorDot.className = "sparkline-color-dot";
+        if (colorVar) {
+          colorDot.style.background = `var(${colorVar}, ${fallbackColor})`;
+        } else if (fallbackColor) {
+          colorDot.style.background = fallbackColor;
+        }
+        captionText.className = "sparkline-caption-text";
+        captionText.textContent = label;
+        caption.appendChild(colorDot);
+        caption.appendChild(captionText);
+
+        const canvas = document.createElement("canvas");
+
+        canvas.className = "sparkline";
+        canvas.width = 220;
+        canvas.height = 48;
+        canvas.setAttribute("role", "img");
+        canvas.setAttribute("aria-label", `${label} trend over time`);
+        if (description) {
+          canvas.title = description;
+        }
+
+        card.appendChild(caption);
+        card.appendChild(canvas);
+        sparkGrid.appendChild(card);
+
+        this[property] = canvas;
+      },
+    );
+
+    const traitSection = document.createElement("section");
+
+    traitSection.className = "metrics-section metrics-section--sparklines";
+    traitSection.setAttribute("aria-label", "Trait expression trends");
+    const traitHeading = document.createElement("h4");
+
+    traitHeading.className = "metrics-section-title";
+    traitHeading.textContent = "Trait Expressions";
+    traitSection.appendChild(traitHeading);
+
+    const traitHint = document.createElement("p");
+
+    traitHint.className = "sparkline-hint";
+    traitHint.textContent =
+      "Compare how many cells embrace each trait against their average intensity.";
+    traitSection.appendChild(traitHint);
+
+    const traitGrid = document.createElement("div");
+
+    traitGrid.className = "sparkline-grid sparkline-grid--traits";
+    traitSection.appendChild(traitGrid);
+    body.appendChild(traitSection);
+
+    const traitConfigs = [
+      {
+        key: "cooperation",
+        name: "Cooperation",
+        colors: {
+          presence: {
+            colorVar: "--color-trait-cooperation-presence",
+            fallbackColor: "#74b9ff",
+          },
+          intensity: {
+            colorVar: "--color-trait-cooperation-intensity",
+            fallbackColor: "#a0c4ff",
+          },
+        },
+      },
+      {
+        key: "fighting",
+        name: "Fighting",
+        colors: {
+          presence: {
+            colorVar: "--color-trait-fighting-presence",
+            fallbackColor: "#ff7675",
+          },
+          intensity: {
+            colorVar: "--color-trait-fighting-intensity",
+            fallbackColor: "#ff9aa2",
+          },
+        },
+      },
+      {
+        key: "breeding",
+        name: "Breeding",
+        colors: {
+          presence: {
+            colorVar: "--color-trait-breeding-presence",
+            fallbackColor: "#f6c177",
+          },
+          intensity: {
+            colorVar: "--color-trait-breeding-intensity",
+            fallbackColor: "#fcd29f",
+          },
+        },
+      },
+      {
+        key: "sight",
+        name: "Sight",
+        colors: {
+          presence: {
+            colorVar: "--color-trait-sight-presence",
+            fallbackColor: "#55efc4",
+          },
+          intensity: {
+            colorVar: "--color-trait-sight-intensity",
+            fallbackColor: "#81f4d0",
+          },
+        },
+      },
+    ];
+
+    const traitSparkDescriptors = [];
+
+    traitConfigs.forEach((trait) => {
       const card = document.createElement("div");
-      const caption = document.createElement("div");
-      const colorDot = document.createElement("span");
-      const captionText = document.createElement("span");
 
-      card.className = "sparkline-card";
-      caption.className = "sparkline-caption";
-      colorDot.className = "sparkline-color-dot";
-      if (color) colorDot.style.background = color;
-      captionText.className = "sparkline-caption-text";
-      captionText.textContent = label;
-      caption.appendChild(colorDot);
-      caption.appendChild(captionText);
+      card.className = "sparkline-card sparkline-card--trait";
+      card.setAttribute("role", "group");
+      card.setAttribute("aria-label", `${trait.name} trait trends`);
+      card.setAttribute("data-trait", trait.key);
 
-      const canvas = document.createElement("canvas");
+      const header = document.createElement("div");
 
-      canvas.className = "sparkline";
-      canvas.width = 220;
-      canvas.height = 40;
-      canvas.setAttribute("role", "img");
-      canvas.setAttribute("aria-label", `${label} trend over time`);
+      header.className = "sparkline-trait-header";
+      const nameEl = document.createElement("span");
 
-      card.appendChild(caption);
-      card.appendChild(canvas);
-      sparkGrid.appendChild(card);
+      nameEl.className = "sparkline-trait-name";
+      nameEl.textContent = trait.name;
+      header.appendChild(nameEl);
 
-      this[property] = canvas;
+      const contextEl = document.createElement("span");
+
+      contextEl.className = "sparkline-trait-context";
+      contextEl.textContent = "Presence vs intensity";
+      header.appendChild(contextEl);
+
+      card.appendChild(header);
+
+      const metrics = [
+        {
+          label: "Activity (presence %)",
+          property: `sparkTrait${trait.name}Presence`,
+          traitKey: trait.key,
+          traitType: "presence",
+          colorVar: trait.colors.presence.colorVar,
+          fallbackColor: trait.colors.presence.fallbackColor,
+          ariaLabel: `${trait.name} presence trend over time`,
+        },
+        {
+          label: "Intensity (avg level)",
+          property: `sparkTrait${trait.name}Average`,
+          traitKey: trait.key,
+          traitType: "average",
+          colorVar: trait.colors.intensity.colorVar,
+          fallbackColor: trait.colors.intensity.fallbackColor,
+          ariaLabel: `${trait.name} intensity trend over time`,
+        },
+      ];
+
+      metrics.forEach((metric, index) => {
+        const row = document.createElement("div");
+
+        row.className = "sparkline-trait-row";
+        if (index > 0) row.classList.add("sparkline-trait-row--separated");
+
+        const rowCaption = document.createElement("div");
+
+        rowCaption.className = "sparkline-caption sparkline-caption--trait";
+        const dot = document.createElement("span");
+
+        dot.className = "sparkline-color-dot";
+        if (metric.colorVar) {
+          dot.style.background = `var(${metric.colorVar}, ${metric.fallbackColor})`;
+        } else if (metric.fallbackColor) {
+          dot.style.background = metric.fallbackColor;
+        }
+        const labelText = document.createElement("span");
+
+        labelText.className = "sparkline-caption-text";
+        labelText.textContent = metric.label;
+        rowCaption.appendChild(dot);
+        rowCaption.appendChild(labelText);
+
+        const canvas = document.createElement("canvas");
+
+        canvas.className = "sparkline sparkline--trait";
+        canvas.width = 220;
+        canvas.height = 48;
+        canvas.setAttribute("role", "img");
+        canvas.setAttribute("aria-label", metric.ariaLabel);
+        canvas.title = metric.label;
+
+        row.appendChild(rowCaption);
+        row.appendChild(canvas);
+        card.appendChild(row);
+
+        this[metric.property] = canvas;
+        traitSparkDescriptors.push({
+          property: metric.property,
+          traitKey: metric.traitKey,
+          traitType: metric.traitType,
+          colorVar: metric.colorVar,
+          fallbackColor: metric.fallbackColor,
+        });
+      });
+
+      traitGrid.appendChild(card);
     });
+
+    this.traitSparkDescriptors = traitSparkDescriptors;
 
     return panel;
   }
@@ -3474,30 +3735,28 @@ export default class UIManager {
 
     this.#renderLifeEvents(stats);
 
-    this.drawSpark(this.sparkPop, stats.history.population, "#88d");
-    this.drawSpark(this.sparkDiv2Canvas, stats.history.diversity, "#d88");
-    this.drawSpark(this.sparkEnergy, stats.history.energy, "#8d8");
-    this.drawSpark(this.sparkGrowth, stats.history.growth, "#dd8");
-    this.drawSpark(this.sparkEvent, stats.history.eventStrength, "#b85");
-    this.drawSpark(this.sparkMutation, stats.history.mutationMultiplier, "#6c5ce7");
-    this.drawSpark(
-      this.sparkDiversePairing,
-      stats.history.diversePairingRate,
-      "#9b59b6",
-    );
-    this.drawSpark(
-      this.sparkDiversityAppetite,
-      stats.history.meanDiversityAppetite,
-      "#1abc9c",
-    );
+    if (Array.isArray(this.sparkMetricDescriptors)) {
+      this.sparkMetricDescriptors.forEach(
+        ({ property, historyKey, colorVar, fallbackColor }) => {
+          const canvas = this[property];
+          const data = stats?.history?.[historyKey];
+          const color = this.#resolveCssColor(colorVar, fallbackColor);
+
+          this.drawSpark(canvas, Array.isArray(data) ? data : [], color);
+        },
+      );
+    }
 
     if (Array.isArray(this.traitSparkDescriptors)) {
-      this.traitSparkDescriptors.forEach(({ property, traitKey, traitType, color }) => {
-        const canvas = this[property];
-        const data = stats?.traitHistory?.[traitType]?.[traitKey];
+      this.traitSparkDescriptors.forEach(
+        ({ property, traitKey, traitType, colorVar, fallbackColor }) => {
+          const canvas = this[property];
+          const data = stats?.traitHistory?.[traitType]?.[traitKey];
+          const color = this.#resolveCssColor(colorVar, fallbackColor);
 
-        this.drawSpark(canvas, Array.isArray(data) ? data : [], color);
-      });
+          this.drawSpark(canvas, Array.isArray(data) ? data : [], color);
+        },
+      );
     }
   }
 
