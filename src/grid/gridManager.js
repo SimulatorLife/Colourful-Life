@@ -155,6 +155,9 @@ export default class GridManager {
   static combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT;
   #spawnCandidateScratch = null;
   #eventScratch = null;
+  #segmentWindowScratch = null;
+  #columnEventScratch = null;
+  #eventRowsScratch = null;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -234,6 +237,38 @@ export default class GridManager {
     this.#eventScratch.length = 0;
 
     return this.#eventScratch;
+  }
+
+  #getSegmentWindowScratch() {
+    if (!this.#segmentWindowScratch) {
+      this.#segmentWindowScratch = [];
+    }
+
+    this.#segmentWindowScratch.length = 0;
+
+    return this.#segmentWindowScratch;
+  }
+
+  #getColumnEventScratch() {
+    if (!this.#columnEventScratch) {
+      this.#columnEventScratch = [];
+    }
+
+    this.#columnEventScratch.length = 0;
+
+    return this.#columnEventScratch;
+  }
+
+  #prepareEventsByRow(rowCount) {
+    if (!this.#eventRowsScratch || this.#eventRowsScratch.length !== rowCount) {
+      this.#eventRowsScratch = Array.from({ length: rowCount }, () => []);
+    } else {
+      for (let i = 0; i < this.#eventRowsScratch.length; i++) {
+        this.#eventRowsScratch[i].length = 0;
+      }
+    }
+
+    return this.#eventRowsScratch;
   }
 
   #resolveEventModifiers({ row, col, rowEvents, eventOptions, useSegmentedEvents }) {
@@ -1784,7 +1819,7 @@ export default class GridManager {
     let eventsByRow = null;
 
     if (hasEvents) {
-      eventsByRow = new Array(rows);
+      eventsByRow = this.#prepareEventsByRow(rows);
 
       for (let i = 0; i < evs.length; i++) {
         const ev = evs[i];
@@ -1828,6 +1863,141 @@ export default class GridManager {
       const downObstacleRow = r < rows - 1 ? obstacles[r + 1] : null;
       const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
       const rowHasEvents = Boolean(eventOptions && rowEvents.length > 0);
+
+      if (rowHasEvents && usingSegmentedEvents) {
+        const segments = rowEvents;
+
+        if (segments.length > 1) {
+          segments.sort((a, b) => a.startCol - b.startCol);
+        }
+
+        const activeSegments = this.#getSegmentWindowScratch();
+        const columnEvents = this.#getColumnEventScratch();
+        const previousEvents = eventOptions.events;
+        let nextSegmentIndex = 0;
+
+        for (let c = 0; c < cols; c++) {
+          const isObstacle = Boolean(obstacleRow?.[c]);
+
+          while (
+            nextSegmentIndex < segments.length &&
+            segments[nextSegmentIndex].startCol <= c
+          ) {
+            activeSegments.push(segments[nextSegmentIndex]);
+            nextSegmentIndex += 1;
+          }
+
+          columnEvents.length = 0;
+
+          let activeCount = 0;
+
+          for (let i = 0; i < activeSegments.length; i++) {
+            const segment = activeSegments[i];
+
+            if (c < segment.endCol) {
+              if (!isObstacle) {
+                columnEvents.push(segment.event);
+              }
+
+              activeSegments[activeCount] = segment;
+              activeCount += 1;
+            }
+          }
+
+          activeSegments.length = activeCount;
+
+          if (isObstacle) {
+            nextRow[c] = 0;
+            if (energyRow[c] !== 0) energyRow[c] = 0;
+            if (deltaRow) deltaRow[c] = 0;
+
+            continue;
+          }
+
+          let densityValue = hasDensityGrid ? densityRow?.[c] : null;
+
+          if (densityValue == null) {
+            densityValue = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
+          }
+
+          const effectiveDensity = clamp(
+            (densityValue ?? 0) * normalizedDensityMultiplier,
+            0,
+            1,
+          );
+          const currentEnergy = energyRow[c];
+          let regen =
+            maxTileEnergy > 0 ? regenRate * (maxTileEnergy - currentEnergy) : 0;
+
+          regen *= Math.max(0, 1 - REGEN_DENSITY_PENALTY * effectiveDensity);
+
+          let regenMultiplier = 1;
+          let regenAdd = 0;
+          let drain = 0;
+
+          if (columnEvents.length > 0) {
+            eventOptions.row = r;
+            eventOptions.col = c;
+            eventOptions.events = columnEvents;
+
+            const modifiers = accumulateEventModifiers(eventOptions);
+
+            if (modifiers) {
+              regenMultiplier = modifiers.regenMultiplier;
+              regenAdd = modifiers.regenAdd;
+              drain = modifiers.drainAdd;
+            }
+
+            columnEvents.length = 0;
+          }
+
+          regen = regen * regenMultiplier + regenAdd;
+
+          let neighborSum = 0;
+          let neighborCount = 0;
+
+          if (useDiffusion) {
+            if (upEnergyRow && (!upObstacleRow || !upObstacleRow[c])) {
+              neighborSum += upEnergyRow[c];
+              neighborCount += 1;
+            }
+
+            if (downEnergyRow && (!downObstacleRow || !downObstacleRow[c])) {
+              neighborSum += downEnergyRow[c];
+              neighborCount += 1;
+            }
+
+            if (c > 0 && (!obstacleRow || !obstacleRow[c - 1])) {
+              neighborSum += energyRow[c - 1];
+              neighborCount += 1;
+            }
+
+            if (c < cols - 1 && (!obstacleRow || !obstacleRow[c + 1])) {
+              neighborSum += energyRow[c + 1];
+              neighborCount += 1;
+            }
+          }
+
+          let diffusion = 0;
+
+          if (neighborCount > 0) {
+            diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
+          }
+
+          let nextEnergy = currentEnergy + regen - drain + diffusion;
+
+          nextEnergy = clamp(nextEnergy, 0, maxTileEnergy);
+          nextRow[c] = nextEnergy;
+
+          if (deltaRow) {
+            deltaRow[c] = clamp((nextEnergy - currentEnergy) * invMaxTileEnergy, -1, 1);
+          }
+        }
+
+        eventOptions.events = previousEvents;
+
+        continue;
+      }
 
       for (let c = 0; c < cols; c++) {
         if (obstacleRow?.[c]) {
@@ -1922,15 +2092,11 @@ export default class GridManager {
       }
     }
 
-    // Swap buffers and clear the buffer for next tick writes
+    // Swap buffers so the freshly computed grid becomes the active state.
     const previous = this.energyGrid;
 
     this.energyGrid = next;
     this.energyNext = previous;
-
-    for (let r = 0; r < rows; r++) {
-      this.energyNext[r].fill(0);
-    }
   }
 
   getCell(row, col) {
