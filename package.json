@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "parcel ./index.html",
-    "clean": "node ./scripts/clean-parcel.mjs",
+    "clean": "parcel clean",
     "build": "parcel build ./index.html",
     "test": "node --test test",
     "format": "prettier --write .",
