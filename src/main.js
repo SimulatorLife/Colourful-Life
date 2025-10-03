@@ -19,17 +19,10 @@ function resolveHeadlessCanvasSize(config = {}) {
   const cols = rawCols != null && rawCols > 0 ? rawCols : null;
   const defaultWidth = (cols ?? 120) * cellSize;
   const defaultHeight = (rows ?? 120) * cellSize;
-  const pickFirstPositive = (candidates, fallback) => {
-    for (const candidate of candidates) {
-      const numeric = toFinite(candidate);
-
-      if (numeric != null && numeric > 0) {
-        return numeric;
-      }
-    }
-
-    return fallback;
-  };
+  const pickFirstPositive = (candidates, fallback) =>
+    candidates
+      .map((candidate) => toFinite(candidate))
+      .find((value) => value != null && value > 0) ?? fallback;
 
   return {
     width: pickFirstPositive(
