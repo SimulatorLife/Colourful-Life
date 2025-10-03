@@ -1218,6 +1218,7 @@ export default class GridManager {
     );
     this.energyNext = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.energyDeltaGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
+    this.pendingOccupantRegen = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
     this.eventManager = resolvedEventManager;
@@ -2081,6 +2082,9 @@ export default class GridManager {
     this.energyDeltaGrid = Array.from({ length: rowsInt }, () =>
       Array(colsInt).fill(0),
     );
+    this.pendingOccupantRegen = Array.from({ length: rowsInt }, () =>
+      Array(colsInt).fill(0),
+    );
     this.#initializeDecayBuffers(rowsInt, colsInt);
     this.obstacles = Array.from({ length: rowsInt }, () => Array(colsInt).fill(false));
     this.densityCounts = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
@@ -2193,6 +2197,9 @@ export default class GridManager {
         if (densityCountRow) densityCountRow[col] = 0;
         if (densityLiveRow) densityLiveRow[col] = 0;
         if (densityRow) densityRow[col] = 0;
+        if (this.pendingOccupantRegen?.[row]) {
+          this.pendingOccupantRegen[row][col] = 0;
+        }
       }
     }
 
@@ -2311,6 +2318,7 @@ export default class GridManager {
     const next = this.energyNext;
     const deltaGrid = this.energyDeltaGrid;
     const obstacles = this.obstacles;
+    const occupantRegenGrid = this.pendingOccupantRegen;
     const { isEventAffecting, getEventEffect } =
       this.eventContext ?? defaultEventContext;
     const regenRate = Number.isFinite(R) ? R : 0;
@@ -2385,6 +2393,7 @@ export default class GridManager {
       const downEnergyRow = r < rows - 1 ? energyGrid[r + 1] : null;
       const upObstacleRow = r > 0 ? obstacles[r - 1] : null;
       const downObstacleRow = r < rows - 1 ? obstacles[r + 1] : null;
+      const occupantRegenRow = occupantRegenGrid ? occupantRegenGrid[r] : null;
       const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
       const rowHasEvents = Boolean(eventOptions && rowEvents.length > 0);
 
@@ -2435,38 +2444,7 @@ export default class GridManager {
             nextRow[c] = 0;
             if (energyRow[c] !== 0) energyRow[c] = 0;
             if (deltaRow) deltaRow[c] = 0;
-
-            continue;
-          }
-
-          if (gridRow?.[c]) {
-            columnEvents.length = 0;
-            const occupant = gridRow[c];
-            const stored = Number.isFinite(energyRow?.[c]) ? energyRow[c] : 0;
-
-            if (stored > 0 && occupant && typeof occupant.energy === "number") {
-              const cap =
-                this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
-
-              if (cap > 0) {
-                const currentEnergy = Number.isFinite(occupant.energy)
-                  ? occupant.energy
-                  : 0;
-                const capacity = Math.max(0, cap - currentEnergy);
-
-                if (capacity > 0) {
-                  const absorbed = Math.min(capacity, stored);
-
-                  if (absorbed > 0) {
-                    occupant.energy = clamp(currentEnergy + absorbed, 0, cap);
-                  }
-                }
-              }
-            }
-
-            nextRow[c] = 0;
-            clearTileEnergyBuffers(this, r, c);
-            if (deltaRow) deltaRow[c] = 0;
+            if (occupantRegenRow) occupantRegenRow[c] = 0;
 
             continue;
           }
@@ -2486,7 +2464,7 @@ export default class GridManager {
             effectiveDensity = 1;
           }
 
-          const currentEnergy = energyRow[c];
+          const currentEnergy = Number.isFinite(energyRow?.[c]) ? energyRow[c] : 0;
           let regen =
             maxTileEnergy > 0 ? regenRate * (maxTileEnergy - currentEnergy) : 0;
           const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
@@ -2556,6 +2534,18 @@ export default class GridManager {
             nextEnergy = maxTileEnergy;
           }
 
+          if (occupantRegenRow) occupantRegenRow[c] = 0;
+
+          if (gridRow?.[c]) {
+            if (occupantRegenRow) occupantRegenRow[c] = nextEnergy;
+
+            nextRow[c] = 0;
+            if (energyRow[c] !== 0) energyRow[c] = 0;
+            if (deltaRow) deltaRow[c] = 0;
+
+            continue;
+          }
+
           nextRow[c] = nextEnergy;
 
           if (deltaRow) {
@@ -2581,37 +2571,7 @@ export default class GridManager {
           nextRow[c] = 0;
           if (energyRow[c] !== 0) energyRow[c] = 0;
           if (deltaRow) deltaRow[c] = 0;
-
-          continue;
-        }
-
-        if (gridRow?.[c]) {
-          const occupant = gridRow[c];
-          const stored = Number.isFinite(energyRow?.[c]) ? energyRow[c] : 0;
-
-          if (stored > 0 && occupant && typeof occupant.energy === "number") {
-            const cap =
-              this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
-
-            if (cap > 0) {
-              const currentEnergy = Number.isFinite(occupant.energy)
-                ? occupant.energy
-                : 0;
-              const capacity = Math.max(0, cap - currentEnergy);
-
-              if (capacity > 0) {
-                const absorbed = Math.min(capacity, stored);
-
-                if (absorbed > 0) {
-                  occupant.energy = clamp(currentEnergy + absorbed, 0, cap);
-                }
-              }
-            }
-          }
-
-          nextRow[c] = 0;
-          clearTileEnergyBuffers(this, r, c);
-          if (deltaRow) deltaRow[c] = 0;
+          if (occupantRegenRow) occupantRegenRow[c] = 0;
 
           continue;
         }
@@ -2629,7 +2589,7 @@ export default class GridManager {
           effectiveDensity = 1;
         }
 
-        const currentEnergy = energyRow[c];
+        const currentEnergy = Number.isFinite(energyRow?.[c]) ? energyRow[c] : 0;
         let regen = maxTileEnergy > 0 ? regenRate * (maxTileEnergy - currentEnergy) : 0;
         const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
 
@@ -2696,6 +2656,17 @@ export default class GridManager {
           nextEnergy = 0;
         } else if (nextEnergy >= maxTileEnergy) {
           nextEnergy = maxTileEnergy;
+        }
+
+        if (occupantRegenRow) occupantRegenRow[c] = 0;
+
+        if (gridRow?.[c]) {
+          occupantRegenRow[c] = nextEnergy;
+          nextRow[c] = 0;
+          if (energyRow[c] !== 0) energyRow[c] = 0;
+          if (deltaRow) deltaRow[c] = 0;
+
+          continue;
         }
 
         nextRow[c] = nextEnergy;
@@ -3298,6 +3269,27 @@ export default class GridManager {
       }
 
       return;
+    }
+
+    let pendingRegen = 0;
+
+    if (this.pendingOccupantRegen) {
+      const regenRow = this.pendingOccupantRegen[row];
+
+      if (regenRow && Number.isFinite(regenRow[col]) && regenRow[col] > 0) {
+        pendingRegen = regenRow[col];
+        regenRow[col] = 0;
+      }
+    }
+
+    if (pendingRegen > 0) {
+      const energyRow = this.energyGrid?.[row];
+
+      if (energyRow) {
+        const currentTileEnergy = Number.isFinite(energyRow[col]) ? energyRow[col] : 0;
+
+        energyRow[col] = currentTileEnergy + pendingRegen;
+      }
     }
 
     const events = eventManager.activeEvents || [];
