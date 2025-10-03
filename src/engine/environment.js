@@ -56,17 +56,11 @@ export function resolveCanvas(canvas, documentRef) {
 export function ensureCanvasDimensions(canvas, config) {
   const toFiniteDimension = toFiniteOrNull;
 
-  const pickDimension = (candidates) => {
-    for (const candidate of candidates) {
-      const normalized = toFiniteDimension(candidate);
-
-      if (normalized != null) {
-        return normalized;
-      }
-    }
-
-    return null;
-  };
+  const pickDimension = (candidates) =>
+    candidates.reduce(
+      (selected, candidate) => selected ?? toFiniteDimension(candidate),
+      null,
+    );
 
   const width = pickDimension([
     config?.width,

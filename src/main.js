@@ -16,17 +16,9 @@ function resolveHeadlessCanvasSize(config = {}) {
   const cols = toFinite(config?.cols);
   const defaultWidth = (cols ?? 120) * cellSize;
   const defaultHeight = (rows ?? 120) * cellSize;
-  const pickFirstFinite = (candidates, fallback) => {
-    for (const candidate of candidates) {
-      const normalized = toFinite(candidate);
-
-      if (normalized != null) {
-        return normalized;
-      }
-    }
-
-    return fallback;
-  };
+  const pickFirstFinite = (candidates, fallback) =>
+    candidates.reduce((selected, candidate) => selected ?? toFinite(candidate), null) ??
+    fallback;
 
   return {
     width: pickFirstFinite(
