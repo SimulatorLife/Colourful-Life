@@ -143,9 +143,7 @@ export function toFiniteNumber(value, { fallback = null } = {}) {
  * @returns {number|null} Finite number or `null` when conversion fails.
  */
 export function toFiniteOrNull(value) {
-  const numeric = toFiniteNumber(value, { fallback: null });
-
-  return numeric == null ? null : numeric;
+  return toFiniteNumber(value, { fallback: null });
 }
 
 /**
