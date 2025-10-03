@@ -1,5 +1,5 @@
 import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
-import { reportError, sanitizeNumber } from "../utils.js";
+import { sanitizeNumber, invokeWithErrorBoundary } from "../utils.js";
 
 /**
  * Creates a lightweight {@link UIManager}-compatible adapter for environments
@@ -99,19 +99,11 @@ export function createHeadlessUiManager(options = {}) {
     return true;
   };
   const notify = (key, value) => {
-    if (typeof onSettingChange !== "function") {
-      return;
-    }
-
-    try {
-      onSettingChange(key, value);
-    } catch (error) {
-      reportError(
-        `Headless UI onSettingChange handler threw while processing "${key}"; continuing without interruption.`,
-        error,
-        { once: true },
-      );
-    }
+    invokeWithErrorBoundary(onSettingChange, [key, value], {
+      message: (settingKey) =>
+        `Headless UI onSettingChange handler threw while processing "${settingKey}"; continuing without interruption.`,
+      once: true,
+    });
   };
 
   return {

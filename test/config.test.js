@@ -163,3 +163,37 @@ test("resolveMutationChance clamps invalid overrides", async () => {
 
   assert.is(resolveMutationChance({ COLOURFUL_LIFE_MUTATION_CHANCE: "NaN" }), 0.15);
 });
+
+test("DECAY_RETURN_FRACTION exposes the environment-aware default", async () => {
+  const { DECAY_RETURN_FRACTION } = await configModulePromise;
+
+  assert.is(DECAY_RETURN_FRACTION, 0.9);
+});
+
+test("resolveDecayReturnFraction respects overrides", async () => {
+  const { resolveDecayReturnFraction } = await configModulePromise;
+
+  assert.is(
+    resolveDecayReturnFraction({ COLOURFUL_LIFE_DECAY_RETURN_FRACTION: "0.6" }),
+    0.6,
+  );
+});
+
+test("resolveDecayReturnFraction clamps invalid overrides", async () => {
+  const { resolveDecayReturnFraction } = await configModulePromise;
+
+  assert.is(
+    resolveDecayReturnFraction({ COLOURFUL_LIFE_DECAY_RETURN_FRACTION: "-0.3" }),
+    0,
+  );
+
+  assert.is(
+    resolveDecayReturnFraction({ COLOURFUL_LIFE_DECAY_RETURN_FRACTION: "1.4" }),
+    1,
+  );
+
+  assert.is(
+    resolveDecayReturnFraction({ COLOURFUL_LIFE_DECAY_RETURN_FRACTION: "NaN" }),
+    0.9,
+  );
+});

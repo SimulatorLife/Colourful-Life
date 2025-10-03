@@ -8,7 +8,13 @@ import {
   createSelectRow,
   createSliderRow,
 } from "./controlBuilders.js";
-import { clamp, clamp01, reportError, warnOnce, toPlainObject } from "../utils.js";
+import {
+  clamp,
+  clamp01,
+  warnOnce,
+  toPlainObject,
+  invokeWithErrorBoundary,
+} from "../utils.js";
 
 const AUTO_PAUSE_DESCRIPTION =
   "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
@@ -753,10 +759,11 @@ export default class UIManager {
     return `${head}, and ${tail}`;
   }
 
-  #applyWorldGeometry(values = {}) {
+  #applyWorldGeometry(values = {}, options = {}) {
     if (typeof this.setWorldGeometry !== "function") return null;
 
-    const request = this.#normalizeGeometryValues(values);
+    const normalized = this.#normalizeGeometryValues(values);
+    const request = { ...normalized, ...options };
     let result = null;
 
     try {
@@ -766,7 +773,7 @@ export default class UIManager {
       result = request;
     }
 
-    const applied = this.#normalizeGeometryValues(result, request);
+    const applied = this.#normalizeGeometryValues(result, normalized);
 
     this.#updateGeometryInputs(applied);
     this.#scheduleUpdate();
@@ -1066,19 +1073,11 @@ export default class UIManager {
   #notifySettingChange(key, value) {
     const callback = this.simulationCallbacks?.onSettingChange;
 
-    if (typeof callback !== "function") {
-      return;
-    }
-
-    try {
-      callback(key, value);
-    } catch (error) {
-      reportError(
-        `UI onSettingChange callback threw while processing "${key}"; continuing without interruption.`,
-        error,
-        { once: true },
-      );
-    }
+    invokeWithErrorBoundary(callback, [key, value], {
+      message: (settingKey) =>
+        `UI onSettingChange callback threw while processing "${settingKey}"; continuing without interruption.`,
+      once: true,
+    });
   }
 
   #updateSetting(key, value) {
@@ -2258,12 +2257,17 @@ export default class UIManager {
     applyButton.type = "button";
     applyButton.textContent = "Apply Geometry";
     applyButton.title = "Resize the grid using the values above.";
-    applyButton.addEventListener("click", () => {
-      this.#applyWorldGeometry({
-        cellSize: Number.parseFloat(cellSizeInput.value),
-        rows: Number.parseFloat(rowsInput.value),
-        cols: Number.parseFloat(colsInput.value),
-      });
+    applyButton.addEventListener("click", (event) => {
+      this.#applyWorldGeometry(
+        {
+          cellSize: Number.parseFloat(cellSizeInput.value),
+          rows: Number.parseFloat(rowsInput.value),
+          cols: Number.parseFloat(colsInput.value),
+        },
+        {
+          reseed: Boolean(event?.shiftKey),
+        },
+      );
     });
     buttonRow.appendChild(applyButton);
     applyButton.disabled = true;
@@ -3504,6 +3508,7 @@ export default class UIManager {
     this.#hideMetricsPlaceholder();
     this.metricsBox.innerHTML = "";
     const s = snapshot || {};
+    const rendering = s.rendering || null;
     const totals = (stats && stats.totals) || {};
     const lastTotals = this._lastInteractionTotals || { fights: 0, cooperations: 0 };
     const fightDelta = Math.max(0, (totals.fights ?? 0) - (lastTotals.fights ?? 0));
@@ -3544,6 +3549,10 @@ export default class UIManager {
     const countOrDash = (value) => finiteOrDash(value);
     const fixedOrDash = (value, digits) =>
       formatIfFinite(value, (v) => v.toFixed(digits), "—");
+    const msOrDash = (value) => finiteOrDash(value, (v) => `${v.toFixed(2)} ms`);
+    const fpsOrDash = (value) => finiteOrDash(value, (v) => `${v.toFixed(1)} fps`);
+    const integerOrDash = (value) =>
+      finiteOrDash(value, (v) => Math.round(v).toLocaleString());
     const coverageOrNull = (ratio) =>
       formatIfFinite(
         ratio,
@@ -3576,6 +3585,74 @@ export default class UIManager {
       fights: totals.fights ?? lastTotals.fights ?? 0,
       cooperations: totals.cooperations ?? lastTotals.cooperations ?? 0,
     };
+
+    if (rendering) {
+      const renderingSection = createSection("Rendering Health");
+      const rendererLabel = [
+        typeof rendering.mode === "string" ? rendering.mode : null,
+        typeof rendering.refreshType === "string" && rendering.refreshType !== "none"
+          ? rendering.refreshType
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      appendMetricRow(renderingSection, {
+        label: "Renderer",
+        value: rendererLabel || "—",
+        title: "Active renderer mode and most recent refresh strategy.",
+      });
+      appendMetricRow(renderingSection, {
+        label: "Estimated FPS",
+        value: fpsOrDash(rendering.fps),
+        title: "Frames per second derived from the smoothed frame time.",
+      });
+      appendMetricRow(renderingSection, {
+        label: "Frame (last)",
+        value: msOrDash(rendering.lastFrameMs),
+        title: "Time required to render the most recent frame.",
+      });
+      appendMetricRow(renderingSection, {
+        label: "Frame (avg)",
+        value: msOrDash(rendering.avgFrameMs),
+        title: "Smoothed average frame duration over recent samples.",
+      });
+      appendMetricRow(renderingSection, {
+        label: "Cell Paint (last)",
+        value: msOrDash(rendering.lastCellLoopMs),
+        title: "Time spent updating cell pixels in the most recent frame.",
+      });
+      appendMetricRow(renderingSection, {
+        label: "Cell Paint (avg)",
+        value: msOrDash(rendering.avgCellLoopMs),
+        title: "Average time spent updating cells across recent frames.",
+      });
+      appendMetricRow(renderingSection, {
+        label: "Obstacle Paint (last)",
+        value: msOrDash(rendering.lastObstacleLoopMs),
+        title: "Time spent redrawing obstacles in the most recent frame.",
+      });
+      appendMetricRow(renderingSection, {
+        label: "Obstacle Paint (avg)",
+        value: msOrDash(rendering.avgObstacleLoopMs),
+        title: "Average time spent redrawing obstacles.",
+      });
+      appendMetricRow(renderingSection, {
+        label: "Tiles Processed",
+        value: integerOrDash(rendering.lastProcessedTiles),
+        title: "Tiles touched by the renderer during the last frame.",
+      });
+      appendMetricRow(renderingSection, {
+        label: "Dirty Tiles",
+        value: integerOrDash(rendering.lastDirtyTileCount),
+        title: "Dirty tiles that triggered updates during the last frame.",
+      });
+      appendMetricRow(renderingSection, {
+        label: "Visible Cells",
+        value: integerOrDash(rendering.lastPaintedCells),
+        title: "Active cells present in the grid during the last frame.",
+      });
+    }
 
     const populationSection = createSection("Population Snapshot");
 

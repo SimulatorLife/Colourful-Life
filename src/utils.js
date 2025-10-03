@@ -308,3 +308,53 @@ export function warnOnce(message, error) {
 
   logWithOptionalError("warn", message, error);
 }
+
+/**
+ * Invokes a callback while shielding callers from exceptions. When the
+ * callback throws, the error is surfaced via {@link reportError} with an
+ * optional custom message. The helper keeps the common "try/catch +
+ * reportError" pattern DRY across UI and simulation modules.
+ *
+ * @template T
+ * @param {((...args: any[]) => T)|null|undefined} callback - Optional callback.
+ * @param {any[]} [args=[]] - Arguments forwarded to the callback.
+ * @param {{
+ *   message?: string | ((...args: any[]) => string),
+ *   once?: boolean,
+ *   thisArg?: any,
+ * }} [options] - Error reporting behaviour.
+ * @returns {T|undefined} Result of the callback when invoked successfully.
+ */
+export function invokeWithErrorBoundary(callback, args = [], options = {}) {
+  if (typeof callback !== "function") return undefined;
+
+  const { message, once = false, thisArg } = options ?? {};
+
+  try {
+    return callback.apply(thisArg, args);
+  } catch (error) {
+    let resolvedMessage = message;
+
+    if (typeof message === "function") {
+      try {
+        resolvedMessage = message(...args);
+      } catch (messageError) {
+        resolvedMessage = null;
+        logWithOptionalError(
+          "warn",
+          "Error message generator threw; using fallback.",
+          messageError,
+        );
+      }
+    }
+
+    const fallbackMessage =
+      typeof resolvedMessage === "string" && resolvedMessage.length > 0
+        ? resolvedMessage
+        : "Callback threw; continuing without interruption.";
+
+    reportError(fallbackMessage, error, { once });
+  }
+
+  return undefined;
+}

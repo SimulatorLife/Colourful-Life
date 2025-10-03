@@ -53,31 +53,96 @@ jobs:
         with:
           script: |
             const n = Number('${{ steps.prnum.outputs.number }}');
+            const timeoutMs = 15 * 60 * 1000; // allow up to 15 minutes for checks to settle
+            const pollDelayMs = 10000;
+            const deadline = Date.now() + timeoutMs;
 
-            // Get fresh PR snapshot (mergeability can be null briefly)
+            const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
             let pr;
-            for (let i = 0; i < 10; i++) {
+
+            while (true) {
               const { data } = await github.rest.pulls.get({
-                owner: context.repo.owner, repo: context.repo.repo, pull_number: n
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: n
               });
               pr = data;
-              if (pr.mergeable !== null) break;
-              await new Promise(r => setTimeout(r, 1000));
+
+              // GitHub may report mergeable=null until background mergeability checks finish.
+              if (pr.mergeable === null) {
+                if (Date.now() >= deadline) {
+                  core.notice(`Bail: mergeability never resolved for PR #${n}.`);
+                  core.setOutput('bail', 'true');
+                  return;
+                }
+                await sleep(5000);
+                continue;
+              }
+
+              const state = (pr.mergeable_state || 'unknown').toLowerCase();
+
+              if (!pr.mergeable && state === 'blocked') {
+                const sha = pr.head.sha;
+
+                const combined = await github.rest.repos.getCombinedStatusForRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: sha
+                });
+
+                const pendingStatuses = combined.statuses
+                  .filter(status => status.state === 'pending')
+                  .map(status => status.context);
+
+                const failingStatuses = combined.statuses
+                  .filter(status => status.state === 'failure' || status.state === 'error')
+                  .map(status => status.context);
+
+                const { data: checkRunsData } = await github.rest.checks.listForRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: sha,
+                  per_page: 100
+                });
+
+                const pendingChecks = checkRunsData.check_runs
+                  .filter(run => run.status !== 'completed')
+                  .map(run => run.name);
+
+                const failingChecks = checkRunsData.check_runs
+                  .filter(run => run.status === 'completed' && ['failure', 'cancelled', 'timed_out', 'action_required', 'stale'].includes((run.conclusion || '').toLowerCase()))
+                  .map(run => run.name);
+
+                if (failingStatuses.length || failingChecks.length) {
+                  core.notice(`Bail: failing checks detected (${[...failingStatuses, ...failingChecks].join(', ') || 'unknown'}).`);
+                  core.setOutput('bail', 'true');
+                  return;
+                }
+
+                if ((pendingStatuses.length || pendingChecks.length) && Date.now() < deadline) {
+                  core.info(`Pending checks (${[...pendingStatuses, ...pendingChecks].join(', ')}) for PR #${n}; waiting to retry.`);
+                  await sleep(pollDelayMs);
+                  continue;
+                }
+              }
+
+              break;
             }
 
             // Bail early if nothing to merge yet (seed PR)
             const hasRealChanges = (pr.changed_files || 0) > 0;
             if (!hasRealChanges) {
               core.notice(`Bail: no real changes yet (commits=${pr.commits}, files=${pr.changed_files}).`);
-              core.setOutput('bail','true');
+              core.setOutput('bail', 'true');
               return;
             }
 
             const mergeable = !!pr.mergeable;
-            const state = (pr.mergeable_state || 'unknown').toLowerCase(); // clean, unstable, dirty, blocked, behind, has_hooks
+            const state = (pr.mergeable_state || 'unknown').toLowerCase();
             const draft = !!pr.draft;
 
-            core.setOutput('bail','false');
+            core.setOutput('bail', 'false');
             core.setOutput('mergeable', mergeable ? 'true' : 'false');
             core.setOutput('state', state);
             core.setOutput('draft', draft ? 'true' : 'false');
