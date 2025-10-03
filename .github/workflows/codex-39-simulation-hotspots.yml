@@ -1,0 +1,27 @@
+name: Codex 39 – Simulation Hot Path Profiling
+on:
+  schedule:
+    - cron: "05 */4 * * *" # every four hours at five minutes past the hour UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  run:
+    uses: ./.github/workflows/_codex-open-pr-and-ping.yml
+    secrets: inherit
+    with:
+      pr_title: "Codex: Simulation Hot Path Profiling"
+      pr_body: "Seed PR for Codex to capture a profiling trace of the simulation tick and optimize a clearly dominant CPU hotspot without violating the Simulation Laws."
+      prompt: >
+        Use CPU profiling or instrumentation to analyze the simulation flow (grid manager
+        sweeps, entity updates, energy accounting) and surface the tightest hot path that
+        stretches tick time. Optimize that exact hotspot while respecting every
+        Simulation Law: avoid changing behavior for occupancy limits, reproduction,
+        energy costs, or genome-driven actions. Focus on algorithmic and structural
+        improvements—shorter loops, reduced branching, hoisted invariants, reuse of
+        buffers—rather than feature tweaks. Capture and include before/after timing in
+        the PR body so reviewers can verify the win.
