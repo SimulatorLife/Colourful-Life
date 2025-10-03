@@ -127,7 +127,11 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   const initialEnergy = 5;
   const maxTileEnergy = 12;
   const cell = new Cell(2, 3, dna, initialEnergy);
-  const context = { localDensity: 0.3, densityEffectMultiplier: 2, maxTileEnergy: 12 };
+  const context = {
+    localDensity: 0.3,
+    densityEffectMultiplier: 2,
+    maxTileEnergy,
+  };
   const effDensity = clamp(
     context.localDensity * context.densityEffectMultiplier,
     0,
@@ -138,7 +142,7 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   const metabolism = cell.metabolism;
   const crowdPenalty = 1 + effDensity * (cell.metabolicCrowdingTax ?? 0);
   const baseLoss = dna.energyLossBase();
-  const energyFraction = clamp(initialEnergy / context.maxTileEnergy, 0, 1);
+  const energyFraction = clamp(initialEnergy / maxTileEnergy, 0, 1);
   const scarcityRelief = 0.55 + energyFraction * 0.45;
   const energyLoss =
     baseLoss *
@@ -152,7 +156,7 @@ test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
 
   const starving = cell.manageEnergy(cell.row, cell.col, context);
   const expectedEnergy = initialEnergy - (energyLoss + cognitiveLoss);
-  const starvationThreshold = dna.starvationThresholdFrac() * context.maxTileEnergy;
+  const starvationThreshold = dna.starvationThresholdFrac() * maxTileEnergy;
 
   approxEqual(cell.energy, expectedEnergy, 1e-12, "energy after management");
   assert.ok(cell.energy < initialEnergy, "energy should decrease");

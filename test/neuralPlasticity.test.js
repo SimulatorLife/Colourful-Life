@@ -1,7 +1,6 @@
 import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
-let Cell;
 let DNA;
 let GENE_LOCI;
 let Brain;
@@ -44,7 +43,6 @@ function setNeuralGene(
 }
 
 test.before(async () => {
-  ({ default: Cell } = await import("../src/cell.js"));
   ({ DNA, GENE_LOCI } = await import("../src/genome.js"));
   ({ clamp } = await import("../src/utils.js"));
   ({
