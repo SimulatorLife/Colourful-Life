@@ -121,6 +121,10 @@ export default class Cell {
       typeof this.dna.neuralReinforcementProfile === "function"
         ? this.dna.neuralReinforcementProfile()
         : null;
+    this.eventAnticipationProfile =
+      typeof this.dna.eventAnticipationProfile === "function"
+        ? this.dna.eventAnticipationProfile()
+        : null;
     this.opportunityProfile = this.neuralReinforcementProfile?.opportunity || null;
     this.matePreferenceBias =
       typeof this.dna.mateSimilarityBias === "function"
@@ -2086,6 +2090,184 @@ export default class Cell {
     const finalSignal = lerp(rewardAdjusted, energyTarget, synergyWeight);
 
     this._opportunitySignal = clamp(finalSignal, -1, 1);
+  }
+
+  _reinforceEventAnticipation({
+    previousPressure = 0,
+    nextPressure = 0,
+    pressurePeak = 0,
+    energyDrain = 0,
+    maxTileEnergy = MAX_TILE_ENERGY,
+  } = {}) {
+    const brain = this.brain;
+    const hasImprint = typeof brain?.applyExperienceImprint === "function";
+    const hasFeedback = typeof brain?.applySensorFeedback === "function";
+
+    if (!hasImprint && !hasFeedback) {
+      return;
+    }
+
+    const profile = this.eventAnticipationProfile || {};
+    const assimilation = clamp(
+      Number.isFinite(profile.assimilation) ? profile.assimilation : 0.35,
+      0.01,
+      1,
+    );
+    const reliefAssimilation = clamp(
+      Number.isFinite(profile.relief) ? profile.relief : assimilation * 0.6,
+      0.01,
+      1,
+    );
+    const gainInfluence = clamp(
+      Number.isFinite(profile.gainInfluence) ? profile.gainInfluence : 0.25,
+      0,
+      1,
+    );
+    const volatility = clamp(
+      Number.isFinite(profile.volatility) ? profile.volatility : 0.4,
+      0,
+      1.5,
+    );
+    const baseline = clamp(
+      Number.isFinite(profile.baseline) ? profile.baseline : 0,
+      0,
+      1,
+    );
+    const rewardScale = clamp(
+      Number.isFinite(profile.rewardScale) ? profile.rewardScale : 0.5,
+      0,
+      2,
+    );
+    const fatigueWeight = clamp(
+      Number.isFinite(profile.fatigueWeight) ? profile.fatigueWeight : 0.3,
+      0,
+      1.5,
+    );
+
+    const delta = clamp(nextPressure - previousPressure, -1, 1);
+    const intensity = clamp(
+      delta >= 0
+        ? Math.max(delta, Math.max(0, pressurePeak - previousPressure))
+        : Math.abs(delta),
+      0,
+      1.5,
+    );
+    const assimilationFactor = delta >= 0 ? assimilation : reliefAssimilation;
+
+    if (hasImprint && assimilationFactor > 0) {
+      const adjustments = [];
+      const unitTarget = clamp(
+        delta >= 0
+          ? Math.min(1, nextPressure + intensity * volatility * 0.4)
+          : Math.max(0, nextPressure - intensity * volatility * 0.3),
+        0,
+        1,
+      );
+      const directionalGain = delta >= 0 ? volatility : -volatility * 0.6;
+
+      adjustments.push({
+        sensor: "eventPressure",
+        target: clamp(unitTarget * 2 - 1, -1, 1),
+        assimilation: assimilationFactor,
+        gainInfluence,
+        gainShift: directionalGain * intensity * 0.35,
+      });
+
+      if (delta < 0 && baseline > 0) {
+        adjustments.push({
+          sensor: "eventPressure",
+          target: clamp(baseline * 2 - 1, -1, 1),
+          assimilation: Math.min(1, reliefAssimilation * 0.5),
+          gainInfluence: gainInfluence * 0.5,
+          gainBlend: 0.35,
+        });
+      }
+
+      const capacity = Math.max(
+        1e-4,
+        Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+          ? maxTileEnergy
+          : MAX_TILE_ENERGY || 1,
+      );
+      const drain = Math.max(0, Number.isFinite(energyDrain) ? energyDrain : 0);
+      const normalizedDrain = clamp(drain / capacity, 0, 2);
+
+      if (normalizedDrain > 0) {
+        const trendShift = clamp(-normalizedDrain * (0.4 + volatility * 0.2), -1, 0);
+
+        adjustments.push({
+          sensor: "resourceTrend",
+          target: trendShift,
+          assimilation: Math.min(1, assimilationFactor * (0.5 + normalizedDrain * 0.4)),
+          gainInfluence: Math.min(1, gainInfluence + normalizedDrain * 0.25),
+          gainShift: -normalizedDrain * volatility * 0.2,
+        });
+      }
+
+      brain.applyExperienceImprint({
+        adjustments,
+        assimilation: assimilationFactor,
+        gainInfluence,
+      });
+    }
+
+    if (hasFeedback) {
+      const capacity = Math.max(
+        1e-4,
+        Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+          ? maxTileEnergy
+          : MAX_TILE_ENERGY || 1,
+      );
+      const drain = Math.max(0, Number.isFinite(energyDrain) ? energyDrain : 0);
+      const normalizedDrain = clamp(drain / capacity, 0, 2);
+      const sensorVector = new Float32Array(Brain.SENSOR_COUNT);
+
+      sensorVector[0] = 1;
+
+      const setSensor = (key, value) => {
+        const index = Brain.sensorIndex(key);
+
+        if (Number.isFinite(index) && index >= 0 && index < sensorVector.length) {
+          sensorVector[index] = clamp(value ?? 0, -1, 1);
+        }
+      };
+
+      setSensor("eventPressure", clamp(nextPressure, 0, 1));
+      setSensor("resourceTrend", clamp(this._resourceSignal ?? 0, -1, 1));
+
+      const baselineFatigue = clamp(
+        Number.isFinite(this.neuralFatigueProfile?.baseline)
+          ? this.neuralFatigueProfile.baseline
+          : 0.35,
+        0,
+        1,
+      );
+      const fatigue = clamp(
+        Number.isFinite(this._neuralFatigue) ? this._neuralFatigue : baselineFatigue,
+        0,
+        1,
+      );
+
+      setSensor("neuralFatigue", fatigue);
+
+      const reward = clamp(
+        (delta >= 0 ? -1 : 1) * intensity * rewardScale - normalizedDrain * rewardScale,
+        -2,
+        2,
+      );
+      const fatigueDelta = -normalizedDrain * fatigueWeight;
+
+      brain.applySensorFeedback({
+        sensorVector,
+        activationCount: Number.isFinite(brain.lastActivationCount)
+          ? brain.lastActivationCount
+          : 0,
+        energyCost: drain,
+        fatigueDelta,
+        rewardSignal: reward,
+        maxTileEnergy,
+      });
+    }
   }
 
   resolveTrait(traitName) {
@@ -4784,6 +4966,8 @@ export default class Cell {
     const strengthScale = clamp(1 - baseRecovery * 0.35, 0.25, 1);
     let pressurePeak = 0;
 
+    let totalDrain = 0;
+
     for (const { effect, strength } of appliedEvents) {
       if (!effect?.cell) continue;
 
@@ -4800,7 +4984,10 @@ export default class Cell {
       );
       const mitigatedImpact = energyLoss * cellStrength * (1 - resistance);
 
-      this.energy -= mitigatedImpact * (1 - mitigation);
+      const netDrain = mitigatedImpact * (1 - mitigation);
+
+      this.energy -= netDrain;
+      totalDrain += Math.max(0, netDrain);
 
       const pressureContribution = clamp(
         cellStrength * retention * (1 - mitigation * 0.5) * (1 - resistance * 0.3),
@@ -4816,6 +5003,14 @@ export default class Cell {
 
     this.lastEventPressure = Math.max(dampenedPrevious, pressurePeak);
     this.energy = Math.max(0, Math.min(maxTileEnergy, this.energy));
+
+    this._reinforceEventAnticipation({
+      previousPressure,
+      nextPressure: this.lastEventPressure,
+      pressurePeak,
+      energyDrain: totalDrain,
+      maxTileEnergy,
+    });
   }
 
   createFightIntent({
