@@ -10,26 +10,24 @@ extending tests, or polishing docs.
 
 1. Install Node.js 18 or newer.
 2. Clone the repository and install dependencies with `npm ci`.
+   Developers iterating outside CI can fall back to `npm install` when they need
+   incremental dependency updates without replacing `node_modules/` entirely.
 3. Run `npm run start` to launch the Parcel development server at
    `http://localhost:1234`.
-4. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/`
+4. If Parcel becomes stuck, run `npm run clean` to remove `dist/`
    and `.parcel-cache/` before restarting the dev server.
 
-> The in-app "Pause When Hidden" toggle now starts disabled so long-running
-> simulations can keep evolving without babysitting the browser tab. Re-enable
-> it beneath the playback controls at the top of the Simulation Controls panel
-> if you prefer the previous focus-dependent behaviour.
+Tips for everyday usage:
 
-> Adjust the "Dashboard Refresh Interval" slider inside the Leaderboard panel to
-> tune how often both the leaderboard and Evolution Insights dashboard request
-> fresh data. The cadence control moved from Evolution Insights so observers can
-> tweak scoreboard updates without hunting through the metrics panel.
-
-> Tip: Run `npm run prepare` after cloning or pulling changes that touch the
-> `.husky/` directory to reinstall the Git hooks managed by Husky.
-
-> Tip: The Parcel server performs hot module replacement. If you need a clean
-> build, use `npm run build` to emit a production bundle in `dist/`.
+- The **Pause When Hidden** toggle in Simulation Controls defaults to disabled
+  so unattended simulations keep progressing; enable it when you want tabs to
+  pause while unfocused.
+- Use the Leaderboard panel's **Dashboard Refresh Interval** slider to change
+  how often the leaderboard and Evolution Insights dashboard request new data.
+- Run `npm run prepare` after cloning or pulling changes that touch the
+  `.husky/` directory to reinstall the Git hooks managed by Husky.
+- Parcel performs hot module replacement. Use `npm run build` when you need a
+  clean production bundle in `dist/`.
 
 ## Coding standards
 
@@ -59,7 +57,7 @@ extending tests, or polishing docs.
 - **Format** — Run `npm run format`, `npm run format:check`, or `npm run format:workflows` to apply Prettier across source, documentation, configuration files, and GitHub workflows.
 - **Lint** — Use `npm run lint` / `npm run lint:fix` to enforce the ESLint ruleset and apply safe autofixes.
 - **Tests** — Execute `npm test` to run the Node.js test suites. Focused suites live beside their target modules under `test/`.
-- **Profiling** — Run `node scripts/profile-energy.mjs` with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations.
+- **Profiling** — Run `npm run benchmark` (or `node scripts/profile-energy.mjs`) with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations.
 - **Cache reset** — Use `npm run clean` to clear `dist/` and `.parcel-cache/` when Parcel hot reloads become inconsistent.
 - **Hooks** — Run `npm run prepare` to reinstall Husky hooks after cloning or whenever `.husky/` contents change.
 

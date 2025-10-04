@@ -16,21 +16,33 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 Colourful Life targets **Node.js 18 or newer**. After cloning the repository:
 
-```bash
-npm ci
-npm run start            # Parcel dev server with hot reloading
+1. Install dependencies with `npm ci`. When you are iterating outside CI and
+   prefer incremental installs, `npm install` is a safe alternative that still
+   honours `package-lock.json`.
+2. Launch the development server:
 
-# Optional helpers
-npm run build            # Production bundle written to dist/
-npm run clean            # Remove dist/ and the Parcel cache via scripts/clean-parcel.mjs
-npm run format           # Format code with Prettier
-npm run format:check     # Validate formatting without writing
-npm run format:workflows # Format GitHub workflow files (ignores .gitignore rules)
-npm run lint             # ESLint across JS modules and inline HTML
-npm run lint:fix         # ESLint with autofix enabled
-npm test                 # Node.js test suites
-npm run prepare          # Reinstall Husky hooks when the .husky folder changes
-```
+   ```bash
+   npm run start
+   ```
+
+   Parcel serves the app at `http://localhost:1234` with hot reloading enabled.
+
+3. When you are ready to validate a change, run `npm test` for the Node.js test
+   suites or `npm run benchmark` to execute the performance profiler harness.
+
+Common follow-up commands:
+
+- `npm run build` — Produce an optimized production bundle in `dist/`.
+- `npm run clean` — Remove `dist/` and the Parcel cache via
+  `scripts/clean-parcel.mjs`.
+- `npm run format` / `npm run format:check` / `npm run format:workflows` — Apply
+  or validate Prettier formatting. The workflows variant ignores `.gitignore`
+  so CI definitions stay tidy.
+- `npm run lint` / `npm run lint:fix` — Run ESLint across JavaScript modules and
+  inline HTML.
+- `npm run prepare` — Reinstall Husky hooks when the `.husky/` folder changes.
+- `npm run deploy:public` — Publish the compiled build using the
+  [`scripts/publish-public-build.sh`](docs/public-hosting.md) helper.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
