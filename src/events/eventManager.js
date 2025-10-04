@@ -1,5 +1,11 @@
 import { EVENT_TYPES } from "./eventEffects.js";
-import { clamp, randomRange, sanitizeNumber } from "../utils.js";
+import {
+  clamp,
+  randomRange,
+  sanitizeNumber,
+  warnOnce,
+  invokeWithErrorBoundary,
+} from "../utils.js";
 import { defaultIsEventAffecting } from "./eventContext.js";
 
 export { defaultIsEventAffecting as isEventAffecting };
@@ -17,6 +23,12 @@ function normalizeEventTypes(candidate) {
 
   return Array.from(new Set(filtered));
 }
+
+const WARNINGS = Object.freeze({
+  resolveEventColor:
+    "Custom event color resolver threw; falling back to default palette.",
+  pickEventType: "Custom event type picker threw; falling back to default selector.",
+});
 
 const DEFAULT_RANDOM_EVENT_CONFIG = Object.freeze({
   durationRange: Object.freeze({ min: 300, max: 900 }),
@@ -193,7 +205,11 @@ export default class EventManager {
 
     if (typeof resolveEventColor === "function") {
       this.eventColorResolver = (eventType) => {
-        const resolved = resolveEventColor(eventType);
+        const resolved = invokeWithErrorBoundary(resolveEventColor, [eventType], {
+          message: WARNINGS.resolveEventColor,
+          reporter: warnOnce,
+          once: true,
+        });
 
         return typeof resolved === "string" && resolved.length > 0
           ? resolved
@@ -225,11 +241,21 @@ export default class EventManager {
 
     if (typeof pickEventType === "function") {
       this.pickEventType = () => {
-        const candidate = pickEventType({
-          rng: this.rng,
-          eventTypes: [...fallbackPool],
-          defaultPick: defaultPicker,
-        });
+        const candidate = invokeWithErrorBoundary(
+          pickEventType,
+          [
+            {
+              rng: this.rng,
+              eventTypes: [...fallbackPool],
+              defaultPick: defaultPicker,
+            },
+          ],
+          {
+            message: WARNINGS.pickEventType,
+            reporter: warnOnce,
+            once: true,
+          },
+        );
 
         return typeof candidate === "string" && candidate ? candidate : defaultPicker();
       };
