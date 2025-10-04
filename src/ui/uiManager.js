@@ -169,7 +169,7 @@ export default class UIManager {
     this.traitSparkDescriptors = [];
     this.playbackSpeedSlider = null;
     this.speedPresetButtons = [];
-    this.leaderboardIntervalSlider = null;
+    this.dashboardCadenceSlider = null;
     this.leaderboardCadenceConfig = null;
     this.pauseOverlay = null;
     this.pauseOverlayTitle = null;
@@ -2959,6 +2959,49 @@ export default class UIManager {
       "Track population health, energy, and behavioral trends as the simulation unfolds.";
     body.appendChild(intro);
 
+    const cadenceSection = document.createElement("section");
+
+    cadenceSection.className = "metrics-section";
+    cadenceSection.setAttribute("aria-label", "Dashboard refresh cadence controls");
+    const cadenceHeading = document.createElement("h4");
+
+    cadenceHeading.className = "metrics-section-title";
+    cadenceHeading.textContent = "Update Frequency";
+    cadenceSection.appendChild(cadenceHeading);
+
+    const cadenceBody = document.createElement("div");
+
+    cadenceBody.className = "metrics-section-body";
+    cadenceSection.appendChild(cadenceBody);
+    body.appendChild(cadenceSection);
+
+    const cadenceGrid = createControlGrid(cadenceBody, "control-grid--compact");
+    const cadenceConfig = this.leaderboardCadenceConfig;
+
+    this.dashboardCadenceSlider = null;
+
+    if (cadenceConfig) {
+      const slider = createSliderRow(cadenceGrid, {
+        label: cadenceConfig.label,
+        min: cadenceConfig.min,
+        max: cadenceConfig.max,
+        step: cadenceConfig.step,
+        value: cadenceConfig.getValue(),
+        title: cadenceConfig.title,
+        format: cadenceConfig.format,
+        onInput: cadenceConfig.setValue,
+      });
+
+      this.dashboardCadenceSlider = slider;
+    }
+
+    const cadenceHint = document.createElement("p");
+
+    cadenceHint.className = "control-hint";
+    cadenceHint.textContent =
+      "Controls how often Evolution Insights and the leaderboard request fresh data.";
+    cadenceBody.appendChild(cadenceHint);
+
     this.metricsBox = document.createElement("div");
     this.metricsBox.className = "metrics-box";
     this.metricsBox.setAttribute("role", "status");
@@ -4391,32 +4434,12 @@ export default class UIManager {
 
       createSectionHeading(controlsWrapper, "Update Frequency");
 
-      const cadenceGrid = createControlGrid(controlsWrapper, "control-grid--compact");
-      const cadenceConfig = this.leaderboardCadenceConfig;
+      const cadenceNote = document.createElement("p");
 
-      this.leaderboardIntervalSlider = null;
-
-      if (cadenceConfig) {
-        const slider = createSliderRow(cadenceGrid, {
-          label: cadenceConfig.label,
-          min: cadenceConfig.min,
-          max: cadenceConfig.max,
-          step: cadenceConfig.step,
-          value: cadenceConfig.getValue(),
-          title: cadenceConfig.title,
-          format: cadenceConfig.format,
-          onInput: cadenceConfig.setValue,
-        });
-
-        this.leaderboardIntervalSlider = slider;
-      }
-
-      const cadenceHint = document.createElement("p");
-
-      cadenceHint.className = "control-hint";
-      cadenceHint.textContent =
-        "Applies to both Evolution Insights and this leaderboard, refreshing them together.";
-      controlsWrapper.appendChild(cadenceHint);
+      cadenceNote.className = "control-hint";
+      cadenceNote.textContent =
+        "Adjust the refresh cadence from Evolution Insights to update this leaderboard.";
+      controlsWrapper.appendChild(cadenceNote);
 
       const entriesContainer = document.createElement("div");
 
@@ -4427,8 +4450,8 @@ export default class UIManager {
       this.leaderEntriesContainer = entriesContainer;
     }
 
-    if (this.leaderboardIntervalSlider?.updateDisplay) {
-      this.leaderboardIntervalSlider.updateDisplay(this.leaderboardIntervalMs);
+    if (this.dashboardCadenceSlider?.updateDisplay) {
+      this.dashboardCadenceSlider.updateDisplay(this.leaderboardIntervalMs);
     }
 
     const entries = Array.isArray(top) ? top.filter(Boolean) : [];
