@@ -96,3 +96,81 @@ test("Apply Geometry preserves population by default", async () => {
     restore();
   }
 });
+
+test("setGridGeometry mirrors engine dimensions outside UI bounds", async () => {
+  const restore = setupDom();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+    const geometryCalls = [];
+
+    const uiManager = new UIManager(
+      { requestFrame: () => {} },
+      "#app",
+      {
+        setWorldGeometry: (options) => {
+          geometryCalls.push(options);
+
+          return {
+            cellSize: options.cellSize ?? 5,
+            rows: options.rows ?? 60,
+            cols: options.cols ?? 60,
+          };
+        },
+        getCellSize: () => 5,
+        getGridDimensions: () => ({ rows: 60, cols: 60, cellSize: 5 }),
+      },
+      { canvasElement: new MockCanvas(240, 240) },
+    );
+
+    uiManager.setGridGeometry({ rows: 20, cols: 18, cellSize: 3 });
+
+    const controls = uiManager.geometryControls ?? {};
+    const {
+      rowsInput,
+      colsInput,
+      cellSizeInput,
+      applyButton,
+      summaryEl,
+      summaryNoteEl,
+    } = controls;
+
+    assert.ok(uiManager.geometryControls, "geometry controls should be defined");
+
+    assert.ok(rowsInput, "rows input should be present");
+    assert.ok(colsInput, "columns input should be present");
+    assert.ok(cellSizeInput, "cell size input should be present");
+    assert.ok(applyButton, "apply button should exist");
+
+    assert.is(rowsInput.value, "20", "rows input should reflect actual grid rows");
+    assert.is(colsInput.value, "18", "cols input should reflect actual grid cols");
+    assert.is(
+      cellSizeInput.value,
+      "3",
+      "cell size input should reflect actual cell size",
+    );
+    assert.is(uiManager.gridRows, 20, "UI manager should store the raw row count");
+    assert.is(uiManager.gridCols, 18, "UI manager should store the raw column count");
+    assert.is(
+      uiManager.currentCellSize,
+      3,
+      "UI manager should store the raw cell size",
+    );
+    assert.is(applyButton.disabled, true, "syncing geometry should not queue an apply");
+
+    const summaryState = summaryEl?.getAttribute("data-state");
+
+    assert.is(summaryState, "current", "geometry summary should report current state");
+
+    const summaryNote = summaryNoteEl?.textContent ?? "";
+
+    assert.ok(
+      summaryNote.includes("Adjusted to stay within limits"),
+      "summary should describe adjustments when values exceed UI bounds",
+    );
+  } finally {
+    restore();
+  }
+});
+
+test.run();

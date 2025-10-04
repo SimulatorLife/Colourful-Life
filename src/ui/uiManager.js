@@ -533,10 +533,13 @@ export default class UIManager {
       dimensions = { rows, cols, cellSize: fallback.cellSize };
     }
 
-    return this.#normalizeGeometryValues(dimensions, fallback);
+    return this.#normalizeGeometryValues(dimensions, fallback, {
+      clampToBounds: false,
+    });
   }
 
-  #normalizeGeometryValues(candidate = {}, fallback = {}) {
+  #normalizeGeometryValues(candidate = {}, fallback = {}, options = {}) {
+    const { clampToBounds = true } = options ?? {};
     const bounds = GRID_GEOMETRY_BOUNDS;
     const baseCellSize = Number.isFinite(candidate.cellSize)
       ? candidate.cellSize
@@ -560,13 +563,22 @@ export default class UIManager {
           ? this.gridCols
           : 120;
 
-    const cellSize = clamp(
-      Math.round(baseCellSize),
-      bounds.cellSize.min,
-      bounds.cellSize.max,
-    );
-    const rows = clamp(Math.round(baseRows), bounds.rows.min, bounds.rows.max);
-    const cols = clamp(Math.round(baseCols), bounds.cols.min, bounds.cols.max);
+    const roundToPositive = (value) =>
+      Math.max(1, Math.round(Number.isFinite(value) ? value : 0));
+    const applyBounds = (value, bound) => {
+      if (!clampToBounds) {
+        return roundToPositive(value);
+      }
+
+      const min = Number.isFinite(bound?.min) ? bound.min : roundToPositive(value);
+      const max = Number.isFinite(bound?.max) ? bound.max : roundToPositive(value);
+
+      return clamp(roundToPositive(value), min, max);
+    };
+
+    const cellSize = applyBounds(baseCellSize, bounds.cellSize);
+    const rows = applyBounds(baseRows, bounds.rows);
+    const cols = applyBounds(baseCols, bounds.cols);
 
     return { cellSize, rows, cols };
   }
@@ -598,7 +610,7 @@ export default class UIManager {
 
     this.#updateGeometrySummary(
       { cellSize, rows, cols },
-      { raw: { cellSize, rows, cols } },
+      { raw: { cellSize, rows, cols }, source: "sync" },
     );
   }
 
@@ -616,6 +628,7 @@ export default class UIManager {
     const rawValues = options.raw ?? values ?? {};
     const hasEmpty = Boolean(options.hasEmpty);
     const hasInvalid = Boolean(options.hasInvalid);
+    const source = options.source || "user";
     const isIncomplete = hasEmpty || hasInvalid;
     const formatNumber = (value) =>
       Number.isFinite(value) ? value.toLocaleString() : "—";
@@ -642,6 +655,7 @@ export default class UIManager {
     }
 
     const differsFromCurrent =
+      source !== "sync" &&
       !isIncomplete &&
       (normalized.cellSize !== this.currentCellSize ||
         normalized.rows !== this.gridRows ||
@@ -792,7 +806,14 @@ export default class UIManager {
   }
 
   setGridGeometry(values = {}) {
-    const normalized = this.#normalizeGeometryValues(values);
+    const fallback = {
+      cellSize: this.currentCellSize,
+      rows: this.gridRows,
+      cols: this.gridCols,
+    };
+    const normalized = this.#normalizeGeometryValues(values, fallback, {
+      clampToBounds: false,
+    });
 
     this.#updateGeometryInputs(normalized);
   }
