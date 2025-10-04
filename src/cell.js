@@ -1,9 +1,8 @@
 import DNA, { GENE_LOCI } from "./genome.js";
 import Brain, { OUTPUT_GROUPS } from "./brain.js";
 import { randomRange, clamp, lerp, cloneTracePayload, warnOnce } from "./utils.js";
-import { isEventAffecting } from "./events/eventManager.js";
-import { getEventEffect } from "./events/eventEffects.js";
 import { accumulateEventModifiers } from "./energySystem.js";
+import { createEventContext, defaultEventContext } from "./events/eventContext.js";
 import { MAX_TILE_ENERGY, MUTATION_CHANCE_BASELINE } from "./config.js";
 
 const EPSILON = 1e-9;
@@ -74,6 +73,34 @@ function sampleFromDistribution(probabilities = [], labels = [], rng = Math.rand
   }
 
   return labels[labels.length - 1] ?? probabilities.length - 1;
+}
+
+function resolveEventContext(contextCandidate) {
+  if (
+    contextCandidate &&
+    typeof contextCandidate.isEventAffecting === "function" &&
+    typeof contextCandidate.getEventEffect === "function"
+  ) {
+    return contextCandidate;
+  }
+
+  if (contextCandidate && contextCandidate !== defaultEventContext) {
+    return createEventContext(contextCandidate);
+  }
+
+  return defaultEventContext;
+}
+
+function resolveEffectCache(effectCacheCandidate) {
+  if (
+    effectCacheCandidate &&
+    typeof effectCacheCandidate.get === "function" &&
+    typeof effectCacheCandidate.set === "function"
+  ) {
+    return effectCacheCandidate;
+  }
+
+  return undefined;
 }
 
 export default class Cell {
@@ -4752,20 +4779,24 @@ export default class Cell {
     currentEvent,
     eventStrengthMultiplier = 1,
     maxTileEnergy = 5,
+    options = {},
   ) {
     const events = Array.isArray(currentEvent)
       ? currentEvent
       : currentEvent
         ? [currentEvent]
         : [];
+    const eventContext = resolveEventContext(options?.eventContext);
+    const effectCache = resolveEffectCache(options?.effectCache);
 
     const { appliedEvents } = accumulateEventModifiers({
       events,
       row,
       col,
       eventStrengthMultiplier,
-      isEventAffecting,
-      getEventEffect,
+      isEventAffecting: eventContext.isEventAffecting,
+      getEventEffect: eventContext.getEventEffect,
+      effectCache,
     });
 
     if (appliedEvents.length === 0) {
