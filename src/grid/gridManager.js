@@ -3594,14 +3594,51 @@ export default class GridManager {
     for (let row = 0; row < this.rows; row++) {
       const gridRow = this.grid[row];
 
+      if (!gridRow) continue;
+
+      const y = row * cellSize;
+      let spanColor = null;
+      let spanStart = -1;
+      let spanLength = 0;
+
       for (let col = 0; col < this.cols; col++) {
-        const cell = gridRow ? gridRow[col] : null;
+        const cell = gridRow[col];
+        const color = cell ? cell.color : null;
 
-        if (!cell) continue;
+        if (color) {
+          paintedCells++;
 
-        ctx.fillStyle = cell.color;
-        ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-        paintedCells++;
+          if (color === spanColor) {
+            spanLength += 1;
+            continue;
+          }
+
+          if (spanLength > 0 && spanColor) {
+            if (ctx.fillStyle !== spanColor) {
+              ctx.fillStyle = spanColor;
+            }
+            ctx.fillRect(spanStart * cellSize, y, spanLength * cellSize, cellSize);
+          }
+
+          spanColor = color;
+          spanStart = col;
+          spanLength = 1;
+        } else if (spanLength > 0 && spanColor) {
+          if (ctx.fillStyle !== spanColor) {
+            ctx.fillStyle = spanColor;
+          }
+          ctx.fillRect(spanStart * cellSize, y, spanLength * cellSize, cellSize);
+          spanColor = null;
+          spanStart = -1;
+          spanLength = 0;
+        }
+      }
+
+      if (spanLength > 0 && spanColor) {
+        if (ctx.fillStyle !== spanColor) {
+          ctx.fillStyle = spanColor;
+        }
+        ctx.fillRect(spanStart * cellSize, y, spanLength * cellSize, cellSize);
       }
     }
 
