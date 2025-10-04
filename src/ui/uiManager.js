@@ -1743,7 +1743,7 @@ export default class UIManager {
     }
   }
 
-  #renderLifeEvents(stats) {
+  #renderLifeEvents(stats, metrics = null) {
     if (!this.lifeEventList) return;
 
     const events =
@@ -1754,7 +1754,8 @@ export default class UIManager {
       typeof stats?.getLifeEventRateSummary === "function"
         ? stats.getLifeEventRateSummary()
         : null;
-    const deathBreakdown = stats?.deathBreakdown;
+    const deathBreakdown =
+      metrics?.deathBreakdown != null ? metrics.deathBreakdown : stats?.deathBreakdown;
 
     this.lifeEventList.innerHTML = "";
 
@@ -2051,10 +2052,18 @@ export default class UIManager {
     if (!this._pendingLifeEventsStats || this.#isPanelCollapsed(this.lifeEventsPanel)) {
       return;
     }
-    const stats = this._pendingLifeEventsStats;
+    const pending = this._pendingLifeEventsStats;
 
     this._pendingLifeEventsStats = null;
-    this.#renderLifeEvents(stats);
+    if (
+      pending &&
+      typeof pending === "object" &&
+      ("stats" in pending || "metrics" in pending)
+    ) {
+      this.#renderLifeEvents(pending.stats, pending.metrics);
+    } else {
+      this.#renderLifeEvents(pending);
+    }
   }
 
   #buildControlsPanel() {
@@ -3825,7 +3834,7 @@ export default class UIManager {
   }
 
   renderMetrics(stats, snapshot, environment = {}) {
-    this.renderLifeEvents(stats);
+    this.renderLifeEvents(stats, snapshot);
 
     const snapshotData = snapshot && typeof snapshot === "object" ? snapshot : {};
     const { rendering, ...insightSnapshot } = snapshotData;
@@ -4326,21 +4335,23 @@ export default class UIManager {
     }
   }
 
-  renderLifeEvents(stats) {
+  renderLifeEvents(stats, metrics) {
     if (!this.lifeEventsPanel) {
-      this._pendingLifeEventsStats = stats ?? null;
+      this._pendingLifeEventsStats =
+        stats || metrics ? { stats: stats ?? null, metrics: metrics ?? null } : null;
 
       return;
     }
 
     if (this.#isPanelCollapsed(this.lifeEventsPanel)) {
-      this._pendingLifeEventsStats = stats ?? null;
+      this._pendingLifeEventsStats =
+        stats || metrics ? { stats: stats ?? null, metrics: metrics ?? null } : null;
 
       return;
     }
 
     this._pendingLifeEventsStats = null;
-    this.#renderLifeEvents(stats);
+    this.#renderLifeEvents(stats, metrics);
   }
 
   drawSpark(canvas, data, color = "#88d") {
