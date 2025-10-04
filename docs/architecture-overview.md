@@ -78,6 +78,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - Neural mate selection blends brain forecasts with DNA courtship heuristics. Each cell now previews reproduction sensors for every visible partner, folds the brain's acceptance probability into the mate's weight, and scales the influence using DNA-programmed reinforcement and sampling profiles. Populations that evolve richer neural wiring can therefore favour mates their brains predict will reciprocate, while simpler genomes continue to lean on legacy similarity heuristics.
 - Baseline neural activity and mutation probability respond to the `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` and `COLOURFUL_LIFE_MUTATION_CHANCE` overrides, giving deployments coarse-grained levers for energising or calming populations and for tuning how quickly genomes mutate without editing DNA accessors.
 - Post-mortem energy recycling honours the `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` override so deployments can dial how much energy decaying organisms return to nearby tiles, keeping scarcity or abundance experiments configuration-driven.
+- DNA emits a `decayRecyclingProfile` that translates recovery, density, and efficiency genes into immediate energy share, drip-release cadence, and how long reserves linger before dispersing, so corpse recycling is now a heritable trait instead of a fixed constant.
 - Decision telemetry is available through `cell.getDecisionTelemetry`, which the debugger captures for UI display.
 
 ### InteractionSystem

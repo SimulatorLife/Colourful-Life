@@ -940,7 +940,34 @@ export default class GridManager {
 
     if (returned <= DECAY_EPSILON) return;
 
-    let reserve = returned * (1 - DECAY_IMMEDIATE_SHARE);
+    const profile =
+      typeof cell?.dna?.decayRecyclingProfile === "function"
+        ? cell.dna.decayRecyclingProfile()
+        : null;
+    const immediateShare = clamp(
+      Number.isFinite(profile?.immediateShare)
+        ? profile.immediateShare
+        : DECAY_IMMEDIATE_SHARE,
+      0.05,
+      0.95,
+    );
+    const releaseBaseTarget = clamp(
+      Number.isFinite(profile?.releaseBase) ? profile.releaseBase : DECAY_RELEASE_BASE,
+      0.01,
+      1,
+    );
+    const releaseRateTarget = clamp(
+      Number.isFinite(profile?.releaseRate) ? profile.releaseRate : DECAY_RELEASE_RATE,
+      0,
+      1,
+    );
+    const persistenceTarget = clamp(
+      Number.isFinite(profile?.persistence) ? profile.persistence : 1,
+      0.25,
+      3,
+    );
+
+    let reserve = returned * Math.max(0, 1 - immediateShare);
     const immediate = returned - reserve;
 
     if (immediate > DECAY_EPSILON) {
@@ -953,12 +980,51 @@ export default class GridManager {
 
     if (reserve <= DECAY_EPSILON) return;
 
-    const rowStore = this.decayAmount[row];
-    const ageRow = this.decayAge[row];
+    let rowStore = this.decayAmount[row];
+    let ageRow = this.decayAge[row];
+    let baseRow = this.decayReleaseBaseGrid?.[row];
+    let rateRow = this.decayReleaseRateGrid?.[row];
+    let persistenceRow = this.decayPersistenceGrid?.[row];
 
-    if (!rowStore || !ageRow) return;
+    if (!rowStore || !ageRow || !baseRow || !rateRow || !persistenceRow) {
+      this.#initializeDecayBuffers(this.rows, this.cols);
+      rowStore = this.decayAmount[row];
+      ageRow = this.decayAge[row];
+      baseRow = this.decayReleaseBaseGrid?.[row];
+      rateRow = this.decayReleaseRateGrid?.[row];
+      persistenceRow = this.decayPersistenceGrid?.[row];
+    }
 
-    rowStore[col] = (rowStore[col] || 0) + reserve;
+    if (!rowStore || !ageRow || !baseRow || !rateRow || !persistenceRow) return;
+
+    const previousEnergy = Number.isFinite(rowStore[col]) ? rowStore[col] : 0;
+    const nextEnergy = previousEnergy + reserve;
+
+    if (nextEnergy <= DECAY_EPSILON) {
+      rowStore[col] = 0;
+      ageRow[col] = 0;
+      this.#resetDecayParameters(row, col);
+
+      return;
+    }
+
+    const weightedBase =
+      (Number.isFinite(baseRow[col]) ? baseRow[col] : DECAY_RELEASE_BASE) *
+        previousEnergy +
+      releaseBaseTarget * reserve;
+    const weightedRate =
+      (Number.isFinite(rateRow[col]) ? rateRow[col] : DECAY_RELEASE_RATE) *
+        previousEnergy +
+      releaseRateTarget * reserve;
+    const weightedPersistence =
+      (Number.isFinite(persistenceRow[col]) ? persistenceRow[col] : 1) *
+        previousEnergy +
+      persistenceTarget * reserve;
+
+    rowStore[col] = nextEnergy;
+    baseRow[col] = clamp(weightedBase / nextEnergy, 0.01, 1);
+    rateRow[col] = clamp(weightedRate / nextEnergy, 0, 1);
+    persistenceRow[col] = clamp(weightedPersistence / nextEnergy, 0.25, 3);
     ageRow[col] = 0;
     this.decayActive.add(row * this.cols + col);
   }
@@ -1006,8 +1072,37 @@ export default class GridManager {
 
     this.decayAmount = Array.from({ length: rowCount }, () => Array(colCount).fill(0));
     this.decayAge = Array.from({ length: rowCount }, () => Array(colCount).fill(0));
+    this.decayReleaseBaseGrid = Array.from({ length: rowCount }, () =>
+      Array(colCount).fill(DECAY_RELEASE_BASE),
+    );
+    this.decayReleaseRateGrid = Array.from({ length: rowCount }, () =>
+      Array(colCount).fill(DECAY_RELEASE_RATE),
+    );
+    this.decayPersistenceGrid = Array.from({ length: rowCount }, () =>
+      Array(colCount).fill(1),
+    );
     this.decayActive = new Set();
     this.decayDeltaPending = null;
+  }
+
+  #resetDecayParameters(row, col) {
+    if (!Number.isInteger(row) || !Number.isInteger(col)) return;
+
+    const baseRow = this.decayReleaseBaseGrid?.[row];
+    const rateRow = this.decayReleaseRateGrid?.[row];
+    const persistenceRow = this.decayPersistenceGrid?.[row];
+
+    if (baseRow && baseRow.length > col) {
+      baseRow[col] = DECAY_RELEASE_BASE;
+    }
+
+    if (rateRow && rateRow.length > col) {
+      rateRow[col] = DECAY_RELEASE_RATE;
+    }
+
+    if (persistenceRow && persistenceRow.length > col) {
+      persistenceRow[col] = 1;
+    }
   }
 
   #accumulateDecayDelta(row, col, amount) {
@@ -1110,11 +1205,18 @@ export default class GridManager {
       for (let r = 0; r < this.decayAmount.length; r++) {
         const rowStore = this.decayAmount[r];
         const ageRow = this.decayAge?.[r];
+        const baseRow = this.decayReleaseBaseGrid?.[r];
+        const rateRow = this.decayReleaseRateGrid?.[r];
+        const persistenceRow = this.decayPersistenceGrid?.[r];
 
         if (!rowStore || !ageRow) continue;
 
         rowStore.fill(0);
         ageRow.fill(0);
+
+        if (baseRow) baseRow.fill(DECAY_RELEASE_BASE);
+        if (rateRow) rateRow.fill(DECAY_RELEASE_RATE);
+        if (persistenceRow) persistenceRow.fill(1);
       }
 
       return;
@@ -1132,19 +1234,41 @@ export default class GridManager {
 
       const rowStore = this.decayAmount[row];
       const ageRow = this.decayAge[row];
+      const baseRow = this.decayReleaseBaseGrid?.[row];
+      const rateRow = this.decayReleaseRateGrid?.[row];
+      const persistenceRow = this.decayPersistenceGrid?.[row];
 
-      if (!rowStore || !ageRow) continue;
+      if (!rowStore || !ageRow || !baseRow || !rateRow || !persistenceRow) {
+        continue;
+      }
 
       let pool = Number.isFinite(rowStore[col]) ? rowStore[col] : 0;
 
       if (pool <= DECAY_EPSILON) {
         rowStore[col] = 0;
         ageRow[col] = 0;
+        this.#resetDecayParameters(row, col);
 
         continue;
       }
 
-      const release = Math.min(pool, DECAY_RELEASE_BASE + pool * DECAY_RELEASE_RATE);
+      const releaseBase = clamp(
+        Number.isFinite(baseRow[col]) ? baseRow[col] : DECAY_RELEASE_BASE,
+        0,
+        Number.POSITIVE_INFINITY,
+      );
+      const releaseRate = clamp(
+        Number.isFinite(rateRow[col]) ? rateRow[col] : DECAY_RELEASE_RATE,
+        0,
+        1,
+      );
+      const persistence = clamp(
+        Number.isFinite(persistenceRow[col]) ? persistenceRow[col] : 1,
+        0.1,
+        5,
+      );
+      const tileMaxAge = Math.max(1, Math.round(DECAY_MAX_AGE * persistence));
+      const release = Math.min(pool, releaseBase + pool * releaseRate);
       const leftover = pool - release;
       const remainder = this.#distributeEnergy(row, col, release);
       const consumed = release - remainder;
@@ -1206,9 +1330,10 @@ export default class GridManager {
         }
       }
 
-      if (nextAmount <= DECAY_EPSILON || age >= DECAY_MAX_AGE) {
+      if (nextAmount <= DECAY_EPSILON || age >= tileMaxAge) {
         rowStore[col] = 0;
         ageRow[col] = 0;
+        this.#resetDecayParameters(row, col);
 
         continue;
       }
