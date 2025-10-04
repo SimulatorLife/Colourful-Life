@@ -3468,9 +3468,14 @@ export default class GridManager {
     const cell = new Cell(row, col, dna, energy);
 
     this.setCell(row, col, cell, { absorbTileEnergy: false });
-    const remainingEnergy = availableEnergy - energy;
 
-    this.energyGrid[row][col] = remainingEnergy > 0 ? remainingEnergy : 0;
+    const residualEnergy = availableEnergy - energy;
+
+    if (residualEnergy > 0) {
+      this.#redistributeEnergyToNeighbors(row, col, residualEnergy, {
+        previousEnergyGrid: this.energyNext,
+      });
+    }
 
     if (recordBirth) {
       this.stats?.onBirth?.(cell, {

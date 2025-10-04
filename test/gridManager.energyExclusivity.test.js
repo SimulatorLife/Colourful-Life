@@ -84,3 +84,41 @@ test("update enforces energy exclusivity across the grid", async () => {
     "resident should retain at least its pre-update reserves",
   );
 });
+
+test("spawnCell reroutes leftover tile energy to open neighbors", async () => {
+  const [{ default: GridManager }, { default: DNA }] = await Promise.all([
+    import("../src/grid/gridManager.js"),
+    import("../src/genome.js"),
+  ]);
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new TestGridManager(3, 3, baseOptions);
+  const dna = new DNA(12, 24, 36);
+  const sourceEnergy = gm.maxTileEnergy;
+  const spawnEnergy = sourceEnergy / 2;
+
+  gm.energyGrid[1][1] = sourceEnergy;
+  gm.energyGrid[0][1] = 0;
+  gm.energyGrid[2][1] = 0;
+  gm.energyGrid[1][0] = 0;
+  gm.energyGrid[1][2] = 0;
+
+  gm.spawnCell(1, 1, { dna, spawnEnergy });
+
+  assert.is(gm.energyGrid[1][1], 0, "occupied tile should report zero stored energy");
+
+  const redistributed =
+    gm.energyGrid[0][1] +
+    gm.energyGrid[2][1] +
+    gm.energyGrid[1][0] +
+    gm.energyGrid[1][2];
+
+  assert.is(
+    redistributed,
+    sourceEnergy - spawnEnergy,
+    "leftover tile energy should spill into adjacent empty cells",
+  );
+});
