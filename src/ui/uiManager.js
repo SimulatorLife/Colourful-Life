@@ -220,7 +220,6 @@ export default class UIManager {
     this.energyRegenRate = defaults.energyRegenRate; // base logistic regen rate (0..0.2)
     this.energyDiffusionRate = defaults.energyDiffusionRate; // neighbor diffusion rate (0..0.5)
     this.leaderboardIntervalMs = defaults.leaderboardIntervalMs;
-    this.profileGridMetrics = defaults.profileGridMetrics;
     this._lastSlowUiRender = Number.NEGATIVE_INFINITY; // shared throttle for fast-updating UI bits
     this._lastInteractionTotals = { fights: 0, cooperations: 0 };
     this.showDensity = defaults.showDensity;
@@ -236,7 +235,6 @@ export default class UIManager {
       this.obstaclePreset = initialObstaclePreset;
     }
     this.autoPauseCheckbox = null;
-    this.profileGridSelect = null;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
 
@@ -2866,68 +2864,8 @@ export default class UIManager {
 
     intro.className = "metrics-intro";
     intro.textContent =
-      "Tune instrumentation and inspect renderer timings to diagnose performance.";
+      "Inspect renderer timings captured from recent frames to diagnose performance.";
     body.appendChild(intro);
-
-    const instrumentationSection = document.createElement("section");
-
-    instrumentationSection.className = "metrics-section";
-    instrumentationSection.setAttribute(
-      "aria-label",
-      "Profiling instrumentation controls",
-    );
-    const instrumentationHeading = document.createElement("h4");
-
-    instrumentationHeading.className = "metrics-section-title";
-    instrumentationHeading.textContent = "Instrumentation";
-    instrumentationSection.appendChild(instrumentationHeading);
-
-    const instrumentationBody = document.createElement("div");
-
-    instrumentationBody.className = "metrics-section-body";
-    instrumentationSection.appendChild(instrumentationBody);
-    body.appendChild(instrumentationSection);
-
-    const instrumentationGrid = createControlGrid(
-      instrumentationBody,
-      "control-grid--compact",
-    );
-
-    const profilingOptions = [
-      {
-        value: "auto",
-        label: "Auto",
-        description: "Capture profiling data when the dashboard requests metrics.",
-      },
-      {
-        value: "always",
-        label: "Always On",
-        description: "Always collect grid profiling metrics each tick.",
-      },
-      {
-        value: "never",
-        label: "Off",
-        description: "Disable grid profiling to minimise overhead.",
-      },
-    ];
-
-    this.profileGridSelect = createSelectRow(instrumentationGrid, {
-      label: "Grid Profiling",
-      title:
-        "Controls how often grid-level profiling metrics are captured for the dashboard and insights panels.",
-      value: this.profileGridMetrics,
-      options: profilingOptions,
-      onChange: (value) => {
-        this.setProfileGridMetrics(value);
-      },
-    });
-
-    const instrumentationHint = document.createElement("p");
-
-    instrumentationHint.className = "control-hint";
-    instrumentationHint.textContent =
-      "Choose when the grid records profiling samples for the dashboard.";
-    instrumentationBody.appendChild(instrumentationHint);
 
     this.profilingBox = document.createElement("div");
     this.profilingBox.className = "metrics-box";
@@ -3553,24 +3491,6 @@ export default class UIManager {
     if (changed && notify) {
       this.#notifySettingChange("autoPauseOnBlur", this.autoPauseOnBlur);
     }
-  }
-
-  setProfileGridMetrics(preference, { notify = true } = {}) {
-    const normalized = resolveSimulationDefaults({
-      profileGridMetrics: preference,
-    }).profileGridMetrics;
-    const changed = this.profileGridMetrics !== normalized;
-
-    this.profileGridMetrics = normalized;
-    if (this.profileGridSelect) {
-      this.profileGridSelect.value = normalized;
-    }
-
-    if (changed && notify) {
-      this.#notifySettingChange("profileGridMetrics", this.profileGridMetrics);
-    }
-
-    return this.profileGridMetrics;
   }
 
   // Getters for simulation

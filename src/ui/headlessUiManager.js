@@ -73,7 +73,6 @@ function coerceBoolean(candidate, fallback = false) {
  * @param {boolean} [options.showDensity] Whether population density overlays are shown.
  * @param {boolean} [options.showFitness] Whether fitness overlays are shown.
  * @param {number} [options.leaderboardIntervalMs] Minimum time between leaderboard updates.
- * @param {string} [options.profileGridMetrics] Profiling mode for grid instrumentation ("auto", "always", "never").
  * @param {Object} [options.selectionManager=null] Shared selection manager instance.
  * @returns {{
  *   isPaused: () => boolean,
@@ -98,8 +97,6 @@ function coerceBoolean(candidate, fallback = false) {
  *   getShowEnergy: () => boolean,
  *   getShowDensity: () => boolean,
  *   getShowFitness: () => boolean,
- *   getProfileGridMetrics: () => string,
- *   setProfileGridMetrics: (value: string) => void,
  *   shouldRenderSlowUi: (timestamp: number) => boolean,
  *   renderMetrics: Function,
  *   renderLeaderboard: Function,
@@ -227,17 +224,6 @@ export function createHeadlessUiManager(options = {}) {
     getShowDensity: () => settings.showDensity,
     getShowFitness: () => settings.showFitness,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
-    getProfileGridMetrics: () => settings.profileGridMetrics,
-    setProfileGridMetrics: (value) => {
-      const normalized = resolveSimulationDefaults({
-        profileGridMetrics: value,
-      }).profileGridMetrics;
-
-      if (settings.profileGridMetrics === normalized) return;
-
-      settings.profileGridMetrics = normalized;
-      notify("profileGridMetrics", settings.profileGridMetrics);
-    },
     shouldRenderSlowUi: (timestamp) => {
       if (!Number.isFinite(timestamp)) return false;
       if (timestamp - lastSlowUiRender >= settings.leaderboardIntervalMs) {

@@ -1,10 +1,6 @@
 import { assert, suite } from "#tests/harness";
 import { MockCanvas, setupDom } from "./helpers/mockDom.js";
-import {
-  findCheckboxByLabel,
-  findSelectByLabel,
-  findSliderByLabel,
-} from "./helpers/controlQueries.js";
+import { findCheckboxByLabel, findSliderByLabel } from "./helpers/controlQueries.js";
 
 const test = suite("ui initial settings sync");
 
@@ -75,27 +71,12 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       uiManager.controlsPanel,
       "Playback Speed ×",
     );
-    const profilingSelect = findSelectByLabel(
-      uiManager.controlsPanel,
-      "Grid Profiling",
-    );
 
     assert.ok(playbackSlider, "playback speed slider should exist");
     assert.is(
       playbackSlider.value,
       String(uiManager.speedMultiplier),
       "slider should reflect the initial playback speed",
-    );
-    assert.ok(profilingSelect, "grid profiling selector should exist");
-    assert.is(
-      profilingSelect?.value,
-      uiManager.profileGridMetrics,
-      "profiling selector should match the active profiling mode",
-    );
-    assert.is(
-      simulation.engine.state.profileGridMetrics,
-      uiManager.profileGridMetrics,
-      "engine state should mirror UI profiling mode",
     );
 
     const sliderRow = playbackSlider?.parentElement?.parentElement ?? null;
@@ -147,7 +128,6 @@ test("createSimulation honours layout initial settings overrides", async () => {
               autoPauseOnBlur: true,
               updatesPerSecond: 48,
               paused: true,
-              profileGridMetrics: "never",
             },
           },
         },
@@ -182,25 +162,18 @@ test("createSimulation honours layout initial settings overrides", async () => {
       uiManager.controlsPanel,
       "Pause When Hidden",
     );
-    const profilingSelect = findSelectByLabel(
-      uiManager.controlsPanel,
-      "Grid Profiling",
-    );
 
     assert.ok(energyToggle, "energy toggle should render");
     assert.ok(densityToggle, "density toggle should render");
     assert.ok(fitnessToggle, "fitness toggle should render");
     assert.ok(lifeEventToggle, "life event toggle should render");
     assert.ok(autoPauseToggle, "auto-pause toggle should render");
-    assert.ok(profilingSelect, "grid profiling selector should render");
 
     assert.is(energyToggle.checked, true);
     assert.is(densityToggle.checked, true);
     assert.is(fitnessToggle.checked, true);
     assert.is(lifeEventToggle.checked, true);
     assert.is(autoPauseToggle.checked, true);
-    assert.is(profilingSelect?.value, "never");
-    assert.is(uiManager.profileGridMetrics, "never");
     assert.is(uiManager.getUpdatesPerSecond(), 48);
     assert.is(uiManager.isPaused(), true);
 
@@ -212,16 +185,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.is(state.showFitness, true);
     assert.is(state.showLifeEventMarkers, true);
     assert.is(state.autoPauseOnBlur, true);
-    assert.is(state.profileGridMetrics, "never");
     assert.is(simulation.engine.isPaused(), true);
-
-    profilingSelect.value = "always";
-    const profileChangeEvent = new window.Event("change", { bubbles: true });
-
-    profilingSelect.dispatchEvent(profileChangeEvent);
-
-    assert.is(uiManager.profileGridMetrics, "always");
-    assert.is(simulation.engine.state.profileGridMetrics, "always");
 
     simulation.destroy();
   } finally {
