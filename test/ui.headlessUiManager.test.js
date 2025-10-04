@@ -99,3 +99,28 @@ test("createHeadlessUiManager allows adjusting the mutation multiplier", () => {
   ]);
   assert.is(manager.getMutationMultiplier(), 1.5);
 });
+
+test("createHeadlessUiManager setAutoPauseOnBlur normalizes string inputs", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  assert.is(manager.getAutoPauseOnBlur(), false);
+
+  manager.setAutoPauseOnBlur("true");
+  assert.is(manager.getAutoPauseOnBlur(), true);
+
+  manager.setAutoPauseOnBlur("false");
+  assert.is(manager.getAutoPauseOnBlur(), false);
+
+  manager.setAutoPauseOnBlur("1");
+  manager.setAutoPauseOnBlur("0");
+
+  assert.equal(notifications, [
+    ["autoPauseOnBlur", true],
+    ["autoPauseOnBlur", false],
+    ["autoPauseOnBlur", true],
+    ["autoPauseOnBlur", false],
+  ]);
+});
