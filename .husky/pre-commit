@@ -1,3 +1,16 @@
 npx lint-staged
-echo "Running benchmark and test suite..."
-npm test
+
+STAGED_FILES=$(git diff --cached --name-only)
+
+# Run benchmarks/tests only when staged changes extend beyond .github/
+if [ -z "$STAGED_FILES" ]; then
+  echo "No staged files detected; skipping benchmark and test suite."
+  exit 0
+fi
+
+if printf '%s\n' "$STAGED_FILES" | grep -qvE '^\.github/'; then
+  echo "Running benchmark and test suite..."
+  npm test
+else
+  echo "Skipping benchmark and test suite: staged changes limited to .github/."
+fi
