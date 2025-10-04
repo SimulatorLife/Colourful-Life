@@ -897,6 +897,46 @@ test("step control calls engine.step when using createSimulation", async () => {
       runningEvent.defaultPrevented,
       "hotkey prevents default behavior after resuming from running state",
     );
+
+    const spaceToggleEvent = {
+      key: " ",
+      target: mockDocument.body,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      defaultPrevented: false,
+    };
+
+    keydownHandlers.forEach((handler) => handler(spaceToggleEvent));
+
+    assert.ok(
+      spaceToggleEvent.defaultPrevented,
+      "space hotkey prevents default scrolling",
+    );
+    assert.ok(
+      !simulation.uiManager.isPaused(),
+      "pressing space resumes the simulation via the pause hotkey",
+    );
+
+    const spacePauseEvent = {
+      key: " ",
+      target: mockDocument.body,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      defaultPrevented: false,
+    };
+
+    keydownHandlers.forEach((handler) => handler(spacePauseEvent));
+
+    assert.ok(
+      simulation.uiManager.isPaused(),
+      "pressing space again pauses the simulation",
+    );
+    assert.ok(
+      spacePauseEvent.defaultPrevented,
+      "space hotkey prevents default scrolling on subsequent presses",
+    );
   } finally {
     simulation?.destroy?.();
     global.window = originalWindow;

@@ -255,7 +255,7 @@ export default class UIManager {
     this.mainRow.appendChild(this.sidebar);
 
     // Allow callers to customize which keys toggle the pause state or step once.
-    this.pauseHotkeySet = this.#resolveHotkeySet(layoutConfig.pauseHotkeys, ["p"]);
+    this.pauseHotkeySet = this.#resolveHotkeySet(layoutConfig.pauseHotkeys, ["p", " "]);
     this.stepHotkeySet = this.#resolveHotkeySet(layoutConfig.stepHotkeys, ["s"]);
     this.speedIncreaseHotkeySet = this.#resolveHotkeySet(
       layoutConfig.speedIncreaseHotkeys,
