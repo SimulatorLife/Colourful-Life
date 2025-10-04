@@ -59,6 +59,7 @@ extending tests, or polishing docs.
 - **Format** — Run `npm run format`, `npm run format:check`, or `npm run format:workflows` to apply Prettier across source, documentation, configuration files, and GitHub workflows.
 - **Lint** — Use `npm run lint` / `npm run lint:fix` to enforce the ESLint ruleset and apply safe autofixes.
 - **Tests** — Execute `npm test` to run the Node.js test suites. Focused suites live beside their target modules under `test/`.
+- **Full sweep** — Run `npm run test:full` when you need the standalone benchmark harness followed by the Node.js test suites.
 - **Profiling** — Run `node scripts/profile-energy.mjs` with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations.
 - **Cache reset** — Use `npm run clean` to clear `dist/` and `.parcel-cache/` when Parcel hot reloads become inconsistent.
 - **Hooks** — Run `npm run prepare` to reinstall Husky hooks after cloning or whenever `.husky/` contents change.

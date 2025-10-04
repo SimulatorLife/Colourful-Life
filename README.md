@@ -29,6 +29,8 @@ npm run format:workflows # Format GitHub workflow files (ignores .gitignore rule
 npm run lint             # ESLint across JS modules and inline HTML
 npm run lint:fix         # ESLint with autofix enabled
 npm test                 # Node.js test suites
+npm run test:full        # Run benchmarks followed by the Node.js test suites
+npm run benchmark        # Execute the standalone performance benchmark harness
 npm run prepare          # Reinstall Husky hooks when the .husky folder changes
 ```
 
@@ -117,6 +119,7 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 - **Formatting** — Run `npm run format` before committing or rely on the included Prettier integration. `npm run format:check` verifies without writing.
 - **Linting** — `npm run lint` enforces the ESLint + Prettier ruleset across JavaScript and inline HTML. Use `npm run lint:fix` to auto-resolve minor issues.
 - **Testing** — `npm test` runs the Node.js test suites. Tests cover grid utilities, selection logic, and regression harnesses. Add cases when behaviours change.
+- **Full test sweep** — Run `npm run test:full` when you need the benchmark harness and Node.js test suites back-to-back.
 - **Profiling** — `node scripts/profile-energy.mjs` benchmarks the energy preparation loop. Adjust rows/cols via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and the stub `cellSize` with `PERF_CELL_SIZE` environment variables. Enable the heavier SimulationEngine benchmark with `PERF_INCLUDE_SIM=1` when you specifically need tick timings.
 - **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap. Use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures, `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` to retune telemetry cutoffs, `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` to calm or emphasise territorial combat bias, `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` to globally energise or relax genomes, and `COLOURFUL_LIFE_MUTATION_CHANCE` to adjust baseline evolutionary churn without modifying source defaults.
 - **Headless usage** — `createSimulation` accepts `{ headless: true }` to return a controller without mounting DOM controls. Inject `requestAnimationFrame`, `performanceNow`, or RNG hooks for deterministic automation.
@@ -146,6 +149,7 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 | `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                                                         |
 | `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions.                                   |
 | `npm test`                                                             | Execute the Node.js test suites covering simulation and UI modules.                                                                                    |
+| `npm run test:full`                                                    | Chain the benchmark harness and Node.js test suites for exhaustive local or CI-style runs.                                                             |
 | `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                                                                 |
 | `node scripts/profile-energy.mjs`                                      | Benchmark the energy preparation loop with configurable grid sizes via environment variables; add `PERF_INCLUDE_SIM=1` to time SimulationEngine ticks. |
 
