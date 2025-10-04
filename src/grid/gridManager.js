@@ -3155,21 +3155,21 @@ export default class GridManager {
   }
 
   #computeNeighborTotal(row, col, radius = this.densityRadius) {
-    let total = 0;
+    if (radius <= 0) return 0;
 
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dy = -radius; dy <= radius; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const rr = row + dy;
-        const cc = col + dx;
+    // Instead of iterating over each neighbor, compute the clamped rectangle
+    // bounds analytically; the number of valid neighbor slots equals the
+    // intersection area minus the center tile itself.
+    const rowMin = row - radius < 0 ? 0 : row - radius;
+    const rowMax = row + radius >= this.rows ? this.rows - 1 : row + radius;
+    const colMin = col - radius < 0 ? 0 : col - radius;
+    const colMax = col + radius >= this.cols ? this.cols - 1 : col + radius;
 
-        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
+    const height = rowMax - rowMin + 1;
+    const width = colMax - colMin + 1;
+    const total = height * width - 1;
 
-        total += 1;
-      }
-    }
-
-    return total;
+    return total > 0 ? total : 0;
   }
 
   #buildDensityTotals(radius = this.densityRadius) {
