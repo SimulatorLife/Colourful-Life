@@ -112,6 +112,8 @@ export function createHeadlessUiManager(options = {}) {
   const { selectionManager, onSettingChange, ...overrides } = options || {};
   const defaults = resolveSimulationDefaults(overrides);
   const settings = { ...defaults };
+
+  settings.autoPausePending = false;
   const baseUpdatesCandidate =
     Number.isFinite(settings.speedMultiplier) && settings.speedMultiplier > 0
       ? settings.updatesPerSecond / settings.speedMultiplier
@@ -257,7 +259,14 @@ export function createHeadlessUiManager(options = {}) {
       if (settings.autoPauseOnBlur === normalized) return;
 
       settings.autoPauseOnBlur = normalized;
+      if (!settings.autoPauseOnBlur) {
+        settings.autoPausePending = false;
+      }
       notify("autoPauseOnBlur", settings.autoPauseOnBlur);
+    },
+    getAutoPausePending: () => settings.autoPausePending,
+    setAutoPausePending: (value) => {
+      settings.autoPausePending = Boolean(value);
     },
     selectionManager: selectionManager ?? null,
   };

@@ -320,6 +320,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     matingDiversityThreshold: defaults.matingDiversityThreshold,
     lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
     autoPauseOnBlur: defaults.autoPauseOnBlur,
+    autoPausePending: false,
     profileGridMetrics: defaults.profileGridMetrics,
   };
 

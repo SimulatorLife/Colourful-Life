@@ -343,6 +343,7 @@ export default class SimulationEngine {
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
       autoPauseOnBlur: this.autoPauseOnBlur,
+      autoPausePending: false,
       profileGridMetrics: defaults.profileGridMetrics,
       gridRows: rows,
       gridCols: cols,
@@ -478,6 +479,20 @@ export default class SimulationEngine {
     return changed;
   }
 
+  #setAutoPausePending(pending) {
+    const normalized = Boolean(pending);
+
+    if (
+      this._autoPauseResumePending === normalized &&
+      this.state.autoPausePending === normalized
+    ) {
+      return;
+    }
+
+    this._autoPauseResumePending = normalized;
+    this.#updateState({ autoPausePending: normalized });
+  }
+
   #handleAutoPauseTrigger() {
     if (!this.autoPauseOnBlur) return;
     if (this._autoPauseResumePending) return;
@@ -487,7 +502,7 @@ export default class SimulationEngine {
     this.pause();
 
     if (this.isPaused()) {
-      this._autoPauseResumePending = true;
+      this.#setAutoPausePending(true);
     }
   }
 
@@ -495,7 +510,7 @@ export default class SimulationEngine {
     if (!this._autoPauseResumePending) return;
 
     this.resume();
-    this._autoPauseResumePending = false;
+    this.#setAutoPausePending(false);
   }
 
   #installAutoPauseHandlers(win, doc) {
@@ -798,7 +813,7 @@ export default class SimulationEngine {
     const changed = this.#updateState({ paused });
 
     if (!paused) {
-      this._autoPauseResumePending = false;
+      this.#setAutoPausePending(false);
     }
 
     if (!paused && this.running) {
@@ -1342,7 +1357,7 @@ export default class SimulationEngine {
     this.autoPauseOnBlur = enabled;
 
     if (!enabled) {
-      this._autoPauseResumePending = false;
+      this.#setAutoPausePending(false);
     }
 
     this.#updateState({ autoPauseOnBlur: enabled });

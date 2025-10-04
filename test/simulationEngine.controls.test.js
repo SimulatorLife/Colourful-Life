@@ -524,10 +524,16 @@ test("autoPauseOnBlur setter keeps engine state aligned", async () => {
     assert.is(engine.autoPauseOnBlur, true, "instance flag mirrors enabled state");
 
     engine._autoPauseResumePending = true;
+    engine.state.autoPausePending = true;
     engine.setAutoPauseOnBlur(false);
 
     assert.is(engine.state.autoPauseOnBlur, false, "disabling autopause updates state");
     assert.is(engine.autoPauseOnBlur, false, "instance flag mirrors disabled state");
+    assert.is(
+      engine.state.autoPausePending,
+      false,
+      "disabling autopause clears pending flag in state",
+    );
     assert.is(
       engine._autoPauseResumePending,
       false,

@@ -97,6 +97,13 @@ function subscribeEngineToUi(engine, uiManager) {
       }
 
       if (
+        changes?.autoPausePending !== undefined &&
+        typeof uiManager.setAutoPausePending === "function"
+      ) {
+        uiManager.setAutoPausePending(changes.autoPausePending);
+      }
+
+      if (
         changes?.lowDiversityReproMultiplier !== undefined &&
         typeof uiManager.setLowDiversityReproMultiplier === "function"
       ) {
@@ -198,6 +205,14 @@ export function bindSimulationToUi({
 
     if (typeof profileMode === "string") {
       uiManager.setProfileGridMetrics(profileMode, { notify: false });
+    }
+  }
+
+  if (uiManager && typeof uiManager.setAutoPausePending === "function") {
+    const pending = engine?.state?.autoPausePending;
+
+    if (pending !== undefined) {
+      uiManager.setAutoPausePending(Boolean(pending));
     }
   }
 

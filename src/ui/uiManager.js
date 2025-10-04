@@ -229,6 +229,7 @@ export default class UIManager {
     this.showObstacles = defaults.showObstacles;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
+    this.autoPausePending = false;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
     const initialObstaclePreset = this.#resolveInitialObstaclePreset(actionFns);
 
@@ -1029,7 +1030,7 @@ export default class UIManager {
     }
 
     if (this.pauseOverlayAutopause) {
-      if (this.autoPauseOnBlur) {
+      if (this.autoPausePending) {
         this.pauseOverlayAutopause.hidden = false;
         this.pauseOverlayAutopause.textContent =
           "Autopause resumes when the tab regains focus.";
@@ -3535,6 +3536,9 @@ export default class UIManager {
 
   setPauseState(paused) {
     this.paused = Boolean(paused);
+    if (!this.paused && this.autoPausePending) {
+      this.autoPausePending = false;
+    }
     this.#updatePauseButtonState();
     this.#updateStepButtonState();
     this.#updatePauseIndicator();
@@ -3553,6 +3557,17 @@ export default class UIManager {
     if (changed && notify) {
       this.#notifySettingChange("autoPauseOnBlur", this.autoPauseOnBlur);
     }
+  }
+
+  setAutoPausePending(pending) {
+    const nextValue = Boolean(pending);
+
+    if (this.autoPausePending === nextValue) {
+      return;
+    }
+
+    this.autoPausePending = nextValue;
+    this.#updatePauseIndicator();
   }
 
   setProfileGridMetrics(preference, { notify = true } = {}) {
