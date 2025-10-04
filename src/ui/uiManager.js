@@ -2788,7 +2788,7 @@ export default class UIManager {
 
     zoneIntro.className = "zone-intro control-hint";
     zoneIntro.textContent =
-      "Focus reproduction by enabling preset regions and combining patterns to guide evolution.";
+      "Focus reproduction by enabling preset regions—from hemispheres to central sanctuaries—and combining patterns to guide evolution.";
     body.appendChild(zoneIntro);
 
     const zoneGrid = createControlGrid(body, "control-grid--compact");
