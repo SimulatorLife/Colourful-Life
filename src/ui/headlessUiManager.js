@@ -1,6 +1,42 @@
 import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
 import { sanitizeNumber, invokeWithErrorBoundary } from "../utils.js";
 
+function coerceBoolean(candidate, fallback = false) {
+  if (typeof candidate === "boolean") {
+    return candidate;
+  }
+
+  if (candidate == null) {
+    return fallback;
+  }
+
+  if (typeof candidate === "number") {
+    return Number.isFinite(candidate) ? candidate !== 0 : fallback;
+  }
+
+  if (typeof candidate === "string") {
+    const normalized = candidate.trim().toLowerCase();
+
+    if (normalized.length === 0) return fallback;
+    if (normalized === "true" || normalized === "yes" || normalized === "on") {
+      return true;
+    }
+    if (normalized === "false" || normalized === "no" || normalized === "off") {
+      return false;
+    }
+
+    const numeric = Number(normalized);
+
+    if (!Number.isNaN(numeric)) {
+      return numeric !== 0;
+    }
+
+    return fallback;
+  }
+
+  return Boolean(candidate);
+}
+
 /**
  * Creates a lightweight {@link UIManager}-compatible adapter for environments
  * where no DOM-backed UI is available (e.g. tests, server-side rendering, or
@@ -216,7 +252,11 @@ export function createHeadlessUiManager(options = {}) {
     renderLeaderboard: () => {},
     getAutoPauseOnBlur: () => settings.autoPauseOnBlur,
     setAutoPauseOnBlur: (value) => {
-      settings.autoPauseOnBlur = Boolean(value);
+      const normalized = coerceBoolean(value, settings.autoPauseOnBlur);
+
+      if (settings.autoPauseOnBlur === normalized) return;
+
+      settings.autoPauseOnBlur = normalized;
       notify("autoPauseOnBlur", settings.autoPauseOnBlur);
     },
     selectionManager: selectionManager ?? null,
