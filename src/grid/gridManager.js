@@ -5092,23 +5092,23 @@ export default class GridManager {
         : enemySimilarity;
 
     const grid = this.grid;
-    const rows = this.rows;
-    const cols = this.cols;
-    const sight = cell.sight;
+    const sight = Math.max(0, Math.floor(Number.isFinite(cell.sight) ? cell.sight : 0));
+    const minRow = Math.max(0, row - sight);
+    const maxRow = Math.min(this.rows - 1, row + sight);
+    const minCol = Math.max(0, col - sight);
+    const maxCol = Math.min(this.cols - 1, col + sight);
+    const hasSharedRng = typeof cell.resolveSharedRng === "function";
+    const resolveHostilityRng = hasSharedRng
+      ? (other) => cell.resolveSharedRng(other, "hostilityGate")
+      : null;
+    const defaultHostilityRng = Math.random;
+    const shouldSampleEnemyBias = enemyBias > 0;
 
-    for (let dy = -sight; dy <= sight; dy++) {
-      const newRow = row + dy;
-
-      if (newRow < 0 || newRow >= rows) continue;
-
+    for (let newRow = minRow; newRow <= maxRow; newRow++) {
       const gridRow = grid[newRow];
 
-      for (let dx = -sight; dx <= sight; dx++) {
-        if (dx === 0 && dy === 0) continue;
-
-        const newCol = col + dx;
-
-        if (newCol < 0 || newCol >= cols) continue;
+      for (let newCol = minCol; newCol <= maxCol; newCol++) {
+        if (newRow === row && newCol === col) continue;
 
         const target = gridRow[newCol];
 
@@ -5124,27 +5124,35 @@ export default class GridManager {
             classification: "society",
             precomputedSimilarity: similarity,
           });
-        } else if (
-          similarity <= enemyT ||
-          (() => {
-            const hostilityRng =
-              typeof cell.resolveSharedRng === "function"
-                ? cell.resolveSharedRng(target, "hostilityGate")
-                : Math.random;
 
-            return hostilityRng() < enemyBias;
-          })()
-        ) {
-          enemies.push({ row: newRow, col: newCol, target });
-        } else {
-          mates.push({
-            row: newRow,
-            col: newCol,
-            target,
-            classification: "mate",
-            precomputedSimilarity: similarity,
-          });
+          continue;
         }
+
+        let classifyAsEnemy = similarity <= enemyT;
+
+        if (!classifyAsEnemy && shouldSampleEnemyBias) {
+          const hostilityRng = resolveHostilityRng
+            ? resolveHostilityRng(target)
+            : defaultHostilityRng;
+
+          if (typeof hostilityRng === "function" && hostilityRng() < enemyBias) {
+            classifyAsEnemy = true;
+          }
+        }
+
+        if (classifyAsEnemy) {
+          enemies.push({ row: newRow, col: newCol, target });
+
+          continue;
+        }
+
+        mates.push({
+          row: newRow,
+          col: newCol,
+          target,
+          classification: "mate",
+          precomputedSimilarity: similarity,
+        });
       }
     }
 
