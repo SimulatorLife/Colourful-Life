@@ -36,7 +36,8 @@ extending tests, or polishing docs.
 - Follow the existing module structure. Simulation logic belongs in `src/`,
   documentation in `docs/`, tests in `test/`, and profiling scripts in
   `scripts/`.
-- Uphold the simulation laws, including energy exclusivity—tiles with residents must never track stored energy, so new behaviour should drain or reroute reserves when a cell occupies a coordinate.
+- Uphold the simulation laws, including energy exclusivity—tiles with residents must never track stored energy, so new behaviour
+  should drain or reroute reserves when a cell occupies a coordinate.
 - Rely on the root `package.json` for module settings; nested manifests inside
   `src/` or other subdirectories are unnecessary and should be removed when
   discovered.
