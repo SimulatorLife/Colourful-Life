@@ -299,13 +299,10 @@ export default class Stats {
     this.#traitPresenceView = this.traitPresence;
     this.#traitKeys = this.traitDefinitions.map(({ key }) => key);
     this.#traitComputes = this.traitDefinitions.map(({ compute }) => compute);
-    const thresholds = new Float64Array(this.traitDefinitions.length);
-
-    for (let i = 0; i < this.traitDefinitions.length; i += 1) {
-      thresholds[i] = this.traitDefinitions[i].threshold ?? TRAIT_THRESHOLD;
-    }
-
-    this.#traitThresholds = thresholds;
+    this.#traitThresholds = Float64Array.from(
+      this.traitDefinitions,
+      ({ threshold }) => threshold ?? TRAIT_THRESHOLD,
+    );
     this.#traitSums = new Float64Array(this.traitDefinitions.length);
     this.#traitActiveCounts = new Float64Array(this.traitDefinitions.length);
     this.traitResampleInterval = sanitizeInterval(traitResampleInterval, 8);
