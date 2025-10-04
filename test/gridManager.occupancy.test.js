@@ -99,6 +99,34 @@ test("GridManager relocation rejects non-adjacent destinations", async () => {
   assert.is(relocated, false, "relocation should fail when target is not adjacent");
 });
 
+test("GridManager.tryMove rejects non-adjacent steps", async () => {
+  const [{ default: GridManager }, { default: Cell }, { default: DNA }] =
+    await Promise.all([
+      import("../src/grid/gridManager.js"),
+      import("../src/cell.js"),
+      import("../src/genome.js"),
+    ]);
+
+  class TestGridManager extends GridManager {
+    init() {}
+    consumeEnergy() {}
+  }
+
+  const gm = new TestGridManager(5, 5, baseOptions);
+  const dna = new DNA(7, 11, 13);
+  const cell = new Cell(2, 2, dna, 10);
+
+  gm.setCell(2, 2, cell);
+
+  const moved = gm.boundTryMove(gm.grid, 2, 2, 0, 2, gm.rows, gm.cols);
+
+  assert.is(moved, false, "movement should fail when skipping intermediate tiles");
+  assert.is(gm.grid[2][2], cell, "origin tile should still contain the mover");
+  assert.is(gm.grid[2][4], null, "destination tile should remain empty");
+  assert.is(cell.row, 2, "cell row should remain unchanged after blocked move");
+  assert.is(cell.col, 2, "cell column should remain unchanged after blocked move");
+});
+
 test("GridManager clears energy when placing cells on energized tiles", async () => {
   const [{ default: GridManager }, { default: Cell }, { default: DNA }] =
     await Promise.all([
