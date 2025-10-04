@@ -2260,6 +2260,7 @@ export default class UIManager {
       step: bounds.cellSize.step,
       value: geometry.cellSize,
       suffix: "px",
+      description: "Pixels per tile. Enter a value between 2 and 20.",
     });
 
     const rowsInput = createNumberInputRow(geometryGrid, {
@@ -2270,6 +2271,7 @@ export default class UIManager {
       step: bounds.rows.step,
       value: geometry.rows,
       suffix: "tiles",
+      description: "Vertical tiles allowed: 40 to 240.",
     });
 
     const colsInput = createNumberInputRow(geometryGrid, {
@@ -2280,17 +2282,18 @@ export default class UIManager {
       step: bounds.cols.step,
       value: geometry.cols,
       suffix: "tiles",
+      description: "Horizontal tiles allowed: 40 to 240.",
     });
 
-    const buttonRow = createControlButtonRow(geometryGrid, {
-      className: "control-button-row control-button-row--compact",
-    });
+    const actions = document.createElement("div");
 
-    buttonRow.style.gridColumn = "1 / -1";
+    actions.className = "geometry-actions";
+    actions.style.gridColumn = "1 / -1";
 
     const applyButton = document.createElement("button");
 
     applyButton.type = "button";
+    applyButton.className = "geometry-actions__apply";
     applyButton.textContent = "Apply Geometry";
     applyButton.title = "Resize the grid using the values above.";
     applyButton.addEventListener("click", (event) => {
@@ -2305,7 +2308,19 @@ export default class UIManager {
         },
       );
     });
-    buttonRow.appendChild(applyButton);
+    actions.appendChild(applyButton);
+
+    const reseedHintId = "geometry-reseed-hint";
+    const reseedHint = document.createElement("span");
+
+    reseedHint.id = reseedHintId;
+    reseedHint.className = "geometry-actions__hint control-hint";
+    reseedHint.textContent = "Shift + click to reseed the world after resizing.";
+    actions.appendChild(reseedHint);
+
+    applyButton.setAttribute("aria-describedby", reseedHintId);
+
+    geometryGrid.appendChild(actions);
     applyButton.disabled = true;
     applyButton.setAttribute("aria-disabled", "true");
 

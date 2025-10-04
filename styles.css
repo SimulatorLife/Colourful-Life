@@ -426,6 +426,10 @@ canvas {
   box-sizing: border-box;
 }
 
+.control-description {
+  margin: 4px 0 0;
+}
+
 .control-line select:focus {
   outline: 2px solid rgba(255, 255, 255, 0.35);
   outline-offset: 2px;
@@ -459,6 +463,24 @@ canvas {
     border-color 160ms ease,
     box-shadow 160ms ease,
     opacity 160ms ease;
+}
+
+.geometry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.geometry-actions__apply {
+  flex: 0 0 auto;
+}
+
+.geometry-actions__hint {
+  flex: 1 1 180px;
+  margin: 0;
+  min-width: 0;
 }
 
 .geometry-summary[data-state="current"] {
