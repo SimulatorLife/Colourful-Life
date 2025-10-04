@@ -104,13 +104,6 @@ function subscribeEngineToUi(engine, uiManager) {
           notify: false,
         });
       }
-
-      if (
-        changes?.profileGridMetrics !== undefined &&
-        typeof uiManager.setProfileGridMetrics === "function"
-      ) {
-        uiManager.setProfileGridMetrics(changes.profileGridMetrics, { notify: false });
-      }
     }),
   ].filter(Boolean);
 }
@@ -190,14 +183,6 @@ export function bindSimulationToUi({
 
     if (typeof lowDiversity === "number") {
       uiManager.setLowDiversityReproMultiplier(lowDiversity, { notify: false });
-    }
-  }
-
-  if (uiManager && typeof uiManager.setProfileGridMetrics === "function") {
-    const profileMode = engine?.state?.profileGridMetrics;
-
-    if (typeof profileMode === "string") {
-      uiManager.setProfileGridMetrics(profileMode, { notify: false });
     }
   }
 
