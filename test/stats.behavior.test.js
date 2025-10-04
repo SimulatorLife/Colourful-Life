@@ -103,6 +103,56 @@ test("estimateDiversity enumerates unique pairs when sample budget covers popula
   }
 });
 
+test("estimateDiversity samples target quota even when most cells lack genomes", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+  const similarityMatrix = new Map([
+    ["0|1", 0.15],
+    ["0|2", 0.4],
+    ["0|3", 0.75],
+    ["1|2", 0.55],
+    ["1|3", 0.6],
+    ["2|3", 0.45],
+  ]);
+  const makeCell = (id) =>
+    createCell({
+      dna: {
+        id,
+        reproductionProb: () => 0,
+        similarity(otherDna) {
+          const a = Math.min(id, otherDna.id);
+          const b = Math.max(id, otherDna.id);
+          const key = `${a}|${b}`;
+
+          return similarityMatrix.get(key) ?? 1;
+        },
+      },
+    });
+
+  const validCells = [0, 1, 2, 3].map((id) => makeCell(id));
+  const inertCells = Array.from({ length: 120 }, () => ({}));
+  const cells = [...validCells, ...inertCells];
+  const originalRandom = Math.random;
+
+  Math.random = () => 0;
+
+  try {
+    const actual = stats.estimateDiversity(cells, 3);
+    const expectedContributions = [
+      1 - similarityMatrix.get("0|1"),
+      1 - similarityMatrix.get("0|2"),
+      1 - similarityMatrix.get("0|3"),
+    ];
+    const expected =
+      expectedContributions.reduce((sum, value) => sum + value, 0) /
+      expectedContributions.length;
+
+    approxEqual(actual, expected, 1e-9);
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
 test("mating records track diversity-aware outcomes and block reasons", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(3);

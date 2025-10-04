@@ -997,74 +997,114 @@ export default class Stats {
 
   // Sample mean pairwise distance between up to maxPairSamples random pairs.
   estimateDiversity(cells, maxPairSamples = 200) {
-    const populationSize = Array.isArray(cells) ? cells.length : 0;
-
-    if (populationSize < 2) return 0;
-
-    const possiblePairs = (populationSize * (populationSize - 1)) / 2;
-
-    if (possiblePairs <= 0) {
+    if (!Array.isArray(cells) || cells.length < 2) {
       return 0;
     }
 
-    if (possiblePairs <= maxPairSamples) {
+    const numericMaxSamples = Number(maxPairSamples);
+    const sanitizedMaxSamples = Number.isFinite(numericMaxSamples)
+      ? Math.max(0, Math.floor(numericMaxSamples))
+      : numericMaxSamples === Infinity
+        ? Infinity
+        : 0;
+    const validCells = [];
+
+    for (let i = 0; i < cells.length; i += 1) {
+      const cell = cells[i];
+
+      if (cell && typeof cell.dna?.similarity === "function") {
+        validCells.push(cell);
+      }
+    }
+
+    const populationSize = validCells.length;
+
+    if (populationSize < 2) {
+      return 0;
+    }
+
+    const possiblePairs = (populationSize * (populationSize - 1)) / 2;
+
+    if (!(possiblePairs > 0)) {
+      return 0;
+    }
+
+    if (sanitizedMaxSamples === 0 || possiblePairs <= sanitizedMaxSamples) {
       let sum = 0;
       let count = 0;
 
-      for (let i = 0; i < populationSize - 1; i++) {
-        const a = cells[i];
+      for (let i = 0; i < populationSize - 1; i += 1) {
+        const a = validCells[i];
 
-        if (!a || typeof a.dna?.similarity !== "function") {
-          continue;
-        }
-
-        for (let j = i + 1; j < populationSize; j++) {
-          const b = cells[j];
-
-          if (!b || typeof b.dna?.similarity !== "function") {
-            continue;
-          }
+        for (let j = i + 1; j < populationSize; j += 1) {
+          const b = validCells[j];
 
           sum += 1 - a.dna.similarity(b.dna);
-          count++;
+          count += 1;
         }
       }
 
       return count > 0 ? sum / count : 0;
     }
 
-    const sampleGoal = Math.min(maxPairSamples, possiblePairs);
-    const maxAttempts = sampleGoal * 8;
-    let collected = 0;
-    let sum = 0;
+    const sampleLimit = Math.min(sanitizedMaxSamples, possiblePairs);
+    const seen = new Set();
+    const pairs = [];
+    const population = populationSize;
+    const maxAttempts = sampleLimit * 6;
     let attempts = 0;
 
-    while (collected < sampleGoal && attempts < maxAttempts) {
-      const a = cells[(Math.random() * populationSize) | 0];
-      const b = cells[(Math.random() * populationSize) | 0];
+    while (pairs.length < sampleLimit && attempts < maxAttempts) {
+      attempts += 1;
+      const first = (Math.random() * population) | 0;
+      let second = (Math.random() * (population - 1)) | 0;
 
-      attempts++;
+      if (second >= first) {
+        second += 1;
+      }
 
-      if (!a || !b || a === b) {
+      const low = first < second ? first : second;
+      const high = first < second ? second : first;
+      const key = low * population + high;
+
+      if (seen.has(key)) {
         continue;
       }
 
-      if (
-        typeof a.dna?.similarity !== "function" ||
-        typeof b.dna?.similarity !== "function"
-      ) {
-        continue;
-      }
-
-      sum += 1 - a.dna.similarity(b.dna);
-      collected++;
+      seen.add(key);
+      pairs.push([low, high]);
     }
 
-    if (collected === 0) {
+    if (pairs.length < sampleLimit) {
+      for (let i = 0; i < population && pairs.length < sampleLimit; i += 1) {
+        for (let j = i + 1; j < population && pairs.length < sampleLimit; j += 1) {
+          const key = i * population + j;
+
+          if (seen.has(key)) {
+            continue;
+          }
+
+          seen.add(key);
+          pairs.push([i, j]);
+        }
+      }
+    }
+
+    if (pairs.length === 0) {
       return 0;
     }
 
-    return sum / collected;
+    let sum = 0;
+
+    for (let i = 0; i < pairs.length; i += 1) {
+      const [aIndex, bIndex] = pairs[i];
+      const a = validCells[aIndex];
+      const b = validCells[bIndex];
+
+      sum += 1 - a.dna.similarity(b.dna);
+    }
+
+    return sum / pairs.length;
   }
 
   /**
