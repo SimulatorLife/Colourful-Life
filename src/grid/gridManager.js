@@ -32,6 +32,7 @@ import {
   COMBAT_TERRITORY_EDGE_FACTOR,
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
+  DECAY_RETURN_FRACTION as CONFIG_DECAY_RETURN_FRACTION,
 } from "../config.js";
 const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
@@ -48,7 +49,13 @@ const NEIGHBOR_OFFSETS = [
   [1, 0],
   [1, 1],
 ];
-const DECAY_RETURN_FRACTION = 0.9;
+const DECAY_RETURN_FRACTION = Math.min(
+  1,
+  Math.max(
+    0,
+    Number.isFinite(CONFIG_DECAY_RETURN_FRACTION) ? CONFIG_DECAY_RETURN_FRACTION : 0.9,
+  ),
+);
 const DECAY_IMMEDIATE_SHARE = 0.25;
 const DECAY_RELEASE_BASE = 0.12;
 const DECAY_RELEASE_RATE = 0.18;
