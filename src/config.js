@@ -50,6 +50,49 @@ export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();
 export const DECAY_RETURN_FRACTION = resolveDecayReturnFraction();
 
+function resolveEnvNumber(
+  env,
+  key,
+  {
+    fallback,
+    min = Number.NEGATIVE_INFINITY,
+    max = Number.POSITIVE_INFINITY,
+    clampResult = false,
+  },
+) {
+  const raw = env?.[key];
+  const parsed = Number.parseFloat(raw);
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  let lowerBound = min;
+  let upperBound = max;
+  const hasMin = Number.isFinite(lowerBound);
+  const hasMax = Number.isFinite(upperBound);
+
+  if (hasMin && hasMax && lowerBound > upperBound) {
+    [lowerBound, upperBound] = [upperBound, lowerBound];
+  }
+
+  const belowMin = hasMin && parsed < lowerBound;
+  const aboveMax = hasMax && parsed > upperBound;
+
+  if (clampResult) {
+    const lower = hasMin ? lowerBound : Number.NEGATIVE_INFINITY;
+    const upper = hasMax ? upperBound : Number.POSITIVE_INFINITY;
+
+    return clamp(parsed, lower, upper);
+  }
+
+  if (belowMin || aboveMax) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
 /**
  * Resolves the density penalty applied during tile regeneration. Allows
  * environments to fine-tune how strongly crowding suppresses energy recovery.
@@ -60,14 +103,11 @@ export const DECAY_RETURN_FRACTION = resolveDecayReturnFraction();
  * @returns {number} Sanitized density penalty coefficient in the 0..1 range.
  */
 export function resolveRegenDensityPenalty(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_REGEN_DENSITY_PENALTY;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
-    return DEFAULT_REGEN_DENSITY_PENALTY;
-  }
-
-  return parsed;
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_REGEN_DENSITY_PENALTY", {
+    fallback: DEFAULT_REGEN_DENSITY_PENALTY,
+    min: 0,
+    max: 1,
+  });
 }
 
 /**
@@ -90,14 +130,11 @@ export const REGEN_DENSITY_PENALTY = resolveRegenDensityPenalty(); // 1 - penalt
  * @returns {number} Sanitized density penalty coefficient in the 0..1 range.
  */
 export function resolveConsumptionDensityPenalty(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
-    return DEFAULT_CONSUMPTION_DENSITY_PENALTY;
-  }
-
-  return parsed;
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY", {
+    fallback: DEFAULT_CONSUMPTION_DENSITY_PENALTY,
+    min: 0,
+    max: 1,
+  });
 }
 
 /**
@@ -118,17 +155,11 @@ export const CONSUMPTION_DENSITY_PENALTY = resolveConsumptionDensityPenalty(); /
  * @returns {number} Territory advantage multiplier between 0 and 1.
  */
 export function resolveCombatTerritoryEdgeFactor(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR;
-  }
-
-  return sanitizeNumber(parsed, {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR", {
     fallback: DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR,
     min: 0,
     max: 1,
+    clampResult: true,
   });
 }
 
@@ -144,14 +175,12 @@ export function resolveCombatTerritoryEdgeFactor(env = RUNTIME_ENV) {
  * @returns {number} Fraction of remaining energy returned to the environment.
  */
 export function resolveDecayReturnFraction(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_DECAY_RETURN_FRACTION;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_DECAY_RETURN_FRACTION;
-  }
-
-  return clamp(parsed, 0, 1);
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_DECAY_RETURN_FRACTION", {
+    fallback: DEFAULT_DECAY_RETURN_FRACTION,
+    min: 0,
+    max: 1,
+    clampResult: true,
+  });
 }
 
 /**
@@ -167,14 +196,12 @@ export function resolveDecayReturnFraction(env = RUNTIME_ENV) {
  * @returns {number} Sanitized activation threshold in the 0..1 range.
  */
 export function resolveTraitActivationThreshold(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_TRAIT_ACTIVATION_THRESHOLD;
-  }
-
-  return clamp(parsed, 0, 1);
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD", {
+    fallback: DEFAULT_TRAIT_ACTIVATION_THRESHOLD,
+    min: 0,
+    max: 1,
+    clampResult: true,
+  });
 }
 
 export const TRAIT_ACTIVATION_THRESHOLD = resolveTraitActivationThreshold();
@@ -191,14 +218,12 @@ export const TRAIT_ACTIVATION_THRESHOLD = resolveTraitActivationThreshold();
  * @returns {number} Activity baseline clamped to the 0..1 interval.
  */
 export function resolveActivityBaseRate(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_ACTIVITY_BASE_RATE;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_ACTIVITY_BASE_RATE;
-  }
-
-  return clamp(parsed, 0, 1);
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_ACTIVITY_BASE_RATE", {
+    fallback: DEFAULT_ACTIVITY_BASE_RATE,
+    min: 0,
+    max: 1,
+    clampResult: true,
+  });
 }
 
 export const ACTIVITY_BASE_RATE = resolveActivityBaseRate();
@@ -214,14 +239,12 @@ export const ACTIVITY_BASE_RATE = resolveActivityBaseRate();
  * @returns {number} Mutation probability constrained to the 0..1 interval.
  */
 export function resolveMutationChance(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_MUTATION_CHANCE;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_MUTATION_CHANCE;
-  }
-
-  return clamp(parsed, 0, 1);
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_MUTATION_CHANCE", {
+    fallback: DEFAULT_MUTATION_CHANCE,
+    min: 0,
+    max: 1,
+    clampResult: true,
+  });
 }
 
 export const MUTATION_CHANCE_BASELINE = resolveMutationChance();
