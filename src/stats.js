@@ -557,6 +557,7 @@ export default class Stats {
     behaviorEvenness = 0,
     successfulComplementarity = 0,
     meanStrategyPenalty = 1,
+    diverseSuccessRate = 0,
   ) {
     const target = clamp01(this.diversityTarget ?? DIVERSITY_TARGET_DEFAULT);
 
@@ -580,11 +581,21 @@ export default class Stats {
     );
     const penaltySlack = penaltyAverage;
     const penaltyRelief = clamp01(1 - penaltyAverage);
+    const successRate = clamp01(
+      Number.isFinite(diverseSuccessRate) ? diverseSuccessRate : 0,
+    );
+    const successTarget = Math.max(0.1, Math.min(0.85, 0.35 + target * 0.5));
+    const successShortfall =
+      successTarget > 0 ? clamp01((successTarget - successRate) / successTarget) : 0;
 
     const geneticShortfall = clamp01((target - diversityValue) / target);
     const evennessShortfall = clamp01(1 - evennessValue);
     const evennessDemand = evennessShortfall * (0.3 + geneticShortfall * 0.4);
-    const combinedShortfall = clamp01(geneticShortfall * 0.7 + evennessDemand);
+    const successDemand =
+      successShortfall * (0.25 + penaltySlack * 0.35 + (1 - evennessValue) * 0.25);
+    const combinedShortfall = clamp01(
+      geneticShortfall * 0.65 + evennessDemand + successDemand,
+    );
     const complementRelief = complementValue * 0.35;
     const targetPressure = Math.max(0, combinedShortfall - complementRelief);
     const prev = Number.isFinite(this.diversityPressure) ? this.diversityPressure : 0;
@@ -594,13 +605,15 @@ export default class Stats {
 
     this.diversityPressure = clamp01(next);
 
-    const monotonyDemand = clamp01(
-      evennessShortfall * (0.45 + geneticShortfall * 0.35) * (0.7 + penaltySlack * 0.6),
-    );
+    const monotonyDemand =
+      evennessShortfall * (0.45 + geneticShortfall * 0.35) * (0.7 + penaltySlack * 0.6);
+    const monotonyDemandScaled = clamp01(monotonyDemand * (1 + successShortfall * 0.5));
     const complementReliefStrategy = clamp01(
       complementValue * (0.25 + geneticShortfall * 0.3) * (0.8 + penaltyRelief * 0.4),
     );
-    const rawStrategyPressure = clamp01(monotonyDemand - complementReliefStrategy);
+    const rawStrategyPressure = clamp01(
+      monotonyDemandScaled - complementReliefStrategy,
+    );
     const prevStrategy = Number.isFinite(this.strategyPressure)
       ? this.strategyPressure
       : 0;
@@ -1140,6 +1153,7 @@ export default class Stats {
       behaviorEvenness,
       successfulComplementarity,
       meanStrategyPenalty,
+      diverseSuccessRate,
     );
 
     this.pushHistory("population", pop);
