@@ -198,6 +198,7 @@ export default class GridManager {
   #segmentWindowScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
+  #eventModifierScratch = null;
   #imageDataCanvas = null;
   #imageDataCtx = null;
   #imageData = null;
@@ -312,6 +313,19 @@ export default class GridManager {
     this.#columnEventScratch.length = 0;
 
     return this.#columnEventScratch;
+  }
+
+  #getEventModifierScratch() {
+    if (!this.#eventModifierScratch) {
+      this.#eventModifierScratch = {
+        regenMultiplier: 1,
+        regenAdd: 0,
+        drainAdd: 0,
+        appliedEvents: EMPTY_EVENT_LIST,
+      };
+    }
+
+    return this.#eventModifierScratch;
   }
 
   #prepareEventsByRow(rowCount) {
@@ -2591,6 +2605,7 @@ export default class GridManager {
     const effectCache = getEventEffect ? this.eventEffectCache : null;
     const usingSegmentedEvents =
       hasEvents && isEventAffecting === defaultIsEventAffecting;
+    const eventModifierScratch = this.#getEventModifierScratch();
     const eventOptions = hasEvents
       ? {
           events: evs,
@@ -2600,6 +2615,8 @@ export default class GridManager {
           isEventAffecting,
           getEventEffect,
           effectCache,
+          collectAppliedEvents: false,
+          result: eventModifierScratch,
         }
       : null;
     const profileEnabled = typeof this.stats?.recordEnergyStageTimings === "function";
