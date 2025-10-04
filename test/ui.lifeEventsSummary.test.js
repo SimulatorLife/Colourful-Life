@@ -435,6 +435,68 @@ test("life event death breakdown surfaces leading causes", async () => {
   }
 });
 
+test("life event death breakdown falls back to metrics payload", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        getCellSize: () => 5,
+      },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    openPanel(uiManager.insightsPanel);
+    openPanel(uiManager.lifeEventsPanel);
+
+    const stats = createLifeEventStatsFixture();
+
+    delete stats.deathBreakdown;
+
+    const metrics = {
+      ...createSnapshotFixture(),
+      deathBreakdown: {
+        starvation: 3,
+        combat: 1,
+      },
+    };
+
+    uiManager.renderMetrics(stats, metrics, {
+      eventStrengthMultiplier: 1,
+      activeEvents: [],
+    });
+
+    assert.equal(
+      uiManager.deathBreakdownList.hidden,
+      false,
+      "death breakdown should render when counts arrive via metrics",
+    );
+
+    const labels = Array.from(
+      uiManager.deathBreakdownList.querySelectorAll(".death-breakdown-label"),
+    ).map((node) => node.textContent);
+
+    assert.include(
+      labels,
+      "Starvation",
+      "metrics-provided causes should populate the breakdown list",
+    );
+  } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
 test("insights panel defers metrics work while collapsed", async () => {
   const restore = setupDom();
   const restoreCanvas = stubCanvasElements();
@@ -524,10 +586,14 @@ test("life events only render after the panel expands", async () => {
       0,
       "collapsed life events panel should not render entries",
     );
-    assert.is(
+    assert.ok(
       uiManager._pendingLifeEventsStats,
-      stats,
       "life events stats should be cached while panel is collapsed",
+    );
+    assert.equal(
+      uiManager._pendingLifeEventsStats?.stats,
+      stats,
+      "cached payload should retain original stats reference",
     );
 
     openPanel(uiManager.lifeEventsPanel);
