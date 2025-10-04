@@ -60,20 +60,29 @@ function softmax(logits = []) {
 
 function sampleFromDistribution(probabilities = [], labels = [], rng = Math.random) {
   if (!Array.isArray(probabilities) || probabilities.length === 0) return null;
-  const total = probabilities.reduce((acc, v) => acc + v, 0);
+
+  const length = probabilities.length;
+  let total = 0;
+
+  for (let i = 0; i < length; i++) {
+    total += probabilities[i];
+  }
 
   if (!Number.isFinite(total) || total <= EPSILON) return null;
+
   const randomSource = typeof rng === "function" ? rng : Math.random;
   const r = randomSource() * total;
   let acc = 0;
 
-  for (let i = 0; i < probabilities.length; i++) {
+  for (let i = 0; i < length; i++) {
     acc += probabilities[i];
 
     if (r <= acc + EPSILON) return labels[i] ?? i;
   }
 
-  return labels[labels.length - 1] ?? probabilities.length - 1;
+  const fallbackIndex = length - 1;
+
+  return labels[fallbackIndex] ?? fallbackIndex;
 }
 
 export default class Cell {
