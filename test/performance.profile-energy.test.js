@@ -24,6 +24,7 @@ const BENCHMARK_ENV = {
   PERF_SIM_CELL_SIZE: "4",
   PERF_SIM_DENSITY: "0.45",
   PERF_SIM_SEED: "4242",
+  PERF_INCLUDE_SIM: "1",
 };
 
 test("energy profiling benchmark exits successfully", async () => {
@@ -130,5 +131,69 @@ test("energy profiling benchmark exits successfully", async () => {
   assert.ok(
     simulation.finalPopulation > 0,
     "simulation should preserve a non-zero population during the benchmark",
+  );
+});
+
+test("energy profiling benchmark skips simulation unless requested", async () => {
+  const child = spawn(process.execPath, [benchmarkPath], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      PERF_ROWS: "10",
+      PERF_COLS: "10",
+      PERF_ITERATIONS: "5",
+      PERF_WARMUP: "2",
+      PERF_CELL_SIZE: "3",
+      PERF_SEED: "2024",
+      PERF_INCLUDE_SIM: "0",
+    },
+    stdio: "pipe",
+  });
+
+  let stdout = "";
+  let stderr = "";
+
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+
+  const result = await new Promise((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code, signal) => resolve({ code, signal }));
+  });
+
+  assert.equal(result.signal, null);
+  assert.equal(result.code, 0);
+  assert.equal(stderr.trim(), "");
+
+  const outputText = stdout.trim();
+
+  assert.notEqual(
+    outputText.length,
+    0,
+    "benchmark should emit output when skipping simulation",
+  );
+
+  let metrics;
+
+  try {
+    metrics = JSON.parse(outputText);
+  } catch (error) {
+    assert.fail(`failed to parse benchmark output as JSON: ${error.message}`);
+  }
+
+  assert.equal(typeof metrics, "object");
+  assert.ok(Number.isFinite(metrics.msPerTick));
+  assert.strictEqual(
+    metrics.simulationBenchmark,
+    undefined,
+    "simulationBenchmark should be omitted when PERF_INCLUDE_SIM is disabled",
   );
 });

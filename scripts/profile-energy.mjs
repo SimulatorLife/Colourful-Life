@@ -60,6 +60,7 @@ const configuration = {
   iterations: envNumber("PERF_ITERATIONS", 200),
   cellSize: envNumber("PERF_CELL_SIZE", 5),
   seed: envNumber("PERF_SEED", 1337, { min: 0 }),
+  includeSimulation: envNumber("PERF_INCLUDE_SIM", 0, { min: 0 }) > 0,
   simulation: {
     rows: envNumber("PERF_SIM_ROWS", envNumber("PERF_ROWS", 60)),
     cols: envNumber("PERF_SIM_COLS", envNumber("PERF_COLS", 60)),
@@ -288,69 +289,82 @@ for (let i = 0; i < configuration.iterations; i++) {
 const energyBenchmarkEnd = performanceApi.now();
 const energyDurationMs = energyBenchmarkEnd - start;
 
-const simulationConfig = configuration.simulation;
-const simulationCanvas = createCanvasStub(
-  simulationConfig.cols * simulationConfig.cellSize,
-  simulationConfig.rows * simulationConfig.cellSize,
-);
-const simulationRng = createRNG(simulationConfig.seed);
-const simulationEngine = new SimulationEngine({
-  canvas: simulationCanvas,
-  autoStart: false,
-  config: {
-    rows: simulationConfig.rows,
-    cols: simulationConfig.cols,
-    cellSize: simulationConfig.cellSize,
-    updatesPerSecond: simulationConfig.updatesPerSecond,
-    autoReseed: false,
-    initialObstaclePreset: "none",
-    randomizeInitialObstacles: false,
-    showObstacles: false,
-    showDensity: false,
-    showEnergy: false,
-    showFitness: false,
-  },
-  rng: simulationRng,
-  requestAnimationFrame: () => 0,
-  cancelAnimationFrame: () => {},
-  performanceNow: () => performanceApi.now(),
-});
+let simulationSummary = null;
 
-const seedingRng = createRNG(deriveSeed(simulationConfig.seed, 1));
-const seedingSummary = populateHighDensityGrid(simulationEngine, {
-  density: simulationConfig.seedDensity,
-  rng: seedingRng,
-});
+if (configuration.includeSimulation) {
+  const simulationConfig = configuration.simulation;
+  const simulationCanvas = createCanvasStub(
+    simulationConfig.cols * simulationConfig.cellSize,
+    simulationConfig.rows * simulationConfig.cellSize,
+  );
+  const simulationRng = createRNG(simulationConfig.seed);
+  const simulationEngine = new SimulationEngine({
+    canvas: simulationCanvas,
+    autoStart: false,
+    config: {
+      rows: simulationConfig.rows,
+      cols: simulationConfig.cols,
+      cellSize: simulationConfig.cellSize,
+      updatesPerSecond: simulationConfig.updatesPerSecond,
+      autoReseed: false,
+      initialObstaclePreset: "none",
+      randomizeInitialObstacles: false,
+      showObstacles: false,
+      showDensity: false,
+      showEnergy: false,
+      showFitness: false,
+    },
+    rng: simulationRng,
+    requestAnimationFrame: () => 0,
+    cancelAnimationFrame: () => {},
+    performanceNow: () => performanceApi.now(),
+  });
 
-const updatesPerSecond = Math.max(1, simulationEngine.state?.updatesPerSecond ?? 60);
-const intervalMs = 1000 / updatesPerSecond;
-const tickStep = intervalMs + 0.01;
-let tickTimestamp = 0;
+  const seedingRng = createRNG(deriveSeed(simulationConfig.seed, 1));
+  const seedingSummary = populateHighDensityGrid(simulationEngine, {
+    density: simulationConfig.seedDensity,
+    rng: seedingRng,
+  });
 
-const stepEngine = (count, tracker) => {
-  for (let i = 0; i < count; i++) {
-    tickTimestamp += tickStep;
-    const advanced = simulationEngine.tick(tickTimestamp);
+  const updatesPerSecond = Math.max(1, simulationEngine.state?.updatesPerSecond ?? 60);
+  const intervalMs = 1000 / updatesPerSecond;
+  const tickStep = intervalMs + 0.01;
+  let tickTimestamp = 0;
 
-    if (tracker && advanced) {
-      tracker.executed += 1;
+  const stepEngine = (count, tracker) => {
+    for (let i = 0; i < count; i++) {
+      tickTimestamp += tickStep;
+      const advanced = simulationEngine.tick(tickTimestamp);
+
+      if (tracker && advanced) {
+        tracker.executed += 1;
+      }
     }
+  };
+
+  if (simulationConfig.warmup > 0) {
+    stepEngine(simulationConfig.warmup);
   }
-};
 
-if (simulationConfig.warmup > 0) {
-  stepEngine(simulationConfig.warmup);
+  const executionTracker = { executed: 0 };
+  const simulationBenchmarkStart = performanceApi.now();
+
+  stepEngine(simulationConfig.iterations, executionTracker);
+  const simulationBenchmarkEnd = performanceApi.now();
+
+  const executedTicks = executionTracker.executed;
+  const simulationDurationMs = simulationBenchmarkEnd - simulationBenchmarkStart;
+  const finalPopulation = simulationEngine.grid?.activeCells?.size ?? 0;
+
+  simulationSummary = {
+    ...simulationConfig,
+    durationMs: simulationDurationMs,
+    executedTicks,
+    msPerTick: simulationDurationMs / Math.max(1, executedTicks),
+    finalPopulation,
+    seedingSummary,
+  };
 }
-
-const executionTracker = { executed: 0 };
-const simulationBenchmarkStart = performanceApi.now();
-
-stepEngine(simulationConfig.iterations, executionTracker);
-const simulationBenchmarkEnd = performanceApi.now();
-
-const executedTicks = executionTracker.executed;
-const simulationDurationMs = simulationBenchmarkEnd - simulationBenchmarkStart;
-const finalPopulation = simulationEngine.grid?.activeCells?.size ?? 0;
 
 const scriptEnd = performanceApi.now();
 
@@ -359,14 +373,10 @@ const output = {
   durationMs: energyDurationMs,
   msPerTick: energyDurationMs / Math.max(1, configuration.iterations),
   totalRuntimeMs: scriptEnd - startGlobal,
-  simulationBenchmark: {
-    ...simulationConfig,
-    durationMs: simulationDurationMs,
-    executedTicks,
-    msPerTick: simulationDurationMs / Math.max(1, executedTicks),
-    finalPopulation,
-    seedingSummary,
-  },
 };
+
+if (simulationSummary) {
+  output.simulationBenchmark = simulationSummary;
+}
 
 console.log(JSON.stringify(output, null, 2));
