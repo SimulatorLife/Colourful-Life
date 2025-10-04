@@ -1,4 +1,4 @@
-name: Request Codex review for PRs
+name: Auto-merge Codex PRs
 
 on:
   pull_request:
