@@ -149,36 +149,63 @@ jobs:
             core.setOutput('head_ref', pr.head.ref);
             core.setOutput('number', String(n));
 
-      - name: Check for existing Codex review request
-        if: ${{ steps.read.outputs.bail == 'false' }}
-        id: review_requested
+      # Temporarily disable Codex review requests while we auto-merge clean PRs.
+      # - name: Check for existing Codex review request
+      #   if: ${{ steps.read.outputs.bail == 'false' }}
+      #   id: review_requested
+      #   uses: actions/github-script@v7
+      #   with:
+      #     script: |
+      #       const n = Number('${{ steps.read.outputs.number }}');
+      #       const marker = '@codex review the changes in this PR...';
+      #       const { data: comments } = await github.rest.issues.listComments({
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         issue_number: n,
+      #         per_page: 100,
+      #       });
+      #
+      #       const alreadyRequested = comments.some(comment => (comment.body || '').trim().startsWith(marker));
+      #       core.setOutput('exists', alreadyRequested ? 'true' : 'false');
+
+      # - name: Request Codex review
+      #   if: ${{ steps.read.outputs.bail == 'false' && steps.review_requested.outputs.exists != 'true' }}
+      #   uses: actions/github-script@v7
+      #   with:
+      #     github-token: ${{ secrets.GH_USER_TOKEN }}
+      #     script: |
+      #       const n = Number('${{ steps.read.outputs.number }}');
+      #       const body = `@codex review the changes in this PR... take a comprehensive pass.\n\nPlease evaluate the update with high expectations and call out anything that needs attention, including:\n- Simulation performance impacts (grid updates, rendering throughput, memory footprint).\n- Code style, clarity, and maintainability concerns.\n- Compliance with the Simulation Laws and any related safeguards.\n- Test coverage, automation signals, and documentation accuracy.\n- Risks to user experience, accessibility, or stability.\n\nProvide actionable feedback or explicit approval so we can proceed confidently.`;
+      #
+      #       await github.rest.issues.createComment({
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         issue_number: n,
+      #         body,
+      #       });
+
+      - name: Auto-merge PR when ready
+        if: ${{ steps.read.outputs.bail == 'false' && steps.read.outputs.mergeable == 'true' && steps.read.outputs.draft != 'true' }}
         uses: actions/github-script@v7
         with:
           script: |
             const n = Number('${{ steps.read.outputs.number }}');
-            const marker = '@codex review the changes in this PR...';
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: n,
-              per_page: 100,
-            });
+            const state = '${{ steps.read.outputs.state }}'.toLowerCase();
 
-            const alreadyRequested = comments.some(comment => (comment.body || '').trim().startsWith(marker));
-            core.setOutput('exists', alreadyRequested ? 'true' : 'false');
+            if (!['clean', 'unstable'].includes(state)) {
+              core.notice(`Skipping auto-merge for PR #${n} because mergeable_state=${state}.`);
+              return;
+            }
 
-      - name: Request Codex review
-        if: ${{ steps.read.outputs.bail == 'false' && steps.review_requested.outputs.exists != 'true' }}
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GH_USER_TOKEN }}
-          script: |
-            const n = Number('${{ steps.read.outputs.number }}');
-            const body = `@codex review the changes in this PR... take a comprehensive pass.\n\nPlease evaluate the update with high expectations and call out anything that needs attention, including:\n- Simulation performance impacts (grid updates, rendering throughput, memory footprint).\n- Code style, clarity, and maintainability concerns.\n- Compliance with the Simulation Laws and any related safeguards.\n- Test coverage, automation signals, and documentation accuracy.\n- Risks to user experience, accessibility, or stability.\n\nProvide actionable feedback or explicit approval so we can proceed confidently.`;
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: n,
-              body,
-            });
+            try {
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: n,
+                merge_method: 'squash'
+              });
+              core.notice(`Auto-merged PR #${n}.`);
+            } catch (error) {
+              core.warning(`Auto-merge failed for PR #${n}: ${error.message}`);
+              throw error;
+            }
