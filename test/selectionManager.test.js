@@ -45,6 +45,80 @@ test("activating built-in patterns restricts eligibility and updates description
   );
 });
 
+test("central sanctuary pattern concentrates eligibility in the core", () => {
+  const manager = createManager(12, 12);
+
+  assert.is(
+    manager.togglePattern("centralSanctuary", true),
+    true,
+    "pattern can be enabled",
+  );
+
+  const renderData = manager.getActiveZoneRenderData();
+
+  assert.is(renderData.length, 1, "central sanctuary contributes one zone");
+
+  const { geometry } = renderData[0];
+
+  assert.ok(geometry, "geometry is available for the pattern");
+  assert.ok(geometry.bounds, "bounds describe the active core region");
+  assert.ok(
+    geometry.bounds.startRow > 0 && geometry.bounds.startCol > 0,
+    "core should sit away from the edges",
+  );
+  assert.ok(
+    geometry.bounds.endRow < manager.rows - 1 &&
+      geometry.bounds.endCol < manager.cols - 1,
+    "core should leave a perimeter of inactive tiles",
+  );
+
+  const insideRow = Math.floor((geometry.bounds.startRow + geometry.bounds.endRow) / 2);
+  const insideCol = Math.floor((geometry.bounds.startCol + geometry.bounds.endCol) / 2);
+
+  assert.is(
+    manager.isInActiveZone(insideRow, insideCol),
+    true,
+    "center of the sanctuary remains eligible",
+  );
+
+  const above = geometry.bounds.startRow - 1;
+  const left = geometry.bounds.startCol - 1;
+  const below = geometry.bounds.endRow + 1;
+  const right = geometry.bounds.endCol + 1;
+
+  if (above >= 0) {
+    assert.is(
+      manager.isInActiveZone(above, insideCol),
+      false,
+      "tiles above the sanctuary should be excluded",
+    );
+  }
+
+  if (left >= 0) {
+    assert.is(
+      manager.isInActiveZone(insideRow, left),
+      false,
+      "tiles left of the sanctuary should be excluded",
+    );
+  }
+
+  if (below < manager.rows) {
+    assert.is(
+      manager.isInActiveZone(below, insideCol),
+      false,
+      "tiles below the sanctuary should be excluded",
+    );
+  }
+
+  if (right < manager.cols) {
+    assert.is(
+      manager.isInActiveZone(insideRow, right),
+      false,
+      "tiles right of the sanctuary should be excluded",
+    );
+  }
+});
+
 test("setDimensions resets patterns and geometry cache", () => {
   const manager = createManager(8, 8);
 

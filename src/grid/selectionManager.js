@@ -44,6 +44,10 @@ export default class SelectionManager {
     const cornerWidth = () => Math.max(2, Math.floor(this.cols * 0.18));
     const cornerHeight = () => Math.max(2, Math.floor(this.rows * 0.18));
     const bandWidth = () => Math.max(2, Math.floor(this.cols * 0.08));
+    const coreWidth = () =>
+      Math.min(this.cols, Math.max(3, Math.floor(this.cols * 0.32)));
+    const coreHeight = () =>
+      Math.min(this.rows, Math.max(3, Math.floor(this.rows * 0.32)));
 
     this.#addPattern("eastHalf", {
       name: "Eastern Hemisphere",
@@ -75,6 +79,23 @@ export default class SelectionManager {
         const bandIndex = Math.floor(col / width);
 
         return bandIndex % 2 === 0;
+      },
+    });
+
+    this.#addPattern("centralSanctuary", {
+      name: "Central Sanctuary",
+      description:
+        "Concentrate reproduction inside a protected core to nurture hub ecosystems.",
+      color: DEFAULT_COLORS[3],
+      contains: (row, col) => {
+        const width = coreWidth();
+        const height = coreHeight();
+        const startRow = Math.max(0, Math.floor((this.rows - height) / 2));
+        const startCol = Math.max(0, Math.floor((this.cols - width) / 2));
+        const endRow = Math.min(this.rows, startRow + height);
+        const endCol = Math.min(this.cols, startCol + width);
+
+        return row >= startRow && row < endRow && col >= startCol && col < endCol;
       },
     });
   }
