@@ -198,6 +198,7 @@ export default class GridManager {
   #segmentWindowScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
+  #rowOccupancy = null;
   #imageDataCanvas = null;
   #imageDataCtx = null;
   #imageData = null;
@@ -1248,6 +1249,7 @@ export default class GridManager {
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
+    this.#resetRowOccupancy();
     this.maxTileEnergy =
       typeof maxTileEnergy === "number" ? maxTileEnergy : GridManager.maxTileEnergy;
     this.autoSeedEnabled = Boolean(options.autoSeedEnabled);
@@ -1481,16 +1483,85 @@ export default class GridManager {
     } else {
       this.cellPositions.set(cell, { row, col });
     }
+
+    this.#registerOccupiedTile(row, col);
   }
 
   #untrackCell(cell) {
     if (!cell) return;
+
+    const existing = this.cellPositions.get(cell);
+
+    if (existing) {
+      this.#unregisterOccupiedTile(existing.row, existing.col);
+    }
 
     this.cellPositions.delete(cell);
   }
 
   #clearTrackedPositions() {
     this.cellPositions = new WeakMap();
+  }
+
+  #ensureRowOccupancy() {
+    if (!Number.isInteger(this.rows) || this.rows <= 0) {
+      this.#rowOccupancy = null;
+
+      return null;
+    }
+
+    if (!this.#rowOccupancy || this.#rowOccupancy.length !== this.rows) {
+      this.#rowOccupancy = Array.from({ length: this.rows }, () => new Set());
+    }
+
+    return this.#rowOccupancy;
+  }
+
+  #resetRowOccupancy() {
+    if (!Number.isInteger(this.rows) || this.rows <= 0) {
+      this.#rowOccupancy = null;
+
+      return;
+    }
+
+    this.#rowOccupancy = Array.from({ length: this.rows }, () => new Set());
+  }
+
+  #registerOccupiedTile(row, col) {
+    if (
+      !Number.isInteger(row) ||
+      !Number.isInteger(col) ||
+      row < 0 ||
+      row >= this.rows ||
+      col < 0 ||
+      col >= this.cols
+    ) {
+      return;
+    }
+
+    const occupancy = this.#ensureRowOccupancy();
+
+    occupancy?.[row]?.add(col);
+  }
+
+  #unregisterOccupiedTile(row, col) {
+    if (
+      !Number.isInteger(row) ||
+      !Number.isInteger(col) ||
+      row < 0 ||
+      row >= this.rows ||
+      col < 0 ||
+      col >= this.cols
+    ) {
+      return;
+    }
+
+    this.#rowOccupancy?.[row]?.delete(col);
+  }
+
+  #moveOccupiedTile(fromRow, fromCol, toRow, toCol) {
+    this.#unregisterOccupiedTile(fromRow, fromCol);
+    this.#registerOccupiedTile(toRow, toCol);
   }
 
   #isValidLocation(row, col, cell) {
@@ -2262,6 +2333,7 @@ export default class GridManager {
     this.cols = colsInt;
     this.cellSize = cellSizeValue;
     this.grid = Array.from({ length: rowsInt }, () => Array(colsInt).fill(null));
+    this.#resetRowOccupancy();
     this.energyGrid = Array.from({ length: rowsInt }, () =>
       Array.from({ length: colsInt }, () => baseEnergy),
     );
@@ -3106,6 +3178,7 @@ export default class GridManager {
     this.#markTileDirty(toRow, toCol);
     clearTileEnergyBuffers(this, toRow, toCol, { preserveCurrent: true });
     this.#trackCellPosition(moving, toRow, toCol);
+    this.#moveOccupiedTile(fromRow, fromCol, toRow, toCol);
     this.#applyDensityDelta(fromRow, fromCol, -1);
     this.#applyDensityDelta(toRow, toCol, 1);
     this.#applyEnergyExclusivityAt(toRow, toCol, moving, {
@@ -3118,6 +3191,7 @@ export default class GridManager {
   #handleCellMoved({ fromRow, fromCol, toRow, toCol }) {
     this.#markTileDirty(fromRow, fromCol);
     this.#markTileDirty(toRow, toCol);
+    this.#moveOccupiedTile(fromRow, fromCol, toRow, toCol);
     this.#applyDensityDelta(fromRow, fromCol, -1);
     this.#applyDensityDelta(toRow, toCol, 1);
   }
@@ -3342,6 +3416,7 @@ export default class GridManager {
   rebuildActiveCells() {
     this.activeCells.clear();
     this.#clearTrackedPositions();
+    this.#resetRowOccupancy();
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         const cell = this.grid[row][col];
@@ -5094,57 +5169,95 @@ export default class GridManager {
     const grid = this.grid;
     const rows = this.rows;
     const cols = this.cols;
-    const sight = cell.sight;
+    const sightValue = Number.isFinite(cell?.sight) ? Math.floor(cell.sight) : 0;
+    const sight = Math.max(0, sightValue);
+    const minRow = Math.max(0, row - sight);
+    const maxRow = Math.min(rows - 1, row + sight);
+    const minCol = Math.max(0, col - sight);
+    const maxCol = Math.min(cols - 1, col + sight);
+    const occupancyRows = this.#rowOccupancy;
+    const useOccupancy = Array.isArray(occupancyRows) && occupancyRows.length === rows;
+    const resolveHostilityRng =
+      typeof cell.resolveSharedRng === "function"
+        ? (target) => {
+            const candidate = cell.resolveSharedRng(target, "hostilityGate");
 
-    for (let dy = -sight; dy <= sight; dy++) {
-      const newRow = row + dy;
+            return typeof candidate === "function" ? candidate : Math.random;
+          }
+        : null;
+    const classifyTarget = (gridRow, targetRow, targetCol) => {
+      if (!gridRow) return;
+      if (targetRow === row && targetCol === col) return;
 
-      if (newRow < 0 || newRow >= rows) continue;
+      const target = gridRow[targetCol];
 
+      if (!target) return;
+
+      const similarity = getPairSimilarity(cell, target);
+
+      if (similarity >= allyT) {
+        society.push({
+          row: targetRow,
+          col: targetCol,
+          target,
+          classification: "society",
+          precomputedSimilarity: similarity,
+        });
+
+        return;
+      }
+
+      let isEnemy = similarity <= enemyT;
+
+      if (!isEnemy && enemyBias > 0) {
+        const rng = resolveHostilityRng ? resolveHostilityRng(target) : Math.random;
+        const roll = typeof rng === "function" ? rng() : Math.random();
+
+        if (roll < enemyBias) {
+          isEnemy = true;
+        }
+      }
+
+      if (isEnemy) {
+        enemies.push({ row: targetRow, col: targetCol, target });
+
+        return;
+      }
+
+      mates.push({
+        row: targetRow,
+        col: targetCol,
+        target,
+        classification: "mate",
+        precomputedSimilarity: similarity,
+      });
+    };
+
+    if (useOccupancy) {
+      for (let newRow = minRow; newRow <= maxRow; newRow++) {
+        const occupiedCols = occupancyRows[newRow];
+
+        if (!occupiedCols || occupiedCols.size === 0) continue;
+
+        const gridRow = grid[newRow];
+
+        for (const newCol of occupiedCols) {
+          if (newCol < minCol || newCol > maxCol) continue;
+
+          classifyTarget(gridRow, newRow, newCol);
+        }
+      }
+
+      return { mates, enemies, society };
+    }
+
+    for (let newRow = minRow; newRow <= maxRow; newRow++) {
       const gridRow = grid[newRow];
 
-      for (let dx = -sight; dx <= sight; dx++) {
-        if (dx === 0 && dy === 0) continue;
+      if (!gridRow) continue;
 
-        const newCol = col + dx;
-
-        if (newCol < 0 || newCol >= cols) continue;
-
-        const target = gridRow[newCol];
-
-        if (!target) continue;
-
-        const similarity = getPairSimilarity(cell, target);
-
-        if (similarity >= allyT) {
-          society.push({
-            row: newRow,
-            col: newCol,
-            target,
-            classification: "society",
-            precomputedSimilarity: similarity,
-          });
-        } else if (
-          similarity <= enemyT ||
-          (() => {
-            const hostilityRng =
-              typeof cell.resolveSharedRng === "function"
-                ? cell.resolveSharedRng(target, "hostilityGate")
-                : Math.random;
-
-            return hostilityRng() < enemyBias;
-          })()
-        ) {
-          enemies.push({ row: newRow, col: newCol, target });
-        } else {
-          mates.push({
-            row: newRow,
-            col: newCol,
-            target,
-            classification: "mate",
-            precomputedSimilarity: similarity,
-          });
-        }
+      for (let newCol = minCol; newCol <= maxCol; newCol++) {
+        classifyTarget(gridRow, newRow, newCol);
       }
     }
 
