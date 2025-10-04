@@ -157,12 +157,26 @@ export function toPlainObject(candidate) {
 export function cloneTracePayload(trace) {
   if (!trace) return null;
 
+  const structuredCloneFn = globalThis.structuredClone;
+
+  if (typeof structuredCloneFn === "function") {
+    try {
+      return structuredCloneFn(trace);
+    } catch (error) {
+      logWithOptionalError(
+        "warn",
+        "structuredClone failed for trace payload; falling back to manual copy.",
+        error,
+      );
+    }
+  }
+
+  const { sensors, nodes } = trace;
+
   return {
-    sensors: Array.isArray(trace.sensors)
-      ? trace.sensors.map((entry) => ({ ...entry }))
-      : [],
-    nodes: Array.isArray(trace.nodes)
-      ? trace.nodes.map((entry) => ({
+    sensors: Array.isArray(sensors) ? sensors.map((entry) => ({ ...entry })) : [],
+    nodes: Array.isArray(nodes)
+      ? nodes.map((entry) => ({
           ...entry,
           inputs: Array.isArray(entry.inputs)
             ? entry.inputs.map((input) => ({ ...input }))
