@@ -2667,6 +2667,197 @@ export default class Cell {
     };
   }
 
+  #resolvePursuitTarget({ mates = [], enemies = [], society = [] } = {}) {
+    const available = {
+      enemies: Array.isArray(enemies) ? enemies.filter(Boolean) : [],
+      mates: Array.isArray(mates) ? mates.filter(Boolean) : [],
+      allies: Array.isArray(society) ? society.filter(Boolean) : [],
+    };
+
+    if (
+      available.enemies.length === 0 &&
+      available.mates.length === 0 &&
+      available.allies.length === 0
+    ) {
+      return null;
+    }
+
+    const outcome = this.#getDecisionOutcome("movement") ?? null;
+    const context = this._decisionContextIndex?.get("movement") ?? null;
+    let probabilities = outcome?.probabilities ?? null;
+
+    if (!probabilities && outcome?.logits) {
+      const entries = OUTPUT_GROUPS.movement;
+      const logits = entries.map(({ key }) => {
+        const value = Number(outcome.logits?.[key]);
+
+        return Number.isFinite(value) ? value : 0;
+      });
+      const labels = entries.map(({ key }) => key);
+      const normalized = softmax(logits);
+
+      probabilities = {};
+
+      for (let i = 0; i < labels.length; i++) {
+        probabilities[labels[i]] = normalized[i] ?? 0;
+      }
+    }
+
+    if (!probabilities) {
+      return null;
+    }
+
+    const normalize01 = (value, fallback = 0) =>
+      clamp(Number.isFinite(value) ? value : fallback, 0, 1);
+    const neighborTotal =
+      available.enemies.length + available.mates.length + available.allies.length;
+    const fallbackEnemy =
+      neighborTotal > 0 ? available.enemies.length / neighborTotal : 0;
+    const fallbackMate = neighborTotal > 0 ? available.mates.length / neighborTotal : 0;
+    const fallbackAlly =
+      neighborTotal > 0 ? available.allies.length / neighborTotal : 0;
+    const contextSensors =
+      context && typeof context.sensors === "object" ? context.sensors : null;
+
+    const enemyFraction = normalize01(contextSensors?.enemyFraction, fallbackEnemy);
+    const mateFraction = normalize01(contextSensors?.mateFraction, fallbackMate);
+    const allyFraction = normalize01(contextSensors?.allyFraction, fallbackAlly);
+    const riskTolerance = normalize01(
+      contextSensors?.riskTolerance,
+      this.#resolveRiskTolerance(),
+    );
+    const neuralFatigue = normalize01(
+      contextSensors?.neuralFatigue,
+      this.#currentNeuralFatigue(),
+    );
+    const opportunitySignal = clamp(
+      Number.isFinite(contextSensors?.opportunitySignal)
+        ? contextSensors.opportunitySignal
+        : this.#currentOpportunitySignal(),
+      -1,
+      1,
+    );
+
+    const pursueProb = normalize01(probabilities.pursue);
+    const cohereProb = normalize01(probabilities.cohere);
+    const avoidProb = normalize01(probabilities.avoid);
+    const exploreProb = normalize01(probabilities.explore);
+    const restProb = normalize01(probabilities.rest);
+
+    const basePenalty = normalize01(avoidProb * (1 - riskTolerance * 0.35));
+    const fatiguePenalty = clamp(0.2 + neuralFatigue * 0.6 + restProb * 0.4, 0.1, 1.4);
+
+    const weights = [];
+
+    if (available.enemies.length > 0) {
+      const aggression = pursueProb * (0.65 + riskTolerance * 0.35);
+      const vigilance = clamp(1 - basePenalty, 0.05, 1);
+      const density = clamp(0.35 + enemyFraction * 0.65, 0.2, 1);
+      const weight = aggression * vigilance * density;
+
+      if (weight > 0) {
+        weights.push({ type: "enemy", weight });
+      }
+    }
+
+    if (available.mates.length > 0) {
+      const curiosity = exploreProb * (0.5 + Math.max(0, opportunitySignal) * 0.35);
+      const pursuitBlend = pursueProb * (0.35 + (1 - avoidProb) * 0.25);
+      const cautionRelease = clamp(0.55 + (1 - riskTolerance) * 0.45, 0.3, 1.2);
+      const density = clamp(0.35 + mateFraction * 0.65, 0.2, 1);
+      const weight = (curiosity + pursuitBlend) * cautionRelease * density;
+
+      if (weight > 0) {
+        weights.push({ type: "mate", weight });
+      }
+    }
+
+    if (available.allies.length > 0) {
+      const cohesion = cohereProb * (0.55 + allyFraction * 0.45);
+      const support = pursueProb * 0.25 + exploreProb * 0.15;
+      const fatigueRelief = clamp(1 - Math.min(1, fatiguePenalty * 0.5), 0.2, 1);
+      const weight = (cohesion + support) * fatigueRelief;
+
+      if (weight > 0) {
+        weights.push({ type: "ally", weight });
+      }
+    }
+
+    const totalWeight = weights.reduce((sum, entry) => sum + entry.weight, 0);
+
+    if (!(totalWeight > 0)) {
+      return null;
+    }
+
+    const normalizedWeights = {};
+    const labels = [];
+    const distribution = [];
+
+    for (let i = 0; i < weights.length; i++) {
+      const { type, weight } = weights[i];
+      const positive = Math.max(0, weight);
+
+      if (!(positive > 0)) continue;
+
+      normalizedWeights[type] = positive / totalWeight;
+      labels.push(type);
+      distribution.push(positive);
+    }
+
+    if (labels.length === 0) {
+      return null;
+    }
+
+    const focusRng = this.resolveRng("movementPursuitFocus");
+    const selectedType =
+      sampleFromDistribution(distribution, labels, focusRng) ?? labels[0];
+
+    let target = null;
+
+    if (selectedType === "enemy") {
+      target = this.#nearest(available.enemies, this.row, this.col);
+    } else if (selectedType === "mate") {
+      target = this.#nearest(available.mates, this.row, this.col);
+    } else if (selectedType === "ally") {
+      target = this.#nearest(available.allies, this.row, this.col);
+    }
+
+    if (!target) {
+      target =
+        this.#nearest(available.enemies, this.row, this.col) ??
+        this.#nearest(available.mates, this.row, this.col) ??
+        this.#nearest(available.allies, this.row, this.col);
+    }
+
+    const targetSummary =
+      target && typeof target === "object"
+        ? {
+            row: target.row ?? target.target?.row ?? null,
+            col: target.col ?? target.target?.col ?? null,
+          }
+        : null;
+
+    return {
+      target,
+      type: selectedType,
+      weights: normalizedWeights,
+      usedNetwork: true,
+      candidates: {
+        enemies: available.enemies.length,
+        mates: available.mates.length,
+        allies: available.allies.length,
+      },
+      sensors: {
+        enemyFraction,
+        mateFraction,
+        allyFraction,
+        riskTolerance,
+        opportunitySignal,
+      },
+      targetSummary,
+    };
+  }
+
   #interactionSensors({
     localDensity = 0,
     densityEffectMultiplier = 1,
@@ -4120,12 +4311,33 @@ export default class Cell {
 
         return;
       case "pursue": {
-        const target = nearestEnemy || nearestMate || nearestAlly;
+        const focus = this.#resolvePursuitTarget({ mates, enemies, society });
+
+        if (focus) {
+          this.#assignDecisionOutcome("movement", {
+            pursuitFocus: {
+              type: focus.type,
+              usedNetwork: Boolean(focus.usedNetwork),
+              weights: focus.weights ?? null,
+              candidates: focus.candidates ?? null,
+              sensors: focus.sensors ?? null,
+              target: focus.targetSummary ?? null,
+            },
+          });
+        }
+
+        const fallbackTarget = nearestEnemy || nearestMate || nearestAlly;
+        const target = focus?.target ?? fallbackTarget;
 
         if (target && typeof moveToTarget === "function") {
-          moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
+          const targetRow = target.row ?? target.target?.row;
+          const targetCol = target.col ?? target.target?.col;
 
-          return;
+          if (Number.isFinite(targetRow) && Number.isFinite(targetCol)) {
+            moveToTarget(gridArr, row, col, targetRow, targetCol, rows, cols);
+
+            return;
+          }
         }
 
         break;

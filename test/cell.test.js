@@ -549,6 +549,69 @@ test("neural rest confidence amplifies recovery boost", () => {
   );
 });
 
+test("neural pursuit focus prioritizes mates when exploration drive is high", () => {
+  const dna = new DNA(210, 140, 60);
+  const cell = new Cell(0, 0, dna, 6);
+
+  cell.baseRiskTolerance = 0.08;
+  cell._neuralFatigue = 0.18;
+  cell._neuralEnergyReserve = 0.74;
+  cell._opportunitySignal = 0.65;
+
+  const sensorVector = new Array(Brain.SENSOR_COUNT).fill(0);
+
+  cell.brain = {
+    connectionCount: 5,
+    evaluateGroup(group) {
+      if (group !== "movement") {
+        return { values: null, activationCount: 0, sensors: sensorVector };
+      }
+
+      return {
+        values: { rest: -3, pursue: 3.2, avoid: -4, cohere: -2.5, explore: 2.7 },
+        activationCount: 5,
+        sensors: sensorVector,
+      };
+    },
+  };
+
+  const mates = [{ row: 0, col: 1 }];
+  const enemies = [{ row: 0, col: 3 }];
+  const society = [];
+  const moves = [];
+  const moveToTarget = (...args) => moves.push(args);
+
+  withMockedRandom([0.05, 0.6], () =>
+    cell.executeMovementStrategy([[cell]], 0, 0, mates, enemies, society, {
+      rows: 5,
+      cols: 5,
+      localDensity: 0.4,
+      densityEffectMultiplier: 1,
+      moveToTarget,
+      moveAwayFromTarget: () => {},
+      moveRandomly: () => {},
+      getEnergyAt: () => 0,
+      tryMove: () => false,
+      isTileBlocked: () => false,
+      maxTileEnergy: window.GridManager.maxTileEnergy,
+    }),
+  );
+
+  assert.ok(moves.length > 0, "pursuit should result in a move");
+  assert.is(moves[0][3], mates[0].row, "mate row should be targeted");
+  assert.is(moves[0][4], mates[0].col, "mate column should be targeted");
+
+  const outcome = cell._decisionContextIndex.get("movement")?.outcome ?? {};
+
+  assert.ok(outcome.pursuitFocus, "pursuit focus should be captured in outcome");
+  assert.is(outcome.pursuitFocus.type, "mate", "neural focus should favor mates");
+  assert.ok(
+    (outcome.pursuitFocus.weights?.mate ?? 0) >
+      (outcome.pursuitFocus.weights?.enemy ?? 0),
+    "mate weight should exceed enemy weight",
+  );
+});
+
 test("breed spends parental investment energy without creating extra energy", () => {
   const dnaA = new DNA(10, 120, 200);
   const dnaB = new DNA(200, 80, 40);
