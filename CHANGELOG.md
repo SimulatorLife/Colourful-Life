@@ -52,6 +52,11 @@ where practical.
 - Raised the default energy regeneration rate to `0.015` and eased density
   penalties so long-running headless simulations sustain viable energy budgets
   without flooding the grid.
+- Nudged the low-diversity reproduction multiplier floor from `0.55` to `0.57`
+  after a 600-tick headless probe (30×30 grid, seed 1337) lifted the post-
+  warmup population floor from 47 to 76 and trimmed recent starvation from
+  0.104 to 0.077, giving bottlenecked colonies enough births to stabilise
+  without erasing similarity pressure despite brief starvation spikes.
 - Elevated the low-diversity reproduction multiplier floor to `0.55` and wired
   cathartic scarcity relief directly into the reproduction cooldowns, allowing
   bottlenecked populations to recover while leaving the diversity pressure

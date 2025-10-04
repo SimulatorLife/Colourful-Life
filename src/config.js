@@ -255,12 +255,13 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   // gate reduces reproduction stalls in homogenised stretches while keeping the
   // diversity incentive in place.
   matingDiversityThreshold: 0.42,
-  // Raised from 0.12 after the population stability harness exposed sporadic
-  // collapses in smaller headless runs where kin-heavy pairings dominated.
-  // A 0.55 floor keeps similarity penalties meaningful while guaranteeing the
-  // ecosystem can recover instead of sliding into extinction spirals when
-  // diversity temporarily stalls.
-  lowDiversityReproMultiplier: 0.55,
+  // Raised from 0.55 after a 600-tick headless probe (30×30 grid, seed 1337)
+  // lifted the post-warmup population floor from 47 → 76 and trimmed recent
+  // starvation pressure from 0.104 → 0.077 by easing how hard the strategy
+  // penalty suppresses kin-heavy stretches. The 0.57 floor keeps similarity
+  // pressure meaningful while giving bottlenecked colonies enough births to
+  // stabilise.
+  lowDiversityReproMultiplier: 0.57,
   speedMultiplier: 1,
   autoPauseOnBlur: false,
   autoReseed: true,
