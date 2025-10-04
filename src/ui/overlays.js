@@ -149,16 +149,14 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
 
   if (ctx.lineWidth !== undefined) ctx.lineWidth = strokeWidth;
 
-  for (let i = 0; i < events.length && rendered < maxCount; i++) {
-    const event = events[i];
-
-    if (!event) continue;
+  const renderEvent = (event) => {
+    if (!event) return false;
 
     const row = Number(event.row);
     const col = Number(event.col);
 
     if (!Number.isFinite(row) || !Number.isFinite(col)) {
-      continue;
+      return false;
     }
 
     const tick = Number(event.tick);
@@ -166,12 +164,8 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
     if (currentTick != null && Number.isFinite(tick)) {
       const age = currentTick - tick;
 
-      if (age < 0) {
-        continue;
-      }
-
-      if (age > fadeWindow) {
-        continue;
+      if (age < 0 || age > fadeWindow) {
+        return false;
       }
 
       const alpha = computeLifeEventAlpha(age, { maxAge: fadeWindow });
@@ -192,6 +186,14 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
     } else {
       drawBirthMarker(ctx, centerX, centerY, markerRadius, color);
     }
+
+    return true;
+  };
+
+  for (const event of events) {
+    if (rendered >= maxCount) break;
+
+    if (!renderEvent(event)) continue;
 
     rendered++;
   }
