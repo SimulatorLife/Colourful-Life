@@ -57,7 +57,11 @@ const DECAY_EPSILON = 1e-4;
 const DECAY_SPAWN_MIN_ENERGY = 1.2;
 const INITIAL_TILE_ENERGY_FRACTION = 0.5;
 
+const COLOR_CACHE_DEFAULT_LIMIT = 4096;
 const COLOR_CACHE = new Map();
+const COLOR_CACHE_KEYS = [];
+let colorCacheLimit = COLOR_CACHE_DEFAULT_LIMIT;
+let colorCacheEvictIndex = 0;
 const RGB_PATTERN =
   /rgba?\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)(?:\s*,\s*([0-9.]+)\s*)?\)/i;
 const HEX_PATTERN = /^#([0-9a-f]{3,8})$/i;
@@ -66,6 +70,62 @@ const TIMESTAMP_NOW =
   typeof performance !== "undefined" && typeof performance.now === "function"
     ? () => performance.now()
     : () => Date.now();
+
+function rememberColor(normalized, value) {
+  if (colorCacheLimit === 0) {
+    return value;
+  }
+
+  if (COLOR_CACHE.has(normalized)) {
+    return value;
+  }
+
+  COLOR_CACHE.set(normalized, value);
+
+  if (!Number.isFinite(colorCacheLimit)) {
+    COLOR_CACHE_KEYS.push(normalized);
+
+    return value;
+  }
+
+  if (COLOR_CACHE_KEYS.length < colorCacheLimit) {
+    COLOR_CACHE_KEYS.push(normalized);
+
+    return value;
+  }
+
+  const evictKey = COLOR_CACHE_KEYS[colorCacheEvictIndex];
+
+  if (evictKey !== undefined) {
+    COLOR_CACHE.delete(evictKey);
+  }
+
+  COLOR_CACHE_KEYS[colorCacheEvictIndex] = normalized;
+  colorCacheEvictIndex =
+    colorCacheLimit > 0 ? (colorCacheEvictIndex + 1) % colorCacheLimit : 0;
+
+  return value;
+}
+
+export function __resetColorCacheForTesting() {
+  COLOR_CACHE.clear();
+  COLOR_CACHE_KEYS.length = 0;
+  colorCacheEvictIndex = 0;
+}
+
+export function __setColorCacheLimitForTesting(limit) {
+  const numeric = Number(limit);
+
+  colorCacheLimit = Number.isFinite(numeric)
+    ? Math.max(0, Math.floor(numeric))
+    : Number.POSITIVE_INFINITY;
+
+  __resetColorCacheForTesting();
+}
+
+export function __getColorCacheSizeForTesting() {
+  return COLOR_CACHE.size;
+}
 
 function parseColorToRgba(color) {
   if (typeof color !== "string") {
@@ -129,7 +189,7 @@ function parseColorToRgba(color) {
     }
   }
 
-  COLOR_CACHE.set(normalized, result);
+  rememberColor(normalized, result);
 
   return result;
 }
