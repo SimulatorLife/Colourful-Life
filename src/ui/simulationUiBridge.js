@@ -111,6 +111,35 @@ function subscribeEngineToUi(engine, uiManager) {
       ) {
         uiManager.setProfileGridMetrics(changes.profileGridMetrics, { notify: false });
       }
+
+      const geometryChanged =
+        typeof uiManager.setGridGeometry === "function" &&
+        changes &&
+        (Object.hasOwn(changes, "gridRows") ||
+          Object.hasOwn(changes, "gridCols") ||
+          Object.hasOwn(changes, "cellSize"));
+
+      if (geometryChanged) {
+        const geometry = {
+          rows: Object.hasOwn(changes, "gridRows")
+            ? changes.gridRows
+            : Number.isFinite(engine?.rows)
+              ? engine.rows
+              : undefined,
+          cols: Object.hasOwn(changes, "gridCols")
+            ? changes.gridCols
+            : Number.isFinite(engine?.cols)
+              ? engine.cols
+              : undefined,
+          cellSize: Object.hasOwn(changes, "cellSize")
+            ? changes.cellSize
+            : Number.isFinite(engine?.cellSize)
+              ? engine.cellSize
+              : undefined,
+        };
+
+        uiManager.setGridGeometry(geometry);
+      }
     }),
   ].filter(Boolean);
 }
