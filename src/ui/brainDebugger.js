@@ -71,18 +71,18 @@ const BrainDebugger = {
   },
   captureFromEntries(entries = [], { limit = 5 } = {}) {
     const count = Math.max(0, Math.floor(limit));
-    const next = [];
 
     if (!Array.isArray(entries) || count === 0) {
       return this.update([]);
     }
 
-    for (let i = 0; i < entries.length && next.length < count; i++) {
-      const entry = entries[i];
+    const next = [];
+
+    const snapshotFromEntry = (entry) => {
       const cell = entry?.cell;
       const brain = cell?.brain;
 
-      if (!brain || typeof brain.snapshot !== "function") continue;
+      if (!brain || typeof brain.snapshot !== "function") return null;
 
       let snapshot;
 
@@ -91,7 +91,7 @@ const BrainDebugger = {
       } catch (error) {
         warnOnce(WARNINGS.snapshot, error);
 
-        continue;
+        return null;
       }
 
       const decisionTelemetry =
@@ -142,7 +142,7 @@ const BrainDebugger = {
       const connectionCount =
         reportedConnectionCount > 0 ? reportedConnectionCount : fallbackConnectionCount;
 
-      next.push({
+      return {
         row: entry.row,
         col: entry.col,
         fitness: entry.fitness,
@@ -152,8 +152,20 @@ const BrainDebugger = {
           Number.isFinite(connectionCount) && connectionCount > 0 ? connectionCount : 0,
         brain: snapshot,
         decisions: normalizedTelemetry,
-      });
-    }
+      };
+    };
+
+    entries.some((entry) => {
+      if (next.length >= count) return true;
+
+      const snapshot = snapshotFromEntry(entry);
+
+      if (snapshot) {
+        next.push(snapshot);
+      }
+
+      return next.length >= count;
+    });
 
     return this.update(next);
   },
