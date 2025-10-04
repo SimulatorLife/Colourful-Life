@@ -992,6 +992,53 @@ export class DNA {
     return { drainMitigation, vigilance, pressureRetention, rebound };
   }
 
+  eventAnticipationProfile() {
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const activity = this.geneFraction(GENE_LOCI.ACTIVITY);
+
+    const assimilation = clamp(
+      0.2 + 0.45 * sense + 0.25 * density - 0.4 * strategy,
+      0.05,
+      0.85,
+    );
+    const relief = clamp(
+      0.12 + 0.4 * recovery + 0.2 * strategy - 0.25 * risk,
+      0.05,
+      0.7,
+    );
+    const gainInfluence = clamp(
+      0.25 + 0.35 * risk + 0.2 * sense - 0.3 * recovery,
+      0,
+      1,
+    );
+    const volatility = clamp(
+      0.25 + 0.4 * risk + 0.2 * density - 0.3 * strategy,
+      0.05,
+      1.2,
+    );
+    const fatigueWeight = clamp(0.2 + 0.45 * activity - 0.35 * recovery, 0, 1.2);
+    const rewardScale = clamp(
+      0.3 + 0.35 * strategy + 0.2 * recovery - 0.3 * risk,
+      0.05,
+      1.5,
+    );
+    const baseline = clamp(0.1 + 0.35 * risk + 0.25 * sense - 0.2 * recovery, 0, 1);
+
+    return {
+      assimilation,
+      relief,
+      gainInfluence,
+      volatility,
+      fatigueWeight,
+      rewardScale,
+      baseline,
+    };
+  }
+
   interactionPlasticity() {
     const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
     const combat = this.geneFraction(GENE_LOCI.COMBAT);
