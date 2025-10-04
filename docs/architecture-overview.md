@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document captures how the Colourful Life simulation composes its core systems and how data flows between them. Use it as a map when extending the engine, creating new UI affordances, or embedding the simulation in automated tooling.
+This document captures how the Colourful Life simulation composes its core systems and how data flows between them. Use it as a map when extending the engine, creating new UI affordances, or embedding the simulation in automated tooling. For setup, tooling, and contributor workflow expectations, pair this guide with the [developer guide](developer-guide.md) and the [README quick start](../README.md#quick-start).
 
 ## High-level loop
 
@@ -136,7 +136,7 @@ When running outside the browser:
 
 ## Related scripts
 
-- `scripts/profile-energy.mjs` benchmarks the grid preparation loop. Tune dimensions via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and adjust the stub cell size with `PERF_CELL_SIZE`.
+- `npm run benchmark` (or `scripts/profile-energy.mjs`) benchmarks the grid preparation loop. Tune dimensions via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and adjust the stub cell size with `PERF_CELL_SIZE`.
 - `npm run clean` delegates to Parcel's built-in clean routine to remove `dist/` and `.parcel-cache/` when the bundler cache becomes inconsistent.
 - Additional helpers in `scripts/` showcase headless usage patterns. Each script is documented inline with configuration tips, and `scripts/profile-energy.mjs` is the canonical benchmarking harness used during performance profiling.
 
