@@ -9,7 +9,7 @@ import {
 import DNA from "../genome.js";
 import Cell from "../cell.js";
 import { computeFitness } from "../fitness.mjs";
-import { computeBehaviorComplementarity } from "../behaviorComplementarity.js";
+import { computeBehaviorComplementarity } from "./behaviorComplementarity.js";
 import {
   createEventContext,
   defaultEventContext,
