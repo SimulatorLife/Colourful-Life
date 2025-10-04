@@ -5067,12 +5067,19 @@ export default class GridManager {
     const mates = [];
     const enemies = [];
     const society = [];
-    const d =
+    const normalizedDensityMultiplier = Number.isFinite(densityEffectMultiplier)
+      ? densityEffectMultiplier
+      : 1;
+    const densitySource =
       this.densityGrid?.[row]?.[col] ??
       this.localDensity(row, col, GridManager.DENSITY_RADIUS);
-    const effD = clamp(d * densityEffectMultiplier, 0, 1);
-    let enemyBias = lerp(cell.density.enemyBias.min, cell.density.enemyBias.max, effD);
-    // Modulate random enemy bias by dynamic risk tolerance
+    const numericDensity = Number.isFinite(densitySource) ? densitySource : 0;
+    const effD = clamp(numericDensity * normalizedDensityMultiplier, 0, 1);
+    const baseEnemyBias = lerp(
+      cell.density.enemyBias.min,
+      cell.density.enemyBias.max,
+      effD,
+    );
     const riskSource =
       typeof cell?.getRiskTolerance === "function"
         ? cell.getRiskTolerance()
@@ -5080,13 +5087,12 @@ export default class GridManager {
           ? cell.dna.riskTolerance()
           : 0.5;
     const risk = clamp(Number.isFinite(riskSource) ? riskSource : 0.5, 0, 1);
-
-    enemyBias = Math.max(0, enemyBias * (0.4 + 0.8 * risk));
-    const allyT =
+    const enemyBias = Math.max(0, baseEnemyBias * (0.4 + 0.8 * risk));
+    const allyThreshold =
       typeof cell.dna.allyThreshold === "function"
         ? cell.dna.allyThreshold()
         : societySimilarity;
-    const enemyT =
+    const enemyThreshold =
       typeof cell.dna.enemyThreshold === "function"
         ? cell.dna.enemyThreshold()
         : enemySimilarity;
@@ -5094,21 +5100,27 @@ export default class GridManager {
     const grid = this.grid;
     const rows = this.rows;
     const cols = this.cols;
-    const sight = cell.sight;
+    const rawSight = Number.isFinite(cell?.sight) ? cell.sight : 0;
+    const sight = Math.max(0, Math.trunc(rawSight));
 
-    for (let dy = -sight; dy <= sight; dy++) {
-      const newRow = row + dy;
+    if (sight === 0) {
+      return { mates, enemies, society };
+    }
 
-      if (newRow < 0 || newRow >= rows) continue;
+    const minRow = Math.max(0, row - sight);
+    const maxRow = Math.min(rows - 1, row + sight);
+    const minCol = Math.max(0, col - sight);
+    const maxCol = Math.min(cols - 1, col + sight);
+    const hasSharedHostilityRng = typeof cell.resolveSharedRng === "function";
+    const shouldRollHostility = enemyBias > 0;
 
+    for (let newRow = minRow; newRow <= maxRow; newRow++) {
       const gridRow = grid[newRow];
 
-      for (let dx = -sight; dx <= sight; dx++) {
-        if (dx === 0 && dy === 0) continue;
+      if (!gridRow) continue;
 
-        const newCol = col + dx;
-
-        if (newCol < 0 || newCol >= cols) continue;
+      for (let newCol = minCol; newCol <= maxCol; newCol++) {
+        if (newRow === row && newCol === col) continue;
 
         const target = gridRow[newCol];
 
@@ -5116,7 +5128,7 @@ export default class GridManager {
 
         const similarity = getPairSimilarity(cell, target);
 
-        if (similarity >= allyT) {
+        if (similarity >= allyThreshold) {
           society.push({
             row: newRow,
             col: newCol,
@@ -5124,27 +5136,35 @@ export default class GridManager {
             classification: "society",
             precomputedSimilarity: similarity,
           });
-        } else if (
-          similarity <= enemyT ||
-          (() => {
-            const hostilityRng =
-              typeof cell.resolveSharedRng === "function"
-                ? cell.resolveSharedRng(target, "hostilityGate")
-                : Math.random;
 
-            return hostilityRng() < enemyBias;
-          })()
-        ) {
-          enemies.push({ row: newRow, col: newCol, target });
-        } else {
-          mates.push({
-            row: newRow,
-            col: newCol,
-            target,
-            classification: "mate",
-            precomputedSimilarity: similarity,
-          });
+          continue;
         }
+
+        let isEnemy = similarity <= enemyThreshold;
+
+        if (!isEnemy && shouldRollHostility) {
+          const hostilityRng = hasSharedHostilityRng
+            ? cell.resolveSharedRng(target, "hostilityGate", Math.random)
+            : Math.random;
+
+          if (typeof hostilityRng === "function" && hostilityRng() < enemyBias) {
+            isEnemy = true;
+          }
+        }
+
+        if (isEnemy) {
+          enemies.push({ row: newRow, col: newCol, target });
+
+          continue;
+        }
+
+        mates.push({
+          row: newRow,
+          col: newCol,
+          target,
+          classification: "mate",
+          precomputedSimilarity: similarity,
+        });
       }
     }
 
