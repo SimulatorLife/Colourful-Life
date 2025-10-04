@@ -215,6 +215,11 @@ canvas {
   text-align: center;
   cursor: pointer;
 }
+.panel .panel-toggle:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.45);
+  outline-offset: 2px;
+  background: var(--color-accent-hover);
+}
 .panel .panel-toggle:hover {
   background: var(--color-accent-hover);
 }
