@@ -59,10 +59,26 @@ test("autopause toggle updates pause indicator and notifies listeners", async ()
     assert.is(uiManager.autoPauseOnBlur, true);
     assert.is(toggle.checked, true);
     assert.equal(settingChanges, [["autoPauseOnBlur", true]]);
+    assert.is(
+      uiManager.pauseOverlayAutopause.hidden,
+      true,
+      "autopause hint stays hidden until an auto pause occurs",
+    );
+    assert.is(uiManager.pauseOverlayAutopause.textContent, "");
+
+    uiManager.setAutoPausePending(true);
+
     assert.is(uiManager.pauseOverlayAutopause.hidden, false);
     assert.is(
       uiManager.pauseOverlayAutopause.textContent,
       "Autopause resumes when the tab regains focus.",
+    );
+
+    uiManager.setAutoPausePending(false);
+    assert.is(
+      uiManager.pauseOverlayAutopause.hidden,
+      true,
+      "clearing autopause pending hides the hint",
     );
 
     toggle.checked = false;
@@ -98,7 +114,11 @@ test("setAutoPauseOnBlur sanitizes string inputs", async () => {
 
     assert.is(uiManager.autoPauseOnBlur, true, "string 'true' enables auto pause");
     assert.is(uiManager.autoPauseCheckbox?.checked, true);
+    assert.is(uiManager.pauseOverlayAutopause?.hidden, true);
+
+    uiManager.setAutoPausePending(true);
     assert.is(uiManager.pauseOverlayAutopause?.hidden, false);
+    uiManager.setAutoPausePending(false);
 
     uiManager.setAutoPauseOnBlur("false");
     assert.is(uiManager.autoPauseOnBlur, false, "string 'false' disables auto pause");
