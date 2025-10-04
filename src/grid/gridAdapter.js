@@ -85,28 +85,20 @@ export default class GridInteractionAdapter {
       return this.gridManager.relocateCell(fromRow, fromCol, toRow, toCol);
     }
 
-    if (
-      fromRow === toRow &&
-      fromCol === toCol &&
-      Number.isInteger(fromRow) &&
-      Number.isInteger(fromCol)
-    ) {
-      return true;
+    const coordinates = [fromRow, fromCol, toRow, toCol];
+
+    if (!coordinates.every(Number.isInteger)) {
+      return false;
     }
 
-    if (
-      !Number.isInteger(fromRow) ||
-      !Number.isInteger(fromCol) ||
-      !Number.isInteger(toRow) ||
-      !Number.isInteger(toCol)
-    ) {
-      return false;
+    if (fromRow === toRow && fromCol === toCol) {
+      return true;
     }
 
     const rowDelta = Math.abs(toRow - fromRow);
     const colDelta = Math.abs(toCol - fromCol);
 
-    if (rowDelta > 1 || colDelta > 1 || (rowDelta === 0 && colDelta === 0)) {
+    if (rowDelta > 1 || colDelta > 1) {
       return false;
     }
 
