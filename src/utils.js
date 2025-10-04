@@ -50,6 +50,51 @@ export function clamp01(value) {
 }
 
 /**
+ * Coerces a loosely-typed candidate into a boolean, preserving the provided
+ * fallback when normalization fails. Accepts common string synonyms and numeric
+ * representations (treating non-zero numbers as `true`).
+ *
+ * @param {any} candidate - Potential boolean-like value supplied by callers.
+ * @param {boolean} [fallback=false] - Value returned when coercion fails.
+ * @returns {boolean} Normalized boolean result.
+ */
+export function coerceBoolean(candidate, fallback = false) {
+  if (typeof candidate === "boolean") {
+    return candidate;
+  }
+
+  if (candidate == null) {
+    return fallback;
+  }
+
+  if (typeof candidate === "number") {
+    return Number.isFinite(candidate) ? candidate !== 0 : fallback;
+  }
+
+  if (typeof candidate === "string") {
+    const normalized = candidate.trim().toLowerCase();
+
+    if (normalized.length === 0) return fallback;
+    if (normalized === "true" || normalized === "yes" || normalized === "on") {
+      return true;
+    }
+    if (normalized === "false" || normalized === "no" || normalized === "off") {
+      return false;
+    }
+
+    const numeric = Number(normalized);
+
+    if (!Number.isNaN(numeric)) {
+      return numeric !== 0;
+    }
+
+    return fallback;
+  }
+
+  return Boolean(candidate);
+}
+
+/**
  * Normalizes arbitrary input into a finite number, optionally constraining the
  * result to a range and applying rounding. Non-finite inputs (including
  * `NaN`, `Infinity`, empty strings, etc.) return the provided fallback.
