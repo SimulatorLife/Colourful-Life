@@ -140,6 +140,7 @@ export function createSliderRow(parent, opts = {}) {
   });
   input.updateDisplay = updateDisplay;
   line.appendChild(input);
+
   line.appendChild(valSpan);
 
   return input;
@@ -169,6 +170,7 @@ export function createNumberInputRow(parent, opts = {}) {
     value,
     title,
     suffix,
+    description,
     onChange,
   } = toPlainObject(opts);
 
@@ -181,6 +183,14 @@ export function createNumberInputRow(parent, opts = {}) {
   if (step != null) input.step = String(step);
   if (value != null && value !== "") {
     input.value = String(value);
+  }
+
+  const numericStep = Number(step);
+
+  if (Number.isFinite(numericStep)) {
+    const isIntegerStep = Number.isInteger(numericStep);
+
+    input.inputMode = isIntegerStep ? "numeric" : "decimal";
   }
 
   const handleChange = () => {
@@ -205,12 +215,22 @@ export function createNumberInputRow(parent, opts = {}) {
 
   line.appendChild(input);
 
+  const rowElement = line.parentElement;
+
   if (suffix) {
     const suffixEl = document.createElement("span");
 
     suffixEl.className = "control-value";
     suffixEl.textContent = suffix;
     line.appendChild(suffixEl);
+  }
+
+  if (description) {
+    const descriptionEl = document.createElement("p");
+
+    descriptionEl.className = "control-description control-hint";
+    descriptionEl.textContent = description;
+    rowElement?.appendChild(descriptionEl);
   }
 
   return input;
