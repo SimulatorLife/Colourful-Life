@@ -67,6 +67,19 @@ const TIMESTAMP_NOW =
     ? () => performance.now()
     : () => Date.now();
 
+/**
+ * Normalizes a CSS color string into an immutable `[r, g, b, a]` tuple.
+ *
+ * Accepts hex literals (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`) and
+ * `rgb()/rgba()` functional notation, clamping each channel to 0–255. Invalid
+ * inputs collapse to `[0, 0, 0, 0]` so callers receive a predictable fallback
+ * instead of `null` or `undefined`. Results are cached by normalized string to
+ * avoid repeated parsing when rendering dense overlays.
+ *
+ * @param {string} color - CSS color candidate supplied by configuration or DNA traits.
+ * @returns {readonly [number, number, number, number]} Frozen RGBA tuple with each
+ *   element in the `[0, 255]` range.
+ */
 function parseColorToRgba(color) {
   if (typeof color !== "string") {
     return EMPTY_RGBA;
