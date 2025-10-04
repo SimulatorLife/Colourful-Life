@@ -96,6 +96,13 @@ function createMetricsStatsFixture() {
       window: 120,
       eventsPer100Ticks: 0,
     }),
+    getLifeEventTimeline: () => ({
+      ticks: [],
+      births: [],
+      deaths: [],
+      window: 0,
+      span: 0,
+    }),
   };
 }
 
@@ -158,6 +165,13 @@ function createLifeEventStatsFixture() {
       eventsPer100Ticks: 8.3,
       birthsPer100Ticks: 5,
       deathsPer100Ticks: 3.3,
+    }),
+    getLifeEventTimeline: () => ({
+      ticks: [400, 401, 402, 403],
+      births: [2, 1, 0, 3],
+      deaths: [1, 0, 2, 1],
+      window: 60,
+      span: 4,
     }),
   };
 }
@@ -226,6 +240,14 @@ test("life event summary reflects rate window totals", async () => {
       deathsPer100Ticks: 6.3,
     };
 
+    const timeline = {
+      ticks: [200, 201, 202, 203],
+      births: [0, 2, 1, 0],
+      deaths: [1, 0, 0, 2],
+      window: 60,
+      span: 4,
+    };
+
     const stats = {
       totals: { fights: 0, cooperations: 0 },
       history: {
@@ -246,6 +268,7 @@ test("life event summary reflects rate window totals", async () => {
       traitHistory: {},
       getRecentLifeEvents: () => events,
       getLifeEventRateSummary: () => rateSummary,
+      getLifeEventTimeline: () => timeline,
     };
 
     const snapshot = {
@@ -289,8 +312,38 @@ test("life event summary reflects rate window totals", async () => {
     );
     assert.is(
       uiManager.lifeEventsSummaryRate.textContent,
-      `≈${rateSummary.eventsPer100Ticks.toFixed(1)} events / 100 ticks`,
+      `Rolling 100-tick avg: ≈${rateSummary.eventsPer100Ticks.toFixed(1)} events`,
       "rate label should use rate summary cadence",
+    );
+    assert.is(
+      uiManager.lifeEventsTimelineBirthValue.textContent,
+      timeline.births[timeline.births.length - 1].toString(),
+      "timeline should surface latest birth count",
+    );
+    assert.is(
+      uiManager.lifeEventsTimelineDeathValue.textContent,
+      timeline.deaths[timeline.deaths.length - 1].toString(),
+      "timeline should surface latest death count",
+    );
+    assert.equal(
+      uiManager.lifeEventsTimelineCanvas.hidden,
+      false,
+      "timeline canvas should be visible when data exists",
+    );
+    assert.equal(
+      uiManager.lifeEventsTimelineLegend.hidden,
+      false,
+      "timeline legend should be visible when data exists",
+    );
+    assert.equal(
+      uiManager.lifeEventsTimelineEmptyState.hidden,
+      true,
+      "timeline empty state should be hidden when populated",
+    );
+    assert.is(
+      uiManager.lifeEventsTimelineWindow.textContent,
+      "Last 60 ticks",
+      "timeline window label should reflect requested window",
     );
   } finally {
     restoreCanvas();
@@ -366,6 +419,13 @@ test("life event death breakdown surfaces leading causes", async () => {
       },
       getRecentLifeEvents: () => events,
       getLifeEventRateSummary: () => rateSummary,
+      getLifeEventTimeline: () => ({
+        ticks: [],
+        births: [],
+        deaths: [],
+        window: 0,
+        span: 0,
+      }),
     };
 
     const snapshot = {
