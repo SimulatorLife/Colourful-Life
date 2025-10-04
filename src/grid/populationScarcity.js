@@ -1,5 +1,5 @@
 import { clamp, warnOnce } from "../utils.js";
-import { computeBehaviorComplementarity } from "../behaviorComplementarity.js";
+import { computeBehaviorComplementarity } from "./behaviorComplementarity.js";
 
 function resolveDrive(
   cell,

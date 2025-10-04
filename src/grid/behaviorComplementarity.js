@@ -1,4 +1,4 @@
-import { clamp } from "./utils.js";
+import { clamp } from "../utils.js";
 
 const INTERACTION_KEYS = ["cooperate", "fight", "avoid"];
 
