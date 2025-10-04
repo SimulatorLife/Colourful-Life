@@ -53,6 +53,16 @@ const envFloat = (
   return parsed;
 };
 
+const envChoice = (key, choices, fallback) => {
+  const raw = RUNTIME_ENV?.[key];
+
+  if (typeof raw !== "string") return fallback;
+
+  const normalized = raw.trim().toLowerCase();
+
+  return choices.includes(normalized) ? normalized : fallback;
+};
+
 const configuration = {
   rows: envNumber("PERF_ROWS", 60),
   cols: envNumber("PERF_COLS", 60),
@@ -60,6 +70,10 @@ const configuration = {
   iterations: envNumber("PERF_ITERATIONS", 200),
   cellSize: envNumber("PERF_CELL_SIZE", 5),
   seed: envNumber("PERF_SEED", 1337, { min: 0 }),
+  densityWarmup: envNumber("PERF_DENSITY_WARMUP", 2, { min: 0 }),
+  densityIterations: envNumber("PERF_DENSITY_ITERATIONS", 10, { min: 1 }),
+  densityRadius: envNumber("PERF_DENSITY_RADIUS", 1, { min: 0 }),
+  densityStrategy: envChoice("PERF_DENSITY_STRATEGY", ["auto", "legacy", "integral"], "auto"),
   simulation: {
     rows: envNumber("PERF_SIM_ROWS", envNumber("PERF_ROWS", 60)),
     cols: envNumber("PERF_SIM_COLS", envNumber("PERF_COLS", 60)),
@@ -263,6 +277,25 @@ const grid = new GridManager(configuration.rows, configuration.cols, {
   rng: energyGridRng,
 });
 
+if (configuration.densityWarmup > 0) {
+  for (let i = 0; i < configuration.densityWarmup; i++) {
+    grid.recalculateDensityCounts(configuration.densityRadius, {
+      strategy: configuration.densityStrategy,
+    });
+  }
+}
+
+const densityBenchmarkStart = performanceApi.now();
+
+for (let i = 0; i < configuration.densityIterations; i++) {
+  grid.recalculateDensityCounts(configuration.densityRadius, {
+    strategy: configuration.densityStrategy,
+  });
+}
+
+const densityBenchmarkEnd = performanceApi.now();
+const densityDurationMs = densityBenchmarkEnd - densityBenchmarkStart;
+
 for (let i = 0; i < configuration.warmup; i++) {
   grid.prepareTick({
     eventManager,
@@ -358,6 +391,14 @@ const output = {
   ...configuration,
   durationMs: energyDurationMs,
   msPerTick: energyDurationMs / Math.max(1, configuration.iterations),
+  densityBenchmark: {
+    warmup: configuration.densityWarmup,
+    iterations: configuration.densityIterations,
+    durationMs: densityDurationMs,
+    msPerRecalc: densityDurationMs / Math.max(1, configuration.densityIterations),
+    radius: configuration.densityRadius,
+    strategy: configuration.densityStrategy,
+  },
   totalRuntimeMs: scriptEnd - startGlobal,
   simulationBenchmark: {
     ...simulationConfig,

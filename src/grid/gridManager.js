@@ -198,6 +198,7 @@ export default class GridManager {
   #segmentWindowScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
+  #densityIntegral = null;
   #imageDataCanvas = null;
   #imageDataCtx = null;
   #imageData = null;
@@ -3155,21 +3156,17 @@ export default class GridManager {
   }
 
   #computeNeighborTotal(row, col, radius = this.densityRadius) {
-    let total = 0;
+    if (radius <= 0 || this.rows <= 0 || this.cols <= 0) return 0;
 
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dy = -radius; dy <= radius; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const rr = row + dy;
-        const cc = col + dx;
+    const minRow = Math.max(0, row - radius);
+    const maxRow = Math.min(this.rows - 1, row + radius);
+    const minCol = Math.max(0, col - radius);
+    const maxCol = Math.min(this.cols - 1, col + radius);
+    const spanRows = maxRow - minRow + 1;
+    const spanCols = maxCol - minCol + 1;
+    const totalTiles = spanRows * spanCols - 1;
 
-        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
-
-        total += 1;
-      }
-    }
-
-    return total;
+    return totalTiles > 0 ? totalTiles : 0;
   }
 
   #buildDensityTotals(radius = this.densityRadius) {
@@ -3289,54 +3286,138 @@ export default class GridManager {
     this.densityDirtyTiles.clear();
   }
 
-  recalculateDensityCounts(radius = this.densityRadius) {
+  recalculateDensityCounts(radius = this.densityRadius, options = {}) {
+    const { strategy = "auto" } = options ?? {};
     const normalizedRadius = Math.max(0, Math.floor(radius));
     const targetRadius = normalizedRadius > 0 ? normalizedRadius : this.densityRadius;
 
-    if (!this.densityCounts) {
-      this.densityCounts = Array.from({ length: this.rows }, () =>
-        Array(this.cols).fill(0),
-      );
+    const rows = this.rows;
+    const cols = this.cols;
+
+    if (
+      !Array.isArray(this.densityCounts) ||
+      this.densityCounts.length !== rows ||
+      this.densityCounts[0]?.length !== cols
+    ) {
+      this.densityCounts = Array.from({ length: rows }, () => Array(cols).fill(0));
+    } else {
+      for (let r = 0; r < rows; r++) this.densityCounts[r].fill(0);
     }
 
-    if (!this.densityLiveGrid) {
-      this.densityLiveGrid = Array.from({ length: this.rows }, () =>
-        Array(this.cols).fill(0),
-      );
+    if (
+      !Array.isArray(this.densityLiveGrid) ||
+      this.densityLiveGrid.length !== rows ||
+      this.densityLiveGrid[0]?.length !== cols
+    ) {
+      this.densityLiveGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
     }
 
-    if (!this.densityGrid) {
-      this.densityGrid = Array.from({ length: this.rows }, () =>
-        Array(this.cols).fill(0),
-      );
+    if (
+      !Array.isArray(this.densityGrid) ||
+      this.densityGrid.length !== rows ||
+      this.densityGrid[0]?.length !== cols
+    ) {
+      this.densityGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
     }
 
     if (!this.densityDirtyTiles) {
       this.densityDirtyTiles = new Set();
+    } else {
+      this.densityDirtyTiles.clear();
     }
 
-    if (targetRadius !== this.densityRadius) {
-      this.densityRadius = targetRadius;
-      this.densityTotals = this.#buildDensityTotals(this.densityRadius);
+    const totalsOutOfDate =
+      !Array.isArray(this.densityTotals) ||
+      this.densityTotals.length !== rows ||
+      this.densityTotals[0]?.length !== cols ||
+      targetRadius !== this.densityRadius;
+
+    if (totalsOutOfDate) {
+      this.densityTotals = this.#buildDensityTotals(targetRadius);
     }
 
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) this.densityCounts[r][c] = 0;
+    this.densityRadius = targetRadius;
+
+    const useIntegral =
+      strategy === "integral" ? true : strategy === "legacy" ? false : targetRadius > 2;
+
+    if (!useIntegral) {
+      for (let r = 0; r < rows; r++) {
+        this.densityLiveGrid[r].fill(0);
+        this.densityGrid[r].fill(0);
+      }
+
+      for (let r = 0; r < rows; r++) {
+        const gridRow = this.grid[r];
+
+        for (let c = 0; c < cols; c++) {
+          if (gridRow?.[c]) this.#applyDensityDelta(r, c, 1, targetRadius);
+        }
+      }
+
+      this.#syncDensitySnapshot(true);
+
+      return;
     }
 
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) this.densityLiveGrid[r][c] = 0;
+    let integral = this.#densityIntegral;
+
+    if (
+      !Array.isArray(integral) ||
+      integral.length !== rows + 1 ||
+      integral[0]?.length !== cols + 1
+    ) {
+      integral = Array.from({ length: rows + 1 }, () => new Float64Array(cols + 1));
+      this.#densityIntegral = integral;
+    } else {
+      for (let r = 0; r < integral.length; r++) integral[r].fill(0);
     }
 
-    this.densityDirtyTiles.clear();
+    for (let r = 0; r < rows; r++) {
+      const prefixRow = integral[r + 1];
+      const prevRow = integral[r];
+      const gridRow = this.grid[r];
+      let rowRunningTotal = 0;
 
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) {
-        if (this.grid[r][c]) this.#applyDensityDelta(r, c, 1);
+      for (let c = 0; c < cols; c++) {
+        const occupied = gridRow?.[c] ? 1 : 0;
+
+        rowRunningTotal += occupied;
+        prefixRow[c + 1] = rowRunningTotal + prevRow[c + 1];
       }
     }
 
-    this.#syncDensitySnapshot(true);
+    for (let r = 0; r < rows; r++) {
+      const countsRow = this.densityCounts[r];
+      const liveRow = this.densityLiveGrid[r];
+      const snapshotRow = this.densityGrid[r];
+      const totalsRow = this.densityTotals?.[r];
+      const minRow = Math.max(0, r - targetRadius);
+      const maxRow = Math.min(rows - 1, r + targetRadius);
+      const topRow = integral[minRow];
+      const bottomRow = integral[maxRow + 1];
+      const gridRow = this.grid[r];
+
+      for (let c = 0; c < cols; c++) {
+        const minCol = Math.max(0, c - targetRadius);
+        const maxCol = Math.min(cols - 1, c + targetRadius);
+        const areaSum =
+          bottomRow[maxCol + 1] -
+          topRow[maxCol + 1] -
+          bottomRow[minCol] +
+          topRow[minCol];
+        const occupied = gridRow?.[c] ? 1 : 0;
+        const neighborCount = areaSum - occupied;
+        const totalNeighbors =
+          totalsRow?.[c] ?? this.#computeNeighborTotal(r, c, targetRadius);
+        const density =
+          totalNeighbors > 0 ? clamp(neighborCount / totalNeighbors, 0, 1) : 0;
+
+        countsRow[c] = neighborCount;
+        liveRow[c] = density;
+        snapshotRow[c] = density;
+      }
+    }
   }
 
   rebuildActiveCells() {
