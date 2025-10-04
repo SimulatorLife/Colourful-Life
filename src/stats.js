@@ -284,6 +284,7 @@ export default class Stats {
   #traitKeys;
   #traitComputes;
   #traitThresholds;
+  #diversityScratch;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
    * @param {{traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>}} [options]
@@ -340,6 +341,7 @@ export default class Stats {
       history: createHistoryRing(240),
     };
     this.starvationRateSmoothed = 0;
+    this.#diversityScratch = [];
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -997,74 +999,115 @@ export default class Stats {
 
   // Sample mean pairwise distance between up to maxPairSamples random pairs.
   estimateDiversity(cells, maxPairSamples = 200) {
-    const populationSize = Array.isArray(cells) ? cells.length : 0;
+    const sampleLimit = Math.max(
+      0,
+      Math.floor(Number.isFinite(maxPairSamples) ? maxPairSamples : 0),
+    );
 
-    if (populationSize < 2) return 0;
+    if (sampleLimit === 0) {
+      return 0;
+    }
 
-    const possiblePairs = (populationSize * (populationSize - 1)) / 2;
+    const pool = Array.isArray(cells) ? cells : [];
+    const totalCells = pool.length;
+
+    if (totalCells < 2) {
+      return 0;
+    }
+
+    let hasInvalid = false;
+    let validCount = 0;
+
+    for (let i = 0; i < totalCells; i += 1) {
+      const cell = pool[i];
+
+      if (cell && typeof cell.dna?.similarity === "function") {
+        validCount += 1;
+      } else {
+        hasInvalid = true;
+      }
+    }
+
+    if (validCount < 2) {
+      return 0;
+    }
+
+    const possiblePairs = (validCount * (validCount - 1)) / 2;
 
     if (possiblePairs <= 0) {
       return 0;
     }
 
-    if (possiblePairs <= maxPairSamples) {
+    const scratch = hasInvalid ? this.#diversityScratch : null;
+
+    if (hasInvalid && scratch) {
+      scratch.length = 0;
+
+      for (let i = 0; i < totalCells; i += 1) {
+        const dna = pool[i]?.dna;
+
+        if (dna && typeof dna.similarity === "function") {
+          scratch.push(dna);
+        }
+      }
+    }
+
+    if (possiblePairs <= sampleLimit) {
       let sum = 0;
-      let count = 0;
 
-      for (let i = 0; i < populationSize - 1; i++) {
-        const a = cells[i];
+      if (hasInvalid && scratch) {
+        for (let i = 0; i < scratch.length - 1; i += 1) {
+          const dnaA = scratch[i];
 
-        if (!a || typeof a.dna?.similarity !== "function") {
-          continue;
-        }
-
-        for (let j = i + 1; j < populationSize; j++) {
-          const b = cells[j];
-
-          if (!b || typeof b.dna?.similarity !== "function") {
-            continue;
+          for (let j = i + 1; j < scratch.length; j += 1) {
+            sum += 1 - dnaA.similarity(scratch[j]);
           }
+        }
 
-          sum += 1 - a.dna.similarity(b.dna);
-          count++;
+        scratch.length = 0;
+      } else {
+        for (let i = 0; i < validCount - 1; i += 1) {
+          const dnaA = pool[i].dna;
+
+          for (let j = i + 1; j < validCount; j += 1) {
+            sum += 1 - dnaA.similarity(pool[j].dna);
+          }
         }
       }
 
-      return count > 0 ? sum / count : 0;
+      return sum / possiblePairs;
     }
 
-    const sampleGoal = Math.min(maxPairSamples, possiblePairs);
-    const maxAttempts = sampleGoal * 8;
-    let collected = 0;
+    const sampleGoal = Math.min(sampleLimit, possiblePairs);
     let sum = 0;
-    let attempts = 0;
 
-    while (collected < sampleGoal && attempts < maxAttempts) {
-      const a = cells[(Math.random() * populationSize) | 0];
-      const b = cells[(Math.random() * populationSize) | 0];
+    if (hasInvalid && scratch) {
+      for (let i = 0; i < sampleGoal; i += 1) {
+        const indexA = (Math.random() * scratch.length) | 0;
+        let indexB = (Math.random() * (scratch.length - 1)) | 0;
 
-      attempts++;
+        if (indexB >= indexA) {
+          indexB += 1;
+        }
 
-      if (!a || !b || a === b) {
-        continue;
+        sum += 1 - scratch[indexA].similarity(scratch[indexB]);
       }
 
-      if (
-        typeof a.dna?.similarity !== "function" ||
-        typeof b.dna?.similarity !== "function"
-      ) {
-        continue;
+      scratch.length = 0;
+    } else {
+      for (let i = 0; i < sampleGoal; i += 1) {
+        const indexA = (Math.random() * validCount) | 0;
+        let indexB = (Math.random() * (validCount - 1)) | 0;
+
+        if (indexB >= indexA) {
+          indexB += 1;
+        }
+
+        sum += 1 - pool[indexA].dna.similarity(pool[indexB].dna);
       }
-
-      sum += 1 - a.dna.similarity(b.dna);
-      collected++;
     }
 
-    if (collected === 0) {
-      return 0;
-    }
-
-    return sum / collected;
+    return sampleGoal > 0 ? sum / sampleGoal : 0;
   }
 
   /**
