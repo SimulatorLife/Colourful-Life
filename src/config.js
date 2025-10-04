@@ -20,6 +20,71 @@ const RUNTIME_ENV =
     : undefined;
 
 /**
+ * Normalizes numeric configuration overrides sourced from environment-like
+ * objects. The helper keeps individual resolvers focused on domain-specific
+ * rules while consolidating shared parsing, validation, and clamping logic.
+ *
+ * @param {Record<string, any>|undefined} env - Environment-like map.
+ * @param {string} key - Lookup key within the environment map.
+ * @param {{
+ *   fallback: number,
+ *   parse?: (value: any) => number,
+ *   validator?: (value: number) => boolean,
+ *   clampTo?: { min?: number, max?: number },
+ * }} options - Normalization behaviour.
+ * @returns {number} Sanitized number or the fallback when invalid.
+ */
+function resolveEnvNumber(env, key, options) {
+  const { fallback, parse = Number.parseFloat, validator, clampTo } = options ?? {};
+  const source = env ?? RUNTIME_ENV;
+
+  if (!source || typeof source !== "object") {
+    return fallback;
+  }
+
+  const raw = source[key];
+
+  if (raw == null) {
+    return fallback;
+  }
+
+  let numeric;
+
+  try {
+    numeric = typeof parse === "function" ? parse(raw) : Number.parseFloat(raw);
+  } catch {
+    return fallback;
+  }
+
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+
+  if (typeof validator === "function") {
+    let isValid = false;
+
+    try {
+      isValid = validator(numeric) === true;
+    } catch {
+      return fallback;
+    }
+
+    if (!isValid) {
+      return fallback;
+    }
+  }
+
+  if (clampTo && ("min" in clampTo || "max" in clampTo)) {
+    const min = Number.isFinite(clampTo.min) ? clampTo.min : Number.NEGATIVE_INFINITY;
+    const max = Number.isFinite(clampTo.max) ? clampTo.max : Number.POSITIVE_INFINITY;
+
+    return clamp(numeric, min, max);
+  }
+
+  return numeric;
+}
+
+/**
  * Resolves the maximum amount of energy a single tile can store, allowing tests
  * and runtime environments to override the baseline via an environment
  * variable.
@@ -30,14 +95,10 @@ const RUNTIME_ENV =
  * @returns {number} Sanitized maximum tile energy value.
  */
 export function resolveMaxTileEnergy(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_MAX_TILE_ENERGY;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return DEFAULT_MAX_TILE_ENERGY;
-  }
-
-  return parsed;
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_MAX_TILE_ENERGY", {
+    fallback: DEFAULT_MAX_TILE_ENERGY,
+    validator: (value) => value > 0,
+  });
 }
 
 export const MAX_TILE_ENERGY = resolveMaxTileEnergy();
@@ -60,14 +121,10 @@ export const DECAY_RETURN_FRACTION = resolveDecayReturnFraction();
  * @returns {number} Sanitized density penalty coefficient in the 0..1 range.
  */
 export function resolveRegenDensityPenalty(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_REGEN_DENSITY_PENALTY;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
-    return DEFAULT_REGEN_DENSITY_PENALTY;
-  }
-
-  return parsed;
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_REGEN_DENSITY_PENALTY", {
+    fallback: DEFAULT_REGEN_DENSITY_PENALTY,
+    validator: (value) => value >= 0 && value <= 1,
+  });
 }
 
 /**
@@ -90,14 +147,10 @@ export const REGEN_DENSITY_PENALTY = resolveRegenDensityPenalty(); // 1 - penalt
  * @returns {number} Sanitized density penalty coefficient in the 0..1 range.
  */
 export function resolveConsumptionDensityPenalty(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
-    return DEFAULT_CONSUMPTION_DENSITY_PENALTY;
-  }
-
-  return parsed;
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY", {
+    fallback: DEFAULT_CONSUMPTION_DENSITY_PENALTY,
+    validator: (value) => value >= 0 && value <= 1,
+  });
 }
 
 /**
@@ -118,17 +171,9 @@ export const CONSUMPTION_DENSITY_PENALTY = resolveConsumptionDensityPenalty(); /
  * @returns {number} Territory advantage multiplier between 0 and 1.
  */
 export function resolveCombatTerritoryEdgeFactor(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR;
-  }
-
-  return sanitizeNumber(parsed, {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR", {
     fallback: DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR,
-    min: 0,
-    max: 1,
+    clampTo: { min: 0, max: 1 },
   });
 }
 
@@ -144,14 +189,10 @@ export function resolveCombatTerritoryEdgeFactor(env = RUNTIME_ENV) {
  * @returns {number} Fraction of remaining energy returned to the environment.
  */
 export function resolveDecayReturnFraction(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_DECAY_RETURN_FRACTION;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_DECAY_RETURN_FRACTION;
-  }
-
-  return clamp(parsed, 0, 1);
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_DECAY_RETURN_FRACTION", {
+    fallback: DEFAULT_DECAY_RETURN_FRACTION,
+    clampTo: { min: 0, max: 1 },
+  });
 }
 
 /**
@@ -167,14 +208,10 @@ export function resolveDecayReturnFraction(env = RUNTIME_ENV) {
  * @returns {number} Sanitized activation threshold in the 0..1 range.
  */
 export function resolveTraitActivationThreshold(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_TRAIT_ACTIVATION_THRESHOLD;
-  }
-
-  return clamp(parsed, 0, 1);
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD", {
+    fallback: DEFAULT_TRAIT_ACTIVATION_THRESHOLD,
+    clampTo: { min: 0, max: 1 },
+  });
 }
 
 export const TRAIT_ACTIVATION_THRESHOLD = resolveTraitActivationThreshold();
@@ -191,14 +228,10 @@ export const TRAIT_ACTIVATION_THRESHOLD = resolveTraitActivationThreshold();
  * @returns {number} Activity baseline clamped to the 0..1 interval.
  */
 export function resolveActivityBaseRate(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_ACTIVITY_BASE_RATE;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_ACTIVITY_BASE_RATE;
-  }
-
-  return clamp(parsed, 0, 1);
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_ACTIVITY_BASE_RATE", {
+    fallback: DEFAULT_ACTIVITY_BASE_RATE,
+    clampTo: { min: 0, max: 1 },
+  });
 }
 
 export const ACTIVITY_BASE_RATE = resolveActivityBaseRate();
@@ -214,14 +247,10 @@ export const ACTIVITY_BASE_RATE = resolveActivityBaseRate();
  * @returns {number} Mutation probability constrained to the 0..1 interval.
  */
 export function resolveMutationChance(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_MUTATION_CHANCE;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_MUTATION_CHANCE;
-  }
-
-  return clamp(parsed, 0, 1);
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_MUTATION_CHANCE", {
+    fallback: DEFAULT_MUTATION_CHANCE,
+    clampTo: { min: 0, max: 1 },
+  });
 }
 
 export const MUTATION_CHANCE_BASELINE = resolveMutationChance();
