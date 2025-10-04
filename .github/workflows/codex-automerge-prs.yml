@@ -8,6 +8,8 @@ on:
     branches:
       - codex/**
       - chore/auto-lint-format
+  schedule:
+    - cron: "*/30 * * * *"
 
 permissions:
   contents: write
@@ -208,4 +210,77 @@ jobs:
             } catch (error) {
               core.warning(`Auto-merge failed for PR #${n}: ${error.message}`);
               throw error;
+            }
+
+  scheduled-automerge:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Merge eligible open PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const merged = [];
+            const skipped = [];
+
+            const openPRs = await github.paginate(
+              github.rest.pulls.list,
+              { owner, repo, state: 'open', per_page: 100, sort: 'updated', direction: 'desc' }
+            );
+
+            const acceptableStates = new Set(['clean', 'unstable']);
+
+            for (const pr of openPRs) {
+              if (pr.draft) {
+                skipped.push({ number: pr.number, reason: 'draft' });
+                continue;
+              }
+
+              try {
+                const details = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+                const data = details.data;
+
+                if ((data.changed_files || 0) === 0) {
+                  skipped.push({ number: pr.number, reason: 'no changes' });
+                  continue;
+                }
+
+                if (data.mergeable === null) {
+                  skipped.push({ number: pr.number, reason: 'mergeability unknown' });
+                  continue;
+                }
+
+                if (!data.mergeable) {
+                  skipped.push({ number: pr.number, reason: `mergeable=false (${data.mergeable_state})` });
+                  continue;
+                }
+
+                const state = (data.mergeable_state || '').toLowerCase();
+                if (!acceptableStates.has(state)) {
+                  skipped.push({ number: pr.number, reason: `state=${state}` });
+                  continue;
+                }
+
+                await github.rest.pulls.merge({
+                  owner,
+                  repo,
+                  pull_number: pr.number,
+                  merge_method: 'squash'
+                });
+                merged.push(pr.number);
+              } catch (error) {
+                core.warning(`Failed to auto-merge PR #${pr.number}: ${error.message}`);
+                skipped.push({ number: pr.number, reason: 'exception' });
+              }
+            }
+
+            core.notice(`Scheduled auto-merge complete. Merged ${merged.length} PR(s): ${merged.join(', ') || 'none'}.`);
+            if (skipped.length) {
+              const breakdown = skipped
+                .map(entry => `#${entry.number} (${entry.reason})`)
+                .join(', ');
+              core.info(`Skipped PRs: ${breakdown}`);
             }
