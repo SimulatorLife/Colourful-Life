@@ -1,4 +1,4 @@
-import { clamp, sanitizeNumber } from "./utils.js";
+import { clamp, sanitizeNumber, coerceBoolean } from "./utils.js";
 
 // Centralized simulation config defaults
 const DEFAULT_MAX_TILE_ENERGY = 6;
@@ -276,42 +276,6 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showLifeEventMarkers",
   "autoPauseOnBlur",
 ]);
-
-function coerceBoolean(candidate, fallback) {
-  if (typeof candidate === "boolean") {
-    return candidate;
-  }
-
-  if (candidate == null) {
-    return fallback;
-  }
-
-  if (typeof candidate === "number") {
-    return Number.isFinite(candidate) ? candidate !== 0 : fallback;
-  }
-
-  if (typeof candidate === "string") {
-    const normalized = candidate.trim().toLowerCase();
-
-    if (normalized.length === 0) return fallback;
-    if (normalized === "true" || normalized === "yes" || normalized === "on") {
-      return true;
-    }
-    if (normalized === "false" || normalized === "no" || normalized === "off") {
-      return false;
-    }
-
-    const numeric = Number(normalized);
-
-    if (!Number.isNaN(numeric)) {
-      return numeric !== 0;
-    }
-
-    return fallback;
-  }
-
-  return Boolean(candidate);
-}
 
 const PROFILING_MODE_ALWAYS = "always";
 const PROFILING_MODE_NEVER = "never";

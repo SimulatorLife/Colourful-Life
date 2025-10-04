@@ -14,6 +14,7 @@ import {
   warnOnce,
   toPlainObject,
   invokeWithErrorBoundary,
+  coerceBoolean,
 } from "../utils.js";
 
 const AUTO_PAUSE_DESCRIPTION =
@@ -40,42 +41,6 @@ const DEATH_CAUSE_COLOR_MAP = Object.freeze({
 // an "Other" bucket. Consumers can override via `ui.layout.deathBreakdownMaxEntries`.
 const DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES = 4;
 const DEATH_BREAKDOWN_OTHER_COLOR = "rgba(255, 255, 255, 0.28)";
-
-function coerceBoolean(candidate, fallback = false) {
-  if (typeof candidate === "boolean") {
-    return candidate;
-  }
-
-  if (candidate == null) {
-    return fallback;
-  }
-
-  if (typeof candidate === "number") {
-    return Number.isFinite(candidate) ? candidate !== 0 : fallback;
-  }
-
-  if (typeof candidate === "string") {
-    const normalized = candidate.trim().toLowerCase();
-
-    if (normalized.length === 0) return fallback;
-    if (normalized === "true" || normalized === "yes" || normalized === "on") {
-      return true;
-    }
-    if (normalized === "false" || normalized === "no" || normalized === "off") {
-      return false;
-    }
-
-    const numeric = Number(normalized);
-
-    if (!Number.isNaN(numeric)) {
-      return numeric !== 0;
-    }
-
-    return fallback;
-  }
-
-  return Boolean(candidate);
-}
 
 /**
  * Formats numeric values that may occasionally be non-finite. When the value
