@@ -234,6 +234,17 @@ export function createHeadlessUiManager(options = {}) {
     getShowDensity: () => settings.showDensity,
     getShowFitness: () => settings.showFitness,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
+    getLeaderboardIntervalMs: () => settings.leaderboardIntervalMs,
+    setLeaderboardIntervalMs: (value) => {
+      if (
+        updateIfFinite("leaderboardIntervalMs", value, {
+          min: 0,
+          round: Math.round,
+        })
+      ) {
+        notify("leaderboardIntervalMs", settings.leaderboardIntervalMs);
+      }
+    },
     getProfileGridMetrics: () => settings.profileGridMetrics,
     setProfileGridMetrics: (value) => {
       const normalized = resolveSimulationDefaults({

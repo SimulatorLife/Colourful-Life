@@ -26,6 +26,10 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   manager.setMaxConcurrentEvents(-2.2);
   manager.setMaxConcurrentEvents("invalid");
 
+  manager.setLeaderboardIntervalMs(-1);
+  manager.setLeaderboardIntervalMs("oops");
+  manager.setLeaderboardIntervalMs(1250.4);
+
   manager.setEventFrequencyMultiplier(1.25);
   manager.setEventFrequencyMultiplier(-0.1);
   manager.setEventFrequencyMultiplier("oops");
@@ -46,6 +50,8 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
     ["combatTerritoryEdgeFactor", 0.6],
     ["maxConcurrentEvents", 3],
     ["maxConcurrentEvents", 0],
+    ["leaderboardIntervalMs", 0],
+    ["leaderboardIntervalMs", 1250],
     ["eventFrequencyMultiplier", 1.25],
     ["eventFrequencyMultiplier", 0],
     ["energyRegenRate", 0.12],
@@ -60,6 +66,7 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   assert.is(manager.getCombatEdgeSharpness(), 4.5);
   assert.is(manager.getCombatTerritoryEdgeFactor(), 0.6);
   assert.is(manager.getMaxConcurrentEvents(), 0);
+  assert.is(manager.getLeaderboardIntervalMs(), 1250);
   assert.is(manager.getEventFrequencyMultiplier(), 0);
   assert.is(manager.getEnergyRegenRate(), 0);
   assert.is(manager.getEnergyDiffusionRate(), 0.45);
@@ -78,6 +85,11 @@ test("createHeadlessUiManager shouldRenderSlowUi enforces the cadence window", (
   assert.is(manager.shouldRenderSlowUi(250), true);
   assert.is(manager.shouldRenderSlowUi(400), false);
   assert.is(manager.shouldRenderSlowUi(501), true);
+
+  manager.setLeaderboardIntervalMs(500);
+  assert.is(manager.getLeaderboardIntervalMs(), 500);
+  assert.is(manager.shouldRenderSlowUi(750), false);
+  assert.is(manager.shouldRenderSlowUi(1001), true);
 });
 
 test("createHeadlessUiManager exposes leaderboard cadence controls", () => {
