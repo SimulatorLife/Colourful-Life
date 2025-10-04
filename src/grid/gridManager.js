@@ -570,6 +570,35 @@ export default class GridManager {
       toCol: sourceCol + deltaCol,
     };
 
+    if (!Number.isInteger(deltaRow) || !Number.isInteger(deltaCol)) {
+      GridManager.#notify(normalizedOptions.onBlocked, {
+        reason: "range",
+        row: sourceRow,
+        col: sourceCol,
+        nextRow: attempt.toRow,
+        nextCol: attempt.toCol,
+        mover: moving,
+      });
+
+      return false;
+    }
+
+    const rowDelta = Math.abs(deltaRow);
+    const colDelta = Math.abs(deltaCol);
+
+    if (rowDelta > 1 || colDelta > 1 || (rowDelta === 0 && colDelta === 0)) {
+      GridManager.#notify(normalizedOptions.onBlocked, {
+        reason: "range",
+        row: sourceRow,
+        col: sourceCol,
+        nextRow: attempt.toRow,
+        nextCol: attempt.toCol,
+        mover: moving,
+      });
+
+      return false;
+    }
+
     if (GridManager.#isOutOfBounds(attempt.toRow, attempt.toCol, rowCount, colCount)) {
       GridManager.#notify(normalizedOptions.onBlocked, {
         reason: "bounds",
