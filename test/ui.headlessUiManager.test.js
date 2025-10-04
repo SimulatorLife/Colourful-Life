@@ -80,6 +80,32 @@ test("createHeadlessUiManager shouldRenderSlowUi enforces the cadence window", (
   assert.is(manager.shouldRenderSlowUi(501), true);
 });
 
+test("createHeadlessUiManager exposes leaderboard cadence controls", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    leaderboardIntervalMs: 400,
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  assert.is(manager.getLeaderboardIntervalMs(), 400);
+
+  manager.setLeaderboardIntervalMs(-50);
+  manager.setLeaderboardIntervalMs("oops");
+  manager.setLeaderboardIntervalMs(1200);
+
+  assert.equal(notifications, [
+    ["leaderboardIntervalMs", 0],
+    ["leaderboardIntervalMs", 1200],
+  ]);
+
+  assert.is(manager.getLeaderboardIntervalMs(), 1200);
+
+  assert.is(manager.shouldRenderSlowUi(0), true);
+  assert.is(manager.shouldRenderSlowUi(100), false);
+  manager.setLeaderboardIntervalMs(50);
+  assert.is(manager.shouldRenderSlowUi(120), true);
+});
+
 test("createHeadlessUiManager allows adjusting the mutation multiplier", () => {
   const notifications = [];
   const manager = createHeadlessUiManager({

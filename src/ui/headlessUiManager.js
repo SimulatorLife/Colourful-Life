@@ -190,6 +190,13 @@ export function createHeadlessUiManager(options = {}) {
         notify("energyDiffusionRate", settings.energyDiffusionRate);
       }
     },
+    getLeaderboardIntervalMs: () => settings.leaderboardIntervalMs,
+    setLeaderboardIntervalMs: (value) => {
+      if (updateIfFinite("leaderboardIntervalMs", value, { min: 0 })) {
+        lastSlowUiRender = Number.NEGATIVE_INFINITY;
+        notify("leaderboardIntervalMs", settings.leaderboardIntervalMs);
+      }
+    },
     getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
     setMatingDiversityThreshold: (value) => {
       if (updateIfFinite("matingDiversityThreshold", value, { min: 0, max: 1 })) {
