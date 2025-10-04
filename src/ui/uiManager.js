@@ -159,6 +159,12 @@ export default class UIManager {
     this.lifeEventsSummaryNet = null;
     this.lifeEventsSummaryDirection = null;
     this.lifeEventsSummaryRate = null;
+    this.lifeEventsTimelineCanvas = null;
+    this.lifeEventsTimelineLegend = null;
+    this.lifeEventsTimelineBirthValue = null;
+    this.lifeEventsTimelineDeathValue = null;
+    this.lifeEventsTimelineWindow = null;
+    this.lifeEventsTimelineEmptyState = null;
     this._pendingMetrics = null;
     this._pendingLeaderboardEntries = null;
     this._pendingProfilingMetrics = null;
@@ -1743,6 +1749,197 @@ export default class UIManager {
     }
   }
 
+  #updateLifeEventsTimeline(timeline) {
+    const canvas = this.lifeEventsTimelineCanvas;
+    const legend = this.lifeEventsTimelineLegend;
+    const emptyState = this.lifeEventsTimelineEmptyState;
+    const windowLabel = this.lifeEventsTimelineWindow;
+    const birthsValueEl = this.lifeEventsTimelineBirthValue;
+    const deathsValueEl = this.lifeEventsTimelineDeathValue;
+    const ticks = Array.isArray(timeline?.ticks) ? timeline.ticks : [];
+    const birthsSeries = Array.isArray(timeline?.births) ? timeline.births : [];
+    const deathsSeries = Array.isArray(timeline?.deaths) ? timeline.deaths : [];
+    const length = Math.min(ticks.length, birthsSeries.length, deathsSeries.length);
+    const hasSeries = length >= 2;
+    const latestBirths = length > 0 ? Number(birthsSeries[length - 1]) || 0 : 0;
+    const latestDeaths = length > 0 ? Number(deathsSeries[length - 1]) || 0 : 0;
+    const requestedWindow = Number.isFinite(timeline?.window) ? timeline.window : null;
+    const reportedSpan = Number.isFinite(timeline?.span) ? timeline.span : null;
+
+    if (birthsValueEl) {
+      const text = latestBirths.toLocaleString();
+
+      birthsValueEl.textContent = text;
+      const parent = birthsValueEl.parentElement;
+
+      if (parent && typeof parent.setAttribute === "function") {
+        const accessible = `${text} births in the latest tick`;
+
+        parent.setAttribute("aria-label", accessible);
+        parent.title = `${accessible.charAt(0).toUpperCase()}${accessible.slice(1)}.`;
+      }
+    }
+
+    if (deathsValueEl) {
+      const text = latestDeaths.toLocaleString();
+
+      deathsValueEl.textContent = text;
+      const parent = deathsValueEl.parentElement;
+
+      if (parent && typeof parent.setAttribute === "function") {
+        const accessible = `${text} deaths in the latest tick`;
+
+        parent.setAttribute("aria-label", accessible);
+        parent.title = `${accessible.charAt(0).toUpperCase()}${accessible.slice(1)}.`;
+      }
+    }
+
+    if (windowLabel) {
+      let windowText = "Awaiting data";
+      let referenceWindow =
+        Number.isFinite(requestedWindow) && requestedWindow > 0
+          ? requestedWindow
+          : null;
+
+      if (
+        referenceWindow == null &&
+        Number.isFinite(reportedSpan) &&
+        reportedSpan > 0
+      ) {
+        referenceWindow = reportedSpan;
+      }
+
+      if (referenceWindow == null && length >= 2) {
+        const firstTick = Number.isFinite(ticks[0]) ? ticks[0] : null;
+        const lastTick = Number.isFinite(ticks[length - 1]) ? ticks[length - 1] : null;
+
+        if (firstTick != null && lastTick != null) {
+          referenceWindow = Math.max(1, lastTick - firstTick + 1);
+        }
+      }
+
+      if (Number.isFinite(referenceWindow)) {
+        if (referenceWindow <= 1) {
+          windowText = "Latest tick";
+        } else {
+          windowText = `Last ${Math.round(referenceWindow).toLocaleString()} ticks`;
+        }
+      }
+
+      windowLabel.textContent = windowText;
+    }
+
+    if (!canvas) {
+      if (emptyState) emptyState.hidden = !hasSeries;
+      if (legend) legend.hidden = !hasSeries;
+
+      return;
+    }
+
+    const ctx =
+      typeof canvas.getContext === "function" ? canvas.getContext("2d") : null;
+
+    if (ctx && typeof ctx.clearRect === "function") {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    if (!hasSeries) {
+      canvas.hidden = true;
+      if (legend) legend.hidden = true;
+      if (emptyState) emptyState.hidden = false;
+
+      return;
+    }
+
+    canvas.hidden = false;
+    if (legend) legend.hidden = false;
+    if (emptyState) emptyState.hidden = true;
+
+    this.#drawLifeEventsTimelineChart(
+      canvas,
+      birthsSeries.slice(0, length),
+      deathsSeries.slice(0, length),
+    );
+  }
+
+  #drawLifeEventsTimelineChart(canvas, birthsSeries, deathsSeries) {
+    if (!canvas) return;
+
+    const ctx =
+      typeof canvas.getContext === "function" ? canvas.getContext("2d") : null;
+
+    if (!ctx) return;
+
+    const width = canvas.width || 0;
+    const height = canvas.height || 0;
+    const seriesLength = Math.min(birthsSeries.length, deathsSeries.length);
+
+    if (typeof ctx.clearRect === "function") {
+      ctx.clearRect(0, 0, width, height);
+    }
+
+    if (seriesLength < 2 || width <= 0 || height <= 0) {
+      return;
+    }
+
+    const combined = [];
+
+    for (let i = 0; i < seriesLength; i++) {
+      const birthValue = Number.isFinite(birthsSeries[i]) ? birthsSeries[i] : 0;
+      const deathValue = Number.isFinite(deathsSeries[i]) ? deathsSeries[i] : 0;
+
+      combined.push(birthValue, deathValue);
+    }
+
+    const maxValue = Math.max(1, ...combined);
+    const verticalPadding = 6;
+    const chartHeight = Math.max(1, height - verticalPadding * 2);
+    const step = seriesLength > 1 ? (width - 2) / (seriesLength - 1) : 0;
+    const toY = (value) =>
+      height - verticalPadding - (Math.max(0, value) / maxValue) * chartHeight;
+
+    if (typeof ctx.beginPath === "function" && typeof ctx.stroke === "function") {
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+      ctx.lineWidth = 1;
+      const baselineY = height - verticalPadding;
+
+      if (typeof ctx.moveTo === "function" && typeof ctx.lineTo === "function") {
+        ctx.moveTo(0, baselineY);
+        ctx.lineTo(width, baselineY);
+      }
+      ctx.stroke();
+    }
+
+    const drawSeries = (series, color) => {
+      if (typeof ctx.beginPath !== "function") return;
+      if (typeof ctx.moveTo !== "function" || typeof ctx.lineTo !== "function") {
+        return;
+      }
+
+      ctx.beginPath();
+      ctx.lineWidth = 1.75;
+      ctx.strokeStyle = color;
+
+      for (let i = 0; i < seriesLength; i++) {
+        const value = Number.isFinite(series[i]) ? series[i] : 0;
+        const x = 1 + step * i;
+        const y = toY(value);
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+
+      ctx.stroke();
+    };
+
+    const birthColor = this.#resolveCssColor("--color-life-birth", "#4caf50");
+    const deathColor = this.#resolveCssColor("--color-life-death", "#e74c3c");
+
+    drawSeries(birthsSeries, birthColor);
+    drawSeries(deathsSeries, deathColor);
+  }
+
   #renderLifeEvents(stats) {
     if (!this.lifeEventList) return;
 
@@ -1753,6 +1950,10 @@ export default class UIManager {
     const trendSummary =
       typeof stats?.getLifeEventRateSummary === "function"
         ? stats.getLifeEventRateSummary()
+        : null;
+    const timelineData =
+      typeof stats?.getLifeEventTimeline === "function"
+        ? stats.getLifeEventTimeline(60)
         : null;
     const deathBreakdown = stats?.deathBreakdown;
 
@@ -1766,6 +1967,7 @@ export default class UIManager {
 
       this.#updateDeathBreakdown(deathBreakdown, fallbackDeaths);
       this.#updateLifeEventsSummary(0, 0, 0, trendSummary);
+      this.#updateLifeEventsTimeline(timelineData);
       this.lifeEventList.hidden = true;
       if (this.lifeEventsEmptyState) {
         this.lifeEventsEmptyState.hidden = false;
@@ -1945,6 +2147,7 @@ export default class UIManager {
       summaryTotal,
       trendSummary,
     );
+    this.#updateLifeEventsTimeline(timelineData);
   }
 
   // Utility to create a collapsible panel with a header
@@ -3459,6 +3662,129 @@ export default class UIManager {
     this.lifeEventsSummary.appendChild(trendSummary);
     lifeBody.appendChild(this.lifeEventsSummary);
 
+    const lifeTimelineCard = document.createElement("div");
+
+    lifeTimelineCard.className = "life-events-timeline";
+    lifeTimelineCard.setAttribute(
+      "aria-label",
+      "Birth and death cadence across recent ticks",
+    );
+    lifeTimelineCard.setAttribute("role", "group");
+
+    const timelineHeader = document.createElement("div");
+
+    timelineHeader.className = "life-events-timeline__header";
+    const timelineTitle = document.createElement("h5");
+
+    timelineTitle.className = "life-events-timeline__title";
+    timelineTitle.textContent = "Birth & Death Trend";
+    const timelineWindow = document.createElement("span");
+
+    timelineWindow.className = "life-events-timeline__window";
+    timelineWindow.textContent = "Awaiting data";
+
+    timelineHeader.appendChild(timelineTitle);
+    timelineHeader.appendChild(timelineWindow);
+
+    const timelineHint = document.createElement("p");
+
+    timelineHint.className = "life-events-timeline__hint control-hint";
+    timelineHint.textContent =
+      "Line chart comparing births and deaths captured during the latest ticks.";
+
+    const timelineCanvas = document.createElement("canvas");
+
+    timelineCanvas.className = "life-events-timeline__canvas";
+    timelineCanvas.width = 320;
+    timelineCanvas.height = 80;
+    timelineCanvas.setAttribute("role", "img");
+    timelineCanvas.setAttribute(
+      "aria-label",
+      "Births and deaths per tick for recent simulation activity",
+    );
+    timelineCanvas.hidden = true;
+
+    const createTimelineLegendItem = (
+      label,
+      modifierClass,
+      colorVar,
+      fallbackColor,
+    ) => {
+      const item = document.createElement("div");
+      const normalizedClass = ["life-events-timeline__legend-item", modifierClass]
+        .filter(Boolean)
+        .join(" ");
+
+      item.className = normalizedClass;
+
+      const dot = document.createElement("span");
+
+      dot.className = "life-events-timeline__legend-dot";
+      if (colorVar) {
+        dot.style.background = `var(${colorVar}, ${fallbackColor})`;
+      } else if (fallbackColor) {
+        dot.style.background = fallbackColor;
+      }
+
+      const labelEl = document.createElement("span");
+
+      labelEl.className = "life-events-timeline__legend-label";
+      labelEl.textContent = label;
+
+      const valueEl = document.createElement("span");
+
+      valueEl.className = "life-events-timeline__legend-value";
+      valueEl.textContent = "0";
+
+      item.appendChild(dot);
+      item.appendChild(labelEl);
+      item.appendChild(valueEl);
+
+      return { item, valueEl };
+    };
+
+    const timelineLegend = document.createElement("div");
+
+    timelineLegend.className = "life-events-timeline__legend";
+    timelineLegend.hidden = true;
+
+    const birthsLegend = createTimelineLegendItem(
+      "Births",
+      "life-events-timeline__legend-item--birth",
+      "--color-life-birth",
+      "#4caf50",
+    );
+
+    const deathsLegend = createTimelineLegendItem(
+      "Deaths",
+      "life-events-timeline__legend-item--death",
+      "--color-life-death",
+      "#e74c3c",
+    );
+
+    timelineLegend.appendChild(birthsLegend.item);
+    timelineLegend.appendChild(deathsLegend.item);
+
+    const timelineEmpty = document.createElement("p");
+
+    timelineEmpty.className = "life-events-timeline__empty control-hint";
+    timelineEmpty.textContent = "Run the simulation to populate the cadence chart.";
+
+    lifeTimelineCard.appendChild(timelineHeader);
+    lifeTimelineCard.appendChild(timelineHint);
+    lifeTimelineCard.appendChild(timelineCanvas);
+    lifeTimelineCard.appendChild(timelineLegend);
+    lifeTimelineCard.appendChild(timelineEmpty);
+
+    this.lifeEventsTimelineCanvas = timelineCanvas;
+    this.lifeEventsTimelineLegend = timelineLegend;
+    this.lifeEventsTimelineBirthValue = birthsLegend.valueEl;
+    this.lifeEventsTimelineDeathValue = deathsLegend.valueEl;
+    this.lifeEventsTimelineWindow = timelineWindow;
+    this.lifeEventsTimelineEmptyState = timelineEmpty;
+
+    lifeBody.appendChild(lifeTimelineCard);
+
     const breakdownCard = document.createElement("div");
 
     breakdownCard.className = "life-events-breakdown";
@@ -3515,6 +3841,7 @@ export default class UIManager {
     body.appendChild(lifeEventsSection);
 
     this.#updateLifeEventsSummary(0, 0, 0, null);
+    this.#updateLifeEventsTimeline(null);
 
     return panel;
   }

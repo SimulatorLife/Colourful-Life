@@ -1488,6 +1488,87 @@ export default class Stats {
     };
   }
 
+  getLifeEventTimeline(windowSize = 60) {
+    if (!this.lifeEventLog) {
+      return {
+        ticks: [],
+        births: [],
+        deaths: [],
+        window: 0,
+        span: 0,
+      };
+    }
+
+    const numericWindow = Math.floor(Number(windowSize));
+
+    if (!Number.isFinite(numericWindow) || numericWindow <= 0) {
+      return {
+        ticks: [],
+        births: [],
+        deaths: [],
+        window: 0,
+        span: 0,
+      };
+    }
+
+    const latestTick = Number.isFinite(this.totals?.ticks) ? this.totals.ticks : 0;
+    const endTick = latestTick;
+    const startTick = Math.max(0, endTick - numericWindow + 1);
+    const values = this.lifeEventLog.values();
+
+    if (!Array.isArray(values) || values.length === 0) {
+      const span = endTick >= startTick ? endTick - startTick + 1 : 0;
+      const ticks =
+        span > 0 ? Array.from({ length: span }, (_, i) => startTick + i) : [];
+      const zeros = ticks.map(() => 0);
+
+      return {
+        ticks,
+        births: zeros,
+        deaths: zeros.slice(),
+        window: numericWindow,
+        span,
+      };
+    }
+
+    const birthCounts = new Map();
+    const deathCounts = new Map();
+
+    for (const event of values) {
+      if (!event) continue;
+
+      const tick = Number.isFinite(event.tick) ? event.tick : null;
+
+      if (tick == null || tick < startTick || tick > endTick) {
+        continue;
+      }
+
+      if (event.type === "birth") {
+        birthCounts.set(tick, (birthCounts.get(tick) || 0) + 1);
+      } else if (event.type === "death") {
+        deathCounts.set(tick, (deathCounts.get(tick) || 0) + 1);
+      }
+    }
+
+    const ticks = [];
+    const births = [];
+    const deaths = [];
+
+    for (let tick = startTick; tick <= endTick; tick++) {
+      ticks.push(tick);
+      births.push(birthCounts.get(tick) || 0);
+      deaths.push(deathCounts.get(tick) || 0);
+    }
+
+    return {
+      ticks,
+      births,
+      deaths,
+      window: numericWindow,
+      span: ticks.length,
+    };
+  }
+
   setMutationMultiplier(multiplier = 1) {
     const value = Number.isFinite(multiplier) ? Math.max(0, multiplier) : 1;
 

@@ -89,3 +89,32 @@ test("getLifeEventRateSummary spans quiet periods within the window", async () =
   approxEqual(summary.birthsPer100Ticks, 1, 1e-9);
   approxEqual(summary.deathsPer100Ticks, 0, 1e-9);
 });
+
+test("getLifeEventTimeline aggregates births and deaths per tick", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+
+  stats.totals.ticks = 10;
+  stats.onBirth({ color: "#abc" });
+  stats.totals.ticks = 11;
+  stats.onBirth({ color: "#def" });
+  stats.totals.ticks = 12;
+  stats.onDeath({ color: "#123" });
+  stats.totals.ticks = 13;
+
+  const timeline = stats.getLifeEventTimeline(4);
+
+  assert.equal(timeline.ticks, [10, 11, 12, 13], "spans the requested window");
+  assert.equal(
+    timeline.births,
+    [1, 1, 0, 0],
+    "counts births for each tick within the window",
+  );
+  assert.equal(
+    timeline.deaths,
+    [0, 0, 1, 0],
+    "counts deaths for each tick within the window",
+  );
+  assert.is(timeline.window, 4, "retains requested window size");
+  assert.is(timeline.span, 4, "reports the number of ticks returned");
+});
