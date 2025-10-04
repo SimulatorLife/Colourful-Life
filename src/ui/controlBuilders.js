@@ -24,7 +24,6 @@ export function createControlGrid(parent, className = "") {
  * @param {{className?: string}} [options] - Styling overrides.
  * @returns {HTMLHeadingElement} Created heading element.
  */
-
 export function createSectionHeading(parent, text, options = {}) {
   const { className = "control-section-title" } = toPlainObject(options);
   const heading = document.createElement("h4");
@@ -133,7 +132,7 @@ export function createSliderRow(parent, opts = {}) {
   };
 
   input.addEventListener("input", () => {
-    const numericValue = parseFloat(input.value);
+    const numericValue = Number.parseFloat(input.value);
 
     valSpan.textContent = format(numericValue);
     if (typeof onInput === "function") onInput(numericValue);
