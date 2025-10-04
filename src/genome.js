@@ -806,6 +806,59 @@ export class DNA {
     return clamp(base, 0.006, 0.03);
   }
 
+  decayRecyclingProfile() {
+    const rng = this.prngFor("decayRecyclingProfile");
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const senescence = this.geneFraction(GENE_LOCI.SENESCENCE);
+    const drought = this.geneFraction(GENE_LOCI.RESIST_DROUGHT);
+    const heat = this.geneFraction(GENE_LOCI.RESIST_HEAT);
+    const resilience = (drought + heat) / 2;
+    const compostingImpulse =
+      0.22 + 0.45 * recovery + 0.28 * parental + 0.18 * cooperation;
+    const hoardingDrag = 0.18 + 0.5 * density + 0.22 * efficiency;
+    const shareJitter = (rng() - 0.5) * 0.08;
+    const immediateShare = clamp(
+      compostingImpulse - hoardingDrag * 0.35 + shareJitter,
+      0.05,
+      0.8,
+    );
+    const baseJitter = (rng() - 0.5) * 0.04;
+    const releaseBase = clamp(
+      0.05 + 0.12 * recovery + 0.08 * risk + 0.06 * (1 - density) + baseJitter,
+      0.02,
+      0.3,
+    );
+    const rateJitter = (rng() - 0.5) * 0.05;
+    const releaseRate = clamp(
+      0.1 + 0.24 * efficiency + 0.12 * (1 - density) + 0.08 * senescence + rateJitter,
+      0.05,
+      0.45,
+    );
+    const persistenceJitter = (rng() - 0.5) * 0.18;
+    const persistence = clamp(
+      0.65 +
+        0.55 * density +
+        0.45 * (1 - efficiency) +
+        0.25 * (1 - recovery) +
+        0.2 * resilience +
+        persistenceJitter,
+      0.35,
+      1.8,
+    );
+
+    return {
+      immediateShare,
+      releaseBase,
+      releaseRate,
+      persistence,
+    };
+  }
+
   scarcityReliefProfile() {
     const rng = this.prngFor("scarcityReliefProfile");
     const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
