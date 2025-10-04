@@ -145,6 +145,9 @@ export default class UIManager {
     this._checkboxIdSequence = 0;
     this.stepButton = null;
     this.metricsPlaceholder = null;
+    this.profilingPanel = null;
+    this.profilingBox = null;
+    this.profilingPlaceholder = null;
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
     this.lifeEventsSummary = null;
@@ -158,6 +161,7 @@ export default class UIManager {
     this.lifeEventsSummaryRate = null;
     this._pendingMetrics = null;
     this._pendingLeaderboardEntries = null;
+    this._pendingProfilingMetrics = null;
     this._pendingLifeEventsStats = null;
     this.deathBreakdownList = null;
     this.deathBreakdownEmptyState = null;
@@ -278,9 +282,11 @@ export default class UIManager {
     }
     this.controlsPanel = this.#buildControlsPanel();
     this.insightsPanel = this.#buildInsightsPanel();
+    this.profilingPanel = this.#buildProfilingPanel();
     this.lifeEventsPanel = this.#buildLifeEventsPanel();
     this.dashboardGrid.appendChild(this.controlsPanel);
     this.dashboardGrid.appendChild(this.insightsPanel);
+    this.dashboardGrid.appendChild(this.profilingPanel);
     this.dashboardGrid.appendChild(this.lifeEventsPanel);
 
     // Keyboard toggle
@@ -2021,6 +2027,16 @@ export default class UIManager {
     this.renderMetrics(stats, snapshot, environment);
   }
 
+  #flushPendingProfiling() {
+    if (!this._pendingProfilingMetrics || this.#isPanelCollapsed(this.profilingPanel)) {
+      return;
+    }
+    const { rendering } = this._pendingProfilingMetrics;
+
+    this._pendingProfilingMetrics = null;
+    this.#renderProfilingMetrics(rendering);
+  }
+
   #flushPendingLeaderboard() {
     if (!this._pendingLeaderboardEntries || this.#isPanelCollapsed(this.leaderPanel)) {
       return;
@@ -2634,35 +2650,6 @@ export default class UIManager {
         }
       });
 
-    const profilingOptions = [
-      {
-        value: "auto",
-        label: "Auto",
-        description: "Capture profiling data when the dashboard requests metrics.",
-      },
-      {
-        value: "always",
-        label: "Always On",
-        description: "Always collect grid profiling metrics each tick.",
-      },
-      {
-        value: "never",
-        label: "Off",
-        description: "Disable grid profiling to minimise overhead.",
-      },
-    ];
-
-    this.profileGridSelect = createSelectRow(generalGroup, {
-      label: "Grid Profiling",
-      title:
-        "Controls how often grid-level profiling metrics are captured for the dashboard and insights panels.",
-      value: this.profileGridMetrics,
-      options: profilingOptions,
-      onChange: (value) => {
-        this.setProfileGridMetrics(value);
-      },
-    });
-
     return {
       renderSlider,
       withSliderConfig,
@@ -2860,6 +2847,99 @@ export default class UIManager {
     sliderContext.generalConfigs
       .filter((cfg) => cfg.position === "afterEnergy")
       .forEach((cfg) => sliderContext.renderSlider(cfg, sliderContext.generalGroup));
+  }
+
+  #buildProfilingPanel() {
+    const { panel, body } = this.#createPanel("Profiling", {
+      collapsed: true,
+      onToggle: (expanded) => {
+        if (expanded) {
+          this.#flushPendingProfiling();
+        }
+      },
+    });
+
+    panel.id = "profiling";
+    panel.classList.add("profiling-panel");
+
+    const intro = document.createElement("p");
+
+    intro.className = "metrics-intro";
+    intro.textContent =
+      "Tune instrumentation and inspect renderer timings to diagnose performance.";
+    body.appendChild(intro);
+
+    const instrumentationSection = document.createElement("section");
+
+    instrumentationSection.className = "metrics-section";
+    instrumentationSection.setAttribute(
+      "aria-label",
+      "Profiling instrumentation controls",
+    );
+    const instrumentationHeading = document.createElement("h4");
+
+    instrumentationHeading.className = "metrics-section-title";
+    instrumentationHeading.textContent = "Instrumentation";
+    instrumentationSection.appendChild(instrumentationHeading);
+
+    const instrumentationBody = document.createElement("div");
+
+    instrumentationBody.className = "metrics-section-body";
+    instrumentationSection.appendChild(instrumentationBody);
+    body.appendChild(instrumentationSection);
+
+    const instrumentationGrid = createControlGrid(
+      instrumentationBody,
+      "control-grid--compact",
+    );
+
+    const profilingOptions = [
+      {
+        value: "auto",
+        label: "Auto",
+        description: "Capture profiling data when the dashboard requests metrics.",
+      },
+      {
+        value: "always",
+        label: "Always On",
+        description: "Always collect grid profiling metrics each tick.",
+      },
+      {
+        value: "never",
+        label: "Off",
+        description: "Disable grid profiling to minimise overhead.",
+      },
+    ];
+
+    this.profileGridSelect = createSelectRow(instrumentationGrid, {
+      label: "Grid Profiling",
+      title:
+        "Controls how often grid-level profiling metrics are captured for the dashboard and insights panels.",
+      value: this.profileGridMetrics,
+      options: profilingOptions,
+      onChange: (value) => {
+        this.setProfileGridMetrics(value);
+      },
+    });
+
+    const instrumentationHint = document.createElement("p");
+
+    instrumentationHint.className = "control-hint";
+    instrumentationHint.textContent =
+      "Choose when the grid records profiling samples for the dashboard.";
+    instrumentationBody.appendChild(instrumentationHint);
+
+    this.profilingBox = document.createElement("div");
+    this.profilingBox.className = "metrics-box";
+    this.profilingBox.setAttribute("role", "status");
+    this.profilingBox.setAttribute("aria-live", "polite");
+    body.appendChild(this.profilingBox);
+
+    this.#showProfilingPlaceholder(
+      "Run the simulation to collect performance samples.",
+    );
+
+    return panel;
   }
 
   #buildInsightsPanel() {
@@ -3599,8 +3679,158 @@ export default class UIManager {
     }
   }
 
+  #showProfilingPlaceholder(message) {
+    if (!this.profilingBox) return;
+    if (!this.profilingPlaceholder) {
+      this.profilingPlaceholder = document.createElement("div");
+      this.profilingPlaceholder.className = "metrics-empty-state";
+    }
+    if (typeof message === "string" && message.length > 0) {
+      this.profilingPlaceholder.textContent = message;
+    }
+
+    this.profilingBox.innerHTML = "";
+    this.profilingBox.appendChild(this.profilingPlaceholder);
+  }
+
+  #hideProfilingPlaceholder() {
+    if (this.profilingPlaceholder?.parentElement === this.profilingBox) {
+      this.profilingPlaceholder.remove();
+    }
+  }
+
+  #updateProfilingPanel(rendering) {
+    if (!this.profilingBox) return;
+
+    if (this.#isPanelCollapsed(this.profilingPanel)) {
+      this._pendingProfilingMetrics = { rendering };
+
+      return;
+    }
+
+    this._pendingProfilingMetrics = null;
+    this.#renderProfilingMetrics(rendering);
+  }
+
+  #renderProfilingMetrics(rendering) {
+    if (!this.profilingBox) return;
+
+    const hasData =
+      rendering &&
+      typeof rendering === "object" &&
+      Object.values(rendering).some((value) => value != null);
+
+    if (!hasData) {
+      this.#showProfilingPlaceholder(
+        "Run the simulation to collect performance samples.",
+      );
+
+      return;
+    }
+
+    this.#hideProfilingPlaceholder();
+    this.profilingBox.innerHTML = "";
+
+    const section = document.createElement("section");
+
+    section.className = "metrics-section";
+    section.setAttribute("aria-label", "Rendering performance metrics");
+    const heading = document.createElement("h4");
+
+    heading.className = "metrics-section-title";
+    heading.textContent = "Rendering Health";
+    section.appendChild(heading);
+
+    const body = document.createElement("div");
+
+    body.className = "metrics-section-body";
+    section.appendChild(body);
+    this.profilingBox.appendChild(section);
+
+    const appendRow = (config) => {
+      this.#appendControlRow(body, config);
+    };
+
+    const finiteOrDash = (value, formatter = String) =>
+      formatIfFinite(value, formatter, "—");
+    const msOrDash = (value) => finiteOrDash(value, (v) => `${v.toFixed(2)} ms`);
+    const fpsOrDash = (value) => finiteOrDash(value, (v) => `${v.toFixed(1)} fps`);
+    const integerOrDash = (value) =>
+      finiteOrDash(value, (v) => Math.round(v).toLocaleString());
+
+    const rendererLabel = [
+      typeof rendering.mode === "string" ? rendering.mode : null,
+      typeof rendering.refreshType === "string" && rendering.refreshType !== "none"
+        ? rendering.refreshType
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    appendRow({
+      label: "Renderer",
+      value: rendererLabel || "—",
+      title: "Active renderer mode and most recent refresh strategy.",
+    });
+    appendRow({
+      label: "Estimated FPS",
+      value: fpsOrDash(rendering.fps),
+      title: "Frames per second derived from the smoothed frame time.",
+    });
+    appendRow({
+      label: "Frame (last)",
+      value: msOrDash(rendering.lastFrameMs),
+      title: "Time required to render the most recent frame.",
+    });
+    appendRow({
+      label: "Frame (avg)",
+      value: msOrDash(rendering.avgFrameMs),
+      title: "Smoothed average frame duration over recent samples.",
+    });
+    appendRow({
+      label: "Cell Paint (last)",
+      value: msOrDash(rendering.lastCellLoopMs),
+      title: "Time spent updating cell pixels in the most recent frame.",
+    });
+    appendRow({
+      label: "Cell Paint (avg)",
+      value: msOrDash(rendering.avgCellLoopMs),
+      title: "Average time spent updating cells across recent frames.",
+    });
+    appendRow({
+      label: "Obstacle Paint (last)",
+      value: msOrDash(rendering.lastObstacleLoopMs),
+      title: "Time spent redrawing obstacles in the most recent frame.",
+    });
+    appendRow({
+      label: "Obstacle Paint (avg)",
+      value: msOrDash(rendering.avgObstacleLoopMs),
+      title: "Average time spent redrawing obstacles.",
+    });
+    appendRow({
+      label: "Tiles Processed",
+      value: integerOrDash(rendering.lastProcessedTiles),
+      title: "Tiles touched by the renderer during the last frame.",
+    });
+    appendRow({
+      label: "Dirty Tiles",
+      value: integerOrDash(rendering.lastDirtyTileCount),
+      title: "Dirty tiles that triggered updates during the last frame.",
+    });
+    appendRow({
+      label: "Visible Cells",
+      value: integerOrDash(rendering.lastPaintedCells),
+      title: "Active cells present in the grid during the last frame.",
+    });
+  }
+
   renderMetrics(stats, snapshot, environment = {}) {
     this.renderLifeEvents(stats);
+
+    const snapshotData = snapshot && typeof snapshot === "object" ? snapshot : {};
+    const { rendering, ...insightSnapshot } = snapshotData;
+
+    this.#updateProfilingPanel(rendering);
 
     if (!this.metricsBox) return;
 
@@ -3611,10 +3841,9 @@ export default class UIManager {
     }
 
     this._pendingMetrics = null;
-    const hasSnapshotData =
-      snapshot &&
-      typeof snapshot === "object" &&
-      Object.keys(snapshot).some((key) => snapshot[key] !== undefined);
+    const hasSnapshotData = Object.keys(insightSnapshot).some(
+      (key) => insightSnapshot[key] !== undefined,
+    );
 
     if (!hasSnapshotData) {
       this.#showMetricsPlaceholder("Run the simulation to populate these metrics.");
@@ -3624,8 +3853,7 @@ export default class UIManager {
 
     this.#hideMetricsPlaceholder();
     this.metricsBox.innerHTML = "";
-    const s = snapshot || {};
-    const rendering = s.rendering || null;
+    const s = insightSnapshot;
     const totals = (stats && stats.totals) || {};
     const lastTotals = this._lastInteractionTotals || { fights: 0, cooperations: 0 };
     const fightDelta = Math.max(0, (totals.fights ?? 0) - (lastTotals.fights ?? 0));
@@ -3666,10 +3894,6 @@ export default class UIManager {
     const countOrDash = (value) => finiteOrDash(value);
     const fixedOrDash = (value, digits) =>
       formatIfFinite(value, (v) => v.toFixed(digits), "—");
-    const msOrDash = (value) => finiteOrDash(value, (v) => `${v.toFixed(2)} ms`);
-    const fpsOrDash = (value) => finiteOrDash(value, (v) => `${v.toFixed(1)} fps`);
-    const integerOrDash = (value) =>
-      finiteOrDash(value, (v) => Math.round(v).toLocaleString());
     const coverageOrNull = (ratio) =>
       formatIfFinite(
         ratio,
@@ -3702,74 +3926,6 @@ export default class UIManager {
       fights: totals.fights ?? lastTotals.fights ?? 0,
       cooperations: totals.cooperations ?? lastTotals.cooperations ?? 0,
     };
-
-    if (rendering) {
-      const renderingSection = createSection("Rendering Health");
-      const rendererLabel = [
-        typeof rendering.mode === "string" ? rendering.mode : null,
-        typeof rendering.refreshType === "string" && rendering.refreshType !== "none"
-          ? rendering.refreshType
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" · ");
-
-      appendMetricRow(renderingSection, {
-        label: "Renderer",
-        value: rendererLabel || "—",
-        title: "Active renderer mode and most recent refresh strategy.",
-      });
-      appendMetricRow(renderingSection, {
-        label: "Estimated FPS",
-        value: fpsOrDash(rendering.fps),
-        title: "Frames per second derived from the smoothed frame time.",
-      });
-      appendMetricRow(renderingSection, {
-        label: "Frame (last)",
-        value: msOrDash(rendering.lastFrameMs),
-        title: "Time required to render the most recent frame.",
-      });
-      appendMetricRow(renderingSection, {
-        label: "Frame (avg)",
-        value: msOrDash(rendering.avgFrameMs),
-        title: "Smoothed average frame duration over recent samples.",
-      });
-      appendMetricRow(renderingSection, {
-        label: "Cell Paint (last)",
-        value: msOrDash(rendering.lastCellLoopMs),
-        title: "Time spent updating cell pixels in the most recent frame.",
-      });
-      appendMetricRow(renderingSection, {
-        label: "Cell Paint (avg)",
-        value: msOrDash(rendering.avgCellLoopMs),
-        title: "Average time spent updating cells across recent frames.",
-      });
-      appendMetricRow(renderingSection, {
-        label: "Obstacle Paint (last)",
-        value: msOrDash(rendering.lastObstacleLoopMs),
-        title: "Time spent redrawing obstacles in the most recent frame.",
-      });
-      appendMetricRow(renderingSection, {
-        label: "Obstacle Paint (avg)",
-        value: msOrDash(rendering.avgObstacleLoopMs),
-        title: "Average time spent redrawing obstacles.",
-      });
-      appendMetricRow(renderingSection, {
-        label: "Tiles Processed",
-        value: integerOrDash(rendering.lastProcessedTiles),
-        title: "Tiles touched by the renderer during the last frame.",
-      });
-      appendMetricRow(renderingSection, {
-        label: "Dirty Tiles",
-        value: integerOrDash(rendering.lastDirtyTileCount),
-        title: "Dirty tiles that triggered updates during the last frame.",
-      });
-      appendMetricRow(renderingSection, {
-        label: "Visible Cells",
-        value: integerOrDash(rendering.lastPaintedCells),
-        title: "Active cells present in the grid during the last frame.",
-      });
-    }
 
     const populationSection = createSection("Population Snapshot");
 
