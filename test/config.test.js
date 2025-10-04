@@ -197,3 +197,32 @@ test("resolveDecayReturnFraction clamps invalid overrides", async () => {
     0.9,
   );
 });
+
+test("DECAY_SPAWN_MIN_ENERGY exposes the environment-aware default", async () => {
+  const { DECAY_SPAWN_MIN_ENERGY } = await configModulePromise;
+
+  assert.is(DECAY_SPAWN_MIN_ENERGY, 1.2);
+});
+
+test("resolveDecaySpawnMinEnergy respects overrides", async () => {
+  const { resolveDecaySpawnMinEnergy } = await configModulePromise;
+
+  assert.is(
+    resolveDecaySpawnMinEnergy({ COLOURFUL_LIFE_DECAY_SPAWN_MIN_ENERGY: "2.5" }),
+    2.5,
+  );
+});
+
+test("resolveDecaySpawnMinEnergy clamps invalid overrides", async () => {
+  const { resolveDecaySpawnMinEnergy } = await configModulePromise;
+
+  assert.is(
+    resolveDecaySpawnMinEnergy({ COLOURFUL_LIFE_DECAY_SPAWN_MIN_ENERGY: "-3" }),
+    0,
+  );
+
+  assert.is(
+    resolveDecaySpawnMinEnergy({ COLOURFUL_LIFE_DECAY_SPAWN_MIN_ENERGY: "NaN" }),
+    1.2,
+  );
+});

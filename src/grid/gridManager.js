@@ -32,6 +32,8 @@ import {
   COMBAT_TERRITORY_EDGE_FACTOR,
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
+  DECAY_RETURN_FRACTION,
+  DECAY_SPAWN_MIN_ENERGY,
 } from "../config.js";
 const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
@@ -48,13 +50,11 @@ const NEIGHBOR_OFFSETS = [
   [1, 0],
   [1, 1],
 ];
-const DECAY_RETURN_FRACTION = 0.9;
 const DECAY_IMMEDIATE_SHARE = 0.25;
 const DECAY_RELEASE_BASE = 0.12;
 const DECAY_RELEASE_RATE = 0.18;
 const DECAY_MAX_AGE = 240;
 const DECAY_EPSILON = 1e-4;
-const DECAY_SPAWN_MIN_ENERGY = 1.2;
 const INITIAL_TILE_ENERGY_FRACTION = 0.5;
 
 const COLOR_CACHE = new Map();
