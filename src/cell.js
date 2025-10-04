@@ -3923,18 +3923,33 @@ export default class Cell {
         this.#nearest(mates, row, col) ||
         this.#nearest(society, row, col);
 
-      if (threat)
-        return moveAwayFromTarget(
-          gridArr,
+      if (threat) {
+        const { shouldRetreat } = this.#legacyResolveCautiousResponse(threat, {
           row,
           col,
-          threat.row,
-          threat.col,
-          rows,
-          cols,
-        );
+          localDensity,
+          densityEffectMultiplier,
+          tileEnergy,
+          tileEnergyDelta,
+          maxTileEnergy,
+        });
 
-      return moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
+        if (shouldRetreat) {
+          if (typeof moveAwayFromTarget === "function") {
+            return moveAwayFromTarget(
+              gridArr,
+              row,
+              col,
+              threat.row,
+              threat.col,
+              rows,
+              cols,
+            );
+          }
+
+          return moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
+        }
+      }
     }
     // wandering: try cohesion toward allies first
     if (Array.isArray(society) && society.length > 0) {
@@ -3999,6 +4014,132 @@ export default class Cell {
     }
 
     return moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
+  }
+
+  #legacyResolveCautiousResponse(
+    threat,
+    {
+      row,
+      col,
+      localDensity = 0,
+      densityEffectMultiplier = 1,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
+      maxTileEnergy = MAX_TILE_ENERGY,
+    } = {},
+  ) {
+    if (!threat) {
+      return { shouldRetreat: false, probability: 0 };
+    }
+
+    const occupantRow = Number.isFinite(row) ? row : this.row;
+    const occupantCol = Number.isFinite(col) ? col : this.col;
+    const densityMultiplier = Number.isFinite(densityEffectMultiplier)
+      ? densityEffectMultiplier
+      : 1;
+    const effectiveDensity = clamp(
+      (Number.isFinite(localDensity) ? localDensity : 0) * densityMultiplier,
+      0,
+      1,
+    );
+    const energyCap = Math.max(
+      1e-4,
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
+    );
+    const normalizeEnergy = (value) =>
+      clamp(Number.isFinite(value) ? value / energyCap : 0, 0, 1);
+    const selfEnergy = normalizeEnergy(this.energy);
+    const threatEnergy = normalizeEnergy(threat?.energy);
+    const energyDelta = clamp(threatEnergy - selfEnergy, -1, 1);
+    const normalizedTileEnergy = clamp(
+      Number.isFinite(tileEnergy) ? tileEnergy : selfEnergy,
+      0,
+      1,
+    );
+    const tileDecline = clamp(
+      -(Number.isFinite(tileEnergyDelta) ? tileEnergyDelta : 0),
+      0,
+      1,
+    );
+    const scarcitySignal = clamp(1 - selfEnergy + tileDecline * 0.6, 0, 1.6);
+    const riskTolerance = this.#resolveRiskTolerance();
+    const resilience = clamp(this.dna?.recoveryRate?.() ?? 0.35, 0, 1);
+    const strategyGene = (() => {
+      if (typeof this.dna?.geneFraction === "function") {
+        const raw = this.dna.geneFraction(GENE_LOCI.STRATEGY);
+
+        if (Number.isFinite(raw)) {
+          return clamp(raw, 0, 1);
+        }
+      }
+
+      return Number.isFinite(this.strategy) ? clamp(this.strategy, 0, 1) : 0.5;
+    })();
+    const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
+    const distance =
+      Number.isFinite(threat?.row) && Number.isFinite(threat?.col)
+        ? Math.max(
+            Math.abs(threat.row - occupantRow),
+            Math.abs(threat.col - occupantCol),
+          )
+        : Number.POSITIVE_INFINITY;
+    const proximity =
+      Number.isFinite(distance) && distance < Number.POSITIVE_INFINITY
+        ? 1 / (1 + distance)
+        : 0;
+    const proximityPressure = clamp(
+      proximity * (0.45 + effectiveDensity * 0.3),
+      0,
+      1.2,
+    );
+    const cautionDrive = clamp(
+      0.35 +
+        (1 - riskTolerance) * 0.6 +
+        strategyGene * 0.25 +
+        (1 - resilience) * 0.25 +
+        eventPressure * 0.3 +
+        effectiveDensity * 0.2,
+      0.1,
+      1.8,
+    );
+    const threatDrive = clamp(
+      0.25 +
+        energyDelta * 0.65 +
+        proximityPressure +
+        scarcitySignal * 0.25 +
+        eventPressure * 0.35,
+      0,
+      1.8,
+    );
+    const resourceAnchor = clamp(
+      0.3 +
+        normalizedTileEnergy * 0.5 +
+        (1 - tileDecline) * 0.4 +
+        Math.max(0, -energyDelta) * 0.4,
+      0,
+      1.6,
+    );
+    const confidence = clamp(
+      0.25 + riskTolerance * 0.5 + resilience * 0.45 + (1 - scarcitySignal) * 0.35,
+      0.1,
+      1.7,
+    );
+    const retreatScore = cautionDrive * (0.4 + threatDrive);
+    const holdScore = resourceAnchor * confidence;
+    const retreatProbability = clamp(
+      0.25 + retreatScore * 0.55 - holdScore * 0.35,
+      0,
+      1,
+    );
+    const rng = this.resolveRng("legacyCautiousRetreat");
+    const roll = typeof rng === "function" ? rng() : Math.random();
+    const shouldRetreat = Number.isFinite(roll)
+      ? roll < retreatProbability
+      : retreatProbability >= 0.5;
+
+    return { shouldRetreat, probability: retreatProbability };
   }
 
   executeMovementStrategy(gridArr, row, col, mates, enemies, society, context = {}) {

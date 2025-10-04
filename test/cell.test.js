@@ -549,6 +549,153 @@ test("neural rest confidence amplifies recovery boost", () => {
   );
 });
 
+test("legacy cautious fallback retreats when DNA signals vulnerability", () => {
+  const dna = new DNA(40, 40, 40);
+
+  dna.genes[GENE_LOCI.STRATEGY] = 30;
+  dna.genes[GENE_LOCI.RISK] = 20;
+  dna.genes[GENE_LOCI.RECOVERY] = 80;
+  dna.genes[GENE_LOCI.DENSITY] = 200;
+  dna.movementGenes = () => ({ wandering: 0, pursuit: 0, cautious: 1 });
+  dna.riskTolerance = () => 0.08;
+  dna.recoveryRate = () => 0.2;
+  dna.prngFor = (tag) => {
+    switch (tag) {
+      case "legacyMovementChoice":
+        return () => 0.9;
+      case "legacyCautiousRetreat":
+        return () => 0.1;
+      case "legacyMovementCohesion":
+      case "legacyMovementExploit":
+        return () => 1;
+      default:
+        return () => 0.5;
+    }
+  };
+
+  const cell = new Cell(0, 0, dna, 1.2);
+
+  cell._neuralFatigue = 0.7;
+  cell._neuralEnergyReserve = 0.3;
+  cell.lastEventPressure = 0.6;
+
+  const threatDNA = new DNA(20, 20, 20);
+
+  threatDNA.prngFor = () => () => 0.5;
+  const threat = new Cell(1, 1, threatDNA, 9);
+
+  const grid = [
+    [cell, null],
+    [null, threat],
+  ];
+
+  let retreated = false;
+  let randomFallback = false;
+
+  cell.executeMovementStrategy(grid, 0, 0, [], [threat], [], {
+    rows: 2,
+    cols: 2,
+    localDensity: 0.8,
+    densityEffectMultiplier: 1.1,
+    moveToTarget: () => false,
+    moveAwayFromTarget: () => {
+      retreated = true;
+
+      return true;
+    },
+    moveRandomly: () => {
+      randomFallback = true;
+    },
+    getEnergyAt: () => 0.1,
+    tryMove: () => false,
+    isTileBlocked: () => false,
+    tileEnergy: 0.05,
+    tileEnergyDelta: -0.3,
+    maxTileEnergy: 12,
+  });
+
+  assert.ok(
+    retreated,
+    "low-risk cautious genomes should retreat from stronger threats",
+  );
+  assert.is(randomFallback, false, "retreat should execute without random fallback");
+});
+
+test("legacy cautious fallback holds position when traits signal confidence", () => {
+  const dna = new DNA(60, 60, 60);
+
+  dna.genes[GENE_LOCI.STRATEGY] = 220;
+  dna.genes[GENE_LOCI.RISK] = 240;
+  dna.genes[GENE_LOCI.RECOVERY] = 210;
+  dna.movementGenes = () => ({ wandering: 0, pursuit: 0, cautious: 1 });
+  dna.riskTolerance = () => 0.9;
+  dna.recoveryRate = () => 0.85;
+  dna.prngFor = (tag) => {
+    switch (tag) {
+      case "legacyMovementChoice":
+        return () => 0.8;
+      case "legacyCautiousRetreat":
+        return () => 0.95;
+      case "legacyMovementCohesion":
+      case "legacyMovementExploit":
+        return () => 1;
+      default:
+        return () => 0.5;
+    }
+  };
+
+  const cell = new Cell(0, 0, dna, 10);
+
+  cell._neuralFatigue = 0.2;
+  cell._neuralEnergyReserve = 0.9;
+  cell.lastEventPressure = 0.05;
+
+  const threatDNA = new DNA(20, 20, 20);
+
+  threatDNA.prngFor = () => () => 0.5;
+  const threat = new Cell(1, 1, threatDNA, 2.5);
+
+  const grid = [
+    [cell, null],
+    [null, threat],
+  ];
+
+  let retreated = false;
+  let randomFallback = false;
+
+  cell.executeMovementStrategy(grid, 0, 0, [], [threat], [], {
+    rows: 2,
+    cols: 2,
+    localDensity: 0.2,
+    densityEffectMultiplier: 0.8,
+    moveToTarget: () => false,
+    moveAwayFromTarget: () => {
+      retreated = true;
+
+      return true;
+    },
+    moveRandomly: () => {
+      randomFallback = true;
+    },
+    getEnergyAt: () => 0.9,
+    tryMove: () => false,
+    isTileBlocked: () => false,
+    tileEnergy: 0.85,
+    tileEnergyDelta: 0.15,
+    maxTileEnergy: 12,
+  });
+
+  assert.is(
+    retreated,
+    false,
+    "confident genomes should not auto-retreat when advantaged",
+  );
+  assert.ok(
+    randomFallback,
+    "without retreat, fallback movement should eventually trigger",
+  );
+});
+
 test("breed spends parental investment energy without creating extra energy", () => {
   const dnaA = new DNA(10, 120, 200);
   const dnaB = new DNA(200, 80, 40);
