@@ -413,6 +413,69 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.5, 0.5, 0.5]);
 });
 
+test("diversity pressure escalates when diverse mating success stalls", async () => {
+  const { default: Stats } = await statsModulePromise;
+
+  class DeterministicStats extends Stats {
+    constructor(size, options = {}) {
+      super(size, options);
+      this.diversitySequence = [];
+    }
+
+    estimateDiversity() {
+      return this.diversitySequence.length ? this.diversitySequence.shift() : 0;
+    }
+  }
+
+  const stats = new DeterministicStats(4, {
+    diversitySampleInterval: 1,
+    traitResampleInterval: 1,
+  });
+
+  stats.resetTick();
+  stats.diversitySequence.push(0.45);
+  stats.mating = {
+    choices: 10,
+    successes: 10,
+    diverseChoices: 3,
+    diverseSuccesses: 1,
+    appetiteSum: 5,
+    selectionModes: { curiosity: 0, preference: 10 },
+    poolSizeSum: 40,
+    complementaritySum: 1.2,
+    complementaritySuccessSum: 0.5,
+    strategyPenaltySum: 8,
+    strategyPressureSum: 1.5,
+  };
+
+  const cells = [
+    createCell({
+      interactionGenes: { cooperate: 0.95, fight: 0.1 },
+      dna: { reproductionProb: () => 0.2 },
+      sight: 2,
+    }),
+    createCell({
+      interactionGenes: { cooperate: 0.9, fight: 0.2 },
+      dna: { reproductionProb: () => 0.15 },
+      sight: 1,
+    }),
+  ];
+
+  const result = stats.updateFromSnapshot({
+    population: cells.length,
+    totalEnergy: 4,
+    totalAge: 6,
+    cells,
+  });
+
+  approxEqual(result.diverseMatingRate, 0.1, 1e-9);
+  approxEqual(result.meanStrategyPenalty, 0.8, 1e-9);
+  approxEqual(result.diversityPressure, 0.1370892857, 1e-5);
+  approxEqual(result.strategyPressure, 0.1322857143, 1e-5);
+  approxEqual(stats.getDiversityPressure(), 0.1370892857, 1e-5);
+  approxEqual(stats.getStrategyPressure(), 0.1322857143, 1e-5);
+});
+
 test("diversity sampling caches results between configured intervals", async () => {
   const { default: Stats } = await statsModulePromise;
   let calls = 0;
@@ -615,8 +678,8 @@ test("diversity pressure responds to behavioral stagnation and complementary suc
   stats.mating = {
     choices: 1,
     successes: 1,
-    diverseChoices: 0,
-    diverseSuccesses: 0,
+    diverseChoices: 1,
+    diverseSuccesses: 1,
     appetiteSum: 0,
     selectionModes: { curiosity: 0, preference: 1 },
     poolSizeSum: 0,
