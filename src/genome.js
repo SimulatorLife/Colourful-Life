@@ -123,7 +123,7 @@ export class DNA {
   }
 
   get length() {
-    return this.genes.length;
+    return this.#genesTarget.length;
   }
 
   get r() {
@@ -151,11 +151,19 @@ export class DNA {
   }
 
   geneAt(index) {
-    return index >= 0 && index < this.genes.length ? this.genes[index] : 0;
+    const genes = this.#genesTarget;
+
+    return index >= 0 && index < genes.length ? genes[index] : 0;
   }
 
   geneFraction(index) {
-    return this.geneAt(index) / 255;
+    const genes = this.#genesTarget;
+
+    if (index >= 0 && index < genes.length) {
+      return genes[index] / 255;
+    }
+
+    return 0;
   }
 
   toColor() {
@@ -168,9 +176,10 @@ export class DNA {
     }
 
     let hash = 2166136261;
+    const genes = this.#genesTarget;
 
-    for (let i = 0; i < this.genes.length; i++) {
-      hash ^= this.genes[i];
+    for (let i = 0; i < genes.length; i++) {
+      hash ^= genes[i];
       hash = Math.imul(hash, 16777619);
     }
 
@@ -219,7 +228,7 @@ export class DNA {
   }
 
   isLegacyGenome() {
-    const extraBytes = this.genes.length - BASE_GENE_COUNT;
+    const extraBytes = this.#genesTarget.length - BASE_GENE_COUNT;
 
     return extraBytes < NEURAL_GENE_BYTES;
   }
@@ -229,7 +238,7 @@ export class DNA {
   }
 
   neuralGeneCount() {
-    const extraBytes = this.genes.length - BASE_GENE_COUNT;
+    const extraBytes = this.#genesTarget.length - BASE_GENE_COUNT;
 
     if (extraBytes < NEURAL_GENE_BYTES) return 0;
 
@@ -273,6 +282,18 @@ export class DNA {
           return obj.length;
         }
 
+        if (typeof prop === "number") {
+          return obj[prop];
+        }
+
+        if (typeof prop === "string") {
+          const index = Number(prop);
+
+          if (Number.isInteger(index) && index >= 0 && index < obj.length) {
+            return obj[index];
+          }
+        }
+
         const value = Reflect.get(obj, prop, receiver);
 
         if (typeof value === "function") {
@@ -310,15 +331,15 @@ export class DNA {
 
   #decodeNeuralGene(index) {
     const start = BASE_GENE_COUNT + index * NEURAL_GENE_BYTES;
+    const genes = this.#genesTarget;
 
-    if (start < BASE_GENE_COUNT || start + NEURAL_GENE_BYTES > this.genes.length) {
+    if (start < BASE_GENE_COUNT || start + NEURAL_GENE_BYTES > genes.length) {
       return null;
     }
-
-    const b0 = this.genes[start];
-    const b1 = this.genes[start + 1];
-    const b2 = this.genes[start + 2];
-    const b3 = this.genes[start + 3];
+    const b0 = genes[start];
+    const b1 = genes[start + 1];
+    const b2 = genes[start + 2];
+    const b3 = genes[start + 3];
     const gene = (((b0 << 24) >>> 0) | (b1 << 16) | (b2 << 8) | b3) >>> 0;
     const sourceId = (gene >>> 24) & 0xff;
     const targetId = (gene >>> 16) & 0xff;
