@@ -12,12 +12,14 @@ test("GridManager.regenerateEnergyGrid applies event effect modifiers", async ()
     init() {}
   }
 
+  const energyCap = 6;
   const affectedArea = { x: 0, y: 0, width: 1, height: 1 };
 
   const floodManager = new TestGridManager(1, 1, {
     eventManager: { activeEvents: [] },
     ctx: {},
     cellSize: 1,
+    maxTileEnergy: energyCap,
   });
 
   floodManager.energyGrid = [[1]];
@@ -30,12 +32,13 @@ test("GridManager.regenerateEnergyGrid applies event effect modifiers", async ()
     [[0]],
   );
 
-  approxEqual(floodManager.energyGrid[0][0], 6);
+  approxEqual(floodManager.energyGrid[0][0], energyCap);
 
   const droughtManager = new TestGridManager(1, 1, {
     eventManager: { activeEvents: [] },
     ctx: {},
     cellSize: 1,
+    maxTileEnergy: energyCap,
   });
 
   droughtManager.energyGrid = [[1]];
@@ -48,7 +51,7 @@ test("GridManager.regenerateEnergyGrid applies event effect modifiers", async ()
     [[0]],
   );
 
-  approxEqual(droughtManager.energyGrid[0][0], 2.4);
+  approxEqual(droughtManager.energyGrid[0][0], energyCap * 0.4);
 });
 
 test("Cell.applyEventEffects uses event mapping and DNA resistance", async () => {

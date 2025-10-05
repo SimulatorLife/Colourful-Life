@@ -145,12 +145,21 @@ test("transferEnergy uses config fallback when no maxTileEnergy provided", () =>
   const adapter = new GridInteractionAdapter({ gridManager: {} });
   const donor = createCell(0, 0, 5);
   const recipient = createCell(0, 1, 1);
+  const initialDonorEnergy = donor.energy;
+  const initialRecipientEnergy = recipient.energy;
+  const requested = 3;
+  const capacity = Math.max(0, MAX_TILE_ENERGY - initialRecipientEnergy);
+  const expectedTransfer = Math.min(requested, capacity);
 
-  const transferred = adapter.transferEnergy({ from: donor, to: recipient, amount: 3 });
+  const transferred = adapter.transferEnergy({
+    from: donor,
+    to: recipient,
+    amount: requested,
+  });
 
-  assert.is(transferred, 3);
-  assert.is(donor.energy, 2);
-  assert.is(recipient.energy, 4);
+  assert.is(transferred, expectedTransfer);
+  assert.is(donor.energy, initialDonorEnergy - expectedTransfer);
+  assert.is(recipient.energy, initialRecipientEnergy + expectedTransfer);
 });
 
 test("densityAt prefers provided density grid over manager helper", () => {

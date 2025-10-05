@@ -34,11 +34,11 @@ test("pause toggle updates accessible state and delegates to simulation", async 
     assert.is(pauseButton.getAttribute("aria-pressed"), "false");
     const pauseShortcuts = pauseButton.getAttribute("aria-keyshortcuts");
 
-    assert.equal(pauseShortcuts.split(/\s+/), ["P", "Space"]);
+    assert.equal(pauseShortcuts.split(/\s+/), ["P"]);
 
     const pauseAnnouncement = pauseButton.getAttribute("aria-label");
 
-    assert.is(pauseAnnouncement, "Pause the simulation. Shortcut: P or Space.");
+    assert.is(pauseAnnouncement, "Pause the simulation. Shortcut: P.");
     assert.is(pauseButton.title, pauseAnnouncement);
     assert.is(stepButton.disabled, true, "step should be disabled until paused");
 
@@ -51,7 +51,7 @@ test("pause toggle updates accessible state and delegates to simulation", async 
 
     const resumeAnnouncement = pauseButton.getAttribute("aria-label");
 
-    assert.is(resumeAnnouncement, "Resume the simulation. Shortcut: P or Space.");
+    assert.is(resumeAnnouncement, "Resume the simulation. Shortcut: P.");
     assert.is(pauseButton.title, resumeAnnouncement);
     assert.is(stepButton.disabled, false, "step should enable while paused");
 
