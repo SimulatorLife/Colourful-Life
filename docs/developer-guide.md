@@ -77,6 +77,12 @@ affect runtime outcomes.
   script locally with the same environment variables to compare `msPerTick`
   values, dig into the `simulationBenchmark` payload, and capture before/after
   numbers for the pull request discussion.
+- A worst-case stress pass that fills a 96×96 grid to 98 % occupancy
+  (`PERF_ROWS=96 PERF_COLS=96 PERF_SIM_DENSITY=0.98 PERF_INCLUDE_SIM=1`)
+  currently reports ~**0.66 ms** per energy tick and ~**945 ms** per simulated
+  frame (20 tick sample). Use the JSON payload emitted by
+  `scripts/profile-energy.mjs` as the source of truth when comparing future
+  pooling or streaming experiments.
 
 ## Configuration overrides
 
