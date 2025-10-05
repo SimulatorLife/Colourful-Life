@@ -888,16 +888,34 @@ export default class UIManager {
       return "";
     }
 
-    const keys = Array.from(hotkeySet, (key) => this.#formatHotkeyLabel(key)).filter(
-      (label) => label.length > 0,
-    );
+    const entries = Array.from(hotkeySet, (key) => {
+      const normalized = this.#normalizeHotkeyValue(key);
 
-    if (keys.length === 0) return "";
-    if (keys.length === 1) return keys[0];
-    if (keys.length === 2) return `${keys[0]} or ${keys[1]}`;
+      if (!normalized) return null;
 
-    const last = keys[keys.length - 1];
-    const leading = keys.slice(0, -1).join(", ");
+      const label = this.#formatHotkeyLabel(normalized);
+
+      if (!label) return null;
+
+      return { normalized, label };
+    }).filter((entry) => entry != null);
+
+    if (entries.length === 0) return "";
+
+    const hasNonSpace = entries.some((entry) => entry.normalized !== " ");
+    const filtered = hasNonSpace
+      ? entries.filter((entry) => entry.normalized !== " ")
+      : entries;
+    const labels = filtered
+      .map((entry) => entry.label)
+      .filter((value) => value.length > 0);
+
+    if (labels.length === 0) return "";
+    if (labels.length === 1) return labels[0];
+    if (labels.length === 2) return `${labels[0]} or ${labels[1]}`;
+
+    const last = labels[labels.length - 1];
+    const leading = labels.slice(0, -1).join(", ");
 
     return `${leading}, or ${last}`;
   }
@@ -927,17 +945,21 @@ export default class UIManager {
       return "";
     }
 
-    const entries = Array.from(hotkeySet, (key) => {
-      const normalized = this.#normalizeHotkeyValue(key);
+    const normalizedEntries = Array.from(hotkeySet, (key) =>
+      this.#normalizeHotkeyValue(key),
+    ).filter((value) => value.length > 0);
+    const hasNonSpaceEntries = normalizedEntries.some((value) => value !== " ");
 
-      if (!normalized) return "";
+    const entries = normalizedEntries
+      .filter((value) => (value === " " ? !hasNonSpaceEntries : true))
+      .map((value) => {
+        if (value === " ") return "Space";
 
-      if (normalized === " ") return "Space";
+        const label = this.#formatHotkeyLabel(value);
 
-      const label = this.#formatHotkeyLabel(normalized);
-
-      return label.replace(/\s+/g, "");
-    }).filter((value) => value.length > 0);
+        return label.replace(/\s+/g, "");
+      })
+      .filter((value) => value.length > 0);
 
     return entries.join(" ");
   }

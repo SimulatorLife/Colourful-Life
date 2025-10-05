@@ -49,9 +49,12 @@ where practical.
 - Relocated the "Dashboard Refresh Interval" slider into Evolution Insights so
   cadence controls live alongside the analytics they govern while keeping the
   leaderboard on the shared refresh schedule.
-- Raised the default energy regeneration rate to `0.015` and eased density
-  penalties so long-running headless simulations sustain viable energy budgets
-  without flooding the grid.
+- Lowered the default energy regeneration rate to `0.012`, trimmed diffusion to
+  `0.05`, and raised the density penalty to `0.42` so crowded hubs return less
+  energy each tick while sparse tiles still recover reliably.
+- Increased the reproduction viability buffer by 15 % so offspring only spawn
+  when parents stockpile meaningful reserves instead of skimming the minimum
+  threshold.
 - Nudged the low-diversity reproduction multiplier floor from `0.55` to `0.57`
   after a 600-tick headless probe (30×30 grid, seed 1337) lifted the post-
   warmup population floor from 47 to 76 and trimmed recent starvation from
