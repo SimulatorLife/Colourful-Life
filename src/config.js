@@ -10,7 +10,6 @@ const DEFAULT_REGEN_DENSITY_PENALTY = 0.42;
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.3;
 const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
 const DEFAULT_DECAY_RETURN_FRACTION = 0.9;
-const DEFAULT_DECAY_SPAWN_MIN_ENERGY = 1.2;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Slightly calmer baseline keeps resting viable when resources tighten.
 const DEFAULT_ACTIVITY_BASE_RATE = 0.28;
@@ -50,7 +49,6 @@ export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();
 export const DECAY_RETURN_FRACTION = resolveDecayReturnFraction();
-export const DECAY_SPAWN_MIN_ENERGY = resolveDecaySpawnMinEnergy();
 
 function resolveEnvNumber(
   env,
@@ -186,31 +184,6 @@ export function resolveDecayReturnFraction(env = RUNTIME_ENV) {
 }
 
 /**
- * Resolves the minimum amount of energy a decay pool must accumulate before it
- * attempts to seed a new organism. Keeping the limit configurable allows headless
- * experiments and UI runs to explore more opportunistic or cautious decay-driven
- * reproduction without altering simulation code.
- *
- * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
- *   Environment-like object to inspect. Defaults to `process.env` when
- *   available so browser builds can safely skip the lookup.
- * @returns {number} Sanitized minimum spawn energy with a zero floor.
- */
-export function resolveDecaySpawnMinEnergy(env = RUNTIME_ENV) {
-  const raw = env?.COLOURFUL_LIFE_DECAY_SPAWN_MIN_ENERGY;
-  const parsed = Number.parseFloat(raw);
-
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_DECAY_SPAWN_MIN_ENERGY;
-  }
-
-  return sanitizeNumber(parsed, {
-    fallback: DEFAULT_DECAY_SPAWN_MIN_ENERGY,
-    min: 0,
-  });
-}
-
-/**
  * Resolves the minimum normalized trait value required for stats to count an
  * organism as "active" in a category. Defaults to {@link
  * DEFAULT_TRAIT_ACTIVATION_THRESHOLD} but allows deployments to tune the
@@ -314,7 +287,6 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   lowDiversityReproMultiplier: 0.57,
   speedMultiplier: 1,
   autoPauseOnBlur: false,
-  autoReseed: true,
   profileGridMetrics: "auto",
 });
 
@@ -429,8 +401,6 @@ export function resolveSimulationDefaults(overrides = {}) {
   } else {
     merged.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
   }
-
-  merged.autoReseed = coerceBoolean(overrides.autoReseed, defaults.autoReseed);
 
   merged.profileGridMetrics = normalizeProfileGridMetrics(
     Object.hasOwn(overrides, "profileGridMetrics")

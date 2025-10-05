@@ -33,7 +33,6 @@ import {
   REGEN_DENSITY_PENALTY,
   CONSUMPTION_DENSITY_PENALTY,
   DECAY_RETURN_FRACTION,
-  DECAY_SPAWN_MIN_ENERGY,
 } from "../config.js";
 const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
@@ -1276,55 +1275,6 @@ export default class GridManager {
         age += 1;
       }
 
-      if (
-        this.activeCells.size < this.minPopulation &&
-        nextAmount > DECAY_SPAWN_MIN_ENERGY &&
-        !this.isObstacle(row, col) &&
-        !this.grid?.[row]?.[col]
-      ) {
-        const cap = this.maxTileEnergy > 0 ? this.maxTileEnergy : MAX_TILE_ENERGY || 1;
-        const energyRow = this.energyGrid?.[row];
-
-        if (energyRow && cap > 0) {
-          const beforeEnergy = Number.isFinite(energyRow[col]) ? energyRow[col] : 0;
-          const capacity = Math.max(0, cap - beforeEnergy);
-
-          if (capacity > DECAY_EPSILON) {
-            const spawnBudget = Math.min(
-              nextAmount,
-              Math.max(DECAY_SPAWN_MIN_ENERGY, cap * 0.6),
-            );
-            const deposit = Math.min(capacity, spawnBudget);
-
-            if (deposit > DECAY_EPSILON) {
-              energyRow[col] = beforeEnergy + deposit;
-              this.#accumulateDecayDelta(row, col, deposit);
-              const offspring = this.spawnCell(row, col, {
-                dna: DNA.random(),
-                spawnEnergy: deposit,
-                recordBirth: true,
-              });
-
-              if (offspring) {
-                nextAmount = Math.max(0, nextAmount - deposit);
-                age = 0;
-                rowStore[col] = nextAmount;
-                ageRow[col] = 0;
-
-                if (nextAmount > DECAY_EPSILON) {
-                  nextActive.add(row * this.cols + col);
-                }
-
-                continue;
-              }
-
-              energyRow[col] = beforeEnergy;
-              this.#accumulateDecayDelta(row, col, -deposit);
-            }
-          }
-        }
-      }
-
       if (nextAmount <= DECAY_EPSILON || age >= DECAY_MAX_AGE) {
         rowStore[col] = 0;
         ageRow[col] = 0;
@@ -1369,7 +1319,6 @@ export default class GridManager {
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
     this.maxTileEnergy =
       typeof maxTileEnergy === "number" ? maxTileEnergy : GridManager.maxTileEnergy;
-    this.autoSeedEnabled = Boolean(options.autoSeedEnabled);
     this.energyGrid = Array.from({ length: rows }, () =>
       Array.from(
         { length: cols },
@@ -2327,7 +2276,7 @@ export default class GridManager {
       }
     }
 
-    this.seed(this.activeCells.size, this.minPopulation);
+    this.#seedInitialPopulation(this.minPopulation);
   }
 
   resize(rows, cols, options = {}) {
@@ -2360,7 +2309,7 @@ export default class GridManager {
     const colsInt = Math.max(1, Math.floor(nextCols));
     const cellSizeValue = Math.max(1, Math.floor(nextCellSize));
     const baseEnergy = this.maxTileEnergy * INITIAL_TILE_ENERGY_FRACTION;
-    const shouldReseed = opts.reseed !== false;
+    const shouldReseed = opts.reseed === true;
     const preservePopulation = !shouldReseed;
     let preservedCells = null;
 
@@ -2486,7 +2435,7 @@ export default class GridManager {
     randomizeObstacles = false,
     obstaclePreset = null,
     presetOptions = null,
-    reseed = true,
+    reseed = false,
   } = {}) {
     const baseEnergy = this.maxTileEnergy * INITIAL_TILE_ENERGY_FRACTION;
 
@@ -2545,7 +2494,7 @@ export default class GridManager {
 
     this.applyObstaclePreset(targetPreset, presetArgs);
 
-    if (reseed !== false) {
+    if (reseed === true) {
       this.init();
     }
 
@@ -2553,8 +2502,11 @@ export default class GridManager {
     this.rebuildActiveCells();
   }
 
-  seed(currentPopulation, minPopulation) {
-    if (currentPopulation >= minPopulation) return;
+  #seedInitialPopulation(targetPopulation) {
+    const target = Math.max(0, Math.floor(targetPopulation ?? 0));
+    const currentPopulation = this.activeCells?.size ?? 0;
+
+    if (currentPopulation >= target) return;
 
     const scarcitySignal = clamp(
       Number.isFinite(this.populationScarcitySignal)
@@ -2598,11 +2550,11 @@ export default class GridManager {
 
     viable.sort((a, b) => b.score - a.score);
 
-    const seedsNeeded = Math.min(minPopulation - currentPopulation, empties.length);
+    const requiredSeeds = Math.min(target - currentPopulation, empties.length);
 
     let seedsPlaced = 0;
 
-    while (seedsPlaced < seedsNeeded) {
+    while (seedsPlaced < requiredSeeds) {
       const pool = viable.length > 0 ? viable : empties;
 
       if (pool.length === 0) break;
@@ -5170,19 +5122,6 @@ export default class GridManager {
         combatEdgeSharpness: combatSharpness,
         combatTerritoryEdgeFactor: territoryFactor,
       });
-    }
-
-    if (
-      this.autoSeedEnabled &&
-      this.activeCells?.size < this.minPopulation &&
-      (this.populationScarcitySignal ?? 0) > 0.2
-    ) {
-      const targetPopulation = Math.max(
-        this.minPopulation,
-        Math.ceil(this.minPopulation * 1.25),
-      );
-
-      this.seed(this.activeCells.size, targetPopulation);
     }
 
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();

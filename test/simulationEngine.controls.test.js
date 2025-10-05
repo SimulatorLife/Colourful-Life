@@ -240,7 +240,7 @@ test("setWorldGeometry resizes the grid and updates dependent systems", async ()
   }
 });
 
-test("setWorldGeometry honors reseed=false to avoid repopulating the grid", async () => {
+test("setWorldGeometry only repopulates when reseed is requested", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
 
@@ -252,7 +252,7 @@ test("setWorldGeometry honors reseed=false to avoid repopulating the grid", asyn
     cancelAnimationFrame: () => {},
   });
 
-  engine.resetWorld({ reseed: false });
+  engine.resetWorld();
 
   assert.is(
     engine.grid.activeCells.size,
