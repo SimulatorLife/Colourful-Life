@@ -29,6 +29,9 @@ where practical.
 - Collapsed dashboard panels now defer metrics, life events, and leaderboard
   rendering work, cutting 50 closed-panel metrics refreshes from ~73.9 ms to
   ~0.84 ms by queueing the latest payload until the panel is reopened.
+- Automatic reseeding has been removed from decay pools, grid resets, and
+  geometry changes; the world now stays empty unless `reseed: true` is
+  explicitly requested, keeping lineage growth compliant with Simulation Law 7.
 - Documentation now calls out the `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR`,
   `COLOURFUL_LIFE_ACTIVITY_BASE_RATE`, and `COLOURFUL_LIFE_MUTATION_CHANCE`
   overrides across the README, developer guide, and architecture notes so
@@ -64,9 +67,12 @@ where practical.
   cathartic scarcity relief directly into the reproduction cooldowns, allowing
   bottlenecked populations to recover while leaving the diversity pressure
   intact during healthy runs.
-- Added an opt-in auto-reseeding path for `GridManager` so headless stability
-  harnesses can replenish populations once they fall below the legal floor
-  without interfering with tests that expect a dormant world.
+
+### Removed
+
+- The `COLOURFUL_LIFE_DECAY_SPAWN_MIN_ENERGY` override and decay-triggered
+  reseeding hook have been retired; decay now only returns energy, leaving
+  population recovery to living lineages or explicit reseed requests.
 
 ### Fixed
 

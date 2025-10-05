@@ -125,7 +125,8 @@ function createHeadlessCanvas(config = {}) {
  * - `uiManager`: either the mounted {@link UIManager} instance or the headless
  *   adapter.
  * - Lifecycle helpers: `start`, `stop`, `pause`, `resume`, `step`/`tick`/`update`.
- * - `resetWorld(options)`: clears the grid, reseeds organisms, and refreshes stats.
+ * - `resetWorld(options)`: clears the grid and refreshes stats. Pass `reseed: true`
+ *   to perform a fresh initial seeding.
  * - `destroy()`: cleans up subscriptions and stops the engine.
  *
  * @param {Object} [options]

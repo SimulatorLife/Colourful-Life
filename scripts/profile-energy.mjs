@@ -306,7 +306,6 @@ if (configuration.includeSimulation) {
       cols: simulationConfig.cols,
       cellSize: simulationConfig.cellSize,
       updatesPerSecond: simulationConfig.updatesPerSecond,
-      autoReseed: false,
       initialObstaclePreset: "none",
       randomizeInitialObstacles: false,
       showObstacles: false,

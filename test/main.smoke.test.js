@@ -396,7 +396,7 @@ test("createSimulation merges obstacle preset overrides into the catalog", async
   }
 });
 
-test("engine.resetWorld reseeds the ecosystem and resets stats", async () => {
+test("engine.resetWorld clears the ecosystem by default and reseeds on request", async () => {
   const { createSimulation } = await simulationModulePromise;
   const deterministicRng = () => 0.01;
 
@@ -416,12 +416,18 @@ test("engine.resetWorld reseeds the ecosystem and resets stats", async () => {
 
   simulation.engine.resetWorld();
 
-  const snapshot = grid.buildSnapshot();
+  let snapshot = grid.buildSnapshot();
 
-  assert.ok(snapshot.population > 0, "population reseeded after reset");
+  assert.is(snapshot.population, 0, "population cleared after default reset");
   assert.is(stats.totals.ticks, 1, "tick counter restarted after reset");
   assert.is(stats.history.population.length, 1, "history contains a fresh sample");
   assert.is(stats.getRecentLifeEvents().length, 0, "life event log cleared");
+
+  simulation.engine.resetWorld({ reseed: true });
+
+  snapshot = grid.buildSnapshot();
+
+  assert.ok(snapshot.population > 0, "population reseeded when explicitly requested");
 
   simulation.destroy();
 });

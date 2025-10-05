@@ -98,174 +98,6 @@ test("GridManager respects dynamic max tile energy", async () => {
   }
 });
 
-test("reseeding respects available tile energy reserves", async () => {
-  const { default: GridManager } = await import("../src/grid/gridManager.js");
-
-  class ReseedTestGridManager extends GridManager {
-    init() {}
-  }
-
-  const gm = new ReseedTestGridManager(10, 10, {
-    eventManager: { activeEvents: [] },
-    stats: { onBirth() {} },
-    ctx: {},
-    cellSize: 1,
-    rng: () => 0.5,
-  });
-
-  const baseTileReserve = gm.maxTileEnergy / 2;
-  const initialTotalTileEnergy = gm.energyGrid.reduce(
-    (sum, row) => sum + row.reduce((rowSum, value) => rowSum + value, 0),
-    0,
-  );
-
-  gm.activeCells.clear();
-  gm.seed(0, gm.minPopulation);
-
-  let tileEnergyAfter = 0;
-  let cellEnergyAfter = 0;
-
-  for (let row = 0; row < gm.rows; row++) {
-    for (let col = 0; col < gm.cols; col++) {
-      tileEnergyAfter += gm.energyGrid[row][col];
-      const cell = gm.grid[row][col];
-
-      if (cell) {
-        cellEnergyAfter += cell.energy;
-        assert.ok(
-          cell.energy <= baseTileReserve,
-          `Seeded cell energy should not exceed local tile reserves (received ${cell.energy})`,
-        );
-      }
-    }
-  }
-
-  const totalEnergyAfter = tileEnergyAfter + cellEnergyAfter;
-
-  assert.ok(
-    totalEnergyAfter <= initialTotalTileEnergy + 1e-6,
-    `Reseeding should not create energy (expected ≤ ${initialTotalTileEnergy}, received ${totalEnergyAfter})`,
-  );
-});
-
-test("auto reseed prioritizes energetic, low-crowding tiles", async () => {
-  const { default: GridManager } = await import("../src/grid/gridManager.js");
-
-  class AutoSeedGridManager extends GridManager {
-    init() {}
-  }
-
-  const gm = new AutoSeedGridManager(4, 4, {
-    eventManager: { activeEvents: [] },
-    stats: { onBirth() {} },
-    ctx: {},
-    cellSize: 1,
-    rng: () => 0,
-  });
-
-  gm.activeCells.clear();
-  gm.grid.forEach((row) => row.fill(null));
-  gm.energyGrid.forEach((row) => row.fill(0));
-
-  gm.energyGrid[0][0] = gm.maxTileEnergy * 0.6;
-  gm.energyGrid[1][1] = gm.maxTileEnergy * 0.55;
-  gm.energyGrid[2][2] = gm.maxTileEnergy * 0.4;
-  gm.energyGrid[3][3] = gm.maxTileEnergy * 0.02;
-
-  gm.minPopulation = 3;
-
-  gm.seed(0, gm.minPopulation);
-
-  const seeded = [];
-
-  gm.grid.forEach((row, r) => {
-    row.forEach((cell, c) => {
-      if (cell) {
-        seeded.push({ r, c, cell });
-      }
-    });
-  });
-
-  assert.deepEqual(
-    seeded.map(({ r, c }) => `${r}:${c}`).sort(),
-    ["0:0", "1:1"],
-    "auto seeding should prioritize the richest viable tiles",
-  );
-
-  seeded.forEach(({ cell }) => {
-    const starvationFloor = cell.dna.starvationThresholdFrac() * gm.maxTileEnergy;
-
-    assert.ok(
-      cell.energy > starvationFloor,
-      `seeded cell should begin above its starvation threshold (received ${cell.energy}, threshold ${starvationFloor})`,
-    );
-  });
-});
-
-test("reseeding grants newcomers a survivable energy buffer", async () => {
-  const { default: GridManager } = await import("../src/grid/gridManager.js");
-
-  class SeedEnergyGridManager extends GridManager {
-    init() {}
-  }
-
-  const deaths = [];
-  const stats = {
-    onBirth() {},
-    onDeath(cell, info) {
-      deaths.push(info?.cause ?? "unknown");
-    },
-    recordEnergyStageTimings() {},
-    getDiversityPressure() {
-      return 0;
-    },
-    getBehavioralEvenness() {
-      return 0;
-    },
-    getStrategyPressure() {
-      return 0;
-    },
-    getPopulationScarcityMultiplier() {
-      return 0;
-    },
-  };
-
-  const gm = new SeedEnergyGridManager(18, 18, {
-    eventManager: { activeEvents: [] },
-    stats,
-    ctx: {},
-    cellSize: 1,
-    rng: () => 0.42,
-  });
-
-  gm.autoSeedEnabled = false;
-  gm.activeCells.clear();
-  gm.grid.forEach((row, r) => {
-    row.fill(null);
-    gm.energyGrid[r].fill(gm.maxTileEnergy / 2);
-  });
-
-  gm.seed(0, gm.minPopulation);
-
-  assert.ok(gm.activeCells.size > 0, "seeding should place new organisms");
-
-  for (const cell of gm.activeCells) {
-    const starvationThreshold = cell.dna.starvationThresholdFrac() * gm.maxTileEnergy;
-
-    assert.ok(
-      cell.energy > starvationThreshold,
-      "newly seeded cell should exceed its starvation floor",
-    );
-  }
-
-  deaths.length = 0;
-  gm.update();
-
-  const starvationDeaths = deaths.filter((cause) => cause === "starvation").length;
-
-  assert.is(starvationDeaths, 0, "seeded organisms should not starve immediately");
-});
-
 test("population scarcity emits signal without forced reseeding", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
 
@@ -297,6 +129,33 @@ test("population scarcity emits signal without forced reseeding", async () => {
   assert.ok(
     result.populationScarcity > 0,
     "snapshot should expose the scarcity indicator",
+  );
+});
+
+test("resetWorld only repopulates when reseed is explicitly requested", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class ResetSeedGridManager extends GridManager {}
+
+  const gm = new ResetSeedGridManager(8, 8, {
+    eventManager: { activeEvents: [] },
+    stats: { onBirth() {} },
+    ctx: {},
+    cellSize: 1,
+    rng: () => 0.01,
+  });
+
+  assert.ok(gm.activeCells.size > 0, "constructor should perform initial seeding");
+
+  gm.resetWorld();
+
+  assert.is(gm.activeCells.size, 0, "default reset should leave the grid empty");
+
+  gm.resetWorld({ reseed: true });
+
+  assert.ok(
+    gm.activeCells.size > 0,
+    "explicit reseed should repopulate after clearing the world",
   );
 });
 

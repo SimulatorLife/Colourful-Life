@@ -49,8 +49,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - Environment overrides such as `COLOURFUL_LIFE_MAX_TILE_ENERGY`,
   `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`,
   `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY`,
-  `COLOURFUL_LIFE_DECAY_RETURN_FRACTION`,
-  `COLOURFUL_LIFE_DECAY_SPAWN_MIN_ENERGY`, and
+  `COLOURFUL_LIFE_DECAY_RETURN_FRACTION`, and
   `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` flow through
   [`src/config.js`](../src/config.js), letting experiments tweak caps, regeneration
   suppression, harvesting taxes, and trait activity sensitivity without patching
@@ -79,7 +78,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - DNA's gestation locus now feeds `offspringEnergyTransferEfficiency`, blending metabolic, parental, and fertility traits with a heritable gestation efficiency gene. Offspring inherit only the delivered share of the parental investment, so lineages evolve toward thrifty or wasteful reproduction instead of assuming perfect energy transfer.
 - Neural mate selection blends brain forecasts with DNA courtship heuristics. Each cell now previews reproduction sensors for every visible partner, folds the brain's acceptance probability into the mate's weight, and scales the influence using DNA-programmed reinforcement and sampling profiles. Populations that evolve richer neural wiring can therefore favour mates their brains predict will reciprocate, while simpler genomes continue to lean on legacy similarity heuristics.
 - Baseline neural activity and mutation probability respond to the `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` and `COLOURFUL_LIFE_MUTATION_CHANCE` overrides, giving deployments coarse-grained levers for energising or calming populations and for tuning how quickly genomes mutate without editing DNA accessors.
-- Post-mortem energy recycling honours the `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` override so deployments can dial how much energy decaying organisms return to nearby tiles, keeping scarcity or abundance experiments configuration-driven, while the `COLOURFUL_LIFE_DECAY_SPAWN_MIN_ENERGY` override tunes how aggressively decay pools attempt to seed replacement organisms.
+- Post-mortem energy recycling honours the `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` override so deployments can dial how much energy decaying organisms return to nearby tiles, keeping scarcity or abundance experiments configuration-driven, while reproduction remains exclusively lineage-driven.
 - Decision telemetry is available through `cell.getDecisionTelemetry`, which the debugger captures for UI display.
 
 ### InteractionSystem

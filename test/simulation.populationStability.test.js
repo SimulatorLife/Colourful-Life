@@ -2,7 +2,7 @@ import { assert, test } from "#tests/harness";
 
 const simulationModulePromise = import("../src/main.js");
 
-test("updated survival tuning maintains a living population", async () => {
+test("simulation relies on lineage reproduction after initial seeding", async () => {
   const { createSimulation } = await simulationModulePromise;
   const simulation = createSimulation({
     headless: true,
@@ -28,21 +28,29 @@ test("updated survival tuning maintains a living population", async () => {
   const snapshot = grid.getLastSnapshot();
 
   assert.ok(
-    snapshot.population > 12,
-    `population should remain above the extinction floor (actual: ${snapshot.population})`,
-  );
-  assert.ok(
     stats.totals.births > 0,
     "organisms should successfully reproduce during the stability window",
   );
 
-  const starvationSeries = stats.getHistorySeries("starvationRate");
-  const recentStarvation =
-    starvationSeries.length > 0 ? starvationSeries[starvationSeries.length - 1] : 0;
+  grid.resetWorld();
+  const birthsBeforeCollapse = stats.totals.births;
 
-  assert.ok(
-    recentStarvation < 0.7,
-    `starvation rate should stay below collapse territory (actual: ${recentStarvation})`,
+  for (let i = 0; i < 180; i++) {
+    timestamp += delta;
+    simulation.tick(timestamp);
+  }
+
+  const postCollapseSnapshot = grid.getLastSnapshot();
+
+  assert.is(
+    postCollapseSnapshot.population,
+    0,
+    "empty worlds stay empty without reseeding",
+  );
+  assert.is(
+    stats.totals.births,
+    birthsBeforeCollapse,
+    "no new births should occur without living parents",
   );
 
   simulation.destroy();

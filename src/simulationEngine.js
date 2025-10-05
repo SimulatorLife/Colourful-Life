@@ -266,8 +266,6 @@ export default class SimulationEngine {
       obstaclePresets: this._obstaclePresets,
       rng,
       brainSnapshotCollector,
-      autoReseed: defaults.autoReseed,
-      autoSeedEnabled: defaults.autoReseed !== false,
       performanceNow: this.now,
       profileGridMetrics: defaults.profileGridMetrics,
     });
@@ -815,7 +813,7 @@ export default class SimulationEngine {
     const randomizeObstacles = Boolean(opts.randomizeObstacles);
     const obstaclePreset = opts.obstaclePreset;
     const presetOptions = opts.presetOptions;
-    const reseed = opts.reseed !== false;
+    const reseed = opts.reseed === true;
 
     let targetCellSize = sanitizeNumber(opts.cellSize, {
       fallback: this.cellSize,
@@ -996,7 +994,7 @@ export default class SimulationEngine {
         randomizeObstacles: Boolean(opts.randomizeObstacles),
         obstaclePreset: opts.obstaclePreset,
         presetOptions: opts.presetOptions,
-        reseed: opts.reseed,
+        reseed: opts.reseed === true,
       });
     }
 
