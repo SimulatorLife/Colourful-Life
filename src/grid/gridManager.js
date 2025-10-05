@@ -1300,7 +1300,7 @@ export default class GridManager {
               energyRow[col] = beforeEnergy + deposit;
               this.#accumulateDecayDelta(row, col, deposit);
               const offspring = this.spawnCell(row, col, {
-                dna: DNA.random(),
+                dna: DNA.random(this.#random.bind(this)),
                 spawnEnergy: deposit,
                 recordBirth: true,
               });
@@ -2320,7 +2320,7 @@ export default class GridManager {
       for (let col = 0; col < this.cols; col++) {
         if (this.isObstacle(row, col)) continue;
         if (this.#random() < 0.05) {
-          const dna = DNA.random();
+          const dna = DNA.random(this.#random.bind(this));
 
           this.spawnCell(row, col, { dna });
         }
@@ -2631,7 +2631,7 @@ export default class GridManager {
       const spawnEnergy = Math.min(availableEnergy, maxSpawnEnergy);
 
       this.spawnCell(row, col, {
-        dna: DNA.random(),
+        dna: DNA.random(this.#random.bind(this)),
         spawnEnergy,
         recordBirth: true,
       });
@@ -3481,7 +3481,15 @@ export default class GridManager {
     }
   }
 
-  spawnCell(row, col, { dna = DNA.random(), spawnEnergy, recordBirth = false } = {}) {
+  spawnCell(row, col, options = {}) {
+    const opts = options && typeof options === "object" ? options : {};
+    const dna =
+      opts.dna !== undefined && opts.dna !== null
+        ? opts.dna
+        : DNA.random(this.#random.bind(this));
+    const { spawnEnergy } = opts;
+    const recordBirth = Boolean(opts.recordBirth);
+
     if (this.isObstacle(row, col)) return null;
     const availableEnergy = Math.max(0, this.energyGrid?.[row]?.[col] ?? 0);
     const requestedEnergy = spawnEnergy ?? availableEnergy;
@@ -5450,7 +5458,7 @@ export default class GridManager {
       const { rr, cc } = coords[i];
 
       if (!this.grid[rr][cc] && !this.isObstacle(rr, cc)) {
-        const dna = DNA.random();
+        const dna = DNA.random(this.#random.bind(this));
 
         this.spawnCell(rr, cc, { dna, recordBirth: true });
         placed++;
