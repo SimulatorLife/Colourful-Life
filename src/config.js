@@ -6,7 +6,7 @@ const DEFAULT_MAX_TILE_ENERGY = 6;
 // showed regeneration recovering ~7% more energy per tick (0.0036 → 0.0039).
 // The softer clamp cushions high-traffic hubs without eliminating the density
 // pressure that keeps sparse foragers advantaged.
-const DEFAULT_REGEN_DENSITY_PENALTY = 0.3;
+const DEFAULT_REGEN_DENSITY_PENALTY = 0.42;
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.3;
 const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
 const DEFAULT_DECAY_RETURN_FRACTION = 0.9;
@@ -42,10 +42,10 @@ export function resolveMaxTileEnergy(env = RUNTIME_ENV) {
 }
 
 export const MAX_TILE_ENERGY = resolveMaxTileEnergy();
-// Elevated baseline regen/diffusion to keep population energy budgets viable and prevent
-// early simulation collapses while still enforcing per-action energy costs.
-export const ENERGY_REGEN_RATE_DEFAULT = 0.015;
-export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.06; // smoothing between tiles (per tick)
+// Tuned baseline regeneration and diffusion keep crowd pressure meaningful while
+// still letting sparse regions recover enough to support exploration.
+export const ENERGY_REGEN_RATE_DEFAULT = 0.012;
+export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.05; // smoothing between tiles (per tick)
 export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();

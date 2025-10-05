@@ -330,8 +330,8 @@ export default class Cell {
       1,
     );
     const transferEfficiency = clamp((efficiencyA + efficiencyB) / 2, 0.1, 1);
-    const viabilityThreshold =
-      resolvedMaxTileEnergy * Math.max(demandFracA, demandFracB); // honor the pickier parent's viability floor
+    const viabilityFloor = Math.max(demandFracA, demandFracB);
+    const viabilityThreshold = resolvedMaxTileEnergy * viabilityFloor * 1.15; // require additional reserves beyond the pickier parent's floor
     const minimumTransfer = Math.max(transferEfficiency, 1e-6);
     const requiredTotalInvestment = viabilityThreshold / minimumTransfer;
     const fracFnA = parentA.dna?.parentalInvestmentFrac;
@@ -3836,11 +3836,8 @@ export default class Cell {
     const { baselineCost, dynamicCost, cognitiveLoss, dynamicLoad, baselineNeurons } =
       this.#calculateCognitiveCosts(effectiveDensity);
     const energyBefore = this.energy;
-    const scarcityFactor = clamp(
-      Number.isFinite(scarcityRelief) ? scarcityRelief : 1,
-      0.05,
-      1,
-    );
+    const scarcityReliefInput = Number.isFinite(scarcityRelief) ? scarcityRelief : 1;
+    const scarcityFactor = clamp(0.3 + scarcityReliefInput * 0.7, 0.3, 1);
     const adjustedEnergyLoss = energyLoss * scarcityFactor;
 
     this.energy -= adjustedEnergyLoss + cognitiveLoss;

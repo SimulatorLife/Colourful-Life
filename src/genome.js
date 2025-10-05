@@ -800,10 +800,10 @@ export class DNA {
     const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
     const risk = this.geneFraction(GENE_LOCI.RISK);
     const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
-    const drivePenalty = 0.45 * risk + 0.2 * (1 - movement);
-    const base = 0.008 + 0.008 * (1 - efficiency) + 0.0045 * drivePenalty;
+    const drivePenalty = 0.5 * risk + 0.25 * (1 - movement);
+    const base = 0.0095 + 0.009 * (1 - efficiency) + 0.005 * drivePenalty;
 
-    return clamp(base, 0.006, 0.03);
+    return clamp(base, 0.0085, 0.032);
   }
 
   scarcityReliefProfile() {
