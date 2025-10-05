@@ -305,7 +305,7 @@ export default class Stats {
     );
     this.#traitSums = new Float64Array(this.traitDefinitions.length);
     this.#traitActiveCounts = new Float64Array(this.traitDefinitions.length);
-    this.traitResampleInterval = sanitizeInterval(traitResampleInterval, 8);
+    this.traitResampleInterval = sanitizeInterval(traitResampleInterval, 120);
     this.diversitySampleInterval = sanitizeInterval(diversitySampleInterval, 4);
     this.lastDiversitySample = 0;
     this.#nextTraitResampleTick = 0;
@@ -1136,9 +1136,15 @@ export default class Stats {
     // Age is tracked in simulation ticks; convert with the active tick rate if seconds are needed.
     const meanAge = pop > 0 ? totalAge / pop : 0;
     const tick = this.totals.ticks;
+    const populationChanged = this.#traitPopulation !== pop;
+
+    if (populationChanged) {
+      this.#traitPresenceDirty = true;
+    }
+
     const shouldRebuildTraits =
       this.#needsTraitRebuild ||
-      this.#traitPopulation !== pop ||
+      populationChanged ||
       tick >= this.#nextTraitResampleTick;
 
     if (shouldRebuildTraits) {
