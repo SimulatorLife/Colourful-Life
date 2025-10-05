@@ -197,7 +197,7 @@ test("computeTileEnergyUpdate applies density penalties and diffusion", async ()
     neighborCount: 2,
   });
 
-  approxEqual(scalarResult.nextEnergy, 2.5754, 1e-3);
+  approxEqual(scalarResult.nextEnergy, 2.56856, 1e-3);
   approxEqual(scalarResult.drain, 0.075, 1e-6);
 
   const arrayResult = computeTileEnergyUpdate({

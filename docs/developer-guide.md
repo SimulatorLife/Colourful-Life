@@ -85,7 +85,7 @@ affect runtime outcomes.
   without modifying `src/config.js`.
 - `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` tunes how strongly local population
   density suppresses regeneration (0 disables the penalty, 1 preserves the
-  default).
+  default `0.42` coefficient).
 - `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` controls how much additional
   energy cost organisms pay when harvesting from crowded tiles (0 removes the
   tax, 1 matches the baseline density pressure).
