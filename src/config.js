@@ -1,7 +1,7 @@
 import { clamp, sanitizeNumber, coerceBoolean } from "./utils.js";
 
 // Centralized simulation config defaults
-const DEFAULT_MAX_TILE_ENERGY = 6;
+const DEFAULT_MAX_TILE_ENERGY = 2;
 // Relaxed slightly from 0.5 after a dense-tile probe (energy 2.4, density 0.85)
 // showed regeneration recovering ~7% more energy per tick (0.0036 → 0.0039).
 // The softer clamp cushions high-traffic hubs without eliminating the density
@@ -44,8 +44,8 @@ export function resolveMaxTileEnergy(env = RUNTIME_ENV) {
 export const MAX_TILE_ENERGY = resolveMaxTileEnergy();
 // Elevated baseline regen/diffusion to keep population energy budgets viable and prevent
 // early simulation collapses while still enforcing per-action energy costs.
-export const ENERGY_REGEN_RATE_DEFAULT = 0.015;
-export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.06; // smoothing between tiles (per tick)
+export const ENERGY_REGEN_RATE_DEFAULT = 0.005;
+export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.02; // smoothing between tiles (per tick)
 export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();

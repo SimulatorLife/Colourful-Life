@@ -181,23 +181,89 @@ test("auto reseed prioritizes energetic, low-crowding tiles", async () => {
   gm.grid.forEach((row, r) => {
     row.forEach((cell, c) => {
       if (cell) {
-        seeded.push({ r, c, energy: cell.energy });
+        seeded.push({ r, c, cell });
       }
     });
   });
 
   assert.deepEqual(
     seeded.map(({ r, c }) => `${r}:${c}`).sort(),
-    ["0:0", "1:1", "2:2"],
-    "auto seeding should prioritize the richest available tiles",
+    ["0:0", "1:1"],
+    "auto seeding should prioritize the richest viable tiles",
   );
 
-  seeded.forEach(({ energy }) => {
+  seeded.forEach(({ cell }) => {
+    const starvationFloor = cell.dna.starvationThresholdFrac() * gm.maxTileEnergy;
+
     assert.ok(
-      energy >= gm.maxTileEnergy * 0.25,
-      `seeded cells should begin with a survivable reserve (received ${energy})`,
+      cell.energy > starvationFloor,
+      `seeded cell should begin above its starvation threshold (received ${cell.energy}, threshold ${starvationFloor})`,
     );
   });
+});
+
+test("reseeding grants newcomers a survivable energy buffer", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class SeedEnergyGridManager extends GridManager {
+    init() {}
+  }
+
+  const deaths = [];
+  const stats = {
+    onBirth() {},
+    onDeath(cell, info) {
+      deaths.push(info?.cause ?? "unknown");
+    },
+    recordEnergyStageTimings() {},
+    getDiversityPressure() {
+      return 0;
+    },
+    getBehavioralEvenness() {
+      return 0;
+    },
+    getStrategyPressure() {
+      return 0;
+    },
+    getPopulationScarcityMultiplier() {
+      return 0;
+    },
+  };
+
+  const gm = new SeedEnergyGridManager(18, 18, {
+    eventManager: { activeEvents: [] },
+    stats,
+    ctx: {},
+    cellSize: 1,
+    rng: () => 0.42,
+  });
+
+  gm.autoSeedEnabled = false;
+  gm.activeCells.clear();
+  gm.grid.forEach((row, r) => {
+    row.fill(null);
+    gm.energyGrid[r].fill(gm.maxTileEnergy / 2);
+  });
+
+  gm.seed(0, gm.minPopulation);
+
+  assert.ok(gm.activeCells.size > 0, "seeding should place new organisms");
+
+  for (const cell of gm.activeCells) {
+    const starvationThreshold = cell.dna.starvationThresholdFrac() * gm.maxTileEnergy;
+
+    assert.ok(
+      cell.energy > starvationThreshold,
+      "newly seeded cell should exceed its starvation floor",
+    );
+  }
+
+  deaths.length = 0;
+  gm.update();
+
+  const starvationDeaths = deaths.filter((cause) => cause === "starvation").length;
+
+  assert.is(starvationDeaths, 0, "seeded organisms should not starve immediately");
 });
 
 test("population scarcity emits signal without forced reseeding", async () => {

@@ -2542,8 +2542,9 @@ export default class GridManager {
       0,
       1,
     );
-    const minEnergyThreshold = this.maxTileEnergy * (0.05 + scarcitySignal * 0.05);
-    const maxSpawnEnergy = this.maxTileEnergy * (0.3 + scarcitySignal * 0.2);
+    const energyFloorFrac = clamp(0.35 + scarcitySignal * 0.15, 0.35, 0.85);
+    const spawnBufferFrac = clamp(0.05 + scarcitySignal * 0.05, 0.05, 0.12);
+    const maxSpawnAttempts = 6;
     const empties = [];
     const viable = [];
 
@@ -2566,7 +2567,7 @@ export default class GridManager {
 
         empties.push(entry);
 
-        if (availableEnergy >= minEnergyThreshold) {
+        if (normalizedEnergy >= energyFloorFrac) {
           viable.push(entry);
         }
       }
@@ -2578,8 +2579,12 @@ export default class GridManager {
 
     const seedsNeeded = Math.min(minPopulation - currentPopulation, empties.length);
 
-    for (let i = 0; i < seedsNeeded; i++) {
+    let seedsPlaced = 0;
+
+    while (seedsPlaced < seedsNeeded) {
       const pool = viable.length > 0 ? viable : empties;
+
+      if (pool.length === 0) break;
       const bandSize =
         pool === viable
           ? Math.max(1, Math.min(pool.length, Math.ceil(pool.length * 0.2)))
@@ -2607,13 +2612,52 @@ export default class GridManager {
       }
 
       const { row, col, availableEnergy } = candidate;
-      const spawnEnergy = Math.min(availableEnergy, maxSpawnEnergy);
+      const normalizedAvailable =
+        this.maxTileEnergy > 0 ? clamp(availableEnergy / this.maxTileEnergy, 0, 1) : 0;
 
-      this.spawnCell(row, col, {
-        dna: DNA.random(),
-        spawnEnergy,
-        recordBirth: true,
-      });
+      if (normalizedAvailable <= 0) {
+        continue;
+      }
+
+      let spawned = false;
+
+      for (let attempt = 0; attempt < maxSpawnAttempts; attempt++) {
+        const dna = DNA.random(() => this.#random());
+        const starvationFrac = clamp(dna.starvationThresholdFrac(), 0, 1);
+        const spawnTargetFrac = clamp(
+          starvationFrac + spawnBufferFrac,
+          energyFloorFrac,
+          0.95,
+        );
+
+        if (spawnTargetFrac - normalizedAvailable > 1e-6) {
+          continue;
+        }
+
+        const spawnEnergy = Math.min(
+          availableEnergy,
+          this.maxTileEnergy * spawnTargetFrac,
+        );
+
+        if (!(spawnEnergy > 0)) {
+          continue;
+        }
+
+        const offspring = this.spawnCell(row, col, {
+          dna,
+          spawnEnergy,
+          recordBirth: true,
+        });
+
+        if (offspring) {
+          spawned = true;
+          break;
+        }
+      }
+
+      if (spawned) {
+        seedsPlaced += 1;
+      }
     }
   }
 

@@ -67,6 +67,10 @@ where practical.
 
 ### Fixed
 
+- Auto-seeded organisms now draw enough energy to clear their DNA-driven
+  starvation threshold before entering the tick loop, preventing the visual
+  flash where fresh spawns vanished immediately after appearing when tile
+  reserves were too low under the reduced max tile energy cap.
 - Ensured senescence always progresses by feeding GridManager the unclamped age
   fraction, guaranteeing hazard escalation, and by enforcing a hard death cap
   once organisms triple their DNA lifespan so immobile lineages cannot linger
