@@ -5133,6 +5133,7 @@ export default class GridManager {
 
   buildSnapshot(maxTileEnergy) {
     const cap = typeof maxTileEnergy === "number" ? maxTileEnergy : this.maxTileEnergy;
+    const entries = [];
     const snapshot = {
       rows: this.rows,
       cols: this.cols,
@@ -5140,15 +5141,13 @@ export default class GridManager {
       totalEnergy: 0,
       totalAge: 0,
       maxFitness: 0,
-      cells: [],
-      entries: [],
+      entries,
     };
     const topBrainEntries = createRankedBuffer(
       BRAIN_SNAPSHOT_LIMIT,
       (a, b) => (b?.fitness ?? -Infinity) - (a?.fitness ?? -Infinity),
     );
 
-    const entries = snapshot.entries;
     const activeCells = this.activeCells;
 
     if (activeCells && activeCells.size > 0) {
@@ -5178,8 +5177,6 @@ export default class GridManager {
         }
       }
     }
-
-    snapshot.cells = entries.map((entry) => entry.cell);
 
     const ranked = topBrainEntries.getItems();
     const collector =

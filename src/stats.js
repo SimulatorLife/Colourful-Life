@@ -745,18 +745,28 @@ export default class Stats {
     this.#traitPresenceDirty = true;
   }
 
-  #rebuildTraitAggregates(cells) {
-    const pool = Array.isArray(cells) ? cells : [];
+  #rebuildTraitAggregates(cellSources) {
+    const pool = Array.isArray(cellSources) ? cellSources : [];
     const computes = this.#traitComputes;
     const thresholds = this.#traitThresholds;
 
     this.#traitSums.fill(0);
     this.#traitActiveCounts.fill(0);
 
-    for (let i = 0; i < pool.length; i += 1) {
-      const cell = pool[i];
+    let population = 0;
 
-      if (!cell) continue;
+    for (let i = 0; i < pool.length; i += 1) {
+      const source = pool[i];
+      const cell =
+        source &&
+        typeof source === "object" &&
+        Object.prototype.hasOwnProperty.call(source, "cell")
+          ? source.cell
+          : source;
+
+      if (!cell || typeof cell !== "object") continue;
+
+      population += 1;
 
       for (let t = 0; t < computes.length; t += 1) {
         const compute = computes[t];
@@ -772,7 +782,7 @@ export default class Stats {
       }
     }
 
-    this.#traitPopulation = pool.length;
+    this.#traitPopulation = population;
     this.#needsTraitRebuild = false;
     this.#traitPresenceDirty = true;
   }
@@ -1006,8 +1016,8 @@ export default class Stats {
   }
 
   // Sample mean pairwise distance between up to maxPairSamples random pairs.
-  estimateDiversity(cells, maxPairSamples = 200) {
-    if (!Array.isArray(cells) || cells.length < 2) {
+  estimateDiversity(cellSources, maxPairSamples = 200) {
+    if (!Array.isArray(cellSources) || cellSources.length < 2) {
       return 0;
     }
 
@@ -1019,10 +1029,20 @@ export default class Stats {
         : 0;
     const validCells = [];
 
-    for (let i = 0; i < cells.length; i += 1) {
-      const cell = cells[i];
+    for (let i = 0; i < cellSources.length; i += 1) {
+      const source = cellSources[i];
+      const cell =
+        source &&
+        typeof source === "object" &&
+        Object.prototype.hasOwnProperty.call(source, "cell")
+          ? source.cell
+          : source;
 
-      if (cell && typeof cell.dna?.similarity === "function") {
+      if (
+        cell &&
+        typeof cell === "object" &&
+        typeof cell.dna?.similarity === "function"
+      ) {
         validCells.push(cell);
       }
     }
@@ -1127,7 +1147,7 @@ export default class Stats {
     const pop = Number.isFinite(rawPopulation)
       ? Math.max(0, Math.floor(rawPopulation))
       : 0;
-    const cells = Array.isArray(snapshot?.cells) ? snapshot.cells : [];
+    const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
     const totalEnergy = Number.isFinite(snapshot?.totalEnergy)
       ? snapshot.totalEnergy
       : 0;
@@ -1142,7 +1162,7 @@ export default class Stats {
       tick >= this.#nextTraitResampleTick;
 
     if (shouldRebuildTraits) {
-      this.#rebuildTraitAggregates(cells);
+      this.#rebuildTraitAggregates(entries);
       this.#nextTraitResampleTick = tick + this.traitResampleInterval;
     }
 
@@ -1161,7 +1181,7 @@ export default class Stats {
       this.#diversityPopulationBaseline !== pop;
 
     if (shouldSampleDiversity) {
-      this.lastDiversitySample = this.estimateDiversity(cells);
+      this.lastDiversitySample = this.estimateDiversity(entries);
       this.#diversityPopulationBaseline = pop;
       this.#nextDiversitySampleTick = tick + this.diversitySampleInterval;
     }

@@ -14,6 +14,16 @@ const createCell = (overrides = {}) => ({
   ...overrides,
 });
 
+const toEntries = (cells) =>
+  Array.isArray(cells)
+    ? cells.map((cell, index) => ({
+        row: Math.floor(index / 10),
+        col: index % 10,
+        cell,
+        fitness: typeof cell?.fitness === "number" ? cell.fitness : 0,
+      }))
+    : [];
+
 test("computeTraitPresence clamps trait values and tracks active fractions", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(4);
@@ -315,7 +325,7 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
     population: 2,
     totalEnergy: 6,
     totalAge: 9,
-    cells,
+    entries: toEntries(cells),
   });
 
   assert.is(result.population, 2);
@@ -389,7 +399,7 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
       population: 1,
       totalEnergy: i + 1,
       totalAge: i + 2,
-      cells,
+      entries: toEntries(cells),
     });
   }
 
@@ -551,13 +561,13 @@ test("trait presence rebuild honors resample interval when events are absent", a
     population: cooperativeA.length,
     totalEnergy: 0,
     totalAge: 0,
-    cells: cooperativeA,
+    entries: toEntries(cooperativeA),
   };
   const snapshotB = {
     population: cooperativeB.length,
     totalEnergy: 0,
     totalAge: 0,
-    cells: cooperativeB,
+    entries: toEntries(cooperativeB),
   };
 
   stats.updateFromSnapshot(snapshotA);
@@ -601,7 +611,7 @@ test("life event ticks align with the active simulation tick", async () => {
     population: 1,
     totalEnergy: offspring.energy,
     totalAge: 0,
-    cells: [offspring],
+    entries: toEntries([offspring]),
   });
 
   const [birthEvent] = stats.getRecentLifeEvents(1);
@@ -664,7 +674,7 @@ test("diversity pressure responds to behavioral stagnation and complementary suc
     population: homogeneousCells.length,
     totalEnergy: 0,
     totalAge: 0,
-    cells: homogeneousCells,
+    entries: toEntries(homogeneousCells),
   });
 
   const firstEvenness = stats.getBehavioralEvenness();
@@ -695,7 +705,7 @@ test("diversity pressure responds to behavioral stagnation and complementary suc
     population: homogeneousCells.length,
     totalEnergy: 0,
     totalAge: 0,
-    cells: homogeneousCells,
+    entries: toEntries(homogeneousCells),
   });
 
   const relievedPressure = stats.getDiversityPressure();
@@ -727,7 +737,7 @@ test("strategy pressure intensifies when monotony escapes penalties", async () =
     population: monotoneCells.length,
     totalEnergy: 0,
     totalAge: 0,
-    cells: monotoneCells,
+    entries: toEntries(monotoneCells),
   };
 
   const unchecked = new DeterministicStats(3, {
@@ -793,7 +803,7 @@ test("behavioral evenness drops when one trait dominates", async () => {
     population: cells.length,
     totalEnergy: 0,
     totalAge: 0,
-    cells,
+    entries: toEntries(cells),
   });
 
   const evenness = stats.getBehavioralEvenness();
@@ -862,7 +872,7 @@ test("updateFromSnapshot tolerates missing or invalid totals", async () => {
     population: "3",
     totalEnergy: undefined,
     totalAge: "not-a-number",
-    cells,
+    entries: toEntries(cells),
   });
 
   assert.is(firstSummary.meanEnergy, 0);
@@ -876,7 +886,7 @@ test("updateFromSnapshot tolerates missing or invalid totals", async () => {
     population: 2,
     totalEnergy: Number.POSITIVE_INFINITY,
     totalAge: Number.NaN,
-    cells: [],
+    entries: [],
   });
 
   assert.is(secondSummary.meanEnergy, 0);
@@ -909,7 +919,7 @@ test("diversity pressure increases when diversity stays below target", async () 
     population: 2,
     totalEnergy: 0,
     totalAge: 0,
-    cells: [createCell(), createCell()],
+    entries: toEntries([createCell(), createCell()]),
   };
 
   stats.setDiversityTarget(0.5);
@@ -947,12 +957,12 @@ test("diversity pressure increases when diversity stays below target", async () 
     population: 4,
     totalEnergy: 0,
     totalAge: 0,
-    cells: [
+    entries: toEntries([
       createCell({ interactionGenes: { cooperate: 0.9, fight: 0.1 }, sight: 0.8 }),
       createCell({ interactionGenes: { cooperate: 0.2, fight: 0.9 }, sight: 0.3 }),
       createCell({ interactionGenes: { cooperate: 0.4, fight: 0.4 }, sight: 0.5 }),
       createCell({ interactionGenes: { cooperate: 0.7, fight: 0.2 }, sight: 0.6 }),
-    ],
+    ]),
   };
 
   stats.updateFromSnapshot(variedSnapshot);
@@ -1063,7 +1073,7 @@ test("starvation rate smoothing blends instant and cumulative signals", async ()
   stats.totals.deaths = 10;
   stats.deathCauseTotals.starvation = 4;
 
-  stats.updateFromSnapshot({ population: 5, cells: [], totalEnergy: 0, totalAge: 0 });
+  stats.updateFromSnapshot({ population: 5, entries: [], totalEnergy: 0, totalAge: 0 });
 
   const firstRate = stats.getHistorySeries("starvationRate").at(-1);
   const expectedFirst = 0.25;
@@ -1075,7 +1085,7 @@ test("starvation rate smoothing blends instant and cumulative signals", async ()
   stats.totals.deaths = 12;
   stats.deathCauseTotals.starvation = 4;
 
-  stats.updateFromSnapshot({ population: 5, cells: [], totalEnergy: 0, totalAge: 0 });
+  stats.updateFromSnapshot({ population: 5, entries: [], totalEnergy: 0, totalAge: 0 });
 
   const secondRate = stats.getHistorySeries("starvationRate").at(-1);
   const expectedSecond = 0.2333333333333333;
