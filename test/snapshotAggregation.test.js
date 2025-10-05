@@ -48,7 +48,7 @@ test("buildSnapshot aggregates living cells for downstream consumers", async () 
     assert.is(snapshot.population, 2);
     assert.is(snapshot.totalEnergy, 6);
     assert.is(snapshot.totalAge, 7);
-    assert.is(snapshot.cells.length, 2);
+    assert.is(snapshot.cells, undefined);
     assert.is(snapshot.entries.length, 2);
     assert.ok(snapshot.maxFitness > 0);
     assert.equal(snapshot.entries.map(({ row, col }) => `${row},${col}`).sort(), [
