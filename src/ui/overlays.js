@@ -12,6 +12,10 @@ const LIFE_EVENT_MARKER_DEFAULT_COLORS = Object.freeze({
   birth: "#7bed9f",
   death: "#ff6b6b",
 });
+const DEFAULT_OBSTACLE_MASK_FILL = "rgba(40,40,55,0.35)";
+const DEFAULT_OBSTACLE_MASK_OUTLINE = "rgba(200,200,255,0.35)";
+const OBSTACLE_MASK_LINE_WIDTH_SCALE = 0.12;
+const OBSTACLE_MASK_ALPHA = 0.35;
 
 function computeLifeEventAlpha(
   ageTicks,
@@ -278,17 +282,52 @@ function drawObstacleMask(
   grid,
   ctx,
   cellSize,
-  { fill = "rgba(40,40,55,0.35)", outline = "rgba(200,200,255,0.35)" } = {},
+  { fill = DEFAULT_OBSTACLE_MASK_FILL, outline = DEFAULT_OBSTACLE_MASK_OUTLINE } = {},
 ) {
   const mask = grid?.obstacles;
 
-  if (!Array.isArray(mask)) return;
+  if (!ctx || !Array.isArray(mask) || !(cellSize > 0)) return;
+
+  const canUseCache =
+    typeof grid?.getObstacleRenderSurface === "function" &&
+    fill === DEFAULT_OBSTACLE_MASK_FILL &&
+    outline === DEFAULT_OBSTACLE_MASK_OUTLINE;
+
+  if (canUseCache) {
+    const surface = grid.getObstacleRenderSurface(cellSize, {
+      lineWidthScale: OBSTACLE_MASK_LINE_WIDTH_SCALE,
+    });
+
+    if (surface && surface.hasAny === false) {
+      return;
+    }
+
+    if (surface?.fillCanvas && surface?.strokeCanvas && surface.hasAny) {
+      const alreadyPainted =
+        surface.lastBasePaintRevision === surface.revision &&
+        surface.lastBasePaintCellSize === cellSize;
+
+      if (!alreadyPainted) {
+        ctx.save();
+        if (ctx.globalAlpha !== undefined) {
+          ctx.globalAlpha = OBSTACLE_MASK_ALPHA;
+        }
+        ctx.drawImage(surface.fillCanvas, 0, 0);
+        ctx.drawImage(surface.strokeCanvas, 0, 0);
+        ctx.restore();
+      }
+
+      return;
+    }
+  }
+
+  const rows = grid.rows || mask.length;
+  const cols = grid.cols || (mask[0]?.length ?? 0);
+
   ctx.save();
   ctx.fillStyle = fill;
   ctx.strokeStyle = outline;
-  ctx.lineWidth = Math.max(1, cellSize * 0.12);
-  const rows = grid.rows || mask.length;
-  const cols = grid.cols || (mask[0]?.length ?? 0);
+  ctx.lineWidth = Math.max(1, cellSize * OBSTACLE_MASK_LINE_WIDTH_SCALE);
 
   for (let r = 0; r < rows; r++) {
     const rowMask = mask[r];

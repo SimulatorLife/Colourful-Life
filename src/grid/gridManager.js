@@ -1342,6 +1342,7 @@ export default class GridManager {
     this.pendingOccupantRegen = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
+    this.#resetObstacleRenderCache();
     this.eventManager = resolvedEventManager;
     this.eventContext = createEventContext(eventContext);
     this.eventEffectCache = new Map();
@@ -2003,11 +2004,20 @@ export default class GridManager {
   }
 
   clearObstacles() {
+    let changed = false;
+
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        this.obstacles[r][c] = false;
+        if (this.obstacles[r][c]) {
+          this.obstacles[r][c] = false;
+          changed = true;
+        }
       }
     }
+    if (changed) {
+      this.#markObstacleRenderDirty();
+    }
+
     this.currentObstaclePreset = "none";
   }
 
@@ -2016,7 +2026,12 @@ export default class GridManager {
     const wasBlocked = this.obstacles[row][col];
 
     if (!blocked) {
-      this.obstacles[row][col] = false;
+      if (wasBlocked) {
+        this.obstacles[row][col] = false;
+        this.#markObstacleRenderDirty();
+      } else {
+        this.obstacles[row][col] = false;
+      }
 
       return true;
     }
@@ -2033,6 +2048,7 @@ export default class GridManager {
           this.registerDeath(removed, { row, col, cause: "obstacle" });
         }
       }
+      this.#markObstacleRenderDirty();
     }
 
     this.#clearTileEnergy(row, col);
@@ -2422,6 +2438,7 @@ export default class GridManager {
     );
     this.#initializeDecayBuffers(rowsInt, colsInt);
     this.obstacles = Array.from({ length: rowsInt }, () => Array(colsInt).fill(false));
+    this.#resetObstacleRenderCache();
     this.#resetImageDataBuffer();
     this.densityCounts = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
@@ -2551,6 +2568,7 @@ export default class GridManager {
     this.densityDirtyTiles?.clear?.();
     this.eventEffectCache?.clear?.();
     this.#initializeDecayBuffers(this.rows, this.cols);
+    this.#markObstacleRenderDirty();
 
     const shouldRandomize = Boolean(randomizeObstacles);
     let targetPreset = obstaclePreset;
@@ -3862,6 +3880,212 @@ export default class GridManager {
     return { minRow, minCol, maxRow, maxCol };
   }
 
+  #resetObstacleRenderCache() {
+    this.obstacleRenderCache = {
+      revision: 0,
+      caches: new Map(),
+      lastBasePaint: null,
+    };
+  }
+
+  #markObstacleRenderDirty() {
+    if (!this.obstacleRenderCache) {
+      this.#resetObstacleRenderCache();
+    }
+
+    this.obstacleRenderCache.revision += 1;
+    this.obstacleRenderCache.lastBasePaint = null;
+
+    for (const cache of this.obstacleRenderCache.caches.values()) {
+      cache.dirty = true;
+    }
+  }
+
+  #createObstacleSurface(width, height) {
+    let canvas = null;
+
+    if (typeof OffscreenCanvas === "function") {
+      canvas = new OffscreenCanvas(width, height);
+    } else if (
+      typeof document !== "undefined" &&
+      typeof document.createElement === "function"
+    ) {
+      canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    if (!canvas) {
+      return null;
+    }
+
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      return null;
+    }
+
+    if (ctx.imageSmoothingEnabled != null) {
+      ctx.imageSmoothingEnabled = false;
+    }
+
+    return { canvas, ctx };
+  }
+
+  #ensureObstacleSurface(surface, width, height) {
+    if (!surface || !surface.canvas || !surface.ctx) {
+      return null;
+    }
+
+    if (surface.canvas.width !== width) {
+      surface.canvas.width = width;
+      surface.ctx = surface.canvas.getContext("2d");
+    }
+
+    if (surface.canvas.height !== height) {
+      surface.canvas.height = height;
+      surface.ctx = surface.canvas.getContext("2d");
+    }
+
+    if (surface.ctx?.imageSmoothingEnabled != null) {
+      surface.ctx.imageSmoothingEnabled = false;
+    }
+
+    return surface;
+  }
+
+  #getObstacleBitmapEntry(cellSize, lineWidthScale = 0.1) {
+    if (!Array.isArray(this.obstacles)) {
+      return null;
+    }
+
+    if (!this.obstacleRenderCache) {
+      this.#resetObstacleRenderCache();
+    }
+
+    const width = Math.max(1, Math.round(this.cols * cellSize));
+    const height = Math.max(1, Math.round(this.rows * cellSize));
+
+    if (!(width > 0) || !(height > 0)) {
+      return null;
+    }
+
+    const key = Number.isFinite(lineWidthScale) ? lineWidthScale.toFixed(4) : "default";
+    let entry = this.obstacleRenderCache.caches.get(key);
+
+    if (!entry) {
+      const fillSurface = this.#createObstacleSurface(width, height);
+      const strokeSurface = this.#createObstacleSurface(width, height);
+
+      if (!fillSurface || !strokeSurface) {
+        return null;
+      }
+
+      entry = {
+        fill: fillSurface,
+        stroke: strokeSurface,
+        width,
+        height,
+        cellSize,
+        lineWidthScale: Number.isFinite(lineWidthScale) ? lineWidthScale : 0.1,
+        revision: -1,
+        dirty: true,
+        hasAny: false,
+      };
+      this.obstacleRenderCache.caches.set(key, entry);
+    } else {
+      entry.lineWidthScale = Number.isFinite(lineWidthScale)
+        ? lineWidthScale
+        : entry.lineWidthScale;
+
+      entry.fill = this.#ensureObstacleSurface(entry.fill, width, height);
+      entry.stroke = this.#ensureObstacleSurface(entry.stroke, width, height);
+
+      if (!entry.fill || !entry.stroke) {
+        this.obstacleRenderCache.caches.delete(key);
+
+        return null;
+      }
+    }
+
+    if (
+      entry.dirty ||
+      entry.revision !== this.obstacleRenderCache.revision ||
+      entry.cellSize !== cellSize ||
+      entry.width !== width ||
+      entry.height !== height
+    ) {
+      const fillCtx = entry.fill.ctx;
+      const strokeCtx = entry.stroke.ctx;
+
+      if (!fillCtx || !strokeCtx) {
+        return null;
+      }
+
+      fillCtx.clearRect(0, 0, width, height);
+      strokeCtx.clearRect(0, 0, width, height);
+
+      fillCtx.fillStyle = "rgb(40,40,55)";
+      strokeCtx.strokeStyle = "rgb(200,200,255)";
+      strokeCtx.lineWidth = Math.max(1, cellSize * entry.lineWidthScale);
+
+      let hasAny = false;
+
+      for (let row = 0; row < this.rows; row++) {
+        const maskRow = this.obstacles[row];
+
+        if (!maskRow) continue;
+
+        for (let col = 0; col < this.cols; col++) {
+          if (!maskRow[col]) continue;
+
+          const x = col * cellSize;
+          const y = row * cellSize;
+
+          fillCtx.fillRect(x, y, cellSize, cellSize);
+          strokeCtx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
+          hasAny = true;
+        }
+      }
+
+      entry.width = width;
+      entry.height = height;
+      entry.cellSize = cellSize;
+      entry.revision = this.obstacleRenderCache.revision;
+      entry.dirty = false;
+      entry.hasAny = hasAny;
+    }
+
+    return entry;
+  }
+
+  #blitObstacleCanvas(ctx, canvas, alpha = 1) {
+    if (!ctx || !canvas || typeof ctx.drawImage !== "function") {
+      return false;
+    }
+
+    const normalizedAlpha = clamp(Number.isFinite(alpha) ? alpha : 1, 0, 1);
+    const hasSave = typeof ctx.save === "function";
+    const hadAlpha = ctx.globalAlpha !== undefined;
+    const previousAlpha = hadAlpha ? ctx.globalAlpha : undefined;
+
+    if (hasSave) ctx.save();
+
+    if (hadAlpha) {
+      ctx.globalAlpha = normalizedAlpha;
+    }
+
+    ctx.drawImage(canvas, 0, 0);
+
+    if (hasSave) {
+      ctx.restore();
+    } else if (hadAlpha) {
+      ctx.globalAlpha = previousAlpha;
+    }
+
+    return true;
+  }
+
   #drawCellsWithCanvas(ctx, cellSize) {
     let paintedCells = 0;
     const totalTiles = this.rows * this.cols;
@@ -4084,29 +4308,71 @@ export default class GridManager {
 
     if (showObstacles && this.obstacles) {
       const obstacleStart = TIMESTAMP_NOW();
+      const cacheEntry = this.#getObstacleBitmapEntry(cellSize, 0.1);
 
-      ctx.fillStyle = "rgba(40,40,55,0.9)";
-      for (let row = 0; row < this.rows; row++) {
-        for (let col = 0; col < this.cols; col++) {
-          if (!this.obstacles[row][col]) continue;
-          ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+      let drewWithCache = false;
+
+      if (cacheEntry && cacheEntry.fill?.canvas && cacheEntry.stroke?.canvas) {
+        let success = true;
+
+        if (cacheEntry.hasAny) {
+          const fillOk = this.#blitObstacleCanvas(ctx, cacheEntry.fill.canvas, 0.9);
+          const strokeOk = this.#blitObstacleCanvas(
+            ctx,
+            cacheEntry.stroke.canvas,
+            0.25,
+          );
+
+          success = fillOk && strokeOk;
+        }
+
+        if (success) {
+          drewWithCache = true;
+
+          if (this.obstacleRenderCache) {
+            this.obstacleRenderCache.lastBasePaint = {
+              revision: cacheEntry.revision,
+              cellSize,
+              lineWidthScale: cacheEntry.lineWidthScale,
+            };
+          }
         }
       }
-      ctx.strokeStyle = "rgba(200,200,255,0.25)";
-      ctx.lineWidth = Math.max(1, cellSize * 0.1);
-      for (let row = 0; row < this.rows; row++) {
-        for (let col = 0; col < this.cols; col++) {
-          if (!this.obstacles[row][col]) continue;
-          ctx.strokeRect(
-            col * cellSize + 0.5,
-            row * cellSize + 0.5,
-            cellSize - 1,
-            cellSize - 1,
-          );
+
+      if (!drewWithCache) {
+        ctx.fillStyle = "rgba(40,40,55,0.9)";
+        for (let row = 0; row < this.rows; row++) {
+          for (let col = 0; col < this.cols; col++) {
+            if (!this.obstacles[row][col]) continue;
+            ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+          }
+        }
+        ctx.strokeStyle = "rgba(200,200,255,0.25)";
+        ctx.lineWidth = Math.max(1, cellSize * 0.1);
+        for (let row = 0; row < this.rows; row++) {
+          for (let col = 0; col < this.cols; col++) {
+            if (!this.obstacles[row][col]) continue;
+            ctx.strokeRect(
+              col * cellSize + 0.5,
+              row * cellSize + 0.5,
+              cellSize - 1,
+              cellSize - 1,
+            );
+          }
+        }
+
+        if (this.obstacleRenderCache) {
+          this.obstacleRenderCache.lastBasePaint = {
+            revision: this.obstacleRenderCache.revision,
+            cellSize,
+            lineWidthScale: 0.1,
+          };
         }
       }
 
       obstacleLoopMs = TIMESTAMP_NOW() - obstacleStart;
+    } else if (this.obstacleRenderCache) {
+      this.obstacleRenderCache.lastBasePaint = null;
     }
 
     const tryImageData = preferredStrategy !== "canvas";
@@ -4149,6 +4415,33 @@ export default class GridManager {
     });
 
     return this.getRenderStats();
+  }
+
+  getObstacleRenderSurface(cellSize = this.cellSize, options = {}) {
+    const normalizedSize = Number.isFinite(cellSize) ? cellSize : this.cellSize;
+    const lineWidthScale = Number.isFinite(options?.lineWidthScale)
+      ? options.lineWidthScale
+      : 0.12;
+    const entry = this.#getObstacleBitmapEntry(normalizedSize, lineWidthScale);
+
+    if (!entry || !entry.fill?.canvas || !entry.stroke?.canvas) {
+      return null;
+    }
+
+    const lastPaint = this.obstacleRenderCache?.lastBasePaint ?? null;
+
+    return {
+      fillCanvas: entry.fill.canvas,
+      strokeCanvas: entry.stroke.canvas,
+      width: entry.width,
+      height: entry.height,
+      lineWidthScale: entry.lineWidthScale,
+      revision: entry.revision,
+      hasAny: entry.hasAny,
+      lastBasePaintRevision: lastPaint?.revision ?? null,
+      lastBasePaintCellSize: lastPaint?.cellSize ?? null,
+      lastBasePaintLineWidthScale: lastPaint?.lineWidthScale ?? null,
+    };
   }
 
   prepareTick({
