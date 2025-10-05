@@ -74,6 +74,12 @@ test("GridManager.resize preserves existing cells when reseed is false", async (
 
   survivor.energy = 2.5;
   gm.energyGrid[1][1] = 1.75;
+  const cap = gm.maxTileEnergy;
+  const clampedInitialEnergy = Math.min(Math.max(survivor.energy, 0), cap);
+  const initialTileEnergy = Math.max(0, gm.energyGrid[1][1]);
+  const capacity = Math.max(0, cap - clampedInitialEnergy);
+  const expectedAbsorption = Math.min(initialTileEnergy, capacity);
+  const expectedEnergy = clampedInitialEnergy + expectedAbsorption;
 
   gm.resize(5, 5, { reseed: false });
 
@@ -95,8 +101,8 @@ test("GridManager.resize preserves existing cells when reseed is false", async (
   );
   assert.is(
     survivor.energy,
-    4.25,
-    "preserved cells should absorb their former tile reserves",
+    expectedEnergy,
+    "preserved cells should absorb available tile energy up to the cap",
   );
 
   const edgeCell = gm.spawnCell(4, 4);

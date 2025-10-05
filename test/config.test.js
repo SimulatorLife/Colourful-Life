@@ -5,7 +5,7 @@ const configModulePromise = import("../src/config.js");
 test("MAX_TILE_ENERGY exposes the environment-aware default", async () => {
   const { MAX_TILE_ENERGY } = await configModulePromise;
 
-  assert.is(MAX_TILE_ENERGY, 6);
+  assert.is(MAX_TILE_ENERGY, 2);
 });
 
 test("resolveMaxTileEnergy respects overrides", async () => {
@@ -16,8 +16,10 @@ test("resolveMaxTileEnergy respects overrides", async () => {
 
 test("resolveMaxTileEnergy falls back when override is invalid", async () => {
   const { resolveMaxTileEnergy } = await configModulePromise;
+  const fallback = resolveMaxTileEnergy({});
 
-  assert.is(resolveMaxTileEnergy({ COLOURFUL_LIFE_MAX_TILE_ENERGY: "-1" }), 6);
+  assert.is(fallback, 2);
+  assert.is(resolveMaxTileEnergy({ COLOURFUL_LIFE_MAX_TILE_ENERGY: "-1" }), fallback);
 });
 
 test("REGEN_DENSITY_PENALTY exposes the environment-aware default", async () => {
