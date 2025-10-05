@@ -278,6 +278,9 @@ export default class GridManager {
   };
   #targetGroupsView = null;
   #targetDescriptorPool = [];
+  #rowOccupancy = [];
+  #tickSimilarityCache = new Map();
+  #tickSimilarityVersion = -1;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -1317,6 +1320,7 @@ export default class GridManager {
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
+    this.#initializeOccupancy(this.rows);
     this.maxTileEnergy =
       typeof maxTileEnergy === "number" ? maxTileEnergy : GridManager.maxTileEnergy;
     this.energyGrid = Array.from({ length: rows }, () =>
@@ -1512,9 +1516,10 @@ export default class GridManager {
       obstacles: this.obstacles,
       onMove: this.onMoveCallback,
       activeCells: this.activeCells,
-      onCellMoved: (cell, _fromRow, _fromCol, toRow, toCol) => {
+      onCellMoved: (cell, fromRow, fromCol, toRow, toCol) => {
         if (!cell) return;
 
+        this.#shiftOccupancy(fromRow, fromCol, toRow, toCol);
         this.activeCells.add(cell);
         this.#trackCellPosition(cell, toRow, toCol);
       },
@@ -1523,6 +1528,55 @@ export default class GridManager {
       maxTileEnergy: this.maxTileEnergy,
       clearDestinationEnergy: (r, c) => clearTileEnergyBuffers(this, r, c),
     };
+  }
+
+  #initializeOccupancy(rowCount) {
+    const rows = Math.max(0, Math.floor(Number.isFinite(rowCount) ? rowCount : 0));
+
+    this.#rowOccupancy = Array.from({ length: rows }, () => new Set());
+  }
+
+  #resetOccupancyTracking() {
+    if (!Array.isArray(this.#rowOccupancy) || this.#rowOccupancy.length !== this.rows) {
+      this.#initializeOccupancy(this.rows);
+
+      return;
+    }
+
+    for (let i = 0; i < this.#rowOccupancy.length; i++) {
+      const bucket = this.#rowOccupancy[i];
+
+      if (bucket) bucket.clear();
+    }
+  }
+
+  #recordOccupancy(row, col) {
+    if (!Number.isInteger(row) || !Number.isInteger(col)) return;
+    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return;
+
+    if (!Array.isArray(this.#rowOccupancy) || this.#rowOccupancy.length !== this.rows) {
+      this.#initializeOccupancy(this.rows);
+    }
+
+    let bucket = this.#rowOccupancy[row];
+
+    if (!bucket) {
+      bucket = new Set();
+      this.#rowOccupancy[row] = bucket;
+    }
+
+    bucket.add(col);
+  }
+
+  #releaseOccupancy(row, col) {
+    if (!Number.isInteger(row) || !Number.isInteger(col)) return;
+
+    this.#rowOccupancy?.[row]?.delete?.(col);
+  }
+
+  #shiftOccupancy(fromRow, fromCol, toRow, toCol) {
+    this.#releaseOccupancy(fromRow, fromCol);
+    this.#recordOccupancy(toRow, toCol);
   }
 
   #trackCellPosition(cell, row, col) {
@@ -2265,6 +2319,7 @@ export default class GridManager {
   }
 
   init() {
+    this.#resetOccupancyTracking();
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         if (this.isObstacle(row, col)) continue;
@@ -2335,6 +2390,7 @@ export default class GridManager {
     this.cols = colsInt;
     this.cellSize = cellSizeValue;
     this.grid = Array.from({ length: rowsInt }, () => Array(colsInt).fill(null));
+    this.#initializeOccupancy(this.rows);
     this.energyGrid = Array.from({ length: rowsInt }, () =>
       Array.from({ length: colsInt }, () => baseEnergy),
     );
@@ -2404,6 +2460,7 @@ export default class GridManager {
         if (this.grid[row][col]) continue;
 
         this.grid[row][col] = cell;
+        this.#recordOccupancy(row, col);
         this.#trackCellPosition(cell, row, col);
         this.#markTileDirty(row, col);
 
@@ -2440,6 +2497,7 @@ export default class GridManager {
     const baseEnergy = this.maxTileEnergy * INITIAL_TILE_ENERGY_FRACTION;
 
     this.#markAllTilesDirty();
+    this.#resetOccupancyTracking();
 
     for (let row = 0; row < this.rows; row++) {
       const gridRow = this.grid[row];
@@ -3126,6 +3184,7 @@ export default class GridManager {
     if (current) this.removeCell(row, col);
 
     this.grid[row][col] = cell;
+    this.#recordOccupancy(row, col);
     this.#markTileDirty(row, col);
     clearTileEnergyBuffers(this, row, col);
     this.#trackCellPosition(cell, row, col);
@@ -3149,6 +3208,7 @@ export default class GridManager {
     if (!current) return null;
 
     this.grid[row][col] = null;
+    this.#releaseOccupancy(row, col);
     this.#markTileDirty(row, col);
     this.activeCells.delete(current);
     this.#untrackCell(current);
@@ -3465,6 +3525,7 @@ export default class GridManager {
   rebuildActiveCells() {
     this.activeCells.clear();
     this.#clearTrackedPositions();
+    this.#resetOccupancyTracking();
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         const cell = this.grid[row][col];
@@ -3473,6 +3534,7 @@ export default class GridManager {
 
         this.activeCells.add(cell);
         this.#trackCellPosition(cell, row, col);
+        this.#recordOccupancy(row, col);
       }
     }
   }
@@ -5086,6 +5148,7 @@ export default class GridManager {
 
     this.lastSnapshot = null;
     this.tickCount += 1;
+    this.#resetTickSimilarityCache();
 
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
 
@@ -5288,6 +5351,103 @@ export default class GridManager {
     this.#flushTargetList(scratch.society);
   }
 
+  #resetTickSimilarityCache() {
+    this.#tickSimilarityCache = new Map();
+    this.#tickSimilarityVersion = this.tickCount;
+  }
+
+  #ensureTickSimilarityCache() {
+    if (!this.#tickSimilarityCache || this.#tickSimilarityVersion !== this.tickCount) {
+      this.#resetTickSimilarityCache();
+    }
+
+    return this.#tickSimilarityCache;
+  }
+
+  #createCellPairMeta(cellA, cellB) {
+    const meta = new Set();
+
+    if (cellA) meta.add(cellA);
+    if (cellB && cellB !== cellA) meta.add(cellB);
+
+    return meta;
+  }
+
+  #isSameCellPair(meta, cellA, cellB) {
+    if (!(meta instanceof Set)) return false;
+
+    if (cellA === cellB) {
+      return meta.size === 1 && meta.has(cellA);
+    }
+
+    return meta.size === 2 && meta.has(cellA) && meta.has(cellB);
+  }
+
+  #buildTickSimilarityKey(cellA, cellB, rowA, colA, rowB, colB) {
+    const seedA = typeof cellA?.dna?.seed === "function" ? cellA.dna.seed() : null;
+    const seedB = typeof cellB?.dna?.seed === "function" ? cellB.dna.seed() : null;
+
+    if (Number.isFinite(seedA) && Number.isFinite(seedB)) {
+      if (seedA <= seedB) {
+        return { key: `seed:${seedA}|${seedB}`, needsMeta: false };
+      }
+
+      return { key: `seed:${seedB}|${seedA}`, needsMeta: false };
+    }
+
+    if (
+      Number.isInteger(rowA) &&
+      Number.isInteger(colA) &&
+      Number.isInteger(rowB) &&
+      Number.isInteger(colB)
+    ) {
+      const cols = this.cols > 0 ? this.cols : 1;
+      const indexA = rowA * cols + colA;
+      const indexB = rowB * cols + colB;
+
+      if (indexA <= indexB) {
+        return { key: `pos:${indexA}|${indexB}`, needsMeta: true };
+      }
+
+      return { key: `pos:${indexB}|${indexA}`, needsMeta: true };
+    }
+
+    return { key: null, needsMeta: false };
+  }
+
+  #resolveTargetSimilarity(cellA, cellB, rowA, colA, rowB, colB) {
+    if (!cellA || !cellB) return 0;
+
+    const { key, needsMeta } = this.#buildTickSimilarityKey(
+      cellA,
+      cellB,
+      rowA,
+      colA,
+      rowB,
+      colB,
+    );
+
+    if (!key) {
+      return getPairSimilarity(cellA, cellB);
+    }
+
+    const cache = this.#ensureTickSimilarityCache();
+    const cached = cache.get(key);
+
+    if (cached && (!needsMeta || this.#isSameCellPair(cached.meta, cellA, cellB))) {
+      return cached.value;
+    }
+
+    const value = getPairSimilarity(cellA, cellB);
+
+    cache.set(key, {
+      value,
+      meta: needsMeta ? this.#createCellPairMeta(cellA, cellB) : null,
+    });
+
+    return value;
+  }
+
   findTargets(
     row,
     col,
@@ -5331,71 +5491,157 @@ export default class GridManager {
       : null;
     const defaultHostilityRng = Math.random;
     const shouldSampleEnemyBias = enemyBias > 0;
+    const occupancyRows = this.#rowOccupancy;
 
-    for (let newRow = minRow; newRow <= maxRow; newRow++) {
-      const gridRow = grid[newRow];
+    if (sight <= 0) {
+      return this.#targetGroupsView;
+    }
 
-      for (let newCol = minCol; newCol <= maxCol; newCol++) {
-        if (newRow === row && newCol === col) continue;
+    const processCandidate = (targetRow, targetCol, bucket) => {
+      if (targetRow === row && targetCol === col) return;
 
-        const target = gridRow[newCol];
+      const gridRow = grid[targetRow];
 
-        if (!target) continue;
+      if (!gridRow) {
+        bucket?.delete?.(targetCol);
 
-        const similarity = getPairSimilarity(cell, target);
+        return;
+      }
 
-        if (similarity >= allyT) {
-          const descriptor = this.#acquireTargetDescriptor();
+      const target = gridRow[targetCol];
 
-          descriptor.row = newRow;
-          descriptor.col = newCol;
-          descriptor.target = target;
-          descriptor.classification = "society";
-          descriptor.precomputedSimilarity = similarity;
-          descriptor.similarity = similarity;
+      if (!target) {
+        bucket?.delete?.(targetCol);
 
-          society.push(descriptor);
+        return;
+      }
 
-          continue;
-        }
+      const similarity = this.#resolveTargetSimilarity(
+        cell,
+        target,
+        row,
+        col,
+        targetRow,
+        targetCol,
+      );
 
-        let classifyAsEnemy = similarity <= enemyT;
-
-        if (!classifyAsEnemy && shouldSampleEnemyBias) {
-          const hostilityRng = resolveHostilityRng
-            ? resolveHostilityRng(target)
-            : defaultHostilityRng;
-
-          if (typeof hostilityRng === "function" && hostilityRng() < enemyBias) {
-            classifyAsEnemy = true;
-          }
-        }
-
-        if (classifyAsEnemy) {
-          const descriptor = this.#acquireTargetDescriptor();
-
-          descriptor.row = newRow;
-          descriptor.col = newCol;
-          descriptor.target = target;
-          descriptor.classification = "enemy";
-          descriptor.precomputedSimilarity = similarity;
-          descriptor.similarity = similarity;
-
-          enemies.push(descriptor);
-
-          continue;
-        }
-
+      if (similarity >= allyT) {
         const descriptor = this.#acquireTargetDescriptor();
 
-        descriptor.row = newRow;
-        descriptor.col = newCol;
+        descriptor.row = targetRow;
+        descriptor.col = targetCol;
         descriptor.target = target;
-        descriptor.classification = "mate";
+        descriptor.classification = "society";
         descriptor.precomputedSimilarity = similarity;
         descriptor.similarity = similarity;
 
-        mates.push(descriptor);
+        society.push(descriptor);
+
+        return;
+      }
+
+      let classifyAsEnemy = similarity <= enemyT;
+
+      if (!classifyAsEnemy && shouldSampleEnemyBias) {
+        const hostilityRng = resolveHostilityRng
+          ? resolveHostilityRng(target)
+          : defaultHostilityRng;
+
+        if (typeof hostilityRng === "function" && hostilityRng() < enemyBias) {
+          classifyAsEnemy = true;
+        }
+      }
+
+      if (classifyAsEnemy) {
+        const descriptor = this.#acquireTargetDescriptor();
+
+        descriptor.row = targetRow;
+        descriptor.col = targetCol;
+        descriptor.target = target;
+        descriptor.classification = "enemy";
+        descriptor.precomputedSimilarity = similarity;
+        descriptor.similarity = similarity;
+
+        enemies.push(descriptor);
+
+        return;
+      }
+
+      const descriptor = this.#acquireTargetDescriptor();
+
+      descriptor.row = targetRow;
+      descriptor.col = targetCol;
+      descriptor.target = target;
+      descriptor.classification = "mate";
+      descriptor.precomputedSimilarity = similarity;
+      descriptor.similarity = similarity;
+
+      mates.push(descriptor);
+    };
+
+    for (let dist = 1; dist <= sight; dist++) {
+      const topRow = row - dist;
+
+      if (topRow >= minRow) {
+        const bucket = occupancyRows?.[topRow];
+
+        if (bucket && bucket.size > 0) {
+          const startCol = Math.max(minCol, col - dist);
+          const endCol = Math.min(maxCol, col + dist);
+
+          for (let newCol = startCol; newCol <= endCol; newCol++) {
+            if (!bucket.has(newCol)) continue;
+
+            processCandidate(topRow, newCol, bucket);
+          }
+        }
+      }
+
+      const bottomRow = row + dist;
+
+      if (bottomRow <= maxRow && bottomRow !== topRow) {
+        const bucket = occupancyRows?.[bottomRow];
+
+        if (bucket && bucket.size > 0) {
+          const startCol = Math.max(minCol, col - dist);
+          const endCol = Math.min(maxCol, col + dist);
+
+          for (let newCol = startCol; newCol <= endCol; newCol++) {
+            if (!bucket.has(newCol)) continue;
+
+            processCandidate(bottomRow, newCol, bucket);
+          }
+        }
+      }
+
+      const leftCol = col - dist;
+
+      if (leftCol >= minCol) {
+        const startRow = Math.max(minRow, row - dist + 1);
+        const endRow = Math.min(maxRow, row + dist - 1);
+
+        for (let newRow = startRow; newRow <= endRow; newRow++) {
+          const bucket = occupancyRows?.[newRow];
+
+          if (!bucket || !bucket.has(leftCol)) continue;
+
+          processCandidate(newRow, leftCol, bucket);
+        }
+      }
+
+      const rightCol = col + dist;
+
+      if (rightCol <= maxCol && rightCol !== leftCol) {
+        const startRow = Math.max(minRow, row - dist + 1);
+        const endRow = Math.min(maxRow, row + dist - 1);
+
+        for (let newRow = startRow; newRow <= endRow; newRow++) {
+          const bucket = occupancyRows?.[newRow];
+
+          if (!bucket || !bucket.has(rightCol)) continue;
+
+          processCandidate(newRow, rightCol, bucket);
+        }
       }
     }
 
