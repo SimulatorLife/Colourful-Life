@@ -38,6 +38,7 @@ import {
 const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
+const EMPTY_TARGET_LIST = Object.freeze([]);
 
 const similarityCache = new WeakMap();
 const NEIGHBOR_OFFSETS = [
@@ -56,6 +57,14 @@ const DECAY_RELEASE_RATE = 0.18;
 const DECAY_MAX_AGE = 240;
 const DECAY_EPSILON = 1e-4;
 const INITIAL_TILE_ENERGY_FRACTION = 0.5;
+const TARGET_DESCRIPTOR_BASE_KEYS = new Set([
+  "row",
+  "col",
+  "target",
+  "classification",
+  "precomputedSimilarity",
+  "similarity",
+]);
 
 const COLOR_CACHE_DEFAULT_LIMIT = 4096;
 const COLOR_CACHE = new Map();
@@ -263,6 +272,13 @@ export default class GridManager {
   #imageDataCtx = null;
   #imageData = null;
   #imageDataNeedsFullRefresh = false;
+  #targetScratch = {
+    mates: [],
+    enemies: [],
+    society: [],
+  };
+  #targetGroupsView = null;
+  #targetDescriptorPool = [];
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -1502,6 +1518,11 @@ export default class GridManager {
         cols,
         this.#movementOptions(),
       );
+    this.#targetGroupsView = {
+      mates: this.#targetScratch.mates,
+      enemies: this.#targetScratch.enemies,
+      society: this.#targetScratch.society,
+    };
     this.boundMoveRandomly = (gridArr, row, col, cell, rows, cols, movementContext) =>
       GridManager.moveRandomly(
         gridArr,
@@ -4208,37 +4229,41 @@ export default class GridManager {
       enemySimilarity,
     });
 
-    if (
-      this.handleReproduction(row, col, cell, targets, {
-        stats,
+    try {
+      if (
+        this.handleReproduction(row, col, cell, targets, {
+          stats,
+          densityGrid,
+          densityEffectMultiplier,
+          mutationMultiplier,
+        })
+      ) {
+        return;
+      }
+
+      if (this.#random() > act) {
+        return;
+      }
+
+      if (
+        this.handleCombat(row, col, cell, targets, {
+          stats,
+          densityEffectMultiplier,
+          densityGrid,
+          combatEdgeSharpness,
+          combatTerritoryEdgeFactor,
+        })
+      ) {
+        return;
+      }
+
+      this.handleMovement(row, col, cell, targets, {
         densityGrid,
         densityEffectMultiplier,
-        mutationMultiplier,
-      })
-    ) {
-      return;
+      });
+    } finally {
+      this.#endTargetScan();
     }
-
-    if (this.#random() > act) {
-      return;
-    }
-
-    if (
-      this.handleCombat(row, col, cell, targets, {
-        stats,
-        densityEffectMultiplier,
-        densityGrid,
-        combatEdgeSharpness,
-        combatTerritoryEdgeFactor,
-      })
-    ) {
-      return;
-    }
-
-    this.handleMovement(row, col, cell, targets, {
-      densityGrid,
-      densityEffectMultiplier,
-    });
   }
 
   #computeLowDiversityPenaltyMultiplier({
@@ -4350,7 +4375,7 @@ export default class GridManager {
     row,
     col,
     cell,
-    { mates, society },
+    { mates = EMPTY_TARGET_LIST, society = EMPTY_TARGET_LIST },
     { stats, densityGrid, densityEffectMultiplier, mutationMultiplier },
   ) {
     // findTargets sorts potential partners into neutral mates and allies; fall back
@@ -4383,7 +4408,9 @@ export default class GridManager {
       ? cell.selectMateWeighted(matePool, reproductionContext)
       : null;
     const selectedMate = selection?.chosen ?? null;
-    const evaluated = Array.isArray(selection?.evaluated) ? selection.evaluated : [];
+    const evaluated = Array.isArray(selection?.evaluated)
+      ? selection.evaluated
+      : EMPTY_TARGET_LIST;
     const selectionMode = selection?.mode ?? "preference";
 
     let bestMate = selectedMate;
@@ -4887,7 +4914,7 @@ export default class GridManager {
     row,
     col,
     cell,
-    targetGroups = {},
+    targetGroups,
     {
       stats,
       densityEffectMultiplier,
@@ -4896,9 +4923,11 @@ export default class GridManager {
       combatTerritoryEdgeFactor,
     },
   ) {
-    const { enemies, society = [] } = targetGroups ?? {};
+    const enemies = targetGroups?.enemies ?? EMPTY_TARGET_LIST;
 
-    if (!Array.isArray(enemies) || enemies.length === 0) return false;
+    if (enemies.length === 0) return false;
+
+    const allies = targetGroups?.society ?? EMPTY_TARGET_LIST;
 
     const targetEnemy =
       typeof cell.chooseEnemyTarget === "function"
@@ -4912,7 +4941,7 @@ export default class GridManager {
       localDensity,
       densityEffectMultiplier,
       enemies,
-      allies: society,
+      allies,
       maxTileEnergy: this.maxTileEnergy,
       tileEnergy,
       tileEnergyDelta,
@@ -5001,13 +5030,17 @@ export default class GridManager {
     row,
     col,
     cell,
-    { mates, enemies, society },
+    {
+      mates = EMPTY_TARGET_LIST,
+      enemies = EMPTY_TARGET_LIST,
+      society = EMPTY_TARGET_LIST,
+    },
     { densityGrid, densityEffectMultiplier },
   ) {
     const localDensity = densityGrid[row][col];
     const energyDenominator = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
 
-    cell.executeMovementStrategy(this.grid, row, col, mates, enemies, society || [], {
+    cell.executeMovementStrategy(this.grid, row, col, mates, enemies, society, {
       localDensity,
       densityEffectMultiplier,
       rows: this.rows,
@@ -5206,15 +5239,82 @@ export default class GridManager {
     return population / (this.rows * this.cols);
   }
 
+  #acquireTargetDescriptor() {
+    const descriptor = this.#targetDescriptorPool.pop();
+
+    if (descriptor) {
+      return descriptor;
+    }
+
+    return {
+      row: 0,
+      col: 0,
+      target: null,
+      classification: "",
+      precomputedSimilarity: 0,
+    };
+  }
+
+  #resetTargetDescriptor(descriptor) {
+    descriptor.row = 0;
+    descriptor.col = 0;
+    descriptor.target = null;
+    descriptor.classification = "";
+    descriptor.precomputedSimilarity = 0;
+
+    descriptor.similarity = 0;
+
+    for (const key in descriptor) {
+      if (!TARGET_DESCRIPTOR_BASE_KEYS.has(key)) {
+        descriptor[key] = undefined;
+      }
+    }
+
+    return descriptor;
+  }
+
+  #flushTargetList(list) {
+    if (!Array.isArray(list) || list.length === 0) {
+      return;
+    }
+
+    for (let i = 0; i < list.length; i++) {
+      const descriptor = list[i];
+
+      if (!descriptor) continue;
+
+      this.#targetDescriptorPool.push(this.#resetTargetDescriptor(descriptor));
+      list[i] = null;
+    }
+
+    list.length = 0;
+  }
+
+  #beginTargetScan() {
+    const scratch = this.#targetScratch;
+
+    this.#flushTargetList(scratch.mates);
+    this.#flushTargetList(scratch.enemies);
+    this.#flushTargetList(scratch.society);
+
+    return scratch;
+  }
+
+  #endTargetScan() {
+    const scratch = this.#targetScratch;
+
+    this.#flushTargetList(scratch.mates);
+    this.#flushTargetList(scratch.enemies);
+    this.#flushTargetList(scratch.society);
+  }
+
   findTargets(
     row,
     col,
     cell,
     { densityEffectMultiplier = 1, societySimilarity = 1, enemySimilarity = 0 } = {},
   ) {
-    const mates = [];
-    const enemies = [];
-    const society = [];
+    const { mates, enemies, society } = this.#beginTargetScan();
     const d =
       this.densityGrid?.[row]?.[col] ??
       this.localDensity(row, col, GridManager.DENSITY_RADIUS);
@@ -5265,13 +5365,16 @@ export default class GridManager {
         const similarity = getPairSimilarity(cell, target);
 
         if (similarity >= allyT) {
-          society.push({
-            row: newRow,
-            col: newCol,
-            target,
-            classification: "society",
-            precomputedSimilarity: similarity,
-          });
+          const descriptor = this.#acquireTargetDescriptor();
+
+          descriptor.row = newRow;
+          descriptor.col = newCol;
+          descriptor.target = target;
+          descriptor.classification = "society";
+          descriptor.precomputedSimilarity = similarity;
+          descriptor.similarity = similarity;
+
+          society.push(descriptor);
 
           continue;
         }
@@ -5289,22 +5392,34 @@ export default class GridManager {
         }
 
         if (classifyAsEnemy) {
-          enemies.push({ row: newRow, col: newCol, target });
+          const descriptor = this.#acquireTargetDescriptor();
+
+          descriptor.row = newRow;
+          descriptor.col = newCol;
+          descriptor.target = target;
+          descriptor.classification = "enemy";
+          descriptor.precomputedSimilarity = similarity;
+          descriptor.similarity = similarity;
+
+          enemies.push(descriptor);
 
           continue;
         }
 
-        mates.push({
-          row: newRow,
-          col: newCol,
-          target,
-          classification: "mate",
-          precomputedSimilarity: similarity,
-        });
+        const descriptor = this.#acquireTargetDescriptor();
+
+        descriptor.row = newRow;
+        descriptor.col = newCol;
+        descriptor.target = target;
+        descriptor.classification = "mate";
+        descriptor.precomputedSimilarity = similarity;
+        descriptor.similarity = similarity;
+
+        mates.push(descriptor);
       }
     }
 
-    return { mates, enemies, society };
+    return this.#targetGroupsView;
   }
 
   // Spawn a cluster of new cells around a center position
