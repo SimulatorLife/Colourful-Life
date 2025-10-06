@@ -188,6 +188,11 @@ export default class UIManager {
     this.profileGridMetrics = defaults.profileGridMetrics;
     this._lastSlowUiRender = Number.NEGATIVE_INFINITY; // shared throttle for fast-updating UI bits
     this._lastInteractionTotals = { fights: 0, cooperations: 0 };
+    this.simulationClock = {
+      ticks: 0,
+      elapsedSeconds: 0,
+      lastUpdatesPerSecond: this.getUpdatesPerSecond(),
+    };
     this.showDensity = defaults.showDensity;
     this.showEnergy = defaults.showEnergy;
     this.showFitness = defaults.showFitness;
@@ -3914,6 +3919,129 @@ export default class UIManager {
     });
   }
 
+  #resetSimulationClock() {
+    if (!this.simulationClock || typeof this.simulationClock !== "object") {
+      this.simulationClock = {
+        ticks: 0,
+        elapsedSeconds: 0,
+        lastUpdatesPerSecond: Math.max(1, this.getUpdatesPerSecond()),
+      };
+
+      return;
+    }
+
+    this.simulationClock.ticks = 0;
+    this.simulationClock.elapsedSeconds = 0;
+    this.simulationClock.lastUpdatesPerSecond = Math.max(1, this.getUpdatesPerSecond());
+  }
+
+  #resolveClockUpdatesPerSecond(candidate) {
+    if (!this.simulationClock || typeof this.simulationClock !== "object") {
+      this.simulationClock = {
+        ticks: 0,
+        elapsedSeconds: 0,
+        lastUpdatesPerSecond: Math.max(1, this.getUpdatesPerSecond()),
+      };
+    }
+
+    const normalized =
+      Number.isFinite(candidate) && candidate > 0 ? Number(candidate) : null;
+
+    if (normalized != null) {
+      this.simulationClock.lastUpdatesPerSecond = normalized;
+
+      return normalized;
+    }
+
+    const fallback =
+      Number.isFinite(this.simulationClock.lastUpdatesPerSecond) &&
+      this.simulationClock.lastUpdatesPerSecond > 0
+        ? this.simulationClock.lastUpdatesPerSecond
+        : Math.max(1, this.getUpdatesPerSecond());
+
+    this.simulationClock.lastUpdatesPerSecond = fallback;
+
+    return fallback;
+  }
+
+  #updateSimulationClock(totalTicks, updatesPerSecond) {
+    if (!this.simulationClock || typeof this.simulationClock !== "object") {
+      this.simulationClock = {
+        ticks: 0,
+        elapsedSeconds: 0,
+        lastUpdatesPerSecond: Math.max(1, this.getUpdatesPerSecond()),
+      };
+    }
+
+    const ticks = Number.isFinite(totalTicks)
+      ? Math.max(0, Math.floor(totalTicks))
+      : null;
+    const previousTicks = Number.isFinite(this.simulationClock.ticks)
+      ? Math.max(0, Math.floor(this.simulationClock.ticks))
+      : 0;
+
+    if (ticks != null && ticks < previousTicks) {
+      this.#resetSimulationClock();
+      this.simulationClock.ticks = ticks;
+
+      return {
+        ticks,
+        seconds: this.simulationClock.elapsedSeconds,
+        updatesPerSecond: this.#resolveClockUpdatesPerSecond(updatesPerSecond),
+      };
+    }
+
+    const cadence = this.#resolveClockUpdatesPerSecond(updatesPerSecond);
+
+    if (ticks != null && ticks > previousTicks) {
+      if (Number.isFinite(cadence) && cadence > 0) {
+        const delta = ticks - previousTicks;
+        const base = Number.isFinite(this.simulationClock.elapsedSeconds)
+          ? this.simulationClock.elapsedSeconds
+          : 0;
+
+        this.simulationClock.elapsedSeconds = base + delta / cadence;
+      }
+
+      this.simulationClock.ticks = ticks;
+    } else if (ticks != null) {
+      this.simulationClock.ticks = ticks;
+    }
+
+    return {
+      ticks: Number.isFinite(this.simulationClock.ticks)
+        ? Math.max(0, Math.floor(this.simulationClock.ticks))
+        : 0,
+      seconds: Number.isFinite(this.simulationClock.elapsedSeconds)
+        ? this.simulationClock.elapsedSeconds
+        : 0,
+      updatesPerSecond: cadence,
+    };
+  }
+
+  #formatElapsedTime(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return "—";
+    }
+
+    if (seconds < 60) {
+      return seconds >= 10 ? `${Math.round(seconds)}s` : `${seconds.toFixed(1)}s`;
+    }
+
+    const totalSeconds = Math.floor(seconds);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, "0")}:${secs
+        .toString()
+        .padStart(2, "0")}`;
+    }
+
+    return `${minutes}:${secs.toString().padStart(2, "0")}`;
+  }
+
   renderMetrics(stats, snapshot, environment = {}) {
     this.renderLifeEvents(stats, snapshot);
 
@@ -4016,6 +4144,38 @@ export default class UIManager {
       fights: totals.fights ?? lastTotals.fights ?? 0,
       cooperations: totals.cooperations ?? lastTotals.cooperations ?? 0,
     };
+
+    const clockState = this.#updateSimulationClock(
+      stats?.totals?.ticks,
+      environment?.updatesPerSecond,
+    );
+    const elapsedTimeLabel = this.#formatElapsedTime(clockState?.seconds);
+    const elapsedTimeTitle = Number.isFinite(clockState?.seconds)
+      ? `Approximately ${
+          clockState.seconds < 10
+            ? clockState.seconds.toFixed(1)
+            : Math.round(clockState.seconds)
+        } simulated seconds have elapsed since the current world spawned.`
+      : "Elapsed simulation time since the current world spawned.";
+    const tickDisplay = formatIfFinite(
+      clockState?.ticks,
+      (value) => Math.max(0, Math.floor(value)).toLocaleString(),
+      "—",
+    );
+
+    const clockSection = createSection("Simulation Clock");
+
+    appendMetricRow(clockSection, {
+      label: "Elapsed Time",
+      value: elapsedTimeLabel,
+      title: elapsedTimeTitle,
+    });
+
+    appendMetricRow(clockSection, {
+      label: "Ticks Elapsed",
+      value: tickDisplay,
+      title: "Total simulation ticks processed since the current world spawned.",
+    });
 
     const populationSection = createSection("Population Snapshot");
 

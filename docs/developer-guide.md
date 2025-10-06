@@ -25,6 +25,11 @@ extending tests, or polishing docs.
 > request fresh data. The cadence control moved out of the Leaderboard so the
 > refresh knob now lives beside the metrics it governs.
 
+> The Evolution Insights dashboard surfaces a Simulation Clock near the top of
+> the metrics feed. It reports both elapsed simulated time and the aggregate
+> tick count so you can align experiments with reproduction bursts or pacing
+> adjustments without reaching for external timers.
+
 > Tip: Run `npm run prepare` after cloning or pulling changes that touch the
 > `.husky/` directory to reinstall the Git hooks managed by Husky.
 

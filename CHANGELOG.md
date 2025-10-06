@@ -9,6 +9,8 @@ where practical.
 
 ### Added
 
+- Simulation clock in Evolution Insights showing elapsed simulated time and the
+  cumulative tick count so pacing stays visible without mental math.
 - Regression tests ensuring the insights, life events, and leaderboard panels
   queue updates while collapsed so performance optimisations remain covered.
 - Documentation audit covering the README, developer guide, architecture overview, and changelog to highlight headless usage, cache-reset tooling, supporting modules such as the cell model, and the overlay rendering pipeline.
