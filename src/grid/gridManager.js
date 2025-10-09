@@ -4807,6 +4807,40 @@ export default class GridManager {
     return clamp(1 - severity, sliderFloor, 1);
   }
 
+  #prioritizeMateCandidates(candidates, parentRow, parentCol, limit = 12) {
+    if (!Array.isArray(candidates) || candidates.length <= limit) {
+      return candidates;
+    }
+
+    const annotated = candidates.map((candidate) => {
+      const targetRow = Number.isFinite(candidate?.row)
+        ? candidate.row
+        : Number.isFinite(candidate?.target?.row)
+          ? candidate.target.row
+          : parentRow;
+      const targetCol = Number.isFinite(candidate?.col)
+        ? candidate.col
+        : Number.isFinite(candidate?.target?.col)
+          ? candidate.target.col
+          : parentCol;
+      const separation = Math.max(
+        Math.abs(targetRow - parentRow),
+        Math.abs(targetCol - parentCol),
+      );
+
+      return {
+        candidate,
+        separation: Number.isFinite(separation) ? separation : Number.POSITIVE_INFINITY,
+      };
+    });
+
+    annotated.sort((a, b) => a.separation - b.separation);
+
+    return annotated
+      .slice(0, Math.min(limit, annotated.length))
+      .map((entry) => entry.candidate);
+  }
+
   handleReproduction(
     row,
     col,
@@ -4816,7 +4850,9 @@ export default class GridManager {
   ) {
     // findTargets sorts potential partners into neutral mates and allies; fall back
     // to the allied list so strongly kin-seeking genomes still have options.
-    const matePool = mates.length > 0 ? mates : society;
+    const baseMatePool = mates.length > 0 ? mates : society;
+    const totalMateCandidates = Array.isArray(baseMatePool) ? baseMatePool.length : 0;
+    const matePool = this.#prioritizeMateCandidates(baseMatePool, row, col);
 
     if (matePool.length === 0) return false;
 
@@ -4838,6 +4874,8 @@ export default class GridManager {
       maxTileEnergy: this.maxTileEnergy,
       tileEnergy: parentTileEnergy,
       tileEnergyDelta: parentTileEnergyDelta,
+      parentRow: row,
+      parentCol: col,
     };
 
     const selection = cell.selectMateWeighted
@@ -5091,7 +5129,7 @@ export default class GridManager {
     const thrB = thrFracB * this.maxTileEnergy;
     const appetite = cell.diversityAppetite ?? 0;
     const bias = cell.matePreferenceBias ?? 0;
-    const selectionListSize = evaluated.length > 0 ? evaluated.length : matePool.length;
+    const evaluatedPoolSize = evaluated.length > 0 ? evaluated.length : matePool.length;
     const selectionKind =
       selectedMate && selectedMate.target ? selectionMode : "legacy";
 
@@ -5298,7 +5336,8 @@ export default class GridManager {
         appetite,
         bias,
         selectionMode: selectionKind,
-        poolSize: selectionListSize,
+        poolSize: totalMateCandidates > 0 ? totalMateCandidates : evaluatedPoolSize,
+        evaluatedPoolSize,
         success: reproduced,
         penalized: penalizedForSimilarity,
         penaltyMultiplier,
