@@ -4851,6 +4851,7 @@ export default class GridManager {
     // findTargets sorts potential partners into neutral mates and allies; fall back
     // to the allied list so strongly kin-seeking genomes still have options.
     const baseMatePool = mates.length > 0 ? mates : society;
+    const totalMateCandidates = Array.isArray(baseMatePool) ? baseMatePool.length : 0;
     const matePool = this.#prioritizeMateCandidates(baseMatePool, row, col);
 
     if (matePool.length === 0) return false;
@@ -5128,7 +5129,7 @@ export default class GridManager {
     const thrB = thrFracB * this.maxTileEnergy;
     const appetite = cell.diversityAppetite ?? 0;
     const bias = cell.matePreferenceBias ?? 0;
-    const selectionListSize = evaluated.length > 0 ? evaluated.length : matePool.length;
+    const evaluatedPoolSize = evaluated.length > 0 ? evaluated.length : matePool.length;
     const selectionKind =
       selectedMate && selectedMate.target ? selectionMode : "legacy";
 
@@ -5335,7 +5336,8 @@ export default class GridManager {
         appetite,
         bias,
         selectionMode: selectionKind,
-        poolSize: selectionListSize,
+        poolSize: totalMateCandidates > 0 ? totalMateCandidates : evaluatedPoolSize,
+        evaluatedPoolSize,
         success: reproduced,
         penalized: penalizedForSimilarity,
         penaltyMultiplier,
