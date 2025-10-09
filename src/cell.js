@@ -590,6 +590,16 @@ export default class Cell {
 
   scorePotentialMates(potentialMates = [], context = {}) {
     const scored = [];
+    const parentRow = Number.isFinite(context?.parentRow)
+      ? context.parentRow
+      : Number.isFinite(this.row)
+        ? this.row
+        : null;
+    const parentCol = Number.isFinite(context?.parentCol)
+      ? context.parentCol
+      : Number.isFinite(this.col)
+        ? this.col
+        : null;
 
     for (let i = 0; i < potentialMates.length; i++) {
       const mate = potentialMates[i];
@@ -637,6 +647,39 @@ export default class Cell {
             const blended = lerp(baseWeight, neuralLift, influence);
 
             evaluated.selectionWeight = Math.max(0.0001, blended);
+          }
+        }
+
+        if (parentRow != null && parentCol != null) {
+          const targetRow = Number.isFinite(mate.row)
+            ? mate.row
+            : Number.isFinite(mate.target?.row)
+              ? mate.target.row
+              : parentRow;
+          const targetCol = Number.isFinite(mate.col)
+            ? mate.col
+            : Number.isFinite(mate.target?.col)
+              ? mate.target.col
+              : parentCol;
+          const separation = Math.max(
+            Math.abs(targetRow - parentRow),
+            Math.abs(targetCol - parentCol),
+          );
+
+          if (Number.isFinite(separation) && separation > 1) {
+            const offset = separation - 1;
+            const weightScale = 1 / (1 + offset * 0.5);
+
+            evaluated.selectionWeight = Math.max(
+              0.0001,
+              (evaluated.selectionWeight || 0.0001) * weightScale,
+            );
+
+            if (typeof evaluated.preferenceScore === "number") {
+              evaluated.preferenceScore -= offset * 0.1;
+            } else {
+              evaluated.preferenceScore = -offset * 0.1;
+            }
           }
         }
 
