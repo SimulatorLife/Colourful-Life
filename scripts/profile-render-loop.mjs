@@ -103,10 +103,13 @@ for (let i = 0; i < 3; i++) {
 }
 
 const samples = [];
+
 for (let i = 0; i < iterations; i++) {
   const start = performance.now();
+
   manager.draw({ renderStrategy: "image-data", showObstacles: false });
   const end = performance.now();
+
   samples.push(end - start);
 }
 
