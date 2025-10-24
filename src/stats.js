@@ -285,6 +285,7 @@ export default class Stats {
   #traitComputes;
   #traitThresholds;
   #rng;
+  #pairSampleScratch;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
    * @param {{
@@ -350,6 +351,7 @@ export default class Stats {
       history: createHistoryRing(240),
     };
     this.starvationRateSmoothed = 0;
+    this.#pairSampleScratch = new Uint32Array(0);
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -1109,36 +1111,68 @@ export default class Stats {
       return Math.min(range - 1, Math.floor(normalized * range));
     };
 
-    const selectedPairs = new Set();
+    let samples = this.#pairSampleScratch;
+
+    if (!samples || samples.length < sampleLimit) {
+      samples = new Uint32Array(sampleLimit);
+      this.#pairSampleScratch = samples;
+    }
+
+    let filled = 0;
 
     for (let i = possiblePairs - sampleLimit; i < possiblePairs; i += 1) {
       const pick = sampleIndex(i + 1);
+      let isDuplicate = false;
 
-      if (selectedPairs.has(pick)) {
-        selectedPairs.add(i);
-      } else {
-        selectedPairs.add(pick);
+      for (let idx = 0; idx < filled; idx += 1) {
+        if (samples[idx] === pick) {
+          isDuplicate = true;
+          break;
+        }
+      }
+
+      if (isDuplicate) {
+        if (filled < sampleLimit) {
+          samples[filled] = i;
+          filled += 1;
+        }
+      } else if (filled < sampleLimit) {
+        samples[filled] = pick;
+        filled += 1;
       }
     }
 
-    if (selectedPairs.size < sampleLimit) {
+    if (filled < sampleLimit) {
       for (
-        let index = 0;
-        index < possiblePairs && selectedPairs.size < sampleLimit;
-        index += 1
+        let candidate = 0;
+        candidate < possiblePairs && filled < sampleLimit;
+        candidate += 1
       ) {
-        selectedPairs.add(index);
+        let exists = false;
+
+        for (let idx = 0; idx < filled; idx += 1) {
+          if (samples[idx] === candidate) {
+            exists = true;
+            break;
+          }
+        }
+
+        if (!exists) {
+          samples[filled] = candidate;
+          filled += 1;
+        }
       }
     }
 
-    if (selectedPairs.size === 0) {
+    if (filled === 0) {
       return 0;
     }
 
     let sum = 0;
     let count = 0;
 
-    for (const pairIndex of selectedPairs) {
+    for (let idx = 0; idx < filled; idx += 1) {
+      const pairIndex = samples[idx];
       const { first, second } = Stats.#pairFromCombinationIndex(
         pairIndex,
         populationSize,
@@ -1155,7 +1189,7 @@ export default class Stats {
     return count > 0 ? sum / count : 0;
   }
 
-  static #pairFromCombinationIndex(index, populationSize) {
+  static #pairFromCombinationIndexLinear(index, populationSize) {
     let remaining = index;
     let first = 0;
     let span = populationSize - 1;
@@ -1167,6 +1201,54 @@ export default class Stats {
     }
 
     const second = first + 1 + remaining;
+
+    return { first, second };
+  }
+
+  static #pairFromCombinationIndex(index, populationSize) {
+    if (!(populationSize > 1)) {
+      return { first: 0, second: 0 };
+    }
+
+    const totalPairs = (populationSize * (populationSize - 1)) / 2;
+
+    if (!(totalPairs > 0)) {
+      return { first: 0, second: 0 };
+    }
+
+    const numericIndex = Math.floor(Number.isFinite(index) ? index : 0);
+    let normalizedIndex = numericIndex;
+
+    if (normalizedIndex < 0) {
+      normalizedIndex = 0;
+    } else if (normalizedIndex >= totalPairs) {
+      normalizedIndex = totalPairs - 1;
+    }
+
+    if (populationSize <= 64) {
+      return Stats.#pairFromCombinationIndexLinear(normalizedIndex, populationSize);
+    }
+
+    const twoNMinus1 = populationSize * 2 - 1;
+    const discriminant = Math.max(0, twoNMinus1 * twoNMinus1 - 8 * normalizedIndex);
+    let first = Math.floor((twoNMinus1 - Math.sqrt(discriminant)) / 2);
+    const maxFirst = populationSize - 2;
+
+    if (first < 0 || !Number.isFinite(first)) {
+      first = 0;
+    } else if (first > maxFirst) {
+      first = maxFirst;
+    }
+
+    const pairsBefore = (first * (2 * populationSize - first - 1)) / 2;
+    let second = first + 1 + (normalizedIndex - pairsBefore);
+    const maxSecond = populationSize - 1;
+
+    if (!Number.isFinite(second) || second <= first) {
+      second = first + 1;
+    } else if (second > maxSecond) {
+      second = maxSecond;
+    }
 
     return { first, second };
   }
