@@ -15,6 +15,7 @@ import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
 import {
   clamp,
   sanitizeNumber,
+  sanitizePositiveInteger,
   toFiniteOrNull,
   invokeWithErrorBoundary,
   coerceBoolean,
@@ -838,30 +839,15 @@ export default class SimulationEngine {
     const presetOptions = opts.presetOptions;
     const reseed = opts.reseed === true;
 
-    let targetCellSize = sanitizeNumber(opts.cellSize, {
+    const targetCellSize = sanitizePositiveInteger(opts.cellSize, {
       fallback: this.cellSize,
-      round: Math.round,
     });
-    let targetRows = sanitizeNumber(opts.rows, {
+    const targetRows = sanitizePositiveInteger(opts.rows, {
       fallback: this.rows,
-      round: Math.floor,
     });
-    let targetCols = sanitizeNumber(opts.cols, {
+    const targetCols = sanitizePositiveInteger(opts.cols, {
       fallback: this.cols,
-      round: Math.floor,
     });
-
-    if (!Number.isFinite(targetCellSize) || targetCellSize < 1) {
-      targetCellSize = this.cellSize;
-    }
-
-    if (!Number.isFinite(targetRows) || targetRows < 1) {
-      targetRows = this.rows;
-    }
-
-    if (!Number.isFinite(targetCols) || targetCols < 1) {
-      targetCols = this.cols;
-    }
 
     const changed =
       targetCellSize !== this.cellSize ||

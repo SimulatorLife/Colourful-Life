@@ -3,6 +3,7 @@ import {
   clamp,
   randomRange,
   sanitizeNumber,
+  sanitizePositiveInteger,
   warnOnce,
   invokeWithErrorBoundary,
 } from "../utils.js";
@@ -273,15 +274,11 @@ export default class EventManager {
   }
 
   setDimensions(rows, cols) {
-    const nextRows = sanitizeNumber(rows, {
+    const nextRows = sanitizePositiveInteger(rows, {
       fallback: this.rows,
-      min: 1,
-      round: Math.floor,
     });
-    const nextCols = sanitizeNumber(cols, {
+    const nextCols = sanitizePositiveInteger(cols, {
       fallback: this.cols,
-      min: 1,
-      round: Math.floor,
     });
 
     if (nextRows === this.rows && nextCols === this.cols) {

@@ -5,6 +5,7 @@ import {
   createRankedBuffer,
   warnOnce,
   sanitizeNumber,
+  sanitizePositiveInteger,
 } from "../utils.js";
 import DNA from "../genome.js";
 import Cell from "../cell.js";
@@ -2367,19 +2368,14 @@ export default class GridManager {
 
   resize(rows, cols, options = {}) {
     const opts = options && typeof options === "object" ? options : {};
-    const nextRows = sanitizeNumber(rows, {
+    const nextRows = sanitizePositiveInteger(rows, {
       fallback: this.rows,
-      min: 1,
-      round: Math.floor,
     });
-    const nextCols = sanitizeNumber(cols, {
+    const nextCols = sanitizePositiveInteger(cols, {
       fallback: this.cols,
-      min: 1,
-      round: Math.floor,
     });
-    const nextCellSize = sanitizeNumber(opts.cellSize, {
+    const nextCellSize = sanitizePositiveInteger(opts.cellSize, {
       fallback: this.cellSize,
-      min: 1,
     });
 
     const changed =
@@ -2391,9 +2387,9 @@ export default class GridManager {
       return { rows: this.rows, cols: this.cols, cellSize: this.cellSize };
     }
 
-    const rowsInt = Math.max(1, Math.floor(nextRows));
-    const colsInt = Math.max(1, Math.floor(nextCols));
-    const cellSizeValue = Math.max(1, Math.floor(nextCellSize));
+    const rowsInt = nextRows;
+    const colsInt = nextCols;
+    const cellSizeValue = nextCellSize;
     const baseEnergy = this.maxTileEnergy * INITIAL_TILE_ENERGY_FRACTION;
     const shouldReseed = opts.reseed === true;
     const preservePopulation = !shouldReseed;
