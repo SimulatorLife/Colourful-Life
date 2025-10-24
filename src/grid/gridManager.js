@@ -2885,13 +2885,10 @@ export default class GridManager {
 
       if (!nextRow || !energyRow) return;
 
-      if (occupantRegenRow) occupantRegenRow[c] = 0;
-
       if (obstacleRow?.[c]) {
         nextRow[c] = 0;
         if (energyRow[c] !== 0) energyRow[c] = 0;
         if (deltaRow) deltaRow[c] = 0;
-        if (occupantRegenRow) occupantRegenRow[c] = 0;
 
         return;
       }
@@ -3064,6 +3061,9 @@ export default class GridManager {
           const upObstacleRow = r > 0 ? obstacles[r - 1] : null;
           const downObstacleRow = r < rows - 1 ? obstacles[r + 1] : null;
           const occupantRegenRow = occupantRegenGrid ? occupantRegenGrid[r] : null;
+
+          if (occupantRegenRow) occupantRegenRow.fill(0);
+
           const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
 
           if (usingSegmentedEvents && rowEvents.length > 1) {
@@ -3144,6 +3144,9 @@ export default class GridManager {
         const upObstacleRow = r > 0 ? obstacles[r - 1] : null;
         const downObstacleRow = r < rows - 1 ? obstacles[r + 1] : null;
         const occupantRegenRow = occupantRegenGrid ? occupantRegenGrid[r] : null;
+
+        if (occupantRegenRow) occupantRegenRow.fill(0);
+
         const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
         const rowHasEvents = Boolean(eventOptions && rowEvents.length > 0);
 
