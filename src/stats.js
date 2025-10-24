@@ -1032,10 +1032,7 @@ export default class Stats {
       : numericMaxSamples === Infinity
         ? Infinity
         : 0;
-    const validCells = [];
-
-    for (let i = 0; i < cellSources.length; i += 1) {
-      const source = cellSources[i];
+    const validCells = cellSources.flatMap((source) => {
       const cell =
         source &&
         typeof source === "object" &&
@@ -1048,9 +1045,11 @@ export default class Stats {
         typeof cell === "object" &&
         typeof cell.dna?.similarity === "function"
       ) {
-        validCells.push(cell);
+        return [cell];
       }
-    }
+
+      return [];
+    });
 
     const populationSize = validCells.length;
 
