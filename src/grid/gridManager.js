@@ -3216,7 +3216,27 @@ export default class GridManager {
           const downObstacleRow = r < rows - 1 ? obstacles[r + 1] : null;
           const occupantRegenRow = occupantRegenGrid ? occupantRegenGrid[r] : null;
 
-          if (occupantRegenRow) occupantRegenRow.fill(0);
+          const columnCount = columns.length;
+
+          if (columnCount > 1) {
+            columns.sort((a, b) => a - b);
+          }
+
+          if (occupantRegenRow) {
+            const preferFill = columnCount * 2 >= cols;
+
+            if (preferFill) {
+              occupantRegenRow.fill(0);
+            } else {
+              for (let j = 0; j < columnCount; j++) {
+                const targetCol = columns[j];
+
+                if (targetCol >= 0 && targetCol < cols) {
+                  occupantRegenRow[targetCol] = 0;
+                }
+              }
+            }
+          }
 
           const rowEvents = hasEvents
             ? eventsByRow
@@ -3225,8 +3245,6 @@ export default class GridManager {
             : EMPTY_EVENT_LIST;
           const rowHasEvents = hasEvents && rowEvents.length > 0;
           const useSegmentedForRow = rowHasEvents && usingSegmentedEvents;
-
-          columns.sort((a, b) => a - b);
 
           const columnEventsScratch =
             useSegmentedForRow && eventOptions ? this.#getColumnEventScratch() : null;
