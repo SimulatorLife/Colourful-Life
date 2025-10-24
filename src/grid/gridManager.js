@@ -290,6 +290,7 @@ export default class GridManager {
   #segmentWindowScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
+  #activeCellSnapshotScratch = null;
   #eventModifierScratch = null;
   #sparseDirtyColumnsScratch = null;
   #sparseDirtyRowsScratch = null;
@@ -418,6 +419,30 @@ export default class GridManager {
     this.#columnEventScratch.length = 0;
 
     return this.#columnEventScratch;
+  }
+
+  #acquireActiveCellSnapshot() {
+    if (!this.#activeCellSnapshotScratch) {
+      this.#activeCellSnapshotScratch = [];
+    }
+
+    const scratch = this.#activeCellSnapshotScratch;
+
+    scratch.length = 0;
+
+    if (this.activeCells && this.activeCells.size > 0) {
+      for (const cell of this.activeCells) {
+        scratch.push(cell);
+      }
+    }
+
+    return scratch;
+  }
+
+  #releaseActiveCellSnapshot() {
+    if (this.#activeCellSnapshotScratch) {
+      this.#activeCellSnapshotScratch.length = 0;
+    }
   }
 
   #getEventModifierScratch() {
@@ -5990,29 +6015,35 @@ export default class GridManager {
 
     this.densityGrid = densityGrid;
     const processed = new WeakSet();
-    const activeSnapshot = Array.from(this.activeCells);
+    const activeSnapshot = this.#acquireActiveCellSnapshot();
 
-    for (const cell of activeSnapshot) {
-      if (!cell) continue;
-      const location = this.#resolveCellCoordinates(cell);
+    try {
+      for (let index = 0; index < activeSnapshot.length; index += 1) {
+        const cell = activeSnapshot[index];
 
-      if (!location) continue;
+        if (!cell) continue;
+        const location = this.#resolveCellCoordinates(cell);
 
-      const { row, col } = location;
+        if (!location) continue;
 
-      this.processCell(row, col, {
-        stats,
-        eventManager,
-        densityGrid,
-        processed,
-        densityEffectMultiplier,
-        societySimilarity,
-        enemySimilarity,
-        eventStrengthMultiplier,
-        mutationMultiplier,
-        combatEdgeSharpness: combatSharpness,
-        combatTerritoryEdgeFactor: territoryFactor,
-      });
+        const { row, col } = location;
+
+        this.processCell(row, col, {
+          stats,
+          eventManager,
+          densityGrid,
+          processed,
+          densityEffectMultiplier,
+          societySimilarity,
+          enemySimilarity,
+          eventStrengthMultiplier,
+          mutationMultiplier,
+          combatEdgeSharpness: combatSharpness,
+          combatTerritoryEdgeFactor: territoryFactor,
+        });
+      }
+    } finally {
+      this.#releaseActiveCellSnapshot();
     }
 
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
