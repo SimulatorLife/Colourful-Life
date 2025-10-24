@@ -4627,12 +4627,76 @@ export default class Cell {
 
         return;
       case "pursue": {
-        const target = nearestEnemy || nearestMate || nearestAlly;
+        let targetedEnemy = null;
+
+        if (
+          Array.isArray(enemies) &&
+          enemies.length > 0 &&
+          typeof this.chooseEnemyTarget === "function"
+        ) {
+          targetedEnemy = this.chooseEnemyTarget(enemies, {
+            maxTileEnergy: movementContext.maxTileEnergy,
+          });
+        }
+
+        let target = targetedEnemy || nearestEnemy || nearestMate || nearestAlly;
+        let source = null;
+
+        if (targetedEnemy) {
+          const targetingOutcome = this.#getDecisionOutcome("targeting");
+          const usedTargetingNetwork = Boolean(targetingOutcome?.usedNetwork);
+
+          source = usedTargetingNetwork ? "neuralTargeting" : "targeting";
+
+          const summary = this.#summarizePursuitTarget(target, {
+            origin: source,
+            row,
+            col,
+          });
+
+          if (summary && typeof moveToTarget === "function") {
+            moveToTarget(gridArr, row, col, summary.row, summary.col, rows, cols);
+
+            this.#assignDecisionOutcome("movement", {
+              pursueTarget: summary,
+              pursueUsedTargetingNetwork: usedTargetingNetwork,
+            });
+
+            return;
+          }
+
+          // If the neural target could not be resolved, fall back to other options.
+          target = null;
+        }
+
+        if (!target && nearestEnemy) {
+          target = nearestEnemy;
+          source = "nearestEnemy";
+        } else if (!target && nearestMate) {
+          target = nearestMate;
+          source = "nearestMate";
+        } else if (!target && nearestAlly) {
+          target = nearestAlly;
+          source = "nearestAlly";
+        }
 
         if (target && typeof moveToTarget === "function") {
-          moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
+          const summary = this.#summarizePursuitTarget(target, {
+            origin: source,
+            row,
+            col,
+          });
 
-          return;
+          if (summary) {
+            moveToTarget(gridArr, row, col, summary.row, summary.col, rows, cols);
+
+            this.#assignDecisionOutcome("movement", {
+              pursueTarget: summary,
+              pursueUsedTargetingNetwork: false,
+            });
+
+            return;
+          }
         }
 
         break;
@@ -4668,6 +4732,66 @@ export default class Cell {
     if (typeof moveRandomly === "function") {
       moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
     }
+  }
+
+  #summarizePursuitTarget(targetEntry, { origin = null, row, col } = {}) {
+    if (!targetEntry) return null;
+
+    const resolvedRow = Number.isFinite(targetEntry?.row)
+      ? targetEntry.row
+      : Number.isFinite(targetEntry?.target?.row)
+        ? targetEntry.target.row
+        : null;
+    const resolvedCol = Number.isFinite(targetEntry?.col)
+      ? targetEntry.col
+      : Number.isFinite(targetEntry?.target?.col)
+        ? targetEntry.target.col
+        : null;
+
+    if (!Number.isFinite(resolvedRow) || !Number.isFinite(resolvedCol)) {
+      return null;
+    }
+
+    const originRow = Number.isFinite(row) ? row : this.row;
+    const originCol = Number.isFinite(col) ? col : this.col;
+    const summary = {
+      row: resolvedRow,
+      col: resolvedCol,
+    };
+
+    if (typeof origin === "string" && origin.length > 0) {
+      summary.source = origin;
+    }
+
+    if (Number.isFinite(originRow) && Number.isFinite(originCol)) {
+      const distance = Math.max(
+        Math.abs(resolvedRow - originRow),
+        Math.abs(resolvedCol - originCol),
+      );
+
+      if (Number.isFinite(distance)) {
+        summary.distance = distance;
+      }
+    }
+
+    const targetCell = targetEntry?.target ?? null;
+
+    if (targetCell) {
+      if (Number.isFinite(targetCell.energy)) {
+        summary.energy = targetCell.energy;
+      }
+
+      const similarity = this.#safeSimilarityTo(targetCell, {
+        context: "movement pursue target similarity",
+        fallback: null,
+      });
+
+      if (Number.isFinite(similarity)) {
+        summary.similarity = clamp(similarity, 0, 1);
+      }
+    }
+
+    return summary;
   }
 
   getReproductionReach({
