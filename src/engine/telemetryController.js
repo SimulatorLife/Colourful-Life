@@ -196,54 +196,48 @@ export default class TelemetryController {
     const ensureStat = (value, fallback = 0) =>
       Number.isFinite(value) ? value : fallback;
 
-    if (entries) {
-      for (let i = 0; i < entries.length; i += 1) {
-        const entry = entries[i];
-
-        if (!entry || typeof entry !== "object") {
-          continue;
-        }
-
-        const cellStats =
-          entry.cell && typeof entry.cell === "object" ? entry.cell : null;
-        const fallbackStat = (key) => ensureStat(cellStats?.[key], 0);
-
-        entry.offspring = ensureStat(entry.offspring, fallbackStat("offspring"));
-        entry.fightsWon = ensureStat(entry.fightsWon, fallbackStat("fightsWon"));
-        entry.age = ensureStat(entry.age, fallbackStat("age"));
-
-        if (entry.color == null) {
-          const colorFromCell =
-            typeof cellStats?.color === "string" ? cellStats.color : null;
-
-          entry.color = colorFromCell;
-        }
-
-        if ("cell" in entry) {
-          delete entry.cell;
-        }
+    entries?.forEach((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return;
       }
-    }
+
+      const cellStats =
+        entry.cell && typeof entry.cell === "object" ? entry.cell : null;
+      const fallbackStat = (key) => ensureStat(cellStats?.[key], 0);
+
+      entry.offspring = ensureStat(entry.offspring, fallbackStat("offspring"));
+      entry.fightsWon = ensureStat(entry.fightsWon, fallbackStat("fightsWon"));
+      entry.age = ensureStat(entry.age, fallbackStat("age"));
+
+      if (entry.color == null) {
+        const colorFromCell =
+          typeof cellStats?.color === "string" ? cellStats.color : null;
+
+        entry.color = colorFromCell;
+      }
+
+      if ("cell" in entry) {
+        delete entry.cell;
+      }
+    });
 
     const brainSnapshots = Array.isArray(snapshot.brainSnapshots)
       ? snapshot.brainSnapshots
       : null;
 
-    if (brainSnapshots) {
-      for (let i = 0; i < brainSnapshots.length; i += 1) {
-        const entry = brainSnapshots[i];
+    brainSnapshots?.forEach((entry, index) => {
+      if (!entry || typeof entry !== "object") return;
 
-        if (!entry || typeof entry !== "object") continue;
+      const entryColor = entries?.[index]?.color;
 
-        if (entry.color == null && typeof entries?.[i]?.color === "string") {
-          entry.color = entries[i].color;
-        }
-
-        if ("cell" in entry) {
-          delete entry.cell;
-        }
+      if (entry.color == null && typeof entryColor === "string") {
+        entry.color = entryColor;
       }
-    }
+
+      if ("cell" in entry) {
+        delete entry.cell;
+      }
+    });
 
     return snapshot;
   }
