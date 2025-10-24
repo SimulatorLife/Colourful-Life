@@ -4085,15 +4085,67 @@ export default class UIManager {
     const interactionTotal = fightDelta + coopDelta;
 
     const appendMetricRow = (container, { label, value, title, valueClass }) => {
-      this.#appendControlRow(container, { label, value, title, valueClass });
+      const card = document.createElement("article");
+
+      card.className = "metrics-stat";
+      card.setAttribute("role", "group");
+      if (typeof label === "string" && label.length > 0) {
+        card.setAttribute("data-metric-label", label);
+      }
+
+      const labelEl = document.createElement("span");
+
+      labelEl.className = "metrics-stat-label";
+      labelEl.textContent = label ?? "";
+
+      const valueEl = document.createElement("span");
+
+      valueEl.className = "metrics-stat-value";
+      const normalizedValueClass =
+        valueClass === "control-value--left" ? "metrics-stat-value--left" : valueClass;
+
+      if (typeof normalizedValueClass === "string" && normalizedValueClass.length > 0) {
+        valueEl.classList.add(normalizedValueClass);
+      }
+
+      let displayValue = "—";
+      const isDomNode = typeof Node !== "undefined" && value instanceof Node;
+
+      if (isDomNode) {
+        displayValue = value.textContent?.trim() || "—";
+        valueEl.appendChild(value);
+      } else if (value != null) {
+        displayValue = String(value);
+        valueEl.textContent = displayValue;
+      } else {
+        valueEl.textContent = displayValue;
+      }
+
+      card.appendChild(labelEl);
+      card.appendChild(valueEl);
+
+      if (typeof title === "string" && title.length > 0) {
+        card.title = title;
+        card.setAttribute("aria-label", `${label}: ${displayValue}`);
+      } else {
+        card.title = `${label}: ${displayValue}`;
+        card.setAttribute("aria-label", card.title);
+      }
+
+      container.appendChild(card);
+
+      return card;
     };
 
     const createSection = (title, options = {}) => {
-      const { wide = false } = options;
+      const { wide = false, layout = "grid", accent } = options;
       const section = document.createElement("section");
 
       section.className = "metrics-section";
       if (wide) section.classList.add("metrics-section--wide");
+      if (typeof accent === "string" && accent.length > 0) {
+        section.style.setProperty("--metrics-section-accent", accent);
+      }
       const heading = document.createElement("h4");
 
       heading.className = "metrics-section-title";
@@ -4102,6 +4154,9 @@ export default class UIManager {
       const body = document.createElement("div");
 
       body.className = "metrics-section-body";
+      if (layout === "grid") {
+        body.classList.add("metrics-section-body--grid");
+      }
       section.appendChild(body);
       this.metricsBox.appendChild(section);
 
@@ -4208,7 +4263,9 @@ export default class UIManager {
 
     const cadenceTitle = cadenceTitleParts.join(" ");
 
-    const clockSection = createSection("Simulation Clock");
+    const clockSection = createSection("Simulation Clock", {
+      accent: "var(--color-metric-growth)",
+    });
 
     appendMetricRow(clockSection, {
       label: "Elapsed Time",
@@ -4227,7 +4284,9 @@ export default class UIManager {
       title: cadenceTitle,
     });
 
-    const populationSection = createSection("Population Snapshot");
+    const populationSection = createSection("Population Snapshot", {
+      accent: "var(--color-metric-population)",
+    });
 
     appendMetricRow(populationSection, {
       label: "Population",
@@ -4259,7 +4318,9 @@ export default class UIManager {
         title: "Global multiplier applied to mutation chance and range for offspring",
       });
     }
-    const interactionSection = createSection("Interaction Pulse");
+    const interactionSection = createSection("Interaction Pulse", {
+      accent: "var(--color-life-birth)",
+    });
 
     appendMetricRow(interactionSection, {
       label: "Skirmishes",
@@ -4278,7 +4339,9 @@ export default class UIManager {
         "Share of cooperative interactions vs total interactions recorded for this update",
     });
 
-    const vitalitySection = createSection("Vitality Signals");
+    const vitalitySection = createSection("Vitality Signals", {
+      accent: "var(--color-metric-energy)",
+    });
 
     appendMetricRow(vitalitySection, {
       label: "Mean Energy",
@@ -4296,7 +4359,9 @@ export default class UIManager {
       title: "Estimated mean pairwise genetic distance",
     });
 
-    const environmentSection = createSection("Environmental Events");
+    const environmentSection = createSection("Environmental Events", {
+      accent: "var(--color-metric-event-strength)",
+    });
 
     appendMetricRow(environmentSection, {
       label: "Global Strength Multiplier",
@@ -4332,7 +4397,9 @@ export default class UIManager {
       });
     }
 
-    const reproductionSection = createSection("Reproduction Trends");
+    const reproductionSection = createSection("Reproduction Trends", {
+      accent: "var(--color-metric-mutation)",
+    });
 
     if (typeof s.blockedMatings === "number") {
       appendMetricRow(reproductionSection, {
@@ -4394,7 +4461,11 @@ export default class UIManager {
       : null;
 
     if (traitPresence) {
-      const traitSection = createSection("Trait Presence", { wide: true });
+      const traitSection = createSection("Trait Presence", {
+        wide: true,
+        layout: "stack",
+        accent: "var(--color-metric-diversity)",
+      });
       const traitGroup = document.createElement("div");
 
       traitGroup.className = "metrics-group trait-metrics";
