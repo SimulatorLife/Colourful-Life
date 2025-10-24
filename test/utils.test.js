@@ -5,6 +5,7 @@ import {
   clamp,
   clamp01,
   sanitizeNumber,
+  sanitizePositiveInteger,
   cloneTracePayload,
   createRankedBuffer,
   createRNG,
@@ -129,6 +130,39 @@ test("sanitizeNumber normalizes input with bounds and rounding strategies", () =
     }),
     42,
     "falls back when rounding produces non-finite values",
+  );
+});
+
+test("sanitizePositiveInteger coerces dimension-like input safely", () => {
+  assert.is(
+    sanitizePositiveInteger("9.7", { fallback: 5 }),
+    9,
+    "floors numeric-like strings",
+  );
+  assert.is(
+    sanitizePositiveInteger("oops", { fallback: 4 }),
+    4,
+    "falls back for invalid input",
+  );
+  assert.is(
+    sanitizePositiveInteger(0, { fallback: 3 }),
+    3,
+    "returns fallback when input falls below minimum bound",
+  );
+  assert.is(
+    sanitizePositiveInteger(500, { fallback: 3, max: 100 }),
+    3,
+    "returns fallback when exceeding max bound",
+  );
+  assert.is(
+    sanitizePositiveInteger(undefined, { fallback: 0 }),
+    1,
+    "clamps fallback into the minimum bound",
+  );
+  assert.is(
+    sanitizePositiveInteger(500, { fallback: 250, max: 100 }),
+    100,
+    "clamps fallback into the configured range",
   );
 });
 

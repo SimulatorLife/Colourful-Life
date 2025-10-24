@@ -142,6 +142,52 @@ export function sanitizeNumber(
 }
 
 /**
+ * Normalizes loosely-typed input into a positive integer using the provided
+ * fallback when coercion fails. Useful for dimension-like values (rows, cols,
+ * cell sizes) that must stay above a minimum bound. Values are floored to the
+ * nearest integer to preserve historical behaviour.
+ *
+ * @param {any} value - Candidate value to normalize.
+ * @param {Object} [options]
+ * @param {number} [options.fallback=1] - Value returned when normalization
+ *   fails. The fallback is also clamped to the provided range.
+ * @param {number} [options.min=1] - Minimum allowed integer. When inputs fall
+ *   below this boundary the fallback is returned.
+ * @param {number} [options.max=Number.POSITIVE_INFINITY] - Maximum allowed
+ *   integer. When inputs exceed this boundary the fallback is returned.
+ * @returns {number} Normalized positive integer value.
+ */
+export function sanitizePositiveInteger(
+  value,
+  { fallback = 1, min = 1, max = Number.POSITIVE_INFINITY } = {},
+) {
+  const fallbackCandidate = sanitizeNumber(fallback, {
+    fallback: min,
+    round: Math.floor,
+  });
+  const fallbackFloored = Number.isFinite(fallbackCandidate)
+    ? Math.floor(fallbackCandidate)
+    : min;
+  const sanitizedFallback = clamp(Math.max(min, fallbackFloored), min, max);
+  const candidate = sanitizeNumber(value, {
+    fallback: Number.NaN,
+    round: Math.floor,
+  });
+
+  if (!Number.isFinite(candidate)) {
+    return sanitizedFallback;
+  }
+
+  const floored = Math.floor(candidate);
+
+  if (floored < min || floored > max) {
+    return sanitizedFallback;
+  }
+
+  return floored;
+}
+
+/**
  * Converts an arbitrary value to a finite `number` or `null` when conversion
  * fails. Useful when callers need to discard invalid inputs such as `NaN`,
  * infinities, empty strings, or non-numeric primitives before applying further
