@@ -212,25 +212,32 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
 }
 
 function createFitnessPalette(steps, hue) {
-  const palette = [];
   const minLightness = 32;
   const maxLightness = 82;
   const saturation = 88;
+  const numericSteps = Number(steps);
 
-  if (steps <= 1) {
+  if (!Number.isFinite(numericSteps)) {
+    return [];
+  }
+
+  const stepCount = Math.max(0, Math.ceil(numericSteps));
+
+  if (stepCount <= 1) {
     const midLightness = (minLightness + maxLightness) / 2;
 
     return [`hsl(${hue}, ${saturation}%, ${midLightness.toFixed(1)}%)`];
   }
 
-  for (let i = 0; i < steps; i++) {
-    const t = i / (steps - 1);
-    const lightness = maxLightness - (maxLightness - minLightness) * t;
+  const denominator = numericSteps - 1;
+  const span = maxLightness - minLightness;
 
-    palette.push(`hsl(${hue}, ${saturation}%, ${lightness.toFixed(1)}%)`);
-  }
+  return Array.from({ length: stepCount }, (_, index) => {
+    const t = denominator !== 0 ? index / denominator : 0;
+    const lightness = maxLightness - span * t;
 
-  return palette;
+    return `hsl(${hue}, ${saturation}%, ${lightness.toFixed(1)}%)`;
+  });
 }
 
 /**
