@@ -55,9 +55,9 @@ where practical.
 - Expanded JSDoc coverage for overlay helpers (celebration glow, life events,
   density/energy/fitness heatmaps, selection zones) so exported drawing
   utilities remain self-documenting.
-- Relocated the "Dashboard Refresh Interval" slider into Evolution Insights so
-  cadence controls live alongside the analytics they govern while keeping the
-  leaderboard on the shared refresh schedule.
+- Relocated the "Dashboard Refresh Interval" slider into the Leaderboard panel
+  so cadence controls sit beside the scoreboard they pace while clarifying that
+  Evolution Insights shares the same refresh schedule.
 - Lowered the default energy regeneration rate to `0.012`, trimmed diffusion to
   `0.05`, and raised the density penalty to `0.42` so crowded hubs return less
   energy each tick while sparse tiles still recover reliably.
