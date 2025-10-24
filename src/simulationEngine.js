@@ -849,12 +849,19 @@ export default class SimulationEngine {
       fallback: this.cols,
     });
 
-    const changed =
+    const geometryChanged =
       targetCellSize !== this.cellSize ||
       targetRows !== this.rows ||
       targetCols !== this.cols;
+    const wantsPresetUpdate =
+      randomizeObstacles ||
+      (typeof obstaclePreset === "string" && obstaclePreset.trim().length > 0) ||
+      typeof presetOptions === "function" ||
+      (presetOptions &&
+        typeof presetOptions === "object" &&
+        Object.keys(presetOptions).length > 0);
 
-    if (!changed) {
+    if (!geometryChanged && !wantsPresetUpdate && !reseed) {
       return { cellSize: this.cellSize, rows: this.rows, cols: this.cols };
     }
 

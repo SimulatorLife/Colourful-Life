@@ -2466,8 +2466,17 @@ export default class GridManager {
       nextRows !== this.rows ||
       nextCols !== this.cols ||
       (Number.isFinite(nextCellSize) && nextCellSize !== this.cellSize);
+    const wantsPresetUpdate =
+      opts.randomizeObstacles === true ||
+      (typeof opts.obstaclePreset === "string" &&
+        opts.obstaclePreset.trim().length > 0) ||
+      typeof opts.presetOptions === "function" ||
+      (opts.presetOptions &&
+        typeof opts.presetOptions === "object" &&
+        Object.keys(opts.presetOptions).length > 0);
+    const wantsReseed = opts.reseed === true;
 
-    if (!changed) {
+    if (!changed && !wantsPresetUpdate && !wantsReseed) {
       return { rows: this.rows, cols: this.cols, cellSize: this.cellSize };
     }
 
