@@ -1039,10 +1039,7 @@ export default class Stats {
       : numericMaxSamples === Infinity
         ? Infinity
         : 0;
-    const validDna = [];
-
-    for (let index = 0; index < cellSources.length; index += 1) {
-      const source = cellSources[index];
+    const validDna = cellSources.reduce((dnaList, source) => {
       const cell =
         source &&
         typeof source === "object" &&
@@ -1053,9 +1050,11 @@ export default class Stats {
       const dna = cell?.dna;
 
       if (dna && typeof dna.similarity === "function") {
-        validDna.push(dna);
+        dnaList.push(dna);
       }
-    }
+
+      return dnaList;
+    }, []);
 
     const populationSize = validDna.length;
 
