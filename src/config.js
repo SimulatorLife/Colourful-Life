@@ -1,4 +1,9 @@
-import { clamp, sanitizeNumber, coerceBoolean } from "./utils.js";
+import {
+  clamp,
+  sanitizeNumber,
+  sanitizePositiveInteger,
+  coerceBoolean,
+} from "./utils.js";
 
 // Centralized simulation config defaults
 const DEFAULT_MAX_TILE_ENERGY = 2;
@@ -14,6 +19,7 @@ const DEFAULT_REGEN_DENSITY_PENALTY = 0.39;
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.3;
 const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
 const DEFAULT_DECAY_RETURN_FRACTION = 0.9;
+const DEFAULT_DECAY_MAX_AGE = 240;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Slightly calmer baseline keeps resting viable when resources tighten.
 const DEFAULT_ACTIVITY_BASE_RATE = 0.28;
@@ -53,6 +59,7 @@ export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();
 export const DECAY_RETURN_FRACTION = resolveDecayReturnFraction();
+export const DECAY_MAX_AGE = resolveDecayMaxAge();
 
 function resolveEnvNumber(
   env,
@@ -184,6 +191,25 @@ export function resolveDecayReturnFraction(env = RUNTIME_ENV) {
     min: 0,
     max: 1,
     clampResult: true,
+  });
+}
+
+/**
+ * Resolves the maximum number of ticks a decay pool persists before it fully
+ * dissipates. Allowing deployments to extend or shorten this window makes the
+ * post-mortem energy trickle tunable without altering simulation code.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Positive integer limit on decay lifetime.
+ */
+export function resolveDecayMaxAge(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_DECAY_MAX_AGE;
+
+  return sanitizePositiveInteger(raw, {
+    fallback: DEFAULT_DECAY_MAX_AGE,
+    min: 1,
   });
 }
 
