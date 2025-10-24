@@ -271,13 +271,16 @@ export function createRankedBuffer(limit, compare) {
   };
 }
 
-/*
- * Deterministic PRNG factory (Mulberry32)
+/**
+ * Internal Mulberry32 generator used to create deterministic RNG instances.
+ *
+ * @param {number} seed - Unsigned 32-bit integer used to seed the generator.
+ * @returns {() => number} Deterministic function producing values in [0, 1).
  */
 function mulberry32(seed) {
   let a = seed >>> 0;
 
-  return function () {
+  return () => {
     a += 0x6d2b79f5;
     let t = a;
 
@@ -302,6 +305,13 @@ export function createRNG(seed) {
 const warnedMessages = new Set();
 const reportedErrors = new Set();
 
+/**
+ * Normalises console interactions so warnings/errors share a consistent shape.
+ *
+ * @param {"warn"|"error"} method - Console method to invoke when available.
+ * @param {string} message - Primary log message forwarded to the console.
+ * @param {Error} [error] - Optional error instance appended for context.
+ */
 function logWithOptionalError(method, message, error) {
   const consoleRef = globalThis.console;
   const logger = consoleRef?.[method];
