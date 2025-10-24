@@ -5204,13 +5204,29 @@ export default class GridManager {
     const averageReach = clamp((parentReach + mateReach) / 2, 0, 4);
     const effectiveReach = Math.max(1, averageReach);
 
-    if (!blockedInfo && (separation === 0 || separation > effectiveReach)) {
-      blockedInfo = {
-        reason: "Parents out of reach",
-        parentA: { row: parentRow, col: parentCol, reach: parentReach },
-        parentB: { row: mateRow, col: mateCol, reach: mateReach },
-        separation: { distance: separation, effectiveReach },
-      };
+    if (!blockedInfo) {
+      if (separation === 0) {
+        blockedInfo = {
+          reason: "Parents out of reach",
+          parentA: { row: parentRow, col: parentCol, reach: parentReach },
+          parentB: { row: mateRow, col: mateCol, reach: mateReach },
+          separation: { distance: separation, effectiveReach },
+        };
+      } else if (separation > 1) {
+        blockedInfo = {
+          reason: "Parents must be adjacent",
+          parentA: { row: parentRow, col: parentCol, reach: parentReach },
+          parentB: { row: mateRow, col: mateCol, reach: mateReach },
+          separation: { distance: separation, effectiveReach, required: 1 },
+        };
+      } else if (separation > effectiveReach) {
+        blockedInfo = {
+          reason: "Parents out of reach",
+          parentA: { row: parentRow, col: parentCol, reach: parentReach },
+          parentB: { row: mateRow, col: mateCol, reach: mateReach },
+          separation: { distance: separation, effectiveReach },
+        };
+      }
     }
 
     const parentCooldownRemaining =
