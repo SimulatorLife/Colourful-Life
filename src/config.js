@@ -6,7 +6,11 @@ const DEFAULT_MAX_TILE_ENERGY = 2;
 // showed regeneration recovering ~7% more energy per tick (0.0036 → 0.0039).
 // The softer clamp cushions high-traffic hubs without eliminating the density
 // pressure that keeps sparse foragers advantaged.
-const DEFAULT_REGEN_DENSITY_PENALTY = 0.42;
+const DEFAULT_REGEN_DENSITY_PENALTY = 0.39;
+// High-density probe (computeTileEnergyUpdate, density 0.85, energy 1.2)
+// showed regen climbing from ~0.00309 → ~0.00321 energy per tick when the
+// penalty eased to 0.39, enough headroom for crowded hubs to stop drifting
+// into starvation while still suppressing runaway refills in traffic pockets.
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.3;
 const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
 const DEFAULT_DECAY_RETURN_FRACTION = 0.9;
