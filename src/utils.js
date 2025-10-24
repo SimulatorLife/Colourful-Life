@@ -194,27 +194,16 @@ export function toPlainObject(candidate) {
 
 /**
  * Deep clones the sensor/node trace payloads used by the brain debugger so the
- * UI can mutate copies without affecting simulation state.
+ * UI can mutate copies without affecting simulation state. Utilizes the
+ * platform `structuredClone` implementation for fidelity and maintenance.
  *
  * @param {Object} trace - Snapshot returned by `brain.snapshot()`.
  * @returns {Object|null} Cloned trace.
  */
 export function cloneTracePayload(trace) {
-  if (!trace) return null;
+  if (trace == null) return null;
 
-  return {
-    sensors: Array.isArray(trace.sensors)
-      ? trace.sensors.map((entry) => ({ ...entry }))
-      : [],
-    nodes: Array.isArray(trace.nodes)
-      ? trace.nodes.map((entry) => ({
-          ...entry,
-          inputs: Array.isArray(entry.inputs)
-            ? entry.inputs.map((input) => ({ ...input }))
-            : [],
-        }))
-      : [],
-  };
+  return globalThis.structuredClone(trace);
 }
 
 /**
