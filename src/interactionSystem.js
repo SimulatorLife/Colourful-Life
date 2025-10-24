@@ -360,22 +360,24 @@ export default class InteractionSystem {
     combatEdgeSharpness,
     combatTerritoryEdgeFactor,
   } = {}) {
-    let processed = false;
+    const intents = this.pendingIntents.splice(0);
 
-    while (this.pendingIntents.length > 0) {
-      const intent = this.pendingIntents.shift();
-
-      processed =
-        this.resolveIntent(intent, {
-          stats,
-          densityGrid,
-          densityEffectMultiplier,
-          combatEdgeSharpness,
-          combatTerritoryEdgeFactor,
-        }) || processed;
+    if (intents.length === 0) {
+      return false;
     }
 
-    return processed;
+    const options = {
+      stats,
+      densityGrid,
+      densityEffectMultiplier,
+      combatEdgeSharpness,
+      combatTerritoryEdgeFactor,
+    };
+
+    return intents.reduce(
+      (processed, intent) => this.resolveIntent(intent, options) || processed,
+      false,
+    );
   }
 
   resolveIntent(
