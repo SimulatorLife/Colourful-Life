@@ -3427,8 +3427,6 @@ export default class GridManager {
       if (sparseRows.length > 0) {
         strategy = "sparse-dirty";
 
-        sparseRows.sort((a, b) => a - b);
-
         if (deltaGrid) {
           for (let r = 0; r < rows; r++) {
             const deltaRow = deltaGrid[r];
@@ -3460,10 +3458,6 @@ export default class GridManager {
 
           const columnCount = columns.length;
 
-          if (columnCount > 1) {
-            columns.sort((a, b) => a - b);
-          }
-
           if (occupantRegenRow) {
             const preferFill = columnCount * 2 >= cols;
 
@@ -3487,6 +3481,10 @@ export default class GridManager {
             : EMPTY_EVENT_LIST;
           const rowHasEvents = hasEvents && rowEvents.length > 0;
           const useSegmentedForRow = rowHasEvents && usingSegmentedEvents;
+
+          if (useSegmentedForRow && columnCount > 1) {
+            columns.sort((a, b) => a - b);
+          }
 
           const segments = useSegmentedForRow ? rowEvents : null;
           const activeSegments =
