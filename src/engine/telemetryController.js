@@ -193,6 +193,8 @@ export default class TelemetryController {
     }
 
     const entries = Array.isArray(snapshot.entries) ? snapshot.entries : null;
+    const ensureStat = (value, fallback = 0) =>
+      Number.isFinite(value) ? value : fallback;
 
     if (entries) {
       for (let i = 0; i < entries.length; i += 1) {
@@ -202,26 +204,19 @@ export default class TelemetryController {
           continue;
         }
 
-        const cell = entry.cell;
+        const cellStats =
+          entry.cell && typeof entry.cell === "object" ? entry.cell : null;
+        const fallbackStat = (key) => ensureStat(cellStats?.[key], 0);
 
-        if (cell && typeof cell === "object") {
-          if (!Number.isFinite(entry.offspring)) {
-            entry.offspring = Number.isFinite(cell.offspring) ? cell.offspring : 0;
-          }
-          if (!Number.isFinite(entry.fightsWon)) {
-            entry.fightsWon = Number.isFinite(cell.fightsWon) ? cell.fightsWon : 0;
-          }
-          if (!Number.isFinite(entry.age)) {
-            entry.age = Number.isFinite(cell.age) ? cell.age : 0;
-          }
-          if (entry.color == null && typeof cell.color === "string") {
-            entry.color = cell.color;
-          }
-        } else {
-          if (!Number.isFinite(entry.offspring)) entry.offspring = 0;
-          if (!Number.isFinite(entry.fightsWon)) entry.fightsWon = 0;
-          if (!Number.isFinite(entry.age)) entry.age = 0;
-          if (entry.color == null) entry.color = null;
+        entry.offspring = ensureStat(entry.offspring, fallbackStat("offspring"));
+        entry.fightsWon = ensureStat(entry.fightsWon, fallbackStat("fightsWon"));
+        entry.age = ensureStat(entry.age, fallbackStat("age"));
+
+        if (entry.color == null) {
+          const colorFromCell =
+            typeof cellStats?.color === "string" ? cellStats.color : null;
+
+          entry.color = colorFromCell;
         }
 
         if ("cell" in entry) {
