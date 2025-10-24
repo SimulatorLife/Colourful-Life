@@ -3378,19 +3378,10 @@ export default class GridManager {
             let drain = 0;
 
             if (eventsForTile && eventOptions) {
-              let reuse = false;
-
-              if (lastModifiers && lastEventsCache.length === eventsForTile.length) {
-                reuse = true;
-
-                for (let k = 0; k < eventsForTile.length; k++) {
-                  if (lastEventsCache[k] !== eventsForTile[k]) {
-                    reuse = false;
-
-                    break;
-                  }
-                }
-              }
+              const reuse =
+                Boolean(lastModifiers) &&
+                lastEventsCache.length === eventsForTile.length &&
+                eventsForTile.every((event, index) => lastEventsCache[index] === event);
 
               if (reuse) {
                 ({ regenMultiplier, regenAdd, drain } = lastModifiers);
