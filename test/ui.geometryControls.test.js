@@ -51,7 +51,6 @@ class GeometrySyncEngine {
       paused: false,
       autoPauseOnBlur: false,
       lowDiversityReproMultiplier: 0.55,
-      profileGridMetrics: "auto",
       gridRows: this.rows,
       gridCols: this.cols,
       cellSize: this.cellSize,
