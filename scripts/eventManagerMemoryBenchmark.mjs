@@ -7,9 +7,11 @@ function runBenchmark({
 } = {}) {
   const rng = (() => {
     let seed = 42;
+
     return () => {
       // Linear congruential generator for deterministic output
       seed = (seed * 1664525 + 1013904223) % 4294967296;
+
       return seed / 4294967296;
     };
   })();
@@ -28,6 +30,7 @@ function runBenchmark({
 
     if (i % 500 === 0) {
       const heap = process.memoryUsage().heapUsed;
+
       if (heap > peak) {
         peak = heap;
       }
