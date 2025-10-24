@@ -281,6 +281,7 @@ export default class Stats {
   #traitThresholds;
   #rng;
   #pairSampleScratch;
+  #pairSampleSelection;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
    * @param {{
@@ -347,6 +348,7 @@ export default class Stats {
     };
     this.starvationRateSmoothed = 0;
     this.#pairSampleScratch = new Uint32Array(0);
+    this.#pairSampleSelection = new Set();
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -1109,50 +1111,20 @@ export default class Stats {
       this.#pairSampleScratch = samples;
     }
 
+    const selected = this.#pairSampleSelection;
+
+    selected.clear();
+
     let filled = 0;
+    const startIndex = possiblePairs - sampleLimit;
 
-    for (let i = possiblePairs - sampleLimit; i < possiblePairs; i += 1) {
-      const pick = sampleIndex(i + 1);
-      let isDuplicate = false;
+    for (let i = startIndex; i < possiblePairs; i += 1) {
+      const candidate = sampleIndex(i + 1);
+      const pick = selected.has(candidate) ? i : candidate;
 
-      for (let idx = 0; idx < filled; idx += 1) {
-        if (samples[idx] === pick) {
-          isDuplicate = true;
-          break;
-        }
-      }
-
-      if (isDuplicate) {
-        if (filled < sampleLimit) {
-          samples[filled] = i;
-          filled += 1;
-        }
-      } else if (filled < sampleLimit) {
-        samples[filled] = pick;
-        filled += 1;
-      }
-    }
-
-    if (filled < sampleLimit) {
-      for (
-        let candidate = 0;
-        candidate < possiblePairs && filled < sampleLimit;
-        candidate += 1
-      ) {
-        let exists = false;
-
-        for (let idx = 0; idx < filled; idx += 1) {
-          if (samples[idx] === candidate) {
-            exists = true;
-            break;
-          }
-        }
-
-        if (!exists) {
-          samples[filled] = candidate;
-          filled += 1;
-        }
-      }
+      selected.add(pick);
+      samples[filled] = pick;
+      filled += 1;
     }
 
     if (filled === 0) {
