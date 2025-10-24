@@ -16,10 +16,11 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 Colourful Life targets **Node.js 18 or newer**. After cloning the repository:
 
-1. Install dependencies with `npm ci`.
+1. Install dependencies with `npm ci` (or `npm install` if you prefer a non-clean install). Run `npm run prepare` afterwards whenever the Husky hooks need to be reinstalled.
 2. Launch the Parcel dev server with `npm run start` and open `http://localhost:1234`.
+3. In a second terminal, run `npm test` to exercise the Node.js suites whenever you touch simulation logic or shared helpers. Add `npm run lint` / `npm run format:check` to catch style regressions before opening a pull request.
 
-Parcel provides hot module reloading while you edit. Use `npm run build` when you need an optimized bundle in `dist/`. See [Key scripts and commands](#key-scripts-and-commands) for linting, testing, benchmarking, and publishing helpers.
+Parcel provides hot module reloading while you edit. Use `npm run build` when you need an optimized bundle in `dist/`. See [Key scripts and commands](#key-scripts-and-commands) for linting, testing, benchmarking, and publishing helpers, and consult [`docs/developer-guide.md`](docs/developer-guide.md) for deeper workflow guidance.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
@@ -41,7 +42,7 @@ Values outside their accepted ranges fall back to the defaults defined in [`src/
 
 ### Life event marker overlay
 
-Enable **Life Event Markers** in the Overlays panel to spotlight where births and deaths just occurred. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps.
+Enable **Life Event Markers** in the Overlays panel to spotlight where births and deaths just occurred. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps. Architecture details live in [`docs/architecture-overview.md`](docs/architecture-overview.md#ui-and-overlays) for readers interested in extending the renderer.
 
 ### Obstacle layout presets
 
@@ -82,7 +83,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 
 ## Headless and embedded usage
 
-`createSimulation` exported from [`src/main.js`](src/main.js) stitches together the engine, UI, overlays, and lifecycle helpers. Pass `{ headless: true }` to obtain a headless controller for automation or tests and inject `{ requestAnimationFrame, cancelAnimationFrame, performanceNow }` to supply deterministic timing in non-browser environments. The helper will:
+`createSimulation` exported from [`src/main.js`](src/main.js) stitches together the engine, UI, overlays, and lifecycle helpers. Pass `{ headless: true }` to obtain a headless controller for automation or tests and inject `{ requestAnimationFrame, cancelAnimationFrame, performanceNow }` to supply deterministic timing in non-browser environments. The helper will (see the [developer guide's headless checklist](docs/developer-guide.md#tooling) for supporting scripts and environment tips):
 
 - Resolve or create a canvas using [`resolveCanvas`](src/engine/environment.js) and [`ensureCanvasDimensions`](src/engine/environment.js).
 - Construct the grid, stats, selection manager, and event manager, exposing them on the returned controller (`{ grid, stats, selectionManager, eventManager }`).
