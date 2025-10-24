@@ -57,9 +57,9 @@ const MUTATING_TYPED_ARRAY_METHODS = new Set([
 ]);
 
 const clampGene = (value) => {
-  if (Number.isNaN(value)) return 0;
+  const normalized = Number.isNaN(value) ? 0 : value | 0;
 
-  return Math.max(0, Math.min(255, value | 0));
+  return clamp(normalized, 0, 255);
 };
 
 export class DNA {
