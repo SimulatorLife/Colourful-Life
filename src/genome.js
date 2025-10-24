@@ -2138,19 +2138,75 @@ export class DNA {
     if (!other) return 0;
 
     const { squared = false, inverseMaxDistance } = options ?? {};
+    const selfGenes = this.#genesTarget;
+    const selfLength = selfGenes.length;
+    const otherObject = typeof other === "object" && other !== null ? other : null;
     const otherLength =
-      typeof other?.length === "number" ? other.length : (other?.genes?.length ?? 0);
-    const geneCount = Math.max(this.length, otherLength);
-    let distSq = 0;
-
-    for (let i = 0; i < geneCount; i++) {
-      const delta = this.geneAt(i) - (other.geneAt?.(i) ?? other?.genes?.[i] ?? 0);
-
-      distSq += delta * delta;
-    }
+      typeof otherObject?.length === "number"
+        ? otherObject.length
+        : (otherObject?.genes?.length ?? 0);
+    const geneCount = Math.max(selfLength, otherLength);
 
     if (geneCount === 0) {
       return 1;
+    }
+
+    const directGenes =
+      other instanceof DNA
+        ? other.#genesTarget
+        : other instanceof Uint8Array
+          ? other
+          : otherObject?.genes instanceof Uint8Array
+            ? otherObject.genes
+            : Array.isArray(other)
+              ? other
+              : Array.isArray(otherObject?.genes)
+                ? otherObject.genes
+                : null;
+    const fallbackGenes = !directGenes && otherObject?.genes ? otherObject.genes : null;
+    const fallbackGeneAt =
+      !directGenes && typeof otherObject?.geneAt === "function"
+        ? otherObject.geneAt.bind(otherObject)
+        : null;
+
+    let distSq = 0;
+
+    if (directGenes) {
+      const otherLen = directGenes.length;
+
+      for (let i = 0; i < geneCount; i++) {
+        const a = i < selfLength ? selfGenes[i] : 0;
+        const b = i < otherLen ? directGenes[i] : 0;
+        const delta = a - b;
+
+        distSq += delta * delta;
+      }
+    } else {
+      const fallbackLen =
+        fallbackGenes && typeof fallbackGenes.length === "number"
+          ? fallbackGenes.length
+          : 0;
+
+      for (let i = 0; i < geneCount; i++) {
+        const a = i < selfLength ? selfGenes[i] : 0;
+        let b = 0;
+
+        if (fallbackGeneAt) {
+          const candidate = fallbackGeneAt(i);
+
+          if (Number.isFinite(candidate)) {
+            b = candidate;
+          } else if (i < fallbackLen) {
+            b = fallbackGenes[i];
+          }
+        } else if (i < fallbackLen) {
+          b = fallbackGenes[i];
+        }
+
+        const delta = a - (Number.isFinite(b) ? b : 0);
+
+        distSq += delta * delta;
+      }
     }
 
     const invMax =
