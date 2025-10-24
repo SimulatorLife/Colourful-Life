@@ -34,6 +34,10 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   manager.setEventFrequencyMultiplier(-0.1);
   manager.setEventFrequencyMultiplier("oops");
 
+  manager.setDensityEffectMultiplier(0.8);
+  manager.setDensityEffectMultiplier(-1);
+  manager.setDensityEffectMultiplier("oops");
+
   manager.setEnergyRegenRate(0.12);
   manager.setEnergyRegenRate(-0.3);
 
@@ -54,6 +58,8 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
     ["leaderboardIntervalMs", 1250],
     ["eventFrequencyMultiplier", 1.25],
     ["eventFrequencyMultiplier", 0],
+    ["densityEffectMultiplier", 0.8],
+    ["densityEffectMultiplier", 0],
     ["energyRegenRate", 0.12],
     ["energyRegenRate", 0],
     ["energyDiffusionRate", 0.45],
@@ -68,6 +74,7 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   assert.is(manager.getMaxConcurrentEvents(), 0);
   assert.is(manager.getLeaderboardIntervalMs(), 1250);
   assert.is(manager.getEventFrequencyMultiplier(), 0);
+  assert.is(manager.getDensityEffectMultiplier(), 0);
   assert.is(manager.getEnergyRegenRate(), 0);
   assert.is(manager.getEnergyDiffusionRate(), 0.45);
   assert.is(manager.getAutoPauseOnBlur(), true);
