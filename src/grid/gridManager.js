@@ -66,10 +66,9 @@ const TARGET_DESCRIPTOR_BASE_KEYS = new Set([
   "similarity",
 ]);
 
-const COLOR_CACHE_DEFAULT_LIMIT = 4096;
+const COLOR_CACHE_LIMIT = 4096;
 const COLOR_CACHE = new Map();
 const COLOR_CACHE_KEYS = [];
-let colorCacheLimit = COLOR_CACHE_DEFAULT_LIMIT;
 let colorCacheEvictIndex = 0;
 const RGB_PATTERN =
   /rgba?\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)(?:\s*,\s*([0-9.]+)\s*)?\)/i;
@@ -81,23 +80,13 @@ const TIMESTAMP_NOW =
     : () => Date.now();
 
 function rememberColor(normalized, value) {
-  if (colorCacheLimit === 0) {
-    return value;
-  }
-
-  if (COLOR_CACHE.has(normalized)) {
+  if (COLOR_CACHE_LIMIT <= 0 || COLOR_CACHE.has(normalized)) {
     return value;
   }
 
   COLOR_CACHE.set(normalized, value);
 
-  if (!Number.isFinite(colorCacheLimit)) {
-    COLOR_CACHE_KEYS.push(normalized);
-
-    return value;
-  }
-
-  if (COLOR_CACHE_KEYS.length < colorCacheLimit) {
+  if (COLOR_CACHE_KEYS.length < COLOR_CACHE_LIMIT) {
     COLOR_CACHE_KEYS.push(normalized);
 
     return value;
@@ -111,29 +100,9 @@ function rememberColor(normalized, value) {
 
   COLOR_CACHE_KEYS[colorCacheEvictIndex] = normalized;
   colorCacheEvictIndex =
-    colorCacheLimit > 0 ? (colorCacheEvictIndex + 1) % colorCacheLimit : 0;
+    COLOR_CACHE_LIMIT > 0 ? (colorCacheEvictIndex + 1) % COLOR_CACHE_LIMIT : 0;
 
   return value;
-}
-
-export function __resetColorCacheForTesting() {
-  COLOR_CACHE.clear();
-  COLOR_CACHE_KEYS.length = 0;
-  colorCacheEvictIndex = 0;
-}
-
-export function __setColorCacheLimitForTesting(limit) {
-  const numeric = Number(limit);
-
-  colorCacheLimit = Number.isFinite(numeric)
-    ? Math.max(0, Math.floor(numeric))
-    : Number.POSITIVE_INFINITY;
-
-  __resetColorCacheForTesting();
-}
-
-export function __getColorCacheSizeForTesting() {
-  return COLOR_CACHE.size;
 }
 
 function parseColorToRgba(color) {
