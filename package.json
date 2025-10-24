@@ -13,7 +13,7 @@
     "clean": "node ./scripts/clean-parcel.mjs",
     "build": "parcel build ./index.html",
     "benchmark": "node scripts/profile-energy.mjs",
-    "test": "npm run benchmark && node --test test",
+    "test": "node scripts/run-node-tests.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "format:workflows": "prettier --ignore-path .gitignore --write \".github/workflows/**/*.yml\"",
