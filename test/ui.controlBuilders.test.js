@@ -2,6 +2,7 @@ import { assert, suite } from "#tests/harness";
 import {
   createControlButtonRow,
   createControlGrid,
+  createNumberInputRow,
   createSectionHeading,
   createSelectRow,
   createSliderRow,
@@ -158,6 +159,47 @@ controls("createSelectRow renders dropdowns and invokes change callbacks", () =>
     select.trigger("change");
 
     assert.is(changeCount, 2);
+  });
+});
+
+controls("createNumberInputRow links descriptions for accessibility", () => {
+  withMockDocument(() => {
+    const parent = document.createElement("div");
+    const input = createNumberInputRow(parent, {
+      label: "Rows",
+      min: 40,
+      max: 240,
+      value: 120,
+      suffix: "tiles",
+      description: "Enter between 40 and 240 tiles.",
+    });
+
+    const row = parent.children[0];
+    const [, line] = row.children;
+    const suffix = Array.from(line.children).find((child) =>
+      child?.className?.includes?.("control-suffix"),
+    );
+    const description = Array.from(row.children).find((child) =>
+      child?.className?.includes?.("control-description"),
+    );
+
+    assert.is(input.type, "number");
+    assert.ok(line.classList.contains("control-line--with-suffix"));
+    assert.ok(suffix, "suffix element should render");
+    assert.is(suffix.textContent, "tiles");
+    assert.ok(description, "description should be rendered for helpers");
+    assert.ok(description.id, "description requires an id");
+    const describedBy =
+      input.getAttribute?.("aria-describedby") ||
+      input.attributes?.["aria-describedby"] ||
+      input.ariaDescribedby ||
+      input.ariaDescribedBy ||
+      "";
+
+    assert.ok(
+      String(describedBy).split(/\s+/).filter(Boolean).includes(description.id),
+      "input should reference the helper text",
+    );
   });
 });
 
