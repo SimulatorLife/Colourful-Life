@@ -456,6 +456,25 @@ export default class UIManager {
     return match ? match.id : null;
   }
 
+  #pickRandomObstaclePresetId() {
+    if (!Array.isArray(this.obstaclePresets) || this.obstaclePresets.length === 0) {
+      return null;
+    }
+
+    const validPresets = this.obstaclePresets.filter((preset) => preset?.id);
+
+    if (validPresets.length === 0) return null;
+
+    const obstacleCandidates = validPresets.filter((preset) => preset.id !== "none");
+    const pool = obstacleCandidates.length > 0 ? obstacleCandidates : validPresets;
+
+    if (pool.length === 0) return null;
+
+    const index = Math.floor(Math.random() * pool.length);
+
+    return pool[index]?.id ?? null;
+  }
+
   #readGridDimensions() {
     const fallback = { rows: 120, cols: 120, cellSize: this.getCellSize?.() ?? 5 };
     let dimensions = null;
@@ -3041,11 +3060,29 @@ export default class UIManager {
         if (presetSelect) presetSelect.value = clearedPreset;
         applyPreset(clearedPreset);
       });
+
+      const shuffleButton = document.createElement("button");
+
+      shuffleButton.type = "button";
+      shuffleButton.textContent = "Shuffle Layout";
+      shuffleButton.title = "Apply a random obstacle preset from the catalog.";
+      shuffleButton.addEventListener("click", () => {
+        const randomPresetId = this.#pickRandomObstaclePresetId();
+
+        if (!randomPresetId) return;
+
+        this.obstaclePreset = randomPresetId;
+        if (presetSelect) presetSelect.value = randomPresetId;
+        applyPreset(randomPresetId);
+      });
+
       if (selectLine) {
         selectLine.classList.add("control-line--inline-actions");
         selectLine.appendChild(clearButton);
+        selectLine.appendChild(shuffleButton);
       } else {
         obstacleGrid.appendChild(clearButton);
+        obstacleGrid.appendChild(shuffleButton);
       }
     }
   }

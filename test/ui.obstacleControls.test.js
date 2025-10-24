@@ -173,4 +173,72 @@ test("clearing obstacles resets preset select to open field", async () => {
   }
 });
 
+test("shuffle layout button applies a random preset", async () => {
+  const restore = setupDom();
+
+  try {
+    const [{ default: UIManager }, { OBSTACLE_PRESETS }] = await Promise.all([
+      import("../src/ui/uiManager.js"),
+      import("../src/grid/obstaclePresets.js"),
+    ]);
+
+    const applyCalls = [];
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        applyObstaclePreset: (...args) => {
+          applyCalls.push(args);
+        },
+        obstaclePresets: OBSTACLE_PRESETS,
+      },
+      { canvasElement: new MockCanvas(200, 200) },
+    );
+
+    const findButtonByText = (root, text) => {
+      const queue = [root];
+
+      while (queue.length > 0) {
+        const node = queue.shift();
+
+        if (!node) continue;
+        if (node.tagName === "BUTTON" && node.textContent === text) return node;
+        if (Array.isArray(node.children)) queue.push(...node.children);
+      }
+
+      return null;
+    };
+
+    const shuffleButton = findButtonByText(uiManager.controlsPanel, "Shuffle Layout");
+
+    assert.ok(shuffleButton, "shuffle layout button should render");
+
+    const originalRandom = Math.random;
+
+    Math.random = () => 0.5;
+
+    try {
+      shuffleButton.dispatchEvent({ type: "click" });
+    } finally {
+      Math.random = originalRandom;
+    }
+
+    assert.is(applyCalls.length, 1, "random preset should be applied once");
+    const [id] = applyCalls[0];
+
+    assert.ok(
+      id && id !== "none",
+      "shuffle should choose a non-empty preset when available",
+    );
+    assert.is(uiManager.obstaclePreset, id, "UI state should track randomized preset");
+  } finally {
+    restore();
+  }
+});
+
 test.run();

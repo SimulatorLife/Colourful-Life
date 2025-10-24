@@ -56,6 +56,7 @@ Enable **Life Event Markers** in the Overlays panel to spotlight where births an
 ### Obstacle layout presets
 
 Select a **Layout Preset** in the Obstacles panel to immediately swap the grid's obstacle mask. The dropdown now applies changes as soon as you choose a preset, streamlining the workflow when experimenting with layouts. Use **Clear Obstacles** to reset the field if you need a blank slate again.
+Hit **Shuffle Layout** to roll a random preset from the catalog without reaching for the dropdown—perfect for sparking new map ideas mid-run.
 
 ### Keyboard shortcuts
 
