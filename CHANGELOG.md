@@ -31,6 +31,10 @@ where practical.
 - Collapsed dashboard panels now defer metrics, life events, and leaderboard
   rendering work, cutting 50 closed-panel metrics refreshes from ~73.9 ms to
   ~0.84 ms by queueing the latest payload until the panel is reopened.
+- README, architecture overview, and developer guide now cross-link workflow
+  basics and highlight quick verification commands (`npm test`, `npm run lint`,
+  `npm run format:check`) so contributors land on accurate setup guidance
+  without bouncing between documents.
 - Automatic reseeding has been removed from decay pools, grid resets, and
   geometry changes; the world now stays empty unless `reseed: true` is
   explicitly requested, keeping lineage growth compliant with Simulation Law 7.

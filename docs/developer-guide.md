@@ -4,7 +4,8 @@ This guide captures the everyday practices for maintaining Colourful Life. It
 complements the [architecture overview](architecture-overview.md) by focusing on
 workflow, tooling, and documentation expectations. Treat it as the handbook for
 day-to-day contributions—whether you are building new simulation features,
-extending tests, or polishing docs.
+extending tests, or polishing docs. The [README quick start](../README.md#quick-start)
+walks through the initial clone-and-run steps before you dive into the details below.
 
 ## Environment setup
 
@@ -12,7 +13,10 @@ extending tests, or polishing docs.
 2. Clone the repository and install dependencies with `npm ci`.
 3. Run `npm run start` to launch the Parcel development server at
    `http://localhost:1234`.
-4. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/`
+4. Run `npm test` in a second terminal whenever you touch shared utilities or
+   simulation logic. Pair it with `npm run lint` / `npm run format:check` to
+   catch style drift before opening a pull request.
+5. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/`
    and `.parcel-cache/` before restarting the dev server.
 
 ### Quality-of-life tips

@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document captures how the Colourful Life simulation composes its core systems and how data flows between them. Use it as a map when extending the engine, creating new UI affordances, or embedding the simulation in automated tooling.
+This document captures how the Colourful Life simulation composes its core systems and how data flows between them. Use it as a map when extending the engine, creating new UI affordances, or embedding the simulation in automated tooling. For setup and workflow basics, start with the [README quick start](../README.md#quick-start) and the [developer guide](developer-guide.md).
 
 ## High-level loop
 
