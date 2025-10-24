@@ -5375,6 +5375,22 @@ export default class GridManager {
       stats.recordReproductionBlocked(blockedInfo);
     }
 
+    const parentNovelty =
+      typeof cell.getMateNoveltyPressure === "function"
+        ? cell.getMateNoveltyPressure()
+        : undefined;
+    const mateNovelty =
+      bestMate.target && typeof bestMate.target.getMateNoveltyPressure === "function"
+        ? bestMate.target.getMateNoveltyPressure()
+        : undefined;
+    const noveltyNumerator =
+      (Number.isFinite(parentNovelty) ? parentNovelty : 0) +
+      (Number.isFinite(mateNovelty) ? mateNovelty : 0);
+    const noveltyDenominator =
+      (Number.isFinite(parentNovelty) ? 1 : 0) + (Number.isFinite(mateNovelty) ? 1 : 0);
+    const combinedNovelty =
+      noveltyDenominator > 0 ? noveltyNumerator / noveltyDenominator : undefined;
+
     if (stats?.recordMateChoice) {
       stats.recordMateChoice({
         similarity,
@@ -5392,6 +5408,7 @@ export default class GridManager {
         strategyPressure,
         threshold: pairDiversityThreshold,
         populationScarcityMultiplier: scarcityMultiplier,
+        noveltyPressure: combinedNovelty,
       });
     }
 

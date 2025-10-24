@@ -1648,6 +1648,105 @@ test("selectMateWeighted honors mate sampling curiosity bias", () => {
   assert.is(chosen, diverse, "curiosity pick should favor diverse mates");
 });
 
+test("repetitive low-diversity matings build novelty pressure that shifts mate scoring", () => {
+  const dna = new DNA(40, 60, 80);
+  const cell = new Cell(0, 0, dna, 6);
+  const similarTarget = new Cell(0, 1, new DNA(45, 65, 85), 6);
+  const diverseTarget = new Cell(0, 2, new DNA(200, 15, 15), 6);
+
+  cell.matePreferenceBias = 0.6;
+  cell.diversityAppetite = 0;
+  cell._mateSelectionNoiseRng = () => 0.5;
+
+  const baselineSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.95,
+  });
+  const baselineDiverse = cell.evaluateMateCandidate({
+    target: diverseTarget,
+    precomputedSimilarity: 0.15,
+  });
+
+  for (let i = 0; i < 5; i += 1) {
+    cell.recordMatingOutcome({
+      diversity: 0.05,
+      success: true,
+      penalized: true,
+      penaltyMultiplier: 0.6,
+      strategyPenaltyMultiplier: 0.7,
+    });
+  }
+
+  const pressuredSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.95,
+  });
+  const pressuredDiverse = cell.evaluateMateCandidate({
+    target: diverseTarget,
+    precomputedSimilarity: 0.15,
+  });
+
+  assert.ok(
+    pressuredSimilar.preferenceScore < baselineSimilar.preferenceScore,
+    "novelty pressure should reduce preference for repetitive mates",
+  );
+  assert.ok(
+    pressuredSimilar.selectionWeight < baselineSimilar.selectionWeight,
+    "novelty pressure should diminish selection weight for repetitive mates",
+  );
+  assert.ok(
+    pressuredDiverse.preferenceScore >= baselineDiverse.preferenceScore,
+    "diverse mates remain as appealing or stronger under novelty pressure",
+  );
+});
+
+test("diverse matings relieve accumulated novelty pressure penalties", () => {
+  const dna = new DNA(70, 90, 40);
+  const cell = new Cell(0, 0, dna, 5);
+  const similarTarget = new Cell(0, 1, new DNA(75, 95, 45), 5);
+
+  cell.matePreferenceBias = 0.45;
+  cell.diversityAppetite = 0.1;
+  cell._mateSelectionNoiseRng = () => 0.5;
+
+  for (let i = 0; i < 4; i += 1) {
+    cell.recordMatingOutcome({
+      diversity: 0.08,
+      success: true,
+      penalized: true,
+      penaltyMultiplier: 0.55,
+      strategyPenaltyMultiplier: 0.75,
+    });
+  }
+
+  const pressuredSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.92,
+  });
+
+  cell.recordMatingOutcome({
+    diversity: 0.88,
+    success: true,
+    penalized: false,
+    penaltyMultiplier: 1,
+    strategyPenaltyMultiplier: 1,
+  });
+
+  const relievedSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.92,
+  });
+
+  assert.ok(
+    relievedSimilar.preferenceScore > pressuredSimilar.preferenceScore,
+    "diverse success should unwind novelty penalty pressure",
+  );
+  assert.ok(
+    relievedSimilar.selectionWeight > pressuredSimilar.selectionWeight,
+    "diverse success should restore selection weight toward balance",
+  );
+});
+
 test("breed uses DNA inheritStrategy to compute offspring strategy", () => {
   const dnaA = new DNA(10, 20, 30);
   const dnaB = new DNA(40, 50, 60);
