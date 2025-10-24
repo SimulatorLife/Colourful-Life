@@ -3437,30 +3437,53 @@ export default class GridManager {
     }
   }
 
-  #computeNeighborTotal(row, col, radius = this.densityRadius) {
-    let total = 0;
+  #buildDensityTotals(radius = this.densityRadius) {
+    const rows = Math.max(0, Math.floor(this.rows));
+    const cols = Math.max(0, Math.floor(this.cols));
 
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dy = -radius; dy <= radius; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const rr = row + dy;
-        const cc = col + dx;
-
-        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
-
-        total += 1;
-      }
+    if (rows === 0 || cols === 0) {
+      return [];
     }
 
-    return total;
-  }
-
-  #buildDensityTotals(radius = this.densityRadius) {
-    return Array.from({ length: this.rows }, (_, r) =>
-      Array.from({ length: this.cols }, (_, c) =>
-        this.#computeNeighborTotal(r, c, radius),
-      ),
+    const normalizedRadius = Math.max(
+      0,
+      Math.floor(Number.isFinite(radius) ? radius : (this.densityRadius ?? 0)),
     );
+
+    if (normalizedRadius === 0) {
+      return Array.from({ length: rows }, () => Array(cols).fill(0));
+    }
+
+    const rowSpans = new Array(rows);
+
+    for (let r = 0; r < rows; r++) {
+      const minRow = r - normalizedRadius < 0 ? 0 : r - normalizedRadius;
+      const maxRow = r + normalizedRadius >= rows ? rows - 1 : r + normalizedRadius;
+
+      rowSpans[r] = maxRow - minRow + 1;
+    }
+
+    const colSpans = new Array(cols);
+
+    for (let c = 0; c < cols; c++) {
+      const minCol = c - normalizedRadius < 0 ? 0 : c - normalizedRadius;
+      const maxCol = c + normalizedRadius >= cols ? cols - 1 : c + normalizedRadius;
+
+      colSpans[c] = maxCol - minCol + 1;
+    }
+
+    return Array.from({ length: rows }, (_, r) => {
+      const span = rowSpans[r];
+      const totals = new Array(cols);
+
+      for (let c = 0; c < cols; c++) {
+        const neighbors = span * colSpans[c] - 1;
+
+        totals[c] = neighbors > 0 ? neighbors : 0;
+      }
+
+      return totals;
+    });
   }
 
   #markDensityDirty(row, col) {
