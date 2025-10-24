@@ -36,6 +36,154 @@ const DEATH_CAUSE_COLOR_MAP = Object.freeze({
 const DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES = 4;
 const DEATH_BREAKDOWN_OTHER_COLOR = "rgba(255, 255, 255, 0.28)";
 
+const DEFAULT_TRAIT_DISPLAY_CONFIG = Object.freeze({
+  cooperation: Object.freeze({
+    name: "Cooperation",
+    colors: Object.freeze({
+      presence: Object.freeze({
+        colorVar: "--color-trait-cooperation-presence",
+        fallbackColor: "#74b9ff",
+      }),
+      intensity: Object.freeze({
+        colorVar: "--color-trait-cooperation-intensity",
+        fallbackColor: "#a0c4ff",
+      }),
+    }),
+  }),
+  fighting: Object.freeze({
+    name: "Fighting",
+    colors: Object.freeze({
+      presence: Object.freeze({
+        colorVar: "--color-trait-fighting-presence",
+        fallbackColor: "#ff7675",
+      }),
+      intensity: Object.freeze({
+        colorVar: "--color-trait-fighting-intensity",
+        fallbackColor: "#ff9aa2",
+      }),
+    }),
+  }),
+  breeding: Object.freeze({
+    name: "Breeding",
+    colors: Object.freeze({
+      presence: Object.freeze({
+        colorVar: "--color-trait-breeding-presence",
+        fallbackColor: "#f6c177",
+      }),
+      intensity: Object.freeze({
+        colorVar: "--color-trait-breeding-intensity",
+        fallbackColor: "#fcd29f",
+      }),
+    }),
+  }),
+  sight: Object.freeze({
+    name: "Sight",
+    colors: Object.freeze({
+      presence: Object.freeze({
+        colorVar: "--color-trait-sight-presence",
+        fallbackColor: "#55efc4",
+      }),
+      intensity: Object.freeze({
+        colorVar: "--color-trait-sight-intensity",
+        fallbackColor: "#81f4d0",
+      }),
+    }),
+  }),
+});
+
+function toPascalCase(value) {
+  if (typeof value !== "string" || value.length === 0) return "";
+
+  return value
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join("");
+}
+
+function formatTraitLabel(key) {
+  if (typeof key !== "string" || key.length === 0) {
+    return "Trait";
+  }
+
+  const cleaned = key.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+
+  if (cleaned.length === 0) {
+    return "Trait";
+  }
+
+  return cleaned.replace(/\b(\w)/g, (match) => match.toUpperCase());
+}
+
+function generateTraitColors(key) {
+  if (typeof key !== "string" || key.length === 0) {
+    return {
+      presence: "#7f8cff",
+      intensity: "#a3aefc",
+    };
+  }
+
+  let hash = 0;
+
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash << 5) - hash + key.charCodeAt(i);
+    hash |= 0;
+  }
+
+  const hue = Math.abs(hash) % 360;
+
+  return {
+    presence: `hsl(${hue}, 65%, 62%)`,
+    intensity: `hsl(${(hue + 18) % 360}, 65%, 74%)`,
+  };
+}
+
+function resolveTraitDisplayConfigs(stats) {
+  const definitions = Array.isArray(stats?.traitDefinitions)
+    ? stats.traitDefinitions
+    : null;
+  const defaultKeys = Object.keys(DEFAULT_TRAIT_DISPLAY_CONFIG);
+  const sourceDefinitions =
+    definitions && definitions.length > 0
+      ? definitions
+      : defaultKeys.map((key) => ({ key }));
+  const seen = new Set();
+
+  return sourceDefinitions
+    .map((definition) =>
+      typeof definition?.key === "string" ? definition.key.trim() : "",
+    )
+    .filter((key) => {
+      if (!key) return false;
+      if (seen.has(key)) return false;
+      seen.add(key);
+
+      return true;
+    })
+    .map((key) => {
+      const base = DEFAULT_TRAIT_DISPLAY_CONFIG[key];
+
+      if (base) {
+        return {
+          key,
+          label: base.name,
+          colors: base.colors,
+        };
+      }
+
+      const generated = generateTraitColors(key);
+
+      return {
+        key,
+        label: formatTraitLabel(key),
+        colors: {
+          presence: { colorVar: null, fallbackColor: generated.presence },
+          intensity: { colorVar: null, fallbackColor: generated.intensity },
+        },
+      };
+    });
+}
+
 /**
  * Formats numeric values that may occasionally be non-finite. When the value
  * fails the finite check the provided fallback is returned instead.
@@ -123,6 +271,8 @@ export default class UIManager {
     this.deathBreakdownEmptyState = null;
     this.sparkMetricDescriptors = [];
     this.traitSparkDescriptors = [];
+    this._traitSparkKeys = null;
+    this.traitSparkGrid = null;
     this.playbackSpeedSlider = null;
     this.speedPresetButtons = [];
     this.dashboardCadenceSlider = null;
@@ -3399,164 +3549,7 @@ export default class UIManager {
     traitSection.appendChild(traitGrid);
     body.appendChild(traitSection);
 
-    const traitConfigs = [
-      {
-        key: "cooperation",
-        name: "Cooperation",
-        colors: {
-          presence: {
-            colorVar: "--color-trait-cooperation-presence",
-            fallbackColor: "#74b9ff",
-          },
-          intensity: {
-            colorVar: "--color-trait-cooperation-intensity",
-            fallbackColor: "#a0c4ff",
-          },
-        },
-      },
-      {
-        key: "fighting",
-        name: "Fighting",
-        colors: {
-          presence: {
-            colorVar: "--color-trait-fighting-presence",
-            fallbackColor: "#ff7675",
-          },
-          intensity: {
-            colorVar: "--color-trait-fighting-intensity",
-            fallbackColor: "#ff9aa2",
-          },
-        },
-      },
-      {
-        key: "breeding",
-        name: "Breeding",
-        colors: {
-          presence: {
-            colorVar: "--color-trait-breeding-presence",
-            fallbackColor: "#f6c177",
-          },
-          intensity: {
-            colorVar: "--color-trait-breeding-intensity",
-            fallbackColor: "#fcd29f",
-          },
-        },
-      },
-      {
-        key: "sight",
-        name: "Sight",
-        colors: {
-          presence: {
-            colorVar: "--color-trait-sight-presence",
-            fallbackColor: "#55efc4",
-          },
-          intensity: {
-            colorVar: "--color-trait-sight-intensity",
-            fallbackColor: "#81f4d0",
-          },
-        },
-      },
-    ];
-
-    const traitSparkDescriptors = [];
-
-    traitConfigs.forEach((trait) => {
-      const card = document.createElement("div");
-
-      card.className = "sparkline-card sparkline-card--trait";
-      card.setAttribute("role", "group");
-      card.setAttribute("aria-label", `${trait.name} trait trends`);
-      card.setAttribute("data-trait", trait.key);
-
-      const header = document.createElement("div");
-
-      header.className = "sparkline-trait-header";
-      const nameEl = document.createElement("span");
-
-      nameEl.className = "sparkline-trait-name";
-      nameEl.textContent = trait.name;
-      header.appendChild(nameEl);
-
-      const contextEl = document.createElement("span");
-
-      contextEl.className = "sparkline-trait-context";
-      contextEl.textContent = "Presence vs intensity";
-      header.appendChild(contextEl);
-
-      card.appendChild(header);
-
-      const metrics = [
-        {
-          label: "Activity (presence %)",
-          property: `sparkTrait${trait.name}Presence`,
-          traitKey: trait.key,
-          traitType: "presence",
-          colorVar: trait.colors.presence.colorVar,
-          fallbackColor: trait.colors.presence.fallbackColor,
-          ariaLabel: `${trait.name} presence trend over time`,
-        },
-        {
-          label: "Intensity (avg level)",
-          property: `sparkTrait${trait.name}Average`,
-          traitKey: trait.key,
-          traitType: "average",
-          colorVar: trait.colors.intensity.colorVar,
-          fallbackColor: trait.colors.intensity.fallbackColor,
-          ariaLabel: `${trait.name} intensity trend over time`,
-        },
-      ];
-
-      metrics.forEach((metric, index) => {
-        const row = document.createElement("div");
-
-        row.className = "sparkline-trait-row";
-        if (index > 0) row.classList.add("sparkline-trait-row--separated");
-
-        const rowCaption = document.createElement("div");
-
-        rowCaption.className = "sparkline-caption sparkline-caption--trait";
-        const dot = document.createElement("span");
-
-        dot.className = "sparkline-color-dot";
-        if (metric.colorVar) {
-          dot.style.background = `var(${metric.colorVar}, ${metric.fallbackColor})`;
-        } else if (metric.fallbackColor) {
-          dot.style.background = metric.fallbackColor;
-        }
-        const labelText = document.createElement("span");
-
-        labelText.className = "sparkline-caption-text";
-        labelText.textContent = metric.label;
-        rowCaption.appendChild(dot);
-        rowCaption.appendChild(labelText);
-
-        const canvas = document.createElement("canvas");
-
-        canvas.className = "sparkline sparkline--trait";
-        canvas.width = 220;
-        canvas.height = 48;
-        canvas.setAttribute("role", "img");
-        canvas.setAttribute("aria-label", metric.ariaLabel);
-        canvas.title = metric.label;
-
-        row.appendChild(rowCaption);
-        row.appendChild(canvas);
-        card.appendChild(row);
-
-        this[metric.property] = canvas;
-        traitSparkDescriptors.push({
-          property: metric.property,
-          traitKey: metric.traitKey,
-          traitType: metric.traitType,
-          colorVar: metric.colorVar,
-          fallbackColor: metric.fallbackColor,
-        });
-      });
-
-      traitGrid.appendChild(card);
-    });
-
-    this.traitSparkDescriptors = traitSparkDescriptors;
+    this.traitSparkGrid = traitGrid;
 
     return panel;
   }
@@ -4083,6 +4076,7 @@ export default class UIManager {
 
     this.#hideMetricsPlaceholder();
     this.metricsBox.innerHTML = "";
+    this.#ensureTraitSparklineCards(stats);
     const s = insightSnapshot;
     const totals = (stats && stats.totals) || {};
     const lastTotals = this._lastInteractionTotals || { fights: 0, cooperations: 0 };
@@ -4525,80 +4519,84 @@ export default class UIManager {
       }
 
       if (hasPopulation) {
-        const traitPalette = {
-          cooperation: "#74b9ff",
-          fighting: "#ff7675",
-          breeding: "#f39c12",
-          sight: "#55efc4",
-        };
-        const traitConfigs = [
-          { key: "cooperation", label: "Cooperation" },
-          { key: "fighting", label: "Fighting" },
-          { key: "breeding", label: "Breeding" },
-          { key: "sight", label: "Sight" },
-        ];
-        const traitList = document.createElement("ul");
+        const traitConfigs = resolveTraitDisplayConfigs(stats);
 
-        traitList.className = "trait-bar-list";
-        traitList.setAttribute("role", "list");
+        if (traitConfigs.length > 0) {
+          const traitList = document.createElement("ul");
 
-        for (let i = 0; i < traitConfigs.length; i++) {
-          const trait = traitConfigs[i];
-          const countRaw = traitPresence.counts?.[trait.key] ?? 0;
-          const fractionRaw = traitPresence.fractions?.[trait.key] ?? 0;
-          const count = Number.isFinite(countRaw) ? countRaw : 0;
-          const fraction = clamp01(Number.isFinite(fractionRaw) ? fractionRaw : 0);
-          const percentText = `${(fraction * 100).toFixed(0)}%`;
-          const countText = count.toLocaleString();
-          const tooltipBase =
-            "Active cells have a normalized value ≥ 60% for this trait.";
-          const item = document.createElement("li");
+          traitList.className = "trait-bar-list";
+          traitList.setAttribute("role", "list");
 
-          item.className = "trait-bar-item";
+          for (let i = 0; i < traitConfigs.length; i++) {
+            const trait = traitConfigs[i];
+            const countRaw = traitPresence.counts?.[trait.key] ?? 0;
+            const fractionRaw = traitPresence.fractions?.[trait.key] ?? 0;
+            const count = Number.isFinite(countRaw) ? countRaw : 0;
+            const fraction = clamp01(Number.isFinite(fractionRaw) ? fractionRaw : 0);
+            const percentText = `${(fraction * 100).toFixed(0)}%`;
+            const countText = count.toLocaleString();
+            const tooltipBase =
+              "Active cells have a normalized value ≥ 60% for this trait.";
+            const item = document.createElement("li");
 
-          const header = document.createElement("div");
+            item.className = "trait-bar-item";
+            item.setAttribute("data-trait", trait.key);
 
-          header.className = "trait-bar-header";
-          const labelEl = document.createElement("span");
+            const header = document.createElement("div");
 
-          labelEl.className = "trait-bar-label";
-          labelEl.textContent = trait.label;
-          header.appendChild(labelEl);
+            header.className = "trait-bar-header";
+            const labelEl = document.createElement("span");
 
-          const valueEl = document.createElement("span");
+            labelEl.className = "trait-bar-label";
+            labelEl.textContent = trait.label;
+            header.appendChild(labelEl);
 
-          valueEl.className = "trait-bar-value";
-          valueEl.textContent = `${countText} cells (${percentText})`;
-          header.appendChild(valueEl);
+            const valueEl = document.createElement("span");
 
-          item.appendChild(header);
+            valueEl.className = "trait-bar-value";
+            valueEl.textContent = `${countText} cells (${percentText})`;
+            header.appendChild(valueEl);
 
-          const meter = document.createElement("div");
+            item.appendChild(header);
 
-          meter.className = "trait-bar-meter";
-          meter.setAttribute("role", "meter");
-          meter.setAttribute("aria-label", `${trait.label} presence`);
-          meter.setAttribute("aria-valuemin", "0");
-          meter.setAttribute("aria-valuemax", "1");
-          meter.setAttribute("aria-valuenow", fraction.toFixed(2));
-          meter.setAttribute(
-            "aria-valuetext",
-            `${percentText} of living cells show high ${trait.label.toLowerCase()}`,
-          );
-          meter.title = `${tooltipBase} ${percentText} of the population exceeds the threshold.`;
+            const meter = document.createElement("div");
 
-          const fill = document.createElement("div");
+            meter.className = "trait-bar-meter";
+            meter.setAttribute("role", "meter");
+            meter.setAttribute("aria-label", `${trait.label} presence`);
+            meter.setAttribute("aria-valuemin", "0");
+            meter.setAttribute("aria-valuemax", "1");
+            meter.setAttribute("aria-valuenow", fraction.toFixed(2));
+            meter.setAttribute(
+              "aria-valuetext",
+              `${percentText} of living cells show high ${trait.label.toLowerCase()}`,
+            );
+            meter.title = `${tooltipBase} ${percentText} of the population exceeds the threshold.`;
 
-          fill.className = "trait-bar-fill";
-          fill.style.width = `${(fraction * 100).toFixed(0)}%`;
-          fill.style.background = traitPalette[trait.key] || "#74b9ff";
-          meter.appendChild(fill);
+            const fill = document.createElement("div");
 
-          item.appendChild(meter);
-          traitList.appendChild(item);
+            fill.className = "trait-bar-fill";
+            fill.style.width = `${(fraction * 100).toFixed(0)}%`;
+
+            const presenceColor = trait.colors.presence;
+
+            fill.style.background = presenceColor.colorVar
+              ? `var(${presenceColor.colorVar}, ${presenceColor.fallbackColor})`
+              : presenceColor.fallbackColor;
+            meter.appendChild(fill);
+
+            item.appendChild(meter);
+            traitList.appendChild(item);
+          }
+
+          traitBody.appendChild(traitList);
+        } else {
+          const emptyState = document.createElement("p");
+
+          emptyState.className = "trait-empty-state";
+          emptyState.textContent = "No living cells to sample for trait presence yet.";
+          traitBody.appendChild(emptyState);
         }
-
-        traitBody.appendChild(traitList);
       } else {
         const emptyState = document.createElement("p");
 
@@ -4633,6 +4631,142 @@ export default class UIManager {
         },
       );
     }
+  }
+
+  #ensureTraitSparklineCards(stats) {
+    if (!this.traitSparkGrid) return;
+
+    const configs = resolveTraitDisplayConfigs(stats);
+    const keys = configs.map((config) => config.key);
+    const keysUnchanged =
+      Array.isArray(this._traitSparkKeys) &&
+      this._traitSparkKeys.length === keys.length &&
+      this._traitSparkKeys.every((key, index) => key === keys[index]);
+
+    if (keysUnchanged) {
+      return;
+    }
+
+    if (Array.isArray(this.traitSparkDescriptors)) {
+      this.traitSparkDescriptors.forEach(({ property }) => {
+        if (property && Object.hasOwn(this, property)) {
+          delete this[property];
+        }
+      });
+    }
+
+    this.traitSparkGrid.innerHTML = "";
+
+    if (configs.length === 0) {
+      this.traitSparkDescriptors = [];
+      this._traitSparkKeys = [];
+
+      return;
+    }
+
+    const descriptors = [];
+
+    configs.forEach((trait) => {
+      const label = trait.label;
+      const key = trait.key;
+      const baseId = toPascalCase(key) || "Trait";
+      const card = document.createElement("div");
+
+      card.className = "sparkline-card sparkline-card--trait";
+      card.setAttribute("role", "group");
+      card.setAttribute("aria-label", `${label} trait trends`);
+      card.setAttribute("data-trait", key);
+
+      const header = document.createElement("div");
+
+      header.className = "sparkline-trait-header";
+      const nameEl = document.createElement("span");
+
+      nameEl.className = "sparkline-trait-name";
+      nameEl.textContent = label;
+      header.appendChild(nameEl);
+
+      const contextEl = document.createElement("span");
+
+      contextEl.className = "sparkline-trait-context";
+      contextEl.textContent = "Presence vs intensity";
+      header.appendChild(contextEl);
+
+      card.appendChild(header);
+
+      const metrics = [
+        {
+          label: "Activity (presence %)",
+          property: `sparkTrait${baseId}Presence`,
+          traitKey: key,
+          traitType: "presence",
+          colorVar: trait.colors.presence.colorVar,
+          fallbackColor: trait.colors.presence.fallbackColor,
+          ariaLabel: `${label} presence trend over time`,
+        },
+        {
+          label: "Intensity (avg level)",
+          property: `sparkTrait${baseId}Average`,
+          traitKey: key,
+          traitType: "average",
+          colorVar: trait.colors.intensity.colorVar,
+          fallbackColor: trait.colors.intensity.fallbackColor,
+          ariaLabel: `${label} intensity trend over time`,
+        },
+      ];
+
+      metrics.forEach((metric, index) => {
+        const row = document.createElement("div");
+
+        row.className = "sparkline-trait-row";
+        if (index > 0) row.classList.add("sparkline-trait-row--separated");
+
+        const rowCaption = document.createElement("div");
+
+        rowCaption.className = "sparkline-caption sparkline-caption--trait";
+        const dot = document.createElement("span");
+
+        dot.className = "sparkline-color-dot";
+        if (metric.colorVar) {
+          dot.style.background = `var(${metric.colorVar}, ${metric.fallbackColor})`;
+        } else if (metric.fallbackColor) {
+          dot.style.background = metric.fallbackColor;
+        }
+        const labelText = document.createElement("span");
+
+        labelText.className = "sparkline-caption-text";
+        labelText.textContent = metric.label;
+        rowCaption.appendChild(dot);
+        rowCaption.appendChild(labelText);
+
+        const canvas = document.createElement("canvas");
+
+        canvas.className = "sparkline sparkline--trait";
+        canvas.width = 220;
+        canvas.height = 48;
+        canvas.setAttribute("role", "img");
+        canvas.setAttribute("aria-label", metric.ariaLabel);
+        canvas.title = metric.label;
+
+        row.appendChild(rowCaption);
+        row.appendChild(canvas);
+        card.appendChild(row);
+
+        this[metric.property] = canvas;
+        descriptors.push({
+          property: metric.property,
+          traitKey: metric.traitKey,
+          traitType: metric.traitType,
+          colorVar: metric.colorVar,
+          fallbackColor: metric.fallbackColor,
+        });
+      });
+
+      this.traitSparkGrid.appendChild(card);
+    });
+
+    this.traitSparkDescriptors = descriptors;
+    this._traitSparkKeys = keys;
   }
 
   renderLifeEvents(stats, metrics) {
