@@ -738,24 +738,22 @@ export default class Stats {
 
     const sums = this.#traitSums;
     const activeCounts = this.#traitActiveCounts;
-    const computes = this.#traitComputes;
     const thresholds = this.#traitThresholds;
 
-    for (let i = 0; i < computes.length; i += 1) {
-      const compute = computes[i];
-      const threshold = thresholds[i];
-      const rawValue = compute ? compute(cell) : 0;
+    this.#traitComputes.forEach((compute, index) => {
+      const threshold = thresholds[index];
+      const rawValue = typeof compute === "function" ? compute(cell) : 0;
       const value = Number.isFinite(rawValue) ? clamp01(rawValue) : 0;
-      const nextSum = sums[i] + value * direction;
+      const nextSum = sums[index] + value * direction;
 
-      sums[i] = nextSum >= 0 ? nextSum : 0;
+      sums[index] = nextSum >= 0 ? nextSum : 0;
 
       if (value >= threshold) {
-        const nextCount = activeCounts[i] + direction;
+        const nextCount = activeCounts[index] + direction;
 
-        activeCounts[i] = nextCount > 0 ? nextCount : 0;
+        activeCounts[index] = nextCount > 0 ? nextCount : 0;
       }
-    }
+    });
 
     this.#traitPresenceDirty = true;
   }
@@ -770,8 +768,7 @@ export default class Stats {
 
     let population = 0;
 
-    for (let i = 0; i < pool.length; i += 1) {
-      const source = pool[i];
+    for (const source of pool) {
       const cell =
         source &&
         typeof source === "object" &&
@@ -783,18 +780,17 @@ export default class Stats {
 
       population += 1;
 
-      for (let t = 0; t < computes.length; t += 1) {
-        const compute = computes[t];
-        const threshold = thresholds[t];
-        const rawValue = compute ? compute(cell) : 0;
+      computes.forEach((compute, index) => {
+        const threshold = thresholds[index];
+        const rawValue = typeof compute === "function" ? compute(cell) : 0;
         const value = Number.isFinite(rawValue) ? clamp01(rawValue) : 0;
 
-        this.#traitSums[t] += value;
+        this.#traitSums[index] += value;
 
         if (value >= threshold) {
-          this.#traitActiveCounts[t] += 1;
+          this.#traitActiveCounts[index] += 1;
         }
-      }
+      });
     }
 
     this.#traitPopulation = population;
