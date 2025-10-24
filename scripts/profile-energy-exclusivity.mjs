@@ -1,14 +1,11 @@
 import { performance as nodePerformance } from "node:perf_hooks";
 
-const [
-  { default: GridManager },
-  { default: EventManager },
-  { default: DNA },
-] = await Promise.all([
-  import("../src/grid/gridManager.js"),
-  import("../src/events/eventManager.js"),
-  import("../src/genome.js"),
-]);
+const [{ default: GridManager }, { default: EventManager }, { default: DNA }] =
+  await Promise.all([
+    import("../src/grid/gridManager.js"),
+    import("../src/events/eventManager.js"),
+    import("../src/genome.js"),
+  ]);
 
 const performanceApi =
   typeof globalThis.performance === "object" &&
@@ -60,8 +57,16 @@ if (configuration.population > 0) {
     ? grid.maxTileEnergy
     : GridManager.maxTileEnergy;
 
-  for (let row = 0; row < configuration.rows && seeded < configuration.population; row++) {
-    for (let col = 0; col < configuration.cols && seeded < configuration.population; col++) {
+  for (
+    let row = 0;
+    row < configuration.rows && seeded < configuration.population;
+    row++
+  ) {
+    for (
+      let col = 0;
+      col < configuration.cols && seeded < configuration.population;
+      col++
+    ) {
       if (grid.isObstacle?.(row, col)) continue;
 
       const dna = DNA.random(rng);
