@@ -2068,6 +2068,53 @@ export default class GridManager {
 
   #enforceEnergyExclusivity({ previousEnergyGrid = null } = {}) {
     if (!this.grid || !this.energyGrid) return;
+    const activeCells = this.activeCells;
+    const hasActiveCells = Boolean(activeCells && activeCells.size > 0);
+
+    if (hasActiveCells) {
+      let fallbackScanNeeded = false;
+
+      for (const cell of activeCells) {
+        if (!cell) continue;
+
+        let location = null;
+
+        if (this.cellPositions && typeof this.cellPositions.get === "function") {
+          location = this.cellPositions.get(cell) || null;
+        }
+
+        if (
+          !location ||
+          !Number.isInteger(location.row) ||
+          !Number.isInteger(location.col) ||
+          this.grid?.[location.row]?.[location.col] !== cell
+        ) {
+          location = this.#resolveCellCoordinates(cell);
+
+          if (!location) {
+            fallbackScanNeeded = true;
+
+            continue;
+          }
+        }
+
+        this.#applyEnergyExclusivityAt(location.row, location.col, cell, {
+          previousEnergyGrid,
+        });
+      }
+
+      if (!fallbackScanNeeded) {
+        return;
+      }
+    } else {
+      const hasRecordedOccupancy = Array.isArray(this.#rowOccupancy)
+        ? this.#rowOccupancy.some((bucket) => bucket && bucket.size > 0)
+        : false;
+
+      if (!hasRecordedOccupancy) {
+        return;
+      }
+    }
 
     for (let row = 0; row < this.rows; row++) {
       const gridRow = this.grid[row];
