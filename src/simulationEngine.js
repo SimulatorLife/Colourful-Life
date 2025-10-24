@@ -2,6 +2,7 @@ import EventManager from "./events/eventManager.js";
 import GridManager from "./grid/gridManager.js";
 import Stats from "./stats.js";
 import { computeLeaderboard } from "./leaderboard.js";
+import TelemetryController from "./engine/telemetryController.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -225,6 +226,49 @@ export default class SimulationEngine {
         (defaults.eventFrequencyMultiplier ?? 1) > 0 && maxConcurrentEvents > 0,
     });
     this.stats = new Stats();
+    this.telemetry = new TelemetryController({
+      stats: this.stats,
+      computeLeaderboard,
+      leaderboardSize: 5,
+      now: this.now,
+    });
+    Object.defineProperties(this, {
+      pendingSlowUiUpdate: {
+        configurable: true,
+        enumerable: false,
+        get: () => this.telemetry.hasPending(),
+        set: (value) => {
+          if (value) {
+            this.telemetry.markPending();
+          } else {
+            this.telemetry.clearPending();
+          }
+        },
+      },
+      lastSnapshot: {
+        configurable: true,
+        enumerable: false,
+        get: () => this.telemetry.snapshot,
+      },
+      lastMetrics: {
+        configurable: true,
+        enumerable: false,
+        get: () => this.telemetry.metrics,
+      },
+      lastSlowUiRender: {
+        configurable: true,
+        enumerable: false,
+        get: () => this.telemetry.getLastEmissionTimestamp(),
+        set: (value) => {
+          this.telemetry.resetThrottle(value);
+        },
+      },
+      lastRenderStats: {
+        configurable: true,
+        enumerable: false,
+        get: () => this.telemetry.metrics?.rendering ?? null,
+      },
+    });
     const resolveSelectionManager = () => {
       if (selectionManager && typeof selectionManager === "object") {
         return selectionManager;
@@ -326,11 +370,9 @@ export default class SimulationEngine {
     });
 
     // Flag signalling that leaderboard/metrics should be recalculated once the throttle allows it.
-    this.pendingSlowUiUpdate = false;
-    this.lastMetrics = null;
-    this.lastRenderStats = null;
-    this.lastSnapshot = this.grid.getLastSnapshot();
-    this.lastSlowUiRender = Number.NEGATIVE_INFINITY;
+    this.telemetry.setInitialSnapshot(this.grid.getLastSnapshot());
+    this.telemetry.clearPending();
+    this.telemetry.resetThrottle(Number.NEGATIVE_INFINITY);
     this.lastUpdateTime = 0;
     this.running = false;
     this.frameHandle = null;
@@ -423,7 +465,7 @@ export default class SimulationEngine {
 
     if (changed) {
       if (changes.leaderboardIntervalMs !== undefined) {
-        this.lastSlowUiRender = Number.NEGATIVE_INFINITY;
+        this.telemetry.resetThrottle(Number.NEGATIVE_INFINITY);
       }
 
       this.emit("state", { state: this.getStateSnapshot(), changes });
@@ -436,7 +478,7 @@ export default class SimulationEngine {
     const changed = this.#updateState(partial);
 
     if (changed) {
-      this.pendingSlowUiUpdate = true;
+      this.telemetry.markPending();
     }
 
     return changed;
@@ -599,10 +641,10 @@ export default class SimulationEngine {
    * Pause and events:
    * - When paused the grid still redraws, but no `tick` event is emitted and throttled UI updates
    *   remain pending until the next unpaused frame.
-   * - `pendingSlowUiUpdate` is flipped to `true` whenever GridManager produces a new snapshot and
-   *   Stats ingest fresh metrics. The `leaderboardIntervalMs` throttle guards how often the
-   *   expensive leaderboard aggregation runs, ensuring UI work is batched even if simulation ticks
-   *   faster.
+   * - The telemetry controller flags slow UI updates as pending whenever GridManager produces a new
+   *   snapshot and Stats ingest fresh metrics. The `leaderboardIntervalMs` throttle guards how
+   *   often the expensive leaderboard aggregation runs, ensuring UI work is batched even if
+   *   simulation ticks faster.
    * - Grid mutations are delegated to `GridManager.update`, which consumes the current tuning
    *   values. The returned snapshot feeds directly into `Stats.updateFromSnapshot`, tying together
    *   world state, statistics, and UI surfaces.
@@ -655,19 +697,20 @@ export default class SimulationEngine {
           this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
       });
 
-      this.lastSnapshot = snapshot;
       this.stats.logEvent?.(
         this.eventManager.currentEvent,
         this.state.eventStrengthMultiplier ?? 1,
       );
       this.stats.setMutationMultiplier?.(this.state.mutationMultiplier ?? 1);
-      this.lastMetrics = this.stats.updateFromSnapshot?.(snapshot);
+
+      const metrics = this.telemetry.ingestSnapshot(snapshot);
       // Defer leaderboard/metrics publication until the throttle window allows another emit.
-      this.pendingSlowUiUpdate = true;
+
+      this.telemetry.markPending();
 
       this.emit("tick", {
         snapshot,
-        metrics: this.lastMetrics,
+        metrics,
         timestamp: effectiveTimestamp,
       });
     }
@@ -677,11 +720,7 @@ export default class SimulationEngine {
     });
 
     if (renderSnapshot) {
-      this.lastRenderStats = renderSnapshot;
-
-      if (this.lastMetrics) {
-        this.lastMetrics = { ...this.lastMetrics, rendering: renderSnapshot };
-      }
+      this.telemetry.includeRenderStats(renderSnapshot);
     }
 
     const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
@@ -703,7 +742,7 @@ export default class SimulationEngine {
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
-      snapshot: this.lastSnapshot,
+      snapshot: this.telemetry.snapshot,
       activeEvents: this.eventManager.activeEvents,
       getEventColor: this.eventManager.getColor?.bind(this.eventManager),
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
@@ -712,42 +751,26 @@ export default class SimulationEngine {
       currentTick: lifeEventTick,
     });
 
-    if (this.pendingSlowUiUpdate) {
-      const interval = Math.max(0, this.state.leaderboardIntervalMs ?? 0);
-
-      if (interval === 0 || effectiveTimestamp - this.lastSlowUiRender >= interval) {
-        this.lastSlowUiRender = effectiveTimestamp;
-
-        if (this.lastMetrics) {
-          this.emit("metrics", {
-            stats: this.stats,
-            metrics: this.lastMetrics,
-            environment: {
-              activeEvents: this.#summarizeActiveEvents(),
-              updatesPerSecond: Math.max(
-                1,
-                Math.round(this.state.updatesPerSecond ?? 60),
-              ),
-              eventStrengthMultiplier: Number.isFinite(
-                this.state.eventStrengthMultiplier,
-              )
-                ? this.state.eventStrengthMultiplier
-                : 1,
-              combatTerritoryEdgeFactor:
-                this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
-            },
-          });
-        }
-
-        const top = this.lastSnapshot ? computeLeaderboard(this.lastSnapshot, 5) : [];
-
-        this.emit("leaderboard", { entries: top });
-        this.pendingSlowUiUpdate = false;
-      }
+    if (this.telemetry.hasPending()) {
+      this.telemetry.publishIfDue({
+        timestamp: effectiveTimestamp,
+        interval: this.state.leaderboardIntervalMs,
+        getEnvironment: () => ({
+          activeEvents: this.#summarizeActiveEvents(),
+          updatesPerSecond: Math.max(1, Math.round(this.state.updatesPerSecond ?? 60)),
+          eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
+            ? this.state.eventStrengthMultiplier
+            : 1,
+          combatTerritoryEdgeFactor:
+            this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
+        }),
+        emitMetrics: (payload) => this.emit("metrics", payload),
+        emitLeaderboard: (payload) => this.emit("leaderboard", payload),
+      });
     }
 
     if (scheduleNext) {
-      const shouldContinue = !paused || this.pendingSlowUiUpdate;
+      const shouldContinue = !paused || this.telemetry.hasPending();
 
       if (shouldContinue) {
         this.#scheduleNextFrame();
@@ -935,15 +958,12 @@ export default class SimulationEngine {
       this.ctx.clearRect(0, 0, this.canvas?.width ?? 0, this.canvas?.height ?? 0);
     }
 
-    this.lastSnapshot =
+    const snapshot =
       typeof this.grid?.buildSnapshot === "function" ? this.grid.buildSnapshot() : null;
-    this.lastMetrics =
-      this.lastSnapshot && typeof this.stats?.updateFromSnapshot === "function"
-        ? this.stats.updateFromSnapshot(this.lastSnapshot)
-        : null;
 
-    this.pendingSlowUiUpdate = true;
-    this.lastSlowUiRender = Number.NEGATIVE_INFINITY;
+    this.telemetry.ingestSnapshot(snapshot);
+    this.telemetry.markPending();
+    this.telemetry.resetThrottle(Number.NEGATIVE_INFINITY);
     this.lastUpdateTime = this.now();
 
     this.#updateState({
@@ -1017,41 +1037,28 @@ export default class SimulationEngine {
       });
     }
 
-    this.lastSnapshot =
+    const snapshot =
       typeof this.grid?.buildSnapshot === "function" ? this.grid.buildSnapshot() : null;
 
     if (typeof this.stats?.setMutationMultiplier === "function") {
       this.stats.setMutationMultiplier(this.state.mutationMultiplier ?? 1);
     }
 
-    this.lastMetrics =
-      this.lastSnapshot && typeof this.stats?.updateFromSnapshot === "function"
-        ? this.stats.updateFromSnapshot(this.lastSnapshot)
-        : null;
-
-    const environment = {
-      activeEvents: this.#summarizeActiveEvents(),
-      updatesPerSecond: Math.max(1, Math.round(this.state.updatesPerSecond ?? 60)),
-      eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
-        ? this.state.eventStrengthMultiplier
-        : 1,
-      combatTerritoryEdgeFactor:
-        this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
-    };
-
-    if (this.lastMetrics) {
-      this.emit("metrics", {
-        stats: this.stats,
-        metrics: this.lastMetrics,
-        environment,
-      });
-    }
-
-    const leaderboard = this.lastSnapshot
-      ? computeLeaderboard(this.lastSnapshot, 5)
-      : [];
-
-    this.emit("leaderboard", { entries: leaderboard });
+    this.telemetry.ingestSnapshot(snapshot);
+    this.telemetry.publishNow({
+      timestamp: this.now(),
+      getEnvironment: () => ({
+        activeEvents: this.#summarizeActiveEvents(),
+        updatesPerSecond: Math.max(1, Math.round(this.state.updatesPerSecond ?? 60)),
+        eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
+          ? this.state.eventStrengthMultiplier
+          : 1,
+        combatTerritoryEdgeFactor:
+          this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
+      }),
+      emitMetrics: (payload) => this.emit("metrics", payload),
+      emitLeaderboard: (payload) => this.emit("leaderboard", payload),
+    });
 
     const showObstacles = this.state.showObstacles ?? true;
 
@@ -1075,7 +1082,7 @@ export default class SimulationEngine {
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
-      snapshot: this.lastSnapshot,
+      snapshot: this.telemetry.snapshot,
       activeEvents: this.eventManager?.activeEvents,
       getEventColor: this.eventManager?.getColor?.bind(this.eventManager),
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
@@ -1084,8 +1091,8 @@ export default class SimulationEngine {
       currentTick: lifeEventTick,
     });
 
-    this.lastSlowUiRender = this.now();
-    this.pendingSlowUiUpdate = false;
+    this.telemetry.resetThrottle(this.now());
+    this.telemetry.clearPending();
 
     if (wasRunning) {
       this.start();
