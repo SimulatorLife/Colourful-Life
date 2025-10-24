@@ -103,6 +103,7 @@ export default class UIManager {
     this.zoneSummaryList = null;
     this._checkboxIdSequence = 0;
     this.stepButton = null;
+    this._documentKeydownListener = null;
     this.metricsPlaceholder = null;
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
@@ -247,62 +248,12 @@ export default class UIManager {
     this.dashboardGrid.appendChild(this.lifeEventsPanel);
 
     // Keyboard toggle
-    document.addEventListener("keydown", (event) => {
-      if (!event?.key) return;
-      if (this.#shouldIgnoreHotkey(event)) return;
-
-      const key = this.#normalizeHotkeyValue(event.key);
-
-      if (!key) return;
-
-      if (this.pauseHotkeySet.has(key)) {
-        event.preventDefault();
-        this.togglePause();
-
-        return;
-      }
-
-      if (this.stepHotkeySet.has(key)) {
-        event.preventDefault();
-
-        if (this.paused) {
-          this.#executeStep();
-        } else {
-          const nowPaused = this.togglePause();
-
-          if (nowPaused) {
-            this.#executeStep();
-          }
-        }
-
-        return;
-      }
-
-      if (this.speedIncreaseHotkeySet.has(key)) {
-        event.preventDefault();
-        const steps = event.shiftKey ? 5 : 1;
-
-        this.#bumpSpeedMultiplier(steps);
-
-        return;
-      }
-
-      if (this.speedDecreaseHotkeySet.has(key)) {
-        event.preventDefault();
-        const steps = event.shiftKey ? 5 : 1;
-
-        this.#bumpSpeedMultiplier(-steps);
-
-        return;
-      }
-
-      if (this.speedResetHotkeySet.has(key)) {
-        event.preventDefault();
-        this.#resetSpeedMultiplier();
-
-        return;
-      }
-    });
+    if (document?.addEventListener) {
+      this._documentKeydownListener = (event) => {
+        this.#handleDocumentKeydown(event);
+      };
+      document.addEventListener("keydown", this._documentKeydownListener);
+    }
   }
 
   #normalizeHotkeyValue(value) {
@@ -335,6 +286,61 @@ export default class UIManager {
     }
 
     return normalized.replace(/[-_\s]+/g, "");
+  }
+
+  #handleDocumentKeydown(event) {
+    if (!event?.key) return;
+    if (this.#shouldIgnoreHotkey(event)) return;
+
+    const key = this.#normalizeHotkeyValue(event.key);
+
+    if (!key) return;
+
+    if (this.pauseHotkeySet.has(key)) {
+      event.preventDefault();
+      this.togglePause();
+
+      return;
+    }
+
+    if (this.stepHotkeySet.has(key)) {
+      event.preventDefault();
+
+      if (this.paused) {
+        this.#executeStep();
+      } else {
+        const nowPaused = this.togglePause();
+
+        if (nowPaused) {
+          this.#executeStep();
+        }
+      }
+
+      return;
+    }
+
+    if (this.speedIncreaseHotkeySet.has(key)) {
+      event.preventDefault();
+      const steps = event.shiftKey ? 5 : 1;
+
+      this.#bumpSpeedMultiplier(steps);
+
+      return;
+    }
+
+    if (this.speedDecreaseHotkeySet.has(key)) {
+      event.preventDefault();
+      const steps = event.shiftKey ? 5 : 1;
+
+      this.#bumpSpeedMultiplier(-steps);
+
+      return;
+    }
+
+    if (this.speedResetHotkeySet.has(key)) {
+      event.preventDefault();
+      this.#resetSpeedMultiplier();
+    }
   }
 
   #resolveHotkeySet(candidate, fallbackKeys = ["p"]) {
@@ -1009,6 +1015,13 @@ export default class UIManager {
 
     this.#ensureMainRowMounted(anchor);
     this.canvasContainer.appendChild(targetCanvas);
+  }
+
+  destroy() {
+    if (this._documentKeydownListener && document?.removeEventListener) {
+      document.removeEventListener("keydown", this._documentKeydownListener);
+      this._documentKeydownListener = null;
+    }
   }
 
   #ensureMainRowMounted(anchor) {
