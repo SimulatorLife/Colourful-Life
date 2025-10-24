@@ -504,6 +504,12 @@ canvas {
   opacity: 1;
 }
 
+.geometry-summary[data-state="busy"] {
+  border-color: rgba(126, 220, 140, 0.45);
+  box-shadow: 0 0 0 1px rgba(126, 220, 140, 0.2);
+  opacity: 1;
+}
+
 .geometry-summary__header {
   display: flex;
   align-items: baseline;
@@ -532,6 +538,10 @@ canvas {
 
 .geometry-summary[data-state="incomplete"] .geometry-summary__status {
   color: var(--color-life-death);
+}
+
+.geometry-summary[data-state="busy"] .geometry-summary__status {
+  color: var(--color-life-birth);
 }
 
 .geometry-summary__grid {
@@ -567,6 +577,36 @@ canvas {
 
 .geometry-summary__note--warning {
   color: var(--color-life-death);
+}
+
+.geometry-summary__note--success {
+  color: var(--color-life-birth);
+}
+
+.geometry-actions__apply[data-busy="true"] {
+  position: relative;
+  padding-left: calc(var(--space-md) * 2.6);
+  cursor: progress;
+}
+
+.geometry-actions__apply[data-busy="true"]::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--space-md) * 0.8);
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.24);
+  border-top-color: var(--color-text);
+  animation: geometry-apply-spinner 0.8s linear infinite;
+}
+
+@keyframes geometry-apply-spinner {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .zone-intro {

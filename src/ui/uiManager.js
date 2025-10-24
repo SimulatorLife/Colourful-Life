@@ -596,6 +596,7 @@ export default class UIManager {
 
     if (!controls?.summaryEl) return normalized;
 
+    const isBusy = Boolean(controls.geometryBusy);
     const rawValues = options.raw ?? values ?? {};
     const hasEmpty = Boolean(options.hasEmpty);
     const hasInvalid = Boolean(options.hasInvalid);
@@ -625,6 +626,20 @@ export default class UIManager {
         : `${formatNumber(widthPx)} × ${formatNumber(heightPx)}`;
     }
 
+    if (isBusy) {
+      controls.summaryEl.setAttribute("data-state", "busy");
+      controls.summaryEl.setAttribute("aria-busy", "true");
+      if (controls.summaryStatusEl) {
+        controls.summaryStatusEl.textContent = "Applying…";
+      }
+      if (controls.applyButton) {
+        controls.applyButton.disabled = true;
+        controls.applyButton.setAttribute("aria-disabled", "true");
+      }
+
+      return normalized;
+    }
+
     const differsFromCurrent =
       source !== "sync" &&
       !isIncomplete &&
@@ -639,6 +654,7 @@ export default class UIManager {
         : "current";
 
     controls.summaryEl.setAttribute("data-state", state);
+    controls.summaryEl.setAttribute("aria-busy", "false");
 
     if (controls.summaryStatusEl) {
       let statusText = "Current";
@@ -655,6 +671,7 @@ export default class UIManager {
       const defaultNote = controls.summaryDefaultNote;
 
       noteEl.classList.remove("geometry-summary__note--warning");
+      noteEl.classList.remove("geometry-summary__note--success");
 
       if (isIncomplete) {
         noteEl.textContent = hasInvalid
@@ -738,6 +755,192 @@ export default class UIManager {
     });
 
     return adjustments;
+  }
+
+  #geometryValuesEqual(a = {}, b = {}) {
+    const keys = ["cellSize", "rows", "cols"];
+
+    return keys.every((key) => {
+      const aValue = Number(a?.[key]);
+      const bValue = Number(b?.[key]);
+
+      if (!Number.isFinite(aValue) && !Number.isFinite(bValue)) return true;
+
+      return aValue === bValue;
+    });
+  }
+
+  #formatGeometryDimensions(values = {}) {
+    const cols = Number(values?.cols);
+    const rows = Number(values?.rows);
+    const cellSize = Number(values?.cellSize);
+    const parts = [];
+
+    if (Number.isFinite(cols) && Number.isFinite(rows)) {
+      parts.push(`${cols.toLocaleString()} × ${rows.toLocaleString()} cells`);
+    }
+
+    if (Number.isFinite(cols) && Number.isFinite(rows) && Number.isFinite(cellSize)) {
+      const width = Math.round(cols * cellSize);
+      const height = Math.round(rows * cellSize);
+
+      parts.push(`${width.toLocaleString()} × ${height.toLocaleString()} px`);
+    } else if (Number.isFinite(cellSize) && parts.length > 0) {
+      parts.push(`${cellSize.toLocaleString()} px tiles`);
+    }
+
+    return parts.join(" • ");
+  }
+
+  #showGeometryAppliedMessage(values = {}, options = {}) {
+    const controls = this.geometryControls;
+    const noteEl = controls?.summaryNoteEl;
+
+    if (!noteEl) return;
+
+    noteEl.classList.remove("geometry-summary__note--warning");
+    const summary = this.#formatGeometryDimensions(values);
+    const adjustments = Array.isArray(options.adjustments)
+      ? options.adjustments.filter(Boolean)
+      : [];
+
+    if (options.changed) {
+      noteEl.classList.add("geometry-summary__note--success");
+      const prefix = options.reseed ? "World resized and reseeded" : "World resized";
+      const baseMessage = summary ? `${prefix}: ${summary}.` : `${prefix}.`;
+      const adjustmentNote =
+        adjustments.length > 0
+          ? ` Adjusted to stay within limits: ${this.#formatReadableList(adjustments)}.`
+          : "";
+
+      noteEl.textContent = `${baseMessage}${adjustmentNote}`;
+    } else {
+      noteEl.classList.remove("geometry-summary__note--success");
+      noteEl.textContent = summary
+        ? `No changes needed. World already sized at ${summary}.`
+        : "No changes needed. World already at the requested size.";
+    }
+  }
+
+  #setGeometryBusy(isBusy, details = {}) {
+    const controls = this.geometryControls;
+
+    if (!controls?.applyButton) return false;
+
+    const button = controls.applyButton;
+    const summary = controls.summaryEl;
+    const statusEl = controls.summaryStatusEl;
+
+    if (isBusy) {
+      if (controls.geometryBusy) return false;
+
+      controls.geometryBusy = true;
+      if (!controls.applyButtonDefaultLabel) {
+        controls.applyButtonDefaultLabel = button.textContent || "Apply Geometry";
+      }
+      if (!controls.applyButtonDefaultTitle) {
+        controls.applyButtonDefaultTitle = button.title || "Apply Geometry";
+      }
+      if (!controls.applyButtonDefaultAriaLabel) {
+        const ariaLabel = this.#readElementAttribute(button, "aria-label");
+
+        controls.applyButtonDefaultAriaLabel =
+          ariaLabel ||
+          controls.applyButtonDefaultTitle ||
+          controls.applyButtonDefaultLabel;
+      }
+
+      button.disabled = true;
+      button.setAttribute("aria-disabled", "true");
+      button.setAttribute("data-busy", "true");
+
+      const targetSummary = this.#formatGeometryDimensions(details.target);
+      let busyNote =
+        details.note ||
+        (details.reseed
+          ? "Resizing and reseeding the world. This may take a moment."
+          : "Resizing the world. This may take a moment.");
+
+      if (targetSummary) {
+        busyNote = `${busyNote} Target: ${targetSummary}.`;
+      }
+
+      button.textContent = details.label || "Applying…";
+      button.title = busyNote;
+      button.setAttribute("aria-label", busyNote);
+
+      if (summary) {
+        summary.setAttribute("data-state", "busy");
+        summary.setAttribute("aria-busy", "true");
+      }
+      if (statusEl) {
+        statusEl.textContent = "Applying…";
+      }
+      if (controls.summaryNoteEl) {
+        controls.summaryNoteEl.textContent = busyNote;
+        controls.summaryNoteEl.classList.remove("geometry-summary__note--warning");
+        controls.summaryNoteEl.classList.remove("geometry-summary__note--success");
+      }
+
+      return true;
+    }
+
+    if (!controls.geometryBusy) return false;
+
+    controls.geometryBusy = false;
+    if (typeof button.removeAttribute === "function")
+      button.removeAttribute("data-busy");
+    else button.setAttribute("data-busy", "false");
+    button.title = controls.applyButtonDefaultTitle || "Apply Geometry";
+    const defaultAriaLabel =
+      controls.applyButtonDefaultAriaLabel ||
+      controls.applyButtonDefaultTitle ||
+      controls.applyButtonDefaultLabel ||
+      "Apply Geometry";
+
+    button.setAttribute("aria-label", defaultAriaLabel);
+    button.textContent = controls.applyButtonDefaultLabel || "Apply Geometry";
+
+    if (summary) {
+      summary.setAttribute("aria-busy", "false");
+    }
+
+    const appliedValues = details.applied ?? {};
+    const normalizedApplied = this.#normalizeGeometryValues(appliedValues, {
+      cellSize: this.currentCellSize,
+      rows: this.gridRows,
+      cols: this.gridCols,
+    });
+    const previousValues = this.#normalizeGeometryValues(
+      details.previous ?? {},
+      normalizedApplied,
+      {
+        clampToBounds: false,
+      },
+    );
+    const changed = !this.#geometryValuesEqual(previousValues, normalizedApplied);
+
+    const rawRequest = details.raw ?? appliedValues ?? {};
+
+    this.#updateGeometrySummary(normalizedApplied, {
+      raw: rawRequest,
+      source: "sync",
+    });
+
+    const adjustmentList = this.#describeGeometryAdjustments(
+      rawRequest,
+      normalizedApplied,
+    );
+
+    this.#showGeometryAppliedMessage(normalizedApplied, {
+      changed,
+      reseed: Boolean(details.reseed),
+      adjustments: adjustmentList,
+    });
+
+    button.setAttribute("aria-disabled", button.disabled ? "true" : "false");
+
+    return true;
   }
 
   #formatReadableList(items = []) {
@@ -1059,6 +1262,25 @@ export default class UIManager {
     if (candidate instanceof Node) return candidate;
     if (typeof candidate === "string") {
       return this.root.querySelector(candidate) || document.querySelector(candidate);
+    }
+
+    return null;
+  }
+
+  #readElementAttribute(element, name) {
+    if (!element || typeof name !== "string" || name.length === 0) return null;
+    if (typeof element.getAttribute === "function") {
+      try {
+        return element.getAttribute(name);
+      } catch (error) {
+        // Ignore environments without standard DOM attribute helpers.
+      }
+    }
+
+    if (element.attributes && typeof element.attributes === "object") {
+      const value = element.attributes[name];
+
+      if (value != null) return value;
     }
 
     return null;
@@ -2319,17 +2541,50 @@ export default class UIManager {
     applyButton.className = "geometry-actions__apply";
     applyButton.textContent = "Apply Geometry";
     applyButton.title = "Resize the grid using the values above.";
+    applyButton.setAttribute("aria-label", "Apply the grid using the values above.");
     applyButton.addEventListener("click", (event) => {
-      this.#applyWorldGeometry(
-        {
-          cellSize: Number.parseFloat(cellSizeInput.value),
-          rows: Number.parseFloat(rowsInput.value),
-          cols: Number.parseFloat(colsInput.value),
-        },
-        {
-          reseed: Boolean(event?.shiftKey),
-        },
-      );
+      const request = {
+        cellSize: Number.parseFloat(cellSizeInput.value),
+        rows: Number.parseFloat(rowsInput.value),
+        cols: Number.parseFloat(colsInput.value),
+      };
+      const reseed = Boolean(event?.shiftKey);
+      const previous = {
+        cellSize: this.currentCellSize,
+        rows: this.gridRows,
+        cols: this.gridCols,
+      };
+      const targetPreview = this.#normalizeGeometryValues(request, previous, {
+        clampToBounds: false,
+      });
+
+      if (!this.#setGeometryBusy(true, { reseed, target: targetPreview })) {
+        return;
+      }
+
+      const execute = () => {
+        let applied = null;
+
+        try {
+          applied = this.#applyWorldGeometry(request, { reseed });
+        } finally {
+          this.#setGeometryBusy(false, {
+            applied,
+            raw: request,
+            reseed,
+            previous,
+          });
+        }
+      };
+
+      const raf =
+        typeof window !== "undefined" &&
+        typeof window.requestAnimationFrame === "function"
+          ? window.requestAnimationFrame.bind(window)
+          : null;
+
+      if (raf) raf(() => execute());
+      else execute();
     });
     actions.appendChild(applyButton);
 
@@ -2354,6 +2609,7 @@ export default class UIManager {
     summary.setAttribute("role", "status");
     summary.setAttribute("aria-live", "polite");
     summary.setAttribute("aria-atomic", "true");
+    summary.setAttribute("aria-busy", "false");
 
     const summaryHeader = document.createElement("div");
 
@@ -2405,17 +2661,23 @@ export default class UIManager {
 
     geometryGrid.appendChild(summary);
 
+    const defaultAriaLabel = this.#readElementAttribute(applyButton, "aria-label");
+
     this.geometryControls = {
       cellSizeInput,
       rowsInput,
       colsInput,
       applyButton,
+      applyButtonDefaultLabel: applyButton.textContent,
+      applyButtonDefaultTitle: applyButton.title,
+      applyButtonDefaultAriaLabel: defaultAriaLabel,
       summaryEl: summary,
       summaryStatusEl: summaryStatus,
       summaryNoteEl: summaryNote,
       summaryDefaultNote: summaryNote.textContent,
       previewCellsEl: cellsValueEl,
       previewPixelsEl: pixelsValueEl,
+      geometryBusy: false,
     };
 
     const handlePreviewChange = () => {

@@ -175,6 +175,145 @@ test("Apply Geometry preserves population by default", async () => {
   }
 });
 
+test("Apply Geometry surfaces busy feedback while resizing", async () => {
+  const restore = setupDom();
+  let originalRaf = window.requestAnimationFrame;
+
+  try {
+    let pendingRaf = null;
+
+    window.requestAnimationFrame = (callback) => {
+      pendingRaf = callback;
+
+      return 1;
+    };
+
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+    const geometryCalls = [];
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        setWorldGeometry: (options) => {
+          geometryCalls.push(options);
+
+          return {
+            cellSize: options.cellSize ?? 5,
+            rows: options.rows ?? 60,
+            cols: options.cols ?? 60,
+          };
+        },
+        getCellSize: () => 5,
+        getGridDimensions: () => ({ rows: 60, cols: 60, cellSize: 5 }),
+      },
+      { canvasElement: new MockCanvas(300, 300) },
+    );
+
+    const rowsInput = findNumberInputByLabel(uiManager.controlsPanel, "Rows");
+    const applyButton = findButtonByText(uiManager.controlsPanel, "Apply Geometry");
+    const summary = uiManager.geometryControls.summaryEl;
+    const statusEl = uiManager.geometryControls.summaryStatusEl;
+    const noteEl = uiManager.geometryControls.summaryNoteEl;
+
+    assert.ok(rowsInput, "rows input should exist");
+    assert.ok(applyButton, "apply button should exist");
+    assert.ok(summary, "summary element should exist");
+    assert.ok(statusEl, "status element should exist");
+    assert.ok(noteEl, "note element should exist");
+
+    rowsInput.value = "96";
+    rowsInput.dispatchEvent({ type: "input" });
+
+    applyButton.dispatchEvent({ type: "click" });
+
+    assert.equal(
+      geometryCalls.length,
+      0,
+      "geometry action should wait for animation frame",
+    );
+    assert.equal(
+      applyButton.getAttribute("data-busy"),
+      "true",
+      "button should mark busy state",
+    );
+    assert.ok(applyButton.disabled, "button should disable while busy");
+    assert.equal(
+      applyButton.textContent,
+      "Applying…",
+      "button label should show applying state",
+    );
+    assert.equal(
+      summary.getAttribute("data-state"),
+      "busy",
+      "summary state should indicate busy",
+    );
+    assert.equal(
+      statusEl.textContent,
+      "Applying…",
+      "status text should reflect busy state",
+    );
+    assert.match(
+      noteEl.textContent,
+      /Resizing the world\. This may take a moment\./i,
+      "note should explain the busy operation",
+    );
+    assert.match(
+      noteEl.textContent,
+      /Target: 60 × 96 cells/i,
+      "note should describe the target dimensions",
+    );
+
+    assert.equal(
+      typeof pendingRaf,
+      "function",
+      "requestAnimationFrame callback should be captured",
+    );
+
+    pendingRaf?.(16);
+
+    assert.equal(
+      geometryCalls.length,
+      1,
+      "geometry action should execute after animation frame",
+    );
+    assert.equal(geometryCalls[0].rows, 96, "geometry call should use entered rows");
+
+    assert.notEqual(
+      applyButton.getAttribute("data-busy"),
+      "true",
+      "busy attribute should clear",
+    );
+    assert.equal(
+      applyButton.textContent,
+      "Apply Geometry",
+      "button label should restore",
+    );
+    assert.equal(
+      summary.getAttribute("data-state"),
+      "current",
+      "summary state should reset",
+    );
+    assert.match(
+      noteEl.textContent,
+      /World resized:/i,
+      "note should confirm the applied geometry",
+    );
+    assert.ok(
+      noteEl.classList.contains("geometry-summary__note--success"),
+      "note should gain success styling",
+    );
+  } finally {
+    window.requestAnimationFrame = originalRaf;
+    restore();
+  }
+});
+
 test("setGridGeometry mirrors engine dimensions outside UI bounds", async () => {
   const restore = setupDom();
 
