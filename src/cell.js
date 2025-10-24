@@ -3160,6 +3160,70 @@ export default class Cell {
     };
   }
 
+  #cooperationSensors(
+    partner,
+    { baseShare = 0, selfEnergy = 0, partnerEnergy = 0, kinship = null } = {},
+  ) {
+    const energy = clamp(Number.isFinite(selfEnergy) ? selfEnergy : 0, 0, 1);
+    const partnerNorm = clamp(
+      Number.isFinite(partnerEnergy) ? partnerEnergy : energy,
+      0,
+      1,
+    );
+    const similarity =
+      kinship != null && Number.isFinite(kinship)
+        ? clamp(kinship, 0, 1)
+        : clamp(
+            this.#safeSimilarityTo(partner, {
+              context: "cooperation sensor similarity",
+              fallback: 0,
+            }),
+            0,
+            1,
+          );
+    const partnerAgeFrac = partner?.lifespan
+      ? clamp(partner.age / partner.lifespan, 0, 1)
+      : 0;
+    const selfSenescence = clamp(
+      typeof this.dna?.senescenceRate === "function" ? this.dna.senescenceRate() : 0,
+      0,
+      2,
+    );
+    const partnerSenescence = clamp(
+      partner && typeof partner.dna?.senescenceRate === "function"
+        ? partner.dna.senescenceRate()
+        : 0,
+      0,
+      2,
+    );
+    const { scarcityMemory, confidenceMemory } = this.#riskMemorySensorValues();
+    const opportunitySignal = this.#currentOpportunitySignal();
+
+    return {
+      energy,
+      partnerEnergy: partnerNorm,
+      partnerSimilarity: similarity,
+      partnerAgeFraction: partnerAgeFrac,
+      selfSenescence,
+      partnerSenescence,
+      riskTolerance: this.#resolveRiskTolerance(),
+      interactionMomentum: this.#resolveInteractionMomentum(),
+      eventPressure: clamp(this.lastEventPressure || 0, 0, 1),
+      resourceTrend: clamp(this._resourceSignal ?? 0, -1, 1),
+      neuralFatigue: this.#currentNeuralFatigue(),
+      scarcityMemory,
+      confidenceMemory,
+      opportunitySignal,
+      allyFraction: 1,
+      enemyFraction: 0,
+      mateFraction: 0,
+      allySimilarity: similarity,
+      enemySimilarity: 0,
+      mateSimilarity: similarity,
+      effectiveDensity: 0,
+    };
+  }
+
   #resolveReproductionNeuralBlend({
     baseProbability = 0,
     neuralProbability = 0,
@@ -3328,6 +3392,141 @@ export default class Cell {
     const probability = clamp(safeBase * (1 - weight) + safeNeural * weight, 0, 1);
 
     return { probability, weight, neuralDelta };
+  }
+
+  #resolveCooperationNeuralWeight({
+    sensors = {},
+    evaluation = null,
+    preference = 0,
+    balanceLean = 0,
+  } = {}) {
+    const geneFraction = (locus, fallback = 0.5) => {
+      if (typeof this.dna?.geneFraction === "function") {
+        const value = this.dna.geneFraction(locus);
+
+        if (Number.isFinite(value)) {
+          return clamp(value, 0, 1);
+        }
+      }
+
+      return clamp(fallback, 0, 1);
+    };
+
+    const neuralGene = geneFraction(GENE_LOCI.NEURAL, 0.5);
+    const cooperationGene = geneFraction(GENE_LOCI.COOPERATION, 0.5);
+    const parentalGene = geneFraction(GENE_LOCI.PARENTAL, 0.5);
+    const strategyGene = geneFraction(GENE_LOCI.STRATEGY, 0.5);
+    const recoveryGene = geneFraction(GENE_LOCI.RECOVERY, 0.5);
+    const reinforcement = this.neuralReinforcementProfile || {};
+    const socialDriveProfile = this.riskMemoryProfile || {};
+    const interactionAlignment = clamp(
+      Number.isFinite(reinforcement.interactionAlignmentWeight)
+        ? reinforcement.interactionAlignmentWeight
+        : 0.3,
+      0,
+      1.3,
+    );
+    const socialDrive = clamp(
+      Number.isFinite(reinforcement.socialWeight)
+        ? reinforcement.socialWeight
+        : Number.isFinite(socialDriveProfile.socialWeight)
+          ? socialDriveProfile.socialWeight
+          : 0.4,
+      0.05,
+      1.4,
+    );
+
+    let weight =
+      0.18 +
+      neuralGene * 0.2 +
+      cooperationGene * 0.26 +
+      parentalGene * 0.18 +
+      strategyGene * 0.12 +
+      interactionAlignment * 0.18 +
+      socialDrive * 0.22;
+
+    const activationCount = Number.isFinite(evaluation?.activationCount)
+      ? evaluation.activationCount
+      : 0;
+    const baselineNeurons = Math.max(
+      1,
+      Number.isFinite(this.neurons) && this.neurons > 0 ? this.neurons : 24,
+    );
+    const normalizedActivation = clamp(
+      activationCount / Math.max(1, baselineNeurons),
+      0,
+      1,
+    );
+
+    if (normalizedActivation > 0) {
+      weight *= 1 + normalizedActivation * 0.22;
+    }
+
+    const resolvedSensors = sensors && typeof sensors === "object" ? sensors : {};
+    const neuralFatigue = clamp(
+      Number.isFinite(resolvedSensors.neuralFatigue)
+        ? resolvedSensors.neuralFatigue
+        : this.#currentNeuralFatigue(),
+      0,
+      1,
+    );
+    const fatiguePenalty = clamp(
+      1 - neuralFatigue * (0.4 - recoveryGene * 0.15),
+      0.3,
+      1,
+    );
+
+    weight *= fatiguePenalty;
+
+    const scarcityMemory = clamp(
+      Number.isFinite(resolvedSensors.scarcityMemory)
+        ? resolvedSensors.scarcityMemory
+        : 0,
+      -1,
+      1,
+    );
+
+    if (scarcityMemory > 0) {
+      weight *= 1 - scarcityMemory * 0.2;
+    }
+
+    const confidenceMemory = clamp(
+      Number.isFinite(resolvedSensors.confidenceMemory)
+        ? resolvedSensors.confidenceMemory
+        : 0,
+      -1,
+      1,
+    );
+
+    if (confidenceMemory < 0) {
+      weight *= 1 + Math.abs(confidenceMemory) * 0.1;
+    }
+
+    const opportunitySignal = clamp(
+      Number.isFinite(resolvedSensors.opportunitySignal)
+        ? resolvedSensors.opportunitySignal
+        : 0,
+      -1,
+      1,
+    );
+
+    if (opportunitySignal > 0) {
+      weight *= 1 + opportunitySignal * 0.08;
+    }
+
+    const directionStrength = clamp(
+      Math.abs(preference) + Math.abs(balanceLean) * 0.5,
+      0,
+      1,
+    );
+
+    weight *= clamp(0.6 + directionStrength * 0.4, 0.3, 1.2);
+
+    if (!Number.isFinite(weight)) {
+      return { weight: 0 };
+    }
+
+    return { weight: clamp(weight, 0, 0.9) };
   }
 
   #targetingSensors(enemies = [], { maxTileEnergy = MAX_TILE_ENERGY } = {}) {
@@ -5527,6 +5726,7 @@ export default class Cell {
       selfEnergy: selfEnergyNorm,
       partnerEnergy: partnerNorm,
       kinship,
+      partner,
     });
     const shareFraction = shareResolution.share;
 
@@ -5562,8 +5762,108 @@ export default class Cell {
     selfEnergy = 0,
     partnerEnergy = 0,
     kinship = 0,
+    partner = null,
   } = {}) {
     const baseShare = clamp(Number.isFinite(baseline) ? baseline : 0, 0, 1);
+    const sensors = this.#cooperationSensors(partner, {
+      baseShare,
+      selfEnergy,
+      partnerEnergy,
+      kinship,
+    });
+    const values = this.#evaluateBrainGroup("cooperationShare", sensors);
+
+    if (!values) {
+      const fallback = this.#legacyCooperationShareFraction({
+        baseShare,
+        selfEnergy,
+        partnerEnergy,
+        kinship,
+      });
+
+      this.#assignDecisionOutcome("cooperationShare", {
+        usedNetwork: false,
+        baseShare,
+        share: fallback.share,
+        neuralTarget: fallback.neuralTarget ?? null,
+        neuralMix: fallback.neuralMix ?? 0,
+        neuralSignal: fallback.neuralSignal ?? null,
+      });
+
+      return fallback;
+    }
+
+    const entries = OUTPUT_GROUPS.cooperationShare;
+    const logits = entries.map(({ key }) => values[key] ?? 0);
+    const probabilities = softmax(logits);
+    const logitsByKey = {};
+    const probabilitiesByKey = {};
+
+    for (let i = 0; i < entries.length; i++) {
+      const { key } = entries[i];
+
+      logitsByKey[key] = logits[i] ?? 0;
+      probabilitiesByKey[key] = probabilities[i] ?? 0;
+    }
+
+    const conserveProb = clamp(probabilitiesByKey.conserve ?? 0, 0, 1);
+    const reciprocateProb = clamp(probabilitiesByKey.reciprocate ?? 0, 0, 1);
+    const amplifyProb = clamp(probabilitiesByKey.amplify ?? 0, 0, 1);
+    const preference = clamp(amplifyProb - conserveProb, -1, 1);
+    const balanceLean = clamp(reciprocateProb - 1 / Math.max(1, entries.length), -1, 1);
+    const kin = clamp(Number.isFinite(kinship) ? kinship : 0, 0, 1);
+    const self = clamp(Number.isFinite(selfEnergy) ? selfEnergy : 0, 0, 1);
+    const partnerNorm = clamp(
+      Number.isFinite(partnerEnergy) ? partnerEnergy : self,
+      0,
+      1,
+    );
+    const energyDelta = clamp(partnerNorm - self, -1, 1);
+    const needBoost = Math.max(0, energyDelta);
+    const cautionDrag = Math.max(0, -energyDelta);
+    const opportunity = clamp(sensors.opportunitySignal ?? 0, -1, 1);
+
+    let neuralTarget = baseShare;
+
+    neuralTarget += preference * (0.55 + kin * 0.3 + needBoost * 0.45);
+    neuralTarget += balanceLean * 0.2;
+    neuralTarget += opportunity * (amplifyProb - conserveProb) * 0.1;
+    neuralTarget -= cautionDrag * (0.28 + (1 - kin) * 0.2 + conserveProb * 0.25);
+    neuralTarget = clamp(neuralTarget, 0, 1);
+
+    const evaluation =
+      this.brain?.lastEvaluation?.group === "cooperationShare"
+        ? this.brain.lastEvaluation
+        : null;
+    const { weight: neuralMix } = this.#resolveCooperationNeuralWeight({
+      sensors,
+      evaluation,
+      preference,
+      balanceLean,
+    });
+    const share = clamp(lerp(baseShare, neuralTarget, neuralMix), 0, 1);
+    const neuralSignal = preference;
+
+    this.#assignDecisionOutcome("cooperationShare", {
+      usedNetwork: true,
+      baseShare,
+      share,
+      neuralTarget,
+      neuralMix,
+      neuralSignal,
+      probabilities: probabilitiesByKey,
+      logits: logitsByKey,
+    });
+
+    return { share, baseShare, neuralTarget, neuralMix, neuralSignal };
+  }
+
+  #legacyCooperationShareFraction({
+    baseShare = 0,
+    selfEnergy = 0,
+    partnerEnergy = 0,
+    kinship = 0,
+  } = {}) {
     const outcome = this.#getDecisionOutcome("interaction");
 
     if (!outcome || outcome.usedNetwork !== true || outcome.action !== "cooperate") {
