@@ -195,6 +195,45 @@ test("resolveSimulationDefaults keeps event frequency overrides opt-in", async (
   );
 });
 
+test("resolveSimulationDefaults sanitizes numeric multipliers", async () => {
+  const {
+    resolveSimulationDefaults,
+    SIMULATION_DEFAULTS,
+    ENERGY_REGEN_RATE_DEFAULT,
+    ENERGY_DIFFUSION_RATE_DEFAULT,
+  } = await configModulePromise;
+  const sanitized = resolveSimulationDefaults({
+    mutationMultiplier: "invalid",
+    densityEffectMultiplier: -3,
+    societySimilarity: 1.5,
+    enemySimilarity: "-0.8",
+    eventStrengthMultiplier: "NaN",
+    energyRegenRate: "oops",
+    energyDiffusionRate: -1,
+    combatEdgeSharpness: "0.05",
+    combatTerritoryEdgeFactor: 4,
+    matingDiversityThreshold: -1,
+    lowDiversityReproMultiplier: "2",
+    leaderboardIntervalMs: -250,
+  });
+
+  assert.is(sanitized.mutationMultiplier, SIMULATION_DEFAULTS.mutationMultiplier);
+  assert.is(sanitized.densityEffectMultiplier, 0);
+  assert.is(sanitized.societySimilarity, 1);
+  assert.is(sanitized.enemySimilarity, 0);
+  assert.is(
+    sanitized.eventStrengthMultiplier,
+    SIMULATION_DEFAULTS.eventStrengthMultiplier,
+  );
+  assert.is(sanitized.energyRegenRate, ENERGY_REGEN_RATE_DEFAULT);
+  assert.is(sanitized.energyDiffusionRate, 0);
+  assert.is(sanitized.combatEdgeSharpness, 0.1);
+  assert.is(sanitized.combatTerritoryEdgeFactor, 1);
+  assert.is(sanitized.matingDiversityThreshold, 0);
+  assert.is(sanitized.lowDiversityReproMultiplier, 1);
+  assert.is(sanitized.leaderboardIntervalMs, 0);
+});
+
 test("resolveSimulationDefaults derives cadence from speed overrides", async () => {
   const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
   const defaults = resolveSimulationDefaults({ speedMultiplier: 2 });

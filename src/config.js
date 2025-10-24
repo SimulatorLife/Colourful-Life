@@ -433,5 +433,25 @@ export function resolveSimulationDefaults(overrides = {}) {
     merged.initialTileEnergyFraction = defaults.initialTileEnergyFraction;
   }
 
+  const sanitizeNumeric = (key, options = {}) => {
+    merged[key] = sanitizeNumber(merged[key], {
+      fallback: defaults[key],
+      ...options,
+    });
+  };
+
+  sanitizeNumeric("mutationMultiplier", { min: 0 });
+  sanitizeNumeric("densityEffectMultiplier", { min: 0 });
+  sanitizeNumeric("societySimilarity", { min: 0, max: 1 });
+  sanitizeNumeric("enemySimilarity", { min: 0, max: 1 });
+  sanitizeNumeric("eventStrengthMultiplier", { min: 0 });
+  sanitizeNumeric("energyRegenRate", { min: 0 });
+  sanitizeNumeric("energyDiffusionRate", { min: 0 });
+  sanitizeNumeric("combatEdgeSharpness", { min: 0.1 });
+  sanitizeNumeric("combatTerritoryEdgeFactor", { min: 0, max: 1 });
+  sanitizeNumeric("leaderboardIntervalMs", { min: 0 });
+  sanitizeNumeric("matingDiversityThreshold", { min: 0, max: 1 });
+  sanitizeNumeric("lowDiversityReproMultiplier", { min: 0, max: 1 });
+
   return merged;
 }
