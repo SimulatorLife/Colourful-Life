@@ -6,8 +6,8 @@ function normalizeLayoutOptions({ engine, uiOptions = {}, sanitizedDefaults = {}
   const normalizedUi = toPlainObject(uiOptions);
   const layoutConfig = toPlainObject(normalizedUi.layout);
   const initialSettings = {
-    ...sanitizedDefaults,
     ...toPlainObject(layoutConfig.initialSettings),
+    ...toPlainObject(sanitizedDefaults),
   };
 
   return {
