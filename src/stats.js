@@ -18,6 +18,7 @@ const HISTORY_SERIES_KEYS = [
   "eventStrength",
   "diversePairingRate",
   "meanDiversityAppetite",
+  "mateNoveltyPressure",
   "mutationMultiplier",
   "starvationRate",
 ];
@@ -246,6 +247,7 @@ const createEmptyMatingSnapshot = () => ({
   complementaritySuccessSum: 0,
   strategyPenaltySum: 0,
   strategyPressureSum: 0,
+  noveltyPressureSum: 0,
   blocks: 0,
   lastBlockReason: null,
 });
@@ -1211,6 +1213,8 @@ export default class Stats {
       choiceCount > 0 ? mateStats.strategyPenaltySum / choiceCount : 1;
     const meanStrategyPressure =
       choiceCount > 0 ? mateStats.strategyPressureSum / choiceCount : 0;
+    const meanMateNoveltyPressure =
+      choiceCount > 0 ? mateStats.noveltyPressureSum / choiceCount : 0;
 
     this.#updateDiversityPressure(
       diversity,
@@ -1229,6 +1233,7 @@ export default class Stats {
     this.pushHistory("deathsPerTick", this.deaths);
     this.pushHistory("diversePairingRate", diverseChoiceRate);
     this.pushHistory("meanDiversityAppetite", meanAppetite);
+    this.pushHistory("mateNoveltyPressure", meanMateNoveltyPressure);
     if (typeof this.mutationMultiplier === "number") {
       this.pushHistory("mutationMultiplier", this.mutationMultiplier);
     }
@@ -1285,6 +1290,7 @@ export default class Stats {
       behaviorEvenness,
       meanStrategyPenalty,
       meanStrategyPressure,
+      mateNoveltyPressure: meanMateNoveltyPressure,
       strategyPressure: this.strategyPressure,
       curiositySelections: mateStats.selectionModes.curiosity,
       lastMating: this.lastMatingDebug,
@@ -1322,6 +1328,7 @@ export default class Stats {
     strategyPenaltyMultiplier = 1,
     strategyPressure = undefined,
     threshold,
+    noveltyPressure = undefined,
   } = {}) {
     if (!this.mating) {
       this.mating = createEmptyMatingSnapshot();
@@ -1348,6 +1355,9 @@ export default class Stats {
     if (Number.isFinite(strategyPressure)) {
       this.mating.strategyPressureSum += clamp01(strategyPressure);
     }
+    if (Number.isFinite(noveltyPressure)) {
+      this.mating.noveltyPressureSum += clamp01(noveltyPressure);
+    }
 
     if (success) {
       this.mating.successes++;
@@ -1369,6 +1379,7 @@ export default class Stats {
       behaviorComplementarity: complementarity,
       strategyPenaltyMultiplier,
       strategyPressure,
+      noveltyPressure,
       blockedReason: this.mating.lastBlockReason || undefined,
     };
     // Consume the one-time reason so the next mating record does not reuse it.

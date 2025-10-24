@@ -194,6 +194,7 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
     behaviorComplementarity: 0.8,
     strategyPenaltyMultiplier: 0.6,
     strategyPressure: 0.3,
+    noveltyPressure: 0.4,
   });
 
   assert.is(stats.mating.choices, 1);
@@ -208,11 +209,13 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   approxEqual(stats.mating.complementaritySuccessSum, 0.8, 1e-9);
   approxEqual(stats.mating.strategyPenaltySum, 0.6, 1e-9);
   approxEqual(stats.mating.strategyPressureSum, 0.3, 1e-9);
+  approxEqual(stats.mating.noveltyPressureSum, 0.4, 1e-9);
   assert.equal(stats.lastMatingDebug.blockedReason, "Too similar");
   assert.is(stats.lastMatingDebug.threshold, 0.6);
   approxEqual(stats.lastMatingDebug.behaviorComplementarity, 0.8, 1e-9);
   approxEqual(stats.lastMatingDebug.strategyPenaltyMultiplier, 0.6, 1e-9);
   approxEqual(stats.lastMatingDebug.strategyPressure, 0.3, 1e-9);
+  approxEqual(stats.lastMatingDebug.noveltyPressure, 0.4, 1e-9);
   assert.is(stats.mating.lastBlockReason, null);
 
   stats.recordMateChoice({
@@ -234,11 +237,13 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   approxEqual(stats.mating.complementaritySuccessSum, 0.8, 1e-9);
   approxEqual(stats.mating.strategyPenaltySum, 1.6, 1e-9);
   approxEqual(stats.mating.strategyPressureSum, 0.3, 1e-9);
+  approxEqual(stats.mating.noveltyPressureSum, 0.4, 1e-9);
   assert.equal(stats.lastMatingDebug.success, false);
   assert.is(stats.lastMatingDebug.threshold, 0.6);
   approxEqual(stats.lastMatingDebug.behaviorComplementarity, 0.1, 1e-9);
   approxEqual(stats.lastMatingDebug.strategyPenaltyMultiplier, 1, 1e-9);
   assert.is(stats.lastMatingDebug.strategyPressure, undefined);
+  assert.is(stats.lastMatingDebug.noveltyPressure, undefined);
 
   stats.recordReproductionBlocked({ reason: "Blocked by reproductive zone" });
 
@@ -297,6 +302,7 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
     complementaritySuccessSum: 0.6,
     strategyPenaltySum: 1.7,
     strategyPressureSum: 0.4,
+    noveltyPressureSum: 0.9,
     blocks: 1,
     lastBlockReason: "Still recent",
   };
@@ -352,6 +358,7 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   approxEqual(result.behaviorEvenness, 1, 1e-9);
   approxEqual(result.meanStrategyPenalty, 0.85, 1e-9);
   approxEqual(result.meanStrategyPressure, 0.2, 1e-9);
+  approxEqual(result.mateNoveltyPressure, 0.45, 1e-9);
   approxEqual(result.strategyPressure, stats.getStrategyPressure(), 1e-9);
   assert.is(result.curiositySelections, 1);
   assert.equal(result.lastMating, stats.lastMatingDebug);
@@ -373,6 +380,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(stats.history.diversePairingRate.length, 1);
   assert.is(stats.history.diversePairingRate[0], 0.5);
   assert.is(stats.history.meanDiversityAppetite.length, 1);
+  assert.is(stats.history.mateNoveltyPressure.length, 1);
+  approxEqual(stats.history.mateNoveltyPressure[0], 0.45, 1e-9);
   assert.is(stats.history.mutationMultiplier.length, 1);
 
   assert.is(stats.traitHistory.presence.cooperation.length, 1);
@@ -390,6 +399,7 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
       poolSizeSum: 0,
       strategyPenaltySum: 0,
       strategyPressureSum: 0,
+      noveltyPressureSum: 0,
     };
     stats.births = i;
     stats.deaths = 0;
@@ -411,6 +421,7 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(stats.history.deathsPerTick.length, 3);
   assert.is(stats.history.diversePairingRate.length, 3);
   assert.is(stats.history.meanDiversityAppetite.length, 3);
+  assert.is(stats.history.mateNoveltyPressure.length, 3);
   assert.is(stats.history.mutationMultiplier.length, 3);
   assert.is(stats.traitHistory.presence.cooperation.length, 3);
   assert.is(stats.traitHistory.average.cooperation.length, 3);
@@ -456,6 +467,7 @@ test("diversity pressure escalates when diverse mating success stalls", async ()
     complementaritySuccessSum: 0.5,
     strategyPenaltySum: 8,
     strategyPressureSum: 1.5,
+    noveltyPressureSum: 0,
   };
 
   const cells = [
@@ -668,6 +680,7 @@ test("diversity pressure responds to behavioral stagnation and complementary suc
     complementaritySuccessSum: 0.1,
     strategyPenaltySum: 1,
     strategyPressureSum: 0,
+    noveltyPressureSum: 0,
   };
 
   stats.updateFromSnapshot({
@@ -697,6 +710,7 @@ test("diversity pressure responds to behavioral stagnation and complementary suc
     complementaritySuccessSum: 0.9,
     strategyPenaltySum: 1,
     strategyPressureSum: 0,
+    noveltyPressureSum: 0,
   };
 
   stats.diversitySequence.push(0.34);
@@ -758,6 +772,7 @@ test("strategy pressure intensifies when monotony escapes penalties", async () =
     complementaritySuccessSum: 0.15,
     strategyPenaltySum: 1,
     strategyPressureSum: 0,
+    noveltyPressureSum: 0,
   };
   unchecked.updateFromSnapshot(snapshot);
 
@@ -779,6 +794,7 @@ test("strategy pressure intensifies when monotony escapes penalties", async () =
     complementaritySuccessSum: 0.15,
     strategyPenaltySum: 0.5,
     strategyPressureSum: 0,
+    noveltyPressureSum: 0,
   };
   relieved.updateFromSnapshot(snapshot);
 

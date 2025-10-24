@@ -198,6 +198,9 @@ export default class Cell {
     );
 
     this._neuralFatigue = baselineFatigue;
+    this._mateDiversityMemory = 0.5;
+    this._mateNoveltyPressure = 0;
+    this._mateDiversitySamples = 0;
     this._neuralEnergyReserve = initialResourceLevel;
     this._neuralFatigueSnapshot = null;
     this._pendingRestRecovery = 0;
@@ -481,7 +484,7 @@ export default class Cell {
     const similarPull = similarity * (1 + Math.max(0, bias));
     const diversePull = diversity * (1 + Math.max(0, -bias) + appetite);
     const curiosityBonus = diversity * appetite * 0.5;
-    const preferenceScore = similarPull + diversePull + curiosityBonus;
+    let preferenceScore = similarPull + diversePull + curiosityBonus;
 
     const samplingProfile = this.mateSamplingProfile || {};
     const weightScale = clamp(
@@ -511,7 +514,30 @@ export default class Cell {
         : this.resolveRng("mateSelectionNoise");
     const jitter = jitterAmplitude > 0 ? (randomSource() - 0.5) * jitterAmplitude : 0;
     const weighted = preferenceScore * weightScale + diversity * noveltyWeight + jitter;
-    const selectionWeight = Math.max(0.0001, weighted);
+    let selectionWeight = Math.max(0.0001, weighted);
+
+    const noveltyPressure = this.#resolveMateNoveltyPressure();
+
+    if (noveltyPressure > 0.001) {
+      const diversityMemory = this.#resolveMateDiversityMemory();
+      const similarityOverlap = clamp(1 - Math.abs(diversity - diversityMemory), 0, 1);
+      const noveltyGap = clamp(diversity - diversityMemory, 0, 1);
+      const monotonyPenalty = similarityOverlap * noveltyPressure;
+      const noveltyLift =
+        noveltyGap * noveltyPressure * (0.3 + Math.max(0, appetite) * 0.4);
+      const preferenceScale = clamp(1 - monotonyPenalty * 0.45, 0.2, 1.1);
+      const weightScaleAdjusted = clamp(1 - monotonyPenalty * 0.55, 0.1, 1);
+
+      preferenceScore =
+        preferenceScore * preferenceScale +
+        noveltyLift * (0.8 + Math.max(0, appetite) * 0.3);
+      selectionWeight = Math.max(
+        0.0001,
+        selectionWeight * weightScaleAdjusted +
+          noveltyLift * (0.6 + Math.max(0, appetite) * 0.4),
+      );
+      mate.noveltyPressure = noveltyPressure;
+    }
 
     mate.similarity = similarity;
     mate.diversity = diversity;
@@ -851,6 +877,76 @@ export default class Cell {
     return this.#selectHighestPreferenceMate(scored);
   }
 
+  #resolveMateDiversityMemory() {
+    const stored = this._mateDiversityMemory;
+
+    if (!Number.isFinite(stored)) {
+      return 0.5;
+    }
+
+    return clamp(stored, 0, 1);
+  }
+
+  #resolveMateNoveltyPressure() {
+    const stored = this._mateNoveltyPressure;
+
+    if (!Number.isFinite(stored) || stored <= 0) {
+      return 0;
+    }
+
+    return clamp(stored, 0, 1);
+  }
+
+  #updateMateDiversityDynamics({
+    diversity = 0,
+    success = false,
+    penalized = false,
+    penaltyMultiplier = 1,
+    strategyPenaltyMultiplier = 1,
+  } = {}) {
+    const observed = clamp(Number.isFinite(diversity) ? diversity : 0, 0, 1);
+    const previousMean = this.#resolveMateDiversityMemory();
+    const smoothing = success ? 0.6 : 0.75;
+    const nextMean = previousMean * smoothing + observed * (1 - smoothing);
+
+    this._mateDiversityMemory = nextMean;
+    this._mateDiversitySamples = Math.min(
+      Number.isFinite(this._mateDiversitySamples) ? this._mateDiversitySamples + 1 : 1,
+      Number.MAX_SAFE_INTEGER,
+    );
+
+    const monotonyGap = clamp(0.45 - observed, 0, 1);
+    const penaltyDrag = clamp(1 - (penaltyMultiplier ?? 1), 0, 1);
+    const strategyDrag = clamp(1 - (strategyPenaltyMultiplier ?? 1), 0, 1);
+    const previousPressure = this.#resolveMateNoveltyPressure();
+    const decay = success ? 0.78 : penalized ? 0.82 : 0.88;
+    let nextPressure = previousPressure * decay;
+
+    if (success || penalized) {
+      const baseWeight = success ? 0.65 : 0.45;
+
+      nextPressure += monotonyGap * (baseWeight + penaltyDrag * 0.35);
+    } else {
+      nextPressure += monotonyGap * 0.25;
+    }
+
+    if (penaltyDrag > 0) {
+      nextPressure += penaltyDrag * (0.2 + monotonyGap * 0.3);
+    }
+
+    if (strategyDrag > 0) {
+      nextPressure += strategyDrag * (0.25 + monotonyGap * 0.25);
+    }
+
+    const noveltyRelief = clamp(Math.max(0, observed - previousMean), 0, 1);
+
+    if (noveltyRelief > 0) {
+      nextPressure *= 1 - noveltyRelief * (0.5 + observed * 0.3);
+    }
+
+    this._mateNoveltyPressure = clamp(nextPressure, 0, 1);
+  }
+
   recordMatingOutcome({
     diversity = 0,
     success = false,
@@ -880,6 +976,18 @@ export default class Cell {
     if (strategyPenalty > 0) {
       this.strategyPenalty = (this.strategyPenalty || 0) + strategyPenalty;
     }
+
+    this.#updateMateDiversityDynamics({
+      diversity,
+      success,
+      penalized,
+      penaltyMultiplier,
+      strategyPenaltyMultiplier,
+    });
+  }
+
+  getMateNoveltyPressure() {
+    return this.#resolveMateNoveltyPressure();
   }
 
   // Internal: nearest target utility
