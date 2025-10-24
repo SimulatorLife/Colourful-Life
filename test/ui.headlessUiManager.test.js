@@ -118,6 +118,26 @@ test("createHeadlessUiManager exposes leaderboard cadence controls", () => {
   assert.is(manager.shouldRenderSlowUi(120), true);
 });
 
+test("createHeadlessUiManager allows adjusting the event strength multiplier", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    eventStrengthMultiplier: 1.1,
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  assert.type(manager.setEventStrengthMultiplier, "function");
+
+  manager.setEventStrengthMultiplier(-1);
+  manager.setEventStrengthMultiplier("oops");
+  manager.setEventStrengthMultiplier(2.4);
+
+  assert.equal(notifications, [
+    ["eventStrengthMultiplier", 0],
+    ["eventStrengthMultiplier", 2.4],
+  ]);
+  assert.is(manager.getEventStrengthMultiplier(), 2.4);
+});
+
 test("createHeadlessUiManager allows adjusting the mutation multiplier", () => {
   const notifications = [];
   const manager = createHeadlessUiManager({

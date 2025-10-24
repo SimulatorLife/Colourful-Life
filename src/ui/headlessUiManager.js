@@ -128,6 +128,11 @@ export function createHeadlessUiManager(options = {}) {
         notify("eventFrequencyMultiplier", settings.eventFrequencyMultiplier);
       }
     },
+    setEventStrengthMultiplier: (value) => {
+      if (updateIfFinite("eventStrengthMultiplier", value, { min: 0 })) {
+        notify("eventStrengthMultiplier", settings.eventStrengthMultiplier);
+      }
+    },
     getMaxConcurrentEvents: () => settings.maxConcurrentEvents,
     getMutationMultiplier: () => settings.mutationMultiplier,
     setMutationMultiplier: (value) => {
