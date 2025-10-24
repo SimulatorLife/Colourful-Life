@@ -1283,7 +1283,7 @@ export default class UIManager {
     if (typeof element.getAttribute === "function") {
       try {
         return element.getAttribute(name);
-      } catch (error) {
+      } catch {
         // Ignore environments without standard DOM attribute helpers.
       }
     }
@@ -4051,7 +4051,9 @@ export default class UIManager {
     this.renderLifeEvents(stats, snapshot);
 
     const snapshotData = snapshot && typeof snapshot === "object" ? snapshot : {};
-    const { rendering: _rendering, ...insightSnapshot } = snapshotData;
+    const insightSnapshot = { ...snapshotData };
+
+    delete insightSnapshot.rendering;
 
     if (!this.metricsBox) return;
 
