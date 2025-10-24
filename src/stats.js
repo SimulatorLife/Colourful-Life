@@ -829,17 +829,17 @@ export default class Stats {
       return null;
     }
 
-    let total = 0;
-    let best = entries[0];
+    const { total, best } = entries.reduce(
+      (acc, entry) => {
+        acc.total += entry.value;
+        if (entry.value > acc.best.value) {
+          acc.best = entry;
+        }
 
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i];
-
-      total += entry.value;
-      if (entry.value > best.value) {
-        best = entry;
-      }
-    }
+        return acc;
+      },
+      { total: 0, best: entries[0] },
+    );
 
     if (best.value <= 0) {
       return null;
