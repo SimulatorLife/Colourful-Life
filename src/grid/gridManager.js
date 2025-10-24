@@ -268,6 +268,8 @@ export default class GridManager {
   #columnEventScratch = null;
   #eventRowsScratch = null;
   #eventModifierScratch = null;
+  #sparseDirtyColumnsScratch = null;
+  #sparseDirtyRowsScratch = null;
   #imageDataCanvas = null;
   #imageDataCtx = null;
   #imageData = null;
@@ -405,6 +407,31 @@ export default class GridManager {
     }
 
     return this.#eventModifierScratch;
+  }
+
+  #prepareSparseDirtyColumns(rowCount) {
+    if (
+      !this.#sparseDirtyColumnsScratch ||
+      this.#sparseDirtyColumnsScratch.length !== rowCount
+    ) {
+      this.#sparseDirtyColumnsScratch = Array.from({ length: rowCount }, () => []);
+    } else {
+      for (let i = 0; i < this.#sparseDirtyColumnsScratch.length; i++) {
+        this.#sparseDirtyColumnsScratch[i].length = 0;
+      }
+    }
+
+    return this.#sparseDirtyColumnsScratch;
+  }
+
+  #getSparseDirtyRowList() {
+    if (!this.#sparseDirtyRowsScratch) {
+      this.#sparseDirtyRowsScratch = [];
+    } else {
+      this.#sparseDirtyRowsScratch.length = 0;
+    }
+
+    return this.#sparseDirtyRowsScratch;
   }
 
   #prepareEventsByRow(rowCount) {
@@ -3015,7 +3042,8 @@ export default class GridManager {
     let strategy = "full-scan";
 
     if (preferSparse) {
-      const sparseTargets = new Map();
+      const sparseColumns = this.#prepareSparseDirtyColumns(rows);
+      const sparseRows = this.#getSparseDirtyRowList();
 
       for (const key of this.energyDirtyTiles) {
         if (!Number.isFinite(key)) continue;
@@ -3025,35 +3053,34 @@ export default class GridManager {
 
         if (row < 0 || row >= rows || col < 0 || col >= cols) continue;
 
-        if (!sparseTargets.has(row)) {
-          sparseTargets.set(row, new Set());
+        const columnList = sparseColumns[row];
+
+        if (columnList.length === 0) {
+          sparseRows.push(row);
         }
 
-        sparseTargets.get(row).add(col);
+        columnList.push(col);
       }
 
-      if (sparseTargets.size > 0) {
+      if (sparseRows.length > 0) {
         strategy = "sparse-dirty";
 
-        for (let r = 0; r < rows; r++) {
-          const energyRow = energyGrid[r];
-          const nextRow = next[r];
-          const deltaRow = deltaGrid ? deltaGrid[r] : null;
+        sparseRows.sort((a, b) => a - b);
 
-          if (energyRow && nextRow) {
-            for (let c = 0; c < cols; c++) {
-              nextRow[c] = energyRow[c];
-            }
-          }
+        if (deltaGrid) {
+          for (let r = 0; r < rows; r++) {
+            const deltaRow = deltaGrid[r];
 
-          if (deltaRow) {
-            for (let c = 0; c < cols; c++) {
-              deltaRow[c] = 0;
-            }
+            if (deltaRow) deltaRow.fill(0);
           }
         }
 
-        for (const [r, colSet] of sparseTargets) {
+        for (let i = 0; i < sparseRows.length; i++) {
+          const r = sparseRows[i];
+          const columns = sparseColumns[r];
+
+          if (!columns || columns.length === 0) continue;
+
           const energyRow = energyGrid[r];
           const nextRow = next[r];
 
@@ -3074,7 +3101,8 @@ export default class GridManager {
             rowEvents.sort((a, b) => a.startCol - b.startCol);
           }
 
-          const columns = Array.from(colSet).sort((a, b) => a - b);
+          columns.sort((a, b) => a - b);
+
           const columnEventsScratch =
             eventOptions && usingSegmentedEvents && rowEvents.length > 0
               ? this.#getColumnEventScratch()
@@ -3094,8 +3122,8 @@ export default class GridManager {
             occupantRegenRow,
           };
 
-          for (let i = 0; i < columns.length; i++) {
-            const c = columns[i];
+          for (let j = 0; j < columns.length; j++) {
+            const c = columns[j];
 
             if (c < 0 || c >= cols) continue;
 
@@ -3106,8 +3134,8 @@ export default class GridManager {
                 if (columnEventsScratch) {
                   columnEventsScratch.length = 0;
 
-                  for (let j = 0; j < rowEvents.length; j++) {
-                    const segment = rowEvents[j];
+                  for (let k = 0; k < rowEvents.length; k++) {
+                    const segment = rowEvents[k];
 
                     if (segment.endCol <= c) continue;
                     if (segment.startCol > c) break;
@@ -3126,6 +3154,7 @@ export default class GridManager {
 
             processTile(r, c, context, eventsForTile);
             processedTileCount += 1;
+            energyRow[c] = nextRow[c];
           }
         }
       }
