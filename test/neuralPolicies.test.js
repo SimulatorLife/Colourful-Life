@@ -434,3 +434,70 @@ test("brains enforce minimum neuron floor while pruning unreachable connections"
 
   approxEqual(cell.energy, startingEnergy - (energyLoss + expectedCognitive), 1e-9);
 });
+
+test("cooperation share leverages dedicated neural outputs", () => {
+  const dna = new DNA(80, 120, 60);
+  const partnerDNA = new DNA(140, 30, 90);
+  const shareGroup = OUTPUT_GROUPS.cooperationShare;
+  const amplifyNode = shareGroup.find((entry) => entry.key === "amplify");
+  const conserveNode = shareGroup.find((entry) => entry.key === "conserve");
+
+  assert.ok(shareGroup && amplifyNode && conserveNode, "share outputs should exist");
+
+  setNeuralGene(dna, 0, { source: 0, target: amplifyNode.id, weight: 0.9 });
+  setNeuralGene(dna, 1, { source: 0, target: conserveNode.id, weight: -0.6 });
+
+  const cell = new Cell(0, 0, dna, 8);
+  const partner = new Cell(0, 1, partnerDNA, 2);
+
+  cell.dna.cooperateShareFrac = () => 0.25;
+  partner.dna.cooperateShareFrac = () => 0.2;
+  cell.age = 4;
+  partner.age = 6;
+
+  const intent = cell.createCooperationIntent({
+    row: 0,
+    col: 0,
+    targetRow: 0,
+    targetCol: 1,
+    targetCell: partner,
+    maxTileEnergy: 10,
+  });
+
+  assert.ok(intent, "cooperation intent should be generated");
+  const share = intent?.metadata?.shareFraction;
+
+  assert.ok(Number.isFinite(share), "share fraction should be numeric");
+  assert.ok(
+    share > 0.25 && share <= 1,
+    "neural policy should lift share above baseline",
+  );
+
+  cell.manageEnergy(0, 0, {
+    localDensity: 0,
+    densityEffectMultiplier: 1,
+    maxTileEnergy: 10,
+  });
+
+  const history = Array.isArray(cell.decisionHistory)
+    ? cell.decisionHistory[cell.decisionHistory.length - 1]
+    : null;
+
+  assert.ok(history, "decision history should include recent tick");
+
+  const shareDecision = history.decisions.find(
+    (decision) => decision?.group === "cooperationShare",
+  );
+
+  assert.ok(shareDecision, "cooperation share decision should be recorded");
+  assert.is(shareDecision.outcome?.usedNetwork, true);
+  assert.ok(
+    shareDecision.outcome?.probabilities?.amplify >
+      shareDecision.outcome?.probabilities?.conserve,
+    "amplify probability should dominate when investing",
+  );
+  assert.ok(
+    shareDecision.outcome?.neuralMix > 0,
+    "neural blend weight should be positive",
+  );
+});

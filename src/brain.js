@@ -62,6 +62,11 @@ export const OUTPUT_GROUPS = Object.freeze({
     [218, "focusProximity", "Prioritize nearby enemies"],
     [219, "focusAttrition", "Exploit attrition"],
   ]),
+  cooperationShare: createOutputGroup([
+    [224, "conserve", "Conserve energy"],
+    [225, "reciprocate", "Reciprocate fairly"],
+    [226, "amplify", "Invest generously"],
+  ]),
 });
 
 const ACTIVATION_FUNCS = {
