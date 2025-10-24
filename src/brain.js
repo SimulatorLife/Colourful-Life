@@ -346,16 +346,12 @@ export default class Brain {
       return output;
     };
 
-    const values = {};
-    const pendingOutputs = [];
-
-    for (let i = 0; i < group.length; i++) {
-      const { id, key } = group[i];
+    const pendingOutputs = group.map(({ id, key }) => {
       const value = computeNode(id);
 
-      values[key] = value;
-      pendingOutputs.push([key, value]);
-    }
+      return [key, value];
+    });
+    const values = Object.fromEntries(pendingOutputs);
 
     const result = {
       values: activationCount > 0 ? values : null,
@@ -375,9 +371,7 @@ export default class Brain {
     }
 
     if (activationCount > 0) {
-      for (let i = 0; i < pendingOutputs.length; i++) {
-        const [key, value] = pendingOutputs[i];
-
+      for (const [key, value] of pendingOutputs) {
         this.lastOutputs.set(key, value);
       }
     }
