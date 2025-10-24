@@ -1038,7 +1038,10 @@ export default class Stats {
       : numericMaxSamples === Infinity
         ? Infinity
         : 0;
-    const validCells = cellSources.flatMap((source) => {
+    const validCells = [];
+
+    for (let index = 0; index < cellSources.length; index += 1) {
+      const source = cellSources[index];
       const cell =
         source &&
         typeof source === "object" &&
@@ -1051,11 +1054,9 @@ export default class Stats {
         typeof cell === "object" &&
         typeof cell.dna?.similarity === "function"
       ) {
-        return [cell];
+        validCells.push(cell);
       }
-
-      return [];
-    });
+    }
 
     const populationSize = validCells.length;
 
@@ -1088,10 +1089,6 @@ export default class Stats {
     }
 
     const sampleLimit = Math.min(sanitizedMaxSamples, possiblePairs);
-    const seen = new Set();
-    const pairs = [];
-    const population = populationSize;
-    const maxAttempts = sampleLimit * 6;
     const rng = this.#rng ?? DEFAULT_RANDOM;
     const sampleIndex = (range) => {
       if (!(range > 0)) {
@@ -1109,59 +1106,67 @@ export default class Stats {
 
       return Math.min(range - 1, Math.floor(normalized * range));
     };
-    let attempts = 0;
 
-    while (pairs.length < sampleLimit && attempts < maxAttempts) {
-      attempts += 1;
-      const first = sampleIndex(population);
-      let second = sampleIndex(population - 1);
+    const selectedPairs = new Set();
 
-      if (second >= first) {
-        second += 1;
-      }
+    for (let i = possiblePairs - sampleLimit; i < possiblePairs; i += 1) {
+      const pick = sampleIndex(i + 1);
 
-      const low = first < second ? first : second;
-      const high = first < second ? second : first;
-      const key = low * population + high;
-
-      if (seen.has(key)) {
-        continue;
-      }
-
-      seen.add(key);
-      pairs.push([low, high]);
-    }
-
-    if (pairs.length < sampleLimit) {
-      for (let i = 0; i < population && pairs.length < sampleLimit; i += 1) {
-        for (let j = i + 1; j < population && pairs.length < sampleLimit; j += 1) {
-          const key = i * population + j;
-
-          if (seen.has(key)) {
-            continue;
-          }
-
-          seen.add(key);
-          pairs.push([i, j]);
-        }
+      if (selectedPairs.has(pick)) {
+        selectedPairs.add(i);
+      } else {
+        selectedPairs.add(pick);
       }
     }
 
-    if (pairs.length === 0) {
+    if (selectedPairs.size < sampleLimit) {
+      for (
+        let index = 0;
+        index < possiblePairs && selectedPairs.size < sampleLimit;
+        index += 1
+      ) {
+        selectedPairs.add(index);
+      }
+    }
+
+    if (selectedPairs.size === 0) {
       return 0;
     }
 
     let sum = 0;
+    let count = 0;
 
-    for (let i = 0; i < pairs.length; i += 1) {
-      const [aIndex, bIndex] = pairs[i];
-      const a = validCells[aIndex];
-      const b = validCells[bIndex];
+    for (const pairIndex of selectedPairs) {
+      const { first, second } = Stats.#pairFromCombinationIndex(
+        pairIndex,
+        populationSize,
+      );
+      const a = validCells[first];
+      const b = validCells[second];
+
+      if (!a || !b) continue;
 
       sum += 1 - a.dna.similarity(b.dna);
+      count += 1;
     }
 
-    return sum / pairs.length;
+    return count > 0 ? sum / count : 0;
+  }
+
+  static #pairFromCombinationIndex(index, populationSize) {
+    let remaining = index;
+    let first = 0;
+    let span = populationSize - 1;
+
+    while (span > 0 && remaining >= span) {
+      remaining -= span;
+      span -= 1;
+      first += 1;
+    }
+
+    const second = first + 1 + remaining;
+
+    return { first, second };
   }
 
   /**
