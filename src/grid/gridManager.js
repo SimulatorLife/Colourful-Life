@@ -3358,8 +3358,42 @@ export default class GridManager {
           const rowHasEvents = hasEvents && rowEvents.length > 0;
           const useSegmentedForRow = rowHasEvents && usingSegmentedEvents;
 
+          const segments = useSegmentedForRow ? rowEvents : null;
+          const activeSegments =
+            useSegmentedForRow && segments ? this.#getSegmentWindowScratch() : null;
           const columnEventsScratch =
-            useSegmentedForRow && eventOptions ? this.#getColumnEventScratch() : null;
+            useSegmentedForRow && segments ? this.#getColumnEventScratch() : null;
+          let nextSegmentIndex = 0;
+          const collectEventsForColumn =
+            useSegmentedForRow && segments && columnEventsScratch && activeSegments
+              ? (column) => {
+                  while (
+                    nextSegmentIndex < segments.length &&
+                    segments[nextSegmentIndex].startCol <= column
+                  ) {
+                    activeSegments.push(segments[nextSegmentIndex]);
+                    nextSegmentIndex += 1;
+                  }
+
+                  let nextActiveCount = 0;
+
+                  columnEventsScratch.length = 0;
+
+                  for (let k = 0; k < activeSegments.length; k++) {
+                    const segment = activeSegments[k];
+
+                    if (segment.endCol > column) {
+                      activeSegments[nextActiveCount] = segment;
+                      nextActiveCount += 1;
+                      columnEventsScratch.push(segment.event);
+                    }
+                  }
+
+                  activeSegments.length = nextActiveCount;
+
+                  return columnEventsScratch.length > 0 ? columnEventsScratch : null;
+                }
+              : null;
           const lastEventsCache = [];
           let lastModifiers = null;
 
@@ -3371,24 +3405,9 @@ export default class GridManager {
             let eventsForTile = null;
 
             if (rowHasEvents) {
-              if (useSegmentedForRow) {
-                if (columnEventsScratch) {
-                  columnEventsScratch.length = 0;
-
-                  for (let k = 0; k < rowEvents.length; k++) {
-                    const segment = rowEvents[k];
-
-                    if (segment.endCol <= c) continue;
-                    if (segment.startCol > c) break;
-
-                    columnEventsScratch.push(segment.event);
-                  }
-
-                  if (columnEventsScratch.length > 0) {
-                    eventsForTile = columnEventsScratch;
-                  }
-                }
-              } else {
+              if (collectEventsForColumn) {
+                eventsForTile = collectEventsForColumn(c);
+              } else if (!useSegmentedForRow) {
                 eventsForTile = rowEvents;
               }
             }
@@ -3594,6 +3613,10 @@ export default class GridManager {
               drain,
             );
             processedTileCount += 1;
+          }
+
+          if (activeSegments) {
+            activeSegments.length = 0;
           }
 
           continue;
