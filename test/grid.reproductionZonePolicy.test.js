@@ -49,6 +49,20 @@ test("hasActiveZones safely queries the attached selection manager", () => {
     false,
     "missing hasActiveZones also defaults to false",
   );
+
+  const failure = new Error("failure");
+
+  policy.setSelectionManager({
+    hasActiveZones() {
+      throw failure;
+    },
+  });
+
+  assert.is(
+    policy.hasActiveZones(),
+    false,
+    "exceptions from hasActiveZones fall back to false",
+  );
 });
 
 test("validateArea forwards arguments and coerces invalid results", () => {
@@ -179,5 +193,19 @@ test("filterSpawnCandidates respects active zones and preserves fallbacks", () =
     policy.filterSpawnCandidates(candidates),
     candidates,
     "missing isInActiveZone method leaves candidates untouched",
+  );
+
+  const erroringManager = {
+    hasActiveZones: () => true,
+    isInActiveZone() {
+      throw new Error("boom");
+    },
+  };
+
+  policy.setSelectionManager(erroringManager);
+  assert.is(
+    policy.filterSpawnCandidates(candidates),
+    candidates,
+    "errors during zone membership checks preserve original candidates",
   );
 });
