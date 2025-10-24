@@ -119,7 +119,7 @@ test("central sanctuary pattern concentrates eligibility in the core", () => {
   }
 });
 
-test("setDimensions resets patterns and geometry cache", () => {
+test("setDimensions preserves active patterns and refreshes geometry", () => {
   const manager = createManager(8, 8);
 
   manager.togglePattern("eastHalf", true);
@@ -133,11 +133,34 @@ test("setDimensions resets patterns and geometry cache", () => {
 
   manager.setDimensions(12, 10);
 
-  assert.is(manager.hasActiveZones(), false, "patterns reset after resizing");
-  assert.is(manager.describeActiveZones(), "All tiles eligible");
-  assert.is(manager.zoneGeometryCache.size, 0, "geometry cache cleared after resizing");
   assert.is(manager.rows, 12);
   assert.is(manager.cols, 10);
+  assert.is(manager.hasActiveZones(), true, "active zones persist after resizing");
+  assert.is(manager.describeActiveZones(), "Eastern Hemisphere");
+
+  const resizedRender = manager.getActiveZoneRenderData();
+
+  assert.is(resizedRender.length, 1, "geometry regenerated for active pattern");
+  const { zone, geometry } = resizedRender[0];
+
+  assert.is(zone.id, "eastHalf");
+  assert.ok(geometry, "geometry available after resizing");
+  assert.is(manager.zoneGeometryCache.size, 1, "cache populated for active pattern");
+  assert.is(
+    manager.isInActiveZone(0, 8),
+    true,
+    "cells in the eastern half remain eligible",
+  );
+  assert.is(
+    manager.isInActiveZone(0, 1),
+    false,
+    "western cells become ineligible after resize",
+  );
+
+  assert.ok(
+    geometry.bounds.endCol < manager.cols,
+    "geometry bounds updated to reflect new dimensions",
+  );
 });
 
 test("validateReproductionArea enforces zone boundaries for parents and spawn", () => {
