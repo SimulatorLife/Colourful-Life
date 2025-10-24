@@ -32,11 +32,25 @@ export default class SelectionManager {
 
   setDimensions(rows, cols) {
     if (rows === this.rows && cols === this.cols) return;
+    const previouslyActive = new Set(
+      Array.from(this.patterns.values())
+        .filter(
+          (pattern) => pattern && pattern.active && typeof pattern.id === "string",
+        )
+        .map((pattern) => pattern.id),
+    );
+
     this.rows = rows;
     this.cols = cols;
     this.patterns.clear();
     this.#invalidateAllZoneGeometry();
     this.#definePredefinedPatterns();
+
+    if (previouslyActive.size > 0) {
+      previouslyActive.forEach((id) => {
+        this.togglePattern(id, true);
+      });
+    }
   }
 
   #definePredefinedPatterns() {
