@@ -114,11 +114,11 @@ where practical.
   ~0.27 to ~0.30 and raised successful matings from 5/241 to 6/269, easing
   reproduction stalls while preserving the diversity incentive in crowded
   stretches.
-- Relocated the "Pause When Hidden" toggle beneath the playback controls so the
-  auto-pause behaviour lives alongside the Pause/Step actions it complements
-  while remaining easy to discover, and kept it disabled by default so
-  unattended, long-running simulations continue advancing when the browser tab
-  loses focus.
+- Relocated the "Pause When Hidden" toggle into the Simulation Controls panel's
+  General Settings section so the focus-dependent behaviour lives beside other
+  global tunables while remaining easy to discover, and kept it disabled by
+  default so unattended, long-running simulations continue advancing when the
+  browser tab loses focus.
 - Shifted the playback speed slider beneath the Pause/Step controls so cadence
   adjustments live with the playback actions they influence.
 - Removed the wall linger penalty control and supporting plumbing from the

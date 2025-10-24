@@ -2486,16 +2486,6 @@ export default class UIManager {
     });
 
     this.#updateSpeedMultiplierUI(this.speedMultiplier);
-
-    this.autoPauseCheckbox = this.#addCheckbox(
-      body,
-      "Pause When Hidden",
-      { title: AUTO_PAUSE_DESCRIPTION, description: AUTO_PAUSE_DESCRIPTION },
-      this.autoPauseOnBlur,
-      (checked) => {
-        this.setAutoPauseOnBlur(checked);
-      },
-    );
   }
 
   #buildGeometryControls(body) {
@@ -2964,6 +2954,16 @@ export default class UIManager {
           this.lowDiversitySlider = input;
         }
       });
+
+    this.autoPauseCheckbox = this.#addCheckbox(
+      generalGroup,
+      "Pause When Hidden",
+      { title: AUTO_PAUSE_DESCRIPTION, description: AUTO_PAUSE_DESCRIPTION },
+      this.autoPauseOnBlur,
+      (checked) => {
+        this.setAutoPauseOnBlur(checked);
+      },
+    );
 
     return {
       renderSlider,

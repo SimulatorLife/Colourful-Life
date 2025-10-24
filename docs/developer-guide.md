@@ -19,8 +19,8 @@ extending tests, or polishing docs.
 
 - The in-app "Pause When Hidden" toggle starts disabled so long-running
   simulations continue evolving even when the browser tab loses focus. Re-enable
-  it beneath the playback controls in the Simulation Controls panel if you
-  prefer focus-dependent behaviour.
+  it from the General Settings section within the Simulation Controls panel if
+  you prefer focus-dependent behaviour.
 - Adjust the "Dashboard Refresh Interval" slider near the top of the Evolution
   Insights panel to tune how often the leaderboard and analytics dashboard
   request fresh data. The control now lives beside the metrics it governs.
