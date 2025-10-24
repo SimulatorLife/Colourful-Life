@@ -715,15 +715,13 @@ export default class Stats {
 
     this.#traitPresenceView.population = 0;
 
-    if (!this.#traitKeys) return;
+    if (!Array.isArray(this.#traitKeys)) return;
 
-    for (let i = 0; i < this.#traitKeys.length; i += 1) {
-      const key = this.#traitKeys[i];
-
+    this.#traitKeys.forEach((key) => {
       averages[key] = 0;
       fractions[key] = 0;
       counts[key] = 0;
-    }
+    });
   }
 
   #applyTraitSample(cell, direction) {
@@ -811,10 +809,9 @@ export default class Stats {
 
     view.population = resolvedPopulation;
 
-    for (let i = 0; i < this.#traitKeys.length; i += 1) {
-      const key = this.#traitKeys[i];
-      const sum = this.#traitSums[i];
-      const count = this.#traitActiveCounts[i];
+    this.#traitKeys.forEach((key, index) => {
+      const sum = this.#traitSums[index];
+      const count = this.#traitActiveCounts[index];
       const normalizedCount = count > 0 ? count : 0;
       const average = resolvedPopulation > 0 ? clamp01(sum * invPop) : 0;
       const fraction = resolvedPopulation > 0 ? clamp01(normalizedCount * invPop) : 0;
@@ -822,7 +819,7 @@ export default class Stats {
       view.averages[key] = average;
       view.fractions[key] = fraction;
       view.counts[key] = Math.max(0, Math.round(normalizedCount));
-    }
+    });
 
     return view;
   }
