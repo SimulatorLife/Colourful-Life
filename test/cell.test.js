@@ -549,6 +549,91 @@ test("neural rest confidence amplifies recovery boost", () => {
   );
 });
 
+test("pursue movement leans on targeting selection when available", () => {
+  const dna = new DNA(120, 120, 120);
+  const cell = new Cell(0, 0, dna, 6);
+  const movementSensors = new Array(Brain.SENSOR_COUNT).fill(0);
+
+  cell.brain = {
+    connectionCount: 3,
+    evaluateGroup(group) {
+      if (group === "movement") {
+        return {
+          values: { rest: -4, pursue: 5, avoid: -3, cohere: -3, explore: -2 },
+          activationCount: 1,
+          sensors: movementSensors.slice(),
+        };
+      }
+
+      return {
+        values: null,
+        activationCount: 0,
+        sensors: movementSensors.slice(),
+      };
+    },
+  };
+
+  const nearEnemy = {
+    row: 0,
+    col: 1,
+    target: { row: 0, col: 1, energy: 8, age: 1, lifespan: 6 },
+  };
+  const farEnemy = {
+    row: 2,
+    col: 0,
+    target: { row: 2, col: 0, energy: 5, age: 1, lifespan: 6 },
+  };
+  const enemies = [nearEnemy, farEnemy];
+  const chooseCalls = [];
+
+  cell.chooseEnemyTarget = (list) => {
+    chooseCalls.push(list);
+
+    return list[1];
+  };
+
+  let moved = null;
+  let randomFallback = false;
+
+  cell.executeMovementStrategy([], 0, 0, [], enemies, [], {
+    rows: 5,
+    cols: 5,
+    localDensity: 0.1,
+    densityEffectMultiplier: 1,
+    moveToTarget: (_grid, _row, _col, targetRow, targetCol) => {
+      moved = { row: targetRow, col: targetCol };
+    },
+    moveAwayFromTarget: () => {},
+    moveRandomly: () => {
+      randomFallback = true;
+    },
+    getEnergyAt: () => 0,
+    tryMove: () => false,
+    isTileBlocked: () => false,
+    tileEnergy: 0.4,
+    tileEnergyDelta: 0,
+    maxTileEnergy: 12,
+  });
+
+  assert.is(chooseCalls.length, 1, "pursue should consult targeting selection");
+  assert.ok(moved, "pursuit should attempt a directed move");
+  assert.is(moved?.row, 2, "movement should chase the targeted enemy row");
+  assert.is(moved?.col, 0, "movement should chase the targeted enemy col");
+  assert.is(randomFallback, false, "successful pursuit should avoid random fallback");
+
+  const outcome = cell._decisionContextIndex.get("movement")?.outcome ?? null;
+
+  assert.ok(outcome?.pursueTarget, "pursuit should record a target summary");
+  assert.is(outcome.pursueTarget.row, 2, "summary should capture pursued row");
+  assert.is(outcome.pursueTarget.col, 0, "summary should capture pursued col");
+  assert.equal(outcome.pursueTarget.source, "targeting");
+  assert.is(
+    outcome.pursueUsedTargetingNetwork,
+    false,
+    "stubbed targeting should report non-neural selection",
+  );
+});
+
 test("legacy cautious fallback retreats when DNA signals vulnerability", () => {
   const dna = new DNA(40, 40, 40);
 
