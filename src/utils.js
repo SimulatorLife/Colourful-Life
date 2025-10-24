@@ -334,8 +334,18 @@ export function createRankedBuffer(limit, compare) {
     add(entry) {
       if (entry == null || capacity === 0) return;
 
+      const size = entries.length;
+
+      if (size >= capacity) {
+        const comparison = comparator(entry, entries[size - 1]);
+
+        if (!(comparison < 0)) {
+          return;
+        }
+      }
+
       let low = 0;
-      let high = entries.length;
+      let high = size;
 
       // Binary-search insertion keeps the collection sorted without re-sorting after each push.
       while (low < high) {
@@ -351,7 +361,7 @@ export function createRankedBuffer(limit, compare) {
 
       const insertionIndex = low;
 
-      if (insertionIndex >= capacity && entries.length >= capacity) return;
+      if (insertionIndex >= capacity && size >= capacity) return;
 
       entries.splice(insertionIndex, 0, entry);
 
