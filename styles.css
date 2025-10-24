@@ -368,16 +368,20 @@ canvas {
   justify-content: flex-start;
   align-items: stretch;
   gap: var(--space-sm);
+  flex-wrap: wrap;
 }
 .control-line--inline-actions select {
-  flex: 1 1 auto;
+  flex: 1 1 100%;
   min-width: 0;
 }
 .control-line--inline-actions button {
-  flex: 0 0 auto;
+  flex: 1 1 calc(50% - var(--space-sm) / 2);
   width: auto;
   margin-bottom: 0;
   white-space: nowrap;
+}
+.control-line--inline-actions button:not(:last-of-type) {
+  margin-right: 0;
 }
 .control-line--checkbox {
   justify-content: flex-start;
