@@ -36,6 +36,8 @@ const STRATEGY_PRESSURE_SMOOTHING = 0.82;
 const LIFE_EVENT_LOG_CAPACITY = 240;
 const LIFE_EVENT_RATE_DEFAULT_WINDOW = 200;
 
+const DEFAULT_RANDOM = () => Math.random();
+
 const INTERACTION_TRAIT_LABELS = Object.freeze({
   cooperate: "Cooperative",
   fight: "Combative",
@@ -282,14 +284,20 @@ export default class Stats {
   #traitKeys;
   #traitComputes;
   #traitThresholds;
+  #rng;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
-   * @param {{traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>}} [options]
-   *   Optional configuration allowing callers to extend or override tracked trait metrics.
+   * @param {{
+   *   traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>,
+   *   traitResampleInterval?: number,
+   *   diversitySampleInterval?: number,
+   *   rng?: () => number,
+   * }} [options]
+   *   Optional configuration allowing callers to extend or override tracked trait metrics and randomness.
    */
   constructor(historySize = 10000, options = {}) {
     this.historySize = historySize;
-    const { traitDefinitions, traitResampleInterval, diversitySampleInterval } =
+    const { traitDefinitions, traitResampleInterval, diversitySampleInterval, rng } =
       options ?? {};
 
     this.traitDefinitions = resolveTraitDefinitions(traitDefinitions);
@@ -303,6 +311,7 @@ export default class Stats {
     );
     this.#traitSums = new Float64Array(this.traitDefinitions.length);
     this.#traitActiveCounts = new Float64Array(this.traitDefinitions.length);
+    this.#rng = typeof rng === "function" ? rng : DEFAULT_RANDOM;
     this.traitResampleInterval = sanitizePositiveInteger(traitResampleInterval, {
       fallback: 120,
       min: 1,
@@ -1086,12 +1095,29 @@ export default class Stats {
     const pairs = [];
     const population = populationSize;
     const maxAttempts = sampleLimit * 6;
+    const rng = this.#rng ?? DEFAULT_RANDOM;
+    const sampleIndex = (range) => {
+      if (!(range > 0)) {
+        return 0;
+      }
+
+      let roll = rng();
+
+      if (!Number.isFinite(roll)) {
+        roll = DEFAULT_RANDOM();
+      }
+
+      const fractional = roll - Math.trunc(roll);
+      const normalized = fractional >= 0 ? fractional : fractional + 1;
+
+      return Math.min(range - 1, Math.floor(normalized * range));
+    };
     let attempts = 0;
 
     while (pairs.length < sampleLimit && attempts < maxAttempts) {
       attempts += 1;
-      const first = (Math.random() * population) | 0;
-      let second = (Math.random() * (population - 1)) | 0;
+      const first = sampleIndex(population);
+      let second = sampleIndex(population - 1);
 
       if (second >= first) {
         second += 1;
@@ -1576,6 +1602,10 @@ export default class Stats {
       birthsPer100Ticks,
       deathsPer100Ticks,
     };
+  }
+
+  setRandomGenerator(randomFn) {
+    this.#rng = typeof randomFn === "function" ? randomFn : DEFAULT_RANDOM;
   }
 
   setMutationMultiplier(multiplier = 1) {
