@@ -267,6 +267,9 @@ export function createSimulation({
     update: (timestamp) => engine.tick(timestamp),
     resetWorld: (options) => engine.resetWorld(options),
     destroy: () => {
+      if (uiManager && typeof uiManager.destroy === "function") {
+        uiManager.destroy();
+      }
       while (unsubscribers.length) {
         const unsub = unsubscribers.pop();
 
