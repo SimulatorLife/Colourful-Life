@@ -5814,7 +5814,11 @@ export default class GridManager {
   }
 
   #resetTickSimilarityCache() {
-    this.#tickSimilarityCache = new Map();
+    if (this.#tickSimilarityCache) {
+      this.#tickSimilarityCache.clear();
+    } else {
+      this.#tickSimilarityCache = new Map();
+    }
     this.#tickSimilarityVersion = this.tickCount;
   }
 
