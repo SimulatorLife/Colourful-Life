@@ -127,4 +127,33 @@ export default class ReproductionZonePolicy {
 
     return filtered.length > 0 ? filtered : candidates;
   }
+
+  clearActiveZones() {
+    const manager = this.#selectionManager;
+
+    if (!manager) {
+      return;
+    }
+
+    if (typeof manager.clearActiveZones === "function") {
+      manager.clearActiveZones();
+
+      return;
+    }
+
+    if (
+      typeof manager.getPatterns === "function" &&
+      typeof manager.togglePattern === "function"
+    ) {
+      const patterns = manager.getPatterns();
+
+      if (Array.isArray(patterns)) {
+        for (const pattern of patterns) {
+          if (pattern?.id) {
+            manager.togglePattern(pattern.id, false);
+          }
+        }
+      }
+    }
+  }
 }

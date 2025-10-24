@@ -447,11 +447,56 @@ export default class GridManager {
 
     if (this.activeCells && this.activeCells.size > 0) {
       for (const cell of this.activeCells) {
+        if (!this.#ensureTrackedCell(cell)) {
+          this.activeCells.delete(cell);
+
+          continue;
+        }
+
         scratch.push(cell);
       }
     }
 
     return scratch;
+  }
+
+  #ensureTrackedCell(cell) {
+    if (!cell || typeof cell !== "object") {
+      return false;
+    }
+
+    if (!this.cellPositions || typeof this.cellPositions.get !== "function") {
+      this.cellPositions = new WeakMap();
+    }
+
+    const tracked = this.cellPositions.get(cell);
+
+    if (tracked && this.#isValidLocation(tracked.row, tracked.col, cell)) {
+      return true;
+    }
+
+    if (tracked) {
+      this.#untrackCell(cell);
+    }
+
+    const directRow = Number.isInteger(cell.row) ? cell.row : null;
+    const directCol = Number.isInteger(cell.col) ? cell.col : null;
+
+    if (this.#isValidLocation(directRow, directCol, cell)) {
+      this.#trackCellPosition(cell, directRow, directCol);
+
+      return true;
+    }
+
+    const located = this.#scanForCell(cell);
+
+    if (!located) {
+      return false;
+    }
+
+    this.#trackCellPosition(cell, located.row, located.col);
+
+    return true;
   }
 
   #releaseActiveCellSnapshot() {
@@ -1795,7 +1840,9 @@ export default class GridManager {
 
     if (!located) return null;
 
-    this.#recordCellPositionMismatch();
+    if (tracked) {
+      this.#recordCellPositionMismatch();
+    }
     this.#trackCellPosition(cell, located.row, located.col);
 
     return located;
@@ -2104,7 +2151,13 @@ export default class GridManager {
           !Number.isInteger(location.col) ||
           this.grid?.[location.row]?.[location.col] !== cell
         ) {
-          location = this.#resolveCellCoordinates(cell);
+          if (!this.#ensureTrackedCell(cell)) {
+            fallbackScanNeeded = true;
+
+            continue;
+          }
+
+          location = this.cellPositions.get(cell) || null;
 
           if (!location) {
             fallbackScanNeeded = true;
@@ -2676,6 +2729,7 @@ export default class GridManager {
     obstaclePreset = null,
     presetOptions = null,
     reseed = false,
+    clearCustomZones = false,
   } = {}) {
     const baseEnergy = this.initialTileEnergy;
 
@@ -2716,6 +2770,13 @@ export default class GridManager {
     this.eventEffectCache?.clear?.();
     this.#initializeDecayBuffers(this.rows, this.cols);
     this.#markObstacleRenderDirty();
+
+    if (
+      clearCustomZones &&
+      typeof this.reproductionZones?.clearActiveZones === "function"
+    ) {
+      this.reproductionZones.clearActiveZones();
+    }
 
     const shouldRandomize = Boolean(randomizeObstacles);
     let targetPreset = obstaclePreset;
@@ -3739,13 +3800,20 @@ export default class GridManager {
     let col = Number.isInteger(provided.col) ? provided.col : null;
 
     if (!Number.isInteger(row) || !Number.isInteger(col)) {
-      const location = this.#resolveCellCoordinates(cell);
+      if (this.#ensureTrackedCell(cell)) {
+        const tracked = this.cellPositions.get(cell);
 
-      if (location) {
-        ({ row, col } = location);
-      } else if (Number.isInteger(cell.row) && Number.isInteger(cell.col)) {
-        row = cell.row;
-        col = cell.col;
+        if (tracked) {
+          row = tracked.row;
+          col = tracked.col;
+        }
+      }
+
+      if (!Number.isInteger(row) || !Number.isInteger(col)) {
+        if (Number.isInteger(cell.row) && Number.isInteger(cell.col)) {
+          row = cell.row;
+          col = cell.col;
+        }
       }
     }
 
@@ -6167,11 +6235,13 @@ export default class GridManager {
     if (activeCells && activeCells.size > 0) {
       for (const cell of activeCells) {
         if (!cell) continue;
-        const location = this.#resolveCellCoordinates(cell);
+        if (!this.#ensureTrackedCell(cell)) continue;
 
-        if (!location) continue;
+        const tracked = this.cellPositions.get(cell);
 
-        const { row, col } = location;
+        if (!tracked) continue;
+
+        const { row, col } = tracked;
 
         const energy = Number.isFinite(cell.energy) ? cell.energy : 0;
         const age = Number.isFinite(cell.age) ? cell.age : 0;
