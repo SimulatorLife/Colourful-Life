@@ -74,6 +74,35 @@ test("cloneTracePayload performs deep copies of sensors and nodes", () => {
   assert.is(cloneTracePayload(null), null);
 });
 
+test("cloneTracePayload falls back when structuredClone is unavailable", () => {
+  const original = globalThis.structuredClone;
+  const trace = {
+    sensors: [{ id: "energy", value: 0.4 }],
+    nodes: [{ id: "hidden", bias: 0 }],
+  };
+
+  try {
+    // Simulate environments such as older Safari releases that lack structuredClone.
+    delete globalThis.structuredClone;
+
+    const clone = cloneTracePayload(trace);
+
+    assert.ok(clone !== trace);
+    assert.ok(Array.isArray(clone.sensors));
+    assert.is(clone.sensors[0].value, 0.4);
+
+    clone.sensors[0].value = 1;
+
+    assert.is(trace.sensors[0].value, 0.4);
+  } finally {
+    if (original === undefined) {
+      delete globalThis.structuredClone;
+    } else {
+      globalThis.structuredClone = original;
+    }
+  }
+});
+
 test("sanitizeNumber normalizes input with bounds and rounding strategies", () => {
   assert.is(
     sanitizeNumber("17.2", { min: 10, max: 20 }),

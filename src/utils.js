@@ -200,10 +200,69 @@ export function toPlainObject(candidate) {
  * @param {Object} trace - Snapshot returned by `brain.snapshot()`.
  * @returns {Object|null} Cloned trace.
  */
+const structuredCloneImpl =
+  typeof globalThis !== "undefined" && typeof globalThis.structuredClone === "function"
+    ? globalThis.structuredClone.bind(globalThis)
+    : null;
+
+function legacyClone(value, seen = new WeakMap()) {
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return new Date(value.getTime());
+  }
+
+  if (ArrayBuffer.isView(value)) {
+    if (value instanceof DataView) {
+      return new DataView(value.buffer.slice(0));
+    }
+
+    return typeof value.slice === "function"
+      ? value.slice(0)
+      : value.constructor.from(value);
+  }
+
+  if (value instanceof ArrayBuffer) {
+    return value.slice(0);
+  }
+
+  if (seen.has(value)) {
+    return seen.get(value);
+  }
+
+  if (Array.isArray(value)) {
+    const clone = [];
+
+    seen.set(value, clone);
+
+    for (const item of value) {
+      clone.push(legacyClone(item, seen));
+    }
+
+    return clone;
+  }
+
+  const clone = {};
+
+  seen.set(value, clone);
+
+  for (const [key, entry] of Object.entries(value)) {
+    clone[key] = legacyClone(entry, seen);
+  }
+
+  return clone;
+}
+
 export function cloneTracePayload(trace) {
   if (trace == null) return null;
 
-  return globalThis.structuredClone(trace);
+  if (structuredCloneImpl) {
+    return structuredCloneImpl(trace);
+  }
+
+  return legacyClone(trace);
 }
 
 /**
