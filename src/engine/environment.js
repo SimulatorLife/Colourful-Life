@@ -16,6 +16,102 @@ const defaultRequestAnimationFrame = (cb) => setTimeout(() => cb(defaultNow()), 
 const defaultCancelAnimationFrame = (id) => clearTimeout(id);
 
 /**
+ * Determines appropriate dimensions for a headless/offscreen canvas based on
+ * the supplied configuration. Mirrors the heuristics used by the browser entry
+ * point so scripted runs produce consistent render sizes without depending on
+ * DOM measurements.
+ *
+ * @param {Object} [config]
+ * @returns {{width:number,height:number}} Normalized canvas dimensions.
+ */
+export function resolveHeadlessCanvasSize(config = {}) {
+  const toFinite = toFiniteOrNull;
+
+  const rawCellSize = toFinite(config?.cellSize);
+  const cellSize = rawCellSize != null && rawCellSize > 0 ? rawCellSize : 5;
+  const rawRows = toFinite(config?.rows);
+  const rawCols = toFinite(config?.cols);
+  const rows = rawRows != null && rawRows > 0 ? rawRows : null;
+  const cols = rawCols != null && rawCols > 0 ? rawCols : null;
+  const defaultWidth = (cols ?? 120) * cellSize;
+  const defaultHeight = (rows ?? 120) * cellSize;
+  const pickFirstPositive = (candidates, fallback) =>
+    candidates
+      .map((candidate) => toFinite(candidate))
+      .find((value) => value != null && value > 0) ?? fallback;
+
+  return {
+    width: pickFirstPositive(
+      [
+        config?.width,
+        config?.canvasWidth,
+        config?.canvasSize?.width,
+        cols != null ? cols * cellSize : null,
+      ],
+      defaultWidth,
+    ),
+    height: pickFirstPositive(
+      [
+        config?.height,
+        config?.canvasHeight,
+        config?.canvasSize?.height,
+        rows != null ? rows * cellSize : null,
+      ],
+      defaultHeight,
+    ),
+  };
+}
+
+/**
+ * Builds a stub 2D canvas implementation for headless environments. The
+ * returned object satisfies the minimal surface expected by the rendering
+ * pipeline while deferring all drawing operations.
+ *
+ * @param {Object} [config]
+ * @returns {{width:number,height:number,getContext:(type:string)=>CanvasRenderingContext2D|null}}
+ *   Headless canvas shim used by {@link SimulationEngine} during tests.
+ */
+export function createHeadlessCanvas(config = {}) {
+  const { width, height } = resolveHeadlessCanvasSize(config);
+  const context = {
+    canvas: null,
+    fillStyle: "#000",
+    strokeStyle: "#000",
+    lineWidth: 1,
+    font: "",
+    textBaseline: "top",
+    textAlign: "left",
+    clearRect() {},
+    fillRect() {},
+    strokeRect() {},
+    save() {},
+    restore() {},
+    beginPath() {},
+    stroke() {},
+    createLinearGradient() {
+      return {
+        addColorStop() {},
+      };
+    },
+    fillText() {},
+    strokeText() {},
+  };
+  const canvas = {
+    width,
+    height,
+    getContext(type) {
+      if (type !== "2d") return null;
+
+      return context;
+    },
+  };
+
+  context.canvas = canvas;
+
+  return canvas;
+}
+
+/**
  * Resolves the canvas element the simulation should render into.
  *
  * Consumers can supply an explicit `HTMLCanvasElement` (or compatible
