@@ -120,6 +120,65 @@ const TIMESTAMP_NOW =
     ? () => performance.now()
     : () => Date.now();
 
+function parseHexColorComponents(hex) {
+  const length = hex.length;
+
+  if (length === 3 || length === 4) {
+    const rNibble = Number.parseInt(hex[0], 16);
+    const gNibble = Number.parseInt(hex[1], 16);
+    const bNibble = Number.parseInt(hex[2], 16);
+
+    if (Number.isNaN(rNibble) || Number.isNaN(gNibble) || Number.isNaN(bNibble)) {
+      return null;
+    }
+
+    const r = (rNibble << 4) | rNibble;
+    const g = (gNibble << 4) | gNibble;
+    const b = (bNibble << 4) | bNibble;
+    let a = 255;
+
+    if (length === 4) {
+      const aNibble = Number.parseInt(hex[3], 16);
+
+      if (Number.isNaN(aNibble)) {
+        return null;
+      }
+
+      a = (aNibble << 4) | aNibble;
+    }
+
+    return { r, g, b, a };
+  }
+
+  if (length === 6 || length === 8) {
+    const parsed = Number.parseInt(hex, 16);
+
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+
+    const value = parsed >>> 0;
+
+    if (length === 6) {
+      return {
+        r: (value >>> 16) & 0xff,
+        g: (value >>> 8) & 0xff,
+        b: value & 0xff,
+        a: 255,
+      };
+    }
+
+    return {
+      r: (value >>> 24) & 0xff,
+      g: (value >>> 16) & 0xff,
+      b: (value >>> 8) & 0xff,
+      a: value & 0xff,
+    };
+  }
+
+  return null;
+}
+
 function rememberColor(normalized, record) {
   if (COLOR_CACHE_LIMIT <= 0 || COLOR_CACHE.has(normalized)) {
     return COLOR_CACHE.get(normalized) ?? record;
@@ -174,36 +233,16 @@ function resolveColorRecord(color) {
     const match = HEX_PATTERN.exec(normalized);
 
     if (match) {
-      const hex = match[1];
-      const expandNibble = (value) => value + value;
-      const resolveHexPair = (pair) => parseInt(pair, 16);
+      const components = parseHexColorComponents(match[1]);
 
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      let a = 255;
-
-      if (hex.length === 3 || hex.length === 4) {
-        const [hr, hg, hb, ha] = hex.split("");
-
-        r = resolveHexPair(expandNibble(hr));
-        g = resolveHexPair(expandNibble(hg));
-        b = resolveHexPair(expandNibble(hb));
-
-        if (ha) {
-          a = Math.round((resolveHexPair(expandNibble(ha)) / 255) * 255);
-        }
-      } else if (hex.length === 6 || hex.length === 8) {
-        r = resolveHexPair(hex.slice(0, 2));
-        g = resolveHexPair(hex.slice(2, 4));
-        b = resolveHexPair(hex.slice(4, 6));
-
-        if (hex.length === 8) {
-          a = Math.round((resolveHexPair(hex.slice(6, 8)) / 255) * 255);
-        }
+      if (components) {
+        record = createColorRecord(
+          components.r,
+          components.g,
+          components.b,
+          components.a,
+        );
       }
-
-      record = createColorRecord(r, g, b, clamp(Math.round(a), 0, 255));
     }
   } else {
     const match = RGB_PATTERN.exec(normalized);
