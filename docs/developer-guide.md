@@ -115,6 +115,10 @@ affect runtime outcomes.
 - `COLOURFUL_LIFE_MUTATION_CHANCE` raises or lowers the default mutation
   probability applied when genomes reproduce without an explicit DNA override,
   allowing faster or slower evolutionary churn during experiments.
+- `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` scales how much surplus energy
+  parents must stockpile beyond the higher offspring demand fraction before
+  gestation begins, letting you tighten or relax reproduction scarcity in
+  headless runs without editing source.
 - Non-finite or out-of-range values are ignored and fall back to the defaults
   resolved in [`src/config.js`](../src/config.js). The energy overlays pull the
   sanitized values so UI telemetry reflects the active configuration.

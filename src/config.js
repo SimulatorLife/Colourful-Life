@@ -31,6 +31,7 @@ const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 const DEFAULT_ACTIVITY_BASE_RATE = 0.28;
 const DEFAULT_MUTATION_CHANCE = 0.15;
 const DEFAULT_INITIAL_TILE_ENERGY_FRACTION = 0.5;
+const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.15;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
@@ -285,6 +286,27 @@ export function resolveMutationChance(env = RUNTIME_ENV) {
 }
 
 export const MUTATION_CHANCE_BASELINE = resolveMutationChance();
+/**
+ * Resolves the multiplier applied to the higher of two parents' minimum energy
+ * demand when determining whether offspring are viable. This keeps the
+ * reproduction gate configurable so deployments can tighten or loosen how much
+ * surplus energy lineages must hold before investing in offspring.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Viability multiplier clamped to the 1..2 interval.
+ */
+export function resolveOffspringViabilityBuffer(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER", {
+    fallback: DEFAULT_OFFSPRING_VIABILITY_BUFFER,
+    min: 1,
+    max: 2,
+    clampResult: true,
+  });
+}
+
+export const OFFSPRING_VIABILITY_BUFFER = resolveOffspringViabilityBuffer();
 export const INITIAL_TILE_ENERGY_FRACTION_DEFAULT =
   DEFAULT_INITIAL_TILE_ENERGY_FRACTION;
 

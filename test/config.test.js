@@ -218,3 +218,45 @@ test("resolveDecayMaxAge falls back when override is invalid", async () => {
   assert.is(resolveDecayMaxAge({ COLOURFUL_LIFE_DECAY_MAX_AGE: "0" }), 240);
   assert.is(resolveDecayMaxAge({ COLOURFUL_LIFE_DECAY_MAX_AGE: "NaN" }), 240);
 });
+
+test("OFFSPRING_VIABILITY_BUFFER exposes the environment-aware default", async () => {
+  const { OFFSPRING_VIABILITY_BUFFER } = await configModulePromise;
+
+  assert.is(OFFSPRING_VIABILITY_BUFFER, 1.15);
+});
+
+test("resolveOffspringViabilityBuffer respects overrides", async () => {
+  const { resolveOffspringViabilityBuffer } = await configModulePromise;
+
+  assert.is(
+    resolveOffspringViabilityBuffer({
+      COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER: "1.5",
+    }),
+    1.5,
+  );
+});
+
+test("resolveOffspringViabilityBuffer clamps invalid overrides", async () => {
+  const { resolveOffspringViabilityBuffer } = await configModulePromise;
+
+  assert.is(
+    resolveOffspringViabilityBuffer({
+      COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER: "0.8",
+    }),
+    1,
+  );
+
+  assert.is(
+    resolveOffspringViabilityBuffer({
+      COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER: "3.4",
+    }),
+    2,
+  );
+
+  assert.is(
+    resolveOffspringViabilityBuffer({
+      COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER: "NaN",
+    }),
+    1.15,
+  );
+});
