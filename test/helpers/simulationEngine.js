@@ -3,8 +3,11 @@ export class MockGradient {
 }
 
 export class MockContext {
-  constructor(width, height) {
-    this.canvas = { width, height };
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.imageSmoothingEnabled = true;
+    this.lastTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+    this.lastScale = { x: 1, y: 1 };
   }
 
   clearRect() {}
@@ -17,13 +20,22 @@ export class MockContext {
   }
   fillText() {}
   strokeText() {}
+  setTransform(a, b, c, d, e, f) {
+    this.lastTransform = { a, b, c, d, e, f };
+  }
+  resetTransform() {
+    this.lastTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+  }
+  scale(x, y) {
+    this.lastScale = { x, y };
+  }
 }
 
 export class MockCanvas {
   constructor(width, height) {
     this.width = width;
     this.height = height;
-    this._context = new MockContext(width, height);
+    this._context = new MockContext(this);
   }
 
   getContext(type) {

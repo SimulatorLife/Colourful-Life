@@ -178,6 +178,11 @@ export default class SimulationEngine {
     this.cellSize = cellSize;
     this.rows = rows;
     this.cols = cols;
+    this.canvasPixelRatio = this.#resolveDevicePixelRatio(win);
+    this.canvasLogicalWidth = width;
+    this.canvasLogicalHeight = height;
+    this._pixelRatioCleanup = null;
+    this.#applyCanvasResolution(width, height);
     this._obstaclePresets = resolveObstaclePresetCatalog(config.obstaclePresets);
     const { now, raf, caf } = resolveTimingProviders({
       window: win,
@@ -381,6 +386,7 @@ export default class SimulationEngine {
     this.listeners = new Map();
 
     this._autoPauseCleanup = this.#installAutoPauseHandlers(win, doc);
+    this._pixelRatioCleanup = this.#installPixelRatioListener(win);
 
     if (autoStart) {
       this.start();
@@ -517,6 +523,86 @@ export default class SimulationEngine {
 
     this.resume();
     this.#setAutoPausePending(false);
+  }
+
+  #resolveDevicePixelRatio(win) {
+    const ratio = Number(win?.devicePixelRatio);
+
+    if (!Number.isFinite(ratio) || ratio <= 0) {
+      return 1;
+    }
+
+    return Math.min(ratio, 4);
+  }
+
+  #applyCanvasResolution(width, height) {
+    const canvas = this.canvas;
+    const ctx = this.ctx;
+
+    if (!canvas || !ctx) {
+      return;
+    }
+
+    const logicalWidth = Math.max(1, Math.round(Number(width) || 0));
+    const logicalHeight = Math.max(1, Math.round(Number(height) || 0));
+
+    this.canvasLogicalWidth = logicalWidth;
+    this.canvasLogicalHeight = logicalHeight;
+
+    const ratio =
+      Number.isFinite(this.canvasPixelRatio) && this.canvasPixelRatio > 0
+        ? this.canvasPixelRatio
+        : 1;
+    const scaledWidth = Math.max(1, Math.round(logicalWidth * ratio));
+    const scaledHeight = Math.max(1, Math.round(logicalHeight * ratio));
+
+    if (canvas.width !== scaledWidth) canvas.width = scaledWidth;
+    if (canvas.height !== scaledHeight) canvas.height = scaledHeight;
+
+    if (typeof ctx.setTransform === "function") {
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    } else {
+      if (typeof ctx.resetTransform === "function") {
+        ctx.resetTransform();
+      }
+      if (typeof ctx.scale === "function") {
+        ctx.scale(ratio, ratio);
+      }
+    }
+
+    if (ctx.imageSmoothingEnabled != null) {
+      ctx.imageSmoothingEnabled = false;
+    }
+  }
+
+  #installPixelRatioListener(win) {
+    if (!win || typeof win.addEventListener !== "function") {
+      return () => {};
+    }
+
+    const handleResize = () => {
+      const nextRatio = this.#resolveDevicePixelRatio(win);
+
+      if (!Number.isFinite(nextRatio) || nextRatio <= 0) {
+        return;
+      }
+
+      if (Math.abs(nextRatio - (this.canvasPixelRatio ?? 1)) < 0.001) {
+        return;
+      }
+
+      this.canvasPixelRatio = nextRatio;
+      const width = this.canvasLogicalWidth ?? this.cols * this.cellSize;
+      const height = this.canvasLogicalHeight ?? this.rows * this.cellSize;
+
+      this.#applyCanvasResolution(width, height);
+    };
+
+    win.addEventListener("resize", handleResize);
+
+    return () => {
+      win.removeEventListener("resize", handleResize);
+    };
   }
 
   #installAutoPauseHandlers(win, doc) {
@@ -875,8 +961,7 @@ export default class SimulationEngine {
     this.cols = targetCols;
 
     if (this.canvas) {
-      this.canvas.width = this.cols * this.cellSize;
-      this.canvas.height = this.rows * this.cellSize;
+      this.#applyCanvasResolution(this.cols * this.cellSize, this.rows * this.cellSize);
     }
 
     if (this.selectionManager?.setDimensions) {
@@ -1110,6 +1195,11 @@ export default class SimulationEngine {
     if (typeof this._autoPauseCleanup === "function") {
       this._autoPauseCleanup();
       this._autoPauseCleanup = null;
+    }
+
+    if (typeof this._pixelRatioCleanup === "function") {
+      this._pixelRatioCleanup();
+      this._pixelRatioCleanup = null;
     }
 
     this.stop();
