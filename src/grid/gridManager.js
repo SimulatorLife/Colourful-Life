@@ -302,7 +302,7 @@ export default class GridManager {
   #targetGroupsView = null;
   #targetDescriptorPool = [];
   #rowOccupancy = [];
-  #tickSimilarityCache = new Map();
+  #tickSimilarityCache = new WeakMap();
   #tickSimilarityVersion = -1;
 
   static #normalizeMoveOptions(options = {}) {
@@ -6261,11 +6261,7 @@ export default class GridManager {
   }
 
   #resetTickSimilarityCache() {
-    if (this.#tickSimilarityCache) {
-      this.#tickSimilarityCache.clear();
-    } else {
-      this.#tickSimilarityCache = new Map();
-    }
+    this.#tickSimilarityCache = new WeakMap();
     this.#tickSimilarityVersion = this.tickCount;
   }
 
@@ -6277,86 +6273,50 @@ export default class GridManager {
     return this.#tickSimilarityCache;
   }
 
-  #createCellPairMeta(cellA, cellB) {
-    const meta = new Set();
-
-    if (cellA) meta.add(cellA);
-    if (cellB && cellB !== cellA) meta.add(cellB);
-
-    return meta;
-  }
-
-  #isSameCellPair(meta, cellA, cellB) {
-    if (!(meta instanceof Set)) return false;
-
-    if (cellA === cellB) {
-      return meta.size === 1 && meta.has(cellA);
-    }
-
-    return meta.size === 2 && meta.has(cellA) && meta.has(cellB);
-  }
-
-  #buildTickSimilarityKey(cellA, cellB, rowA, colA, rowB, colB) {
-    const seedA = typeof cellA?.dna?.seed === "function" ? cellA.dna.seed() : null;
-    const seedB = typeof cellB?.dna?.seed === "function" ? cellB.dna.seed() : null;
-
-    if (Number.isFinite(seedA) && Number.isFinite(seedB)) {
-      if (seedA <= seedB) {
-        return { key: `seed:${seedA}|${seedB}`, needsMeta: false };
-      }
-
-      return { key: `seed:${seedB}|${seedA}`, needsMeta: false };
-    }
-
-    if (
-      Number.isInteger(rowA) &&
-      Number.isInteger(colA) &&
-      Number.isInteger(rowB) &&
-      Number.isInteger(colB)
-    ) {
-      const cols = this.cols > 0 ? this.cols : 1;
-      const indexA = rowA * cols + colA;
-      const indexB = rowB * cols + colB;
-
-      if (indexA <= indexB) {
-        return { key: `pos:${indexA}|${indexB}`, needsMeta: true };
-      }
-
-      return { key: `pos:${indexB}|${indexA}`, needsMeta: true };
-    }
-
-    return { key: null, needsMeta: false };
-  }
-
-  #resolveTargetSimilarity(cellA, cellB, rowA, colA, rowB, colB) {
+  #resolveTargetSimilarity(cellA, cellB) {
     if (!cellA || !cellB) return 0;
 
-    const { key, needsMeta } = this.#buildTickSimilarityKey(
-      cellA,
-      cellB,
-      rowA,
-      colA,
-      rowB,
-      colB,
-    );
+    const cache = this.#ensureTickSimilarityCache();
+    let mapForA = cache.get(cellA);
 
-    if (!key) {
-      return getPairSimilarity(cellA, cellB);
+    if (mapForA && mapForA.has(cellB)) {
+      return mapForA.get(cellB);
     }
 
-    const cache = this.#ensureTickSimilarityCache();
-    const cached = cache.get(key);
+    const mapForB = cache.get(cellB);
 
-    if (cached && (!needsMeta || this.#isSameCellPair(cached.meta, cellA, cellB))) {
-      return cached.value;
+    if (mapForB && mapForB.has(cellA)) {
+      const value = mapForB.get(cellA);
+
+      if (!mapForA) {
+        mapForA = new WeakMap();
+        cache.set(cellA, mapForA);
+      }
+
+      mapForA.set(cellB, value);
+
+      return value;
     }
 
     const value = getPairSimilarity(cellA, cellB);
 
-    cache.set(key, {
-      value,
-      meta: needsMeta ? this.#createCellPairMeta(cellA, cellB) : null,
-    });
+    if (!mapForA) {
+      mapForA = new WeakMap();
+      cache.set(cellA, mapForA);
+    }
+
+    mapForA.set(cellB, value);
+
+    if (cellA !== cellB) {
+      let reverseMap = mapForB;
+
+      if (!reverseMap) {
+        reverseMap = new WeakMap();
+        cache.set(cellB, reverseMap);
+      }
+
+      reverseMap.set(cellA, value);
+    }
 
     return value;
   }
@@ -6429,14 +6389,7 @@ export default class GridManager {
         return;
       }
 
-      const similarity = this.#resolveTargetSimilarity(
-        cell,
-        target,
-        row,
-        col,
-        targetRow,
-        targetCol,
-      );
+      const similarity = this.#resolveTargetSimilarity(cell, target);
 
       if (similarity >= allyT) {
         const descriptor = this.#acquireTargetDescriptor();
