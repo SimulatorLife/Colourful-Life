@@ -141,6 +141,11 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getDensityEffectMultiplier: () => settings.densityEffectMultiplier,
+    setDensityEffectMultiplier: (value) => {
+      if (updateIfFinite("densityEffectMultiplier", value, { min: 0 })) {
+        notify("densityEffectMultiplier", settings.densityEffectMultiplier);
+      }
+    },
     getSocietySimilarity: () => settings.societySimilarity,
     getEnemySimilarity: () => settings.enemySimilarity,
     getEventStrengthMultiplier: () => settings.eventStrengthMultiplier,
