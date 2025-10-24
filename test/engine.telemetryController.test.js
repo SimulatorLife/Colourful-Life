@@ -60,7 +60,13 @@ test("TelemetryController publishes pending metrics with throttle enforcement", 
     },
   ]);
   assert.equal(leaderboardCalls, [
-    { entries: [{ id: "a" }, { id: "b" }, { id: "c" }] },
+    {
+      entries: [
+        { id: "a", offspring: 0, fightsWon: 0, age: 0, color: null },
+        { id: "b", offspring: 0, fightsWon: 0, age: 0, color: null },
+        { id: "c", offspring: 0, fightsWon: 0, age: 0, color: null },
+      ],
+    },
   ]);
   assert.equal(
     leaderboardArgs.map(({ size }) => size),
@@ -102,7 +108,11 @@ test("TelemetryController publishes pending metrics with throttle enforcement", 
     environment,
   });
   assert.equal(leaderboardCalls[1], {
-    entries: [{ id: "d" }, { id: "e" }, { id: "f" }],
+    entries: [
+      { id: "d", offspring: 0, fightsWon: 0, age: 0, color: null },
+      { id: "e", offspring: 0, fightsWon: 0, age: 0, color: null },
+      { id: "f", offspring: 0, fightsWon: 0, age: 0, color: null },
+    ],
   });
   assert.equal(
     leaderboardArgs.map(({ size }) => size),

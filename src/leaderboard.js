@@ -48,18 +48,39 @@ export function computeLeaderboard(snapshot, topN = 5) {
   const topItems = createRankedBuffer(sanitizedTopN, compareItems);
 
   for (const entry of entries) {
-    const { cell, fitness } = entry || {};
-
-    if (!cell || !Number.isFinite(fitness)) {
+    if (!entry || typeof entry !== "object") {
       continue;
     }
 
+    const { cell, fitness } = entry;
+
+    if (!Number.isFinite(fitness)) {
+      continue;
+    }
+
+    const offspringCandidate = Number.isFinite(entry.offspring)
+      ? entry.offspring
+      : Number.isFinite(cell?.offspring)
+        ? cell.offspring
+        : 0;
+    const fightsWonCandidate = Number.isFinite(entry.fightsWon)
+      ? entry.fightsWon
+      : Number.isFinite(cell?.fightsWon)
+        ? cell.fightsWon
+        : 0;
+    const ageCandidate = Number.isFinite(entry.age)
+      ? entry.age
+      : Number.isFinite(cell?.age)
+        ? cell.age
+        : 0;
+    const colorCandidate = entry.color ?? cell?.color;
+
     const item = {
       fitness,
-      offspring: Number.isFinite(cell?.offspring) ? cell.offspring : 0,
-      fightsWon: Number.isFinite(cell?.fightsWon) ? cell.fightsWon : 0,
-      age: Number.isFinite(cell?.age) ? cell.age : 0,
-      color: cell?.color,
+      offspring: offspringCandidate,
+      fightsWon: fightsWonCandidate,
+      age: ageCandidate,
+      color: colorCandidate,
     };
     const row = sanitizeCoordinate(entry?.row);
     const col = sanitizeCoordinate(entry?.col);
