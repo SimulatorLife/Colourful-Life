@@ -1,4 +1,5 @@
 import { assert, test } from "#tests/harness";
+import { clamp } from "../src/utils.js";
 
 const baseOptions = {
   eventManager: { activeEvents: [] },
@@ -75,7 +76,7 @@ test("GridManager.resize preserves existing cells when reseed is false", async (
   survivor.energy = 2.5;
   gm.energyGrid[1][1] = 1.75;
   const cap = gm.maxTileEnergy;
-  const clampedInitialEnergy = Math.min(Math.max(survivor.energy, 0), cap);
+  const clampedInitialEnergy = clamp(survivor.energy, 0, cap);
   const initialTileEnergy = Math.max(0, gm.energyGrid[1][1]);
   const capacity = Math.max(0, cap - clampedInitialEnergy);
   const expectedAbsorption = Math.min(initialTileEnergy, capacity);

@@ -581,8 +581,8 @@ export default class SimulationEngine {
       const area = event?.affectedArea ?? {};
       const rawWidth = Number.isFinite(area.width) ? area.width : 0;
       const rawHeight = Number.isFinite(area.height) ? area.height : 0;
-      const width = Math.max(0, Math.min(this.cols, Math.round(rawWidth)));
-      const height = Math.max(0, Math.min(this.rows, Math.round(rawHeight)));
+      const width = clamp(Math.round(rawWidth), 0, this.cols);
+      const height = clamp(Math.round(rawHeight), 0, this.rows);
       const coverageTiles = width * height;
       const coverageRatio = coverageTiles > 0 ? coverageTiles / totalTiles : 0;
       const remainingTicks = Math.max(0, Math.floor(event?.remaining ?? 0));
