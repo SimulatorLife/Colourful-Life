@@ -54,3 +54,70 @@ test("SimulationEngine falls back to derived dimensions when row/col overrides a
     restore();
   }
 });
+
+test("SimulationEngine scales the canvas for high-DPI displays", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const canvas = new MockCanvas(200, 150);
+    const listeners = {};
+    const removed = [];
+    const fakeWindow = {
+      devicePixelRatio: 2,
+      addEventListener(event, handler) {
+        listeners[event] = handler;
+      },
+      removeEventListener(event, handler) {
+        removed.push({ event, handler });
+      },
+    };
+
+    const engine = new SimulationEngine({
+      canvas,
+      window: fakeWindow,
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+    });
+
+    assert.is(canvas.width, 400);
+    assert.is(canvas.height, 300);
+    assert.equal(canvas.getContext("2d").lastTransform, {
+      a: 2,
+      b: 0,
+      c: 0,
+      d: 2,
+      e: 0,
+      f: 0,
+    });
+    assert.ok(typeof listeners.resize === "function");
+
+    fakeWindow.devicePixelRatio = 1.5;
+    listeners.resize();
+
+    assert.is(canvas.width, 300);
+    assert.is(canvas.height, 225);
+    assert.equal(canvas.getContext("2d").lastTransform, {
+      a: 1.5,
+      b: 0,
+      c: 0,
+      d: 1.5,
+      e: 0,
+      f: 0,
+    });
+
+    engine.destroy();
+
+    assert.ok(
+      removed.some(
+        (entry) => entry.event === "resize" && entry.handler === listeners.resize,
+      ),
+      "resize listener should be cleaned up",
+    );
+  } finally {
+    restore();
+  }
+});

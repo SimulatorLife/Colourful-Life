@@ -81,6 +81,7 @@ export function createHeadlessCanvas(config = {}) {
     font: "",
     textBaseline: "top",
     textAlign: "left",
+    imageSmoothingEnabled: false,
     clearRect() {},
     fillRect() {},
     strokeRect() {},
@@ -88,6 +89,9 @@ export function createHeadlessCanvas(config = {}) {
     restore() {},
     beginPath() {},
     stroke() {},
+    setTransform() {},
+    resetTransform() {},
+    scale() {},
     createLinearGradient() {
       return {
         addColorStop() {},
