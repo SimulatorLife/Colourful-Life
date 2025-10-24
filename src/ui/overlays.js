@@ -339,9 +339,65 @@ function drawObstacleMask(
       const y = r * cellSize;
 
       ctx.fillRect(x, y, cellSize, cellSize);
-      ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
     }
   }
+
+  const canStroke =
+    typeof ctx.beginPath === "function" &&
+    typeof ctx.moveTo === "function" &&
+    typeof ctx.lineTo === "function" &&
+    typeof ctx.stroke === "function";
+
+  if (canStroke) {
+    ctx.beginPath();
+    const halfPixel = 0.5;
+
+    for (let r = 0; r < rows; r++) {
+      const rowMask = mask[r];
+
+      if (!rowMask) continue;
+      const prevRow = r > 0 ? mask[r - 1] : null;
+      const nextRow = r + 1 < rows ? mask[r + 1] : null;
+
+      for (let c = 0; c < cols; c++) {
+        if (!rowMask[c]) continue;
+
+        const x = c * cellSize;
+        const y = r * cellSize;
+        const leftBlocked = c > 0 && rowMask[c - 1];
+        const rightBlocked = c + 1 < cols && rowMask[c + 1];
+        const topBlocked = prevRow ? prevRow[c] : false;
+        const bottomBlocked = nextRow ? nextRow[c] : false;
+
+        if (!topBlocked) {
+          ctx.moveTo(x, y + halfPixel);
+          ctx.lineTo(x + cellSize, y + halfPixel);
+        }
+
+        if (!bottomBlocked) {
+          const bottomY = y + cellSize - halfPixel;
+
+          ctx.moveTo(x, bottomY);
+          ctx.lineTo(x + cellSize, bottomY);
+        }
+
+        if (!leftBlocked) {
+          ctx.moveTo(x + halfPixel, y);
+          ctx.lineTo(x + halfPixel, y + cellSize);
+        }
+
+        if (!rightBlocked) {
+          const rightX = x + cellSize - halfPixel;
+
+          ctx.moveTo(rightX, y);
+          ctx.lineTo(rightX, y + cellSize);
+        }
+      }
+    }
+
+    ctx.stroke();
+  }
+
   ctx.restore();
 }
 

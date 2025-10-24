@@ -1367,6 +1367,26 @@ export default class UIManager {
     return `${displayValue}×`;
   }
 
+  #formatMultiplierDisplay(value, decimals = 2) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return "—";
+
+    const precision = Number.isFinite(decimals)
+      ? Math.max(0, Math.min(4, decimals))
+      : 0;
+    const factor = precision > 0 ? 10 ** precision : 1;
+    const rounded =
+      precision > 0 ? Math.round(numeric * factor) / factor : Math.round(numeric);
+    let text = precision > 0 ? rounded.toFixed(precision) : String(rounded);
+
+    if (precision > 0) {
+      text = text.replace(/(\.\d*?[1-9])0+$/u, "$1").replace(/\.0+$/u, "");
+    }
+
+    return `${text}×`;
+  }
+
   #buildSpeedHotkeyHint() {
     const baseHint = "Speed multiplier relative to 60 updates/sec (0.5×..100×).";
     const pieces = [];
@@ -2813,7 +2833,7 @@ export default class UIManager {
         max: 3,
         step: 0.05,
         title: "Scales the impact of environmental events (0..3)",
-        format: (v) => v.toFixed(2),
+        format: (v) => this.#formatMultiplierDisplay(v, 2),
         getValue: () => this.eventStrengthMultiplier,
         setValue: (v) => this.#updateSetting("eventStrengthMultiplier", v),
       }),
@@ -2823,7 +2843,7 @@ export default class UIManager {
         max: 3,
         step: 0.1,
         title: "How often events spawn (0 disables new events)",
-        format: (v) => v.toFixed(1),
+        format: (v) => this.#formatMultiplierDisplay(v, 1),
         getValue: () => this.eventFrequencyMultiplier,
         setValue: (v) => this.#updateSetting("eventFrequencyMultiplier", v),
       }),
@@ -2837,7 +2857,7 @@ export default class UIManager {
         step: 0.05,
         title:
           "Scales how strongly population density affects energy, aggression, and breeding (0..2)",
-        format: (v) => v.toFixed(2),
+        format: (v) => this.#formatMultiplierDisplay(v, 2),
         getValue: () => this.densityEffectMultiplier,
         setValue: (v) => this.#updateSetting("densityEffectMultiplier", v),
       }),
@@ -2870,7 +2890,7 @@ export default class UIManager {
       step: 0.05,
       title:
         "Multiplier applied to reproduction chance when diversity is below the threshold (0 disables births)",
-      format: (v) => v.toFixed(2),
+      format: (v) => this.#formatMultiplierDisplay(v, 2),
       getValue: () => this.lowDiversityReproMultiplier,
       setValue: (v) => this.#updateSetting("lowDiversityReproMultiplier", v),
       position: "beforeOverlays",
@@ -2884,7 +2904,7 @@ export default class UIManager {
         step: 0.05,
         title:
           "Scales averaged parental mutation chance and range for offspring (0 disables mutation)",
-        format: (v) => v.toFixed(2),
+        format: (v) => this.#formatMultiplierDisplay(v, 2),
         getValue: () => this.mutationMultiplier,
         setValue: (v) => this.#updateSetting("mutationMultiplier", v),
         position: "beforeOverlays",
