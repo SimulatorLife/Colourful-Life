@@ -1063,7 +1063,7 @@ export default class Cell {
       sensorVector,
       outputs: evaluation.values ? { ...evaluation.values } : null,
       activationCount,
-      trace: evaluation.trace ? cloneTracePayload(evaluation.trace) : null,
+      trace: evaluation.trace ?? null,
       outcome: null,
     };
 

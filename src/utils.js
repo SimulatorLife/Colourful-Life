@@ -251,6 +251,127 @@ const structuredCloneImpl =
     ? globalThis.structuredClone.bind(globalThis)
     : null;
 
+const objectPrototype = Object.prototype;
+const hasOwn = objectPrototype.hasOwnProperty;
+
+function isPlainObject(value) {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const proto = Object.getPrototypeOf(value);
+
+  return proto === objectPrototype || proto === null;
+}
+
+function fastCloneTracePayload(trace) {
+  if (!isPlainObject(trace)) {
+    return null;
+  }
+
+  const stack = [];
+  const root = {};
+
+  stack.push({ source: trace, target: root });
+
+  while (stack.length > 0) {
+    const frame = stack.pop();
+    const { source, target } = frame;
+
+    if (Array.isArray(source)) {
+      const length = source.length;
+
+      if (!Array.isArray(target) || target.length !== length) {
+        target.length = length;
+      }
+
+      for (let index = 0; index < length; index += 1) {
+        const entry = source[index];
+
+        if (!entry || typeof entry !== "object") {
+          target[index] = entry;
+          continue;
+        }
+
+        if (Array.isArray(entry)) {
+          const clone = new Array(entry.length);
+
+          target[index] = clone;
+          stack.push({ source: entry, target: clone });
+
+          continue;
+        }
+
+        if (!isPlainObject(entry)) {
+          return null;
+        }
+
+        const clone = {};
+
+        target[index] = clone;
+        stack.push({ source: entry, target: clone });
+      }
+
+      continue;
+    }
+
+    const keys = Object.keys(source);
+
+    for (let i = 0; i < keys.length; i += 1) {
+      const key = keys[i];
+
+      if (!hasOwn.call(source, key)) continue;
+
+      const value = source[key];
+
+      if (!value || typeof value !== "object") {
+        target[key] = value;
+        continue;
+      }
+
+      if (Array.isArray(value)) {
+        const clone = new Array(value.length);
+
+        target[key] = clone;
+        stack.push({ source: value, target: clone });
+
+        continue;
+      }
+
+      if (ArrayBuffer.isView(value)) {
+        if (value instanceof DataView) {
+          target[key] = new DataView(value.buffer.slice(0));
+        } else if (typeof value.slice === "function") {
+          target[key] = value.slice(0);
+        } else if (typeof value.constructor?.from === "function") {
+          target[key] = value.constructor.from(value);
+        } else {
+          return null;
+        }
+
+        continue;
+      }
+
+      if (value instanceof ArrayBuffer) {
+        target[key] = value.slice(0);
+
+        continue;
+      }
+
+      if (!isPlainObject(value)) {
+        return null;
+      }
+
+      const clone = {};
+
+      target[key] = clone;
+      stack.push({ source: value, target: clone });
+    }
+  }
+
+  return root;
+}
+
 function legacyClone(value, seen = new WeakMap()) {
   if (value == null || typeof value !== "object") {
     return value;
@@ -303,6 +424,12 @@ function legacyClone(value, seen = new WeakMap()) {
 
 export function cloneTracePayload(trace) {
   if (trace == null) return null;
+
+  const fastClone = fastCloneTracePayload(trace);
+
+  if (fastClone) {
+    return fastClone;
+  }
 
   if (structuredCloneImpl) {
     return structuredCloneImpl(trace);
