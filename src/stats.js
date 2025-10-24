@@ -725,6 +725,12 @@ export default class Stats {
     });
   }
 
+  #resolveTraitValue(compute, cell) {
+    const rawValue = typeof compute === "function" ? compute(cell) : 0;
+
+    return Number.isFinite(rawValue) ? clamp01(rawValue) : 0;
+  }
+
   #applyTraitSample(cell, direction) {
     if (!cell) {
       this.#needsTraitRebuild = true;
@@ -739,8 +745,7 @@ export default class Stats {
 
     this.#traitComputes.forEach((compute, index) => {
       const threshold = thresholds[index];
-      const rawValue = typeof compute === "function" ? compute(cell) : 0;
-      const value = Number.isFinite(rawValue) ? clamp01(rawValue) : 0;
+      const value = this.#resolveTraitValue(compute, cell);
       const nextSum = sums[index] + value * direction;
 
       sums[index] = nextSum >= 0 ? nextSum : 0;
@@ -779,8 +784,7 @@ export default class Stats {
 
       computes.forEach((compute, index) => {
         const threshold = thresholds[index];
-        const rawValue = typeof compute === "function" ? compute(cell) : 0;
-        const value = Number.isFinite(rawValue) ? clamp01(rawValue) : 0;
+        const value = this.#resolveTraitValue(compute, cell);
 
         this.#traitSums[index] += value;
 
