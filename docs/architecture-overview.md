@@ -9,10 +9,26 @@ This document captures how the Colourful Life simulation composes its core syste
    - Prepares the grid for the upcoming tick via `grid.prepareTick`.
    - Advances the grid one step, which updates organism state, tile energy, events, and overlays.
    - Emits lifecycle events (`tick`, `metrics`, `leaderboard`, `state`) consumed by UI panels and analytics.
-2. **UIManager** (`src/ui/uiManager.js`) renders controls, metrics, and overlays. It dispatches user actions (pause, stamping obstacles, slider changes) back to the engine by calling `engine` helpers exposed through `createSimulation`. When the browser UI is unavailable, `createHeadlessUiManager` in `src/ui/headlessUiManager.js` mirrors the same surface area so headless runs share settings and cadence management.
-3. **SimulationUiBridge** (`src/ui/simulationUiBridge.js`) glues the engine to either the browser UI or the headless adapter. The bridge synchronises pause state, reproduction multipliers, metrics streams, leaderboard updates, and layout defaults while forwarding setting changes (e.g. updates-per-second sliders) back to the engine. Headless consumers receive a plain-object control surface with the same callbacks, making automated runs and browser sessions behave identically.
-4. **BrainDebugger** (`src/ui/brainDebugger.js`) receives neuron snapshots from the grid and exposes them to the browser console for inspection. The debugger is optional in headless environments and doubles as the default brain snapshot collector for headless runs.
-5. **Environment adapters** (`src/engine/environment.js`) normalise canvas lookup, sizing, and timing primitives so the engine can run in browsers, tests, or automation without bespoke wiring.
+2. **UIManager** (`src/ui/uiManager.js`) renders controls, metrics, and overlays. It
+   dispatches user actions (pause, stamping obstacles, slider changes) back to the
+   engine by calling `engine` helpers exposed through `createSimulation`. When the
+   browser UI is unavailable, `createHeadlessUiManager` in
+   `src/ui/headlessUiManager.js` mirrors the same surface area so headless runs
+   share settings and cadence management.
+3. **SimulationUiBridge** (`src/ui/simulationUiBridge.js`) glues the engine to
+   either the browser UI or the headless adapter. The bridge synchronises pause
+   state, reproduction multipliers, metrics streams, leaderboard updates, and
+   layout defaults while forwarding setting changes (e.g. updates-per-second
+   sliders) back to the engine. Headless consumers receive a plain-object control
+   surface with the same callbacks, making automated runs and browser sessions
+   behave identically.
+4. **BrainDebugger** (`src/ui/brainDebugger.js`) receives neuron snapshots from
+   the grid and exposes them to the browser console for inspection. The debugger
+   is optional in headless environments and doubles as the default brain
+   snapshot collector for headless runs.
+5. **Environment adapters** (`src/engine/environment.js`) normalise canvas
+   lookup, sizing, and timing primitives so the engine can run in browsers,
+   tests, or automation without bespoke wiring.
 
 ## Core subsystems
 
