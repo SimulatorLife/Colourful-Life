@@ -572,16 +572,9 @@ export function densityToRgba(normalizedValue, { opaque = false } = {}) {
     { t: 1, color: [220, 36, 31] },
   ];
 
-  let start = stops[0];
-  let end = stops[stops.length - 1];
-
-  for (let i = 1; i < stops.length; i++) {
-    if (t <= stops[i].t) {
-      start = stops[i - 1];
-      end = stops[i];
-      break;
-    }
-  }
+  const endIndex = stops.findIndex((stop, index) => index > 0 && t <= stop.t);
+  const start = endIndex > 0 ? stops[endIndex - 1] : stops[0];
+  const end = endIndex > 0 ? stops[endIndex] : (stops[stops.length - 1] ?? stops[0]);
 
   const segmentSpan = end.t - start.t || 1;
   const localT = (t - start.t) / segmentSpan;
