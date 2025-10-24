@@ -24,6 +24,7 @@ const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Slightly calmer baseline keeps resting viable when resources tighten.
 const DEFAULT_ACTIVITY_BASE_RATE = 0.28;
 const DEFAULT_MUTATION_CHANCE = 0.15;
+const DEFAULT_INITIAL_TILE_ENERGY_FRACTION = 0.5;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
@@ -278,6 +279,8 @@ export function resolveMutationChance(env = RUNTIME_ENV) {
 }
 
 export const MUTATION_CHANCE_BASELINE = resolveMutationChance();
+export const INITIAL_TILE_ENERGY_FRACTION_DEFAULT =
+  DEFAULT_INITIAL_TILE_ENERGY_FRACTION;
 
 export const SIMULATION_DEFAULTS = Object.freeze({
   paused: false,
@@ -296,6 +299,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
   combatEdgeSharpness: COMBAT_EDGE_SHARPNESS_DEFAULT,
   combatTerritoryEdgeFactor: COMBAT_TERRITORY_EDGE_FACTOR,
+  initialTileEnergyFraction: DEFAULT_INITIAL_TILE_ENERGY_FRACTION,
   showObstacles: true,
   showEnergy: false,
   showDensity: false,
@@ -419,6 +423,14 @@ export function resolveSimulationDefaults(overrides = {}) {
       Number.isFinite(numericSpeed) && numericSpeed > 0
         ? numericSpeed
         : defaults.speedMultiplier;
+  }
+
+  const initialEnergyFraction = Number(merged.initialTileEnergyFraction);
+
+  if (Number.isFinite(initialEnergyFraction)) {
+    merged.initialTileEnergyFraction = clamp(initialEnergyFraction, 0, 1);
+  } else {
+    merged.initialTileEnergyFraction = defaults.initialTileEnergyFraction;
   }
 
   return merged;
