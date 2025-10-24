@@ -233,3 +233,38 @@ test("createSimulation keeps engine cadence in sync with speed defaults", async 
     restore();
   }
 });
+
+test("layout initial settings yield to sanitized config overrides", async () => {
+  const restore = setupDom();
+
+  try {
+    const { createSimulation } = await import("../src/main.js");
+    const config = {
+      updatesPerSecond: 120,
+      ui: {
+        layout: {
+          initialSettings: {
+            updatesPerSecond: 30,
+          },
+        },
+      },
+    };
+
+    const simulation = createSimulation({
+      canvas: new MockCanvas(120, 120),
+      autoStart: false,
+      config,
+    });
+
+    assert.is(simulation.engine.state.updatesPerSecond, 120);
+    assert.is(simulation.uiManager.getUpdatesPerSecond(), 120);
+    assert.is(
+      simulation.uiManager.speedMultiplier,
+      simulation.engine.state.speedMultiplier,
+    );
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});
