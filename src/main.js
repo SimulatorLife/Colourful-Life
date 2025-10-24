@@ -25,6 +25,10 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
  * - `config` (`Object`): base configuration forwarded to the engine. Supports
  *   `config.ui` for {@link UIManager} overrides (e.g. `mountSelector`,
  *   `layout`, `actions`) and `config.paused` to start paused.
+ *   `config.initialTileEnergyFraction` can be provided to set the fraction of
+ *   the tile energy cap applied to empty tiles during world resets and
+ *   constructor seeding. The value is clamped to the 0..1 range and defaults to
+ *   0.5.
  * - `headless` (`boolean`, default `false`): create a headless UI adapter via
  *   {@link createHeadlessUiManager} instead of mounting the {@link UIManager}.
  * - `autoStart` (`boolean`, default `true`): whether to call `engine.start()`

@@ -214,6 +214,24 @@ test("resolveSimulationDefaults backfills speed multiplier from cadence override
   assert.is(defaults.speedMultiplier, 45 / SIMULATION_DEFAULTS.updatesPerSecond);
 });
 
+test("resolveSimulationDefaults clamps initial tile energy overrides", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+
+  const capped = resolveSimulationDefaults({ initialTileEnergyFraction: 1.25 });
+
+  assert.is(capped.initialTileEnergyFraction, 1);
+
+  const fallback = resolveSimulationDefaults({
+    initialTileEnergyFraction: "not-a-number",
+  });
+
+  assert.is(
+    fallback.initialTileEnergyFraction,
+    SIMULATION_DEFAULTS.initialTileEnergyFraction,
+    "non-numeric overrides should fall back to the baseline",
+  );
+});
+
 test("UIManager constructor seeds settings from resolveSimulationDefaults", async () => {
   const originalDocument = global.document;
   const originalNode = global.Node;
@@ -299,6 +317,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     leaderboardIntervalMs: defaults.leaderboardIntervalMs,
     matingDiversityThreshold: defaults.matingDiversityThreshold,
     lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
+    initialTileEnergyFraction: defaults.initialTileEnergyFraction,
     autoPauseOnBlur: defaults.autoPauseOnBlur,
     autoPausePending: false,
   };

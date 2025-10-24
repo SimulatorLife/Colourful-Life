@@ -35,6 +35,7 @@ import {
   CONSUMPTION_DENSITY_PENALTY,
   DECAY_RETURN_FRACTION,
   DECAY_MAX_AGE,
+  INITIAL_TILE_ENERGY_FRACTION_DEFAULT,
 } from "../config.js";
 const BRAIN_SNAPSHOT_LIMIT = 5;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
@@ -56,8 +57,18 @@ const DECAY_IMMEDIATE_SHARE = 0.25;
 const DECAY_RELEASE_BASE = 0.12;
 const DECAY_RELEASE_RATE = 0.18;
 const DECAY_EPSILON = 1e-4;
-const INITIAL_TILE_ENERGY_FRACTION = 0.5;
 const ENERGY_SPARSE_SCAN_RATIO = 0.2;
+
+function resolveInitialTileEnergyFraction(candidate) {
+  const numeric = Number(candidate);
+
+  if (!Number.isFinite(numeric)) {
+    return INITIAL_TILE_ENERGY_FRACTION_DEFAULT;
+  }
+
+  return clamp(numeric, 0, 1);
+}
+
 const TARGET_DESCRIPTOR_BASE_KEYS = new Set([
   "row",
   "col",
@@ -1349,6 +1360,7 @@ export default class GridManager {
       cellSize = 8,
       stats,
       maxTileEnergy,
+      initialTileEnergyFraction,
       selectionManager,
       initialObstaclePreset = "none",
       initialObstaclePresetOptions = {},
@@ -1371,11 +1383,15 @@ export default class GridManager {
     this.#initializeOccupancy(this.rows);
     this.maxTileEnergy =
       typeof maxTileEnergy === "number" ? maxTileEnergy : GridManager.maxTileEnergy;
+    // Consumers can tune how energetic the world starts without touching the
+    // core constant by supplying a fraction of the tile cap. The sanitizer keeps
+    // the value in the 0..1 range so overrides remain deterministic.
+    this.initialTileEnergyFraction = resolveInitialTileEnergyFraction(
+      initialTileEnergyFraction,
+    );
+    this.initialTileEnergy = this.maxTileEnergy * this.initialTileEnergyFraction;
     this.energyGrid = Array.from({ length: rows }, () =>
-      Array.from(
-        { length: cols },
-        () => this.maxTileEnergy * INITIAL_TILE_ENERGY_FRACTION,
-      ),
+      Array.from({ length: cols }, () => this.initialTileEnergy),
     );
     this.energyNext = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.energyDeltaGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
@@ -2351,7 +2367,7 @@ export default class GridManager {
         const safeBottom = Math.min(bottomStart, this.rows - islandRows);
         const safeLeft = Math.min(leftStart, this.cols - islandCols);
         const safeRight = Math.min(rightStart, this.cols - islandCols);
-        const baseEnergy = this.maxTileEnergy * INITIAL_TILE_ENERGY_FRACTION;
+        const baseEnergy = this.initialTileEnergy;
 
         const isInsideIsland = (row, col) =>
           (row >= safeTop &&
@@ -2433,7 +2449,7 @@ export default class GridManager {
     const rowsInt = nextRows;
     const colsInt = nextCols;
     const cellSizeValue = nextCellSize;
-    const baseEnergy = this.maxTileEnergy * INITIAL_TILE_ENERGY_FRACTION;
+    const baseEnergy = this.initialTileEnergy;
     const shouldReseed = opts.reseed === true;
     const preservePopulation = !shouldReseed;
     let preservedCells = null;
@@ -2565,7 +2581,7 @@ export default class GridManager {
     presetOptions = null,
     reseed = false,
   } = {}) {
-    const baseEnergy = this.maxTileEnergy * INITIAL_TILE_ENERGY_FRACTION;
+    const baseEnergy = this.initialTileEnergy;
 
     this.#markAllTilesDirty();
     this.#resetOccupancyTracking();

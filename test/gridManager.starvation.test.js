@@ -1,4 +1,5 @@
 import { assert, test } from "#tests/harness";
+import { approxEqual } from "./helpers/assertions.js";
 
 test("GridManager removes cells that report starvation", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
@@ -45,6 +46,49 @@ test("GridManager removes cells that report starvation", async () => {
     0,
     "starved cell should be removed from active tracking",
   );
+});
+
+test("GridManager respects configured initial tile energy fraction", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class FractionGridManager extends GridManager {
+    init() {}
+  }
+
+  const fraction = 0.2;
+  const gm = new FractionGridManager(3, 4, {
+    eventManager: { activeEvents: [] },
+    stats: {},
+    ctx: {},
+    cellSize: 1,
+    initialTileEnergyFraction: fraction,
+  });
+
+  const expected = gm.maxTileEnergy * fraction;
+
+  gm.energyGrid.forEach((row, rowIndex) => {
+    row.forEach((value, colIndex) => {
+      approxEqual(
+        value,
+        expected,
+        1e-12,
+        `initial energy at (${rowIndex},${colIndex}) should match configured fraction`,
+      );
+    });
+  });
+
+  gm.resetWorld();
+
+  gm.energyGrid.forEach((row, rowIndex) => {
+    row.forEach((value, colIndex) => {
+      approxEqual(
+        value,
+        expected,
+        1e-12,
+        `reset should restore configured fraction at (${rowIndex},${colIndex})`,
+      );
+    });
+  });
 });
 
 test("GridManager respects dynamic max tile energy", async () => {
