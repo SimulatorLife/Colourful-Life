@@ -16,21 +16,10 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 Colourful Life targets **Node.js 18 or newer**. After cloning the repository:
 
-```bash
-npm ci
-npm run start            # Parcel dev server with hot reloading
+1. Install dependencies with `npm ci`.
+2. Launch the Parcel dev server with `npm run start` and open `http://localhost:1234`.
 
-# Optional helpers
-npm run build            # Production bundle written to dist/
-npm run clean            # Remove dist/ and the Parcel cache via scripts/clean-parcel.mjs
-npm run format           # Format code with Prettier
-npm run format:check     # Validate formatting without writing
-npm run format:workflows # Format GitHub workflow files (ignores .gitignore rules)
-npm run lint             # ESLint across JS modules and inline HTML
-npm run lint:fix         # ESLint with autofix enabled
-npm test                 # Node.js test suites
-npm run prepare          # Reinstall Husky hooks when the .husky folder changes
-```
+Parcel provides hot module reloading while you edit. Use `npm run build` when you need an optimized bundle in `dist/`. See [Key scripts and commands](#key-scripts-and-commands) for linting, testing, benchmarking, and publishing helpers.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
@@ -141,16 +130,17 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 ## Key scripts and commands
 
-| Command                                                                | Purpose                                                                                                                                                |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `npm run start`                                                        | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.                                                           |
-| `npm run build`                                                        | Produce an optimized production bundle in `dist/`.                                                                                                     |
-| `npm run clean`                                                        | Remove `dist/` and `.parcel-cache/` via `scripts/clean-parcel.mjs`. Pass `--dry-run` to validate without deleting files.                               |
-| `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                                                         |
-| `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions.                                   |
-| `npm test`                                                             | Execute the Node.js test suites covering simulation and UI modules.                                                                                    |
-| `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                                                                 |
-| `node scripts/profile-energy.mjs`                                      | Benchmark the energy preparation loop with configurable grid sizes via environment variables; add `PERF_INCLUDE_SIM=1` to time SimulationEngine ticks. |
+| Command                                                                | Purpose                                                                                                                       |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `npm run start`                                                        | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.                                  |
+| `npm run build`                                                        | Produce an optimized production bundle in `dist/`.                                                                            |
+| `npm run clean [-- --dry-run]`                                         | Remove `dist/` and `.parcel-cache/` via `scripts/clean-parcel.mjs`, or preview the removals first with `--dry-run`.           |
+| `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                                |
+| `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions.          |
+| `npm test`                                                             | Execute the Node.js test suites covering simulation and UI modules.                                                           |
+| `npm run benchmark`                                                    | Profile the energy preparation loop via `scripts/profile-energy.mjs`; combine with `PERF_*` variables to mirror CI scenarios. |
+| `npm run deploy:public`                                                | Publish the production bundle to a public Git repository using `scripts/publish-public-build.sh`.                             |
+| `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                                        |
 
 ## Further reading
 

@@ -15,26 +15,23 @@ extending tests, or polishing docs.
 4. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/`
    and `.parcel-cache/` before restarting the dev server.
 
-> The in-app "Pause When Hidden" toggle now starts disabled so long-running
-> simulations can keep evolving without babysitting the browser tab. Re-enable
-> it beneath the playback controls at the top of the Simulation Controls panel
-> if you prefer the previous focus-dependent behaviour.
+### Quality-of-life tips
 
-> Adjust the "Dashboard Refresh Interval" slider near the top of the Evolution
-> Insights panel to tune how often both the leaderboard and analytics dashboard
-> request fresh data. The cadence control moved out of the Leaderboard so the
-> refresh knob now lives beside the metrics it governs.
-
-> The Evolution Insights dashboard surfaces a Simulation Clock near the top of
-> the metrics feed. It reports both elapsed simulated time and the aggregate
-> tick count so you can align experiments with reproduction bursts or pacing
-> adjustments without reaching for external timers.
-
-> Tip: Run `npm run prepare` after cloning or pulling changes that touch the
-> `.husky/` directory to reinstall the Git hooks managed by Husky.
-
-> Tip: The Parcel server performs hot module replacement. If you need a clean
-> build, use `npm run build` to emit a production bundle in `dist/`.
+- The in-app "Pause When Hidden" toggle starts disabled so long-running
+  simulations continue evolving even when the browser tab loses focus. Re-enable
+  it beneath the playback controls in the Simulation Controls panel if you
+  prefer focus-dependent behaviour.
+- Adjust the "Dashboard Refresh Interval" slider near the top of the Evolution
+  Insights panel to tune how often the leaderboard and analytics dashboard
+  request fresh data. The control now lives beside the metrics it governs.
+- The Evolution Insights dashboard surfaces a Simulation Clock at the top of
+  the metrics feed, reporting both simulated time and the aggregate tick count
+  for easy pacing comparisons.
+- Run `npm run prepare` after cloning or pulling changes that touch the
+  `.husky/` directory to reinstall Git hooks managed by Husky.
+- Parcel performs hot module replacement during development. Use
+  `npm run build` when you need a fresh production bundle in `dist/` for manual
+  verification or publishing.
 
 ## Coding standards
 
@@ -64,7 +61,7 @@ extending tests, or polishing docs.
 - **Format** — Run `npm run format`, `npm run format:check`, or `npm run format:workflows` to apply Prettier across source, documentation, configuration files, and GitHub workflows.
 - **Lint** — Use `npm run lint` / `npm run lint:fix` to enforce the ESLint ruleset and apply safe autofixes.
 - **Tests** — Execute `npm test` to run the Node.js test suites. Focused suites live beside their target modules under `test/`.
-- **Profiling** — Run `node scripts/profile-energy.mjs` with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations.
+- **Profiling** — Run `npm run benchmark` (alias for `node scripts/profile-energy.mjs`) with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations.
 - **Cache reset** — Use `npm run clean` to clear `dist/` and `.parcel-cache/` when Parcel hot reloads become inconsistent.
 - **Hooks** — Run `npm run prepare` to reinstall Husky hooks after cloning or whenever `.husky/` contents change.
 
@@ -168,10 +165,13 @@ affect runtime outcomes.
 
 ## Helpful scripts
 
-- `npm run clean` — Clear Parcel caches when dev servers behave
-  strangely.
-- `node scripts/profile-energy.mjs` — Profile the energy preparation loop with
-  configurable grid sizes.
+- `npm run clean` — Clear Parcel caches when dev servers behave strangely.
+- `npm run benchmark` — Profile the energy preparation loop with configurable
+  grid sizes and SimulationEngine samples; combine with `PERF_*` variables to
+  reproduce CI runs.
+- `npm run deploy:public` — Publish the latest production build to a public
+  repository. See [`docs/public-hosting.md`](public-hosting.md) for setup
+  details.
 
 ## Support
 
