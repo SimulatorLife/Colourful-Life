@@ -6376,6 +6376,33 @@ export default class GridManager {
       mates.push(descriptor);
     };
 
+    const iterateRowColumns = (targetRow, bucket, startCol, endCol) => {
+      if (!bucket || startCol > endCol) return;
+
+      const rangeLength = endCol - startCol + 1;
+
+      if (
+        bucket instanceof Set &&
+        bucket.size > 0 &&
+        typeof bucket.values === "function" &&
+        bucket.size < rangeLength
+      ) {
+        for (const value of bucket.values()) {
+          if (value < startCol || value > endCol) continue;
+
+          processCandidate(targetRow, value, bucket);
+        }
+
+        return;
+      }
+
+      for (let newCol = startCol; newCol <= endCol; newCol++) {
+        if (!bucket?.has?.(newCol)) continue;
+
+        processCandidate(targetRow, newCol, bucket);
+      }
+    };
+
     for (let dist = 1; dist <= sight; dist++) {
       const topRow = row - dist;
 
@@ -6386,11 +6413,7 @@ export default class GridManager {
           const startCol = Math.max(minCol, col - dist);
           const endCol = Math.min(maxCol, col + dist);
 
-          for (let newCol = startCol; newCol <= endCol; newCol++) {
-            if (!bucket.has(newCol)) continue;
-
-            processCandidate(topRow, newCol, bucket);
-          }
+          iterateRowColumns(topRow, bucket, startCol, endCol);
         }
       }
 
@@ -6403,11 +6426,7 @@ export default class GridManager {
           const startCol = Math.max(minCol, col - dist);
           const endCol = Math.min(maxCol, col + dist);
 
-          for (let newCol = startCol; newCol <= endCol; newCol++) {
-            if (!bucket.has(newCol)) continue;
-
-            processCandidate(bottomRow, newCol, bucket);
-          }
+          iterateRowColumns(bottomRow, bucket, startCol, endCol);
         }
       }
 
