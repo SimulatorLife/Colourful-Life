@@ -5683,17 +5683,16 @@ export default class GridManager {
   }
 
   calculatePopulationDensity() {
-    let population = 0;
+    const rows = Number.isFinite(this.rows) ? this.rows : 0;
+    const cols = Number.isFinite(this.cols) ? this.cols : 0;
+    const population = this.activeCells?.size ?? 0;
+    const area = rows * cols;
 
-    for (let row = 0; row < this.rows; row++) {
-      for (let col = 0; col < this.cols; col++) {
-        if (this.grid[row][col]) {
-          population++;
-        }
-      }
+    if (population <= 0 || area <= 0) {
+      return 0;
     }
 
-    return population / (this.rows * this.cols);
+    return clamp(population / area, 0, 1);
   }
 
   #acquireTargetDescriptor() {
