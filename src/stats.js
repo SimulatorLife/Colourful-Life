@@ -1,5 +1,11 @@
 import { TRAIT_ACTIVATION_THRESHOLD } from "./config.js";
-import { clamp, clamp01, toFiniteOrNull, warnOnce } from "./utils.js";
+import {
+  clamp,
+  clamp01,
+  sanitizePositiveInteger,
+  toFiniteOrNull,
+  warnOnce,
+} from "./utils.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;
@@ -166,16 +172,6 @@ const createTraitValueMap = (definitions, initializer) => {
   );
 };
 
-const sanitizeInterval = (value, fallback) => {
-  const numeric = Number(value);
-
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-    return fallback;
-  }
-
-  return Math.max(1, Math.floor(numeric));
-};
-
 /**
  * Minimal fixed-capacity ring buffer used by chart history accessors.
  * Keeps insertion O(n) for deterministic order while bounding memory.
@@ -307,8 +303,14 @@ export default class Stats {
     );
     this.#traitSums = new Float64Array(this.traitDefinitions.length);
     this.#traitActiveCounts = new Float64Array(this.traitDefinitions.length);
-    this.traitResampleInterval = sanitizeInterval(traitResampleInterval, 120);
-    this.diversitySampleInterval = sanitizeInterval(diversitySampleInterval, 4);
+    this.traitResampleInterval = sanitizePositiveInteger(traitResampleInterval, {
+      fallback: 120,
+      min: 1,
+    });
+    this.diversitySampleInterval = sanitizePositiveInteger(diversitySampleInterval, {
+      fallback: 4,
+      min: 1,
+    });
     this.lastDiversitySample = 0;
     this.#nextTraitResampleTick = 0;
     this.#nextDiversitySampleTick = 0;
