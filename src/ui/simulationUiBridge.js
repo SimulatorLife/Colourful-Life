@@ -112,13 +112,6 @@ function subscribeEngineToUi(engine, uiManager) {
         });
       }
 
-      if (
-        changes?.profileGridMetrics !== undefined &&
-        typeof uiManager.setProfileGridMetrics === "function"
-      ) {
-        uiManager.setProfileGridMetrics(changes.profileGridMetrics, { notify: false });
-      }
-
       const geometryChanged =
         typeof uiManager.setGridGeometry === "function" &&
         changes &&
@@ -226,14 +219,6 @@ export function bindSimulationToUi({
 
     if (typeof lowDiversity === "number") {
       uiManager.setLowDiversityReproMultiplier(lowDiversity, { notify: false });
-    }
-  }
-
-  if (uiManager && typeof uiManager.setProfileGridMetrics === "function") {
-    const profileMode = engine?.state?.profileGridMetrics;
-
-    if (typeof profileMode === "string") {
-      uiManager.setProfileGridMetrics(profileMode, { notify: false });
     }
   }
 
