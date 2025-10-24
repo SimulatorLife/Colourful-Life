@@ -4,7 +4,6 @@ import {
   lerp,
   createRankedBuffer,
   warnOnce,
-  sanitizeNumber,
   sanitizePositiveInteger,
 } from "../utils.js";
 import DNA from "../genome.js";
@@ -220,10 +219,6 @@ function resolveColorRecord(color) {
   }
 
   return rememberColor(normalized, record);
-}
-
-function parseColorToRgba(color) {
-  return resolveColorRecord(color).rgba;
 }
 
 function getPairSimilarity(cellA, cellB) {
