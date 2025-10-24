@@ -189,6 +189,48 @@ test("tick emits events and clears pending slow UI updates after throttle interv
   }
 });
 
+test("tick forces an update even when timestamp repeats", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore, calls } = patchSimulationPrototypes(modules);
+
+  let engine;
+
+  try {
+    let now = 0;
+
+    engine = new SimulationEngine({
+      canvas: new MockCanvas(16, 16),
+      autoStart: false,
+      performanceNow: () => now,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+    });
+
+    now = 1000;
+    const firstResult = engine.tick(now);
+
+    assert.ok(firstResult, "initial forced tick should advance the simulation");
+
+    const updatesAfterFirst = calls.grid.update.length;
+
+    const secondResult = engine.tick(now);
+
+    assert.ok(
+      secondResult,
+      "forced tick should advance even when timestamp does not progress",
+    );
+    assert.is(
+      calls.grid.update.length,
+      updatesAfterFirst + 1,
+      "grid.update invoked again on repeated forced tick",
+    );
+  } finally {
+    engine?.destroy();
+    restore();
+  }
+});
+
 test("updateSetting speedMultiplier and low diversity multiplier propagate changes", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;

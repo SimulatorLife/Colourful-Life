@@ -751,7 +751,9 @@ export default class SimulationEngine {
     const interval = 1000 / Math.max(1, this.state.updatesPerSecond);
     const elapsed = effectiveTimestamp - this.lastUpdateTime;
     const shouldAdvance =
-      (!paused && elapsed >= interval) || (allowPausedTick && paused);
+      (force && (!paused || allowPausedTick)) ||
+      (!paused && elapsed >= interval) ||
+      (allowPausedTick && paused);
 
     if (shouldAdvance) {
       this.lastUpdateTime = effectiveTimestamp;

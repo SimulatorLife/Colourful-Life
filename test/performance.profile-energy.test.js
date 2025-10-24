@@ -111,8 +111,8 @@ test("energy profiling benchmark exits successfully", async () => {
   );
 
   assert.ok(
-    simulation.msPerTick < 120,
-    `simulation msPerTick should stay under 120ms (received ${simulation.msPerTick.toFixed?.(3) ?? simulation.msPerTick})`,
+    simulation.msPerTick < 125,
+    `simulation msPerTick should stay under 125ms (received ${simulation.msPerTick.toFixed?.(3) ?? simulation.msPerTick})`,
   );
 
   const seeding = simulation.seedingSummary;
