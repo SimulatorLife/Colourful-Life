@@ -146,6 +146,14 @@ export default class SelectionManager {
     return pattern.active;
   }
 
+  clearActiveZones() {
+    for (const pattern of this.patterns.values()) {
+      if (pattern?.id && pattern.active) {
+        this.togglePattern(pattern.id, false);
+      }
+    }
+  }
+
   getActiveZones() {
     const patterns = Array.from(this.patterns.values()).filter(
       (pattern) => pattern.active,
