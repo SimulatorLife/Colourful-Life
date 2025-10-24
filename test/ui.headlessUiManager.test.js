@@ -165,6 +165,51 @@ test("createHeadlessUiManager allows adjusting the mutation multiplier", () => {
   assert.is(manager.getMutationMultiplier(), 1.5);
 });
 
+test("createHeadlessUiManager exposes overlay visibility toggles", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    showObstacles: false,
+    showEnergy: true,
+    showDensity: false,
+    showFitness: false,
+    showLifeEventMarkers: true,
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  assert.is(manager.getShowObstacles(), false);
+  assert.is(manager.getShowEnergy(), true);
+  assert.is(manager.getShowDensity(), false);
+  assert.is(manager.getShowFitness(), false);
+  assert.is(manager.getShowLifeEventMarkers(), true);
+
+  manager.setShowObstacles("true");
+  manager.setShowObstacles(true); // should not notify again
+
+  manager.setShowEnergy("false");
+  manager.setShowEnergy(0); // no change
+
+  manager.setShowDensity("1");
+
+  manager.setShowFitness("yes");
+
+  manager.setShowLifeEventMarkers("no");
+  manager.setShowLifeEventMarkers(false); // no change
+
+  assert.equal(notifications, [
+    ["showObstacles", true],
+    ["showEnergy", false],
+    ["showDensity", true],
+    ["showFitness", true],
+    ["showLifeEventMarkers", false],
+  ]);
+
+  assert.is(manager.getShowObstacles(), true);
+  assert.is(manager.getShowEnergy(), false);
+  assert.is(manager.getShowDensity(), true);
+  assert.is(manager.getShowFitness(), true);
+  assert.is(manager.getShowLifeEventMarkers(), false);
+});
+
 test("createHeadlessUiManager setAutoPauseOnBlur normalizes string inputs", () => {
   const notifications = [];
   const manager = createHeadlessUiManager({

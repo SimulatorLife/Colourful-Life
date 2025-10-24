@@ -201,6 +201,46 @@ export function createHeadlessUiManager(options = {}) {
     getShowDensity: () => settings.showDensity,
     getShowFitness: () => settings.showFitness,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
+    setShowObstacles: (value) => {
+      const normalized = coerceBoolean(value, settings.showObstacles);
+
+      if (settings.showObstacles === normalized) return;
+
+      settings.showObstacles = normalized;
+      notify("showObstacles", settings.showObstacles);
+    },
+    setShowEnergy: (value) => {
+      const normalized = coerceBoolean(value, settings.showEnergy);
+
+      if (settings.showEnergy === normalized) return;
+
+      settings.showEnergy = normalized;
+      notify("showEnergy", settings.showEnergy);
+    },
+    setShowDensity: (value) => {
+      const normalized = coerceBoolean(value, settings.showDensity);
+
+      if (settings.showDensity === normalized) return;
+
+      settings.showDensity = normalized;
+      notify("showDensity", settings.showDensity);
+    },
+    setShowFitness: (value) => {
+      const normalized = coerceBoolean(value, settings.showFitness);
+
+      if (settings.showFitness === normalized) return;
+
+      settings.showFitness = normalized;
+      notify("showFitness", settings.showFitness);
+    },
+    setShowLifeEventMarkers: (value) => {
+      const normalized = coerceBoolean(value, settings.showLifeEventMarkers);
+
+      if (settings.showLifeEventMarkers === normalized) return;
+
+      settings.showLifeEventMarkers = normalized;
+      notify("showLifeEventMarkers", settings.showLifeEventMarkers);
+    },
     getLeaderboardIntervalMs: () => settings.leaderboardIntervalMs,
     setLeaderboardIntervalMs: (value) => {
       if (
