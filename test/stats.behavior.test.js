@@ -40,6 +40,63 @@ const createSequenceRng = (sequence) => {
   };
 };
 
+const mapCombinationIndexToPair = (index, populationSize) => {
+  let remaining = index;
+  let first = 0;
+  let span = populationSize - 1;
+
+  while (span > 0 && remaining >= span) {
+    remaining -= span;
+    span -= 1;
+    first += 1;
+  }
+
+  return { first, second: first + 1 + remaining };
+};
+
+const sampleCombinationIndices = (populationSize, sampleLimit, rng) => {
+  const possiblePairs = (populationSize * (populationSize - 1)) / 2;
+
+  if (!(possiblePairs > 0) || !(sampleLimit > 0)) {
+    return [];
+  }
+
+  const limit = Math.min(sampleLimit, possiblePairs);
+  const selected = new Set();
+  const sampleIndex = (range) => {
+    if (!(range > 0)) return 0;
+
+    let roll = rng();
+
+    if (!Number.isFinite(roll)) {
+      roll = Math.random();
+    }
+
+    const fractional = roll - Math.trunc(roll);
+    const normalized = fractional >= 0 ? fractional : fractional + 1;
+
+    return Math.min(range - 1, Math.floor(normalized * range));
+  };
+
+  for (let i = possiblePairs - limit; i < possiblePairs; i += 1) {
+    const pick = sampleIndex(i + 1);
+
+    if (selected.has(pick)) {
+      selected.add(i);
+    } else {
+      selected.add(pick);
+    }
+  }
+
+  if (selected.size < limit) {
+    for (let i = 0; i < possiblePairs && selected.size < limit; i += 1) {
+      selected.add(i);
+    }
+  }
+
+  return Array.from(selected);
+};
+
 test("computeTraitPresence clamps trait values and tracks active fractions", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(4);
@@ -142,13 +199,18 @@ test("estimateDiversity samples target quota even when most cells lack genomes",
   const validCells = [0, 1, 2, 3].map((id) => makeCell(id));
   const inertCells = Array.from({ length: 120 }, () => ({}));
   const cells = [...validCells, ...inertCells];
-  const stats = new Stats(undefined, { rng: () => 0 });
+  const rng = () => 0;
+  const stats = new Stats(undefined, { rng });
   const actual = stats.estimateDiversity(cells, 3);
-  const expectedContributions = [
-    1 - similarityMatrix.get("0|1"),
-    1 - similarityMatrix.get("0|2"),
-    1 - similarityMatrix.get("0|3"),
-  ];
+  const indices = sampleCombinationIndices(validCells.length, 3, rng);
+  const expectedContributions = indices.map((pairIndex) => {
+    const { first, second } = mapCombinationIndexToPair(pairIndex, validCells.length);
+    const low = Math.min(first, second);
+    const high = Math.max(first, second);
+    const key = `${low}|${high}`;
+
+    return 1 - similarityMatrix.get(key);
+  });
   const expected =
     expectedContributions.reduce((sum, value) => sum + value, 0) /
     expectedContributions.length;
