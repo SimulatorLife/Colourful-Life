@@ -80,6 +80,64 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   assert.is(manager.getAutoPauseOnBlur(), true);
 });
 
+test("createHeadlessUiManager pause controls delegate to simulation callbacks", () => {
+  const calls = [];
+  const manager = createHeadlessUiManager({
+    pause: () => {
+      calls.push("pause");
+
+      return true;
+    },
+    resume: () => {
+      calls.push("resume");
+
+      return false;
+    },
+  });
+
+  assert.is(manager.isPaused(), false);
+
+  manager.setPaused(true);
+  assert.equal(calls, ["pause"]);
+  assert.is(manager.isPaused(), true);
+
+  manager.setPaused(true);
+  assert.equal(calls, ["pause"]);
+
+  manager.togglePause();
+  assert.equal(calls, ["pause", "resume"]);
+  assert.is(manager.isPaused(), false);
+
+  manager.setPauseState(true);
+  assert.is(manager.isPaused(), true);
+
+  manager.setPauseState(false);
+  assert.is(manager.isPaused(), false);
+});
+
+test("createHeadlessUiManager falls back to togglePause when dedicated controls missing", () => {
+  const toggled = [];
+  let paused = false;
+  const manager = createHeadlessUiManager({
+    togglePause: () => {
+      paused = !paused;
+      toggled.push(paused);
+
+      return paused;
+    },
+  });
+
+  manager.setPauseState(paused);
+
+  manager.setPaused(true);
+  assert.equal(toggled, [true]);
+  assert.is(manager.isPaused(), true);
+
+  manager.setPaused(false);
+  assert.equal(toggled, [true, false]);
+  assert.is(manager.isPaused(), false);
+});
+
 test("createHeadlessUiManager shouldRenderSlowUi enforces the cadence window", () => {
   const manager = createHeadlessUiManager({ leaderboardIntervalMs: 250 });
 
