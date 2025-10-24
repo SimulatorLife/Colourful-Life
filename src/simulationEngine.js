@@ -3,6 +3,7 @@ import GridManager from "./grid/gridManager.js";
 import Stats from "./stats.js";
 import { computeLeaderboard } from "./leaderboard.js";
 import TelemetryController from "./engine/telemetryController.js";
+import createSelectionManagerStub from "./grid/selectionManagerStub.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -25,51 +26,6 @@ import {
   resolveCanvas,
   resolveTimingProviders,
 } from "./engine/environment.js";
-
-function createSelectionManagerStub(rows, cols) {
-  const state = { rows: Math.max(0, rows ?? 0), cols: Math.max(0, cols ?? 0) };
-
-  const updateDimensions = (r, c) => {
-    state.rows = Math.max(0, r ?? state.rows ?? 0);
-    state.cols = Math.max(0, c ?? state.cols ?? 0);
-  };
-
-  return {
-    setDimensions(rows, cols) {
-      updateDimensions(rows, cols);
-    },
-    getPatterns() {
-      return [];
-    },
-    togglePattern() {
-      return false;
-    },
-    getActiveZones() {
-      return [];
-    },
-    hasActiveZones() {
-      return false;
-    },
-    isInActiveZone() {
-      return true;
-    },
-    validateReproductionArea() {
-      return { allowed: true };
-    },
-    getActiveZoneRenderData() {
-      return [];
-    },
-    describeActiveZones() {
-      return "All tiles eligible";
-    },
-    get rows() {
-      return state.rows;
-    },
-    get cols() {
-      return state.cols;
-    },
-  };
-}
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
