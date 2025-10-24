@@ -294,7 +294,6 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.enemySimilarity, defaults.enemySimilarity);
   assert.is(uiManager.eventStrengthMultiplier, defaults.eventStrengthMultiplier);
   assert.is(uiManager.eventFrequencyMultiplier, defaults.eventFrequencyMultiplier);
-  assert.is(uiManager.maxConcurrentEvents, defaults.maxConcurrentEvents);
   assert.is(uiManager.speedMultiplier, defaults.speedMultiplier);
   assert.is(uiManager.densityEffectMultiplier, defaults.densityEffectMultiplier);
   assert.is(uiManager.mutationMultiplier, defaults.mutationMultiplier);

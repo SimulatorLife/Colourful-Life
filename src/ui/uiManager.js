@@ -300,7 +300,6 @@ export default class UIManager {
     this.enemySimilarity = defaults.enemySimilarity;
     this.eventStrengthMultiplier = defaults.eventStrengthMultiplier;
     this.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
-    this.maxConcurrentEvents = defaults.maxConcurrentEvents;
     this.speedMultiplier = defaults.speedMultiplier;
     const baseUpdatesCandidate =
       Number.isFinite(this.speedMultiplier) && this.speedMultiplier > 0
@@ -2493,8 +2492,6 @@ export default class UIManager {
 
     const sliderContext = this.#buildSliderGroups(body);
 
-    this.sliderContext = sliderContext;
-
     this.#buildOverlayToggles(body);
 
     this.#buildObstacleControls(body);
@@ -2561,7 +2558,7 @@ export default class UIManager {
       },
     });
 
-    this.resetWorldButton = addControlButton({
+    addControlButton({
       id: "resetWorldButton",
       label: "Regenerate World",
       title:
