@@ -129,6 +129,11 @@ test("sanitizeNumber normalizes input with bounds and rounding strategies", () =
     42,
     "falls back when rounding produces non-finite values",
   );
+  assert.is(
+    sanitizeNumber(Symbol("nope"), { fallback: 9 }),
+    9,
+    "returns fallback when conversion throws",
+  );
 });
 
 test("sanitizePositiveInteger coerces dimension-like input safely", () => {
@@ -388,4 +393,5 @@ test("toFiniteOrNull converts numeric-like values and discards invalid input", (
   assert.is(toFiniteOrNull("abc"), null);
   assert.is(toFiniteOrNull(Number.POSITIVE_INFINITY), null);
   assert.is(toFiniteOrNull(Number.NaN), null);
+  assert.is(toFiniteOrNull(Symbol("invalid")), null);
 });

@@ -121,7 +121,13 @@ export function sanitizeNumber(
     round = false,
   } = {},
 ) {
-  const numeric = Number(value);
+  let numeric;
+
+  try {
+    numeric = Number(value);
+  } catch (error) {
+    return fallback;
+  }
 
   if (!Number.isFinite(numeric)) return fallback;
 
@@ -219,9 +225,13 @@ export function toFiniteOrNull(value) {
     return Number.isFinite(numeric) ? numeric : null;
   }
 
-  const numeric = Number(value);
+  try {
+    const numeric = Number(value);
 
-  return Number.isFinite(numeric) ? numeric : null;
+    return Number.isFinite(numeric) ? numeric : null;
+  } catch (error) {
+    return null;
+  }
 }
 
 /**
