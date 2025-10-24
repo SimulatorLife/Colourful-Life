@@ -199,3 +199,22 @@ test("resolveDecayReturnFraction clamps invalid overrides", async () => {
     0.9,
   );
 });
+
+test("DECAY_MAX_AGE exposes the environment-aware default", async () => {
+  const { DECAY_MAX_AGE } = await configModulePromise;
+
+  assert.is(DECAY_MAX_AGE, 240);
+});
+
+test("resolveDecayMaxAge respects overrides", async () => {
+  const { resolveDecayMaxAge } = await configModulePromise;
+
+  assert.is(resolveDecayMaxAge({ COLOURFUL_LIFE_DECAY_MAX_AGE: "480" }), 480);
+});
+
+test("resolveDecayMaxAge falls back when override is invalid", async () => {
+  const { resolveDecayMaxAge } = await configModulePromise;
+
+  assert.is(resolveDecayMaxAge({ COLOURFUL_LIFE_DECAY_MAX_AGE: "0" }), 240);
+  assert.is(resolveDecayMaxAge({ COLOURFUL_LIFE_DECAY_MAX_AGE: "NaN" }), 240);
+});
