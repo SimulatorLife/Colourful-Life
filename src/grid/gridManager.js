@@ -75,22 +75,51 @@ const RGB_PATTERN =
   /rgba?\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)(?:\s*,\s*([0-9.]+)\s*)?\)/i;
 const HEX_PATTERN = /^#([0-9a-f]{3,8})$/i;
 const EMPTY_RGBA = Object.freeze([0, 0, 0, 0]);
+const PACK_RGBA32 = (() => {
+  if (typeof Uint8ClampedArray !== "function" || typeof Uint32Array !== "function") {
+    return null;
+  }
+
+  try {
+    const probe = new Uint8ClampedArray(4);
+    const view = new Uint32Array(probe.buffer);
+
+    view[0] = 0x01020304;
+
+    if (
+      probe[0] === 0x04 &&
+      probe[1] === 0x03 &&
+      probe[2] === 0x02 &&
+      probe[3] === 0x01
+    ) {
+      return (r, g, b, a) => ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
+    }
+  } catch (error) {
+    warnOnce("Uint32 color packing unsupported", error);
+  }
+
+  return null;
+})();
+const EMPTY_COLOR_RECORD = Object.freeze({
+  rgba: EMPTY_RGBA,
+  packed: PACK_RGBA32 ? PACK_RGBA32(0, 0, 0, 0) : 0,
+});
 const TIMESTAMP_NOW =
   typeof performance !== "undefined" && typeof performance.now === "function"
     ? () => performance.now()
     : () => Date.now();
 
-function rememberColor(normalized, value) {
+function rememberColor(normalized, record) {
   if (COLOR_CACHE_LIMIT <= 0 || COLOR_CACHE.has(normalized)) {
-    return value;
+    return COLOR_CACHE.get(normalized) ?? record;
   }
 
-  COLOR_CACHE.set(normalized, value);
+  COLOR_CACHE.set(normalized, record);
 
   if (COLOR_CACHE_KEYS.length < COLOR_CACHE_LIMIT) {
     COLOR_CACHE_KEYS.push(normalized);
 
-    return value;
+    return record;
   }
 
   const evictKey = COLOR_CACHE_KEYS[colorCacheEvictIndex];
@@ -103,21 +132,32 @@ function rememberColor(normalized, value) {
   colorCacheEvictIndex =
     COLOR_CACHE_LIMIT > 0 ? (colorCacheEvictIndex + 1) % COLOR_CACHE_LIMIT : 0;
 
-  return value;
+  return record;
 }
 
-function parseColorToRgba(color) {
+function createColorRecord(r, g, b, a) {
+  const rgba = Object.freeze([r, g, b, a]);
+  const packed = PACK_RGBA32 ? PACK_RGBA32(r, g, b, a) : 0;
+
+  return Object.freeze({ rgba, packed });
+}
+
+function resolveColorRecord(color) {
   if (typeof color !== "string") {
-    return EMPTY_RGBA;
+    return EMPTY_COLOR_RECORD;
   }
 
   const normalized = color.trim();
+
+  if (normalized.length === 0) {
+    return EMPTY_COLOR_RECORD;
+  }
 
   if (COLOR_CACHE.has(normalized)) {
     return COLOR_CACHE.get(normalized);
   }
 
-  let result = EMPTY_RGBA;
+  let record = EMPTY_COLOR_RECORD;
 
   if (normalized.startsWith("#")) {
     const match = HEX_PATTERN.exec(normalized);
@@ -152,7 +192,7 @@ function parseColorToRgba(color) {
         }
       }
 
-      result = Object.freeze([r, g, b, clamp(Math.round(a), 0, 255)]);
+      record = createColorRecord(r, g, b, clamp(Math.round(a), 0, 255));
     }
   } else {
     const match = RGB_PATTERN.exec(normalized);
@@ -164,13 +204,15 @@ function parseColorToRgba(color) {
       const alpha = match[4] != null ? Number.parseFloat(match[4]) : 1;
       const a = clamp(Math.round((Number.isFinite(alpha) ? alpha : 1) * 255), 0, 255);
 
-      result = Object.freeze([r, g, b, a]);
+      record = createColorRecord(r, g, b, a);
     }
   }
 
-  rememberColor(normalized, result);
+  return rememberColor(normalized, record);
+}
 
-  return result;
+function parseColorToRgba(color) {
+  return resolveColorRecord(color).rgba;
 }
 
 function getPairSimilarity(cellA, cellB) {
@@ -243,6 +285,7 @@ export default class GridManager {
   #imageDataCanvas = null;
   #imageDataCtx = null;
   #imageData = null;
+  #imageData32 = null;
   #imageDataNeedsFullRefresh = false;
   #targetScratch = {
     mates: [],
@@ -3781,6 +3824,7 @@ export default class GridManager {
     this.#imageDataCanvas = null;
     this.#imageDataCtx = null;
     this.#imageData = null;
+    this.#imageData32 = null;
     this.#imageDataNeedsFullRefresh = true;
     this.renderDirtyTiles = new Set();
   }
@@ -4041,6 +4085,22 @@ export default class GridManager {
     this.#imageDataCanvas = canvas;
     this.#imageDataCtx = context;
     this.#imageData = context.createImageData(width, height);
+    const imageDataBuffer = this.#imageData?.data;
+
+    if (
+      PACK_RGBA32 &&
+      imageDataBuffer &&
+      imageDataBuffer.byteOffset % 4 === 0 &&
+      imageDataBuffer.length % 4 === 0
+    ) {
+      this.#imageData32 = new Uint32Array(
+        imageDataBuffer.buffer,
+        imageDataBuffer.byteOffset,
+        imageDataBuffer.length / 4,
+      );
+    } else {
+      this.#imageData32 = null;
+    }
     this.#imageDataNeedsFullRefresh = true;
 
     return true;
@@ -4052,20 +4112,39 @@ export default class GridManager {
     const { data } = this.#imageData;
     const rows = this.rows;
     const cols = this.cols;
-    let offset = 0;
+    const data32 = this.#imageData32;
+    const canUsePacked = Boolean(data32) && data32.length === data.length / 4;
 
-    for (let row = 0; row < rows; row++) {
-      const gridRow = this.grid[row];
+    if (canUsePacked && data32) {
+      let index = 0;
 
-      for (let col = 0; col < cols; col++) {
-        const cell = gridRow ? gridRow[col] : null;
-        const rgba = cell ? parseColorToRgba(cell.color) : EMPTY_RGBA;
+      for (let row = 0; row < rows; row++) {
+        const gridRow = this.grid[row];
 
-        data[offset] = rgba[0];
-        data[offset + 1] = rgba[1];
-        data[offset + 2] = rgba[2];
-        data[offset + 3] = rgba[3];
-        offset += 4;
+        for (let col = 0; col < cols; col++) {
+          const cell = gridRow ? gridRow[col] : null;
+          const record = cell ? resolveColorRecord(cell.color) : EMPTY_COLOR_RECORD;
+
+          data32[index] = record.packed;
+          index += 1;
+        }
+      }
+    } else {
+      let offset = 0;
+
+      for (let row = 0; row < rows; row++) {
+        const gridRow = this.grid[row];
+
+        for (let col = 0; col < cols; col++) {
+          const cell = gridRow ? gridRow[col] : null;
+          const rgba = cell ? resolveColorRecord(cell.color).rgba : EMPTY_RGBA;
+
+          data[offset] = rgba[0];
+          data[offset + 1] = rgba[1];
+          data[offset + 2] = rgba[2];
+          data[offset + 3] = rgba[3];
+          offset += 4;
+        }
       }
     }
 
@@ -4081,6 +4160,8 @@ export default class GridManager {
     const { data } = this.#imageData;
     const cols = this.cols;
     const rows = this.rows;
+    const data32 = this.#imageData32;
+    const canUsePacked = Boolean(data32) && data32.length === data.length / 4;
     let minRow = rows;
     let minCol = cols;
     let maxRow = -1;
@@ -4093,13 +4174,20 @@ export default class GridManager {
       if (row < 0 || row >= rows || col < 0 || col >= cols) continue;
 
       const cell = this.grid[row]?.[col] ?? null;
-      const rgba = cell ? parseColorToRgba(cell.color) : EMPTY_RGBA;
-      const index = (row * cols + col) * 4;
+      const record = cell ? resolveColorRecord(cell.color) : EMPTY_COLOR_RECORD;
+      const baseIndex = row * cols + col;
 
-      data[index] = rgba[0];
-      data[index + 1] = rgba[1];
-      data[index + 2] = rgba[2];
-      data[index + 3] = rgba[3];
+      if (canUsePacked && data32) {
+        data32[baseIndex] = record.packed;
+      } else {
+        const index = baseIndex * 4;
+        const rgba = record.rgba;
+
+        data[index] = rgba[0];
+        data[index + 1] = rgba[1];
+        data[index + 2] = rgba[2];
+        data[index + 3] = rgba[3];
+      }
 
       if (row < minRow) minRow = row;
       if (row > maxRow) maxRow = row;
