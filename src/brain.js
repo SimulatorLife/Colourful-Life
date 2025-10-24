@@ -362,10 +362,10 @@ export default class Brain {
     let tracePayload = null;
 
     if (traceEnabled) {
-      tracePayload = cloneTracePayload({
+      tracePayload = {
         sensors: sensorTrace ?? [],
         nodes: traceEntries ?? [],
-      });
+      };
 
       result.trace = tracePayload;
     }
