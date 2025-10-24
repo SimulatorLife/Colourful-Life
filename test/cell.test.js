@@ -11,6 +11,7 @@ let createRNG;
 let InteractionSystem;
 let Brain;
 let OUTPUT_GROUPS;
+let OFFSPRING_VIABILITY_BUFFER;
 
 function investmentFor(
   energy,
@@ -68,6 +69,7 @@ test.before(async () => {
   ({ clamp, lerp, randomRange, createRNG } = await import("../src/utils.js"));
   ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
   ({ default: Brain, OUTPUT_GROUPS } = await import("../src/brain.js"));
+  ({ OFFSPRING_VIABILITY_BUFFER } = await import("../src/config.js"));
   if (typeof global.window === "undefined") global.window = globalThis;
   if (!window.GridManager) window.GridManager = {};
   if (typeof window.GridManager.maxTileEnergy !== "number") {
@@ -796,7 +798,8 @@ test("breed spends parental investment energy without creating extra energy", ()
   const demandFracA = dnaA.offspringEnergyDemandFrac();
   const demandFracB = dnaB.offspringEnergyDemandFrac();
   const transferEfficiency = combinedTransferEfficiency(dnaA, dnaB);
-  const viabilityThreshold = maxTileEnergy * Math.max(demandFracA, demandFracB) * 1.15;
+  const viabilityThreshold =
+    maxTileEnergy * Math.max(demandFracA, demandFracB) * OFFSPRING_VIABILITY_BUFFER;
   const requiredTotalInvestment =
     viabilityThreshold / Math.max(transferEfficiency, 1e-6);
   const weightSum = Math.max(1e-6, Math.abs(investFracA) + Math.abs(investFracB));
@@ -1062,7 +1065,7 @@ test("breed clamps investment so parents stop at starvation threshold", () => {
   const demandFracB = dnaB.offspringEnergyDemandFrac();
   const transferEfficiency = combinedTransferEfficiency(dnaA, dnaB);
   const viabilityThreshold =
-    reproductionMax * Math.max(demandFracA, demandFracB) * 1.15;
+    reproductionMax * Math.max(demandFracA, demandFracB) * OFFSPRING_VIABILITY_BUFFER;
   const requiredTotalInvestment =
     viabilityThreshold / Math.max(transferEfficiency, 1e-6);
   const investFracA = dnaA.parentalInvestmentFrac();
@@ -1232,10 +1235,10 @@ test("gestation efficiency genes modulate delivered offspring energy", () => {
   const lowEfficiency = combinedTransferEfficiency(lowDnaA, lowDnaB);
   const highEfficiency = combinedTransferEfficiency(highDnaA, highDnaB);
   const lowRequiredTotal =
-    (maxTileEnergy * Math.max(lowDemandA, lowDemandB) * 1.15) /
+    (maxTileEnergy * Math.max(lowDemandA, lowDemandB) * OFFSPRING_VIABILITY_BUFFER) /
     Math.max(lowEfficiency, 1e-6);
   const highRequiredTotal =
-    (maxTileEnergy * Math.max(highDemandA, highDemandB) * 1.15) /
+    (maxTileEnergy * Math.max(highDemandA, highDemandB) * OFFSPRING_VIABILITY_BUFFER) /
     Math.max(highEfficiency, 1e-6);
   const lowFracA = lowDnaA.parentalInvestmentFrac();
   const lowFracB = lowDnaB.parentalInvestmentFrac();

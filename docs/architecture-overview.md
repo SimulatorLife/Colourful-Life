@@ -67,12 +67,13 @@ This document captures how the Colourful Life simulation composes its core syste
   `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`,
   `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY`,
   `COLOURFUL_LIFE_DECAY_RETURN_FRACTION`,
-  `COLOURFUL_LIFE_DECAY_MAX_AGE`, and
+  `COLOURFUL_LIFE_DECAY_MAX_AGE`,
+  `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER`, and
   `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` flow through
   [`src/config.js`](../src/config.js), letting experiments tweak caps, regeneration
-  suppression, harvesting taxes, and trait activity sensitivity without patching
-  source. The sanitized values are consumed by both the energy computations and
-  overlays so telemetry stays in sync.
+  suppression, harvesting taxes, reproduction scarcity, and trait activity
+  sensitivity without patching source. The sanitized values are consumed by both
+  the energy computations and overlays so telemetry stays in sync.
 
 ### Events
 
@@ -93,10 +94,11 @@ This document captures how the Colourful Life simulation composes its core syste
 - Neural reinforcement now tracks a DNA-tuned opportunity memory that blends recent neural rewards with energy swings, surfacing the rolling outcome through an `opportunitySignal` sensor. Brains can lean into strategies that are genuinely paying off—or cool off costly loops—without bolting on bespoke behaviour flags.
 - DNA exposes a `metabolicProfile` translating activity, efficiency, and crowding genes into baseline maintenance drain and a density-driven crowding tax, so genomes comfortable in throngs waste less energy than solitary specialists when packed together.
 - DNA encodes an `offspringEnergyDemandFrac` that establishes a DNA-driven viability floor for reproduction. Parents refuse to spawn unless their combined energy investment clears the pickier genome's expectation, allowing nurturing lineages to favour fewer, well-funded offspring while opportunists tolerate lean births.
+- The environment-level `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` scales how much surplus energy above that DNA floor parents must stockpile before gestation begins, letting deployments tune scarcity without touching genome accessors.
 - DNA's gestation locus now feeds `offspringEnergyTransferEfficiency`, blending metabolic, parental, and fertility traits with a heritable gestation efficiency gene. Offspring inherit only the delivered share of the parental investment, so lineages evolve toward thrifty or wasteful reproduction instead of assuming perfect energy transfer.
 - Neural mate selection blends brain forecasts with DNA courtship heuristics. Each cell now previews reproduction sensors for every visible partner, folds the brain's acceptance probability into the mate's weight, and scales the influence using DNA-programmed reinforcement and sampling profiles. Populations that evolve richer neural wiring can therefore favour mates their brains predict will reciprocate, while simpler genomes continue to lean on legacy similarity heuristics.
 - Baseline neural activity and mutation probability respond to the `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` and `COLOURFUL_LIFE_MUTATION_CHANCE` overrides, giving deployments coarse-grained levers for energising or calming populations and for tuning how quickly genomes mutate without editing DNA accessors.
-- Post-mortem energy recycling honours the `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` and `COLOURFUL_LIFE_DECAY_MAX_AGE` overrides so deployments can dial how much energy decaying organisms return to nearby tiles and how long the reservoir persists, keeping scarcity or abundance experiments configuration-driven, while reproduction remains exclusively lineage-driven.
+- Post-mortem energy recycling honours the `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` and `COLOURFUL_LIFE_DECAY_MAX_AGE` overrides so deployments can dial how much energy decaying organisms return to nearby tiles and how long the reservoir persists, keeping scarcity or abundance experiments configuration-driven, while reproduction still flows through DNA-defined demand fractions modulated only by the configurable viability buffer.
 - Decision telemetry is available through `cell.getDecisionTelemetry`, which the debugger captures for UI display.
 
 ### InteractionSystem

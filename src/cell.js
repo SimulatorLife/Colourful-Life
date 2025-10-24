@@ -4,7 +4,11 @@ import { randomRange, clamp, lerp, cloneTracePayload } from "./utils.js";
 import { warnOnce } from "./utils/error.js";
 import { accumulateEventModifiers } from "./energySystem.js";
 import { createEventContext, defaultEventContext } from "./events/eventContext.js";
-import { MAX_TILE_ENERGY, MUTATION_CHANCE_BASELINE } from "./config.js";
+import {
+  MAX_TILE_ENERGY,
+  MUTATION_CHANCE_BASELINE,
+  OFFSPRING_VIABILITY_BUFFER,
+} from "./config.js";
 
 const EPSILON = 1e-9;
 
@@ -362,7 +366,8 @@ export default class Cell {
     );
     const transferEfficiency = clamp((efficiencyA + efficiencyB) / 2, 0.1, 1);
     const viabilityFloor = Math.max(demandFracA, demandFracB);
-    const viabilityThreshold = resolvedMaxTileEnergy * viabilityFloor * 1.15; // require additional reserves beyond the pickier parent's floor
+    const viabilityThreshold =
+      resolvedMaxTileEnergy * viabilityFloor * OFFSPRING_VIABILITY_BUFFER; // require additional reserves beyond the pickier parent's floor
     const minimumTransfer = Math.max(transferEfficiency, 1e-6);
     const requiredTotalInvestment = viabilityThreshold / minimumTransfer;
     const fracFnA = parentA.dna?.parentalInvestmentFrac;
