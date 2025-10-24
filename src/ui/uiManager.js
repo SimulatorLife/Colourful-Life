@@ -4161,6 +4161,48 @@ export default class UIManager {
       (value) => Math.max(0, Math.floor(value)).toLocaleString(),
       "—",
     );
+    const baseCadence =
+      Number.isFinite(this.baseUpdatesPerSecond) && this.baseUpdatesPerSecond > 0
+        ? this.baseUpdatesPerSecond
+        : SIMULATION_DEFAULTS.updatesPerSecond;
+    const cadenceDisplay = formatIfFinite(
+      clockState?.updatesPerSecond,
+      (value) => {
+        const decimals = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+        const factor = 10 ** decimals;
+        const rounded = Math.round(value * factor) / factor;
+        const formatted =
+          decimals === 0
+            ? Math.round(rounded).toLocaleString()
+            : rounded
+                .toFixed(decimals)
+                .replace(/(\.\d*?[1-9])0+$/u, "$1")
+                .replace(/\.0+$/u, "");
+        const cadenceText = `${formatted} updates/sec`;
+
+        if (Number.isFinite(baseCadence) && baseCadence > 0) {
+          const multiplierText = this.#formatSpeedDisplay(value / baseCadence);
+
+          if (multiplierText && multiplierText !== "—") {
+            return `${cadenceText} (${multiplierText})`;
+          }
+        }
+
+        return cadenceText;
+      },
+      "—",
+    );
+    const cadenceTitleParts = [
+      "Effective updates processed per simulated second derived from the playback speed controls.",
+    ];
+
+    if (Number.isFinite(baseCadence) && baseCadence > 0) {
+      const baseLabel = Math.round(baseCadence).toLocaleString();
+
+      cadenceTitleParts.push(`Base cadence: ${baseLabel} updates/sec.`);
+    }
+
+    const cadenceTitle = cadenceTitleParts.join(" ");
 
     const clockSection = createSection("Simulation Clock");
 
@@ -4174,6 +4216,11 @@ export default class UIManager {
       label: "Ticks Elapsed",
       value: tickDisplay,
       title: "Total simulation ticks processed since the current world spawned.",
+    });
+    appendMetricRow(clockSection, {
+      label: "Current Cadence",
+      value: cadenceDisplay,
+      title: cadenceTitle,
     });
 
     const populationSection = createSection("Population Snapshot");
