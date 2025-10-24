@@ -226,7 +226,7 @@ export default class SimulationEngine {
       startWithEvent:
         (defaults.eventFrequencyMultiplier ?? 1) > 0 && maxConcurrentEvents > 0,
     });
-    this.stats = new Stats();
+    this.stats = new Stats(undefined, { rng });
     this.telemetry = new TelemetryController({
       stats: this.stats,
       computeLeaderboard,

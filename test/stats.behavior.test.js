@@ -24,6 +24,22 @@ const toEntries = (cells) =>
       }))
     : [];
 
+const createSequenceRng = (sequence) => {
+  let index = 0;
+
+  return () => {
+    if (!Array.isArray(sequence) || sequence.length === 0) {
+      return 0;
+    }
+
+    const value = sequence[index % sequence.length];
+
+    index += 1;
+
+    return value;
+  };
+};
+
 test("computeTraitPresence clamps trait values and tracks active fractions", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(4);
@@ -65,7 +81,6 @@ test("computeTraitPresence clamps trait values and tracks active fractions", asy
 
 test("estimateDiversity enumerates unique pairs when sample budget covers population", async () => {
   const { default: Stats } = await statsModulePromise;
-  const stats = new Stats();
   const similarityMatrix = new Map([
     ["0|1", 0.1],
     ["0|2", 0.3],
@@ -92,30 +107,15 @@ test("estimateDiversity enumerates unique pairs when sample budget covers popula
     1 - similarityMatrix.get("1|2"),
   ];
   const expected = distances.reduce((sum, value) => sum + value, 0) / distances.length;
-  const originalRandom = Math.random;
   const sequence = [0.1, 0.5, 0.4, 0.1, 0.2, 0.9];
-  let index = 0;
+  const stats = new Stats(undefined, { rng: createSequenceRng(sequence) });
+  const actual = stats.estimateDiversity(cells, 10);
 
-  Math.random = () => {
-    const value = sequence[index % sequence.length];
-
-    index += 1;
-
-    return value;
-  };
-
-  try {
-    const actual = stats.estimateDiversity(cells, 10);
-
-    approxEqual(actual, expected, 1e-9);
-  } finally {
-    Math.random = originalRandom;
-  }
+  approxEqual(actual, expected, 1e-9);
 });
 
 test("estimateDiversity samples target quota even when most cells lack genomes", async () => {
   const { default: Stats } = await statsModulePromise;
-  const stats = new Stats();
   const similarityMatrix = new Map([
     ["0|1", 0.15],
     ["0|2", 0.4],
@@ -142,20 +142,58 @@ test("estimateDiversity samples target quota even when most cells lack genomes",
   const validCells = [0, 1, 2, 3].map((id) => makeCell(id));
   const inertCells = Array.from({ length: 120 }, () => ({}));
   const cells = [...validCells, ...inertCells];
+  const stats = new Stats(undefined, { rng: () => 0 });
+  const actual = stats.estimateDiversity(cells, 3);
+  const expectedContributions = [
+    1 - similarityMatrix.get("0|1"),
+    1 - similarityMatrix.get("0|2"),
+    1 - similarityMatrix.get("0|3"),
+  ];
+  const expected =
+    expectedContributions.reduce((sum, value) => sum + value, 0) /
+    expectedContributions.length;
+
+  approxEqual(actual, expected, 1e-9);
+});
+
+test("estimateDiversity uses injected RNG without touching Math.random", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const similarityMatrix = new Map([
+    ["0|1", 0.2],
+    ["0|2", 0.55],
+    ["0|3", 0.35],
+    ["1|2", 0.6],
+    ["1|3", 0.45],
+    ["2|3", 0.5],
+  ]);
+  const makeCell = (id) =>
+    createCell({
+      dna: {
+        id,
+        reproductionProb: () => 0,
+        similarity(otherDna) {
+          const a = Math.min(id, otherDna.id);
+          const b = Math.max(id, otherDna.id);
+          const key = `${a}|${b}`;
+
+          return similarityMatrix.get(key) ?? 1;
+        },
+      },
+    });
+  const cells = [0, 1, 2, 3].map((id) => makeCell(id));
+  const sequence = [0.82, 0.14, 0.61, 0.37, 0.48, 0.29];
+  const sampleLimit = 2;
+  const expectedStats = new Stats(undefined, { rng: createSequenceRng(sequence) });
+  const expected = expectedStats.estimateDiversity(cells, sampleLimit);
   const originalRandom = Math.random;
 
-  Math.random = () => 0;
+  Math.random = () => {
+    throw new Error("Math.random should not be called when a custom RNG is provided.");
+  };
 
   try {
-    const actual = stats.estimateDiversity(cells, 3);
-    const expectedContributions = [
-      1 - similarityMatrix.get("0|1"),
-      1 - similarityMatrix.get("0|2"),
-      1 - similarityMatrix.get("0|3"),
-    ];
-    const expected =
-      expectedContributions.reduce((sum, value) => sum + value, 0) /
-      expectedContributions.length;
+    const stats = new Stats(undefined, { rng: createSequenceRng(sequence) });
+    const actual = stats.estimateDiversity(cells, sampleLimit);
 
     approxEqual(actual, expected, 1e-9);
   } finally {
