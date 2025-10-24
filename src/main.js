@@ -125,9 +125,10 @@ export function createSimulation({
   const headlessCanvasSize = headless
     ? resolveHeadlessCanvasSize(configWithLayoutDefaults)
     : null;
+  const sizeOverrides = headlessCanvasSize ?? {};
+  let createdHeadlessCanvas = false;
 
   if (headless && !resolvedCanvas) {
-    const sizeOverrides = headlessCanvasSize ?? {};
     const canvasSizeConfig = {
       ...toPlainObject(configWithLayoutDefaults.canvasSize),
     };
@@ -148,10 +149,10 @@ export function createSimulation({
       canvasHeight: sizeOverrides.height,
       canvasSize: canvasSizeConfig,
     });
+    createdHeadlessCanvas = true;
   }
 
-  if (headless && headlessCanvasSize) {
-    const sizeOverrides = headlessCanvasSize;
+  if (headless && headlessCanvasSize && createdHeadlessCanvas) {
     const canvasSizeConfig = {
       ...toPlainObject(configWithLayoutDefaults.canvasSize),
     };
