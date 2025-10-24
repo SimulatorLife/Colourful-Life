@@ -146,7 +146,8 @@ export function createSliderRow(parent, opts = {}) {
 }
 
 /**
- * Creates a labelled numeric input row with optional suffix text.
+ * Creates a labelled numeric input row with optional suffix text and helper
+ * copy.
  *
  * @param {HTMLElement} parent - Container node.
  * @param {Object} opts - Input options.
@@ -157,6 +158,7 @@ export function createSliderRow(parent, opts = {}) {
  * @param {number} [opts.value] - Initial value shown in the input.
  * @param {string} [opts.title] - Optional tooltip description.
  * @param {string} [opts.suffix] - Optional suffix rendered beside the input.
+ * @param {string} [opts.description] - Optional helper text rendered below the row.
  * @param {(value:number)=>void} [opts.onChange] - Callback invoked when value changes.
  * @returns {HTMLInputElement} The generated number input element.
  */
