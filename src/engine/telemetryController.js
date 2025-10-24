@@ -80,15 +80,17 @@ export default class TelemetryController {
   }
 
   setInitialSnapshot(snapshot) {
-    this.#lastSnapshot = snapshot ?? null;
+    this.#lastSnapshot = this.#prepareSnapshotForRetention(snapshot);
   }
 
   ingestSnapshot(snapshot) {
-    this.#lastSnapshot = snapshot ?? null;
+    const workingSnapshot = snapshot ?? null;
+
     this.#lastMetrics =
-      this.#lastSnapshot && typeof this.stats?.updateFromSnapshot === "function"
-        ? this.stats.updateFromSnapshot(this.#lastSnapshot)
+      workingSnapshot && typeof this.stats?.updateFromSnapshot === "function"
+        ? this.stats.updateFromSnapshot(workingSnapshot)
         : null;
+    this.#lastSnapshot = this.#prepareSnapshotForRetention(workingSnapshot);
     this.#pending = true;
 
     return this.#lastMetrics;
@@ -184,4 +186,70 @@ export default class TelemetryController {
   #pending;
   #lastSlowEmit;
   #lastRenderStats;
+
+  #prepareSnapshotForRetention(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") {
+      return null;
+    }
+
+    const entries = Array.isArray(snapshot.entries) ? snapshot.entries : null;
+
+    if (entries) {
+      for (let i = 0; i < entries.length; i += 1) {
+        const entry = entries[i];
+
+        if (!entry || typeof entry !== "object") {
+          continue;
+        }
+
+        const cell = entry.cell;
+
+        if (cell && typeof cell === "object") {
+          if (!Number.isFinite(entry.offspring)) {
+            entry.offspring = Number.isFinite(cell.offspring) ? cell.offspring : 0;
+          }
+          if (!Number.isFinite(entry.fightsWon)) {
+            entry.fightsWon = Number.isFinite(cell.fightsWon) ? cell.fightsWon : 0;
+          }
+          if (!Number.isFinite(entry.age)) {
+            entry.age = Number.isFinite(cell.age) ? cell.age : 0;
+          }
+          if (entry.color == null && typeof cell.color === "string") {
+            entry.color = cell.color;
+          }
+        } else {
+          if (!Number.isFinite(entry.offspring)) entry.offspring = 0;
+          if (!Number.isFinite(entry.fightsWon)) entry.fightsWon = 0;
+          if (!Number.isFinite(entry.age)) entry.age = 0;
+          if (entry.color == null) entry.color = null;
+        }
+
+        if ("cell" in entry) {
+          delete entry.cell;
+        }
+      }
+    }
+
+    const brainSnapshots = Array.isArray(snapshot.brainSnapshots)
+      ? snapshot.brainSnapshots
+      : null;
+
+    if (brainSnapshots) {
+      for (let i = 0; i < brainSnapshots.length; i += 1) {
+        const entry = brainSnapshots[i];
+
+        if (!entry || typeof entry !== "object") continue;
+
+        if (entry.color == null && typeof entries?.[i]?.color === "string") {
+          entry.color = entries[i].color;
+        }
+
+        if ("cell" in entry) {
+          delete entry.cell;
+        }
+      }
+    }
+
+    return snapshot;
+  }
 }
