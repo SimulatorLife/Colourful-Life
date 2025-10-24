@@ -81,6 +81,7 @@ const COLOR_CACHE_LIMIT = 4096;
 const COLOR_CACHE = new Map();
 const COLOR_CACHE_KEYS = [];
 let colorCacheEvictIndex = 0;
+const CELL_COLOR_RECORD_CACHE = new WeakMap();
 const RGB_PATTERN =
   /rgba?\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)(?:\s*,\s*([0-9.]+)\s*)?\)/i;
 const HEX_PATTERN = /^#([0-9a-f]{3,8})$/i;
@@ -219,6 +220,25 @@ function resolveColorRecord(color) {
   }
 
   return rememberColor(normalized, record);
+}
+
+function resolveCellColorRecord(cell) {
+  if (!cell || typeof cell !== "object") {
+    return EMPTY_COLOR_RECORD;
+  }
+
+  const cached = CELL_COLOR_RECORD_CACHE.get(cell);
+  const color = typeof cell.color === "string" ? cell.color : "";
+
+  if (cached && cached.color === color) {
+    return cached.record;
+  }
+
+  const record = color ? resolveColorRecord(color) : EMPTY_COLOR_RECORD;
+
+  CELL_COLOR_RECORD_CACHE.set(cell, { color, record });
+
+  return record;
 }
 
 function getPairSimilarity(cellA, cellB) {
@@ -4228,7 +4248,7 @@ export default class GridManager {
 
         for (let col = 0; col < cols; col++) {
           const cell = gridRow ? gridRow[col] : null;
-          const record = cell ? resolveColorRecord(cell.color) : EMPTY_COLOR_RECORD;
+          const record = cell ? resolveCellColorRecord(cell) : EMPTY_COLOR_RECORD;
 
           data32[index] = record.packed;
           index += 1;
@@ -4242,7 +4262,8 @@ export default class GridManager {
 
         for (let col = 0; col < cols; col++) {
           const cell = gridRow ? gridRow[col] : null;
-          const rgba = cell ? resolveColorRecord(cell.color).rgba : EMPTY_RGBA;
+          const record = cell ? resolveCellColorRecord(cell) : EMPTY_COLOR_RECORD;
+          const rgba = record.rgba;
 
           data[offset] = rgba[0];
           data[offset + 1] = rgba[1];
@@ -4279,7 +4300,7 @@ export default class GridManager {
       if (row < 0 || row >= rows || col < 0 || col >= cols) continue;
 
       const cell = this.grid[row]?.[col] ?? null;
-      const record = cell ? resolveColorRecord(cell.color) : EMPTY_COLOR_RECORD;
+      const record = cell ? resolveCellColorRecord(cell) : EMPTY_COLOR_RECORD;
       const baseIndex = row * cols + col;
 
       if (canUsePacked && data32) {
