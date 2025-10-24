@@ -4881,9 +4881,9 @@ export default class Cell {
       const choice = sampleFromDistribution(probs, labels, decisionRng);
       const probabilitiesByKey = {};
 
-      for (let i = 0; i < labels.length; i++) {
-        probabilitiesByKey[labels[i]] = probs[i] ?? 0;
-      }
+      labels.forEach((label, index) => {
+        probabilitiesByKey[label] = probs[index] ?? 0;
+      });
 
       if (choice) {
         this.#assignDecisionOutcome("interaction", {
