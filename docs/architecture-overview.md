@@ -39,12 +39,13 @@ This document captures how the Colourful Life simulation composes its core syste
 - Blends base regeneration with density penalties, diffusion from neighbouring tiles, and modifiers contributed by active environmental events.
 - Returns both the next energy value and any event metadata so overlays can highlight affected regions.
 - The default regeneration coefficient (`0.012`) now pairs with a diffusion
-  rate of `0.05` and a density penalty of `0.42`, keeping crowded hubs from
-  rebounding instantly while sparse frontier tiles still recover enough to
-  support scouting. A tile-only probe (600 ticks, density 0.35, no events)
-  settled around ~2.7 energy instead of spiralling upward, preserving scarcity
-  pressure without collapsing early runs; adjust via
-  `resolveSimulationDefaults` when experimenting with alternative baselines.
+  rate of `0.05` and a softened density penalty of `0.39`, keeping crowded hubs
+  from rebounding instantly while sparse frontier tiles still recover enough to
+  support scouting. A `computeTileEnergyUpdate` probe (density 0.85, tile energy
+  1.2, no events) nudged the per-tick gain from ~0.00309 to ~0.00321 energy
+  after the tweak, giving busy regions breathing room without eliminating
+  scarcity pressure; adjust via `resolveSimulationDefaults` when experimenting
+  with alternative baselines.
 
 - Environment overrides such as `COLOURFUL_LIFE_MAX_TILE_ENERGY`,
   `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`,
