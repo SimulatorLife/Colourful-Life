@@ -1,5 +1,7 @@
 import { toPlainObject } from "../utils.js";
 
+let controlRowSequence = 0;
+
 /**
  * Creates the two-column grid wrapper used across control panels.
  *
@@ -221,9 +223,10 @@ export function createNumberInputRow(parent, opts = {}) {
   if (suffix) {
     const suffixEl = document.createElement("span");
 
-    suffixEl.className = "control-value";
+    suffixEl.className = "control-value control-suffix";
     suffixEl.textContent = suffix;
     line.appendChild(suffixEl);
+    line.classList.add("control-line--with-suffix");
   }
 
   if (description) {
@@ -231,7 +234,35 @@ export function createNumberInputRow(parent, opts = {}) {
 
     descriptionEl.className = "control-description control-hint";
     descriptionEl.textContent = description;
+    const descriptionId = `control-description-${controlRowSequence++}`;
+
+    descriptionEl.id = descriptionId;
     rowElement?.appendChild(descriptionEl);
+
+    const readDescribedBy = () => {
+      if (typeof input.getAttribute === "function") {
+        return input.getAttribute("aria-describedby");
+      }
+
+      if (input.attributes && typeof input.attributes === "object") {
+        const raw = input.attributes["aria-describedby"];
+
+        if (typeof raw === "string") return raw;
+      }
+
+      return input.ariaDescribedby || input.ariaDescribedBy || "";
+    };
+
+    const existingDescription = readDescribedBy();
+    const nextDescription = existingDescription
+      ? `${existingDescription} ${descriptionId}`
+      : descriptionId;
+
+    if (typeof input.setAttribute === "function") {
+      input.setAttribute("aria-describedby", nextDescription.trim());
+    } else {
+      input.ariaDescribedby = nextDescription.trim();
+    }
   }
 
   return input;

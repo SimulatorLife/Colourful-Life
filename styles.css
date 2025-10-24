@@ -361,8 +361,15 @@ canvas {
   justify-content: space-between;
   gap: var(--space-md);
 }
+.control-line--with-suffix {
+  justify-content: flex-start;
+  gap: var(--space-sm);
+}
 .control-line > * {
   min-width: 0;
+}
+.control-line--with-suffix .control-value {
+  flex: 0 0 auto;
 }
 .control-line--inline-actions {
   justify-content: flex-start;
@@ -452,6 +459,10 @@ canvas {
   text-align: right;
   color: var(--color-text-subtle);
   font-variant-numeric: tabular-nums;
+}
+.control-suffix {
+  min-width: auto;
+  text-align: left;
 }
 
 .control-value.control-hint,
