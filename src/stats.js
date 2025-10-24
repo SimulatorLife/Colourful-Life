@@ -1039,7 +1039,10 @@ export default class Stats {
       : numericMaxSamples === Infinity
         ? Infinity
         : 0;
-    const validCells = cellSources.flatMap((source) => {
+    const validDna = [];
+
+    for (let index = 0; index < cellSources.length; index += 1) {
+      const source = cellSources[index];
       const cell =
         source &&
         typeof source === "object" &&
@@ -1047,14 +1050,14 @@ export default class Stats {
           ? source.cell
           : source;
 
-      return cell &&
-        typeof cell === "object" &&
-        typeof cell.dna?.similarity === "function"
-        ? [cell]
-        : [];
-    });
+      const dna = cell?.dna;
 
-    const populationSize = validCells.length;
+      if (dna && typeof dna.similarity === "function") {
+        validDna.push(dna);
+      }
+    }
+
+    const populationSize = validDna.length;
 
     if (populationSize < 2) {
       return 0;
@@ -1071,12 +1074,17 @@ export default class Stats {
       let count = 0;
 
       for (let i = 0; i < populationSize - 1; i += 1) {
-        const a = validCells[i];
+        const dnaA = validDna[i];
+        const { similarity } = dnaA;
+
+        if (typeof similarity !== "function") {
+          continue;
+        }
 
         for (let j = i + 1; j < populationSize; j += 1) {
-          const b = validCells[j];
+          const dnaB = validDna[j];
 
-          sum += 1 - a.dna.similarity(b.dna);
+          sum += 1 - similarity.call(dnaA, dnaB);
           count += 1;
         }
       }
@@ -1139,12 +1147,13 @@ export default class Stats {
         pairIndex,
         populationSize,
       );
-      const a = validCells[first];
-      const b = validCells[second];
+      const dnaA = validDna[first];
+      const dnaB = validDna[second];
+      const similarity = dnaA?.similarity;
 
-      if (!a || !b) continue;
+      if (!dnaA || !dnaB || typeof similarity !== "function") continue;
 
-      sum += 1 - a.dna.similarity(b.dna);
+      sum += 1 - similarity.call(dnaA, dnaB);
       count += 1;
     }
 
