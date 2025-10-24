@@ -42,6 +42,10 @@ where practical.
 - Refreshed documentation across the README, developer guide, and architecture
   notes to highlight the UI bridge, fitness scoring module, Husky hook setup,
   and new formatting scripts so contributor workflows mirror the current code.
+- Streamlined the README quick start, developer guide, and public hosting
+  instructions to surface npm script aliases (including `npm run benchmark` and
+  `npm run deploy:public`), clarify publishing steps, and reduce duplicated
+  onboarding guidance.
 - Reproduction acceptance now blends neural policy intent with the genome's
   baseline instincts using DNA-tuned weights that react to opportunity,
   scarcity, neural fatigue, and network confidence, replacing the former
