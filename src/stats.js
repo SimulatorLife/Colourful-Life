@@ -641,13 +641,15 @@ export default class Stats {
       return 0;
     }
 
-    const values = [];
+    const values = Object.values(fractions).reduce((acc, raw) => {
+      if (!Number.isFinite(raw) || raw <= 0) {
+        return acc;
+      }
 
-    for (const raw of Object.values(fractions)) {
-      if (!Number.isFinite(raw) || raw <= 0) continue;
+      acc.push(clamp01(raw));
 
-      values.push(clamp01(raw));
-    }
+      return acc;
+    }, []);
 
     if (values.length === 0) return 0;
     if (values.length === 1) return 0;
@@ -659,15 +661,15 @@ export default class Stats {
     }
 
     const invSum = 1 / sum;
-    let entropy = 0;
-
-    for (const value of values) {
+    const entropy = values.reduce((total, value) => {
       const probability = value * invSum;
 
-      if (!(probability > 0)) continue;
+      if (!(probability > 0)) {
+        return total;
+      }
 
-      entropy -= probability * Math.log(probability);
-    }
+      return total - probability * Math.log(probability);
+    }, 0);
 
     const maxEntropy = Math.log(values.length);
 
