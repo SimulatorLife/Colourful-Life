@@ -4,9 +4,8 @@ import {
   randomRange,
   sanitizeNumber,
   sanitizePositiveInteger,
-  warnOnce,
-  invokeWithErrorBoundary,
 } from "../utils.js";
+import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 import { defaultIsEventAffecting } from "./eventContext.js";
 
 export { defaultIsEventAffecting as isEventAffecting };

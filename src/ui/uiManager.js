@@ -8,14 +8,8 @@ import {
   createSelectRow,
   createSliderRow,
 } from "./controlBuilders.js";
-import {
-  clamp,
-  clamp01,
-  warnOnce,
-  toPlainObject,
-  invokeWithErrorBoundary,
-  coerceBoolean,
-} from "../utils.js";
+import { clamp, clamp01, toPlainObject, coerceBoolean } from "../utils.js";
+import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
 const AUTO_PAUSE_DESCRIPTION =
   "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";

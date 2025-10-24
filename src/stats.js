@@ -1,11 +1,6 @@
 import { TRAIT_ACTIVATION_THRESHOLD } from "./config.js";
-import {
-  clamp,
-  clamp01,
-  sanitizePositiveInteger,
-  toFiniteOrNull,
-  warnOnce,
-} from "./utils.js";
+import { clamp, clamp01, sanitizePositiveInteger, toFiniteOrNull } from "./utils.js";
+import { warnOnce } from "./utils/error.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;

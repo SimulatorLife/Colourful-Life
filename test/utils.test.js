@@ -9,12 +9,10 @@ import {
   cloneTracePayload,
   createRankedBuffer,
   createRNG,
-  invokeWithErrorBoundary,
-  reportError,
   toFiniteOrNull,
   toPlainObject,
-  warnOnce,
 } from "../src/utils.js";
+import { invokeWithErrorBoundary, reportError, warnOnce } from "../src/utils/error.js";
 
 function* cycle(values) {
   let index = 0;

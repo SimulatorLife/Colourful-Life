@@ -1,4 +1,4 @@
-import { warnOnce } from "../utils.js";
+import { warnOnce } from "../utils/error.js";
 
 const DEFAULT_COLORS = [
   "rgba(80, 160, 255, 0.22)",

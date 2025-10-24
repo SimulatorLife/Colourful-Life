@@ -17,9 +17,9 @@ import {
   sanitizeNumber,
   sanitizePositiveInteger,
   toFiniteOrNull,
-  invokeWithErrorBoundary,
   coerceBoolean,
 } from "./utils.js";
+import { invokeWithErrorBoundary } from "./utils/error.js";
 import {
   ensureCanvasDimensions,
   resolveCanvas,
