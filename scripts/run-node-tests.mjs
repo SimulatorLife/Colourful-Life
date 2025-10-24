@@ -4,6 +4,11 @@ import { pathToFileURL } from "node:url";
 
 const WATCH_FALSE_VALUES = new Set(["", "false", "0", "off", "no"]);
 const WATCH_TRUE_VALUES = new Set(["true", "1", "on", "yes"]);
+const WATCH_FLAG_ALIASES = new Map([
+  ["--watch", "--watch"],
+  ["--watchAll", "--watch"],
+  ["--watch-all", "--watch"],
+]);
 
 export function normalizeTestRunnerArgs(rawArgs = []) {
   const flags = [];
@@ -19,8 +24,9 @@ export function normalizeTestRunnerArgs(rawArgs = []) {
       break;
     }
 
-    if (arg === "--watch") {
+    if (WATCH_FLAG_ALIASES.has(arg)) {
       const next = args[index + 1];
+      const normalizedFlag = WATCH_FLAG_ALIASES.get(arg);
 
       if (next && !next.startsWith("-")) {
         const value = String(next).trim().toLowerCase();
@@ -31,18 +37,50 @@ export function normalizeTestRunnerArgs(rawArgs = []) {
         }
 
         if (WATCH_TRUE_VALUES.has(value)) {
-          flags.push("--watch");
+          flags.push(normalizedFlag);
           index += 1;
           continue;
         }
 
-        flags.push(`--watch=${next}`);
+        flags.push(`${normalizedFlag}=${next}`);
         index += 1;
         continue;
       }
 
-      flags.push("--watch");
+      flags.push(normalizedFlag);
       continue;
+    }
+
+    if (typeof arg === "string") {
+      let handled = false;
+
+      for (const [alias, normalizedFlag] of WATCH_FLAG_ALIASES) {
+        if (!arg.startsWith(`${alias}=`)) {
+          continue;
+        }
+
+        const rawValue = arg.slice(alias.length + 1);
+        const value = rawValue.trim().toLowerCase();
+
+        if (WATCH_FALSE_VALUES.has(value)) {
+          handled = true;
+          break;
+        }
+
+        if (WATCH_TRUE_VALUES.has(value)) {
+          flags.push(normalizedFlag);
+          handled = true;
+          break;
+        }
+
+        flags.push(`${normalizedFlag}=${rawValue}`);
+        handled = true;
+        break;
+      }
+
+      if (handled) {
+        continue;
+      }
     }
 
     if (typeof arg === "string" && arg.startsWith("--watch=")) {

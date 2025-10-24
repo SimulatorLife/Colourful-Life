@@ -48,3 +48,21 @@ test("normalizeTestRunnerArgs stops processing after explicit terminator", () =>
   assert.deepEqual(flags, ["--watch"]);
   assert.deepEqual(paths, ["--watch=false", "focus.test.js"]);
 });
+
+test("normalizeTestRunnerArgs treats watchAll falsey values as disabling watch", () => {
+  const { flags, paths } = normalizeTestRunnerArgs([
+    "--watchAll=false",
+    "--watch-all=0",
+    "gridManager",
+  ]);
+
+  assert.deepEqual(flags, []);
+  assert.deepEqual(paths, ["gridManager"]);
+});
+
+test("normalizeTestRunnerArgs maps watchAll to the Node watch flag", () => {
+  const { flags, paths } = normalizeTestRunnerArgs(["--watchAll", "--watch-all=on"]);
+
+  assert.deepEqual(flags, ["--watch", "--watch"]);
+  assert.deepEqual(paths, []);
+});
