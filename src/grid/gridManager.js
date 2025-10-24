@@ -2482,7 +2482,7 @@ export default class GridManager {
       for (let col = 0; col < this.cols; col++) {
         if (this.isObstacle(row, col)) continue;
         if (this.#random() < 0.05) {
-          const dna = DNA.random();
+          const dna = DNA.random(() => this.#random());
 
           this.spawnCell(row, col, { dna });
         }
@@ -4033,7 +4033,11 @@ export default class GridManager {
     }
   }
 
-  spawnCell(row, col, { dna = DNA.random(), spawnEnergy, recordBirth = false } = {}) {
+  spawnCell(
+    row,
+    col,
+    { dna = DNA.random(() => this.#random()), spawnEnergy, recordBirth = false } = {},
+  ) {
     if (this.isObstacle(row, col)) return null;
     const availableEnergy = Math.max(0, this.energyGrid?.[row]?.[col] ?? 0);
     const requestedEnergy = spawnEnergy ?? availableEnergy;
@@ -6552,7 +6556,7 @@ export default class GridManager {
       const { rr, cc } = coords[i];
 
       if (!this.grid[rr][cc] && !this.isObstacle(rr, cc)) {
-        const dna = DNA.random();
+        const dna = DNA.random(() => this.#random());
 
         this.spawnCell(rr, cc, { dna, recordBirth: true });
         placed++;
