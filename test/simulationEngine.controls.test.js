@@ -278,6 +278,69 @@ test("setWorldGeometry only repopulates when reseed is requested", async () => {
   engine.destroy?.();
 });
 
+test("setWorldGeometry applies obstacle changes without resizing", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(120, 120),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      rng: () => 0,
+    });
+
+    engine.grid.clearObstacles();
+    engine.grid.currentObstaclePreset = "none";
+
+    const baselineObstacles = engine.grid.obstacles.some((row) => row.some(Boolean));
+
+    assert.is(baselineObstacles, false, "baseline grid should be obstacle free");
+
+    const result = engine.setWorldGeometry({ obstaclePreset: "midline" });
+
+    assert.is(
+      result.rows,
+      engine.rows,
+      "rows remain unchanged when only preset changes",
+    );
+    assert.is(
+      result.cols,
+      engine.cols,
+      "cols remain unchanged when only preset changes",
+    );
+    assert.is(
+      engine.grid.currentObstaclePreset,
+      "midline",
+      "engine updates the current obstacle preset",
+    );
+    assert.ok(
+      engine.grid.obstacles.some((row) => row.some(Boolean)),
+      "applying a preset paints obstacles",
+    );
+
+    engine.grid.clearObstacles();
+    engine.grid.currentObstaclePreset = "none";
+
+    engine.setWorldGeometry({ randomizeObstacles: true });
+
+    assert.notEqual(
+      engine.grid.currentObstaclePreset,
+      "none",
+      "randomization selects a preset",
+    );
+    assert.ok(
+      engine.grid.obstacles.some((row) => row.some(Boolean)),
+      "randomized preset repaints obstacles",
+    );
+  } finally {
+    restore();
+  }
+});
+
 test("pausing stops the animation loop until work is requested", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
