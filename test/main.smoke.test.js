@@ -132,6 +132,25 @@ test("headless canvas sanitizes invalid dimension overrides", async () => {
   simulation.destroy();
 });
 
+test("createSimulation preserves provided headless canvas dimensions", async () => {
+  const [{ createSimulation }, { createHeadlessCanvas }] = await Promise.all([
+    simulationModulePromise,
+    import("../src/engine/environment.js"),
+  ]);
+
+  const customCanvas = createHeadlessCanvas({ width: 320, height: 200 });
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    canvas: customCanvas,
+  });
+
+  assert.is(simulation.engine.canvas.width, 320);
+  assert.is(simulation.engine.canvas.height, 200);
+
+  simulation.destroy();
+});
+
 test("createSimulation respects low diversity multiplier overrides in headless mode", async () => {
   const { createSimulation } = await simulationModulePromise;
   const configuredMultiplier = 0.24;
