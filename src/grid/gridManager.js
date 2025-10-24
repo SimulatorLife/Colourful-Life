@@ -5764,7 +5764,9 @@ export default class GridManager {
               if (offspring) {
                 offspring.row = spawn.r;
                 offspring.col = spawn.c;
-                this.setCell(spawn.r, spawn.c, offspring);
+                this.setCell(spawn.r, spawn.c, offspring, {
+                  absorbTileEnergy: true,
+                });
                 const parentColors = [];
 
                 if (typeof cell?.dna?.toColor === "function") {

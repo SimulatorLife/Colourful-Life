@@ -122,3 +122,139 @@ test("spawnCell reroutes leftover tile energy to open neighbors", async () => {
     "leftover tile energy should spill into adjacent empty cells",
   );
 });
+
+test("reproduction immediately clears spawn tile energy", async () => {
+  const [
+    { default: GridManager },
+    { default: Cell },
+    { default: DNA },
+    { MAX_TILE_ENERGY },
+  ] = await Promise.all([
+    import("../src/grid/gridManager.js"),
+    import("../src/cell.js"),
+    import("../src/genome.js"),
+    import("../src/config.js"),
+  ]);
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  let birth = null;
+  const stats = {
+    onBirth(offspring, details) {
+      birth = { offspring, details };
+    },
+    onDeath() {},
+    recordMateChoice() {},
+    recordReproductionBlocked() {},
+  };
+
+  const gm = new TestGridManager(3, 3, {
+    eventManager: { activeEvents: [] },
+    stats,
+  });
+
+  gm.densityGrid = Array.from({ length: gm.rows }, () =>
+    Array.from({ length: gm.cols }, () => 0),
+  );
+
+  const parentDNA = new DNA(0, 0, 0);
+  const mateDNA = new DNA(0, 0, 0);
+  const parent = new Cell(1, 1, parentDNA, MAX_TILE_ENERGY);
+  const mate = new Cell(1, 2, mateDNA, MAX_TILE_ENERGY);
+
+  for (const individual of [parent, mate]) {
+    individual.dna.reproductionThresholdFrac = () => 0;
+    individual.dna.parentalInvestmentFrac = () => 0.4;
+    individual.dna.starvationThresholdFrac = () => 0;
+  }
+
+  parent.computeReproductionProbability = () => 1;
+  parent.decideReproduction = () => ({ probability: 1 });
+
+  const mateEntry = {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 1,
+    diversity: 0,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  parent.selectMateWeighted = () => ({
+    chosen: mateEntry,
+    evaluated: [mateEntry],
+    mode: "preference",
+  });
+  parent.findBestMate = () => mateEntry;
+
+  gm.setCell(parent.row, parent.col, parent);
+  gm.setCell(mate.row, mate.col, mate);
+
+  const energizedTiles = new Map();
+
+  const recordEnergy = (row, col, energy) => {
+    const key = `${row},${col}`;
+
+    energizedTiles.set(key, energy);
+  };
+
+  for (let r = 0; r < gm.rows; r++) {
+    for (let c = 0; c < gm.cols; c++) {
+      if (gm.getCell(r, c)) continue;
+
+      const hasParentNeighbor =
+        Math.abs(r - parent.row) <= 1 && Math.abs(c - parent.col) <= 1;
+      const hasMateNeighbor =
+        Math.abs(r - mate.row) <= 1 && Math.abs(c - mate.col) <= 1;
+
+      if (hasParentNeighbor || hasMateNeighbor) {
+        gm.energyGrid[r][c] = gm.maxTileEnergy / 2;
+        recordEnergy(r, c, gm.energyGrid[r][c]);
+      }
+    }
+  }
+
+  const reproductionArgs = {
+    mates: [mateEntry],
+    society: [],
+  };
+  const context = {
+    stats,
+    densityGrid: gm.densityGrid,
+    densityEffectMultiplier: 1,
+    mutationMultiplier: 1,
+  };
+
+  const reproduced = gm.handleReproduction(
+    parent.row,
+    parent.col,
+    parent,
+    reproductionArgs,
+    context,
+  );
+
+  assert.is(reproduced, true, "reproduction attempt should succeed");
+  assert.ok(birth, "stats should receive birth details");
+
+  const spawnRow = birth.details.row;
+  const spawnCol = birth.details.col;
+  const spawnKey = `${spawnRow},${spawnCol}`;
+  const preSpawnEnergy = energizedTiles.get(spawnKey);
+
+  assert.ok(
+    preSpawnEnergy > 0,
+    "spawn tile should have stored energy before reproduction",
+  );
+  assert.is(
+    gm.energyGrid[spawnRow][spawnCol],
+    0,
+    "spawn tile energy should be cleared immediately",
+  );
+  assert.ok(
+    birth.offspring.energy > 0,
+    "offspring should retain invested energy after absorbing the tile",
+  );
+});
