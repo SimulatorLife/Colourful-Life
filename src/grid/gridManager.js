@@ -2854,6 +2854,16 @@ export default class GridManager {
           }
         }
       }
+
+      if (usingSegmentedEvents && eventsByRow) {
+        for (let r = 0; r < eventsByRow.length; r++) {
+          const rowEvents = eventsByRow[r];
+
+          if (Array.isArray(rowEvents) && rowEvents.length > 1) {
+            rowEvents.sort((a, b) => a.startCol - b.startCol);
+          }
+        }
+      }
     }
 
     const totalTiles = rows * cols;
@@ -2864,21 +2874,24 @@ export default class GridManager {
       dirtyCount < totalTiles &&
       dirtyCount / totalTiles <= ENERGY_SPARSE_SCAN_RATIO;
 
-    const processTile = (r, c, context, eventsForTile) => {
-      const {
-        energyRow,
-        nextRow,
-        deltaRow,
-        densityRow,
-        obstacleRow,
-        gridRow,
-        upEnergyRow,
-        downEnergyRow,
-        upObstacleRow,
-        downObstacleRow,
-        occupantRegenRow,
-      } = context;
-
+    const processTileBase = (
+      r,
+      c,
+      energyRow,
+      nextRow,
+      deltaRow,
+      densityRow,
+      obstacleRow,
+      gridRow,
+      upEnergyRow,
+      downEnergyRow,
+      upObstacleRow,
+      downObstacleRow,
+      occupantRegenRow,
+      regenMultiplier = 1,
+      regenAdd = 0,
+      drain = 0,
+    ) => {
       if (!nextRow || !energyRow) return;
 
       if (obstacleRow?.[c]) {
@@ -2910,28 +2923,6 @@ export default class GridManager {
         regen = 0;
       } else {
         regen *= regenPenalty;
-      }
-
-      let regenMultiplier = 1;
-      let regenAdd = 0;
-      let drain = 0;
-
-      if (eventOptions && eventsForTile && eventsForTile.length > 0) {
-        const previousEvents = eventOptions.events;
-
-        eventOptions.row = r;
-        eventOptions.col = c;
-        eventOptions.events = eventsForTile;
-
-        const modifiers = accumulateEventModifiers(eventOptions);
-
-        if (modifiers) {
-          regenMultiplier = modifiers.regenMultiplier;
-          regenAdd = modifiers.regenAdd;
-          drain = modifiers.drainAdd;
-        }
-
-        eventOptions.events = previousEvents;
       }
 
       regen = regen * regenMultiplier + regenAdd;
@@ -3000,6 +2991,130 @@ export default class GridManager {
       }
     };
 
+    const processTileWithEvents = hasEvents
+      ? (
+          r,
+          c,
+          energyRow,
+          nextRow,
+          deltaRow,
+          densityRow,
+          obstacleRow,
+          gridRow,
+          upEnergyRow,
+          downEnergyRow,
+          upObstacleRow,
+          downObstacleRow,
+          occupantRegenRow,
+          eventsForTile,
+        ) => {
+          let regenMultiplier = 1;
+          let regenAdd = 0;
+          let drain = 0;
+
+          if (eventOptions && eventsForTile && eventsForTile.length > 0) {
+            const previousEvents = eventOptions.events;
+
+            eventOptions.row = r;
+            eventOptions.col = c;
+            eventOptions.events = eventsForTile;
+
+            const modifiers = accumulateEventModifiers(eventOptions);
+
+            if (modifiers) {
+              regenMultiplier = modifiers.regenMultiplier;
+              regenAdd = modifiers.regenAdd;
+              drain = modifiers.drainAdd;
+            }
+
+            eventOptions.events = previousEvents;
+          }
+
+          processTileBase(
+            r,
+            c,
+            energyRow,
+            nextRow,
+            deltaRow,
+            densityRow,
+            obstacleRow,
+            gridRow,
+            upEnergyRow,
+            downEnergyRow,
+            upObstacleRow,
+            downObstacleRow,
+            occupantRegenRow,
+            regenMultiplier,
+            regenAdd,
+            drain,
+          );
+        }
+      : null;
+
+    const processTile = hasEvents
+      ? (
+          r,
+          c,
+          energyRow,
+          nextRow,
+          deltaRow,
+          densityRow,
+          obstacleRow,
+          gridRow,
+          upEnergyRow,
+          downEnergyRow,
+          upObstacleRow,
+          downObstacleRow,
+          occupantRegenRow,
+          eventsForTile,
+        ) =>
+          processTileWithEvents(
+            r,
+            c,
+            energyRow,
+            nextRow,
+            deltaRow,
+            densityRow,
+            obstacleRow,
+            gridRow,
+            upEnergyRow,
+            downEnergyRow,
+            upObstacleRow,
+            downObstacleRow,
+            occupantRegenRow,
+            eventsForTile,
+          )
+      : (
+          r,
+          c,
+          energyRow,
+          nextRow,
+          deltaRow,
+          densityRow,
+          obstacleRow,
+          gridRow,
+          upEnergyRow,
+          downEnergyRow,
+          upObstacleRow,
+          downObstacleRow,
+          occupantRegenRow,
+        ) =>
+          processTileBase(
+            r,
+            c,
+            energyRow,
+            nextRow,
+            deltaRow,
+            densityRow,
+            obstacleRow,
+            gridRow,
+            upEnergyRow,
+            downEnergyRow,
+            upObstacleRow,
+            downObstacleRow,
+            occupantRegenRow,
+          );
+
     let processedTileCount = 0;
     let strategy = "full-scan";
 
@@ -3060,32 +3175,20 @@ export default class GridManager {
 
           if (occupantRegenRow) occupantRegenRow.fill(0);
 
-          const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
-
-          if (usingSegmentedEvents && rowEvents.length > 1) {
-            rowEvents.sort((a, b) => a.startCol - b.startCol);
-          }
+          const rowEvents = hasEvents
+            ? eventsByRow
+              ? (eventsByRow[r] ?? EMPTY_EVENT_LIST)
+              : evs
+            : EMPTY_EVENT_LIST;
+          const rowHasEvents = hasEvents && rowEvents.length > 0;
+          const useSegmentedForRow = rowHasEvents && usingSegmentedEvents;
 
           columns.sort((a, b) => a - b);
 
           const columnEventsScratch =
-            eventOptions && usingSegmentedEvents && rowEvents.length > 0
-              ? this.#getColumnEventScratch()
-              : null;
-
-          const context = {
-            energyRow,
-            nextRow,
-            deltaRow,
-            densityRow,
-            obstacleRow,
-            gridRow,
-            upEnergyRow,
-            downEnergyRow,
-            upObstacleRow,
-            downObstacleRow,
-            occupantRegenRow,
-          };
+            useSegmentedForRow && eventOptions ? this.#getColumnEventScratch() : null;
+          const lastEventsCache = [];
+          let lastModifiers = null;
 
           for (let j = 0; j < columns.length; j++) {
             const c = columns[j];
@@ -3094,8 +3197,8 @@ export default class GridManager {
 
             let eventsForTile = null;
 
-            if (eventOptions && rowEvents.length > 0) {
-              if (usingSegmentedEvents) {
+            if (rowHasEvents) {
+              if (useSegmentedForRow) {
                 if (columnEventsScratch) {
                   columnEventsScratch.length = 0;
 
@@ -3117,7 +3220,74 @@ export default class GridManager {
               }
             }
 
-            processTile(r, c, context, eventsForTile);
+            let regenMultiplier = 1;
+            let regenAdd = 0;
+            let drain = 0;
+
+            if (eventsForTile && eventOptions) {
+              let reuse = false;
+
+              if (lastModifiers && lastEventsCache.length === eventsForTile.length) {
+                reuse = true;
+
+                for (let k = 0; k < eventsForTile.length; k++) {
+                  if (lastEventsCache[k] !== eventsForTile[k]) {
+                    reuse = false;
+
+                    break;
+                  }
+                }
+              }
+
+              if (reuse) {
+                ({ regenMultiplier, regenAdd, drain } = lastModifiers);
+              } else {
+                const previousEvents = eventOptions.events;
+
+                eventOptions.row = r;
+                eventOptions.col = c;
+                eventOptions.events = eventsForTile;
+
+                const modifiers = accumulateEventModifiers(eventOptions);
+
+                if (modifiers) {
+                  regenMultiplier = modifiers.regenMultiplier;
+                  regenAdd = modifiers.regenAdd;
+                  drain = modifiers.drainAdd;
+                }
+
+                eventOptions.events = previousEvents;
+                lastEventsCache.length = 0;
+
+                for (let k = 0; k < (eventsForTile?.length ?? 0); k++) {
+                  lastEventsCache.push(eventsForTile[k]);
+                }
+
+                lastModifiers = { regenMultiplier, regenAdd, drain };
+              }
+            } else {
+              lastModifiers = null;
+              lastEventsCache.length = 0;
+            }
+
+            processTileBase(
+              r,
+              c,
+              energyRow,
+              nextRow,
+              deltaRow,
+              densityRow,
+              obstacleRow,
+              gridRow,
+              upEnergyRow,
+              downEnergyRow,
+              upObstacleRow,
+              downObstacleRow,
+              occupantRegenRow,
+              regenMultiplier,
+              regenAdd,
+              drain,
+            );
             processedTileCount += 1;
             energyRow[c] = nextRow[c];
           }
@@ -3143,33 +3313,21 @@ export default class GridManager {
 
         if (occupantRegenRow) occupantRegenRow.fill(0);
 
-        const rowEvents = eventsByRow ? (eventsByRow[r] ?? EMPTY_EVENT_LIST) : evs;
-        const rowHasEvents = Boolean(eventOptions && rowEvents.length > 0);
+        const rowEvents = hasEvents
+          ? eventsByRow
+            ? (eventsByRow[r] ?? EMPTY_EVENT_LIST)
+            : evs
+          : EMPTY_EVENT_LIST;
+        const rowHasEvents = hasEvents && rowEvents.length > 0;
 
         if (rowHasEvents && usingSegmentedEvents) {
           const segments = rowEvents;
 
-          if (segments.length > 1) {
-            segments.sort((a, b) => a.startCol - b.startCol);
-          }
-
           const activeSegments = this.#getSegmentWindowScratch();
           const columnEvents = this.#getColumnEventScratch();
+          const lastEventsCache = [];
+          let lastModifiers = null;
           let nextSegmentIndex = 0;
-
-          const context = {
-            energyRow,
-            nextRow,
-            deltaRow,
-            densityRow,
-            obstacleRow,
-            gridRow,
-            upEnergyRow,
-            downEnergyRow,
-            upObstacleRow,
-            downObstacleRow,
-            occupantRegenRow,
-          };
 
           for (let c = 0; c < cols; c++) {
             const isObstacle = Boolean(obstacleRow?.[c]);
@@ -3203,31 +3361,99 @@ export default class GridManager {
 
             const eventsForTile = columnEvents.length > 0 ? columnEvents : null;
 
-            processTile(r, c, context, eventsForTile);
+            let regenMultiplier = 1;
+            let regenAdd = 0;
+            let drain = 0;
+
+            if (eventsForTile && eventOptions) {
+              let reuse = false;
+
+              if (lastModifiers && lastEventsCache.length === eventsForTile.length) {
+                reuse = true;
+
+                for (let i = 0; i < eventsForTile.length; i++) {
+                  if (lastEventsCache[i] !== eventsForTile[i]) {
+                    reuse = false;
+
+                    break;
+                  }
+                }
+              }
+
+              if (reuse) {
+                ({ regenMultiplier, regenAdd, drain } = lastModifiers);
+              } else {
+                const previousEvents = eventOptions.events;
+
+                eventOptions.row = r;
+                eventOptions.col = c;
+                eventOptions.events = eventsForTile;
+
+                const modifiers = accumulateEventModifiers(eventOptions);
+
+                if (modifiers) {
+                  regenMultiplier = modifiers.regenMultiplier;
+                  regenAdd = modifiers.regenAdd;
+                  drain = modifiers.drainAdd;
+                }
+
+                eventOptions.events = previousEvents;
+                lastEventsCache.length = 0;
+
+                for (let i = 0; i < (eventsForTile?.length ?? 0); i++) {
+                  lastEventsCache.push(eventsForTile[i]);
+                }
+
+                lastModifiers = { regenMultiplier, regenAdd, drain };
+              }
+            } else {
+              lastModifiers = null;
+              lastEventsCache.length = 0;
+            }
+
+            processTileBase(
+              r,
+              c,
+              energyRow,
+              nextRow,
+              deltaRow,
+              densityRow,
+              obstacleRow,
+              gridRow,
+              upEnergyRow,
+              downEnergyRow,
+              upObstacleRow,
+              downObstacleRow,
+              occupantRegenRow,
+              regenMultiplier,
+              regenAdd,
+              drain,
+            );
             processedTileCount += 1;
           }
 
           continue;
         }
 
-        const context = {
-          energyRow,
-          nextRow,
-          deltaRow,
-          densityRow,
-          obstacleRow,
-          gridRow,
-          upEnergyRow,
-          downEnergyRow,
-          upObstacleRow,
-          downObstacleRow,
-          occupantRegenRow,
-        };
-
         const eventsForRow = rowHasEvents ? rowEvents : null;
 
         for (let c = 0; c < cols; c++) {
-          processTile(r, c, context, eventsForRow);
+          processTile(
+            r,
+            c,
+            energyRow,
+            nextRow,
+            deltaRow,
+            densityRow,
+            obstacleRow,
+            gridRow,
+            upEnergyRow,
+            downEnergyRow,
+            upObstacleRow,
+            downObstacleRow,
+            occupantRegenRow,
+            eventsForRow,
+          );
           processedTileCount += 1;
         }
       }
