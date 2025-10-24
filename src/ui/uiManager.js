@@ -3891,6 +3891,9 @@ export default class UIManager {
     const changed = this.autoPauseOnBlur !== nextValue;
 
     this.autoPauseOnBlur = nextValue;
+    if (!this.autoPauseOnBlur && this.autoPausePending) {
+      this.autoPausePending = false;
+    }
     if (this.autoPauseCheckbox) {
       this.autoPauseCheckbox.checked = this.autoPauseOnBlur;
     }
