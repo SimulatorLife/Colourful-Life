@@ -493,28 +493,34 @@ export default class Stats {
       }
     }
 
+    const coerceFinite = (candidate) => {
+      const numeric = toFiniteOrNull(candidate);
+
+      return numeric != null ? numeric : null;
+    };
+
     for (const [metric, descriptor] of Object.entries(summary)) {
       if (!metric) continue;
 
       let value = null;
       let accumulate = true;
       let sampleCount = null;
-
-      if (
+      const isObjectDescriptor =
         descriptor != null &&
         typeof descriptor === "object" &&
-        !Array.isArray(descriptor)
-      ) {
-        if (descriptor.value != null) {
-          const numericValue = Number(descriptor.value);
+        !Array.isArray(descriptor);
 
-          if (Number.isFinite(numericValue)) {
+      if (isObjectDescriptor) {
+        if (descriptor.value != null) {
+          const numericValue = coerceFinite(descriptor.value);
+
+          if (numericValue != null) {
             value = numericValue;
           }
         } else {
-          const numericValue = Number(descriptor);
+          const numericValue = coerceFinite(descriptor);
 
-          if (Number.isFinite(numericValue)) {
+          if (numericValue != null) {
             value = numericValue;
           }
         }
@@ -524,22 +530,22 @@ export default class Stats {
         }
 
         if (descriptor.count != null) {
-          const numericCount = Number(descriptor.count);
+          const numericCount = coerceFinite(descriptor.count);
 
-          if (Number.isFinite(numericCount)) {
+          if (numericCount != null) {
             sampleCount = numericCount;
           }
         } else if (descriptor.samples != null) {
-          const numericSamples = Number(descriptor.samples);
+          const numericSamples = coerceFinite(descriptor.samples);
 
-          if (Number.isFinite(numericSamples)) {
+          if (numericSamples != null) {
             sampleCount = numericSamples;
           }
         }
       } else {
-        const numericValue = Number(descriptor);
+        const numericValue = coerceFinite(descriptor);
 
-        if (Number.isFinite(numericValue)) {
+        if (numericValue != null) {
           value = numericValue;
         }
       }
