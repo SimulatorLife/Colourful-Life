@@ -1,6 +1,7 @@
 import UIManager from "./uiManager.js";
 import { createHeadlessUiManager } from "./headlessUiManager.js";
-import { toPlainObject, invokeWithErrorBoundary } from "../utils.js";
+import { toPlainObject } from "../utils.js";
+import { invokeWithErrorBoundary } from "../utils/error.js";
 
 function normalizeLayoutOptions({ engine, uiOptions = {}, sanitizedDefaults = {} }) {
   const normalizedUi = toPlainObject(uiOptions);

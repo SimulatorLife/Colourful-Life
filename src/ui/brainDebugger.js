@@ -1,4 +1,4 @@
-import { warnOnce, invokeWithErrorBoundary } from "../utils.js";
+import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
 const DEBUG_PROPERTY = "__colourfulLifeBrains";
 const state = {

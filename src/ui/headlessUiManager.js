@@ -1,5 +1,6 @@
 import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
-import { sanitizeNumber, invokeWithErrorBoundary, coerceBoolean } from "../utils.js";
+import { sanitizeNumber, coerceBoolean } from "../utils.js";
+import { invokeWithErrorBoundary } from "../utils/error.js";
 
 /**
  * Creates a lightweight {@link UIManager}-compatible adapter for environments

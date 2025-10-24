@@ -1,4 +1,5 @@
-import { clamp, warnOnce } from "../utils.js";
+import { clamp } from "../utils.js";
+import { warnOnce } from "../utils/error.js";
 import { computeBehaviorComplementarity } from "./behaviorComplementarity.js";
 
 function resolveDrive(

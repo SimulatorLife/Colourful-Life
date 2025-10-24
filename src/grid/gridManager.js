@@ -3,9 +3,9 @@ import {
   clamp,
   lerp,
   createRankedBuffer,
-  warnOnce,
   sanitizePositiveInteger,
 } from "../utils.js";
+import { warnOnce } from "../utils/error.js";
 import DNA from "../genome.js";
 import Cell from "../cell.js";
 import { computeFitness } from "../fitness.mjs";
