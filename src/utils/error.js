@@ -1,6 +1,15 @@
 const warnedMessages = new Set();
 const reportedErrors = new Set();
 
+/**
+ * Safely proxies console logging so optional error objects can be appended
+ * without triggering runtime failures when the console is unavailable or
+ * missing the requested method.
+ *
+ * @param {keyof Console | string} method - Console method name such as "warn" or "error".
+ * @param {string} message - Human-friendly diagnostic message.
+ * @param {unknown} [error] - Optional error-like payload forwarded for context.
+ */
 function logWithOptionalError(method, message, error) {
   const consoleRef = globalThis.console;
   const logger = consoleRef?.[method];
@@ -10,6 +19,16 @@ function logWithOptionalError(method, message, error) {
   logger.call(consoleRef, message, ...(error ? [error] : []));
 }
 
+/**
+ * Emits an error-level log, optionally deduplicating repeat reports that share
+ * the same message and error signature. Callers can use `once: true` to prevent
+ * spamming the console when the same failure reoccurs across frames.
+ *
+ * @param {string} message - Readable summary of the failure.
+ * @param {unknown} [error] - Optional error instance for stack/context.
+ * @param {{ once?: boolean }} [options] - Behavioural flags.
+ * @returns {void}
+ */
 export function reportError(message, error, options = {}) {
   if (typeof message !== "string" || message.length === 0) return;
 
@@ -25,6 +44,15 @@ export function reportError(message, error, options = {}) {
   logWithOptionalError("error", message, error);
 }
 
+/**
+ * Emits a warning-level log the first time a distinct message/error pair is
+ * observed. Useful for cautionary telemetry where repeated warnings would flood
+ * the console without providing new information.
+ *
+ * @param {string} message - Description of the warning condition.
+ * @param {unknown} [error] - Optional contextual error payload.
+ * @returns {void}
+ */
 export function warnOnce(message, error) {
   if (typeof message !== "string" || message.length === 0) return;
 
@@ -36,6 +64,27 @@ export function warnOnce(message, error) {
   logWithOptionalError("warn", message, error);
 }
 
+/**
+ * Invokes a callback while trapping synchronous errors so the caller's control
+ * flow can continue. A reporter hook receives failures, and `once` dedupes
+ * repeated emissions using the same logic as `reportError`.
+ *
+ * @template TResult
+ * @param {(...args: any[]) => TResult} callback - Function executed inside the boundary.
+ * @param {any[]} [args=[]] - Arguments forwarded to the callback.
+ * @param {Object} [options]
+ * @param {string|((...args: any[]) => string)} [options.message] - Optional
+ *   message or generator invoked when an error surfaces.
+ * @param {boolean} [options.once=false] - Whether identical failures are
+ *   reported at most once.
+ * @param {any} [options.thisArg] - Value applied as `this` during invocation.
+ * @param {(message: string, error: unknown, opts?: { once?: boolean }) => void}
+ *   [options.reporter=reportError] - Custom error reporter.
+ * @param {(error: unknown) => void} [options.onError] - Handler executed when a
+ *   failure occurs.
+ * @returns {TResult|undefined} Callback result when successful; `undefined`
+ *   after handling an error.
+ */
 export function invokeWithErrorBoundary(callback, args = [], options = {}) {
   if (typeof callback !== "function") return undefined;
 
