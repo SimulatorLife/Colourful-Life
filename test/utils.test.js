@@ -41,7 +41,8 @@ test("numeric helpers clamp and interpolate values deterministically", () => {
   assert.is(clamp01(Number.POSITIVE_INFINITY), 0);
 });
 
-test("cloneTracePayload performs deep copies of sensors and nodes", () => {
+test("cloneTracePayload delegates to structuredClone when available", () => {
+  const originalStructuredClone = globalThis.structuredClone;
   const trace = {
     sensors: [
       { id: "energy", value: 0.5 },
@@ -58,19 +59,78 @@ test("cloneTracePayload performs deep copies of sensors and nodes", () => {
       },
     ],
   };
+  let calls = 0;
 
-  const clone = cloneTracePayload(trace);
+  try {
+    globalThis.structuredClone = (value) => {
+      calls += 1;
 
-  assert.ok(clone !== trace);
-  assert.ok(clone.sensors[0] !== trace.sensors[0]);
-  assert.ok(clone.nodes[0] !== trace.nodes[0]);
-  assert.ok(clone.nodes[0].inputs[0] !== trace.nodes[0].inputs[0]);
+      if (typeof originalStructuredClone === "function") {
+        return originalStructuredClone(value);
+      }
 
-  clone.sensors[0].value = 1;
-  clone.nodes[0].inputs[0].weight = 0.9;
+      return JSON.parse(JSON.stringify(value));
+    };
 
-  assert.is(trace.sensors[0].value, 0.5);
-  assert.is(trace.nodes[0].inputs[0].weight, 0.2);
+    const clone = cloneTracePayload(trace);
+
+    assert.is(calls, 1, "structuredClone should be used when available");
+    assert.ok(clone !== trace);
+    assert.ok(clone.sensors[0] !== trace.sensors[0]);
+    assert.ok(clone.nodes[0] !== trace.nodes[0]);
+    assert.ok(clone.nodes[0].inputs[0] !== trace.nodes[0].inputs[0]);
+
+    clone.sensors[0].value = 1;
+    clone.nodes[0].inputs[0].weight = 0.9;
+
+    assert.is(trace.sensors[0].value, 0.5);
+    assert.is(trace.nodes[0].inputs[0].weight, 0.2);
+  } finally {
+    globalThis.structuredClone = originalStructuredClone;
+  }
+});
+
+test("cloneTracePayload falls back when structuredClone is unavailable or fails", () => {
+  const originalStructuredClone = globalThis.structuredClone;
+  const trace = {
+    sensors: [{ id: "energy", value: 0.5 }],
+    nodes: [
+      {
+        id: "hidden-1",
+        bias: 0.1,
+        inputs: [{ id: "input-1", weight: 0.2 }],
+      },
+    ],
+  };
+
+  try {
+    globalThis.structuredClone = undefined;
+
+    const cloneWithoutStructuredClone = cloneTracePayload(trace);
+
+    assert.ok(cloneWithoutStructuredClone !== trace);
+    assert.ok(
+      cloneWithoutStructuredClone.sensors[0] !== trace.sensors[0],
+      "fallback clone should deep copy sensor entries",
+    );
+
+    globalThis.structuredClone = () => {
+      throw new Error("structuredClone failure");
+    };
+
+    const cloneAfterFailure = cloneTracePayload({
+      sensors: null,
+      nodes: [{ id: "node", inputs: null }],
+    });
+
+    assert.equal(cloneAfterFailure, {
+      sensors: [],
+      nodes: [{ id: "node", inputs: [] }],
+    });
+  } finally {
+    globalThis.structuredClone = originalStructuredClone;
+  }
+
   assert.is(cloneTracePayload(null), null);
 });
 
