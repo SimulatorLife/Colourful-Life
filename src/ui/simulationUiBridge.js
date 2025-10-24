@@ -33,6 +33,25 @@ function createHeadlessOptions({
     ...normalizedUi,
     selectionManager: engine?.selectionManager ?? normalizedUi.selectionManager ?? null,
   };
+
+  if (typeof mergedOptions.togglePause !== "function") {
+    mergedOptions.togglePause =
+      typeof simulationCallbacks.togglePause === "function"
+        ? simulationCallbacks.togglePause
+        : undefined;
+  }
+  if (typeof mergedOptions.pause !== "function") {
+    mergedOptions.pause =
+      typeof simulationCallbacks.pause === "function"
+        ? simulationCallbacks.pause
+        : undefined;
+  }
+  if (typeof mergedOptions.resume !== "function") {
+    mergedOptions.resume =
+      typeof simulationCallbacks.resume === "function"
+        ? simulationCallbacks.resume
+        : undefined;
+  }
   const userOnSettingChange = mergedOptions.onSettingChange;
   const simulationOnSettingChange = simulationCallbacks.onSettingChange;
 
@@ -231,7 +250,7 @@ export function bindSimulationToUi({
     }
   }
 
-  const unsubscribers = headless ? [] : subscribeEngineToUi(engine, uiManager);
+  const unsubscribers = subscribeEngineToUi(engine, uiManager);
 
   return {
     uiManager,

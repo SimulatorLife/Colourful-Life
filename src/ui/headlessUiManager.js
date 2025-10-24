@@ -42,6 +42,8 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @returns {{
  *   isPaused: () => boolean,
  *   setPaused: (value: boolean) => void,
+ *   setPauseState: (value: boolean) => void,
+ *   togglePause: () => boolean,
  *   getUpdatesPerSecond: () => number,
  *   setUpdatesPerSecond: (value: number) => void,
  *   getEventFrequencyMultiplier: () => number,
@@ -71,7 +73,14 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * }} Headless UI facade that keeps simulation code agnostic to environment.
  */
 export function createHeadlessUiManager(options = {}) {
-  const { selectionManager, onSettingChange, ...overrides } = options || {};
+  const {
+    selectionManager,
+    onSettingChange,
+    pause: pauseControl,
+    resume: resumeControl,
+    togglePause: toggleControl,
+    ...overrides
+  } = options || {};
   const defaults = resolveSimulationDefaults(overrides);
   const settings = { ...defaults };
 
@@ -84,6 +93,45 @@ export function createHeadlessUiManager(options = {}) {
     Number.isFinite(baseUpdatesCandidate) && baseUpdatesCandidate > 0
       ? baseUpdatesCandidate
       : SIMULATION_DEFAULTS.updatesPerSecond;
+
+  const callPause = () => {
+    if (typeof pauseControl === "function") {
+      const result = pauseControl();
+
+      return typeof result === "boolean" ? result : true;
+    }
+
+    if (typeof toggleControl === "function") {
+      const result = toggleControl();
+
+      return typeof result === "boolean" ? result : !settings.paused;
+    }
+
+    return true;
+  };
+
+  const callResume = () => {
+    if (typeof resumeControl === "function") {
+      const result = resumeControl();
+
+      return typeof result === "boolean" ? result : false;
+    }
+
+    if (typeof toggleControl === "function") {
+      const result = toggleControl();
+
+      return typeof result === "boolean" ? result : !settings.paused;
+    }
+
+    return false;
+  };
+
+  const applyPauseState = (nextPaused) => {
+    settings.paused = nextPaused;
+    if (!settings.paused && settings.autoPausePending) {
+      settings.autoPausePending = false;
+    }
+  };
 
   let lastSlowUiRender = Number.NEGATIVE_INFINITY;
   const updateIfFinite = (key, value, options = {}) => {
@@ -112,7 +160,34 @@ export function createHeadlessUiManager(options = {}) {
   return {
     isPaused: () => settings.paused,
     setPaused: (value) => {
-      settings.paused = Boolean(value);
+      const next = Boolean(value);
+
+      if (settings.paused === next) return;
+
+      const result = next ? callPause() : callResume();
+      const resolved = typeof result === "boolean" ? result : next;
+
+      applyPauseState(resolved);
+    },
+    setPauseState: (value) => {
+      const next = Boolean(value);
+
+      if (settings.paused === next) return;
+
+      applyPauseState(next);
+    },
+    togglePause: () => {
+      const result =
+        typeof toggleControl === "function"
+          ? toggleControl()
+          : settings.paused
+            ? callResume()
+            : callPause();
+      const resolved = typeof result === "boolean" ? result : !settings.paused;
+
+      applyPauseState(resolved);
+
+      return settings.paused;
     },
     getUpdatesPerSecond: () => settings.updatesPerSecond,
     setUpdatesPerSecond: (value) => {

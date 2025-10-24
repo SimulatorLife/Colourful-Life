@@ -222,6 +222,8 @@ export function createSimulation({
   const simulationCallbacks = {
     requestFrame: () => engine.requestFrame(),
     togglePause: () => engine.togglePause(),
+    pause: () => engine.pause(),
+    resume: () => engine.resume(),
     step: () => engine.step(),
     onSettingChange: (key, value) => engine.updateSetting(key, value),
     resetWorld: (options) => engine.resetWorld(options),
