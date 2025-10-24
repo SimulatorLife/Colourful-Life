@@ -4646,7 +4646,17 @@ export default class GridManager {
     const events = eventManager.activeEvents || [];
 
     for (const ev of events) {
-      cell.applyEventEffects(row, col, ev, eventStrengthMultiplier, this.maxTileEnergy);
+      cell.applyEventEffects(
+        row,
+        col,
+        ev,
+        eventStrengthMultiplier,
+        this.maxTileEnergy,
+        {
+          eventContext: this.eventContext,
+          effectCache: this.eventEffectCache,
+        },
+      );
     }
 
     this.consumeEnergy(cell, row, col, densityGrid, densityEffectMultiplier);
