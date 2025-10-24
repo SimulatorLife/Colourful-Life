@@ -166,6 +166,25 @@ export default class SelectionManager {
     );
   }
 
+  /**
+   * Validates whether proposed parents and offspring fall inside the currently
+   * active reproductive zones.
+   *
+   * Why it matters: reproduction outside curated zones should be rejected so
+   * the simulation honours scenario-specific mating constraints without relying
+   * on downstream grid checks.
+   *
+   * @param {{
+   *   parentA?: {row:number, col:number},
+   *   parentB?: {row:number, col:number},
+   *   spawn?: {row:number, col:number}
+   * }} [options]
+   * @returns {{allowed: true} | {
+   *   allowed: false,
+   *   role: "parentA" | "parentB" | "spawn",
+   *   reason: string
+   * }} When no zones are active the call always resolves to `{ allowed: true }`.
+   */
   validateReproductionArea({ parentA, parentB, spawn } = {}) {
     const zones = this.getActiveZones();
 
@@ -220,6 +239,23 @@ export default class SelectionManager {
     return names.join(", ");
   }
 
+  /**
+   * Resolves render metadata for each active zone, including cached geometry
+   * rectangles and bounds derived from the zone predicate.
+   *
+   * @returns {Array<{
+   *   zone: {
+   *     id?: string,
+   *     name?: string,
+   *     color?: string,
+   *     contains: (row:number, col:number) => boolean
+   *   },
+   *   geometry: {
+   *     rects: Array<{row:number, col:number, rowSpan:number, colSpan:number}>,
+   *     bounds: {startRow:number, endRow:number, startCol:number, endCol:number} | null
+   *   }
+   * }>} Empty array when no zones are active.
+   */
   getActiveZoneRenderData() {
     const zones = this.getActiveZones();
 
