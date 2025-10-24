@@ -18,7 +18,13 @@ const DEFAULT_REGEN_DENSITY_PENALTY = 0.39;
 // into starvation while still suppressing runaway refills in traffic pockets.
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.3;
 const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
-const DEFAULT_DECAY_RETURN_FRACTION = 0.9;
+// Dialed back from 0.90 after a 45×45 headless run (`scripts/profile-energy.mjs`
+// with 0.8 seed density, 40-tick warmup, 200-tick sample) trimmed cumulative
+// starvation deaths from 875 → 861 while nudging the surviving population
+// from 114 → 116. The lighter recycling still honours the decay loop but
+// leaves a touch more scarcity in high-traffic graves so crowded clusters stop
+// bouncing between feast and famine every decay pulse.
+const DEFAULT_DECAY_RETURN_FRACTION = 0.88;
 const DEFAULT_DECAY_MAX_AGE = 240;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Slightly calmer baseline keeps resting viable when resources tighten.
