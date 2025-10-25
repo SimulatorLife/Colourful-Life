@@ -118,7 +118,10 @@ affect runtime outcomes.
 - `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` scales how much surplus energy
   parents must stockpile beyond the higher offspring demand fraction before
   gestation begins, letting you tighten or relax reproduction scarcity in
-  headless runs without editing source.
+  headless runs without editing source. The default `1.12` emerged from a
+  dense 60×60 headless probe (`scripts/profile-energy.mjs` with `PERF_INCLUDE_SIM=1`)
+  where easing the buffer lifted survivor counts from roughly 218 → 225 after
+  120 ticks without collapsing scarcity pressure.
 - Non-finite or out-of-range values are ignored and fall back to the defaults
   resolved in [`src/config.js`](../src/config.js). The energy overlays pull the
   sanitized values so UI telemetry reflects the active configuration.
