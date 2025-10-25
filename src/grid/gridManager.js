@@ -157,6 +157,10 @@ export default class GridManager {
   #sparseDirtyColumnsScratch = null;
   #sparseDirtyRowsScratch = null;
   #densityPrefixScratch = null;
+  #densityRowTopScratch = null;
+  #densityRowBottomScratch = null;
+  #densityColLeftScratch = null;
+  #densityColRightScratch = null;
   #occupantRegenVersion = null;
   #occupantRegenRevision = 0;
   #imageDataCanvas = null;
@@ -559,6 +563,59 @@ export default class GridManager {
     }
 
     return this.#densityPrefixScratch;
+  }
+
+  #ensureDensityBounds(rowCount, colCount, radius = 0) {
+    const rows = Math.max(0, Math.floor(Number.isFinite(rowCount) ? rowCount : 0));
+    const cols = Math.max(0, Math.floor(Number.isFinite(colCount) ? colCount : 0));
+    const normalizedRadius = Math.max(
+      0,
+      Math.floor(Number.isFinite(radius) ? radius : 0),
+    );
+
+    if (!this.#densityRowTopScratch || this.#densityRowTopScratch.length !== rows) {
+      this.#densityRowTopScratch = new Uint32Array(rows);
+      this.#densityRowBottomScratch = new Uint32Array(rows);
+    }
+
+    if (!this.#densityColLeftScratch || this.#densityColLeftScratch.length !== cols) {
+      this.#densityColLeftScratch = new Uint32Array(cols);
+      this.#densityColRightScratch = new Uint32Array(cols);
+    }
+
+    const rowTop = this.#densityRowTopScratch;
+    const rowBottom = this.#densityRowBottomScratch;
+
+    for (let r = 0; r < rows; r++) {
+      let minRow = r - normalizedRadius;
+
+      if (minRow < 0) minRow = 0;
+
+      let maxRow = r + normalizedRadius + 1;
+
+      if (maxRow > rows) maxRow = rows;
+
+      rowTop[r] = minRow;
+      rowBottom[r] = maxRow;
+    }
+
+    const colLeft = this.#densityColLeftScratch;
+    const colRight = this.#densityColRightScratch;
+
+    for (let c = 0; c < cols; c++) {
+      let minCol = c - normalizedRadius;
+
+      if (minCol < 0) minCol = 0;
+
+      let maxCol = c + normalizedRadius + 1;
+
+      if (maxCol > cols) maxCol = cols;
+
+      colLeft[c] = minCol;
+      colRight[c] = maxCol;
+    }
+
+    return { rowTop, rowBottom, colLeft, colRight };
   }
 
   static #computePairDiversityThreshold({
@@ -4326,6 +4383,11 @@ export default class GridManager {
     }
 
     const activeRadius = this.densityRadius;
+    const { rowTop, rowBottom, colLeft, colRight } = this.#ensureDensityBounds(
+      rows,
+      cols,
+      activeRadius,
+    );
     const counts = this.densityCounts;
     const live = this.densityLiveGrid;
     const totals = this.densityTotals;
@@ -4335,22 +4397,20 @@ export default class GridManager {
       const liveRow = live ? live[r] : null;
       const totalsRow = totals ? totals[r] : null;
       const gridRow = this.grid[r];
-      const minRow = r - activeRadius < 0 ? 0 : r - activeRadius;
-      const maxRow = r + activeRadius >= rows ? rows - 1 : r + activeRadius;
-      const topIndex = minRow;
-      const bottomIndex = maxRow + 1;
+      const topIndex = rowTop[r];
+      const bottomIndex = rowBottom[r];
+      const prefixTopRow = prefix[topIndex];
+      const prefixBottomRow = prefix[bottomIndex];
 
       for (let c = 0; c < cols; c++) {
-        const minCol = c - activeRadius < 0 ? 0 : c - activeRadius;
-        const maxCol = c + activeRadius >= cols ? cols - 1 : c + activeRadius;
-        const leftIndex = minCol;
-        const rightIndex = maxCol + 1;
+        const leftIndex = colLeft[c];
+        const rightIndex = colRight[c];
 
         const regionSum =
-          prefix[bottomIndex][rightIndex] -
-          prefix[topIndex][rightIndex] -
-          prefix[bottomIndex][leftIndex] +
-          prefix[topIndex][leftIndex];
+          prefixBottomRow[rightIndex] -
+          prefixTopRow[rightIndex] -
+          prefixBottomRow[leftIndex] +
+          prefixTopRow[leftIndex];
 
         const occupied = gridRow?.[c] ? 1 : 0;
         const neighborCount = regionSum - occupied;
@@ -4479,6 +4539,11 @@ export default class GridManager {
     }
 
     const prefix = this.#ensureDensityPrefix(rows, cols);
+    const { rowTop, rowBottom, colLeft, colRight } = this.#ensureDensityBounds(
+      rows,
+      cols,
+      normalizedRadius,
+    );
 
     for (let r = 1; r <= rows; r++) {
       const prefixRow = prefix[r];
@@ -4504,21 +4569,19 @@ export default class GridManager {
       const outRow = out[r];
       const totalsRow = totals[r];
       const gridRow = this.grid[r];
-      const minRow = r - normalizedRadius < 0 ? 0 : r - normalizedRadius;
-      const maxRow = r + normalizedRadius >= rows ? rows - 1 : r + normalizedRadius;
-      const topIndex = minRow;
-      const bottomIndex = maxRow + 1;
+      const topIndex = rowTop[r];
+      const bottomIndex = rowBottom[r];
+      const prefixTopRow = prefix[topIndex];
+      const prefixBottomRow = prefix[bottomIndex];
 
       for (let c = 0; c < cols; c++) {
-        const minCol = c - normalizedRadius < 0 ? 0 : c - normalizedRadius;
-        const maxCol = c + normalizedRadius >= cols ? cols - 1 : c + normalizedRadius;
-        const leftIndex = minCol;
-        const rightIndex = maxCol + 1;
+        const leftIndex = colLeft[c];
+        const rightIndex = colRight[c];
         const regionSum =
-          prefix[bottomIndex][rightIndex] -
-          prefix[topIndex][rightIndex] -
-          prefix[bottomIndex][leftIndex] +
-          prefix[topIndex][leftIndex];
+          prefixBottomRow[rightIndex] -
+          prefixTopRow[rightIndex] -
+          prefixBottomRow[leftIndex] +
+          prefixTopRow[leftIndex];
         const occupied = gridRow?.[c] ? 1 : 0;
         const neighborCount = regionSum - occupied;
         const totalNeighbors = totalsRow?.[c] ?? 0;
