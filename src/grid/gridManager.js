@@ -3064,6 +3064,135 @@ export default class GridManager {
           result: eventModifierScratch,
         }
       : null;
+    const baseEventModifiers = { regenMultiplier: 1, regenAdd: 0, drain: 0 };
+    let segmentedEventContributions = null;
+    const segmentedModifiersScratch = { regenMultiplier: 1, regenAdd: 0, drain: 0 };
+
+    if (hasEvents && usingSegmentedEvents && eventOptions) {
+      segmentedEventContributions = new Map();
+      const previousRow = eventOptions.row;
+      const previousCol = eventOptions.col;
+      const previousEvents = eventOptions.events;
+      const singleEventList = [null];
+
+      for (let i = 0; i < evs.length; i++) {
+        const ev = evs[i];
+
+        if (!ev) continue;
+
+        singleEventList[0] = ev;
+        const area = ev.affectedArea;
+        const sampleRow = area
+          ? Math.min(rows - 1, Math.max(0, Math.floor(area.y ?? 0)))
+          : 0;
+        const sampleCol = area
+          ? Math.min(cols - 1, Math.max(0, Math.floor(area.x ?? 0)))
+          : 0;
+
+        eventOptions.row = sampleRow;
+        eventOptions.col = sampleCol;
+        eventOptions.events = singleEventList;
+
+        const modifiers = accumulateEventModifiers(eventOptions);
+
+        segmentedEventContributions.set(ev, {
+          regenMultiplier: modifiers?.regenMultiplier ?? 1,
+          regenAdd: modifiers?.regenAdd ?? 0,
+          drain: modifiers?.drainAdd ?? 0,
+        });
+      }
+
+      eventOptions.row = previousRow;
+      eventOptions.col = previousCol;
+      eventOptions.events = previousEvents;
+    }
+    let computeGeneralEventModifiers = null;
+
+    if (hasEvents && !segmentedEventContributions && eventOptions) {
+      const lastEventsCache = [];
+      const reusableModifiers = { regenMultiplier: 1, regenAdd: 0, drain: 0 };
+
+      computeGeneralEventModifiers = (eventsForTile, row, col) => {
+        if (!eventsForTile || eventsForTile.length === 0) {
+          lastEventsCache.length = 0;
+
+          return baseEventModifiers;
+        }
+
+        let reuse = lastEventsCache.length === eventsForTile.length;
+
+        if (reuse) {
+          for (let i = 0; i < eventsForTile.length; i++) {
+            if (lastEventsCache[i] !== eventsForTile[i]) {
+              reuse = false;
+
+              break;
+            }
+          }
+        }
+
+        if (!reuse) {
+          const previousRow = eventOptions.row;
+          const previousCol = eventOptions.col;
+          const previousEvents = eventOptions.events;
+
+          eventOptions.row = row;
+          eventOptions.col = col;
+          eventOptions.events = eventsForTile;
+
+          const modifiers = accumulateEventModifiers(eventOptions);
+
+          eventOptions.row = previousRow;
+          eventOptions.col = previousCol;
+          eventOptions.events = previousEvents;
+
+          reusableModifiers.regenMultiplier = modifiers?.regenMultiplier ?? 1;
+          reusableModifiers.regenAdd = modifiers?.regenAdd ?? 0;
+          reusableModifiers.drain = modifiers?.drainAdd ?? 0;
+
+          lastEventsCache.length = eventsForTile.length;
+
+          for (let i = 0; i < eventsForTile.length; i++) {
+            lastEventsCache[i] = eventsForTile[i];
+          }
+        }
+
+        return reusableModifiers;
+      };
+    }
+    const resolveModifiersForTile = (eventsForTile, row, col) => {
+      if (!eventsForTile || eventsForTile.length === 0) {
+        return baseEventModifiers;
+      }
+
+      if (segmentedEventContributions) {
+        let regenMultiplier = 1;
+        let regenAdd = 0;
+        let drain = 0;
+
+        for (let i = 0; i < eventsForTile.length; i++) {
+          const contribution = segmentedEventContributions.get(eventsForTile[i]);
+
+          if (!contribution) continue;
+
+          regenMultiplier *= contribution.regenMultiplier;
+          regenAdd += contribution.regenAdd;
+          drain += contribution.drain;
+        }
+
+        segmentedModifiersScratch.regenMultiplier = regenMultiplier;
+        segmentedModifiersScratch.regenAdd = regenAdd;
+        segmentedModifiersScratch.drain = drain;
+
+        return segmentedModifiersScratch;
+      }
+
+      if (computeGeneralEventModifiers) {
+        return computeGeneralEventModifiers(eventsForTile, row, col);
+      }
+
+      return baseEventModifiers;
+    };
     const profileEnabled = typeof this.stats?.recordEnergyStageTimings === "function";
     const now =
       profileEnabled && typeof this.energyTimerNow === "function"
@@ -3277,27 +3406,7 @@ export default class GridManager {
           occupantRegenVersionRow,
           eventsForTile,
         ) => {
-          let regenMultiplier = 1;
-          let regenAdd = 0;
-          let drain = 0;
-
-          if (eventOptions && eventsForTile && eventsForTile.length > 0) {
-            const previousEvents = eventOptions.events;
-
-            eventOptions.row = r;
-            eventOptions.col = c;
-            eventOptions.events = eventsForTile;
-
-            const modifiers = accumulateEventModifiers(eventOptions);
-
-            if (modifiers) {
-              regenMultiplier = modifiers.regenMultiplier;
-              regenAdd = modifiers.regenAdd;
-              drain = modifiers.drainAdd;
-            }
-
-            eventOptions.events = previousEvents;
-          }
+          const modifiers = resolveModifiersForTile(eventsForTile, r, c);
 
           processTileBase(
             r,
@@ -3314,9 +3423,9 @@ export default class GridManager {
             downObstacleRow,
             occupantRegenRow,
             occupantRegenVersionRow,
-            regenMultiplier,
-            regenAdd,
-            drain,
+            modifiers.regenMultiplier,
+            modifiers.regenAdd,
+            modifiers.drain,
           );
         }
       : null;
@@ -3496,8 +3605,6 @@ export default class GridManager {
                   return columnEventsScratch.length > 0 ? columnEventsScratch : null;
                 }
               : null;
-          const lastEventsCache = [];
-          let lastModifiers = null;
 
           for (let j = 0; j < columns.length; j++) {
             const c = columns[j];
@@ -3513,47 +3620,7 @@ export default class GridManager {
                 eventsForTile = rowEvents;
               }
             }
-
-            let regenMultiplier = 1;
-            let regenAdd = 0;
-            let drain = 0;
-
-            if (eventsForTile && eventOptions) {
-              const reuse =
-                Boolean(lastModifiers) &&
-                lastEventsCache.length === eventsForTile.length &&
-                eventsForTile.every((event, index) => lastEventsCache[index] === event);
-
-              if (reuse) {
-                ({ regenMultiplier, regenAdd, drain } = lastModifiers);
-              } else {
-                const previousEvents = eventOptions.events;
-
-                eventOptions.row = r;
-                eventOptions.col = c;
-                eventOptions.events = eventsForTile;
-
-                const modifiers = accumulateEventModifiers(eventOptions);
-
-                if (modifiers) {
-                  regenMultiplier = modifiers.regenMultiplier;
-                  regenAdd = modifiers.regenAdd;
-                  drain = modifiers.drainAdd;
-                }
-
-                eventOptions.events = previousEvents;
-                lastEventsCache.length = 0;
-
-                for (let k = 0; k < (eventsForTile?.length ?? 0); k++) {
-                  lastEventsCache.push(eventsForTile[k]);
-                }
-
-                lastModifiers = { regenMultiplier, regenAdd, drain };
-              }
-            } else {
-              lastModifiers = null;
-              lastEventsCache.length = 0;
-            }
+            const modifiers = resolveModifiersForTile(eventsForTile, r, c);
 
             processTileBase(
               r,
@@ -3570,9 +3637,9 @@ export default class GridManager {
               downObstacleRow,
               occupantRegenRow,
               occupantRegenVersionRow,
-              regenMultiplier,
-              regenAdd,
-              drain,
+              modifiers.regenMultiplier,
+              modifiers.regenAdd,
+              modifiers.drain,
             );
             processedTileCount += 1;
             energyRow[c] = nextRow[c];
@@ -3612,8 +3679,6 @@ export default class GridManager {
 
           const activeSegments = this.#getSegmentWindowScratch();
           const columnEvents = this.#getColumnEventScratch();
-          const lastEventsCache = [];
-          let lastModifiers = null;
           let nextSegmentIndex = 0;
 
           for (let c = 0; c < cols; c++) {
@@ -3647,56 +3712,7 @@ export default class GridManager {
             activeSegments.length = nextActiveCount;
 
             const eventsForTile = columnEvents.length > 0 ? columnEvents : null;
-
-            let regenMultiplier = 1;
-            let regenAdd = 0;
-            let drain = 0;
-
-            if (eventsForTile && eventOptions) {
-              let reuse = false;
-
-              if (lastModifiers && lastEventsCache.length === eventsForTile.length) {
-                reuse = true;
-
-                for (let i = 0; i < eventsForTile.length; i++) {
-                  if (lastEventsCache[i] !== eventsForTile[i]) {
-                    reuse = false;
-
-                    break;
-                  }
-                }
-              }
-
-              if (reuse) {
-                ({ regenMultiplier, regenAdd, drain } = lastModifiers);
-              } else {
-                const previousEvents = eventOptions.events;
-
-                eventOptions.row = r;
-                eventOptions.col = c;
-                eventOptions.events = eventsForTile;
-
-                const modifiers = accumulateEventModifiers(eventOptions);
-
-                if (modifiers) {
-                  regenMultiplier = modifiers.regenMultiplier;
-                  regenAdd = modifiers.regenAdd;
-                  drain = modifiers.drainAdd;
-                }
-
-                eventOptions.events = previousEvents;
-                lastEventsCache.length = 0;
-
-                for (let i = 0; i < (eventsForTile?.length ?? 0); i++) {
-                  lastEventsCache.push(eventsForTile[i]);
-                }
-
-                lastModifiers = { regenMultiplier, regenAdd, drain };
-              }
-            } else {
-              lastModifiers = null;
-              lastEventsCache.length = 0;
-            }
+            const modifiers = resolveModifiersForTile(eventsForTile, r, c);
 
             processTileBase(
               r,
@@ -3713,9 +3729,9 @@ export default class GridManager {
               downObstacleRow,
               occupantRegenRow,
               occupantRegenVersionRow,
-              regenMultiplier,
-              regenAdd,
-              drain,
+              modifiers.regenMultiplier,
+              modifiers.regenAdd,
+              modifiers.drain,
             );
             processedTileCount += 1;
           }
