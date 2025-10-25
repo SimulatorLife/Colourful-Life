@@ -180,6 +180,8 @@ export default class GridManager {
   #tickSimilarityCache = new WeakMap();
   #tickSimilarityVersion = -1;
   #populationCellsScratch = null;
+  #energyDeltaDirtyTiles = null;
+  #energyDeltaLastSparse = false;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -1606,6 +1608,8 @@ export default class GridManager {
     });
     this.energyNext = Array.from({ length: rows }, () => new Float64Array(cols));
     this.energyDeltaGrid = Array.from({ length: rows }, () => new Float64Array(cols));
+    this.#energyDeltaDirtyTiles = null;
+    this.#energyDeltaLastSparse = false;
     this.#ensureOccupantRegenBuffers(rows, cols);
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
@@ -2878,6 +2882,11 @@ export default class GridManager {
       { length: rowsInt },
       () => new Float64Array(colsInt),
     );
+    if (this.#energyDeltaDirtyTiles) {
+      this.#energyDeltaDirtyTiles.clear();
+      this.#energyDeltaDirtyTiles = null;
+    }
+    this.#energyDeltaLastSparse = false;
     this.#ensureOccupantRegenBuffers(rowsInt, colsInt);
     this.#initializeDecayBuffers(rowsInt, colsInt);
     this.obstacles = Array.from({ length: rowsInt }, () => Array(colsInt).fill(false));
@@ -3500,6 +3509,9 @@ export default class GridManager {
       dirtyCount / totalTiles <= ENERGY_SPARSE_SCAN_RATIO;
     const obstacleRowCounts = this.obstacleRowCounts;
 
+    let trackSparseDelta = false;
+    let deltaDirtyTiles = null;
+
     const processTileBase = (
       r,
       c,
@@ -3525,7 +3537,13 @@ export default class GridManager {
       if (isObstacle) {
         nextRow[c] = 0;
         energyRow[c] = 0;
-        if (hasDeltaRow) deltaRow[c] = 0;
+        if (hasDeltaRow) {
+          deltaRow[c] = 0;
+
+          if (trackSparseDelta && deltaDirtyTiles) {
+            deltaDirtyTiles.add(r * cols + c);
+          }
+        }
 
         return;
       }
@@ -3618,7 +3636,13 @@ export default class GridManager {
 
         nextRow[c] = 0;
         energyRow[c] = 0;
-        if (hasDeltaRow) deltaRow[c] = 0;
+        if (hasDeltaRow) {
+          deltaRow[c] = 0;
+
+          if (trackSparseDelta && deltaDirtyTiles) {
+            deltaDirtyTiles.add(r * cols + c);
+          }
+        }
 
         return;
       }
@@ -3636,8 +3660,50 @@ export default class GridManager {
         }
 
         deltaRow[c] = normalizedDelta;
+
+        if (trackSparseDelta && deltaDirtyTiles) {
+          deltaDirtyTiles.add(r * cols + c);
+        }
       }
     };
+
+    trackSparseDelta = Boolean(deltaGrid) && preferSparse;
+
+    if (trackSparseDelta) {
+      deltaDirtyTiles =
+        this.#energyDeltaDirtyTiles ?? (this.#energyDeltaDirtyTiles = new Set());
+
+      if (!this.#energyDeltaLastSparse) {
+        for (let r = 0; r < rows; r++) {
+          const deltaRow = deltaGrid[r];
+
+          if (deltaRow) deltaRow.fill(0);
+        }
+      } else if (deltaDirtyTiles.size > 0) {
+        for (const key of deltaDirtyTiles) {
+          if (!Number.isFinite(key)) continue;
+
+          const row = Math.floor(key / cols);
+          const col = key % cols;
+          const deltaRow = deltaGrid[row];
+
+          if (deltaRow && col >= 0 && col < deltaRow.length) {
+            deltaRow[col] = 0;
+          }
+        }
+      }
+
+      deltaDirtyTiles.clear();
+      this.#energyDeltaLastSparse = true;
+    } else {
+      deltaDirtyTiles = null;
+
+      if (this.#energyDeltaDirtyTiles) {
+        this.#energyDeltaDirtyTiles.clear();
+      }
+
+      this.#energyDeltaLastSparse = false;
+    }
 
     let processedTileCount = 0;
     let strategy = "full-scan";
@@ -3665,14 +3731,6 @@ export default class GridManager {
 
       if (sparseRows.length > 0) {
         strategy = "sparse-dirty";
-
-        if (deltaGrid) {
-          for (let r = 0; r < rows; r++) {
-            const deltaRow = deltaGrid[r];
-
-            if (deltaRow) deltaRow.fill(0);
-          }
-        }
 
         for (let i = 0; i < sparseRows.length; i++) {
           const r = sparseRows[i];
