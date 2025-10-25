@@ -2947,6 +2947,7 @@ export default class GridManager {
     const useDiffusion = diffusionRate !== 0;
     const maxTileEnergy = this.maxTileEnergy;
     const invMaxTileEnergy = maxTileEnergy > 0 ? 1 / maxTileEnergy : 1;
+    const positiveMaxTileEnergy = maxTileEnergy > 0 ? maxTileEnergy : 0;
     const normalizedDensityMultiplier = Number.isFinite(densityEffectMultiplier)
       ? densityEffectMultiplier
       : 1;
@@ -3052,20 +3053,23 @@ export default class GridManager {
     ) => {
       if (!nextRow || !energyRow) return;
 
-      if (obstacleRow?.[c]) {
+      const isObstacle = obstacleRow && obstacleRow[c];
+
+      if (isObstacle) {
         nextRow[c] = 0;
-        if (energyRow[c] !== 0) energyRow[c] = 0;
+        energyRow[c] = 0;
         if (deltaRow) deltaRow[c] = 0;
 
         return;
       }
 
-      const densityRowValue = densityRow ? densityRow[c] : null;
-      const baseDensity =
-        densityRowValue == null
-          ? this.localDensity(r, c, GridManager.DENSITY_RADIUS)
-          : densityRowValue;
-      let effectiveDensity = (baseDensity ?? 0) * normalizedDensityMultiplier;
+      let density = densityRow ? densityRow[c] : undefined;
+
+      if (density == null) {
+        density = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
+      }
+
+      let effectiveDensity = (density ?? 0) * normalizedDensityMultiplier;
 
       if (effectiveDensity <= 0) {
         effectiveDensity = 0;
@@ -3073,8 +3077,17 @@ export default class GridManager {
         effectiveDensity = 1;
       }
 
-      const currentEnergy = Number.isFinite(energyRow?.[c]) ? energyRow[c] : 0;
-      let regen = maxTileEnergy > 0 ? regenRate * (maxTileEnergy - currentEnergy) : 0;
+      const currentEnergy = energyRow[c] ?? 0;
+      let regen = 0;
+
+      if (positiveMaxTileEnergy > 0) {
+        const deficit = positiveMaxTileEnergy - currentEnergy;
+
+        if (deficit > 0) {
+          regen = regenRate * deficit;
+        }
+      }
+
       const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
 
       if (regenPenalty <= 0) {
@@ -3085,10 +3098,12 @@ export default class GridManager {
 
       regen = regen * regenMultiplier + regenAdd;
 
-      let neighborSum = 0;
-      let neighborCount = 0;
+      let diffusion = 0;
 
       if (useDiffusion) {
+        let neighborSum = 0;
+        let neighborCount = 0;
+
         if (upEnergyRow && (!upObstacleRow || !upObstacleRow[c])) {
           neighborSum += upEnergyRow[c];
           neighborCount += 1;
@@ -3108,27 +3123,27 @@ export default class GridManager {
           neighborSum += energyRow[c + 1];
           neighborCount += 1;
         }
-      }
 
-      let diffusion = 0;
-
-      if (neighborCount > 0) {
-        diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
+        if (neighborCount > 0) {
+          diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
+        }
       }
 
       let nextEnergy = currentEnergy + regen - drain + diffusion;
 
       if (nextEnergy <= 0) {
         nextEnergy = 0;
-      } else if (nextEnergy >= maxTileEnergy) {
-        nextEnergy = maxTileEnergy;
+      } else if (positiveMaxTileEnergy > 0 && nextEnergy >= positiveMaxTileEnergy) {
+        nextEnergy = positiveMaxTileEnergy;
       }
 
-      if (gridRow?.[c]) {
+      const occupant = gridRow ? gridRow[c] : null;
+
+      if (occupant) {
         if (occupantRegenRow) occupantRegenRow[c] = nextEnergy;
 
         nextRow[c] = 0;
-        if (energyRow[c] !== 0) energyRow[c] = 0;
+        energyRow[c] = 0;
         if (deltaRow) deltaRow[c] = 0;
 
         return;
