@@ -808,19 +808,13 @@ export default class Cell {
       );
       const safeTotal = totalWeight > 0 ? totalWeight : 1;
       let roll = randomSample() * safeTotal;
+      const selected = evaluated.find((candidate) => {
+        roll -= Math.max(0, candidate.selectionWeight);
 
-      for (let i = 0; i < evaluated.length; i++) {
-        const candidate = evaluated[i];
-        const weight = Math.max(0, candidate.selectionWeight);
+        return roll <= 0;
+      });
 
-        roll -= weight;
-        if (roll <= 0) {
-          chosen = candidate;
-          break;
-        }
-      }
-
-      if (!chosen) chosen = evaluated[evaluated.length - 1];
+      chosen = selected ?? evaluated[evaluated.length - 1];
     }
 
     return { chosen, evaluated, mode };
