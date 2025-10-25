@@ -18,6 +18,18 @@ test("ensureCanvasDimensions accepts numeric string overrides", () => {
   assert.is(canvas.height, 480);
 });
 
+test("ensureCanvasDimensions ignores zero or negative overrides", () => {
+  const canvas = { width: 800, height: 600 };
+  const dimensions = ensureCanvasDimensions(canvas, {
+    width: 0,
+    canvasHeight: -50,
+  });
+
+  assert.equal(dimensions, { width: 800, height: 600 });
+  assert.is(canvas.width, 800);
+  assert.is(canvas.height, 600);
+});
+
 test("ensureCanvasDimensions normalizes mixed sources", () => {
   const canvas = { width: "320", height: 200 };
   const dimensions = ensureCanvasDimensions(canvas, {
