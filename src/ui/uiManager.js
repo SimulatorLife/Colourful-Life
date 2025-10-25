@@ -1065,8 +1065,8 @@ export default class UIManager {
 
         controls.applyButtonDefaultAriaLabel =
           ariaLabel ||
-          controls.applyButtonDefaultTitle ||
-          controls.applyButtonDefaultLabel;
+          controls.applyButtonDefaultLabel ||
+          controls.applyButtonDefaultTitle;
       }
 
       button.disabled = true;
@@ -1113,8 +1113,8 @@ export default class UIManager {
     button.title = controls.applyButtonDefaultTitle || "Apply Geometry";
     const defaultAriaLabel =
       controls.applyButtonDefaultAriaLabel ||
-      controls.applyButtonDefaultTitle ||
       controls.applyButtonDefaultLabel ||
+      controls.applyButtonDefaultTitle ||
       "Apply Geometry";
 
     button.setAttribute("aria-label", defaultAriaLabel);
@@ -3018,7 +3018,6 @@ export default class UIManager {
     applyButton.className = "geometry-actions__apply";
     applyButton.textContent = "Apply Geometry";
     applyButton.title = "Resize the grid using the values above.";
-    applyButton.setAttribute("aria-label", "Apply the grid using the values above.");
     applyButton.addEventListener("click", (event) => {
       const request = {
         cellSize: Number.parseFloat(cellSizeInput.value),
@@ -3065,6 +3064,14 @@ export default class UIManager {
     });
     actions.appendChild(applyButton);
 
+    const applyDescriptionId = "geometry-apply-description";
+    const applyDescription = document.createElement("span");
+
+    applyDescription.id = applyDescriptionId;
+    applyDescription.className = "visually-hidden";
+    applyDescription.textContent = "Resize the grid using the values above.";
+    actions.appendChild(applyDescription);
+
     const reseedHintId = "geometry-reseed-hint";
     const reseedHint = document.createElement("span");
 
@@ -3073,7 +3080,10 @@ export default class UIManager {
     reseedHint.textContent = "Shift + click to reseed the world after resizing.";
     actions.appendChild(reseedHint);
 
-    applyButton.setAttribute("aria-describedby", reseedHintId);
+    applyButton.setAttribute(
+      "aria-describedby",
+      `${applyDescriptionId} ${reseedHintId}`.trim(),
+    );
 
     geometryGrid.appendChild(actions);
     applyButton.disabled = true;
@@ -3138,7 +3148,10 @@ export default class UIManager {
 
     geometryGrid.appendChild(summary);
 
-    const defaultAriaLabel = this.#readElementAttribute(applyButton, "aria-label");
+    const defaultAriaLabel =
+      this.#readElementAttribute(applyButton, "aria-label") ||
+      applyButton.textContent ||
+      applyButton.title;
 
     this.geometryControls = {
       cellSizeInput,
