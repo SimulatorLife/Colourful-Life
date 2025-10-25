@@ -147,6 +147,37 @@ test("resolveTimingProviders falls back to timeout-based scheduling when unavail
   }
 });
 
+test("resolveHeadlessCanvasSize falls back to default grid dimensions when overrides missing", () => {
+  const result = resolveHeadlessCanvasSize();
+
+  assert.equal(result, { width: 600, height: 600 });
+});
+
+test("resolveHeadlessCanvasSize derives size from rows/cols when overrides invalid", () => {
+  const result = resolveHeadlessCanvasSize({
+    width: -200,
+    canvasWidth: "0",
+    canvasSize: { width: null },
+    height: undefined,
+    canvasHeight: "",
+    cols: "48",
+    rows: 36,
+    cellSize: 3,
+  });
+
+  assert.equal(result, { width: 144, height: 108 });
+});
+
+test("resolveHeadlessCanvasSize defaults cell size when provided value is non-positive", () => {
+  const result = resolveHeadlessCanvasSize({
+    cols: 10,
+    rows: "5",
+    cellSize: 0,
+  });
+
+  assert.equal(result, { width: 50, height: 25 });
+});
+
 test("resolveHeadlessCanvasSize applies layout overrides", () => {
   const result = resolveHeadlessCanvasSize({
     rows: 50,
