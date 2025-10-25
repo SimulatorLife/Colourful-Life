@@ -201,6 +201,7 @@ test("resolveSimulationDefaults sanitizes numeric multipliers", async () => {
     SIMULATION_DEFAULTS,
     ENERGY_REGEN_RATE_DEFAULT,
     ENERGY_DIFFUSION_RATE_DEFAULT,
+    LEADERBOARD_INTERVAL_MIN_MS,
   } = await configModulePromise;
   const sanitized = resolveSimulationDefaults({
     mutationMultiplier: "invalid",
@@ -232,8 +233,16 @@ test("resolveSimulationDefaults sanitizes numeric multipliers", async () => {
   assert.is(sanitized.combatTerritoryEdgeFactor, 1);
   assert.is(sanitized.matingDiversityThreshold, 0);
   assert.is(sanitized.lowDiversityReproMultiplier, 1);
-  assert.is(sanitized.leaderboardIntervalMs, 0);
+  assert.is(sanitized.leaderboardIntervalMs, LEADERBOARD_INTERVAL_MIN_MS);
   assert.is(sanitized.leaderboardSize, 0);
+});
+
+test("resolveSimulationDefaults clamps leaderboard interval below the UI floor", async () => {
+  const { resolveSimulationDefaults, LEADERBOARD_INTERVAL_MIN_MS } =
+    await configModulePromise;
+  const sanitized = resolveSimulationDefaults({ leaderboardIntervalMs: 80 });
+
+  assert.is(sanitized.leaderboardIntervalMs, LEADERBOARD_INTERVAL_MIN_MS);
 });
 
 test("resolveSimulationDefaults floors leaderboard size overrides", async () => {

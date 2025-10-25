@@ -1,6 +1,7 @@
 import {
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   COMBAT_TERRITORY_EDGE_FACTOR,
+  LEADERBOARD_INTERVAL_MIN_MS,
   SIMULATION_DEFAULTS,
 } from "../config.js";
 
@@ -104,7 +105,7 @@ export const UI_SLIDER_CONFIG = Object.freeze({
   },
   leaderboardIntervalMs: {
     default: SIMULATION_DEFAULTS.leaderboardIntervalMs,
-    min: 100,
+    min: LEADERBOARD_INTERVAL_MIN_MS,
     max: 3000,
     step: 50,
     floor: 0,
