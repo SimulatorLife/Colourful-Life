@@ -456,6 +456,19 @@ export default class SimulationEngine {
     return changed;
   }
 
+  #sanitizeAndSetState(key, value, options, { markPending = true } = {}) {
+    const { fallback = this.state[key], ...rest } = options ?? {};
+    const sanitized = sanitizeNumber(value, { fallback, ...rest });
+
+    if (markPending) {
+      this.#updateStateAndFlag({ [key]: sanitized });
+    } else {
+      this.#updateState({ [key]: sanitized });
+    }
+
+    return sanitized;
+  }
+
   #setAutoPausePending(pending) {
     const normalized = Boolean(pending);
 
@@ -1227,12 +1240,9 @@ export default class SimulationEngine {
   }
 
   setEventFrequencyMultiplier(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.eventFrequencyMultiplier,
+    this.#sanitizeAndSetState("eventFrequencyMultiplier", value, {
       min: 0,
     });
-
-    this.#updateStateAndFlag({ eventFrequencyMultiplier: sanitized });
   }
 
   setMaxConcurrentEvents(value) {
@@ -1245,40 +1255,28 @@ export default class SimulationEngine {
   }
 
   setMutationMultiplier(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.mutationMultiplier,
+    this.#sanitizeAndSetState("mutationMultiplier", value, {
       min: 0,
     });
-
-    this.#updateStateAndFlag({ mutationMultiplier: sanitized });
   }
 
   setCombatEdgeSharpness(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.combatEdgeSharpness,
+    this.#sanitizeAndSetState("combatEdgeSharpness", value, {
       min: 0.1,
     });
-
-    this.#updateStateAndFlag({ combatEdgeSharpness: sanitized });
   }
 
   setCombatTerritoryEdgeFactor(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.combatTerritoryEdgeFactor,
+    this.#sanitizeAndSetState("combatTerritoryEdgeFactor", value, {
       min: 0,
       max: 1,
     });
-
-    this.#updateStateAndFlag({ combatTerritoryEdgeFactor: sanitized });
   }
 
   setDensityEffectMultiplier(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.densityEffectMultiplier,
+    this.#sanitizeAndSetState("densityEffectMultiplier", value, {
       min: 0,
     });
-
-    this.#updateStateAndFlag({ densityEffectMultiplier: sanitized });
   }
 
   setSimilarityThresholds({ societySimilarity, enemySimilarity }) {
@@ -1306,12 +1304,9 @@ export default class SimulationEngine {
   }
 
   setEventStrengthMultiplier(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.eventStrengthMultiplier,
+    this.#sanitizeAndSetState("eventStrengthMultiplier", value, {
       min: 0,
     });
-
-    this.#updateStateAndFlag({ eventStrengthMultiplier: sanitized });
   }
 
   setEnergyRates({ regen, diffusion }) {
@@ -1361,12 +1356,14 @@ export default class SimulationEngine {
   }
 
   setLeaderboardInterval(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.leaderboardIntervalMs,
-      min: 0,
-    });
-
-    this.#updateState({ leaderboardIntervalMs: sanitized });
+    this.#sanitizeAndSetState(
+      "leaderboardIntervalMs",
+      value,
+      {
+        min: 0,
+      },
+      { markPending: false },
+    );
   }
 
   setOverlayVisibility({
