@@ -250,202 +250,28 @@ export function toPlainObject(candidate) {
 
 /**
  * Deep clones the sensor/node trace payloads used by the brain debugger so the
- * UI can mutate copies without affecting simulation state. Utilizes the
- * platform `structuredClone` implementation for fidelity and maintenance.
+ * UI can mutate copies without affecting simulation state. Modern runtimes
+ * expose `structuredClone`, so we delegate directly to the platform helper.
  *
  * @param {Object} trace - Snapshot returned by `brain.snapshot()`.
  * @returns {Object|null} Cloned trace.
  */
-const structuredCloneImpl =
-  typeof globalThis !== "undefined" && typeof globalThis.structuredClone === "function"
-    ? globalThis.structuredClone.bind(globalThis)
-    : null;
-
-const objectPrototype = Object.prototype;
-const hasOwn = objectPrototype.hasOwnProperty;
-
-function isPlainObject(value) {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const proto = Object.getPrototypeOf(value);
-
-  return proto === objectPrototype || proto === null;
-}
-
-function fastCloneTracePayload(trace) {
-  if (!isPlainObject(trace)) {
-    return null;
-  }
-
-  const stack = [];
-  const root = {};
-
-  stack.push({ source: trace, target: root });
-
-  while (stack.length > 0) {
-    const frame = stack.pop();
-    const { source, target } = frame;
-
-    if (Array.isArray(source)) {
-      const length = source.length;
-
-      if (!Array.isArray(target) || target.length !== length) {
-        target.length = length;
-      }
-
-      for (let index = 0; index < length; index += 1) {
-        const entry = source[index];
-
-        if (!entry || typeof entry !== "object") {
-          target[index] = entry;
-          continue;
-        }
-
-        if (Array.isArray(entry)) {
-          const clone = new Array(entry.length);
-
-          target[index] = clone;
-          stack.push({ source: entry, target: clone });
-
-          continue;
-        }
-
-        if (!isPlainObject(entry)) {
-          return null;
-        }
-
-        const clone = {};
-
-        target[index] = clone;
-        stack.push({ source: entry, target: clone });
-      }
-
-      continue;
-    }
-
-    const keys = Object.keys(source);
-
-    for (let i = 0; i < keys.length; i += 1) {
-      const key = keys[i];
-
-      if (!hasOwn.call(source, key)) continue;
-
-      const value = source[key];
-
-      if (!value || typeof value !== "object") {
-        target[key] = value;
-        continue;
-      }
-
-      if (Array.isArray(value)) {
-        const clone = new Array(value.length);
-
-        target[key] = clone;
-        stack.push({ source: value, target: clone });
-
-        continue;
-      }
-
-      if (ArrayBuffer.isView(value)) {
-        if (value instanceof DataView) {
-          target[key] = new DataView(value.buffer.slice(0));
-        } else if (typeof value.slice === "function") {
-          target[key] = value.slice(0);
-        } else if (typeof value.constructor?.from === "function") {
-          target[key] = value.constructor.from(value);
-        } else {
-          return null;
-        }
-
-        continue;
-      }
-
-      if (value instanceof ArrayBuffer) {
-        target[key] = value.slice(0);
-
-        continue;
-      }
-
-      if (!isPlainObject(value)) {
-        return null;
-      }
-
-      const clone = {};
-
-      target[key] = clone;
-      stack.push({ source: value, target: clone });
-    }
-  }
-
-  return root;
-}
-
-function legacyClone(value, seen = new WeakMap()) {
-  if (value == null || typeof value !== "object") {
-    return value;
-  }
-
-  if (value instanceof Date) {
-    return new Date(value.getTime());
-  }
-
-  if (ArrayBuffer.isView(value)) {
-    if (value instanceof DataView) {
-      return new DataView(value.buffer.slice(0));
-    }
-
-    return typeof value.slice === "function"
-      ? value.slice(0)
-      : value.constructor.from(value);
-  }
-
-  if (value instanceof ArrayBuffer) {
-    return value.slice(0);
-  }
-
-  if (seen.has(value)) {
-    return seen.get(value);
-  }
-
-  if (Array.isArray(value)) {
-    const clone = [];
-
-    seen.set(value, clone);
-
-    for (const item of value) {
-      clone.push(legacyClone(item, seen));
-    }
-
-    return clone;
-  }
-
-  const clone = {};
-
-  seen.set(value, clone);
-
-  for (const [key, entry] of Object.entries(value)) {
-    clone[key] = legacyClone(entry, seen);
-  }
-
-  return clone;
-}
-
 export function cloneTracePayload(trace) {
   if (trace == null) return null;
 
-  const fastClone = fastCloneTracePayload(trace);
+  const structuredCloneImpl =
+    typeof globalThis !== "undefined" &&
+    typeof globalThis.structuredClone === "function"
+      ? globalThis.structuredClone.bind(globalThis)
+      : null;
 
-  if (fastClone) {
-    return fastClone;
+  if (!structuredCloneImpl) {
+    throw new Error(
+      "cloneTracePayload requires structuredClone support; the current environment does not provide it.",
+    );
   }
 
-  if (structuredCloneImpl) {
-    return structuredCloneImpl(trace);
-  }
-
-  return legacyClone(trace);
+  return structuredCloneImpl(trace);
 }
 
 /**
