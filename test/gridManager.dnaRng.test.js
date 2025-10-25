@@ -13,37 +13,80 @@ const baseOptions = {
 test("GridManager DNA generation uses injected RNG", async () => {
   const { default: DNA } = await import("../src/genome.js");
   const originalRandom = DNA.random;
-  const rngArgs = [];
+  const rngInvocations = [];
+  const rngSequence = [0.62, 0.71, 0.83, 0.64, 0.19, 0.58, 0.42, 0.27, 0.35];
+  let rngCallIndex = 0;
+
+  const rng = () => {
+    if (rngCallIndex >= rngSequence.length) {
+      throw new Error(`rngSequence exhausted at index ${rngCallIndex}`);
+    }
+
+    const value = rngSequence[rngCallIndex];
+
+    rngCallIndex += 1;
+
+    return value;
+  };
 
   DNA.random = (rngFn) => {
-    rngArgs.push(rngFn);
+    assert.type(
+      rngFn,
+      "function",
+      "GridManager should supply an RNG factory to DNA.random",
+    );
+
+    const before = rngCallIndex;
+    const sample = rngFn();
+    const after = rngCallIndex;
+
+    rngInvocations.push({ before, after, sample });
 
     return originalRandom(() => 0);
   };
 
   try {
     const { default: GridManager } = await import("../src/grid/gridManager.js");
-    const rngSequence = [0.01, 0.5, 0.99, 0.02, 0.6];
-    let index = 0;
-    const rng = () => {
-      const value = rngSequence[index % rngSequence.length];
-
-      index += 1;
-
-      return value;
-    };
-    const manager = new GridManager(4, 4, { ...baseOptions, rng });
+    const manager = new GridManager(2, 2, { ...baseOptions, rng });
 
     manager.spawnCell(0, 0);
-    manager.init();
-    manager.burstRandomCells({ count: 3, radius: 1 });
+    manager.spawnCell(0, 1);
+    assert.is(manager.burstAt(1, 1, { count: 1, radius: 0 }), 1);
   } finally {
     DNA.random = originalRandom;
   }
 
-  assert.ok(rngArgs.length > 0, "DNA.random should be invoked during grid operations");
-  assert.ok(
-    rngArgs.every((fn) => typeof fn === "function"),
-    "GridManager should pass its RNG to DNA.random",
+  assert.is(
+    rngInvocations.length,
+    3,
+    "expected RNG-backed DNA generation for each spawn path",
+  );
+
+  const initialOffset = rngInvocations[0]?.before ?? 0;
+
+  rngInvocations.forEach(({ before, after, sample }, index) => {
+    assert.is(
+      before,
+      initialOffset + index,
+      "RNG draws should advance sequentially per DNA spawn",
+    );
+    assert.is(
+      after,
+      before + 1,
+      "DNA.random should consume the manager RNG exactly once",
+    );
+    assert.is(
+      sample,
+      rngSequence[before],
+      `DNA.random invocation ${index + 1} should observe the injected RNG sequence`,
+    );
+  });
+
+  const lastInvocation = rngInvocations[rngInvocations.length - 1];
+
+  assert.is(
+    rngCallIndex,
+    lastInvocation?.after ?? rngCallIndex,
+    "RNG call count should align with the final DNA.random invocation",
   );
 });
