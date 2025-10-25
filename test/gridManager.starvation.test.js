@@ -142,6 +142,47 @@ test("GridManager respects dynamic max tile energy", async () => {
   }
 });
 
+test("GridManager rehydrates empty tiles when initial energy fraction changes", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class EnergyRefreshGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new EnergyRefreshGridManager(3, 3, {
+    eventManager: { activeEvents: [] },
+    stats: {},
+    ctx: {},
+    cellSize: 1,
+  });
+
+  gm.setCell(0, 0, { energy: 5 });
+  gm.energyGrid[0][0] = 2;
+  gm.energyGrid[1][1] = 0;
+  gm.energyGrid[2][2] = 0;
+
+  const nextFraction = 0.4;
+  const expectedEnergy = gm.maxTileEnergy * nextFraction;
+
+  gm.setInitialTileEnergyFraction(nextFraction);
+
+  assert.is(gm.initialTileEnergyFraction, nextFraction);
+  assert.is(gm.energyGrid[0][0], 2, "occupied tiles should retain their stored energy");
+  assert.is(gm.energyGrid[1][1], expectedEnergy);
+  assert.is(gm.energyGrid[2][2], expectedEnergy);
+
+  gm.energyGrid[1][1] = 0;
+
+  gm.setInitialTileEnergyFraction(nextFraction, {
+    refreshEmptyTiles: true,
+    forceRefresh: true,
+  });
+
+  assert.is(gm.energyGrid[1][1], expectedEnergy);
+  assert.is(gm.energyNext[1][1], 0);
+  assert.is(gm.energyDeltaGrid[1][1], 0);
+});
+
 test("population scarcity emits signal without forced reseeding", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
 

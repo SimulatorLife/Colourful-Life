@@ -1819,6 +1819,72 @@ export default class GridManager {
     this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
   }
 
+  setInitialTileEnergyFraction(fraction, options = {}) {
+    const { refreshEmptyTiles = true, forceRefresh = false } =
+      options && typeof options === "object" ? options : {};
+    const sanitized = resolveInitialTileEnergyFraction(fraction);
+    const previous = Number.isFinite(this.initialTileEnergyFraction)
+      ? this.initialTileEnergyFraction
+      : INITIAL_TILE_ENERGY_FRACTION_DEFAULT;
+    const changed = Math.abs(previous - sanitized) > 1e-6;
+
+    if (!changed && !forceRefresh) {
+      return previous;
+    }
+
+    this.initialTileEnergyFraction = sanitized;
+    this.initialTileEnergy = this.maxTileEnergy * this.initialTileEnergyFraction;
+
+    if (!refreshEmptyTiles) {
+      return this.initialTileEnergyFraction;
+    }
+
+    const baseEnergy = this.initialTileEnergy;
+
+    if (!Array.isArray(this.energyGrid) || !Array.isArray(this.grid)) {
+      return this.initialTileEnergyFraction;
+    }
+
+    if (!this.energyDirtyTiles) {
+      this.energyDirtyTiles = new Set();
+    }
+
+    for (let row = 0; row < this.rows; row++) {
+      const energyRow = this.energyGrid[row];
+      const nextRow = this.energyNext?.[row];
+      const deltaRow = this.energyDeltaGrid?.[row];
+      const occupancyRow = this.grid[row];
+      const regenRow = this.pendingOccupantRegen?.[row];
+
+      if (!energyRow || !occupancyRow) continue;
+
+      for (let col = 0; col < this.cols; col++) {
+        if (occupancyRow[col]) continue;
+
+        const before = Number.isFinite(energyRow[col]) ? energyRow[col] : 0;
+
+        if (before === baseEnergy) {
+          if (forceRefresh) {
+            this.markEnergyDirty(row, col, { radius: 1 });
+          }
+          if (nextRow) nextRow[col] = 0;
+          if (deltaRow) deltaRow[col] = 0;
+          if (regenRow) regenRow[col] = 0;
+
+          continue;
+        }
+
+        energyRow[col] = baseEnergy;
+        if (nextRow) nextRow[col] = 0;
+        if (deltaRow) deltaRow[col] = 0;
+        if (regenRow) regenRow[col] = 0;
+        this.markEnergyDirty(row, col, { radius: 1 });
+      }
+    }
+
+    return this.initialTileEnergyFraction;
+  }
+
   setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {
     if (threshold !== undefined) {
       const numeric = Number(threshold);

@@ -132,6 +132,15 @@ function subscribeEngineToUi(engine, uiManager) {
         });
       }
 
+      if (
+        changes?.initialTileEnergyFraction !== undefined &&
+        typeof uiManager.setInitialTileEnergyFraction === "function"
+      ) {
+        uiManager.setInitialTileEnergyFraction(changes.initialTileEnergyFraction, {
+          notify: false,
+        });
+      }
+
       const geometryChanged =
         typeof uiManager.setGridGeometry === "function" &&
         changes &&
