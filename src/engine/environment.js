@@ -1,4 +1,4 @@
-import { pickFirstFinitePositive, toFiniteOrNull } from "../utils.js";
+import { pickFirstFinitePositive, toFiniteOrNull, toPlainObject } from "../utils.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
@@ -107,6 +107,55 @@ export function createHeadlessCanvas(config = {}) {
   context.canvas = canvas;
 
   return canvas;
+}
+
+/**
+ * Derives width/height overrides for headless canvases so both the generated
+ * canvas and simulation config stay in sync. Returns `null` when no positive
+ * dimensions are supplied by the resolver.
+ *
+ * @param {Object} config - Simulation configuration containing optional
+ *   `canvasSize` overrides.
+ * @param {{width?:number,height?:number}|null} size - Canvas dimensions
+ *   returned by {@link resolveHeadlessCanvasSize}.
+ * @returns {Object|null} Override object suitable for merging into the
+ *   simulation config or `null` when no overrides are required.
+ */
+export function buildHeadlessCanvasOverrides(config, size) {
+  if (!size) return null;
+
+  const width = Number.isFinite(size.width) && size.width > 0 ? size.width : null;
+  const height = Number.isFinite(size.height) && size.height > 0 ? size.height : null;
+
+  if (width == null && height == null) {
+    return null;
+  }
+
+  const canvasSize = { ...toPlainObject(config?.canvasSize) };
+
+  if (width != null) {
+    canvasSize.width = width;
+  }
+
+  if (height != null) {
+    canvasSize.height = height;
+  }
+
+  const overrides = {
+    canvasSize,
+  };
+
+  if (width != null) {
+    overrides.width = width;
+    overrides.canvasWidth = width;
+  }
+
+  if (height != null) {
+    overrides.height = height;
+    overrides.canvasHeight = height;
+  }
+
+  return overrides;
 }
 
 /**
