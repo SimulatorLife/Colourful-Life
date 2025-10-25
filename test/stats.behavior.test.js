@@ -218,6 +218,35 @@ test("estimateDiversity samples target quota even when most cells lack genomes",
   approxEqual(actual, expected, 1e-9);
 });
 
+test("estimateDiversity resolves each dna seed at most once per sampling run", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(undefined, { rng: () => 0.42 });
+  const genomes = [0, 1, 2, 3].map((id) => ({
+    id,
+    seedCalls: 0,
+    similarity(otherDna) {
+      return otherDna?.id === id ? 1 : 0.5;
+    },
+    seed() {
+      this.seedCalls += 1;
+
+      return id * 101;
+    },
+    reproductionProb: () => 0,
+  }));
+  const cells = genomes.map((dna) => ({ dna }));
+  const diversity = stats.estimateDiversity(cells, Infinity);
+
+  assert.ok(Number.isFinite(diversity), "diversity estimate should be numeric");
+  genomes.forEach((dna) => {
+    assert.is(
+      dna.seedCalls,
+      1,
+      `dna ${dna.id} seed() should be evaluated once (received ${dna.seedCalls})`,
+    );
+  });
+});
+
 test("estimateDiversity uses injected RNG without touching Math.random", async () => {
   const { default: Stats } = await statsModulePromise;
   const similarityMatrix = new Map([

@@ -51,6 +51,8 @@ const TRAIT_COMPUTE_WARNING =
 const DIVERSITY_SIMILARITY_WARNING =
   "Failed to compute DNA similarity while estimating diversity.";
 
+const UNRESOLVED_SEED = Symbol("stats.unresolvedSeed");
+
 function wrapTraitCompute(fn) {
   if (typeof fn !== "function") {
     return () => 0;
@@ -332,6 +334,8 @@ export default class Stats {
   #pairIndexScratch;
   #diversityDnaScratch;
   #dnaSimilarityCache;
+  #diversitySeedScratch;
+  #activeDiversitySeeds;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
    * @param {{
@@ -404,6 +408,8 @@ export default class Stats {
     this.#pairIndexScratch = { first: 0, second: 0 };
     this.#diversityDnaScratch = [];
     this.#dnaSimilarityCache = new WeakMap();
+    this.#diversitySeedScratch = new Map();
+    this.#activeDiversitySeeds = null;
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -904,8 +910,41 @@ export default class Stats {
       return null;
     }
 
-    const seedA = this.#resolveDnaSeed(dnaA);
-    const seedB = this.#resolveDnaSeed(dnaB);
+    const activeSeeds = this.#activeDiversitySeeds;
+    let seedA;
+
+    if (activeSeeds && activeSeeds.has(dnaA)) {
+      seedA = activeSeeds.get(dnaA);
+
+      if (seedA === UNRESOLVED_SEED) {
+        seedA = this.#resolveDnaSeed(dnaA);
+        activeSeeds.set(dnaA, seedA);
+      }
+    } else {
+      seedA = this.#resolveDnaSeed(dnaA);
+
+      if (activeSeeds) {
+        activeSeeds.set(dnaA, seedA);
+      }
+    }
+
+    let seedB;
+
+    if (activeSeeds && activeSeeds.has(dnaB)) {
+      seedB = activeSeeds.get(dnaB);
+
+      if (seedB === UNRESOLVED_SEED) {
+        seedB = this.#resolveDnaSeed(dnaB);
+        activeSeeds.set(dnaB, seedB);
+      }
+    } else {
+      seedB = this.#resolveDnaSeed(dnaB);
+
+      if (activeSeeds) {
+        activeSeeds.set(dnaB, seedB);
+      }
+    }
+
     const cacheA = this.#obtainDnaCacheRecord(dnaA, seedA);
     const cached = cacheA?.map?.get(dnaB);
 
@@ -1275,6 +1314,17 @@ export default class Stats {
 
     validDna.length = 0;
 
+    let seedScratch = this.#diversitySeedScratch;
+
+    if (!seedScratch) {
+      seedScratch = new Map();
+      this.#diversitySeedScratch = seedScratch;
+    } else {
+      seedScratch.clear();
+    }
+
+    this.#activeDiversitySeeds = seedScratch;
+
     const hasOwn = Object.prototype.hasOwnProperty;
     const sourceCount = cellSources.length;
 
@@ -1289,145 +1339,145 @@ export default class Stats {
 
       if (dna && typeof dna.similarity === "function") {
         validDna.push(dna);
-      }
-    }
 
-    const populationSize = validDna.length;
-
-    if (populationSize < 2) {
-      validDna.length = 0;
-
-      return 0;
-    }
-
-    const possiblePairs = (populationSize * (populationSize - 1)) / 2;
-
-    if (!(possiblePairs > 0)) {
-      validDna.length = 0;
-
-      return 0;
-    }
-
-    if (sanitizedMaxSamples === 0 || possiblePairs <= sanitizedMaxSamples) {
-      let sum = 0;
-      let count = 0;
-
-      for (let i = 0; i < populationSize - 1; i += 1) {
-        const dnaA = validDna[i];
-
-        for (let j = i + 1; j < populationSize; j += 1) {
-          const dnaB = validDna[j];
-
-          const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
-
-          if (!Number.isFinite(similarity)) {
-            continue;
-          }
-
-          sum += 1 - similarity;
-          count += 1;
+        if (!seedScratch.has(dna)) {
+          seedScratch.set(dna, UNRESOLVED_SEED);
         }
       }
-
-      validDna.length = 0;
-
-      return count > 0 ? sum / count : 0;
     }
 
-    const sampleLimit = Math.min(sanitizedMaxSamples, possiblePairs);
-    const rng = this.#rng ?? DEFAULT_RANDOM;
-    const sampleIndex = (range) => {
-      if (!(range > 0)) {
+    try {
+      const populationSize = validDna.length;
+
+      if (populationSize < 2) {
         return 0;
       }
 
-      let roll = rng();
+      const possiblePairs = (populationSize * (populationSize - 1)) / 2;
 
-      if (!Number.isFinite(roll)) {
-        roll = DEFAULT_RANDOM();
+      if (!(possiblePairs > 0)) {
+        return 0;
       }
 
-      const fractional = roll - Math.trunc(roll);
-      const normalized = fractional >= 0 ? fractional : fractional + 1;
+      if (sanitizedMaxSamples === 0 || possiblePairs <= sanitizedMaxSamples) {
+        let sum = 0;
+        let count = 0;
 
-      return Math.min(range - 1, Math.floor(normalized * range));
-    };
+        for (let i = 0; i < populationSize - 1; i += 1) {
+          const dnaA = validDna[i];
 
-    let samples = this.#pairSampleScratch;
+          for (let j = i + 1; j < populationSize; j += 1) {
+            const dnaB = validDna[j];
 
-    if (!samples || samples.length < sampleLimit) {
-      samples = new Uint32Array(sampleLimit);
-      this.#pairSampleScratch = samples;
+            const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
+
+            if (!Number.isFinite(similarity)) {
+              continue;
+            }
+
+            sum += 1 - similarity;
+            count += 1;
+          }
+        }
+
+        return count > 0 ? sum / count : 0;
+      }
+
+      const sampleLimit = Math.min(sanitizedMaxSamples, possiblePairs);
+      const rng = this.#rng ?? DEFAULT_RANDOM;
+      const sampleIndex = (range) => {
+        if (!(range > 0)) {
+          return 0;
+        }
+
+        let roll = rng();
+
+        if (!Number.isFinite(roll)) {
+          roll = DEFAULT_RANDOM();
+        }
+
+        const fractional = roll - Math.trunc(roll);
+        const normalized = fractional >= 0 ? fractional : fractional + 1;
+
+        return Math.min(range - 1, Math.floor(normalized * range));
+      };
+
+      let samples = this.#pairSampleScratch;
+
+      if (!samples || samples.length < sampleLimit) {
+        samples = new Uint32Array(sampleLimit);
+        this.#pairSampleScratch = samples;
+      }
+
+      const membership = this.#pairSampleMembership;
+
+      membership.clear();
+
+      const sampledView = samples.subarray(0, sampleLimit);
+      const startIndex = possiblePairs - sampleLimit;
+      let filled = 0;
+
+      const pushSample = (value) => {
+        if (membership.has(value)) {
+          return false;
+        }
+
+        membership.set(value, true);
+        sampledView[filled] = value;
+        filled += 1;
+
+        return true;
+      };
+
+      for (let i = startIndex; i < possiblePairs && filled < sampleLimit; i += 1) {
+        const candidate = sampleIndex(i + 1);
+
+        if (!pushSample(candidate)) {
+          pushSample(i);
+        }
+      }
+
+      if (filled < sampleLimit) {
+        for (let i = 0; i < possiblePairs && filled < sampleLimit; i += 1) {
+          pushSample(i);
+        }
+      }
+
+      membership.clear();
+
+      if (filled === 0) {
+        return 0;
+      }
+
+      let sum = 0;
+      let count = 0;
+
+      for (let i = 0; i < filled; i += 1) {
+        const comboIndex = sampledView[i];
+        const pair = this.#resolvePairFromIndex(comboIndex, populationSize);
+
+        if (!pair) {
+          continue;
+        }
+
+        const dnaA = validDna[pair.first];
+        const dnaB = validDna[pair.second];
+        const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
+
+        if (!Number.isFinite(similarity)) {
+          continue;
+        }
+
+        sum += 1 - similarity;
+        count += 1;
+      }
+
+      return count > 0 ? sum / count : 0;
+    } finally {
+      validDna.length = 0;
+      this.#activeDiversitySeeds = null;
+      seedScratch?.clear?.();
     }
-
-    const membership = this.#pairSampleMembership;
-
-    membership.clear();
-
-    const sampledView = samples.subarray(0, sampleLimit);
-    const startIndex = possiblePairs - sampleLimit;
-    let filled = 0;
-
-    const pushSample = (value) => {
-      if (membership.has(value)) {
-        return false;
-      }
-
-      membership.set(value, true);
-      sampledView[filled] = value;
-      filled += 1;
-
-      return true;
-    };
-
-    for (let i = startIndex; i < possiblePairs && filled < sampleLimit; i += 1) {
-      const candidate = sampleIndex(i + 1);
-
-      if (!pushSample(candidate)) {
-        pushSample(i);
-      }
-    }
-
-    if (filled < sampleLimit) {
-      for (let i = 0; i < possiblePairs && filled < sampleLimit; i += 1) {
-        pushSample(i);
-      }
-    }
-
-    membership.clear();
-
-    if (filled === 0) {
-      return 0;
-    }
-
-    let sum = 0;
-    let count = 0;
-
-    for (let i = 0; i < filled; i += 1) {
-      const comboIndex = sampledView[i];
-      const pair = this.#resolvePairFromIndex(comboIndex, populationSize);
-
-      if (!pair) {
-        continue;
-      }
-
-      const dnaA = validDna[pair.first];
-      const dnaB = validDna[pair.second];
-      const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
-
-      if (!Number.isFinite(similarity)) {
-        continue;
-      }
-
-      sum += 1 - similarity;
-      count += 1;
-    }
-
-    const result = count > 0 ? sum / count : 0;
-
-    validDna.length = 0;
-
-    return result;
   }
 
   /**
