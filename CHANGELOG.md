@@ -65,6 +65,9 @@ where practical.
 - Relocated the "Dashboard Refresh Interval" slider into the Leaderboard panel
   so cadence controls sit beside the scoreboard they pace while clarifying that
   Evolution Insights shares the same refresh schedule.
+- Moved the "Low Diversity Penalty ×" slider into the Similarity Thresholds
+  section so reproduction tuning lives alongside the diversity cutoff and
+  ally/enemy similarity sliders.
 - Lowered the default energy regeneration rate to `0.012`, trimmed diffusion to
   `0.05`, and set the density penalty to `0.39` so crowded hubs return less
   energy each tick while sparse tiles still recover reliably.
