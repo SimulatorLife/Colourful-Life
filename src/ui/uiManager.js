@@ -3160,8 +3160,9 @@ export default class UIManager {
       format: (v) => this.#formatMultiplierDisplay(v, 2),
       getValue: () => this.lowDiversityReproMultiplier,
       setValue: (v) => this.#updateSetting("lowDiversityReproMultiplier", v),
-      position: "beforeOverlays",
     });
+
+    thresholdConfigs.push(lowDiversitySliderConfig);
 
     const generalConfigs = [
       withSliderConfig("mutationMultiplier", {
@@ -3200,7 +3201,6 @@ export default class UIManager {
         setValue: (v) => this.#updateSetting("combatTerritoryEdgeFactor", v),
         position: "beforeOverlays",
       }),
-      lowDiversitySliderConfig,
     ];
 
     this.leaderboardCadenceConfig = withSliderConfig("leaderboardIntervalMs", {
@@ -3218,7 +3218,20 @@ export default class UIManager {
     createSectionHeading(body, "Similarity Thresholds");
     const thresholdsGroup = createControlGrid(body);
 
-    thresholdConfigs.forEach((cfg) => renderSlider(cfg, thresholdsGroup));
+    thresholdConfigs.forEach((cfg) => {
+      const input = renderSlider(cfg, thresholdsGroup);
+
+      if (cfg.key === "lowDiversityReproMultiplier") {
+        this.lowDiversitySlider = input;
+      }
+    });
+
+    const thresholdsHint = document.createElement("p");
+
+    thresholdsHint.className = "control-hint";
+    thresholdsHint.textContent =
+      "Tune how cells classify allies, enemies, and viable mates. Births below the diversity threshold use the penalty multiplier.";
+    body.appendChild(thresholdsHint);
 
     createSectionHeading(body, "Environmental Events");
     const eventsGroup = createControlGrid(body);
@@ -3231,11 +3244,7 @@ export default class UIManager {
     generalConfigs
       .filter((cfg) => cfg.position === "beforeOverlays")
       .forEach((cfg) => {
-        const input = renderSlider(cfg, generalGroup);
-
-        if (cfg.key === "lowDiversityReproMultiplier") {
-          this.lowDiversitySlider = input;
-        }
+        renderSlider(cfg, generalGroup);
       });
 
     const resetRow = createControlButtonRow(body);
