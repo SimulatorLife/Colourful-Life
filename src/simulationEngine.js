@@ -1,7 +1,7 @@
 import EventManager from "./events/eventManager.js";
 import GridManager from "./grid/gridManager.js";
 import Stats from "./stats.js";
-import { computeLeaderboard } from "./leaderboard.js";
+import { computeLeaderboard } from "./engine/leaderboard.js";
 import TelemetryController from "./engine/telemetryController.js";
 import createSelectionManagerStub from "./grid/selectionManagerStub.js";
 import {
