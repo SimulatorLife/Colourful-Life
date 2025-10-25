@@ -16,30 +16,39 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 Colourful Life targets **Node.js 18 or newer**. After cloning the repository:
 
-1. Install dependencies with `npm ci` (or `npm install` if you prefer a non-clean install). Run `npm run prepare` afterwards whenever the Husky hooks need to be reinstalled.
-2. Launch the Parcel dev server with `npm run start` and open `http://localhost:1234`.
-3. In a second terminal, run `npm test` to exercise the Node.js suites whenever you touch simulation logic or shared helpers. Add `npm run lint` / `npm run format:check` to catch style regressions before opening a pull request.
+1. Install dependencies with `npm ci` (or `npm install` if you prefer a non-clean install). Re-run `npm run prepare` whenever you first clone or pull changes that touch `.husky/` so the Git hooks stay active.
+2. Launch the Parcel dev server with `npm run start`, then visit `http://localhost:1234`.
+3. Open a second terminal for `npm test` whenever you change shared helpers or simulation logic. Pair it with `npm run lint` / `npm run format:check` to keep style drift from slipping into pull requests.
+4. If Parcel ever behaves strangely, run `npm run clean` to clear `dist/` and `.parcel-cache/` before restarting the dev server.
 
-Parcel provides hot module reloading while you edit. Use `npm run build` when you need an optimized bundle in `dist/`. See [Key scripts and commands](#key-scripts-and-commands) for linting, testing, benchmarking, and publishing helpers, and consult [`docs/developer-guide.md`](docs/developer-guide.md) for deeper workflow guidance.
+Parcel provides hot module reloading while you edit. Use `npm run build` when you need an optimized bundle in `dist/`, and see [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, and testing expectations once the quick start is familiar.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
 ### Configuration overrides
 
-Tune baseline energy and density behaviour without editing source by setting environment variables before starting the dev server or running headless scripts:
+[`src/config.js`](src/config.js) sanitizes a handful of environment variables before the simulation boots so experiments can adjust energy flow, neural temperament, and reproduction without editing source. Set them before starting the dev server or running headless scripts:
+
+**Energy and density**
 
 - `COLOURFUL_LIFE_MAX_TILE_ENERGY` — Raises or lowers the per-tile energy cap used by the energy system and heatmap legends.
-- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` — Adjusts how strongly local population density suppresses energy regeneration (0 disables the penalty, 1 matches the default cap).
-- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` — Tunes the harvesting penalty applied when crowded organisms attempt to consume energy from a tile, allowing experiments with more competitive or laissez-faire ecosystems.
-- `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Adjusts the normalized cutoff the stats system uses when counting organisms as "active" for a trait, keeping telemetry aligned with looser or stricter interpretations of participation.
-- `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` — Scales how strongly territorial advantage influences combat odds. Values outside 0–1 fall back to the default defined in [`src/config.js`](src/config.js).
-- `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` — Controls what fraction of an organism's remaining energy returns to the environment when it dies, letting you explore harsher decay losses or more generous recycling without code changes.
-- `COLOURFUL_LIFE_DECAY_MAX_AGE` — Sets how many ticks a corpse's residual energy can persist before dissipating, allowing longer recycling tails or faster clean-up without editing source.
-- `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` — Raises or lowers the baseline neural activity genomes inherit before their DNA modifiers apply, letting you globally calm or energise populations without editing source.
-- `COLOURFUL_LIFE_MUTATION_CHANCE` — Sets the default mutation probability applied when genomes reproduce without their own override, keeping evolutionary churn adjustable from the environment.
-- `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` — Scales how much surplus energy parents must accumulate beyond the pickier parent's minimum demand before gestation begins, letting you tighten or relax reproduction scarcity without code edits.
+- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` — Controls how strongly crowding suppresses regeneration (0 disables the penalty, 1 matches the default coefficient).
+- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` — Adjusts the harvesting tax organisms pay when gathering from packed tiles so you can model cooperative or cut-throat ecosystems.
 
-Values outside their accepted ranges fall back to the defaults defined in [`src/config.js`](src/config.js) so experiments remain predictable across environments and overlays stay aligned with the active configuration.
+**Lifecycle and territory**
+
+- `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` — Determines what fraction of a corpse's remaining energy returns to the grid as it decomposes.
+- `COLOURFUL_LIFE_DECAY_MAX_AGE` — Limits how long post-mortem energy lingers before dissipating.
+- `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` — Scales territorial advantage in combat. Values outside 0–1 are clamped back to the default.
+
+**Neural activity and evolution**
+
+- `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` — Adjusts the baseline neural activity genomes inherit before DNA modifiers apply.
+- `COLOURFUL_LIFE_MUTATION_CHANCE` — Sets the default mutation probability applied when genomes reproduce without their own override.
+- `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Tunes the normalized cutoff the stats system uses when counting organisms as "active" for a trait.
+- `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` — Scales how much surplus energy parents must bank beyond the strictest genome's demand before gestation begins.
+
+Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/config.js) so overlays remain aligned with the active configuration. The [developer guide](docs/developer-guide.md#configuration-overrides) walks through how these knobs interact when running longer experiments.
 
 ### Life event marker overlay
 
@@ -166,4 +175,5 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 - [`docs/architecture-overview.md`](docs/architecture-overview.md) details module boundaries, update loops, subsystem hand-offs, and the UI bridge.
 - [`docs/developer-guide.md`](docs/developer-guide.md) covers environment setup, workflow practices, and expectations for testing and documentation.
+- [`docs/public-hosting.md`](docs/public-hosting.md) explains how to publish the compiled build to a separate public repository or GitHub Pages site.
 - [`CHANGELOG.md`](CHANGELOG.md) captures notable changes between releases so contributors can track evolution over time.

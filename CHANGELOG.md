@@ -46,6 +46,9 @@ where practical.
 - Refreshed documentation across the README, developer guide, and architecture
   notes to highlight the UI bridge, fitness scoring module, Husky hook setup,
   and new formatting scripts so contributor workflows mirror the current code.
+- Grouped configuration override guidance across the README, developer guide,
+  and architecture overview while tightening the quick-start flow to call out
+  `npm run prepare`, cache resets, and the supporting documentation map.
 - Streamlined the README quick start, developer guide, and public hosting
   instructions to surface npm script aliases (including `npm run benchmark` and
   `npm run deploy:public`), clarify publishing steps, and reduce duplicated
@@ -63,7 +66,7 @@ where practical.
   so cadence controls sit beside the scoreboard they pace while clarifying that
   Evolution Insights shares the same refresh schedule.
 - Lowered the default energy regeneration rate to `0.012`, trimmed diffusion to
-  `0.05`, and raised the density penalty to `0.42` so crowded hubs return less
+  `0.05`, and set the density penalty to `0.39` so crowded hubs return less
   energy each tick while sparse tiles still recover reliably.
 - Increased the reproduction viability buffer by 15 % so offspring only spawn
   when parents stockpile meaningful reserves instead of skimming the minimum

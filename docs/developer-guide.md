@@ -10,7 +10,10 @@ walks through the initial clone-and-run steps before you dive into the details b
 ## Environment setup
 
 1. Install Node.js 18 or newer.
-2. Clone the repository and install dependencies with `npm ci`.
+2. Clone the repository and install dependencies with `npm ci` (or `npm install`
+   if you are intentionally skipping a clean install). Re-run `npm run prepare`
+   after the initial install and any time `.husky/` changes so Git hooks stay
+   active.
 3. Run `npm run start` to launch the Parcel development server at
    `http://localhost:1234`.
 4. Run `npm test` in a second terminal whenever you touch shared utilities or
@@ -31,8 +34,6 @@ walks through the initial clone-and-run steps before you dive into the details b
 - The Evolution Insights dashboard surfaces a Simulation Clock at the top of
   the metrics feed, reporting both simulated time and the aggregate tick count
   for easy pacing comparisons.
-- Run `npm run prepare` after cloning or pulling changes that touch the
-  `.husky/` directory to reinstall Git hooks managed by Husky.
 - Parcel performs hot module replacement during development. Use
   `npm run build` when you need a fresh production bundle in `dist/` for manual
   verification or publishing.
@@ -93,38 +94,51 @@ affect runtime outcomes.
 
 ## Configuration overrides
 
-- `COLOURFUL_LIFE_MAX_TILE_ENERGY` adjusts the per-tile energy ceiling. Set it
-  before running tests or headless scripts to explore higher or lower caps
-  without modifying `src/config.js`.
-- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` tunes how strongly local population
-  density suppresses regeneration (0 disables the penalty, 1 preserves the
-  default `0.39` coefficient).
-- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` controls how much additional
-  energy cost organisms pay when harvesting from crowded tiles (0 removes the
-  tax, 1 matches the baseline density pressure).
-- `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` shifts the normalized cutoff the
-  stats system uses when counting organisms as "active" for a trait. Lower
-  values loosen the requirement so charts show broader participation, while
-  higher values focus on strongly expressed behaviours.
-- `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` tempers or emphasises how much
-  territorial advantage influences combat outcomes. Values outside the 0–1
-  window fall back to the default defined in `src/config.js`.
+`src/config.js` centralises the environment knobs surfaced to players and
+automation. Set them before launching the dev server or headless scripts to
+change behaviour without touching source:
+
+**Energy and density**
+
+- `COLOURFUL_LIFE_MAX_TILE_ENERGY` adjusts the per-tile energy ceiling. Use it to
+  explore more generous or harsher energy caps in both browser and headless
+  runs.
+- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` tunes how strongly crowding suppresses
+  regeneration (0 disables the penalty, 1 preserves the default `0.39`
+  coefficient).
+- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` controls the harvesting tax
+  organisms pay on packed tiles so you can reward cooperation or sharpen
+  competition.
+
+**Lifecycle and territory**
+
+- `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` determines how much energy corpses
+  return to nearby tiles as they decompose.
+- `COLOURFUL_LIFE_DECAY_MAX_AGE` caps how long the decay reservoir persists
+  before fully dissipating.
+- `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` tempers or emphasises territorial
+  advantage in combat. Values outside 0–1 are clamped back to the default.
+
+**Neural activity and evolution**
+
 - `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` globally adjusts the baseline neural
-  activity genomes inherit before DNA modifiers apply, making it easy to calm or
-  energise every organism without editing source.
+  activity genomes inherit before DNA modifiers apply.
 - `COLOURFUL_LIFE_MUTATION_CHANCE` raises or lowers the default mutation
-  probability applied when genomes reproduce without an explicit DNA override,
-  allowing faster or slower evolutionary churn during experiments.
+  probability applied when genomes reproduce without an explicit DNA override.
+- `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` shifts the normalized cutoff the
+  stats system uses when counting organisms as "active" for a trait.
 - `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` scales how much surplus energy
-  parents must stockpile beyond the higher offspring demand fraction before
-  gestation begins, letting you tighten or relax reproduction scarcity in
-  headless runs without editing source. The default `1.12` emerged from a
-  dense 60×60 headless probe (`scripts/profile-energy.mjs` with `PERF_INCLUDE_SIM=1`)
-  where easing the buffer lifted survivor counts from roughly 218 → 225 after
-  120 ticks without collapsing scarcity pressure.
-- Non-finite or out-of-range values are ignored and fall back to the defaults
-  resolved in [`src/config.js`](../src/config.js). The energy overlays pull the
-  sanitized values so UI telemetry reflects the active configuration.
+  parents must stockpile beyond the strictest genome's demand before gestation
+  begins. The default `1.12` came from a dense 60×60 headless probe
+  (`scripts/profile-energy.mjs` with `PERF_INCLUDE_SIM=1`) where easing the
+  buffer lifted survivors from roughly 218 → 225 after 120 ticks without
+  collapsing scarcity pressure.
+
+Non-finite or out-of-range values are ignored and fall back to the defaults
+resolved in [`src/config.js`](../src/config.js). Overlays pull the sanitised
+values so UI telemetry reflects whichever configuration is active. The README's
+[configuration overview](../README.md#configuration-overrides) lists the same
+variables for quick reference during onboarding.
 
 ## UI layout options
 
