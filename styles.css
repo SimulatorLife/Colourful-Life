@@ -109,6 +109,8 @@ canvas {
   max-width: 100%;
   height: auto;
   aspect-ratio: 1 / 1;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
 }
 
 /* Sidebar stacks panels vertically */
