@@ -38,6 +38,8 @@ where practical.
 - Automatic reseeding has been removed from decay pools, grid resets, and
   geometry changes; the world now stays empty unless `reseed: true` is
   explicitly requested, keeping lineage growth compliant with Simulation Law 7.
+- Dashboard refresh interval slider now lives inside the Evolution Insights
+  panel so cadence controls sit beside the metrics they influence.
 - Documentation now calls out the `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR`,
   `COLOURFUL_LIFE_ACTIVITY_BASE_RATE`, and `COLOURFUL_LIFE_MUTATION_CHANCE`
   overrides across the README, developer guide, and architecture notes so
