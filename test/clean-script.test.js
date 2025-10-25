@@ -31,11 +31,30 @@ test("clean script exists", () => {
   );
 });
 
-test("clean script dry-run executes successfully", () => {
-  assert.doesNotThrow(() => {
-    execFileSync("node", [cleanScriptPath, "--dry-run"], {
-      cwd: repoRoot,
-      stdio: "pipe",
-    });
-  }, "clean script dry-run should execute without errors");
+test("clean script dry-run reports each target without deleting", () => {
+  const output = execFileSync("node", [cleanScriptPath, "--dry-run"], {
+    cwd: repoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+    encoding: "utf8",
+  });
+
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const expectedTargets = ["dist", ".parcel-cache"];
+
+  expectedTargets.forEach((target) => {
+    const expectedMessage = `[dry-run] Would remove ${target} (${resolve(repoRoot, target)})`;
+
+    assert.ok(
+      lines.includes(expectedMessage),
+      `dry-run should report ${target} removal preview`,
+    );
+  });
+
+  const summary = lines.at(-1);
+
+  assert.equal(summary, "Parcel artifacts clean script validated (dry-run).");
 });
