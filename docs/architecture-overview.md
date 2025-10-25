@@ -39,8 +39,11 @@ This document captures how the Colourful Life simulation composes its core syste
 - Enforces energy exclusivity by immediately draining or redistributing tile reserves when a cell occupies a coordinate so no tile reports a resident and stored energy simultaneously.
 - Delegates complex social interactions to **InteractionSystem** and neural decision making to **Brain** instances.
 - Collects leaderboard entries by combining `computeFitness` with Brain snapshots.
-- Applies obstacle presets resolved via `resolveObstaclePresetCatalog` and exposes helpers such as `burstRandomCells` and `applyObstaclePreset` that the UI surfaces. Embedding contexts can pass `config.obstaclePresets` to extend or replace the catalog without touching core code.
-- Integrates with `SelectionManager` and `ReproductionZonePolicy` to respect curated reproduction areas, and with wall-contact penalties configured per DNA profile.
+- Applies obstacle presets resolved via `resolveObstaclePresetCatalog` and exposes helpers such as
+  `burstRandomCells` and `applyObstaclePreset` that the UI surfaces. Embedding contexts can pass
+  `config.obstaclePresets` to extend or replace the catalog without touching core code.
+- Integrates with `SelectionManager` and `ReproductionZonePolicy` to respect curated reproduction
+  areas, and with wall-contact penalties configured per DNA profile.
 
 ### Cell
 
