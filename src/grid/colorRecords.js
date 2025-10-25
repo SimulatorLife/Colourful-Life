@@ -1,0 +1,207 @@
+import { clamp } from "../utils.js";
+import { warnOnce } from "../utils/error.js";
+
+const COLOR_CACHE_LIMIT = 4096;
+const COLOR_CACHE = new Map();
+const COLOR_CACHE_KEYS = [];
+let colorCacheEvictIndex = 0;
+
+const CELL_COLOR_RECORD_CACHE = new WeakMap();
+
+const RGB_PATTERN =
+  /rgba?\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)(?:\s*,\s*([0-9.]+)\s*)?\)/i;
+const HEX_PATTERN = /^#([0-9a-f]{3,8})$/i;
+const EMPTY_RGBA = Object.freeze([0, 0, 0, 0]);
+
+const PACK_RGBA32 = (() => {
+  if (typeof Uint8ClampedArray !== "function" || typeof Uint32Array !== "function") {
+    return null;
+  }
+
+  try {
+    const probe = new Uint8ClampedArray(4);
+    const view = new Uint32Array(probe.buffer);
+
+    view[0] = 0x01020304;
+
+    if (
+      probe[0] === 0x04 &&
+      probe[1] === 0x03 &&
+      probe[2] === 0x02 &&
+      probe[3] === 0x01
+    ) {
+      return (r, g, b, a) => ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
+    }
+  } catch (error) {
+    warnOnce("Uint32 color packing unsupported", error);
+  }
+
+  return null;
+})();
+
+export const supportsPackedColor = Boolean(PACK_RGBA32);
+
+export const EMPTY_COLOR_RECORD = Object.freeze({
+  rgba: EMPTY_RGBA,
+  packed: PACK_RGBA32 ? PACK_RGBA32(0, 0, 0, 0) : 0,
+});
+
+function rememberColor(normalized, record) {
+  if (COLOR_CACHE_LIMIT <= 0 || COLOR_CACHE.has(normalized)) {
+    return COLOR_CACHE.get(normalized) ?? record;
+  }
+
+  COLOR_CACHE.set(normalized, record);
+
+  if (COLOR_CACHE_KEYS.length < COLOR_CACHE_LIMIT) {
+    COLOR_CACHE_KEYS.push(normalized);
+
+    return record;
+  }
+
+  const evictKey = COLOR_CACHE_KEYS[colorCacheEvictIndex];
+
+  if (evictKey !== undefined) {
+    COLOR_CACHE.delete(evictKey);
+  }
+
+  COLOR_CACHE_KEYS[colorCacheEvictIndex] = normalized;
+  colorCacheEvictIndex =
+    COLOR_CACHE_LIMIT > 0 ? (colorCacheEvictIndex + 1) % COLOR_CACHE_LIMIT : 0;
+
+  return record;
+}
+
+function parseHexColorComponents(hex) {
+  const length = hex.length;
+
+  if (length === 3 || length === 4) {
+    const rNibble = Number.parseInt(hex[0], 16);
+    const gNibble = Number.parseInt(hex[1], 16);
+    const bNibble = Number.parseInt(hex[2], 16);
+
+    if (Number.isNaN(rNibble) || Number.isNaN(gNibble) || Number.isNaN(bNibble)) {
+      return null;
+    }
+
+    const r = (rNibble << 4) | rNibble;
+    const g = (gNibble << 4) | gNibble;
+    const b = (bNibble << 4) | bNibble;
+    let a = 255;
+
+    if (length === 4) {
+      const aNibble = Number.parseInt(hex[3], 16);
+
+      if (Number.isNaN(aNibble)) {
+        return null;
+      }
+
+      a = (aNibble << 4) | aNibble;
+    }
+
+    return { r, g, b, a };
+  }
+
+  if (length === 6 || length === 8) {
+    const parsed = Number.parseInt(hex, 16);
+
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+
+    const value = parsed >>> 0;
+
+    if (length === 6) {
+      return {
+        r: (value >>> 16) & 0xff,
+        g: (value >>> 8) & 0xff,
+        b: value & 0xff,
+        a: 255,
+      };
+    }
+
+    return {
+      r: (value >>> 24) & 0xff,
+      g: (value >>> 16) & 0xff,
+      b: (value >>> 8) & 0xff,
+      a: value & 0xff,
+    };
+  }
+
+  return null;
+}
+
+function createColorRecord(r, g, b, a) {
+  const rgba = Object.freeze([r, g, b, a]);
+  const packed = PACK_RGBA32 ? PACK_RGBA32(r, g, b, a) : 0;
+
+  return Object.freeze({ rgba, packed });
+}
+
+export function resolveColorRecord(color) {
+  if (typeof color !== "string") {
+    return EMPTY_COLOR_RECORD;
+  }
+
+  const normalized = color.trim();
+
+  if (normalized.length === 0) {
+    return EMPTY_COLOR_RECORD;
+  }
+
+  if (COLOR_CACHE.has(normalized)) {
+    return COLOR_CACHE.get(normalized);
+  }
+
+  let record = EMPTY_COLOR_RECORD;
+
+  if (normalized.startsWith("#")) {
+    const match = HEX_PATTERN.exec(normalized);
+
+    if (match) {
+      const components = parseHexColorComponents(match[1]);
+
+      if (components) {
+        record = createColorRecord(
+          components.r,
+          components.g,
+          components.b,
+          components.a,
+        );
+      }
+    }
+  } else {
+    const match = RGB_PATTERN.exec(normalized);
+
+    if (match) {
+      const r = clamp(parseInt(match[1], 10) || 0, 0, 255);
+      const g = clamp(parseInt(match[2], 10) || 0, 0, 255);
+      const b = clamp(parseInt(match[3], 10) || 0, 0, 255);
+      const alpha = match[4] != null ? Number.parseFloat(match[4]) : 1;
+      const a = clamp(Math.round((Number.isFinite(alpha) ? alpha : 1) * 255), 0, 255);
+
+      record = createColorRecord(r, g, b, a);
+    }
+  }
+
+  return rememberColor(normalized, record);
+}
+
+export function resolveCellColorRecord(cell) {
+  if (!cell || typeof cell !== "object") {
+    return EMPTY_COLOR_RECORD;
+  }
+
+  const cached = CELL_COLOR_RECORD_CACHE.get(cell);
+  const color = typeof cell.color === "string" ? cell.color : "";
+
+  if (cached && cached.color === color) {
+    return cached.record;
+  }
+
+  const record = color ? resolveColorRecord(color) : EMPTY_COLOR_RECORD;
+
+  CELL_COLOR_RECORD_CACHE.set(cell, { color, record });
+
+  return record;
+}
