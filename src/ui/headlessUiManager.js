@@ -357,7 +357,19 @@ export function createHeadlessUiManager(options = {}) {
     },
     shouldRenderSlowUi: (timestamp) => {
       if (!Number.isFinite(timestamp)) return false;
-      if (timestamp - lastSlowUiRender >= settings.leaderboardIntervalMs) {
+
+      const intervalCandidate = Number(settings.leaderboardIntervalMs);
+      const interval = Number.isFinite(intervalCandidate)
+        ? Math.max(0, intervalCandidate)
+        : 0;
+
+      if (timestamp < lastSlowUiRender) {
+        lastSlowUiRender = timestamp;
+
+        return true;
+      }
+
+      if (interval === 0 || timestamp - lastSlowUiRender >= interval) {
         lastSlowUiRender = timestamp;
 
         return true;

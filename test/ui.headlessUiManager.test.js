@@ -174,6 +174,15 @@ test("createHeadlessUiManager shouldRenderSlowUi enforces the cadence window", (
   assert.is(manager.shouldRenderSlowUi(1001), true);
 });
 
+test("createHeadlessUiManager shouldRenderSlowUi resets when time goes backwards", () => {
+  const manager = createHeadlessUiManager({ leaderboardIntervalMs: 250 });
+
+  assert.is(manager.shouldRenderSlowUi(500), true);
+  assert.is(manager.shouldRenderSlowUi(620), false);
+  assert.is(manager.shouldRenderSlowUi(200), true);
+  assert.is(manager.shouldRenderSlowUi(320), false);
+});
+
 test("createHeadlessUiManager exposes leaderboard cadence controls", () => {
   const notifications = [];
   const manager = createHeadlessUiManager({
