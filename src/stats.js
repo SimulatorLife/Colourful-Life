@@ -1254,6 +1254,9 @@ export default class Stats {
       ? Math.max(0, Math.floor(rawPopulation))
       : 0;
     const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
+    const populationSources = Array.isArray(snapshot?.populationCells)
+      ? snapshot.populationCells
+      : entries;
     const totalEnergy = Number.isFinite(snapshot?.totalEnergy)
       ? snapshot.totalEnergy
       : 0;
@@ -1274,7 +1277,7 @@ export default class Stats {
       tick >= this.#nextTraitResampleTick;
 
     if (shouldRebuildTraits) {
-      this.#rebuildTraitAggregates(entries);
+      this.#rebuildTraitAggregates(populationSources);
       this.#nextTraitResampleTick = tick + this.traitResampleInterval;
     }
 
@@ -1293,7 +1296,7 @@ export default class Stats {
       this.#diversityPopulationBaseline !== pop;
 
     if (shouldSampleDiversity) {
-      this.lastDiversitySample = this.estimateDiversity(entries);
+      this.lastDiversitySample = this.estimateDiversity(populationSources);
       this.#diversityPopulationBaseline = pop;
       this.#nextDiversitySampleTick = tick + this.diversitySampleInterval;
     }
