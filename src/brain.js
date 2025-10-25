@@ -674,10 +674,7 @@ export default class Brain {
     }
 
     this.sensorExperienceTargets = new Float32Array(SENSOR_COUNT);
-
-    for (let i = 0; i < this.sensorExperienceTargets.length; i++) {
-      this.sensorExperienceTargets[i] = Number.NaN;
-    }
+    this.sensorExperienceTargets.fill(Number.NaN);
   }
 
   applySensorFeedback({
