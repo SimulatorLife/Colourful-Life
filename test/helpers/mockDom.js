@@ -222,37 +222,69 @@ export class MockElement {
   }
 }
 
+class MockCanvasContext {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.imageSmoothingEnabled = false;
+    this.fillStyle = "#000";
+    this.strokeStyle = "#000";
+    this.lineWidth = 1;
+    this.font = "";
+    this.textBaseline = "top";
+    this.textAlign = "left";
+    this.globalAlpha = 1;
+    this.lineJoin = "miter";
+    this.lineCap = "butt";
+    this.lastTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+    this.lastScale = { x: 1, y: 1 };
+  }
+
+  clearRect() {}
+  fillRect() {}
+  strokeRect() {}
+  save() {}
+  restore() {}
+  beginPath() {}
+  moveTo() {}
+  lineTo() {}
+  stroke() {}
+  fill() {}
+  arc() {}
+  setTransform(a, b, c, d, e, f) {
+    this.lastTransform = { a, b, c, d, e, f };
+  }
+  resetTransform() {
+    this.lastTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+  }
+  scale(x, y) {
+    this.lastScale = { x, y };
+  }
+  createLinearGradient() {
+    return {
+      addColorStop() {},
+    };
+  }
+  fillText() {}
+  strokeText() {}
+}
+
 export class MockCanvas extends MockElement {
   constructor(width, height) {
     super("canvas");
     this.width = width;
     this.height = height;
     this.boundingRect = { left: 0, top: 0, width, height };
+    this._context = null;
   }
 
   getContext(type) {
     if (type !== "2d") return null;
 
-    return {
-      canvas: this,
-      imageSmoothingEnabled: false,
-      fillRect() {},
-      strokeRect() {},
-      save() {},
-      restore() {},
-      beginPath() {},
-      stroke() {},
-      setTransform() {},
-      resetTransform() {},
-      scale() {},
-      createLinearGradient() {
-        return {
-          addColorStop() {},
-        };
-      },
-      fillText() {},
-      strokeText() {},
-    };
+    if (!this._context) {
+      this._context = new MockCanvasContext(this);
+    }
+
+    return this._context;
   }
 }
 
