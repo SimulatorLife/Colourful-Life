@@ -15,7 +15,7 @@ jobs:
     secrets: inherit
     with:
       pr_title: "Codex: Decouple Architecture"
-      pr_body: "Seed PR for Codex to implement the intended architecture-decoupling refactor atop current master."
+      pr_body: "Seed PR for Codex to implement the intended architecture-decoupling refactor."
       prompt: >
         Review the architecture and select ONE overly coupled area (a module cluster,
         package, or dependency cycle) that, if refactored, will materially improve

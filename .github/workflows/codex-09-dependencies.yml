@@ -15,7 +15,7 @@ jobs:
     secrets: inherit
     with:
       pr_title: "Codex: Dependency Hygiene"
-      pr_body: "Seed PR for Codex to streamline runtime and dev dependencies atop current master."
+      pr_body: "Seed PR for Codex to streamline runtime and dev dependencies."
       prompt: >
         Audit package.json (and the lockfile) for outdated, unused, or redundant
         dependencies. Remove packages that are no longer referenced, collapse duplicate

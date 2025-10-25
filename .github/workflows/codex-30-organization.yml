@@ -21,7 +21,7 @@ jobs:
       prompt: >
         Perform a focused organization pass. Locate one function, module, or file/asset that
         currently lives in an ill-fitting directory or file (e.g., UI helper in core
-        logic, event utilities outside `src/events`, grid helpers outside `src/grid`).
+        logic, event utilities outside `src/events`, math helpers outside `src/math`).
         Justify why the current placement is suboptimal, then move it to the more
         logical location.
 

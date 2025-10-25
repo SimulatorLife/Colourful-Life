@@ -15,14 +15,15 @@ jobs:
     secrets: inherit
     with:
       pr_title: "Codex: Config Improvement"
-      pr_body: "Seed PR for Codex to refactor and improve a configuration surface atop current master."
+      pr_body: "Seed PR for Codex to refactor and improve a configuration surface."
       prompt: >
         Select one configuration surface that improves build, lint, or CI ergonomics
         without touching application logic. Candidates include npm scripts, lint/format
         configs, EditorConfig, TypeScript/Babel settings, Browserslist/engines fields,
         bundler options, or CI workflows that orchestrate tests and checks. Deliver one
         concrete upgrade such as clarifying npm script names, wiring a missing lint
-        check, aligning ESLint and Prettier to avoid conflicts, tightening CI triggers,
-        or documenting environment expectations. Leave dependency version churn to the
-        dedicated dependency workflow. Keep the change small, reversible, and thoroughly
-        justified in the commit message so reviewers understand the before/after impact.
+        check, aligning ESLint and Prettier to avoid conflicts, enhancing/adding 
+        missing package.json metadata, tightening CI triggers, or documenting environment 
+        expectations. Leave dependency version churn to the dedicated dependency workflow. 
+        Keep the change small, reversible, and thoroughly justified in the commit message 
+        so reviewers understand the before/after impact.
