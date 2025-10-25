@@ -189,19 +189,34 @@ class FixedSizeRingBuffer {
   }
 
   push(value) {
-    if (this.capacity === 0) return;
+    const capacity = this.capacity;
 
-    if (this.length < this.capacity) {
-      const index = (this.start + this.length) % this.capacity;
+    if (capacity === 0) {
+      return;
+    }
 
-      this.buffer[index] = value;
-      this.length += 1;
+    // Avoid modulo operations in the hot push path by using simple wraparound math.
+    const buffer = this.buffer;
+    const start = this.start;
+    const length = this.length;
+
+    if (length < capacity) {
+      let index = start + length;
+
+      if (index >= capacity) {
+        index -= capacity;
+      }
+
+      buffer[index] = value;
+      this.length = length + 1;
 
       return;
     }
 
-    this.buffer[this.start] = value;
-    this.start = (this.start + 1) % this.capacity;
+    buffer[start] = value;
+    const nextStart = start + 1;
+
+    this.start = nextStart === capacity ? 0 : nextStart;
   }
 
   values() {
