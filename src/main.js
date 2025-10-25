@@ -6,53 +6,12 @@ import { bindSimulationToUi } from "./ui/simulationUiBridge.js";
 import { resolveSimulationDefaults } from "./config.js";
 import { toPlainObject } from "./utils.js";
 import {
+  buildHeadlessCanvasOverrides,
   createHeadlessCanvas,
   resolveHeadlessCanvasSize,
 } from "./engine/environment.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
-
-/**
- * Derives width/height overrides for headless canvases so both the generated
- * canvas and simulation config stay in sync. Returns `null` when no positive
- * dimensions are supplied by the resolver.
- */
-function buildHeadlessCanvasOverrides(config, size) {
-  if (!size) return null;
-
-  const width = Number.isFinite(size.width) && size.width > 0 ? size.width : null;
-  const height = Number.isFinite(size.height) && size.height > 0 ? size.height : null;
-
-  if (width == null && height == null) {
-    return null;
-  }
-
-  const canvasSize = { ...toPlainObject(config?.canvasSize) };
-
-  if (width != null) {
-    canvasSize.width = width;
-  }
-
-  if (height != null) {
-    canvasSize.height = height;
-  }
-
-  const overrides = {
-    canvasSize,
-  };
-
-  if (width != null) {
-    overrides.width = width;
-    overrides.canvasWidth = width;
-  }
-
-  if (height != null) {
-    overrides.height = height;
-    overrides.canvasHeight = height;
-  }
-
-  return overrides;
-}
 
 /**
  * Bootstraps a {@link SimulationEngine} instance together with its associated

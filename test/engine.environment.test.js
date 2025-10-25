@@ -1,5 +1,6 @@
 import { assert, test } from "#tests/harness";
 import {
+  buildHeadlessCanvasOverrides,
   createHeadlessCanvas,
   resolveCanvas,
   resolveHeadlessCanvasSize,
@@ -188,6 +189,30 @@ test("resolveHeadlessCanvasSize applies layout overrides", () => {
   });
 
   assert.equal(result, { width: 600, height: 420 });
+});
+
+test("buildHeadlessCanvasOverrides merges derived dimensions into config", () => {
+  const overrides = buildHeadlessCanvasOverrides(
+    { canvasSize: { width: 200 } },
+    { width: 320, height: 180 },
+  );
+
+  assert.equal(overrides, {
+    canvasSize: { width: 320, height: 180 },
+    width: 320,
+    canvasWidth: 320,
+    height: 180,
+    canvasHeight: 180,
+  });
+});
+
+test("buildHeadlessCanvasOverrides returns null when no positive dimensions", () => {
+  const overrides = buildHeadlessCanvasOverrides(
+    { canvasSize: {} },
+    { width: 0, height: -5 },
+  );
+
+  assert.is(overrides, null);
 });
 
 test("createHeadlessCanvas returns stub context", () => {
