@@ -770,34 +770,48 @@ export default class Stats {
     const pool = Array.isArray(cellSources) ? cellSources : [];
     const computes = this.#traitComputes;
     const thresholds = this.#traitThresholds;
+    const computeCount = computes.length;
 
     this.#traitSums.fill(0);
     this.#traitActiveCounts.fill(0);
 
+    if (pool.length === 0) {
+      this.#traitPopulation = 0;
+      this.#needsTraitRebuild = false;
+      this.#traitPresenceDirty = true;
+
+      return;
+    }
+
+    const traitSums = this.#traitSums;
+    const traitActiveCounts = this.#traitActiveCounts;
+    const hasOwn = Object.prototype.hasOwnProperty;
+
     let population = 0;
 
-    for (const source of pool) {
+    const poolLength = pool.length;
+
+    for (let i = 0; i < poolLength; i += 1) {
+      const source = pool[i];
       const cell =
-        source &&
-        typeof source === "object" &&
-        Object.prototype.hasOwnProperty.call(source, "cell")
+        source && typeof source === "object" && hasOwn.call(source, "cell")
           ? source.cell
           : source;
 
-      if (!cell || typeof cell !== "object") continue;
+      if (!cell || typeof cell !== "object") {
+        continue;
+      }
 
       population += 1;
 
-      computes.forEach((compute, index) => {
-        const threshold = thresholds[index];
-        const value = this.#resolveTraitValue(compute, cell);
+      for (let traitIndex = 0; traitIndex < computeCount; traitIndex += 1) {
+        const compute = computes[traitIndex];
+        const threshold = thresholds[traitIndex];
+        const value = compute(cell) || 0;
 
-        this.#traitSums[index] += value;
-
-        if (value >= threshold) {
-          this.#traitActiveCounts[index] += 1;
-        }
-      });
+        traitSums[traitIndex] += value;
+        traitActiveCounts[traitIndex] += value >= threshold ? 1 : 0;
+      }
     }
 
     this.#traitPopulation = population;
