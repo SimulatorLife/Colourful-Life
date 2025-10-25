@@ -203,7 +203,7 @@ test("resolveDecayReturnFraction clamps invalid overrides", async () => {
 test("DECAY_IMMEDIATE_SHARE exposes the environment-aware default", async () => {
   const { DECAY_IMMEDIATE_SHARE } = await configModulePromise;
 
-  assert.is(DECAY_IMMEDIATE_SHARE, 0.25);
+  assert.is(DECAY_IMMEDIATE_SHARE, 0.26);
 });
 
 test("resolveDecayImmediateShare respects overrides", async () => {
@@ -230,7 +230,7 @@ test("resolveDecayImmediateShare clamps invalid overrides", async () => {
 
   assert.is(
     resolveDecayImmediateShare({ COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE: "NaN" }),
-    0.25,
+    0.26,
   );
 });
 

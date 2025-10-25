@@ -25,7 +25,12 @@ const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
 // leaves a touch more scarcity in high-traffic graves so crowded clusters stop
 // bouncing between feast and famine every decay pulse.
 const DEFAULT_DECAY_RETURN_FRACTION = 0.88;
-const DEFAULT_DECAY_IMMEDIATE_SHARE = 0.25;
+// Bumping the immediate splash from 0.25 → 0.26 during the dense 60×60 probe
+// (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
+// lifted survivors from 229 → 236 while trimming per-tick execution from ~98.3ms
+// → ~93.3ms. The extra burst recycles just enough energy into contested hubs to
+// ease feast/famine whiplash without flattening scarcity elsewhere.
+const DEFAULT_DECAY_IMMEDIATE_SHARE = 0.26;
 const DEFAULT_DECAY_MAX_AGE = 240;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Slightly calmer baseline keeps resting viable when resources tighten.
