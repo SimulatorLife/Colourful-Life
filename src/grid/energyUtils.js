@@ -21,6 +21,8 @@
  *   current-frame `energyGrid` value is reset.
  * @returns {void}
  */
+import { isArrayLike } from "../utils.js";
+
 export function clearTileEnergyBuffers(source, row, col, options = {}) {
   if (!source || row == null || col == null) return;
 
@@ -33,26 +35,26 @@ export function clearTileEnergyBuffers(source, row, col, options = {}) {
 
   const { energyGrid, energyNext, energyDeltaGrid } = source;
 
-  if (!preserveCurrent && Array.isArray(energyGrid)) {
+  if (!preserveCurrent && isArrayLike(energyGrid)) {
     const energyRow = energyGrid[normalizedRow];
 
-    if (Array.isArray(energyRow) && normalizedCol < energyRow.length) {
+    if (isArrayLike(energyRow) && normalizedCol < energyRow.length) {
       energyRow[normalizedCol] = 0;
     }
   }
 
-  if (Array.isArray(energyNext)) {
+  if (isArrayLike(energyNext)) {
     const nextRow = energyNext[normalizedRow];
 
-    if (Array.isArray(nextRow) && normalizedCol < nextRow.length) {
+    if (isArrayLike(nextRow) && normalizedCol < nextRow.length) {
       nextRow[normalizedCol] = 0;
     }
   }
 
-  if (Array.isArray(energyDeltaGrid)) {
+  if (isArrayLike(energyDeltaGrid)) {
     const deltaRow = energyDeltaGrid[normalizedRow];
 
-    if (Array.isArray(deltaRow) && normalizedCol < deltaRow.length) {
+    if (isArrayLike(deltaRow) && normalizedCol < deltaRow.length) {
       deltaRow[normalizedCol] = 0;
     }
   }

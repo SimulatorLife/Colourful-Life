@@ -5,6 +5,7 @@ import {
   createRankedBuffer,
   sanitizeNumber,
   sanitizePositiveInteger,
+  isArrayLike,
 } from "../utils.js";
 import { warnOnce } from "../utils/error.js";
 import DNA from "../genome.js";
@@ -1581,11 +1582,15 @@ export default class GridManager {
       initialTileEnergyFraction,
     );
     this.initialTileEnergy = this.maxTileEnergy * this.initialTileEnergyFraction;
-    this.energyGrid = Array.from({ length: rows }, () =>
-      Array.from({ length: cols }, () => this.initialTileEnergy),
-    );
-    this.energyNext = Array.from({ length: rows }, () => Array(cols).fill(0));
-    this.energyDeltaGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
+    this.energyGrid = Array.from({ length: rows }, () => {
+      const row = new Float64Array(cols);
+
+      row.fill(this.initialTileEnergy);
+
+      return row;
+    });
+    this.energyNext = Array.from({ length: rows }, () => new Float64Array(cols));
+    this.energyDeltaGrid = Array.from({ length: rows }, () => new Float64Array(cols));
     this.#ensureOccupantRegenBuffers(rows, cols);
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
@@ -2833,12 +2838,17 @@ export default class GridManager {
     this.cellSize = cellSizeValue;
     this.grid = Array.from({ length: rowsInt }, () => Array(colsInt).fill(null));
     this.#initializeOccupancy(this.rows);
-    this.energyGrid = Array.from({ length: rowsInt }, () =>
-      Array.from({ length: colsInt }, () => baseEnergy),
-    );
-    this.energyNext = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
-    this.energyDeltaGrid = Array.from({ length: rowsInt }, () =>
-      Array(colsInt).fill(0),
+    this.energyGrid = Array.from({ length: rowsInt }, () => {
+      const row = new Float64Array(colsInt);
+
+      row.fill(baseEnergy);
+
+      return row;
+    });
+    this.energyNext = Array.from({ length: rowsInt }, () => new Float64Array(colsInt));
+    this.energyDeltaGrid = Array.from(
+      { length: rowsInt },
+      () => new Float64Array(colsInt),
     );
     this.#ensureOccupantRegenBuffers(rowsInt, colsInt);
     this.#initializeDecayBuffers(rowsInt, colsInt);
@@ -3206,17 +3216,19 @@ export default class GridManager {
     let occupantRegenGrid = this.pendingOccupantRegen;
     let occupantRegenVersion = this.#occupantRegenVersion;
 
-    if (
-      !Array.isArray(occupantRegenGrid) ||
-      occupantRegenGrid.length !== rows ||
-      (rows > 0 &&
-        (!Array.isArray(occupantRegenGrid[0]) ||
-          occupantRegenGrid[0].length !== cols)) ||
-      !Array.isArray(occupantRegenVersion) ||
-      occupantRegenVersion.length !== rows ||
-      (rows > 0 &&
-        (!occupantRegenVersion[0] || occupantRegenVersion[0].length !== cols))
-    ) {
+    const regenGridValid =
+      Array.isArray(occupantRegenGrid) &&
+      occupantRegenGrid.length === rows &&
+      (rows === 0 ||
+        (isArrayLike(occupantRegenGrid[0]) && occupantRegenGrid[0].length === cols));
+    const regenVersionValid =
+      Array.isArray(occupantRegenVersion) &&
+      occupantRegenVersion.length === rows &&
+      (rows === 0 ||
+        (isArrayLike(occupantRegenVersion[0]) &&
+          occupantRegenVersion[0].length === cols));
+
+    if (!regenGridValid || !regenVersionValid) {
       this.#ensureOccupantRegenBuffers(rows, cols);
       occupantRegenGrid = this.pendingOccupantRegen;
       occupantRegenVersion = this.#occupantRegenVersion;

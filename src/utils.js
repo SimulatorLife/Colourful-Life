@@ -58,6 +58,17 @@ export function clamp01(value) {
 }
 
 /**
+ * Determines whether the candidate behaves like an indexed numeric array,
+ * returning `true` for standard arrays and typed array views.
+ *
+ * @param {any} candidate - Value to test.
+ * @returns {boolean} Whether the value is array-like.
+ */
+export function isArrayLike(candidate) {
+  return Array.isArray(candidate) || ArrayBuffer.isView(candidate);
+}
+
+/**
  * Coerces a loosely-typed candidate into a boolean, preserving the provided
  * fallback when normalization fails. Accepts common string synonyms and numeric
  * representations (treating non-zero numbers as `true`).
