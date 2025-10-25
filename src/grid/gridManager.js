@@ -4318,6 +4318,8 @@ export default class GridManager {
       this.densityGrid[row][col] = liveGrid[row][col];
     }
 
+    // Each tile's density values are reassigned in the loops below, so avoid an
+    // extra grid-sized pass that previously zeroed the arrays.
     this.densityDirtyTiles.clear();
   }
 
@@ -4350,14 +4352,6 @@ export default class GridManager {
     if (targetRadius !== this.densityRadius) {
       this.densityRadius = targetRadius;
       this.densityTotals = this.#buildDensityTotals(this.densityRadius);
-    }
-
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) this.densityCounts[r][c] = 0;
-    }
-
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) this.densityLiveGrid[r][c] = 0;
     }
 
     this.densityDirtyTiles.clear();
