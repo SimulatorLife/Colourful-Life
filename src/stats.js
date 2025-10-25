@@ -135,20 +135,25 @@ function resolveTraitDefinitions(candidate) {
     return Array.from(baseDefinitions.values());
   }
 
-  for (const entry of candidate) {
-    if (!entry || typeof entry !== "object") continue;
+  const mergedDefinitions = candidate.reduce((definitions, entry) => {
+    if (!entry || typeof entry !== "object") {
+      return definitions;
+    }
 
     const key = typeof entry.key === "string" ? entry.key.trim() : "";
 
-    if (!key) continue;
+    if (!key) {
+      return definitions;
+    }
 
-    const overrideCompute =
-      typeof entry.compute === "function" ? wrapTraitCompute(entry.compute) : null;
-    const prior = baseDefinitions.get(key);
-    const compute = overrideCompute ?? prior?.compute;
+    const prior = definitions.get(key);
+    const compute =
+      typeof entry.compute === "function"
+        ? wrapTraitCompute(entry.compute)
+        : prior?.compute;
 
     if (typeof compute !== "function") {
-      continue;
+      return definitions;
     }
 
     const threshold = normalizeThreshold(
@@ -156,10 +161,12 @@ function resolveTraitDefinitions(candidate) {
       prior?.threshold ?? TRAIT_THRESHOLD,
     );
 
-    baseDefinitions.set(key, { key, compute, threshold });
-  }
+    definitions.set(key, { key, compute, threshold });
 
-  return Array.from(baseDefinitions.values());
+    return definitions;
+  }, baseDefinitions);
+
+  return Array.from(mergedDefinitions.values());
 }
 
 const createTraitValueMap = (definitions, initializer) => {
