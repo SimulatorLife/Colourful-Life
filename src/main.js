@@ -284,7 +284,6 @@ export function createSimulation({
     tick: (timestamp) => engine.tick(timestamp),
     pause: () => engine.pause(),
     resume: () => engine.resume(),
-    update: (timestamp) => engine.tick(timestamp),
     resetWorld: (options) => engine.resetWorld(options),
     destroy: () => {
       if (uiManager && typeof uiManager.destroy === "function") {
