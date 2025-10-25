@@ -678,6 +678,20 @@ function getSelectionZoneEntries(selectionManager) {
   }
 }
 
+function* iterateRenderableRects(rects) {
+  if (!Array.isArray(rects)) return;
+
+  for (const rect of rects) {
+    if (!rect) continue;
+
+    const { rowSpan = 1, colSpan = 1 } = rect;
+
+    if (rowSpan <= 0 || colSpan <= 0) continue;
+
+    yield rect;
+  }
+}
+
 /**
  * Outlines active reproduction zones supplied by the selection manager.
  *
@@ -711,14 +725,8 @@ export function drawSelectionZones(selectionManager, ctx, cellSize) {
     }
 
     ctx.fillStyle = color;
-    for (let i = 0; i < rects.length; i++) {
-      const rect = rects[i];
-
-      if (!rect) continue;
-
+    for (const rect of iterateRenderableRects(rects)) {
       const { row, col, rowSpan = 1, colSpan = 1 } = rect;
-
-      if (rowSpan <= 0 || colSpan <= 0) continue;
 
       ctx.fillRect(
         col * cellSize,
