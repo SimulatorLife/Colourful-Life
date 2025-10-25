@@ -918,30 +918,36 @@ export default class Stats {
 
     const traitSums = this.#traitSums;
     const traitActiveCounts = this.#traitActiveCounts;
+    const traitCount = computes.length;
     const hasOwn = Object.prototype.hasOwnProperty;
 
     let population = 0;
 
-    pool.forEach((source) => {
-      const cell =
-        source && typeof source === "object" && hasOwn.call(source, "cell")
-          ? source.cell
-          : source;
+    for (let i = 0; i < pool.length; i += 1) {
+      const source = pool[i];
+      let cell = source;
+
+      if (source && typeof source === "object" && hasOwn.call(source, "cell")) {
+        cell = source.cell;
+      }
 
       if (!cell || typeof cell !== "object") {
-        return;
+        continue;
       }
 
       population += 1;
 
-      computes.forEach((compute, traitIndex) => {
+      for (let traitIndex = 0; traitIndex < traitCount; traitIndex += 1) {
+        const compute = computes[traitIndex];
         const threshold = thresholds[traitIndex];
         const value = compute(cell) || 0;
 
         traitSums[traitIndex] += value;
-        traitActiveCounts[traitIndex] += value >= threshold ? 1 : 0;
-      });
-    });
+        if (value >= threshold) {
+          traitActiveCounts[traitIndex] += 1;
+        }
+      }
+    }
 
     this.#traitPopulation = population;
     this.#needsTraitRebuild = false;
