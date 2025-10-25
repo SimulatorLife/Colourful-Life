@@ -1482,11 +1482,9 @@ export default class SimulationEngine {
   }
 
   setMatingDiversityThreshold(value) {
-    const numeric = Number(value);
+    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
 
-    if (!Number.isFinite(numeric)) return;
-
-    const clamped = clamp(numeric, 0, 1);
+    if (clamped === null) return;
 
     if (this.state.matingDiversityThreshold === clamped) return;
 
@@ -1508,11 +1506,9 @@ export default class SimulationEngine {
   }
 
   setLowDiversityReproMultiplier(value) {
-    const numeric = Number(value);
+    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
 
-    if (!Number.isFinite(numeric)) return;
-
-    const clamped = clamp(numeric, 0, 1);
+    if (clamped === null) return;
 
     if (this.state.lowDiversityReproMultiplier === clamped) return;
 
