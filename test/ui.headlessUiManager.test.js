@@ -228,6 +228,34 @@ test("createHeadlessUiManager allows adjusting the mutation multiplier", () => {
   assert.is(manager.getMutationMultiplier(), 1.5);
 });
 
+test("createHeadlessUiManager allows adjusting similarity thresholds", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    societySimilarity: 0.6,
+    enemySimilarity: 0.3,
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  assert.type(manager.setSocietySimilarity, "function");
+  assert.type(manager.setEnemySimilarity, "function");
+
+  manager.setSocietySimilarity("nan");
+  manager.setSocietySimilarity(0.9);
+  manager.setSocietySimilarity("0.4");
+
+  manager.setEnemySimilarity(2);
+  manager.setEnemySimilarity("oops");
+
+  assert.equal(notifications, [
+    ["societySimilarity", 0.9],
+    ["societySimilarity", 0.4],
+    ["enemySimilarity", 1],
+  ]);
+
+  assert.is(manager.getSocietySimilarity(), 0.4);
+  assert.is(manager.getEnemySimilarity(), 1);
+});
+
 test("createHeadlessUiManager exposes overlay visibility toggles", () => {
   const notifications = [];
   const manager = createHeadlessUiManager({

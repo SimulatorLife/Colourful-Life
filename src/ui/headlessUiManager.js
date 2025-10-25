@@ -227,7 +227,17 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getSocietySimilarity: () => settings.societySimilarity,
+    setSocietySimilarity: (value) => {
+      if (updateIfFinite("societySimilarity", value, { min: 0, max: 1 })) {
+        notify("societySimilarity", settings.societySimilarity);
+      }
+    },
     getEnemySimilarity: () => settings.enemySimilarity,
+    setEnemySimilarity: (value) => {
+      if (updateIfFinite("enemySimilarity", value, { min: 0, max: 1 })) {
+        notify("enemySimilarity", settings.enemySimilarity);
+      }
+    },
     getEventStrengthMultiplier: () => settings.eventStrengthMultiplier,
     getCombatEdgeSharpness: () => settings.combatEdgeSharpness,
     getCombatTerritoryEdgeFactor: () => settings.combatTerritoryEdgeFactor,
