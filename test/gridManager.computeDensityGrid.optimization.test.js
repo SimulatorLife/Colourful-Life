@@ -115,3 +115,41 @@ test("GridManager.computeDensityGrid sanitizes degenerate radii", async () => {
     }
   }
 });
+
+test("GridManager.computeDensityGrid resets prefix scratch between runs", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+    consumeEnergy() {}
+  }
+
+  const rows = 12;
+  const cols = 14;
+  const gm = new TestGridManager(rows, cols, { stats: {} });
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if ((row + col) % 3 === 0) {
+        gm.placeCell(row, col, { id: `seed-${row}-${col}` });
+      }
+    }
+  }
+
+  const radius = 4;
+
+  gm.computeDensityGrid(radius);
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if ((row + col) % 5 === 0) {
+        gm.removeCell(row, col);
+      }
+    }
+  }
+
+  const recomputed = gm.computeDensityGrid(radius);
+  const expected = naiveDensity(gm.grid, radius);
+
+  assertMatrixClose(recomputed, expected);
+});
