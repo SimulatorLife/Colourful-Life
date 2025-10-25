@@ -315,7 +315,7 @@ export default class Stats {
   #traitThresholds;
   #rng;
   #pairSampleScratch;
-  #pairSampleSelection;
+  #pairSampleMembership;
   #pairIndexScratch;
   #diversityDnaScratch;
   #dnaSimilarityCache;
@@ -387,7 +387,7 @@ export default class Stats {
     };
     this.starvationRateSmoothed = 0;
     this.#pairSampleScratch = new Uint32Array(0);
-    this.#pairSampleSelection = new Set();
+    this.#pairSampleMembership = new Map();
     this.#pairIndexScratch = { first: 0, second: 0 };
     this.#diversityDnaScratch = [];
     this.#dnaSimilarityCache = new WeakMap();
@@ -1326,38 +1326,41 @@ export default class Stats {
       this.#pairSampleScratch = samples;
     }
 
-    const selected = this.#pairSampleSelection;
+    const membership = this.#pairSampleMembership;
 
-    selected.clear();
-
-    const startIndex = possiblePairs - sampleLimit;
-
-    for (let i = startIndex; i < possiblePairs; i += 1) {
-      const candidate = sampleIndex(i + 1);
-
-      if (selected.has(candidate)) {
-        selected.add(i);
-      } else {
-        selected.add(candidate);
-      }
-    }
-
-    if (selected.size < sampleLimit) {
-      for (let i = 0; i < possiblePairs && selected.size < sampleLimit; i += 1) {
-        selected.add(i);
-      }
-    }
+    membership.clear();
 
     const sampledView = samples.subarray(0, sampleLimit);
+    const startIndex = possiblePairs - sampleLimit;
     let filled = 0;
 
-    for (const value of selected) {
-      if (filled >= sampleLimit) break;
+    const pushSample = (value) => {
+      if (membership.has(value)) {
+        return false;
+      }
+
+      membership.set(value, true);
       sampledView[filled] = value;
       filled += 1;
+
+      return true;
+    };
+
+    for (let i = startIndex; i < possiblePairs && filled < sampleLimit; i += 1) {
+      const candidate = sampleIndex(i + 1);
+
+      if (!pushSample(candidate)) {
+        pushSample(i);
+      }
     }
 
-    selected.clear();
+    if (filled < sampleLimit) {
+      for (let i = 0; i < possiblePairs && filled < sampleLimit; i += 1) {
+        pushSample(i);
+      }
+    }
+
+    membership.clear();
 
     if (filled === 0) {
       return 0;
