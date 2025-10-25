@@ -14,12 +14,13 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 ## Quick start
 
-Colourful Life targets **Node.js 18 or newer**. After cloning the repository:
+Colourful Life targets **Node.js 25.0.0**. After cloning the repository:
 
-1. Install dependencies with `npm ci` (or `npm install` if you prefer a non-clean install). Re-run `npm run prepare` whenever you first clone or pull changes that touch `.husky/` so the Git hooks stay active.
-2. Launch the Parcel dev server with `npm run start`, then visit `http://localhost:1234`.
-3. Open a second terminal for `npm test` whenever you change shared helpers or simulation logic. Pair it with `npm run lint` / `npm run format:check` to keep style drift from slipping into pull requests.
-4. If Parcel ever behaves strangely, run `npm run clean` to clear `dist/` and `.parcel-cache/` before restarting the dev server.
+1. Align your runtime with `nvm use` (or install it first via `nvm install`); the included `.nvmrc` pins the project to Node.js 25.0.0.
+2. Install dependencies with `npm ci` (or `npm install` if you prefer a non-clean install). Re-run `npm run prepare` whenever you first clone or pull changes that touch `.husky/` so the Git hooks stay active.
+3. Launch the Parcel dev server with `npm run start`, then visit `http://localhost:1234`.
+4. Open a second terminal for `npm test` whenever you change shared helpers or simulation logic. Pair it with `npm run lint` / `npm run format:check` to keep style drift from slipping into pull requests.
+5. If Parcel ever behaves strangely, run `npm run clean` to clear `dist/` and `.parcel-cache/` before restarting the dev server.
 
 Parcel provides hot module reloading while you edit. Use `npm run build` when you need an optimized bundle in `dist/`, and see [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, and testing expectations once the quick start is familiar.
 
