@@ -292,6 +292,7 @@ export default class Stats {
   #rng;
   #pairSampleScratch;
   #pairSampleSelection;
+  #diversityDnaScratch;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
    * @param {{
@@ -361,6 +362,7 @@ export default class Stats {
     this.starvationRateSmoothed = 0;
     this.#pairSampleScratch = new Uint32Array(0);
     this.#pairSampleSelection = new Set();
+    this.#diversityDnaScratch = [];
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -1068,6 +1070,10 @@ export default class Stats {
   // Sample mean pairwise distance between up to maxPairSamples random pairs.
   estimateDiversity(cellSources, maxPairSamples = 200) {
     if (!Array.isArray(cellSources) || cellSources.length < 2) {
+      if (Array.isArray(this.#diversityDnaScratch)) {
+        this.#diversityDnaScratch.length = 0;
+      }
+
       return 0;
     }
 
@@ -1077,32 +1083,46 @@ export default class Stats {
       : numericMaxSamples === Infinity
         ? Infinity
         : 0;
-    const validDna = cellSources.reduce((dnaList, source) => {
+
+    let validDna = this.#diversityDnaScratch;
+
+    if (!Array.isArray(validDna)) {
+      validDna = [];
+      this.#diversityDnaScratch = validDna;
+    }
+
+    validDna.length = 0;
+
+    const hasOwn = Object.prototype.hasOwnProperty;
+    const sourceCount = cellSources.length;
+
+    for (let index = 0; index < sourceCount; index += 1) {
+      const source = cellSources[index];
       const cell =
-        source &&
-        typeof source === "object" &&
-        Object.prototype.hasOwnProperty.call(source, "cell")
+        source && typeof source === "object" && hasOwn.call(source, "cell")
           ? source.cell
           : source;
 
       const dna = cell?.dna;
 
       if (dna && typeof dna.similarity === "function") {
-        dnaList.push(dna);
+        validDna.push(dna);
       }
-
-      return dnaList;
-    }, []);
+    }
 
     const populationSize = validDna.length;
 
     if (populationSize < 2) {
+      validDna.length = 0;
+
       return 0;
     }
 
     const possiblePairs = (populationSize * (populationSize - 1)) / 2;
 
     if (!(possiblePairs > 0)) {
+      validDna.length = 0;
+
       return 0;
     }
 
@@ -1112,7 +1132,7 @@ export default class Stats {
 
       for (let i = 0; i < populationSize - 1; i += 1) {
         const dnaA = validDna[i];
-        const { similarity } = dnaA;
+        const { similarity } = dnaA ?? {};
 
         if (typeof similarity !== "function") {
           continue;
@@ -1121,10 +1141,16 @@ export default class Stats {
         for (let j = i + 1; j < populationSize; j += 1) {
           const dnaB = validDna[j];
 
+          if (!dnaB || typeof dnaB.similarity !== "function") {
+            continue;
+          }
+
           sum += 1 - similarity.call(dnaA, dnaB);
           count += 1;
         }
       }
+
+      validDna.length = 0;
 
       return count > 0 ? sum / count : 0;
     }
@@ -1215,7 +1241,11 @@ export default class Stats {
       rowOffset = rowEnd;
     }
 
-    return count > 0 ? sum / count : 0;
+    const result = count > 0 ? sum / count : 0;
+
+    validDna.length = 0;
+
+    return result;
   }
 
   /**
