@@ -4461,6 +4461,8 @@ export default class GridManager {
     col,
     { dna = DNA.random(() => this.#random()), spawnEnergy, recordBirth = false } = {},
   ) {
+    if (this.grid?.[row]?.[col]) return null;
+
     if (this.isObstacle(row, col)) return null;
     const availableEnergy = Math.max(0, this.energyGrid?.[row]?.[col] ?? 0);
     const requestedEnergy = spawnEnergy ?? availableEnergy;

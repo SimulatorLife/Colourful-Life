@@ -45,6 +45,53 @@ test("GridManager prevents moves into occupied cells", async () => {
   assert.is(cellB.col, 2, "blocking cell column should remain unchanged");
 });
 
+test("GridManager.spawnCell refuses to overwrite occupied tiles", async () => {
+  const [{ default: GridManager }, { default: Cell }, { default: DNA }] =
+    await Promise.all([
+      import("../src/grid/gridManager.js"),
+      import("../src/cell.js"),
+      import("../src/genome.js"),
+    ]);
+
+  class TestGridManager extends GridManager {
+    init() {}
+    consumeEnergy() {}
+  }
+
+  const gm = new TestGridManager(2, 2, baseOptions);
+
+  const residentDNA = new DNA(3, 6, 9);
+  const resident = new Cell(0, 0, residentDNA, gm.maxTileEnergy / 2);
+
+  gm.setCell(0, 0, resident);
+
+  gm.energyGrid[0][0] = 0;
+  gm.energyNext[0][0] = 0;
+
+  const attempted = gm.spawnCell(0, 0, {
+    dna: new DNA(12, 15, 18),
+    spawnEnergy: gm.maxTileEnergy,
+  });
+
+  assert.is(attempted, null, "spawnCell should abort when the tile is occupied");
+  assert.is(
+    gm.getCell(0, 0),
+    resident,
+    "existing resident should remain anchored to the tile",
+  );
+  assert.is(
+    resident.energy,
+    gm.maxTileEnergy / 2,
+    "resident energy should remain unchanged after the blocked spawn",
+  );
+  assert.is(gm.energyGrid[0][0], 0, "tile energy should remain zero while occupied");
+  assert.is(
+    gm.energyNext[0][0],
+    0,
+    "queued energy buffers should remain untouched after rejecting the spawn",
+  );
+});
+
 test("GridManager relocation respects occupied destinations", async () => {
   const [{ default: GridManager }, { default: Cell }, { default: DNA }] =
     await Promise.all([
