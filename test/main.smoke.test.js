@@ -151,6 +151,23 @@ test("createSimulation preserves provided headless canvas dimensions", async () 
   simulation.destroy();
 });
 
+test("headless canvas derives dimensions when provided canvas lacks size", async () => {
+  const { createSimulation } = await simulationModulePromise;
+  const canvas = new MockCanvas();
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    canvas,
+    config: { rows: 12, cols: 18, cellSize: 5 },
+  });
+
+  assert.is(simulation.engine.canvas.width, 90);
+  assert.is(simulation.engine.canvas.height, 60);
+
+  simulation.destroy();
+});
+
 test("createSimulation respects low diversity multiplier overrides in headless mode", async () => {
   const { createSimulation } = await simulationModulePromise;
   const configuredMultiplier = 0.24;

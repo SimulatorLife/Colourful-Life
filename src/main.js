@@ -181,11 +181,19 @@ export function createSimulation({
     createdHeadlessCanvas = true;
   }
 
-  if (createdHeadlessCanvas && headlessOverrides) {
-    configWithLayoutDefaults = {
-      ...configWithLayoutDefaults,
-      ...headlessOverrides,
-    };
+  if (headlessOverrides) {
+    const hasPositiveDimension = (value) => Number.isFinite(value) && value > 0;
+    const canvasHasSize =
+      resolvedCanvas &&
+      hasPositiveDimension(resolvedCanvas.width) &&
+      hasPositiveDimension(resolvedCanvas.height);
+
+    if (createdHeadlessCanvas || !canvasHasSize) {
+      configWithLayoutDefaults = {
+        ...configWithLayoutDefaults,
+        ...headlessOverrides,
+      };
+    }
   }
 
   const selectionManagerFactory =
