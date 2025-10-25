@@ -20,10 +20,11 @@ jobs:
         Profile and analyze the codebase to identify performance bottlenecks. Select one
         high-impact area (such as a module, file, or method) that, if optimized, will
         materially improve speed or scalability. One valid targeted area is any
-        operation currently running in O(n²); prioritize refactors that reduce its
-        complexity or constrain its growth. Refactor that area by eliminating
+        operation currently running in O(n²). Prioritize refactors that reduce
+        complexity or constrain growth. Refactor that area by eliminating
         unnecessary computations, reducing memory overhead, or consolidating redundant
-        database/API calls. Where appropriate, cache repeated work, simplify data
+        database/API/function calls. Where appropriate, cache repeated work, simplify data
         structures, or replace heavy operations with lighter alternatives. Ensure the
         optimization preserves readability and maintainability, and validate the changes
-        with profiling or benchmarks to confirm measurable gains without regressions.
+        with profiling, benchmarks, or timed unit tests to confirm measurable gains 
+        without regressions.
