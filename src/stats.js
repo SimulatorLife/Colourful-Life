@@ -1163,90 +1163,47 @@ export default class Stats {
       return 0;
     }
 
+    const sortedSamples = samples.subarray(0, filled);
+
+    sortedSamples.sort((a, b) => a - b);
+
     let sum = 0;
     let count = 0;
+    let rowOffset = 0;
+    let sampleIdx = 0;
 
-    for (let idx = 0; idx < filled; idx += 1) {
-      const pairIndex = samples[idx];
-      const { first, second } = Stats.#pairFromCombinationIndex(
-        pairIndex,
-        populationSize,
-      );
-      const dnaA = validDna[first];
-      const dnaB = validDna[second];
-      const similarity = dnaA?.similarity;
+    for (
+      let first = 0;
+      first < populationSize - 1 && sampleIdx < sortedSamples.length;
+      first += 1
+    ) {
+      const combosForFirst = populationSize - first - 1;
+      const rowEnd = rowOffset + combosForFirst;
 
-      if (!dnaA || !dnaB || typeof similarity !== "function") continue;
+      while (sampleIdx < sortedSamples.length) {
+        const comboIndex = sortedSamples[sampleIdx];
 
-      sum += 1 - similarity.call(dnaA, dnaB);
-      count += 1;
+        if (comboIndex >= rowEnd) {
+          break;
+        }
+
+        const second = first + 1 + (comboIndex - rowOffset);
+        const dnaA = validDna[first];
+        const dnaB = validDna[second];
+        const similarity = dnaA?.similarity;
+
+        if (dnaA && dnaB && typeof similarity === "function") {
+          sum += 1 - similarity.call(dnaA, dnaB);
+          count += 1;
+        }
+
+        sampleIdx += 1;
+      }
+
+      rowOffset = rowEnd;
     }
 
     return count > 0 ? sum / count : 0;
-  }
-
-  static #pairFromCombinationIndexLinear(index, populationSize) {
-    let remaining = index;
-    let first = 0;
-    let span = populationSize - 1;
-
-    while (span > 0 && remaining >= span) {
-      remaining -= span;
-      span -= 1;
-      first += 1;
-    }
-
-    const second = first + 1 + remaining;
-
-    return { first, second };
-  }
-
-  static #pairFromCombinationIndex(index, populationSize) {
-    if (!(populationSize > 1)) {
-      return { first: 0, second: 0 };
-    }
-
-    const totalPairs = (populationSize * (populationSize - 1)) / 2;
-
-    if (!(totalPairs > 0)) {
-      return { first: 0, second: 0 };
-    }
-
-    const numericIndex = Math.floor(Number.isFinite(index) ? index : 0);
-    let normalizedIndex = numericIndex;
-
-    if (normalizedIndex < 0) {
-      normalizedIndex = 0;
-    } else if (normalizedIndex >= totalPairs) {
-      normalizedIndex = totalPairs - 1;
-    }
-
-    if (populationSize <= 64) {
-      return Stats.#pairFromCombinationIndexLinear(normalizedIndex, populationSize);
-    }
-
-    const twoNMinus1 = populationSize * 2 - 1;
-    const discriminant = Math.max(0, twoNMinus1 * twoNMinus1 - 8 * normalizedIndex);
-    let first = Math.floor((twoNMinus1 - Math.sqrt(discriminant)) / 2);
-    const maxFirst = populationSize - 2;
-
-    if (first < 0 || !Number.isFinite(first)) {
-      first = 0;
-    } else if (first > maxFirst) {
-      first = maxFirst;
-    }
-
-    const pairsBefore = (first * (2 * populationSize - first - 1)) / 2;
-    let second = first + 1 + (normalizedIndex - pairsBefore);
-    const maxSecond = populationSize - 1;
-
-    if (!Number.isFinite(second) || second <= first) {
-      second = first + 1;
-    } else if (second > maxSecond) {
-      second = maxSecond;
-    }
-
-    return { first, second };
   }
 
   /**
