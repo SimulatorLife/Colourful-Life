@@ -146,3 +146,43 @@ test("captureFromEntries defaults decision telemetry to empty array when getter 
 
   BrainDebugger.update([]);
 });
+
+test("captureFromEntries requests telemetry depth matching limit", async () => {
+  const { default: BrainDebugger } = await import("../src/ui/brainDebugger.js");
+  const history = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }, { id: "e" }];
+  let requestedLimit = null;
+
+  const snapshots = BrainDebugger.captureFromEntries(
+    [
+      {
+        row: 0,
+        col: 0,
+        fitness: 1,
+        cell: {
+          brain: {
+            neuronCount: 2,
+            connectionCount: 2,
+            snapshot() {
+              return { connections: [1, 2] };
+            },
+          },
+          getDecisionTelemetry(limit) {
+            requestedLimit = limit;
+
+            return history.slice(-limit);
+          },
+        },
+      },
+    ],
+    { limit: 4 },
+  );
+
+  assert.is(requestedLimit, 4);
+  assert.equal(
+    snapshots[0].decisions,
+    history.slice(-4),
+    "decisions should respect the requested telemetry depth",
+  );
+
+  BrainDebugger.update([]);
+});

@@ -94,9 +94,10 @@ const BrainDebugger = {
         return null;
       }
 
+      const telemetryDepth = count > 0 ? count : 1;
       const decisionTelemetry =
         typeof cell?.getDecisionTelemetry === "function"
-          ? safeInvoke(() => cell.getDecisionTelemetry(3), "telemetry", [])
+          ? safeInvoke(() => cell.getDecisionTelemetry(telemetryDepth), "telemetry", [])
           : [];
       const normalizedTelemetry = Array.isArray(decisionTelemetry)
         ? decisionTelemetry
