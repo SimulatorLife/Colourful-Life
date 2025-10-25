@@ -546,13 +546,7 @@ export default class Stats {
       totals: Object.create(null),
       samples: Object.create(null),
     });
-    const lastTick = bucket.lastTick;
-
-    if (lastTick && typeof lastTick === "object") {
-      for (const key of Object.keys(lastTick)) {
-        delete lastTick[key];
-      }
-    }
+    const lastTick = (bucket.lastTick = Object.create(null));
 
     const coerceFinite = (candidate) => {
       const numeric = toFiniteOrNull(candidate);
@@ -560,8 +554,10 @@ export default class Stats {
       return numeric != null ? numeric : null;
     };
 
-    for (const [metric, descriptor] of Object.entries(summary)) {
-      if (!metric) continue;
+    for (const metric in summary) {
+      if (!Object.hasOwn(summary, metric) || !metric) continue;
+
+      const descriptor = summary[metric];
 
       let value = null;
       let accumulate = true;
