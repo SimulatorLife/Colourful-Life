@@ -366,8 +366,22 @@ export default class Cell {
     );
     const transferEfficiency = clamp((efficiencyA + efficiencyB) / 2, 0.1, 1);
     const viabilityFloor = Math.max(demandFracA, demandFracB);
-    const viabilityThreshold =
-      resolvedMaxTileEnergy * viabilityFloor * OFFSPRING_VIABILITY_BUFFER; // require additional reserves beyond the pickier parent's floor
+    const viabilityBufferA = clamp(
+      typeof parentA.dna?.offspringViabilityBuffer === "function"
+        ? parentA.dna.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER)
+        : OFFSPRING_VIABILITY_BUFFER,
+      1,
+      2,
+    );
+    const viabilityBufferB = clamp(
+      typeof parentB.dna?.offspringViabilityBuffer === "function"
+        ? parentB.dna.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER)
+        : OFFSPRING_VIABILITY_BUFFER,
+      1,
+      2,
+    );
+    const viabilityBuffer = Math.max(viabilityBufferA, viabilityBufferB);
+    const viabilityThreshold = resolvedMaxTileEnergy * viabilityFloor * viabilityBuffer; // require additional reserves beyond the pickier parent's floor
     const minimumTransfer = Math.max(transferEfficiency, 1e-6);
     const requiredTotalInvestment = viabilityThreshold / minimumTransfer;
     const fracFnA = parentA.dna?.parentalInvestmentFrac;

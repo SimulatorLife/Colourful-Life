@@ -1,6 +1,10 @@
 import { clamp, createRNG, randomRange } from "./utils.js";
 import Brain, { NEURAL_GENE_BYTES } from "./brain.js";
-import { ACTIVITY_BASE_RATE, MUTATION_CHANCE_BASELINE } from "./config.js";
+import {
+  ACTIVITY_BASE_RATE,
+  MUTATION_CHANCE_BASELINE,
+  OFFSPRING_VIABILITY_BUFFER,
+} from "./config.js";
 
 const ACTIVITY_RATE_SPAN = 0.7;
 
@@ -584,6 +588,30 @@ export class DNA {
     const jitter = (rng() - 0.5) * 0.04;
 
     return clamp(blended + jitter, 0.5, 0.96);
+  }
+
+  offspringViabilityBuffer(globalBuffer = OFFSPRING_VIABILITY_BUFFER) {
+    const rng = this.prngFor("offspringViabilityBuffer");
+    const gestation = this.geneFraction(GENE_LOCI.GESTATION_EFFICIENCY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const baseline = clamp(
+      Number.isFinite(globalBuffer) ? globalBuffer : OFFSPRING_VIABILITY_BUFFER,
+      1,
+      2,
+    );
+    const caution = clamp(0.85 + parental * 0.35 + (1 - risk) * 0.4, 0.7, 1.6);
+    const support = clamp(
+      0.8 + efficiency * 0.3 + gestation * 0.35 + recovery * 0.2,
+      0.75,
+      1.6,
+    );
+    const temperament = clamp(caution / support, 0.65, 1.45);
+    const jitter = 1 + (rng() - 0.5) * 0.08;
+
+    return clamp(baseline * temperament * jitter, 1, 2);
   }
 
   // How strongly aging increases maintenance costs and reduces fertility

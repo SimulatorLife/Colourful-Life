@@ -786,8 +786,8 @@ test("legacy cautious fallback holds position when traits signal confidence", ()
 test("breed spends parental investment energy without creating extra energy", () => {
   const dnaA = new DNA(10, 120, 200);
   const dnaB = new DNA(200, 80, 40);
-  const parentA = new Cell(4, 5, dnaA, 9);
-  const parentB = new Cell(4, 5, dnaB, 10);
+  const parentA = new Cell(4, 5, dnaA, 12);
+  const parentB = new Cell(4, 5, dnaB, 12);
   const energyBeforeA = parentA.energy;
   const energyBeforeB = parentB.energy;
   const investFracA = dnaA.parentalInvestmentFrac();
@@ -798,8 +798,12 @@ test("breed spends parental investment energy without creating extra energy", ()
   const demandFracA = dnaA.offspringEnergyDemandFrac();
   const demandFracB = dnaB.offspringEnergyDemandFrac();
   const transferEfficiency = combinedTransferEfficiency(dnaA, dnaB);
+  const viabilityBuffer = Math.max(
+    dnaA.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+    dnaB.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+  );
   const viabilityThreshold =
-    maxTileEnergy * Math.max(demandFracA, demandFracB) * OFFSPRING_VIABILITY_BUFFER;
+    maxTileEnergy * Math.max(demandFracA, demandFracB) * viabilityBuffer;
   const requiredTotalInvestment =
     viabilityThreshold / Math.max(transferEfficiency, 1e-6);
   const weightSum = Math.max(1e-6, Math.abs(investFracA) + Math.abs(investFracB));
@@ -1064,8 +1068,12 @@ test("breed clamps investment so parents stop at starvation threshold", () => {
   const demandFracA = dnaA.offspringEnergyDemandFrac();
   const demandFracB = dnaB.offspringEnergyDemandFrac();
   const transferEfficiency = combinedTransferEfficiency(dnaA, dnaB);
+  const viabilityBuffer = Math.max(
+    dnaA.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+    dnaB.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+  );
   const viabilityThreshold =
-    reproductionMax * Math.max(demandFracA, demandFracB) * OFFSPRING_VIABILITY_BUFFER;
+    reproductionMax * Math.max(demandFracA, demandFracB) * viabilityBuffer;
   const requiredTotalInvestment =
     viabilityThreshold / Math.max(transferEfficiency, 1e-6);
   const investFracA = dnaA.parentalInvestmentFrac();
@@ -1224,21 +1232,29 @@ test("gestation efficiency genes modulate delivered offspring energy", () => {
   const highDnaA = configureGenome(240);
   const highDnaB = configureGenome(250);
   const maxTileEnergy = window.GridManager.maxTileEnergy;
-  const lowParentA = new Cell(1, 1, lowDnaA, 9);
-  const lowParentB = new Cell(1, 1, lowDnaB, 9);
-  const highParentA = new Cell(1, 1, highDnaA, 9);
-  const highParentB = new Cell(1, 1, highDnaB, 9);
+  const lowParentA = new Cell(1, 1, lowDnaA, 11);
+  const lowParentB = new Cell(1, 1, lowDnaB, 11);
+  const highParentA = new Cell(1, 1, highDnaA, 11);
+  const highParentB = new Cell(1, 1, highDnaB, 11);
   const lowDemandA = lowDnaA.offspringEnergyDemandFrac();
   const lowDemandB = lowDnaB.offspringEnergyDemandFrac();
   const highDemandA = highDnaA.offspringEnergyDemandFrac();
   const highDemandB = highDnaB.offspringEnergyDemandFrac();
   const lowEfficiency = combinedTransferEfficiency(lowDnaA, lowDnaB);
   const highEfficiency = combinedTransferEfficiency(highDnaA, highDnaB);
+  const lowViabilityBuffer = Math.max(
+    lowDnaA.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+    lowDnaB.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+  );
+  const highViabilityBuffer = Math.max(
+    highDnaA.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+    highDnaB.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+  );
   const lowRequiredTotal =
-    (maxTileEnergy * Math.max(lowDemandA, lowDemandB) * OFFSPRING_VIABILITY_BUFFER) /
+    (maxTileEnergy * Math.max(lowDemandA, lowDemandB) * lowViabilityBuffer) /
     Math.max(lowEfficiency, 1e-6);
   const highRequiredTotal =
-    (maxTileEnergy * Math.max(highDemandA, highDemandB) * OFFSPRING_VIABILITY_BUFFER) /
+    (maxTileEnergy * Math.max(highDemandA, highDemandB) * highViabilityBuffer) /
     Math.max(highEfficiency, 1e-6);
   const lowFracA = lowDnaA.parentalInvestmentFrac();
   const lowFracB = lowDnaB.parentalInvestmentFrac();
