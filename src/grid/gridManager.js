@@ -538,13 +538,22 @@ export default class GridManager {
         () => new Uint32Array(requiredCols),
       );
     } else {
-      for (let r = 0; r < requiredRows; r++) {
-        const existing = this.#densityPrefixScratch[r];
+      const scratch = this.#densityPrefixScratch;
+      const firstRow = scratch[0];
+
+      if (!firstRow || firstRow.length !== requiredCols) {
+        scratch[0] = new Uint32Array(requiredCols);
+      } else {
+        firstRow.fill(0);
+      }
+
+      for (let r = 1; r < requiredRows; r++) {
+        const existing = scratch[r];
 
         if (!existing || existing.length !== requiredCols) {
-          this.#densityPrefixScratch[r] = new Uint32Array(requiredCols);
+          scratch[r] = new Uint32Array(requiredCols);
         } else {
-          existing.fill(0);
+          existing[0] = 0;
         }
       }
     }
