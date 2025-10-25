@@ -1,5 +1,11 @@
 import { TRAIT_ACTIVATION_THRESHOLD } from "./config.js";
-import { clamp, clamp01, sanitizePositiveInteger, toFiniteOrNull } from "./utils.js";
+import {
+  clamp,
+  clamp01,
+  sanitizeNumber,
+  sanitizePositiveInteger,
+  toFiniteOrNull,
+} from "./utils.js";
 import { warnOnce } from "./utils/error.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
@@ -1409,11 +1415,11 @@ export default class Stats {
   }
 
   setMatingDiversityThreshold(value) {
-    const numeric = Number(value);
+    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
 
-    if (!Number.isFinite(numeric)) return;
+    if (clamped === null) return;
 
-    this.matingDiversityThreshold = clamp(numeric, 0, 1);
+    this.matingDiversityThreshold = clamped;
   }
 
   /**

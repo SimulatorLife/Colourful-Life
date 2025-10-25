@@ -3,6 +3,7 @@ import {
   clamp,
   lerp,
   createRankedBuffer,
+  sanitizeNumber,
   sanitizePositiveInteger,
 } from "../utils.js";
 import { warnOnce } from "../utils/error.js";
@@ -1887,20 +1888,24 @@ export default class GridManager {
 
   setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {
     if (threshold !== undefined) {
-      const numeric = Number(threshold);
+      const clamped = sanitizeNumber(threshold, { fallback: null, min: 0, max: 1 });
 
-      if (Number.isFinite(numeric)) {
-        this.matingDiversityThreshold = clamp(numeric, 0, 1);
+      if (clamped !== null) {
+        this.matingDiversityThreshold = clamped;
       }
     } else if (typeof this.stats?.matingDiversityThreshold === "number") {
       this.matingDiversityThreshold = clamp(this.stats.matingDiversityThreshold, 0, 1);
     }
 
     if (lowDiversityMultiplier !== undefined) {
-      const numeric = Number(lowDiversityMultiplier);
+      const clamped = sanitizeNumber(lowDiversityMultiplier, {
+        fallback: null,
+        min: 0,
+        max: 1,
+      });
 
-      if (Number.isFinite(numeric)) {
-        this.lowDiversityReproMultiplier = clamp(numeric, 0, 1);
+      if (clamped !== null) {
+        this.lowDiversityReproMultiplier = clamped;
       }
     }
   }

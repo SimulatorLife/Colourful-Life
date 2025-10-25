@@ -8,7 +8,13 @@ import {
   createSelectRow,
   createSliderRow,
 } from "./controlBuilders.js";
-import { clamp, clamp01, toPlainObject, coerceBoolean } from "../utils.js";
+import {
+  clamp,
+  clamp01,
+  coerceBoolean,
+  sanitizeNumber,
+  toPlainObject,
+} from "../utils.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
 const AUTO_PAUSE_DESCRIPTION =
@@ -3963,11 +3969,9 @@ export default class UIManager {
   }
 
   setInitialTileEnergyFraction(value, { notify = true } = {}) {
-    const numeric = Number(value);
+    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
 
-    if (!Number.isFinite(numeric)) return;
-
-    const clamped = clamp(numeric, 0, 1);
+    if (clamped === null) return;
 
     this.initialTileEnergyFraction = clamped;
 
@@ -3981,11 +3985,9 @@ export default class UIManager {
   }
 
   setLowDiversityReproMultiplier(value, { notify = true } = {}) {
-    const numeric = Number(value);
+    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
 
-    if (!Number.isFinite(numeric)) return;
-
-    const clamped = clamp(numeric, 0, 1);
+    if (clamped === null) return;
     const changed = this.lowDiversityReproMultiplier !== clamped;
 
     this.lowDiversityReproMultiplier = clamped;
