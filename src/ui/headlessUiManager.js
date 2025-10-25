@@ -147,6 +147,7 @@ export function createHeadlessUiManager(options = {}) {
     });
 
     if (!Number.isFinite(sanitized)) return false;
+    if (Object.is(settings[key], sanitized)) return false;
 
     settings[key] = sanitized;
 
@@ -243,8 +244,11 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getInitialTileEnergyFraction: () => settings.initialTileEnergyFraction,
-    setInitialTileEnergyFraction: (value) => {
-      if (updateIfFinite("initialTileEnergyFraction", value, { min: 0, max: 1 })) {
+    setInitialTileEnergyFraction: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("initialTileEnergyFraction", value, { min: 0, max: 1 }) &&
+        shouldNotify
+      ) {
         notify("initialTileEnergyFraction", settings.initialTileEnergyFraction);
       }
     },
@@ -255,8 +259,11 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getLowDiversityReproMultiplier: () => settings.lowDiversityReproMultiplier,
-    setLowDiversityReproMultiplier: (value) => {
-      if (updateIfFinite("lowDiversityReproMultiplier", value, { min: 0, max: 1 })) {
+    setLowDiversityReproMultiplier: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("lowDiversityReproMultiplier", value, { min: 0, max: 1 }) &&
+        shouldNotify
+      ) {
         notify("lowDiversityReproMultiplier", settings.lowDiversityReproMultiplier);
       }
     },
@@ -349,7 +356,7 @@ export function createHeadlessUiManager(options = {}) {
     renderMetrics: () => {},
     renderLeaderboard: () => {},
     getAutoPauseOnBlur: () => settings.autoPauseOnBlur,
-    setAutoPauseOnBlur: (value) => {
+    setAutoPauseOnBlur: (value, { notify: shouldNotify = true } = {}) => {
       const normalized = coerceBoolean(value, settings.autoPauseOnBlur);
 
       if (settings.autoPauseOnBlur === normalized) return;
@@ -358,7 +365,9 @@ export function createHeadlessUiManager(options = {}) {
       if (!settings.autoPauseOnBlur) {
         settings.autoPausePending = false;
       }
-      notify("autoPauseOnBlur", settings.autoPauseOnBlur);
+      if (shouldNotify) {
+        notify("autoPauseOnBlur", settings.autoPauseOnBlur);
+      }
     },
     getAutoPausePending: () => settings.autoPausePending,
     setAutoPausePending: (value) => {

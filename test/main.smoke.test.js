@@ -209,6 +209,43 @@ test("headless UI forwards setting changes to the engine", async () => {
   simulation.destroy();
 });
 
+test("headless UI suppresses callbacks for engine-driven updates", async () => {
+  const { createSimulation } = await simulationModulePromise;
+  const observed = [];
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    config: {
+      ui: {
+        onSettingChange(key, value) {
+          observed.push([key, value]);
+        },
+      },
+    },
+  });
+
+  try {
+    assert.equal(
+      observed,
+      [],
+      "initial engine state sync should not emit headless UI callbacks",
+    );
+
+    simulation.engine.setAutoPauseOnBlur(true);
+    simulation.engine.setLowDiversityReproMultiplier(0.33);
+    simulation.engine.setInitialTileEnergyFraction(0.42);
+
+    assert.equal(
+      observed,
+      [],
+      "engine-driven updates should not trigger headless onSettingChange callbacks",
+    );
+  } finally {
+    simulation.destroy();
+  }
+});
+
 test("createSimulation accepts a custom brain snapshot collector", async () => {
   const { createSimulation } = await simulationModulePromise;
   const collector = { captureFromEntries: () => [] };
