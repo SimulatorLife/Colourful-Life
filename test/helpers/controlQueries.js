@@ -111,3 +111,29 @@ export function findSelectByLabel(root, label) {
 
   return null;
 }
+
+export function findButtonByLabel(root, label) {
+  const queue = [root];
+
+  while (queue.length > 0) {
+    const node = queue.shift();
+
+    if (node && Array.isArray(node.children)) {
+      queue.push(...node.children);
+    }
+
+    if (!node || node.tagName !== "BUTTON") {
+      continue;
+    }
+
+    const text = extractTextContent(node).trim();
+    const ariaLabel =
+      typeof node.getAttribute === "function" ? node.getAttribute("aria-label") : null;
+
+    if (text === label || (ariaLabel && ariaLabel.trim() === label)) {
+      return node;
+    }
+  }
+
+  return null;
+}

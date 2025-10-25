@@ -249,6 +249,8 @@ export default class UIManager {
     this.zoneSummaryEl = null;
     this.zoneSummaryTextEl = null;
     this.zoneSummaryList = null;
+    this.zoneCheckboxes = new Map();
+    this.clearZonesButton = null;
     this._checkboxIdSequence = 0;
     this.stepButton = null;
     this._documentKeydownListener = null;
@@ -1173,6 +1175,11 @@ export default class UIManager {
       document.removeEventListener("keydown", this._documentKeydownListener);
       this._documentKeydownListener = null;
     }
+    if (this.zoneCheckboxes) {
+      this.zoneCheckboxes.clear();
+      this.zoneCheckboxes = null;
+    }
+    this.clearZonesButton = null;
   }
 
   #ensureMainRowMounted(anchor) {
@@ -1622,6 +1629,39 @@ export default class UIManager {
     });
   }
 
+  #syncZoneCheckboxesFromManager() {
+    if (!this.zoneCheckboxes || this.zoneCheckboxes.size === 0) return;
+    const manager = this.selectionManager;
+
+    if (!manager || typeof manager.getPatterns !== "function") {
+      return;
+    }
+
+    let patterns;
+
+    try {
+      patterns = manager.getPatterns();
+    } catch (error) {
+      warnOnce(
+        "Failed to read reproductive zone patterns; leaving checkbox states unchanged.",
+        error,
+      );
+
+      return;
+    }
+
+    if (!Array.isArray(patterns)) return;
+
+    patterns.forEach((pattern) => {
+      if (!pattern?.id) return;
+      const checkbox = this.zoneCheckboxes.get(pattern.id);
+
+      if (checkbox) {
+        checkbox.checked = Boolean(pattern.active);
+      }
+    });
+  }
+
   #updateZoneSummary() {
     if (!this.zoneSummaryEl) return;
     const zones =
@@ -1629,6 +1669,8 @@ export default class UIManager {
       typeof this.selectionManager.getActiveZones === "function"
         ? this.selectionManager.getActiveZones()
         : [];
+
+    this.#syncZoneCheckboxesFromManager();
 
     const zoneNames = zones
       .map((zone) => zone?.name || zone?.id)
@@ -1642,6 +1684,11 @@ export default class UIManager {
       this.zoneSummaryTextEl.textContent = summaryText;
     } else {
       this.zoneSummaryEl.textContent = summaryText;
+    }
+
+    if (this.clearZonesButton) {
+      this.clearZonesButton.disabled = !hasZones;
+      this.clearZonesButton.setAttribute("aria-disabled", hasZones ? "false" : "true");
     }
 
     if (this.zoneSummaryList) {
@@ -3277,13 +3324,16 @@ export default class UIManager {
   #buildReproductiveZoneTools(body) {
     if (!this.selectionManager) return;
 
+    this.zoneCheckboxes = new Map();
+    this.clearZonesButton = null;
+
     createSectionHeading(body, "Reproductive Zones", { className: "overlay-header" });
 
     const zoneIntro = document.createElement("p");
 
     zoneIntro.className = "zone-intro control-hint";
     zoneIntro.textContent =
-      "Focus reproduction by enabling preset regions—from hemispheres to central sanctuaries—and combining patterns to guide evolution.";
+      "Focus reproduction by enabling preset regions—from hemispheres to central sanctuaries—and combining patterns to guide evolution. Use Clear Zones to reopen the entire map in one click.";
     body.appendChild(zoneIntro);
 
     const zoneGrid = createControlGrid(body, "control-grid--compact");
@@ -3295,7 +3345,7 @@ export default class UIManager {
           ? pattern.description
           : null;
 
-      this.#addCheckbox(
+      const checkbox = this.#addCheckbox(
         zoneGrid,
         pattern.name,
         { title: description || "", description, color: pattern.color },
@@ -3306,7 +3356,97 @@ export default class UIManager {
           this.#scheduleUpdate();
         },
       );
+
+      if (checkbox && pattern?.id) {
+        this.zoneCheckboxes.set(pattern.id, checkbox);
+      }
     });
+
+    const zoneActions = createControlButtonRow(body, {
+      className: "control-button-row control-button-row--compact",
+    });
+
+    const clearButton = document.createElement("button");
+
+    clearButton.type = "button";
+    clearButton.textContent = "Clear Zones";
+    clearButton.title =
+      "Disable all reproductive zone patterns so the entire grid can reproduce.";
+    clearButton.setAttribute(
+      "aria-label",
+      "Disable all reproductive zone patterns and reopen the full map",
+    );
+    clearButton.addEventListener("click", () => {
+      if (!this.selectionManager) return;
+
+      const manager = this.selectionManager;
+      let hadActive = false;
+
+      if (typeof manager.hasActiveZones === "function") {
+        try {
+          hadActive = Boolean(manager.hasActiveZones());
+        } catch (error) {
+          warnOnce(
+            "Failed to read reproductive zone activity state; assuming zones remain active.",
+            error,
+          );
+          hadActive = true;
+        }
+      } else if (typeof manager.getActiveZones === "function") {
+        try {
+          const activeZones = manager.getActiveZones();
+
+          hadActive = Array.isArray(activeZones)
+            ? activeZones.length > 0
+            : Boolean(activeZones);
+        } catch (error) {
+          warnOnce(
+            "Failed to list active reproductive zones; assuming zones remain active.",
+            error,
+          );
+          hadActive = true;
+        }
+      }
+
+      if (typeof manager.clearActiveZones === "function") {
+        try {
+          manager.clearActiveZones();
+        } catch (error) {
+          warnOnce(
+            "Failed to clear reproductive zones; keeping existing zones active.",
+            error,
+          );
+        }
+      } else if (
+        typeof manager.getPatterns === "function" &&
+        typeof manager.togglePattern === "function"
+      ) {
+        const patterns = manager.getPatterns();
+
+        if (Array.isArray(patterns)) {
+          patterns.forEach((pattern) => {
+            if (pattern?.id) {
+              try {
+                manager.togglePattern(pattern.id, false);
+              } catch (error) {
+                warnOnce(
+                  `Failed to disable reproductive zone pattern "${pattern.id}"; leaving it active.`,
+                  error,
+                );
+              }
+            }
+          });
+        }
+      }
+
+      this.#updateZoneSummary();
+
+      if (hadActive) {
+        this.#scheduleUpdate();
+      }
+    });
+    zoneActions.appendChild(clearButton);
+    this.clearZonesButton = clearButton;
 
     const summaryValue = document.createElement("div");
 
@@ -3329,7 +3469,9 @@ export default class UIManager {
       valueClass: "control-value--left",
     });
 
-    this.zoneSummaryEl = summaryRow.querySelector(".control-value");
+    const summaryContainer = summaryValue.parentElement ?? summaryValue;
+
+    this.zoneSummaryEl = summaryContainer;
     this.zoneSummaryTextEl = summaryText;
     this.zoneSummaryList = summaryList;
     if (this.zoneSummaryEl) {
