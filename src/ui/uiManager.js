@@ -2380,12 +2380,24 @@ export default class UIManager {
         ? Math.max(4, Math.min(18, spacing * 0.5))
         : Math.min(48, chartWidth * 0.6);
 
-    for (let index = 0; index < buckets.length; index += 1) {
-      const bucket = buckets[index] || {};
-      const centerX =
-        buckets.length > 1 ? paddingX + spacing * index : paddingX + chartWidth / 2;
-      const births = Math.max(0, Number.isFinite(bucket.births) ? bucket.births : 0);
-      const deaths = Math.max(0, Number.isFinite(bucket.deaths) ? bucket.deaths : 0);
+    const hasMultipleBuckets = buckets.length > 1;
+    const resolveCenterX = hasMultipleBuckets
+      ? (index) => paddingX + spacing * index
+      : () => paddingX + chartWidth / 2;
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+
+    let isFirstPoint = true;
+
+    for (const [index, rawBucket] of buckets.entries()) {
+      const bucket = rawBucket ?? {};
+      const centerX = resolveCenterX(index);
+      const rawBirths = Number.isFinite(bucket.births) ? bucket.births : 0;
+      const rawDeaths = Number.isFinite(bucket.deaths) ? bucket.deaths : 0;
+      const births = Math.max(0, rawBirths);
+      const deaths = Math.max(0, rawDeaths);
 
       if (births > 0) {
         const heightPx = births * scale;
@@ -2400,23 +2412,13 @@ export default class UIManager {
         ctx.fillStyle = deathColor;
         ctx.fillRect(centerX - barWidth / 2, baseline, barWidth, heightPx);
       }
-    }
 
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-
-    for (let index = 0; index < buckets.length; index += 1) {
-      const bucket = buckets[index] || {};
-      const centerX =
-        buckets.length > 1 ? paddingX + spacing * index : paddingX + chartWidth / 2;
-      const net =
-        (Number.isFinite(bucket.births) ? bucket.births : 0) -
-        (Number.isFinite(bucket.deaths) ? bucket.deaths : 0);
+      const net = rawBirths - rawDeaths;
       const y = baseline - clamp(net, -maxCount, maxCount) * scale;
 
-      if (index === 0) {
+      if (isFirstPoint) {
         ctx.moveTo(centerX, y);
+        isFirstPoint = false;
       } else {
         ctx.lineTo(centerX, y);
       }
