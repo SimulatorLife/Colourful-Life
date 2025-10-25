@@ -6338,6 +6338,7 @@ export default class GridManager {
   buildSnapshot(maxTileEnergy) {
     const cap = typeof maxTileEnergy === "number" ? maxTileEnergy : this.maxTileEnergy;
     const entries = [];
+    const populationCells = [];
     const snapshot = {
       rows: this.rows,
       cols: this.cols,
@@ -6368,15 +6369,35 @@ export default class GridManager {
         const energy = Number.isFinite(cell.energy) ? cell.energy : 0;
         const age = Number.isFinite(cell.age) ? cell.age : 0;
         const fitness = computeFitness(cell, cap);
-        const entry = { row, col, cell, fitness };
+        const fightsWon = Number.isFinite(cell.fightsWon) ? cell.fightsWon : 0;
+        const offspring = Number.isFinite(cell.offspring) ? cell.offspring : 0;
+        const colorCandidate =
+          typeof cell.color === "string"
+            ? cell.color
+            : typeof cell.dna?.toColor === "function"
+              ? cell.dna.toColor()
+              : null;
+        const entry = {
+          row,
+          col,
+          fitness,
+          age,
+          fightsWon,
+          offspring,
+        };
+
+        if (colorCandidate) {
+          entry.color = colorCandidate;
+        }
 
         snapshot.population += 1;
         snapshot.totalEnergy += energy;
         snapshot.totalAge += age;
         entries.push(entry);
+        populationCells.push(cell);
 
         if (Number.isFinite(entry.fitness)) {
-          topBrainEntries.add(entry);
+          topBrainEntries.add({ row, col, cell, fitness: entry.fitness });
           if (entry.fitness > snapshot.maxFitness) {
             snapshot.maxFitness = entry.fitness;
           }
@@ -6391,6 +6412,7 @@ export default class GridManager {
       ? collector(ranked, { limit: BRAIN_SNAPSHOT_LIMIT, gridManager: this, snapshot })
       : ranked;
 
+    snapshot.populationCells = populationCells;
     snapshot.brainSnapshots = Array.isArray(collected) ? collected : ranked;
     snapshot.populationScarcity = clamp(
       Number.isFinite(this.populationScarcitySignal)

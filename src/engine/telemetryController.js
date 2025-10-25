@@ -239,6 +239,14 @@ export default class TelemetryController {
       }
     });
 
+    if (Array.isArray(snapshot.populationCells)) {
+      snapshot.populationCells.length = 0;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(snapshot, "populationCells")) {
+      delete snapshot.populationCells;
+    }
+
     return snapshot;
   }
 }
