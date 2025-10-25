@@ -48,6 +48,8 @@ const INTERACTION_TRAIT_LABELS = Object.freeze({
 
 const TRAIT_COMPUTE_WARNING =
   "Trait compute function failed; defaulting to neutral contribution.";
+const DIVERSITY_SIMILARITY_WARNING =
+  "Failed to compute DNA similarity while estimating diversity.";
 
 function wrapTraitCompute(fn) {
   if (typeof fn !== "function") {
@@ -315,6 +317,7 @@ export default class Stats {
   #pairSampleScratch;
   #pairSampleSelection;
   #diversityDnaScratch;
+  #dnaSimilarityCache;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
    * @param {{
@@ -385,6 +388,7 @@ export default class Stats {
     this.#pairSampleScratch = new Uint32Array(0);
     this.#pairSampleSelection = new Set();
     this.#diversityDnaScratch = [];
+    this.#dnaSimilarityCache = new WeakMap();
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -808,6 +812,94 @@ export default class Stats {
     this.#traitPresenceDirty = true;
   }
 
+  #resolveDnaSeed(dna) {
+    if (!dna || typeof dna.seed !== "function") {
+      return null;
+    }
+
+    try {
+      const value = dna.seed();
+
+      return Number.isFinite(value) ? value : null;
+    } catch (error) {
+      warnOnce(DIVERSITY_SIMILARITY_WARNING, error);
+
+      return null;
+    }
+  }
+
+  #obtainDnaCacheRecord(dna, seed) {
+    if (!dna) {
+      return null;
+    }
+
+    if (!this.#dnaSimilarityCache) {
+      this.#dnaSimilarityCache = new WeakMap();
+    }
+
+    let record = this.#dnaSimilarityCache.get(dna);
+
+    if (record && seed != null && record.seed !== seed) {
+      record = null;
+    }
+
+    if (!record) {
+      record = { seed: seed ?? null, map: new WeakMap() };
+      this.#dnaSimilarityCache.set(dna, record);
+    } else if (record.seed == null && seed != null) {
+      record.seed = seed;
+    }
+
+    return record;
+  }
+
+  #resolveDnaSimilarity(dnaA, dnaB) {
+    if (!dnaA || !dnaB) {
+      return null;
+    }
+
+    if (dnaA === dnaB) {
+      return 1;
+    }
+
+    const similarityFn = dnaA?.similarity;
+
+    if (typeof similarityFn !== "function") {
+      return null;
+    }
+
+    const seedA = this.#resolveDnaSeed(dnaA);
+    const seedB = this.#resolveDnaSeed(dnaB);
+    const cacheA = this.#obtainDnaCacheRecord(dnaA, seedA);
+    const cached = cacheA?.map?.get(dnaB);
+
+    if (typeof cached === "number") {
+      return cached;
+    }
+
+    let similarity;
+
+    try {
+      similarity = similarityFn.call(dnaA, dnaB);
+    } catch (error) {
+      warnOnce(DIVERSITY_SIMILARITY_WARNING, error);
+
+      return null;
+    }
+
+    if (!Number.isFinite(similarity)) {
+      return null;
+    }
+
+    cacheA?.map?.set(dnaB, similarity);
+
+    const cacheB = this.#obtainDnaCacheRecord(dnaB, seedB);
+
+    cacheB?.map?.set(dnaA, similarity);
+
+    return similarity;
+  }
+
   #rebuildTraitAggregates(cellSources) {
     const pool = Array.isArray(cellSources) ? cellSources : [];
     const computes = this.#traitComputes;
@@ -1154,20 +1246,17 @@ export default class Stats {
 
       for (let i = 0; i < populationSize - 1; i += 1) {
         const dnaA = validDna[i];
-        const { similarity } = dnaA ?? {};
-
-        if (typeof similarity !== "function") {
-          continue;
-        }
 
         for (let j = i + 1; j < populationSize; j += 1) {
           const dnaB = validDna[j];
 
-          if (!dnaB || typeof dnaB.similarity !== "function") {
+          const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
+
+          if (!Number.isFinite(similarity)) {
             continue;
           }
 
-          sum += 1 - similarity.call(dnaA, dnaB);
+          sum += 1 - similarity;
           count += 1;
         }
       }
@@ -1250,12 +1339,16 @@ export default class Stats {
         const second = first + 1 + (comboIndex - rowOffset);
         const dnaA = validDna[first];
         const dnaB = validDna[second];
-        const similarity = dnaA?.similarity;
+        const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
 
-        if (dnaA && dnaB && typeof similarity === "function") {
-          sum += 1 - similarity.call(dnaA, dnaB);
-          count += 1;
+        if (!Number.isFinite(similarity)) {
+          sampleIdx += 1;
+
+          continue;
         }
+
+        sum += 1 - similarity;
+        count += 1;
 
         sampleIdx += 1;
       }
