@@ -14,7 +14,7 @@ import {
   toFiniteOrNull,
   toPlainObject,
 } from "../src/utils.js";
-import { invokeWithErrorBoundary, reportError, warnOnce } from "../src/utils/error.js";
+import { invokeWithErrorBoundary, warnOnce } from "../src/utils/error.js";
 
 function* cycle(values) {
   let index = 0;
@@ -365,7 +365,7 @@ test("warnOnce ignores non-string or empty messages", () => {
   assert.equal(calls[0], ["gamma-message"]);
 });
 
-test("reportError logs errors and supports optional deduplication", () => {
+test("invokeWithErrorBoundary reports errors through console.error by default", () => {
   const originalError = console.error;
   const calls = [];
 
@@ -374,34 +374,20 @@ test("reportError logs errors and supports optional deduplication", () => {
   };
 
   try {
-    const firstError = new Error("alpha");
-    const secondError = new Error("beta");
-
-    reportError("first message", firstError);
-    reportError("first message", firstError);
-
-    reportError("dedup message", firstError, { once: true });
-    reportError("dedup message", firstError, { once: true });
-    reportError("dedup message", secondError, { once: true });
-
-    reportError("message only");
-    reportError("", secondError);
+    invokeWithErrorBoundary(
+      () => {
+        throw new Error("boom");
+      },
+      [],
+      { message: "default reporter" },
+    );
   } finally {
     console.error = originalError;
   }
 
-  assert.is(calls.length, 5);
-  assert.equal(
-    calls.map((args) => args[0]),
-    [
-      "first message",
-      "first message",
-      "dedup message",
-      "dedup message",
-      "message only",
-    ],
-  );
-  assert.is(calls[0][1], calls[1][1]);
+  assert.is(calls.length, 1);
+  assert.is(calls[0][0], "default reporter");
+  assert.ok(calls[0][1] instanceof Error);
 });
 
 test("invokeWithErrorBoundary supports custom reporters and onError hooks", () => {

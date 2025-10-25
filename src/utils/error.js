@@ -1,5 +1,10 @@
 const warnedMessages = new Set();
-const reportedErrors = new Set();
+
+const defaultErrorReporter = (message, error) => {
+  if (typeof message !== "string" || message.length === 0) return;
+
+  logWithOptionalError("error", message, error);
+};
 
 /**
  * Safely proxies console logging so optional error objects can be appended
@@ -17,31 +22,6 @@ function logWithOptionalError(method, message, error) {
   if (typeof logger !== "function") return;
 
   logger.call(consoleRef, message, ...(error ? [error] : []));
-}
-
-/**
- * Emits an error-level log, optionally deduplicating repeat reports that share
- * the same message and error signature. Callers can use `once: true` to prevent
- * spamming the console when the same failure reoccurs across frames.
- *
- * @param {string} message - Readable summary of the failure.
- * @param {unknown} [error] - Optional error instance for stack/context.
- * @param {{ once?: boolean }} [options] - Behavioural flags.
- * @returns {void}
- */
-export function reportError(message, error, options = {}) {
-  if (typeof message !== "string" || message.length === 0) return;
-
-  const { once = false } = options ?? {};
-
-  if (once === true) {
-    const errorKey = `${message}::$${error?.name ?? ""}::$${error?.message ?? ""}`;
-
-    if (reportedErrors.has(errorKey)) return;
-    reportedErrors.add(errorKey);
-  }
-
-  logWithOptionalError("error", message, error);
 }
 
 /**
@@ -66,8 +46,8 @@ export function warnOnce(message, error) {
 
 /**
  * Invokes a callback while trapping synchronous errors so the caller's control
- * flow can continue. A reporter hook receives failures, and `once` dedupes
- * repeated emissions using the same logic as `reportError`.
+ * flow can continue. A reporter hook receives failures, and `once` flags allow
+ * reporters to optionally dedupe repeated emissions.
  *
  * @template TResult
  * @param {(...args: any[]) => TResult} callback - Function executed inside the boundary.
@@ -79,7 +59,7 @@ export function warnOnce(message, error) {
  *   reported at most once.
  * @param {any} [options.thisArg] - Value applied as `this` during invocation.
  * @param {(message: string, error: unknown, opts?: { once?: boolean }) => void}
- *   [options.reporter=reportError] - Custom error reporter.
+ *   [options.reporter=defaultErrorReporter] - Custom error reporter.
  * @param {(error: unknown) => void} [options.onError] - Handler executed when a
  *   failure occurs.
  * @returns {TResult|undefined} Callback result when successful; `undefined`
@@ -92,7 +72,7 @@ export function invokeWithErrorBoundary(callback, args = [], options = {}) {
     message,
     once = false,
     thisArg,
-    reporter = reportError,
+    reporter = defaultErrorReporter,
     onError,
   } = options ?? {};
 
@@ -119,7 +99,7 @@ export function invokeWithErrorBoundary(callback, args = [], options = {}) {
         ? resolvedMessage
         : "Callback threw; continuing without interruption.";
 
-    const reporterFn = typeof reporter === "function" ? reporter : reportError;
+    const reporterFn = typeof reporter === "function" ? reporter : defaultErrorReporter;
 
     reporterFn(fallbackMessage, error, { once });
 
