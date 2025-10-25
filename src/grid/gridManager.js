@@ -1301,7 +1301,22 @@ export default class GridManager {
       this.#initializeDecayBuffers(this.rows, this.cols);
     }
 
-    const returned = energy * DECAY_RETURN_FRACTION;
+    const baseFraction = clamp(DECAY_RETURN_FRACTION, 0, 1);
+    let effectiveFraction = baseFraction;
+
+    if (typeof cell?.dna?.decayEnergyReturnFraction === "function") {
+      const dnaFraction = cell.dna.decayEnergyReturnFraction(baseFraction);
+
+      if (Number.isFinite(dnaFraction)) {
+        effectiveFraction = clamp(dnaFraction, 0, 1);
+      } else {
+        warnOnce(
+          "GridManager received non-finite decay return fraction from DNA; falling back to config.",
+        );
+      }
+    }
+
+    const returned = energy * effectiveFraction;
 
     if (returned <= DECAY_EPSILON) return;
 

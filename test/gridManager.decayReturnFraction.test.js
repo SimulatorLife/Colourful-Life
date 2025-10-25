@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import GridManager from "../src/grid/gridManager.js";
+import DNA, { GENE_LOCI } from "../src/genome.js";
+import { DECAY_RETURN_FRACTION } from "../src/config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -48,5 +51,92 @@ test("GridManager honors decay return fraction configuration", () => {
   assert.ok(
     Math.abs(returnFraction - override) < 1e-6,
     `Expected return fraction ${override}, received ${returnFraction}`,
+  );
+});
+
+function measureReturnForDNA(dna, energy = 20) {
+  const grid = new GridManager(3, 3, {
+    maxTileEnergy: 100,
+    autoSeedEnabled: false,
+  });
+  const before = grid.energyGrid.map((row) => row.slice());
+
+  grid.registerDeath({ energy, dna }, { row: 1, col: 1 });
+
+  const after = grid.energyGrid.map((row) => row.slice());
+  let immediateReturn = 0;
+
+  for (let r = 0; r < after.length; r++) {
+    for (let c = 0; c < after[r].length; c++) {
+      immediateReturn += after[r][c] - before[r][c];
+    }
+  }
+
+  const reserveReturn = grid.decayAmount?.[1]?.[1] ?? 0;
+  const total = immediateReturn + reserveReturn;
+
+  return energy > 0 ? total / energy : 0;
+}
+
+function createDNAWithTraits({
+  density = 0,
+  recovery = 0,
+  efficiency = 0,
+  capacity = 0,
+  drought = 0,
+  heat = 0,
+  cold = 0,
+} = {}) {
+  const dna = DNA.random(() => 0.5);
+
+  dna.genes[GENE_LOCI.DENSITY] = Math.round(clamp01(density) * 255);
+  dna.genes[GENE_LOCI.RECOVERY] = Math.round(clamp01(recovery) * 255);
+  dna.genes[GENE_LOCI.ENERGY_EFFICIENCY] = Math.round(clamp01(efficiency) * 255);
+  dna.genes[GENE_LOCI.ENERGY_CAPACITY] = Math.round(clamp01(capacity) * 255);
+  dna.genes[GENE_LOCI.RESIST_DROUGHT] = Math.round(clamp01(drought) * 255);
+  dna.genes[GENE_LOCI.RESIST_HEAT] = Math.round(clamp01(heat) * 255);
+  dna.genes[GENE_LOCI.RESIST_COLD] = Math.round(clamp01(cold) * 255);
+
+  return dna;
+}
+
+function clamp01(value) {
+  return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
+}
+
+test("DNA influences decay return fraction", () => {
+  const lowDNA = createDNAWithTraits({
+    density: 0.05,
+    recovery: 0.05,
+    efficiency: 0.05,
+    capacity: 0.05,
+    drought: 0.05,
+    heat: 0.05,
+    cold: 0.05,
+  });
+  const highDNA = createDNAWithTraits({
+    density: 0.95,
+    recovery: 0.95,
+    efficiency: 0.95,
+    capacity: 0.95,
+    drought: 0.95,
+    heat: 0.95,
+    cold: 0.95,
+  });
+
+  const lowFraction = measureReturnForDNA(lowDNA);
+  const highFraction = measureReturnForDNA(highDNA);
+
+  assert.ok(
+    highFraction > lowFraction + 0.05,
+    `Expected high-trait DNA to return more energy (${highFraction}) than low-trait DNA (${lowFraction}).`,
+  );
+  assert.ok(
+    highFraction <= 0.985,
+    `DNA-derived decay return should stay below 0.985, received ${highFraction}.`,
+  );
+  assert.ok(
+    lowFraction >= Math.max(0.05, DECAY_RETURN_FRACTION * 0.25),
+    `DNA-derived decay return should not collapse excessively, received ${lowFraction}.`,
   );
 });
