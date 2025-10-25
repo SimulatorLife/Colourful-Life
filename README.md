@@ -54,6 +54,10 @@ Hit **Shuffle Layout** to roll a random preset from the catalog without reaching
 
 Find **Empty Tile Energy** in the Energy Dynamics panel to instantly rebalance how much resource sits on empty terrain. Drag the slider to rehydrate barren ground up to the shown percentage of the tile cap, or dial it down to create harsher survival conditions. Adjustments apply immediately to vacant tiles and set the baseline used for future world regenerations, so you can experiment with lush gardens or austere wastelands without restarting the app.
 
+### Restore default tuning
+
+Nudged a dozen sliders into a corner and want to get back to the canonical baseline? Hit **Restore Default Tuning** in the Simulation Controls panel. The button snaps similarity thresholds, environmental multipliers, energy flow rates, mutation and combat modifiers, playback speed, and the dashboard refresh cadence back to their default values so you can restart experiments without manually retracing every tweak.
+
 ### Keyboard shortcuts
 
 Speed through experiments without reaching for the mouse:
