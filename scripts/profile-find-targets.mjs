@@ -35,6 +35,7 @@ const manager = new GridManager(rows, cols, {
 function createCell(row, col) {
   const dna = DNA.random(rng);
   const cell = new Cell(row, col, dna, manager.maxTileEnergy * 0.5);
+
   cell.sight = sight;
 
   return cell;
@@ -48,6 +49,7 @@ function addCell(row, col) {
   if (usedPositions.has(key)) return;
 
   const cell = createCell(row, col);
+
   manager.placeCell(row, col, cell);
   usedPositions.add(key);
 }
@@ -64,6 +66,7 @@ for (let i = 0; i < population; i++) {
 const actorRow = Math.floor(rows / 2);
 const actorCol = Math.floor(cols / 2);
 const actor = createCell(actorRow, actorCol);
+
 manager.placeCell(actorRow, actorCol, actor);
 
 manager.recalculateDensityCounts();
