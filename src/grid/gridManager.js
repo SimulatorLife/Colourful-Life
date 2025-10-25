@@ -686,16 +686,43 @@ export default class GridManager {
     }
 
     const weights = new Array(candidates.length);
+    const energizedFlags = new Array(candidates.length);
     let totalWeight = 0;
+    let energizedCount = 0;
 
     for (let i = 0; i < candidates.length; i++) {
-      const weight = this.#scoreSpawnCandidate(candidates[i], context);
+      const candidate = candidates[i];
+      const energyRow = candidate ? this.energyGrid?.[candidate.r] : null;
+      const energyValue = energyRow ? energyRow[candidate.c] : null;
+      const hasEnergy = Number.isFinite(energyValue) && energyValue > 0;
+
+      energizedFlags[i] = hasEnergy;
+
+      if (hasEnergy) {
+        energizedCount += 1;
+      }
+
+      const weight = hasEnergy ? this.#scoreSpawnCandidate(candidate, context) : 0;
 
       weights[i] = weight;
       totalWeight += weight;
     }
 
     if (!(totalWeight > 0)) {
+      if (energizedCount > 0) {
+        let pick = Math.floor(this.#random() * energizedCount);
+
+        for (let i = 0; i < candidates.length; i++) {
+          if (!energizedFlags[i]) continue;
+
+          if (pick === 0) {
+            return candidates[i] ?? null;
+          }
+
+          pick -= 1;
+        }
+      }
+
       const fallbackIndex = Math.floor(this.#random() * candidates.length);
 
       return candidates[fallbackIndex] ?? null;
