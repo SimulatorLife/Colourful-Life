@@ -194,12 +194,14 @@ export function createHeadlessUiManager(options = {}) {
       return settings.paused;
     },
     getUpdatesPerSecond: () => settings.updatesPerSecond,
-    setUpdatesPerSecond: (value) => {
+    setUpdatesPerSecond: (value, { notify: shouldNotify = true } = {}) => {
       if (updateIfFinite("updatesPerSecond", value, { min: 1, round: true })) {
         const safeBase = baseUpdatesPerSecond > 0 ? baseUpdatesPerSecond : 1;
 
         settings.speedMultiplier = settings.updatesPerSecond / safeBase;
-        notify("updatesPerSecond", settings.updatesPerSecond);
+        if (shouldNotify) {
+          notify("updatesPerSecond", settings.updatesPerSecond);
+        }
       }
     },
     getEventFrequencyMultiplier: () => settings.eventFrequencyMultiplier,

@@ -1660,12 +1660,12 @@ export default class UIManager {
     return `${hint}${shiftNote}`.trim();
   }
 
-  #setSpeedMultiplier(value) {
+  #setSpeedMultiplier(value, { notify = true } = {}) {
     const sanitized = this.#sanitizeSpeedMultiplier(value);
 
     if (!Number.isFinite(sanitized)) return;
 
-    this.#updateSetting("speedMultiplier", sanitized);
+    this.#updateSetting("speedMultiplier", sanitized, { notify });
     this.#updateSpeedMultiplierUI(sanitized);
   }
 
@@ -4255,6 +4255,29 @@ export default class UIManager {
     if (changed && notify) {
       this.#notifySettingChange("autoPauseOnBlur", this.autoPauseOnBlur);
     }
+  }
+
+  setUpdatesPerSecond(value, { notify = true } = {}) {
+    const sanitized = sanitizeNumber(value, {
+      fallback: null,
+      min: 1,
+      round: Math.round,
+    });
+
+    if (sanitized === null) return;
+
+    const base =
+      Number.isFinite(this.baseUpdatesPerSecond) && this.baseUpdatesPerSecond > 0
+        ? this.baseUpdatesPerSecond
+        : SIMULATION_DEFAULTS.updatesPerSecond;
+    const derivedMultiplier = sanitized / base;
+    const safeMultiplier =
+      Number.isFinite(derivedMultiplier) && derivedMultiplier > 0
+        ? derivedMultiplier
+        : this.speedMultiplier;
+
+    this.#setSpeedMultiplier(safeMultiplier, { notify });
+    this.simulationClock.lastUpdatesPerSecond = Math.max(1, this.getUpdatesPerSecond());
   }
 
   setAutoPausePending(pending) {
