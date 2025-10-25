@@ -101,4 +101,5 @@ test("handleReproduction records the full mate pool size when prioritizing candi
   assert.is(seenPoolLength, 12, "prioritization should limit the mating pool");
   assert.is(recorded.length, 1, "expected mate choice to be recorded");
   assert.is(recorded[0].poolSize, mateCount);
+  assert.ok(Object.prototype.hasOwnProperty.call(recorded[0], "diversityOpportunity"));
 });

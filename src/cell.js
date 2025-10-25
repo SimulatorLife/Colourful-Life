@@ -936,6 +936,7 @@ export default class Cell {
     penalized = false,
     penaltyMultiplier = 1,
     strategyPenaltyMultiplier = 1,
+    diversityOpportunity = 0,
   } = {}) {
     const observed = clamp(Number.isFinite(diversity) ? diversity : 0, 0, 1);
     const previousMean = this.#resolveMateDiversityMemory();
@@ -951,6 +952,11 @@ export default class Cell {
     const monotonyGap = clamp(0.45 - observed, 0, 1);
     const penaltyDrag = clamp(1 - (penaltyMultiplier ?? 1), 0, 1);
     const strategyDrag = clamp(1 - (strategyPenaltyMultiplier ?? 1), 0, 1);
+    const opportunitySignal = clamp(
+      Number.isFinite(diversityOpportunity) ? diversityOpportunity : 0,
+      0,
+      1,
+    );
     const previousPressure = this.#resolveMateNoveltyPressure();
     const decay = success ? 0.78 : penalized ? 0.82 : 0.88;
     let nextPressure = previousPressure * decay;
@@ -971,6 +977,10 @@ export default class Cell {
       nextPressure += strategyDrag * (0.25 + monotonyGap * 0.25);
     }
 
+    if (opportunitySignal > 0) {
+      nextPressure += opportunitySignal * (0.18 + monotonyGap * 0.28);
+    }
+
     const noveltyRelief = clamp(Math.max(0, observed - previousMean), 0, 1);
 
     if (noveltyRelief > 0) {
@@ -987,6 +997,7 @@ export default class Cell {
     penaltyMultiplier = 1,
     strategyPenaltyMultiplier = 1,
     behaviorComplementarity = 0,
+    diversityOpportunity = 0,
   } = {}) {
     this.matingAttempts = (this.matingAttempts || 0) + 1;
 
@@ -1016,6 +1027,7 @@ export default class Cell {
       penalized,
       penaltyMultiplier,
       strategyPenaltyMultiplier,
+      diversityOpportunity,
     });
   }
 
