@@ -1,7 +1,18 @@
 import { sanitizeNumber } from "../utils.js";
+import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
 const DEFAULT_LEADERBOARD_SIZE = 5;
 const NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
+
+const WARNINGS = Object.freeze({
+  getEnvironment:
+    "Telemetry environment resolver failed; continuing without environment context.",
+  computeLeaderboard:
+    "Telemetry leaderboard computation failed; emitting empty leaderboard.",
+  emitMetrics: "Telemetry metrics emitter failed; skipping metrics publication.",
+  emitLeaderboard:
+    "Telemetry leaderboard emitter failed; skipping leaderboard publication.",
+});
 
 function normalizeLeaderboardSize(value, fallback = DEFAULT_LEADERBOARD_SIZE) {
   const sanitized = sanitizeNumber(value, {
@@ -143,22 +154,51 @@ export default class TelemetryController {
 
   #emit({ getEnvironment, emitMetrics, emitLeaderboard }) {
     const environment =
-      typeof getEnvironment === "function" ? getEnvironment() : getEnvironment;
+      typeof getEnvironment === "function"
+        ? (invokeWithErrorBoundary(getEnvironment, [], {
+            message: WARNINGS.getEnvironment,
+            reporter: warnOnce,
+            once: true,
+          }) ?? null)
+        : (getEnvironment ?? null);
 
     if (typeof emitMetrics === "function" && this.#lastMetrics) {
-      emitMetrics({
-        stats: this.stats,
-        metrics: this.#lastMetrics,
-        environment,
-      });
+      invokeWithErrorBoundary(
+        emitMetrics,
+        [
+          {
+            stats: this.stats,
+            metrics: this.#lastMetrics,
+            environment,
+          },
+        ],
+        {
+          message: WARNINGS.emitMetrics,
+          reporter: warnOnce,
+          once: true,
+        },
+      );
     }
 
     if (typeof emitLeaderboard === "function") {
-      const entries = this.#lastSnapshot
-        ? this.#computeLeaderboard(this.#lastSnapshot, this.#leaderboardSize)
+      const rawEntries = this.#lastSnapshot
+        ? invokeWithErrorBoundary(
+            this.#computeLeaderboard,
+            [this.#lastSnapshot, this.#leaderboardSize],
+            {
+              message: WARNINGS.computeLeaderboard,
+              reporter: warnOnce,
+              once: true,
+            },
+          )
         : [];
+      const entries = Array.isArray(rawEntries) ? rawEntries : [];
 
-      emitLeaderboard({ entries });
+      invokeWithErrorBoundary(emitLeaderboard, [{ entries }], {
+        message: WARNINGS.emitLeaderboard,
+        reporter: warnOnce,
+        once: true,
+      });
     }
   }
 
