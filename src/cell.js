@@ -2986,11 +2986,11 @@ export default class Cell {
         const labels = entries.map(({ key }) => key);
         const normalized = softmax(logits);
 
-        probabilities = {};
+        probabilities = labels.reduce((acc, label, index) => {
+          acc[label] = normalized[index] ?? 0;
 
-        for (let i = 0; i < labels.length; i++) {
-          probabilities[labels[i]] = normalized[i] ?? 0;
-        }
+          return acc;
+        }, {});
       }
 
       if (probabilities) {
