@@ -183,6 +183,10 @@ export default class Cell {
       typeof this.dna.reproductionReachProfile === "function"
         ? this.dna.reproductionReachProfile()
         : null;
+    this.mateAffinityPlasticity =
+      typeof this.dna.mateAffinityPlasticityProfile === "function"
+        ? this.dna.mateAffinityPlasticityProfile()
+        : null;
     this.riskMemoryProfile =
       typeof this.dna.riskMemoryProfile === "function"
         ? this.dna.riskMemoryProfile()
@@ -998,6 +1002,189 @@ export default class Cell {
     this._mateNoveltyPressure = clamp(nextPressure, 0, 1);
   }
 
+  #imprintMateAffinityExperience({
+    diversity = 0,
+    success = false,
+    penalized = false,
+    penaltyMultiplier = 1,
+    behaviorComplementarity = 0,
+    diversityOpportunity = 0,
+    sensorVector = null,
+    activationCount = 0,
+  } = {}) {
+    const brain = this.brain;
+
+    if (
+      !brain ||
+      !brain.sensorPlasticity?.enabled ||
+      typeof brain.applyExperienceImprint !== "function"
+    ) {
+      return;
+    }
+
+    const profile = this.mateAffinityPlasticity || {};
+    const baseAssimilation = clamp(
+      Number.isFinite(profile.assimilation) ? profile.assimilation : 0.28,
+      0.01,
+      0.9,
+    );
+    const successWeight = clamp(
+      Number.isFinite(profile.successWeight) ? profile.successWeight : 0.6,
+      0,
+      1.5,
+    );
+    const penaltyWeight = clamp(
+      Number.isFinite(profile.penaltyWeight) ? profile.penaltyWeight : 0.5,
+      0,
+      1.5,
+    );
+    const opportunityWeight = clamp(
+      Number.isFinite(profile.opportunityWeight) ? profile.opportunityWeight : 0.4,
+      0,
+      1.5,
+    );
+    const complementWeight = clamp(
+      Number.isFinite(profile.complementWeight) ? profile.complementWeight : 0.3,
+      0,
+      1.5,
+    );
+    const gainInfluence = clamp(
+      Number.isFinite(profile.gainInfluence) ? profile.gainInfluence : 0.35,
+      0,
+      1,
+    );
+
+    const diversityClamped = clamp(Number.isFinite(diversity) ? diversity : 0, 0, 1);
+    const similarity = clamp(1 - diversityClamped, 0, 1);
+    const complementarity = clamp(
+      Number.isFinite(behaviorComplementarity) ? behaviorComplementarity : 0,
+      0,
+      1,
+    );
+    const opportunity = clamp(
+      Number.isFinite(diversityOpportunity) ? diversityOpportunity : 0,
+      0,
+      1,
+    );
+    const penaltyMagnitude = penalized
+      ? clamp(1 - (Number.isFinite(penaltyMultiplier) ? penaltyMultiplier : 1), 0, 1)
+      : 0;
+
+    const adjustments = [];
+
+    if (success) {
+      const assimilation = clamp(
+        baseAssimilation * (0.6 + successWeight * 0.4),
+        0.01,
+        1,
+      );
+      const similarityTarget = clamp(similarity * 2 - 1, -1, 1);
+      const similarityGainBlend = clamp(0.3 + successWeight * 0.3, 0, 1);
+
+      adjustments.push({
+        sensor: "partnerSimilarity",
+        target: similarityTarget,
+        assimilation,
+        gainInfluence,
+        gainBlend: similarityGainBlend,
+      });
+      adjustments.push({
+        sensor: "mateSimilarity",
+        target: similarityTarget,
+        assimilation: assimilation * 0.85,
+        gainInfluence,
+        gainBlend: clamp(similarityGainBlend * 0.8, 0, 1),
+      });
+      adjustments.push({
+        sensor: "allySimilarity",
+        target: similarityTarget,
+        assimilation: assimilation * 0.65,
+        gainInfluence: gainInfluence * 0.5,
+        gainBlend: clamp(similarityGainBlend * 0.5, 0, 1),
+      });
+
+      if (complementarity > 0 && complementWeight > 0) {
+        adjustments.push({
+          sensor: "allyFraction",
+          target: clamp(complementarity * 2 - 1, -1, 1),
+          assimilation: assimilation * complementWeight * 0.4,
+          gainInfluence: gainInfluence * 0.45,
+        });
+      }
+    }
+
+    if (penaltyMagnitude > 0 && penaltyWeight > 0) {
+      const assimilation = clamp(
+        baseAssimilation * (0.4 + penaltyWeight * 0.5),
+        0.01,
+        1,
+      );
+      const penaltyShift = clamp(penaltyMagnitude * penaltyWeight, 0, 1);
+      const penaltyTarget = clamp((similarity - penaltyShift) * 2 - 1, -1, 1);
+
+      adjustments.push({
+        sensor: "partnerSimilarity",
+        target: penaltyTarget,
+        assimilation,
+        gainInfluence: gainInfluence * 0.6,
+        gainShift: -penaltyShift * 0.35,
+      });
+      adjustments.push({
+        sensor: "mateSimilarity",
+        target: penaltyTarget,
+        assimilation: assimilation * 0.9,
+        gainInfluence: gainInfluence * 0.6,
+      });
+    }
+
+    if ((success || opportunity > 0) && opportunityWeight > 0) {
+      const assimilation = clamp(
+        baseAssimilation * (0.45 + opportunityWeight * 0.55),
+        0.01,
+        1,
+      );
+      const target = clamp(opportunity * (success ? 1 : 0.6) * 2 - 1, -1, 1);
+
+      adjustments.push({
+        sensor: "opportunitySignal",
+        target,
+        assimilation,
+        gainInfluence: gainInfluence * 0.5,
+      });
+    }
+
+    if (adjustments.length === 0) return;
+
+    brain.applyExperienceImprint({
+      adjustments,
+      assimilation: baseAssimilation,
+      gainInfluence,
+    });
+
+    if (
+      typeof brain.applySensorFeedback === "function" &&
+      sensorVector &&
+      typeof sensorVector.length === "number" &&
+      sensorVector.length > 0
+    ) {
+      const activation = Number.isFinite(activationCount) ? activationCount : 0;
+      const reward = success
+        ? clamp(diversityClamped * (0.4 + successWeight * 0.3), -1, 1)
+        : -penaltyMagnitude * (0.3 + penaltyWeight * 0.4);
+
+      if (Math.abs(reward) > 1e-4) {
+        brain.applySensorFeedback({
+          sensorVector,
+          activationCount: activation,
+          rewardSignal: clamp(reward, -1, 1),
+          energyCost: 0,
+          fatigueDelta: 0,
+          maxTileEnergy: MAX_TILE_ENERGY,
+        });
+      }
+    }
+  }
+
   recordMatingOutcome({
     diversity = 0,
     success = false,
@@ -1036,6 +1223,19 @@ export default class Cell {
       penaltyMultiplier,
       strategyPenaltyMultiplier,
       diversityOpportunity,
+    });
+
+    const reproductionContext = this._decisionContextIndex?.get("reproduction");
+
+    this.#imprintMateAffinityExperience({
+      diversity,
+      success,
+      penalized,
+      penaltyMultiplier,
+      behaviorComplementarity,
+      diversityOpportunity,
+      sensorVector: reproductionContext?.sensorVector ?? null,
+      activationCount: reproductionContext?.activationCount ?? 0,
     });
   }
 

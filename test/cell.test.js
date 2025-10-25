@@ -1851,6 +1851,120 @@ test("diverse matings relieve accumulated novelty pressure penalties", () => {
   );
 });
 
+test("recordMatingOutcome imprints DNA-driven mate affinity into neural sensors", () => {
+  const dna = new DNA(90, 120, 180);
+  const cell = new Cell(0, 0, dna, 6);
+  const imprintCalls = [];
+  const feedbackCalls = [];
+
+  cell.brain = {
+    sensorPlasticity: { enabled: true },
+    applyExperienceImprint(payload) {
+      imprintCalls.push(payload);
+    },
+    applySensorFeedback(payload) {
+      feedbackCalls.push(payload);
+    },
+  };
+  cell.mateAffinityPlasticity = {
+    assimilation: 0.3,
+    successWeight: 0.7,
+    penaltyWeight: 0.5,
+    opportunityWeight: 0.6,
+    complementWeight: 0.4,
+    gainInfluence: 0.5,
+  };
+  cell._decisionContextIndex.set("reproduction", {
+    sensorVector: new Float32Array([1, 0.2, -0.1, 0.5]),
+    activationCount: 8,
+  });
+
+  cell.recordMatingOutcome({
+    diversity: 0.65,
+    success: true,
+    penalized: false,
+    penaltyMultiplier: 1,
+    behaviorComplementarity: 0.55,
+    diversityOpportunity: 0.4,
+  });
+
+  assert.is(imprintCalls.length, 1, "experience imprint should fire once");
+  const imprint = imprintCalls[0];
+
+  assert.ok(Array.isArray(imprint.adjustments), "imprint payload includes adjustments");
+
+  const partnerAdjustment = imprint.adjustments.find(
+    (entry) => entry && entry.sensor === "partnerSimilarity",
+  );
+
+  assert.ok(partnerAdjustment, "successful mating imprints partner similarity");
+  assert.ok(
+    partnerAdjustment.assimilation > 0,
+    "partner similarity adjustment should carry assimilation",
+  );
+
+  const opportunityAdjustment = imprint.adjustments.find(
+    (entry) => entry && entry.sensor === "opportunitySignal",
+  );
+
+  assert.ok(opportunityAdjustment, "opportunity signal adjustment should be included");
+  assert.ok(
+    feedbackCalls.length > 0,
+    "successful mating should reinforce neural sensors via feedback",
+  );
+});
+
+test("recordMatingOutcome penalizes repetitive mates through neural imprint", () => {
+  const dna = new DNA(50, 80, 110);
+  const cell = new Cell(0, 0, dna, 6);
+  const imprintCalls = [];
+
+  cell.brain = {
+    sensorPlasticity: { enabled: true },
+    applyExperienceImprint(payload) {
+      imprintCalls.push(payload);
+    },
+    applySensorFeedback() {},
+  };
+  cell.mateAffinityPlasticity = {
+    assimilation: 0.25,
+    successWeight: 0.4,
+    penaltyWeight: 0.9,
+    opportunityWeight: 0,
+    complementWeight: 0,
+    gainInfluence: 0.4,
+  };
+  cell._decisionContextIndex.set("reproduction", {
+    sensorVector: new Float32Array([1, 0]),
+    activationCount: 3,
+  });
+
+  cell.recordMatingOutcome({
+    diversity: 0.1,
+    success: false,
+    penalized: true,
+    penaltyMultiplier: 0.6,
+    behaviorComplementarity: 0.2,
+    diversityOpportunity: 0,
+  });
+
+  assert.is(imprintCalls.length, 1, "penalized mating should produce an imprint");
+  const imprint = imprintCalls[0];
+  const partnerAdjustment = imprint.adjustments.find(
+    (entry) => entry && entry.sensor === "partnerSimilarity",
+  );
+
+  assert.ok(partnerAdjustment, "penalty should adjust partner similarity");
+  assert.ok(
+    partnerAdjustment.assimilation > 0,
+    "penalty adjustment should apply learning",
+  );
+  assert.ok(
+    partnerAdjustment.target < 0.8,
+    "penalty should push the similarity target away from repetitive mates",
+  );
+});
+
 test("breed uses DNA inheritStrategy to compute offspring strategy", () => {
   const dnaA = new DNA(10, 20, 30);
   const dnaB = new DNA(40, 50, 60);

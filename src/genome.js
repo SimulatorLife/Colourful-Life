@@ -2047,6 +2047,62 @@ export class DNA {
     };
   }
 
+  mateAffinityPlasticityProfile() {
+    const courtship = this.geneFraction(GENE_LOCI.COURTSHIP);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+
+    const assimilation = clamp(
+      0.18 + 0.32 * courtship + 0.18 * neural - 0.2 * strategy,
+      0.05,
+      0.8,
+    );
+    const successWeight = clamp(
+      0.35 + 0.4 * cooperation + 0.2 * fertility + 0.15 * courtship,
+      0.1,
+      1.2,
+    );
+    const penaltyWeight = clamp(
+      0.25 + 0.45 * strategy + 0.2 * risk + 0.15 * (1 - cooperation),
+      0.05,
+      1.4,
+    );
+    const opportunityWeight = clamp(
+      0.2 + 0.45 * exploration + 0.25 * courtship - 0.25 * strategy,
+      0,
+      1.2,
+    );
+    const complementWeight = clamp(
+      0.2 + 0.35 * cooperation + 0.2 * neural - 0.15 * risk,
+      0,
+      1.1,
+    );
+    const gainInfluence = clamp(
+      0.18 + 0.35 * neural + 0.2 * cooperation - 0.18 * strategy,
+      0.05,
+      0.9,
+    );
+    const retention = clamp(
+      0.55 + 0.25 * strategy + 0.15 * neural - 0.2 * courtship,
+      0.25,
+      0.92,
+    );
+
+    return {
+      assimilation,
+      successWeight,
+      penaltyWeight,
+      opportunityWeight,
+      complementWeight,
+      gainInfluence,
+      retention,
+    };
+  }
+
   lifespanAdj() {
     return Math.round((this.geneFraction(GENE_LOCI.SENESCENCE) - 0.5) * 200);
   }
