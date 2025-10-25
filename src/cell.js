@@ -1,10 +1,14 @@
 import DNA, { GENE_LOCI } from "./genome.js";
 import Brain, { OUTPUT_GROUPS } from "./brain.js";
-import { randomRange, clamp, lerp, cloneTracePayload, warnOnce } from "./utils.js";
-import { isEventAffecting } from "./events/eventManager.js";
-import { getEventEffect } from "./events/eventEffects.js";
+import { randomRange, clamp, lerp, cloneTracePayload } from "./utils.js";
+import { warnOnce } from "./utils/error.js";
 import { accumulateEventModifiers } from "./energySystem.js";
-import { MAX_TILE_ENERGY, MUTATION_CHANCE_BASELINE } from "./config.js";
+import { createEventContext, defaultEventContext } from "./events/eventContext.js";
+import {
+  MAX_TILE_ENERGY,
+  MUTATION_CHANCE_BASELINE,
+  OFFSPRING_VIABILITY_BUFFER,
+} from "./config.js";
 
 const EPSILON = 1e-9;
 
@@ -83,6 +87,34 @@ function sampleFromDistribution(probabilities = [], labels = [], rng = Math.rand
   const fallbackIndex = length - 1;
 
   return labels[fallbackIndex] ?? fallbackIndex;
+}
+
+function resolveEventContext(contextCandidate) {
+  if (
+    contextCandidate &&
+    typeof contextCandidate.isEventAffecting === "function" &&
+    typeof contextCandidate.getEventEffect === "function"
+  ) {
+    return contextCandidate;
+  }
+
+  if (contextCandidate && contextCandidate !== defaultEventContext) {
+    return createEventContext(contextCandidate);
+  }
+
+  return defaultEventContext;
+}
+
+function resolveEffectCache(effectCacheCandidate) {
+  if (
+    effectCacheCandidate &&
+    typeof effectCacheCandidate.get === "function" &&
+    typeof effectCacheCandidate.set === "function"
+  ) {
+    return effectCacheCandidate;
+  }
+
+  return undefined;
 }
 
 export default class Cell {
@@ -198,6 +230,9 @@ export default class Cell {
     );
 
     this._neuralFatigue = baselineFatigue;
+    this._mateDiversityMemory = 0.5;
+    this._mateNoveltyPressure = 0;
+    this._mateDiversitySamples = 0;
     this._neuralEnergyReserve = initialResourceLevel;
     this._neuralFatigueSnapshot = null;
     this._pendingRestRecovery = 0;
@@ -331,7 +366,22 @@ export default class Cell {
     );
     const transferEfficiency = clamp((efficiencyA + efficiencyB) / 2, 0.1, 1);
     const viabilityFloor = Math.max(demandFracA, demandFracB);
-    const viabilityThreshold = resolvedMaxTileEnergy * viabilityFloor * 1.15; // require additional reserves beyond the pickier parent's floor
+    const viabilityBufferA = clamp(
+      typeof parentA.dna?.offspringViabilityBuffer === "function"
+        ? parentA.dna.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER)
+        : OFFSPRING_VIABILITY_BUFFER,
+      1,
+      2,
+    );
+    const viabilityBufferB = clamp(
+      typeof parentB.dna?.offspringViabilityBuffer === "function"
+        ? parentB.dna.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER)
+        : OFFSPRING_VIABILITY_BUFFER,
+      1,
+      2,
+    );
+    const viabilityBuffer = Math.max(viabilityBufferA, viabilityBufferB);
+    const viabilityThreshold = resolvedMaxTileEnergy * viabilityFloor * viabilityBuffer; // require additional reserves beyond the pickier parent's floor
     const minimumTransfer = Math.max(transferEfficiency, 1e-6);
     const requiredTotalInvestment = viabilityThreshold / minimumTransfer;
     const fracFnA = parentA.dna?.parentalInvestmentFrac;
@@ -481,7 +531,7 @@ export default class Cell {
     const similarPull = similarity * (1 + Math.max(0, bias));
     const diversePull = diversity * (1 + Math.max(0, -bias) + appetite);
     const curiosityBonus = diversity * appetite * 0.5;
-    const preferenceScore = similarPull + diversePull + curiosityBonus;
+    let preferenceScore = similarPull + diversePull + curiosityBonus;
 
     const samplingProfile = this.mateSamplingProfile || {};
     const weightScale = clamp(
@@ -511,7 +561,30 @@ export default class Cell {
         : this.resolveRng("mateSelectionNoise");
     const jitter = jitterAmplitude > 0 ? (randomSource() - 0.5) * jitterAmplitude : 0;
     const weighted = preferenceScore * weightScale + diversity * noveltyWeight + jitter;
-    const selectionWeight = Math.max(0.0001, weighted);
+    let selectionWeight = Math.max(0.0001, weighted);
+
+    const noveltyPressure = this.#resolveMateNoveltyPressure();
+
+    if (noveltyPressure > 0.001) {
+      const diversityMemory = this.#resolveMateDiversityMemory();
+      const similarityOverlap = clamp(1 - Math.abs(diversity - diversityMemory), 0, 1);
+      const noveltyGap = clamp(diversity - diversityMemory, 0, 1);
+      const monotonyPenalty = similarityOverlap * noveltyPressure;
+      const noveltyLift =
+        noveltyGap * noveltyPressure * (0.3 + Math.max(0, appetite) * 0.4);
+      const preferenceScale = clamp(1 - monotonyPenalty * 0.45, 0.2, 1.1);
+      const weightScaleAdjusted = clamp(1 - monotonyPenalty * 0.55, 0.1, 1);
+
+      preferenceScore =
+        preferenceScore * preferenceScale +
+        noveltyLift * (0.8 + Math.max(0, appetite) * 0.3);
+      selectionWeight = Math.max(
+        0.0001,
+        selectionWeight * weightScaleAdjusted +
+          noveltyLift * (0.6 + Math.max(0, appetite) * 0.4),
+      );
+      mate.noveltyPressure = noveltyPressure;
+    }
 
     mate.similarity = similarity;
     mate.diversity = diversity;
@@ -590,6 +663,16 @@ export default class Cell {
 
   scorePotentialMates(potentialMates = [], context = {}) {
     const scored = [];
+    const parentRow = Number.isFinite(context?.parentRow)
+      ? context.parentRow
+      : Number.isFinite(this.row)
+        ? this.row
+        : null;
+    const parentCol = Number.isFinite(context?.parentCol)
+      ? context.parentCol
+      : Number.isFinite(this.col)
+        ? this.col
+        : null;
 
     for (let i = 0; i < potentialMates.length; i++) {
       const mate = potentialMates[i];
@@ -637,6 +720,39 @@ export default class Cell {
             const blended = lerp(baseWeight, neuralLift, influence);
 
             evaluated.selectionWeight = Math.max(0.0001, blended);
+          }
+        }
+
+        if (parentRow != null && parentCol != null) {
+          const targetRow = Number.isFinite(mate.row)
+            ? mate.row
+            : Number.isFinite(mate.target?.row)
+              ? mate.target.row
+              : parentRow;
+          const targetCol = Number.isFinite(mate.col)
+            ? mate.col
+            : Number.isFinite(mate.target?.col)
+              ? mate.target.col
+              : parentCol;
+          const separation = Math.max(
+            Math.abs(targetRow - parentRow),
+            Math.abs(targetCol - parentCol),
+          );
+
+          if (Number.isFinite(separation) && separation > 1) {
+            const offset = separation - 1;
+            const weightScale = 1 / (1 + offset * 0.5);
+
+            evaluated.selectionWeight = Math.max(
+              0.0001,
+              (evaluated.selectionWeight || 0.0001) * weightScale,
+            );
+
+            if (typeof evaluated.preferenceScore === "number") {
+              evaluated.preferenceScore -= offset * 0.1;
+            } else {
+              evaluated.preferenceScore = -offset * 0.1;
+            }
           }
         }
 
@@ -692,19 +808,13 @@ export default class Cell {
       );
       const safeTotal = totalWeight > 0 ? totalWeight : 1;
       let roll = randomSample() * safeTotal;
+      const selected = evaluated.find((candidate) => {
+        roll -= Math.max(0, candidate.selectionWeight);
 
-      for (let i = 0; i < evaluated.length; i++) {
-        const candidate = evaluated[i];
-        const weight = Math.max(0, candidate.selectionWeight);
+        return roll <= 0;
+      });
 
-        roll -= weight;
-        if (roll <= 0) {
-          chosen = candidate;
-          break;
-        }
-      }
-
-      if (!chosen) chosen = evaluated[evaluated.length - 1];
+      chosen = selected ?? evaluated[evaluated.length - 1];
     }
 
     return { chosen, evaluated, mode };
@@ -808,6 +918,86 @@ export default class Cell {
     return this.#selectHighestPreferenceMate(scored);
   }
 
+  #resolveMateDiversityMemory() {
+    const stored = this._mateDiversityMemory;
+
+    if (!Number.isFinite(stored)) {
+      return 0.5;
+    }
+
+    return clamp(stored, 0, 1);
+  }
+
+  #resolveMateNoveltyPressure() {
+    const stored = this._mateNoveltyPressure;
+
+    if (!Number.isFinite(stored) || stored <= 0) {
+      return 0;
+    }
+
+    return clamp(stored, 0, 1);
+  }
+
+  #updateMateDiversityDynamics({
+    diversity = 0,
+    success = false,
+    penalized = false,
+    penaltyMultiplier = 1,
+    strategyPenaltyMultiplier = 1,
+    diversityOpportunity = 0,
+  } = {}) {
+    const observed = clamp(Number.isFinite(diversity) ? diversity : 0, 0, 1);
+    const previousMean = this.#resolveMateDiversityMemory();
+    const smoothing = success ? 0.6 : 0.75;
+    const nextMean = previousMean * smoothing + observed * (1 - smoothing);
+
+    this._mateDiversityMemory = nextMean;
+    this._mateDiversitySamples = Math.min(
+      Number.isFinite(this._mateDiversitySamples) ? this._mateDiversitySamples + 1 : 1,
+      Number.MAX_SAFE_INTEGER,
+    );
+
+    const monotonyGap = clamp(0.45 - observed, 0, 1);
+    const penaltyDrag = clamp(1 - (penaltyMultiplier ?? 1), 0, 1);
+    const strategyDrag = clamp(1 - (strategyPenaltyMultiplier ?? 1), 0, 1);
+    const opportunitySignal = clamp(
+      Number.isFinite(diversityOpportunity) ? diversityOpportunity : 0,
+      0,
+      1,
+    );
+    const previousPressure = this.#resolveMateNoveltyPressure();
+    const decay = success ? 0.78 : penalized ? 0.82 : 0.88;
+    let nextPressure = previousPressure * decay;
+
+    if (success || penalized) {
+      const baseWeight = success ? 0.65 : 0.45;
+
+      nextPressure += monotonyGap * (baseWeight + penaltyDrag * 0.35);
+    } else {
+      nextPressure += monotonyGap * 0.25;
+    }
+
+    if (penaltyDrag > 0) {
+      nextPressure += penaltyDrag * (0.2 + monotonyGap * 0.3);
+    }
+
+    if (strategyDrag > 0) {
+      nextPressure += strategyDrag * (0.25 + monotonyGap * 0.25);
+    }
+
+    if (opportunitySignal > 0) {
+      nextPressure += opportunitySignal * (0.18 + monotonyGap * 0.28);
+    }
+
+    const noveltyRelief = clamp(Math.max(0, observed - previousMean), 0, 1);
+
+    if (noveltyRelief > 0) {
+      nextPressure *= 1 - noveltyRelief * (0.5 + observed * 0.3);
+    }
+
+    this._mateNoveltyPressure = clamp(nextPressure, 0, 1);
+  }
+
   recordMatingOutcome({
     diversity = 0,
     success = false,
@@ -815,6 +1005,7 @@ export default class Cell {
     penaltyMultiplier = 1,
     strategyPenaltyMultiplier = 1,
     behaviorComplementarity = 0,
+    diversityOpportunity = 0,
   } = {}) {
     this.matingAttempts = (this.matingAttempts || 0) + 1;
 
@@ -837,6 +1028,19 @@ export default class Cell {
     if (strategyPenalty > 0) {
       this.strategyPenalty = (this.strategyPenalty || 0) + strategyPenalty;
     }
+
+    this.#updateMateDiversityDynamics({
+      diversity,
+      success,
+      penalized,
+      penaltyMultiplier,
+      strategyPenaltyMultiplier,
+      diversityOpportunity,
+    });
+  }
+
+  getMateNoveltyPressure() {
+    return this.#resolveMateNoveltyPressure();
   }
 
   // Internal: nearest target utility
@@ -884,7 +1088,7 @@ export default class Cell {
       sensorVector,
       outputs: evaluation.values ? { ...evaluation.values } : null,
       activationCount,
-      trace: evaluation.trace ? cloneTracePayload(evaluation.trace) : null,
+      trace: evaluation.trace ?? null,
       outcome: null,
     };
 
@@ -2802,11 +3006,11 @@ export default class Cell {
         const labels = entries.map(({ key }) => key);
         const normalized = softmax(logits);
 
-        probabilities = {};
+        probabilities = labels.reduce((acc, label, index) => {
+          acc[label] = normalized[index] ?? 0;
 
-        for (let i = 0; i < labels.length; i++) {
-          probabilities[labels[i]] = normalized[i] ?? 0;
-        }
+          return acc;
+        }, {});
       }
 
       if (probabilities) {
@@ -2981,6 +3185,70 @@ export default class Cell {
     };
   }
 
+  #cooperationSensors(
+    partner,
+    { baseShare = 0, selfEnergy = 0, partnerEnergy = 0, kinship = null } = {},
+  ) {
+    const energy = clamp(Number.isFinite(selfEnergy) ? selfEnergy : 0, 0, 1);
+    const partnerNorm = clamp(
+      Number.isFinite(partnerEnergy) ? partnerEnergy : energy,
+      0,
+      1,
+    );
+    const similarity =
+      kinship != null && Number.isFinite(kinship)
+        ? clamp(kinship, 0, 1)
+        : clamp(
+            this.#safeSimilarityTo(partner, {
+              context: "cooperation sensor similarity",
+              fallback: 0,
+            }),
+            0,
+            1,
+          );
+    const partnerAgeFrac = partner?.lifespan
+      ? clamp(partner.age / partner.lifespan, 0, 1)
+      : 0;
+    const selfSenescence = clamp(
+      typeof this.dna?.senescenceRate === "function" ? this.dna.senescenceRate() : 0,
+      0,
+      2,
+    );
+    const partnerSenescence = clamp(
+      partner && typeof partner.dna?.senescenceRate === "function"
+        ? partner.dna.senescenceRate()
+        : 0,
+      0,
+      2,
+    );
+    const { scarcityMemory, confidenceMemory } = this.#riskMemorySensorValues();
+    const opportunitySignal = this.#currentOpportunitySignal();
+
+    return {
+      energy,
+      partnerEnergy: partnerNorm,
+      partnerSimilarity: similarity,
+      partnerAgeFraction: partnerAgeFrac,
+      selfSenescence,
+      partnerSenescence,
+      riskTolerance: this.#resolveRiskTolerance(),
+      interactionMomentum: this.#resolveInteractionMomentum(),
+      eventPressure: clamp(this.lastEventPressure || 0, 0, 1),
+      resourceTrend: clamp(this._resourceSignal ?? 0, -1, 1),
+      neuralFatigue: this.#currentNeuralFatigue(),
+      scarcityMemory,
+      confidenceMemory,
+      opportunitySignal,
+      allyFraction: 1,
+      enemyFraction: 0,
+      mateFraction: 0,
+      allySimilarity: similarity,
+      enemySimilarity: 0,
+      mateSimilarity: similarity,
+      effectiveDensity: 0,
+    };
+  }
+
   #resolveReproductionNeuralBlend({
     baseProbability = 0,
     neuralProbability = 0,
@@ -3149,6 +3417,141 @@ export default class Cell {
     const probability = clamp(safeBase * (1 - weight) + safeNeural * weight, 0, 1);
 
     return { probability, weight, neuralDelta };
+  }
+
+  #resolveCooperationNeuralWeight({
+    sensors = {},
+    evaluation = null,
+    preference = 0,
+    balanceLean = 0,
+  } = {}) {
+    const geneFraction = (locus, fallback = 0.5) => {
+      if (typeof this.dna?.geneFraction === "function") {
+        const value = this.dna.geneFraction(locus);
+
+        if (Number.isFinite(value)) {
+          return clamp(value, 0, 1);
+        }
+      }
+
+      return clamp(fallback, 0, 1);
+    };
+
+    const neuralGene = geneFraction(GENE_LOCI.NEURAL, 0.5);
+    const cooperationGene = geneFraction(GENE_LOCI.COOPERATION, 0.5);
+    const parentalGene = geneFraction(GENE_LOCI.PARENTAL, 0.5);
+    const strategyGene = geneFraction(GENE_LOCI.STRATEGY, 0.5);
+    const recoveryGene = geneFraction(GENE_LOCI.RECOVERY, 0.5);
+    const reinforcement = this.neuralReinforcementProfile || {};
+    const socialDriveProfile = this.riskMemoryProfile || {};
+    const interactionAlignment = clamp(
+      Number.isFinite(reinforcement.interactionAlignmentWeight)
+        ? reinforcement.interactionAlignmentWeight
+        : 0.3,
+      0,
+      1.3,
+    );
+    const socialDrive = clamp(
+      Number.isFinite(reinforcement.socialWeight)
+        ? reinforcement.socialWeight
+        : Number.isFinite(socialDriveProfile.socialWeight)
+          ? socialDriveProfile.socialWeight
+          : 0.4,
+      0.05,
+      1.4,
+    );
+
+    let weight =
+      0.18 +
+      neuralGene * 0.2 +
+      cooperationGene * 0.26 +
+      parentalGene * 0.18 +
+      strategyGene * 0.12 +
+      interactionAlignment * 0.18 +
+      socialDrive * 0.22;
+
+    const activationCount = Number.isFinite(evaluation?.activationCount)
+      ? evaluation.activationCount
+      : 0;
+    const baselineNeurons = Math.max(
+      1,
+      Number.isFinite(this.neurons) && this.neurons > 0 ? this.neurons : 24,
+    );
+    const normalizedActivation = clamp(
+      activationCount / Math.max(1, baselineNeurons),
+      0,
+      1,
+    );
+
+    if (normalizedActivation > 0) {
+      weight *= 1 + normalizedActivation * 0.22;
+    }
+
+    const resolvedSensors = sensors && typeof sensors === "object" ? sensors : {};
+    const neuralFatigue = clamp(
+      Number.isFinite(resolvedSensors.neuralFatigue)
+        ? resolvedSensors.neuralFatigue
+        : this.#currentNeuralFatigue(),
+      0,
+      1,
+    );
+    const fatiguePenalty = clamp(
+      1 - neuralFatigue * (0.4 - recoveryGene * 0.15),
+      0.3,
+      1,
+    );
+
+    weight *= fatiguePenalty;
+
+    const scarcityMemory = clamp(
+      Number.isFinite(resolvedSensors.scarcityMemory)
+        ? resolvedSensors.scarcityMemory
+        : 0,
+      -1,
+      1,
+    );
+
+    if (scarcityMemory > 0) {
+      weight *= 1 - scarcityMemory * 0.2;
+    }
+
+    const confidenceMemory = clamp(
+      Number.isFinite(resolvedSensors.confidenceMemory)
+        ? resolvedSensors.confidenceMemory
+        : 0,
+      -1,
+      1,
+    );
+
+    if (confidenceMemory < 0) {
+      weight *= 1 + Math.abs(confidenceMemory) * 0.1;
+    }
+
+    const opportunitySignal = clamp(
+      Number.isFinite(resolvedSensors.opportunitySignal)
+        ? resolvedSensors.opportunitySignal
+        : 0,
+      -1,
+      1,
+    );
+
+    if (opportunitySignal > 0) {
+      weight *= 1 + opportunitySignal * 0.08;
+    }
+
+    const directionStrength = clamp(
+      Math.abs(preference) + Math.abs(balanceLean) * 0.5,
+      0,
+      1,
+    );
+
+    weight *= clamp(0.6 + directionStrength * 0.4, 0.3, 1.2);
+
+    if (!Number.isFinite(weight)) {
+      return { weight: 0 };
+    }
+
+    return { weight: clamp(weight, 0, 0.9) };
   }
 
   #targetingSensors(enemies = [], { maxTileEnergy = MAX_TILE_ENERGY } = {}) {
@@ -4111,6 +4514,9 @@ export default class Cell {
           tileEnergy,
           tileEnergyDelta,
           maxTileEnergy,
+          mates,
+          enemies,
+          society,
         });
 
         if (shouldRetreat) {
@@ -4205,10 +4611,86 @@ export default class Cell {
       tileEnergy = null,
       tileEnergyDelta = 0,
       maxTileEnergy = MAX_TILE_ENERGY,
+      mates = [],
+      enemies = [],
+      society = [],
     } = {},
   ) {
     if (!threat) {
       return { shouldRetreat: false, probability: 0 };
+    }
+
+    const baseline = this.#computeLegacyRetreatImpulse(threat, {
+      row,
+      col,
+      localDensity,
+      densityEffectMultiplier,
+      tileEnergy,
+      tileEnergyDelta,
+      maxTileEnergy,
+    });
+    const neural = this.#neuralCautiousRetreatImpulse({
+      threat,
+      row,
+      col,
+      localDensity,
+      densityEffectMultiplier,
+      tileEnergy,
+      tileEnergyDelta,
+      maxTileEnergy,
+      mates,
+      enemies,
+      society,
+      baseline,
+    });
+
+    let probability = baseline.probability;
+    let neuralDetails = null;
+
+    if (neural) {
+      const weight = clamp(Number.isFinite(neural.weight) ? neural.weight : 0.5, 0, 1);
+
+      probability = lerp(probability, neural.probability, weight);
+      neuralDetails = { ...neural, weight };
+    }
+
+    probability = clamp(Number.isFinite(probability) ? probability : 0, 0, 1);
+
+    const rng = this.resolveRng("legacyCautiousRetreat");
+    const roll = typeof rng === "function" ? rng() : Math.random();
+    const shouldRetreat = Number.isFinite(roll)
+      ? roll < probability
+      : probability >= 0.5;
+
+    if (neuralDetails) {
+      this.#assignDecisionOutcome("movement", {
+        cautiousRetreat: {
+          baselineProbability: baseline.probability,
+          probability,
+          neuralProbability: neuralDetails.probability,
+          neuralWeight: neuralDetails.weight,
+          neuralAdvantage: neuralDetails.advantage,
+        },
+      });
+    }
+
+    return { shouldRetreat, probability };
+  }
+
+  #computeLegacyRetreatImpulse(
+    threat,
+    {
+      row,
+      col,
+      localDensity = 0,
+      densityEffectMultiplier = 1,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
+      maxTileEnergy = MAX_TILE_ENERGY,
+    } = {},
+  ) {
+    if (!threat) {
+      return { probability: 0, metrics: null };
     }
 
     const occupantRow = Number.isFinite(row) ? row : this.row;
@@ -4312,13 +4794,129 @@ export default class Cell {
       0,
       1,
     );
-    const rng = this.resolveRng("legacyCautiousRetreat");
-    const roll = typeof rng === "function" ? rng() : Math.random();
-    const shouldRetreat = Number.isFinite(roll)
-      ? roll < retreatProbability
-      : retreatProbability >= 0.5;
 
-    return { shouldRetreat, probability: retreatProbability };
+    return {
+      probability: retreatProbability,
+      metrics: {
+        cautionDrive,
+        threatDrive,
+        resourceAnchor,
+        confidence,
+        retreatScore,
+        holdScore,
+        scarcitySignal,
+        energyDelta,
+        proximityPressure,
+        eventPressure,
+      },
+    };
+  }
+
+  #neuralCautiousRetreatImpulse({
+    threat,
+    localDensity = 0,
+    densityEffectMultiplier = 1,
+    mates = [],
+    enemies = [],
+    society = [],
+    maxTileEnergy = MAX_TILE_ENERGY,
+    tileEnergy = null,
+    tileEnergyDelta = 0,
+    baseline = null,
+  } = {}) {
+    if (!threat || !this.#canUseNeuralPolicies()) {
+      return null;
+    }
+
+    const sensors = this.#movementSensors({
+      localDensity,
+      densityEffectMultiplier,
+      mates,
+      enemies,
+      society,
+      maxTileEnergy,
+      tileEnergy,
+      tileEnergyDelta,
+    });
+    const preview = this.#previewBrainGroup("movement", sensors);
+
+    if (!preview?.values) {
+      return null;
+    }
+
+    const entries = OUTPUT_GROUPS.movement;
+    const logits = entries.map(({ key }) => Number(preview.values[key]) || 0);
+    const probabilities = softmax(logits);
+    const indexOf = (label) => entries.findIndex((entry) => entry.key === label);
+    const clampProb = (idx) => (idx >= 0 ? clamp(probabilities[idx] ?? 0, 0, 1) : 0);
+    const avoidIndex = indexOf("avoid");
+    const avoidProb = clampProb(avoidIndex);
+
+    if (avoidIndex < 0) {
+      return null;
+    }
+
+    let competitorMax = 0;
+
+    for (let i = 0; i < probabilities.length; i++) {
+      if (i === avoidIndex) continue;
+
+      const candidate = clamp(probabilities[i] ?? 0, 0, 1);
+
+      if (candidate > competitorMax) {
+        competitorMax = candidate;
+      }
+    }
+
+    const advantage = Math.max(0, avoidProb - competitorMax);
+    const restProb = clampProb(indexOf("rest"));
+    const pursueProb = clampProb(indexOf("pursue"));
+    const exploreProb = clampProb(indexOf("explore"));
+    const severity = (() => {
+      const metrics = baseline?.metrics || {};
+      const threatDrive = Number.isFinite(metrics.threatDrive)
+        ? clamp(metrics.threatDrive, 0, 2)
+        : 0;
+      const proximityPressure = Number.isFinite(metrics.proximityPressure)
+        ? clamp(metrics.proximityPressure, 0, 1.5)
+        : 0;
+      const energyDelta = Number.isFinite(metrics.energyDelta)
+        ? clamp(Math.max(0, metrics.energyDelta), 0, 1)
+        : 0;
+      const eventPressure = Number.isFinite(metrics.eventPressure)
+        ? clamp(metrics.eventPressure, 0, 1)
+        : clamp(this.lastEventPressure || 0, 0, 1);
+
+      return clamp(
+        threatDrive * 0.35 +
+          proximityPressure * 0.35 +
+          energyDelta * 0.3 +
+          eventPressure * 0.25,
+        0,
+        1.6,
+      );
+    })();
+    const neuralFatigue = this.#currentNeuralFatigue();
+    const scarcityMemory = clamp(Math.max(0, sensors.scarcityMemory ?? 0), 0, 1);
+    let neuralProbability = avoidProb * (0.65 + advantage * 0.55);
+
+    neuralProbability += severity * 0.25;
+    neuralProbability += neuralFatigue * 0.12 + scarcityMemory * 0.1;
+    neuralProbability -= restProb * 0.18 + pursueProb * 0.22 + exploreProb * 0.08;
+    neuralProbability = clamp(neuralProbability, 0, 1);
+
+    const weight = clamp(0.45 + advantage * 0.35 + severity * 0.25, 0.2, 0.95);
+
+    return {
+      probability: neuralProbability,
+      weight,
+      advantage,
+      avoidProbability: avoidProb,
+      competitorProbability: competitorMax,
+      restProbability: restProb,
+      pursueProbability: pursueProb,
+      exploreProbability: exploreProb,
+    };
   }
 
   executeMovementStrategy(gridArr, row, col, mates, enemies, society, context = {}) {
@@ -4449,12 +5047,76 @@ export default class Cell {
 
         return;
       case "pursue": {
-        const target = nearestEnemy || nearestMate || nearestAlly;
+        let targetedEnemy = null;
+
+        if (
+          Array.isArray(enemies) &&
+          enemies.length > 0 &&
+          typeof this.chooseEnemyTarget === "function"
+        ) {
+          targetedEnemy = this.chooseEnemyTarget(enemies, {
+            maxTileEnergy: movementContext.maxTileEnergy,
+          });
+        }
+
+        let target = targetedEnemy || nearestEnemy || nearestMate || nearestAlly;
+        let source = null;
+
+        if (targetedEnemy) {
+          const targetingOutcome = this.#getDecisionOutcome("targeting");
+          const usedTargetingNetwork = Boolean(targetingOutcome?.usedNetwork);
+
+          source = usedTargetingNetwork ? "neuralTargeting" : "targeting";
+
+          const summary = this.#summarizePursuitTarget(target, {
+            origin: source,
+            row,
+            col,
+          });
+
+          if (summary && typeof moveToTarget === "function") {
+            moveToTarget(gridArr, row, col, summary.row, summary.col, rows, cols);
+
+            this.#assignDecisionOutcome("movement", {
+              pursueTarget: summary,
+              pursueUsedTargetingNetwork: usedTargetingNetwork,
+            });
+
+            return;
+          }
+
+          // If the neural target could not be resolved, fall back to other options.
+          target = null;
+        }
+
+        if (!target && nearestEnemy) {
+          target = nearestEnemy;
+          source = "nearestEnemy";
+        } else if (!target && nearestMate) {
+          target = nearestMate;
+          source = "nearestMate";
+        } else if (!target && nearestAlly) {
+          target = nearestAlly;
+          source = "nearestAlly";
+        }
 
         if (target && typeof moveToTarget === "function") {
-          moveToTarget(gridArr, row, col, target.row, target.col, rows, cols);
+          const summary = this.#summarizePursuitTarget(target, {
+            origin: source,
+            row,
+            col,
+          });
 
-          return;
+          if (summary) {
+            moveToTarget(gridArr, row, col, summary.row, summary.col, rows, cols);
+
+            this.#assignDecisionOutcome("movement", {
+              pursueTarget: summary,
+              pursueUsedTargetingNetwork: false,
+            });
+
+            return;
+          }
         }
 
         break;
@@ -4490,6 +5152,66 @@ export default class Cell {
     if (typeof moveRandomly === "function") {
       moveRandomly(gridArr, row, col, this, rows, cols, movementContext);
     }
+  }
+
+  #summarizePursuitTarget(targetEntry, { origin = null, row, col } = {}) {
+    if (!targetEntry) return null;
+
+    const resolvedRow = Number.isFinite(targetEntry?.row)
+      ? targetEntry.row
+      : Number.isFinite(targetEntry?.target?.row)
+        ? targetEntry.target.row
+        : null;
+    const resolvedCol = Number.isFinite(targetEntry?.col)
+      ? targetEntry.col
+      : Number.isFinite(targetEntry?.target?.col)
+        ? targetEntry.target.col
+        : null;
+
+    if (!Number.isFinite(resolvedRow) || !Number.isFinite(resolvedCol)) {
+      return null;
+    }
+
+    const originRow = Number.isFinite(row) ? row : this.row;
+    const originCol = Number.isFinite(col) ? col : this.col;
+    const summary = {
+      row: resolvedRow,
+      col: resolvedCol,
+    };
+
+    if (typeof origin === "string" && origin.length > 0) {
+      summary.source = origin;
+    }
+
+    if (Number.isFinite(originRow) && Number.isFinite(originCol)) {
+      const distance = Math.max(
+        Math.abs(resolvedRow - originRow),
+        Math.abs(resolvedCol - originCol),
+      );
+
+      if (Number.isFinite(distance)) {
+        summary.distance = distance;
+      }
+    }
+
+    const targetCell = targetEntry?.target ?? null;
+
+    if (targetCell) {
+      if (Number.isFinite(targetCell.energy)) {
+        summary.energy = targetCell.energy;
+      }
+
+      const similarity = this.#safeSimilarityTo(targetCell, {
+        context: "movement pursue target similarity",
+        fallback: null,
+      });
+
+      if (Number.isFinite(similarity)) {
+        summary.similarity = clamp(similarity, 0, 1);
+      }
+    }
+
+    return summary;
   }
 
   getReproductionReach({
@@ -4838,9 +5560,9 @@ export default class Cell {
       const choice = sampleFromDistribution(probs, labels, decisionRng);
       const probabilitiesByKey = {};
 
-      for (let i = 0; i < labels.length; i++) {
-        probabilitiesByKey[labels[i]] = probs[i] ?? 0;
-      }
+      labels.forEach((label, index) => {
+        probabilitiesByKey[label] = probs[index] ?? 0;
+      });
 
       if (choice) {
         this.#assignDecisionOutcome("interaction", {
@@ -5081,20 +5803,24 @@ export default class Cell {
     currentEvent,
     eventStrengthMultiplier = 1,
     maxTileEnergy = 5,
+    options = {},
   ) {
     const events = Array.isArray(currentEvent)
       ? currentEvent
       : currentEvent
         ? [currentEvent]
         : [];
+    const eventContext = resolveEventContext(options?.eventContext);
+    const effectCache = resolveEffectCache(options?.effectCache);
 
     const { appliedEvents } = accumulateEventModifiers({
       events,
       row,
       col,
       eventStrengthMultiplier,
-      isEventAffecting,
-      getEventEffect,
+      isEventAffecting: eventContext.isEventAffecting,
+      getEventEffect: eventContext.getEventEffect,
+      effectCache,
     });
 
     if (appliedEvents.length === 0) {
@@ -5220,6 +5946,7 @@ export default class Cell {
       selfEnergy: selfEnergyNorm,
       partnerEnergy: partnerNorm,
       kinship,
+      partner,
     });
     const shareFraction = shareResolution.share;
 
@@ -5255,8 +5982,108 @@ export default class Cell {
     selfEnergy = 0,
     partnerEnergy = 0,
     kinship = 0,
+    partner = null,
   } = {}) {
     const baseShare = clamp(Number.isFinite(baseline) ? baseline : 0, 0, 1);
+    const sensors = this.#cooperationSensors(partner, {
+      baseShare,
+      selfEnergy,
+      partnerEnergy,
+      kinship,
+    });
+    const values = this.#evaluateBrainGroup("cooperationShare", sensors);
+
+    if (!values) {
+      const fallback = this.#legacyCooperationShareFraction({
+        baseShare,
+        selfEnergy,
+        partnerEnergy,
+        kinship,
+      });
+
+      this.#assignDecisionOutcome("cooperationShare", {
+        usedNetwork: false,
+        baseShare,
+        share: fallback.share,
+        neuralTarget: fallback.neuralTarget ?? null,
+        neuralMix: fallback.neuralMix ?? 0,
+        neuralSignal: fallback.neuralSignal ?? null,
+      });
+
+      return fallback;
+    }
+
+    const entries = OUTPUT_GROUPS.cooperationShare;
+    const logits = entries.map(({ key }) => values[key] ?? 0);
+    const probabilities = softmax(logits);
+    const logitsByKey = {};
+    const probabilitiesByKey = {};
+
+    for (let i = 0; i < entries.length; i++) {
+      const { key } = entries[i];
+
+      logitsByKey[key] = logits[i] ?? 0;
+      probabilitiesByKey[key] = probabilities[i] ?? 0;
+    }
+
+    const conserveProb = clamp(probabilitiesByKey.conserve ?? 0, 0, 1);
+    const reciprocateProb = clamp(probabilitiesByKey.reciprocate ?? 0, 0, 1);
+    const amplifyProb = clamp(probabilitiesByKey.amplify ?? 0, 0, 1);
+    const preference = clamp(amplifyProb - conserveProb, -1, 1);
+    const balanceLean = clamp(reciprocateProb - 1 / Math.max(1, entries.length), -1, 1);
+    const kin = clamp(Number.isFinite(kinship) ? kinship : 0, 0, 1);
+    const self = clamp(Number.isFinite(selfEnergy) ? selfEnergy : 0, 0, 1);
+    const partnerNorm = clamp(
+      Number.isFinite(partnerEnergy) ? partnerEnergy : self,
+      0,
+      1,
+    );
+    const energyDelta = clamp(partnerNorm - self, -1, 1);
+    const needBoost = Math.max(0, energyDelta);
+    const cautionDrag = Math.max(0, -energyDelta);
+    const opportunity = clamp(sensors.opportunitySignal ?? 0, -1, 1);
+
+    let neuralTarget = baseShare;
+
+    neuralTarget += preference * (0.55 + kin * 0.3 + needBoost * 0.45);
+    neuralTarget += balanceLean * 0.2;
+    neuralTarget += opportunity * (amplifyProb - conserveProb) * 0.1;
+    neuralTarget -= cautionDrag * (0.28 + (1 - kin) * 0.2 + conserveProb * 0.25);
+    neuralTarget = clamp(neuralTarget, 0, 1);
+
+    const evaluation =
+      this.brain?.lastEvaluation?.group === "cooperationShare"
+        ? this.brain.lastEvaluation
+        : null;
+    const { weight: neuralMix } = this.#resolveCooperationNeuralWeight({
+      sensors,
+      evaluation,
+      preference,
+      balanceLean,
+    });
+    const share = clamp(lerp(baseShare, neuralTarget, neuralMix), 0, 1);
+    const neuralSignal = preference;
+
+    this.#assignDecisionOutcome("cooperationShare", {
+      usedNetwork: true,
+      baseShare,
+      share,
+      neuralTarget,
+      neuralMix,
+      neuralSignal,
+      probabilities: probabilitiesByKey,
+      logits: logitsByKey,
+    });
+
+    return { share, baseShare, neuralTarget, neuralMix, neuralSignal };
+  }
+
+  #legacyCooperationShareFraction({
+    baseShare = 0,
+    selfEnergy = 0,
+    partnerEnergy = 0,
+    kinship = 0,
+  } = {}) {
     const outcome = this.#getDecisionOutcome("interaction");
 
     if (!outcome || outcome.usedNetwork !== true || outcome.action !== "cooperate") {

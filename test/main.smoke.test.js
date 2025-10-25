@@ -132,6 +132,25 @@ test("headless canvas sanitizes invalid dimension overrides", async () => {
   simulation.destroy();
 });
 
+test("createSimulation preserves provided headless canvas dimensions", async () => {
+  const [{ createSimulation }, { createHeadlessCanvas }] = await Promise.all([
+    simulationModulePromise,
+    import("../src/engine/environment.js"),
+  ]);
+
+  const customCanvas = createHeadlessCanvas({ width: 320, height: 200 });
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    canvas: customCanvas,
+  });
+
+  assert.is(simulation.engine.canvas.width, 320);
+  assert.is(simulation.engine.canvas.height, 200);
+
+  simulation.destroy();
+});
+
 test("createSimulation respects low diversity multiplier overrides in headless mode", async () => {
   const { createSimulation } = await simulationModulePromise;
   const configuredMultiplier = 0.24;
@@ -188,6 +207,43 @@ test("headless UI forwards setting changes to the engine", async () => {
   assert.is(simulation.engine.autoPauseOnBlur, false);
 
   simulation.destroy();
+});
+
+test("headless UI suppresses callbacks for engine-driven updates", async () => {
+  const { createSimulation } = await simulationModulePromise;
+  const observed = [];
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    config: {
+      ui: {
+        onSettingChange(key, value) {
+          observed.push([key, value]);
+        },
+      },
+    },
+  });
+
+  try {
+    assert.equal(
+      observed,
+      [],
+      "initial engine state sync should not emit headless UI callbacks",
+    );
+
+    simulation.engine.setAutoPauseOnBlur(true);
+    simulation.engine.setLowDiversityReproMultiplier(0.33);
+    simulation.engine.setInitialTileEnergyFraction(0.42);
+
+    assert.equal(
+      observed,
+      [],
+      "engine-driven updates should not trigger headless onSettingChange callbacks",
+    );
+  } finally {
+    simulation.destroy();
+  }
 });
 
 test("createSimulation accepts a custom brain snapshot collector", async () => {

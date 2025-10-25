@@ -25,7 +25,7 @@ test("resolveMaxTileEnergy falls back when override is invalid", async () => {
 test("REGEN_DENSITY_PENALTY exposes the environment-aware default", async () => {
   const { REGEN_DENSITY_PENALTY } = await configModulePromise;
 
-  assert.is(REGEN_DENSITY_PENALTY, 0.42);
+  assert.is(REGEN_DENSITY_PENALTY, 0.39);
 });
 
 test("resolveRegenDensityPenalty respects overrides", async () => {
@@ -42,7 +42,7 @@ test("resolveRegenDensityPenalty falls back when override is invalid", async () 
 
   assert.is(
     resolveRegenDensityPenalty({ COLOURFUL_LIFE_REGEN_DENSITY_PENALTY: "1.5" }),
-    0.42,
+    0.39,
   );
 });
 
@@ -169,7 +169,7 @@ test("resolveMutationChance clamps invalid overrides", async () => {
 test("DECAY_RETURN_FRACTION exposes the environment-aware default", async () => {
   const { DECAY_RETURN_FRACTION } = await configModulePromise;
 
-  assert.is(DECAY_RETURN_FRACTION, 0.9);
+  assert.is(DECAY_RETURN_FRACTION, 0.88);
 });
 
 test("resolveDecayReturnFraction respects overrides", async () => {
@@ -196,6 +196,101 @@ test("resolveDecayReturnFraction clamps invalid overrides", async () => {
 
   assert.is(
     resolveDecayReturnFraction({ COLOURFUL_LIFE_DECAY_RETURN_FRACTION: "NaN" }),
-    0.9,
+    0.88,
+  );
+});
+
+test("DECAY_IMMEDIATE_SHARE exposes the environment-aware default", async () => {
+  const { DECAY_IMMEDIATE_SHARE } = await configModulePromise;
+
+  assert.is(DECAY_IMMEDIATE_SHARE, 0.25);
+});
+
+test("resolveDecayImmediateShare respects overrides", async () => {
+  const { resolveDecayImmediateShare } = await configModulePromise;
+
+  assert.is(
+    resolveDecayImmediateShare({ COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE: "0.4" }),
+    0.4,
+  );
+});
+
+test("resolveDecayImmediateShare clamps invalid overrides", async () => {
+  const { resolveDecayImmediateShare } = await configModulePromise;
+
+  assert.is(
+    resolveDecayImmediateShare({ COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE: "-0.1" }),
+    0,
+  );
+
+  assert.is(
+    resolveDecayImmediateShare({ COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE: "1.3" }),
+    1,
+  );
+
+  assert.is(
+    resolveDecayImmediateShare({ COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE: "NaN" }),
+    0.25,
+  );
+});
+
+test("DECAY_MAX_AGE exposes the environment-aware default", async () => {
+  const { DECAY_MAX_AGE } = await configModulePromise;
+
+  assert.is(DECAY_MAX_AGE, 240);
+});
+
+test("resolveDecayMaxAge respects overrides", async () => {
+  const { resolveDecayMaxAge } = await configModulePromise;
+
+  assert.is(resolveDecayMaxAge({ COLOURFUL_LIFE_DECAY_MAX_AGE: "480" }), 480);
+});
+
+test("resolveDecayMaxAge falls back when override is invalid", async () => {
+  const { resolveDecayMaxAge } = await configModulePromise;
+
+  assert.is(resolveDecayMaxAge({ COLOURFUL_LIFE_DECAY_MAX_AGE: "0" }), 240);
+  assert.is(resolveDecayMaxAge({ COLOURFUL_LIFE_DECAY_MAX_AGE: "NaN" }), 240);
+});
+
+test("OFFSPRING_VIABILITY_BUFFER exposes the environment-aware default", async () => {
+  const { OFFSPRING_VIABILITY_BUFFER } = await configModulePromise;
+
+  assert.is(OFFSPRING_VIABILITY_BUFFER, 1.12);
+});
+
+test("resolveOffspringViabilityBuffer respects overrides", async () => {
+  const { resolveOffspringViabilityBuffer } = await configModulePromise;
+
+  assert.is(
+    resolveOffspringViabilityBuffer({
+      COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER: "1.5",
+    }),
+    1.5,
+  );
+});
+
+test("resolveOffspringViabilityBuffer clamps invalid overrides", async () => {
+  const { resolveOffspringViabilityBuffer } = await configModulePromise;
+
+  assert.is(
+    resolveOffspringViabilityBuffer({
+      COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER: "0.8",
+    }),
+    1,
+  );
+
+  assert.is(
+    resolveOffspringViabilityBuffer({
+      COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER: "3.4",
+    }),
+    2,
+  );
+
+  assert.is(
+    resolveOffspringViabilityBuffer({
+      COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER: "NaN",
+    }),
+    1.12,
   );
 });

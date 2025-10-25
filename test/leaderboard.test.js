@@ -1,5 +1,5 @@
 import { assert, test } from "#tests/harness";
-import { computeLeaderboard } from "../src/leaderboard.js";
+import { computeLeaderboard } from "../src/engine/leaderboard.js";
 
 test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots", () => {
   const snapshot = {
@@ -81,14 +81,13 @@ test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots
       brain: { row: 1, col: 1, brain: "primary" },
     },
     {
-      row: 2,
-      col: 2,
-      fitness: 8,
-      offspring: 1,
+      row: 4,
+      col: 4,
+      fitness: 9,
+      offspring: 0,
       fightsWon: 0,
-      age: 7,
-      color: "#303030",
-      brain: { row: 2, col: 2, brain: "tertiary" },
+      age: 0,
+      color: undefined,
     },
   ]);
 });

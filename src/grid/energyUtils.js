@@ -1,3 +1,26 @@
+/**
+ * Zeros out the staged energy buffers for a specific tile so downstream
+ * diffusion/regen math can treat the location as freshly vacated.
+ *
+ * The helper normalizes indices, short-circuits when coordinates fall outside
+ * the grid, tolerates partially initialised buffers, and optionally preserves
+ * the currently rendered energy level while still clearing future-step
+ * buffers. Callers typically invoke this immediately after a cell dies or an
+ * obstacle is placed so stale energy does not leak back in on the following
+ * tick.
+ *
+ * @param {{
+ *   energyGrid?: number[][],
+ *   energyNext?: number[][],
+ *   energyDeltaGrid?: number[][],
+ *   markEnergyDirty?: (row: number, col: number, options?: { radius?: number }) => void,
+ * }} source - Grid-like owner containing the buffers to clear.
+ * @param {number} row - Tile row index (integer or float; will be floored).
+ * @param {number} col - Tile column index (integer or float; will be floored).
+ * @param {{ preserveCurrent?: boolean }} [options] - Flags controlling whether the
+ *   current-frame `energyGrid` value is reset.
+ * @returns {void}
+ */
 export function clearTileEnergyBuffers(source, row, col, options = {}) {
   if (!source || row == null || col == null) return;
 

@@ -310,7 +310,7 @@ test("handleReproduction requires parents to be adjacent before spawning", async
 
   assert.is(reproduced, false);
   assert.is(births, 0);
-  assert.is(blockReason, "Parents out of reach");
+  assert.is(blockReason, "Parents must be adjacent");
   assert.is(parent.row, 0);
   assert.is(parent.col, 2);
   assert.is(gm.getCell(0, 2), parent);
@@ -430,7 +430,7 @@ test("handleReproduction enforces reproduction energy thresholds", async () => {
   );
 });
 
-test("handleReproduction succeeds when DNA grants extended reach", async () => {
+test("handleReproduction requires adjacency even when DNA extends reach", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
@@ -546,9 +546,9 @@ test("handleReproduction succeeds when DNA grants extended reach", async () => {
     Math.random = originalRandom;
   }
 
-  assert.is(reproduced, true);
-  assert.is(births, 1);
-  assert.is(blockReason, null);
+  assert.is(reproduced, false);
+  assert.is(births, 0);
+  assert.is(blockReason, "Parents must be adjacent");
 });
 
 test("handleReproduction does not wrap offspring placement across map edges", async () => {

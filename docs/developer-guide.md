@@ -4,44 +4,47 @@ This guide captures the everyday practices for maintaining Colourful Life. It
 complements the [architecture overview](architecture-overview.md) by focusing on
 workflow, tooling, and documentation expectations. Treat it as the handbook for
 day-to-day contributions—whether you are building new simulation features,
-extending tests, or polishing docs.
+extending tests, or polishing docs. The [README quick start](../README.md#quick-start)
+walks through the initial clone-and-run steps before you dive into the details below.
 
 ## Environment setup
 
 1. Install Node.js 18 or newer.
-2. Clone the repository and install dependencies with `npm ci`.
+2. Clone the repository and install dependencies with `npm ci` (or `npm install`
+   if you are intentionally skipping a clean install). Re-run `npm run prepare`
+   after the initial install and any time `.husky/` changes so Git hooks stay
+   active.
 3. Run `npm run start` to launch the Parcel development server at
    `http://localhost:1234`.
-4. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/`
+4. Run `npm test` in a second terminal whenever you touch shared utilities or
+   simulation logic. Pair it with `npm run lint` / `npm run format:check` to
+   catch style drift before opening a pull request.
+5. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/`
    and `.parcel-cache/` before restarting the dev server.
 
-> The in-app "Pause When Hidden" toggle now starts disabled so long-running
-> simulations can keep evolving without babysitting the browser tab. Re-enable
-> it beneath the playback controls at the top of the Simulation Controls panel
-> if you prefer the previous focus-dependent behaviour.
+### Quality-of-life tips
 
-> Adjust the "Dashboard Refresh Interval" slider near the top of the Evolution
-> Insights panel to tune how often both the leaderboard and analytics dashboard
-> request fresh data. The cadence control moved out of the Leaderboard so the
-> refresh knob now lives beside the metrics it governs.
-
-> The Evolution Insights dashboard surfaces a Simulation Clock near the top of
-> the metrics feed. It reports both elapsed simulated time and the aggregate
-> tick count so you can align experiments with reproduction bursts or pacing
-> adjustments without reaching for external timers.
-
-> Tip: Run `npm run prepare` after cloning or pulling changes that touch the
-> `.husky/` directory to reinstall the Git hooks managed by Husky.
-
-> Tip: The Parcel server performs hot module replacement. If you need a clean
-> build, use `npm run build` to emit a production bundle in `dist/`.
+- The in-app "Pause When Hidden" toggle starts disabled so long-running
+  simulations continue evolving even when the browser tab loses focus. Re-enable
+  it from the Simulation Controls panel directly beneath the playback controls
+  if you prefer focus-dependent behaviour.
+- Adjust the "Dashboard Refresh Interval" slider near the top of the Evolution
+  Insights panel to tune how often the leaderboard and analytics dashboard
+  request fresh data. The control now lives beside the metrics it governs.
+- The Evolution Insights dashboard surfaces a Simulation Clock at the top of
+  the metrics feed, reporting both simulated time and the aggregate tick count
+  for easy pacing comparisons.
+- Parcel performs hot module replacement during development. Use
+  `npm run build` when you need a fresh production bundle in `dist/` for manual
+  verification or publishing.
 
 ## Coding standards
 
 - Follow the existing module structure. Simulation logic belongs in `src/`,
   documentation in `docs/`, tests in `test/`, and profiling scripts in
   `scripts/`.
-- Uphold the simulation laws, including energy exclusivity—tiles with residents must never track stored energy, so new behaviour should drain or reroute reserves when a cell occupies a coordinate.
+- Uphold the simulation laws, including energy exclusivity—tiles with residents must never track stored energy, so new behaviour
+  should drain or reroute reserves when a cell occupies a coordinate.
 - Rely on the root `package.json` for module settings; nested manifests inside
   `src/` or other subdirectories are unnecessary and should be removed when
   discovered.
@@ -64,7 +67,7 @@ extending tests, or polishing docs.
 - **Format** — Run `npm run format`, `npm run format:check`, or `npm run format:workflows` to apply Prettier across source, documentation, configuration files, and GitHub workflows.
 - **Lint** — Use `npm run lint` / `npm run lint:fix` to enforce the ESLint ruleset and apply safe autofixes.
 - **Tests** — Execute `npm test` to run the Node.js test suites. Focused suites live beside their target modules under `test/`.
-- **Profiling** — Run `node scripts/profile-energy.mjs` with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations.
+- **Profiling** — Run `npm run benchmark` (alias for `node scripts/profile-energy.mjs`) with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations.
 - **Cache reset** — Use `npm run clean` to clear `dist/` and `.parcel-cache/` when Parcel hot reloads become inconsistent.
 - **Hooks** — Run `npm run prepare` to reinstall Husky hooks after cloning or whenever `.husky/` contents change.
 
@@ -91,31 +94,62 @@ affect runtime outcomes.
 
 ## Configuration overrides
 
-- `COLOURFUL_LIFE_MAX_TILE_ENERGY` adjusts the per-tile energy ceiling. Set it
-  before running tests or headless scripts to explore higher or lower caps
-  without modifying `src/config.js`.
-- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` tunes how strongly local population
-  density suppresses regeneration (0 disables the penalty, 1 preserves the
-  default `0.42` coefficient).
-- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` controls how much additional
-  energy cost organisms pay when harvesting from crowded tiles (0 removes the
-  tax, 1 matches the baseline density pressure).
-- `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` shifts the normalized cutoff the
-  stats system uses when counting organisms as "active" for a trait. Lower
-  values loosen the requirement so charts show broader participation, while
-  higher values focus on strongly expressed behaviours.
-- `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` tempers or emphasises how much
-  territorial advantage influences combat outcomes. Values outside the 0–1
-  window fall back to the default defined in `src/config.js`.
+`src/config.js` centralises the environment knobs surfaced to players and
+automation. Set them before launching the dev server or headless scripts to
+change behaviour without touching source:
+
+**Energy and density**
+
+- `COLOURFUL_LIFE_MAX_TILE_ENERGY` adjusts the per-tile energy ceiling. Use it to
+  explore more generous or harsher energy caps in both browser and headless
+  runs.
+- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` tunes how strongly crowding suppresses
+  regeneration (0 disables the penalty, 1 preserves the default `0.39`
+  coefficient).
+- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` controls the harvesting tax
+  organisms pay on packed tiles so you can reward cooperation or sharpen
+  competition.
+
+**Lifecycle and territory**
+
+- `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` determines how much energy corpses
+  return to nearby tiles as they decompose.
+- `COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE` sets the fraction of that recycled
+  energy that splashes into neighbouring tiles on the same tick instead of
+  smouldering in the decay reservoir.
+- `COLOURFUL_LIFE_DECAY_MAX_AGE` caps how long the decay reservoir persists
+  before fully dissipating.
+- `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` tempers or emphasises territorial
+  advantage in combat. Values outside 0–1 are clamped back to the default.
+
+**Telemetry and dashboards**
+
+- `config.leaderboardSize` (or
+  `resolveSimulationDefaults({ leaderboardSize })`) controls how many organisms
+  the telemetry stream surfaces to the Evolution Insights leaderboard. Values
+  below zero clamp to zero so headless runs can disable the leaderboard entirely
+  without rewriting the engine wiring.
+
+**Neural activity and evolution**
+
 - `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` globally adjusts the baseline neural
-  activity genomes inherit before DNA modifiers apply, making it easy to calm or
-  energise every organism without editing source.
+  activity genomes inherit before DNA modifiers apply.
 - `COLOURFUL_LIFE_MUTATION_CHANCE` raises or lowers the default mutation
-  probability applied when genomes reproduce without an explicit DNA override,
-  allowing faster or slower evolutionary churn during experiments.
-- Non-finite or out-of-range values are ignored and fall back to the defaults
-  resolved in [`src/config.js`](../src/config.js). The energy overlays pull the
-  sanitized values so UI telemetry reflects the active configuration.
+  probability applied when genomes reproduce without an explicit DNA override.
+- `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` shifts the normalized cutoff the
+  stats system uses when counting organisms as "active" for a trait.
+- `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` scales how much surplus energy
+  parents must stockpile beyond the strictest genome's demand before gestation
+  begins. The default `1.12` came from a dense 60×60 headless probe
+  (`scripts/profile-energy.mjs` with `PERF_INCLUDE_SIM=1`) where easing the
+  buffer lifted survivors from roughly 218 → 225 after 120 ticks without
+  collapsing scarcity pressure.
+
+Non-finite or out-of-range values are ignored and fall back to the defaults
+resolved in [`src/config.js`](../src/config.js). Overlays pull the sanitised
+values so UI telemetry reflects whichever configuration is active. The README's
+[configuration overview](../README.md#configuration-overrides) lists the same
+variables for quick reference during onboarding.
 
 ## UI layout options
 
@@ -168,10 +202,13 @@ affect runtime outcomes.
 
 ## Helpful scripts
 
-- `npm run clean` — Clear Parcel caches when dev servers behave
-  strangely.
-- `node scripts/profile-energy.mjs` — Profile the energy preparation loop with
-  configurable grid sizes.
+- `npm run clean` — Clear Parcel caches when dev servers behave strangely.
+- `npm run benchmark` — Profile the energy preparation loop with configurable
+  grid sizes and SimulationEngine samples; combine with `PERF_*` variables to
+  reproduce CI runs.
+- `npm run deploy:public` — Publish the latest production build to a public
+  repository. See [`docs/public-hosting.md`](public-hosting.md) for setup
+  details.
 
 ## Support
 

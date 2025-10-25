@@ -235,12 +235,16 @@ export class MockCanvas extends MockElement {
 
     return {
       canvas: this,
+      imageSmoothingEnabled: false,
       fillRect() {},
       strokeRect() {},
       save() {},
       restore() {},
       beginPath() {},
       stroke() {},
+      setTransform() {},
+      resetTransform() {},
+      scale() {},
       createLinearGradient() {
         return {
           addColorStop() {},

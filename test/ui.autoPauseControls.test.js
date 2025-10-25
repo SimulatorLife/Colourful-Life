@@ -96,6 +96,38 @@ test("autopause toggle updates pause indicator and notifies listeners", async ()
   }
 });
 
+test("disabling autopause clears pending hint", async () => {
+  const restore = setupDom();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      { requestFrame: () => {} },
+      "#app",
+      {},
+      { initialSettings: { autoPauseOnBlur: true } },
+    );
+
+    uiManager.setPauseState(true);
+    uiManager.setAutoPausePending(true);
+
+    assert.is(uiManager.pauseOverlayAutopause.hidden, false);
+
+    uiManager.setAutoPauseOnBlur(false);
+
+    assert.is(uiManager.autoPauseOnBlur, false);
+    assert.is(
+      uiManager.pauseOverlayAutopause.hidden,
+      true,
+      "disabling autopause hides the pending hint",
+    );
+    assert.is(uiManager.autoPausePending, false);
+  } finally {
+    restore();
+  }
+});
+
 test("setAutoPauseOnBlur sanitizes string inputs", async () => {
   const restore = setupDom();
 

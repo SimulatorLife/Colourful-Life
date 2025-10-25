@@ -1,5 +1,12 @@
 import { TRAIT_ACTIVATION_THRESHOLD } from "./config.js";
-import { clamp, clamp01, toFiniteOrNull, warnOnce } from "./utils.js";
+import {
+  clamp,
+  clamp01,
+  sanitizeNumber,
+  sanitizePositiveInteger,
+  toFiniteOrNull,
+} from "./utils.js";
+import { warnOnce } from "./utils/error.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;
@@ -11,6 +18,7 @@ const HISTORY_SERIES_KEYS = [
   "population",
   "diversity",
   "diversityPressure",
+  "diversityOpportunity",
   "energy",
   "growth",
   "birthsPerTick",
@@ -18,6 +26,7 @@ const HISTORY_SERIES_KEYS = [
   "eventStrength",
   "diversePairingRate",
   "meanDiversityAppetite",
+  "mateNoveltyPressure",
   "mutationMultiplier",
   "starvationRate",
 ];
@@ -29,6 +38,8 @@ const STRATEGY_PRESSURE_SMOOTHING = 0.82;
 const LIFE_EVENT_LOG_CAPACITY = 240;
 const LIFE_EVENT_RATE_DEFAULT_WINDOW = 200;
 
+const DEFAULT_RANDOM = () => Math.random();
+
 const INTERACTION_TRAIT_LABELS = Object.freeze({
   cooperate: "Cooperative",
   fight: "Combative",
@@ -37,6 +48,8 @@ const INTERACTION_TRAIT_LABELS = Object.freeze({
 
 const TRAIT_COMPUTE_WARNING =
   "Trait compute function failed; defaulting to neutral contribution.";
+const DIVERSITY_SIMILARITY_WARNING =
+  "Failed to compute DNA similarity while estimating diversity.";
 
 function wrapTraitCompute(fn) {
   if (typeof fn !== "function") {
@@ -124,20 +137,25 @@ function resolveTraitDefinitions(candidate) {
     return Array.from(baseDefinitions.values());
   }
 
-  for (const entry of candidate) {
-    if (!entry || typeof entry !== "object") continue;
+  const mergedDefinitions = candidate.reduce((definitions, entry) => {
+    if (!entry || typeof entry !== "object") {
+      return definitions;
+    }
 
     const key = typeof entry.key === "string" ? entry.key.trim() : "";
 
-    if (!key) continue;
+    if (!key) {
+      return definitions;
+    }
 
-    const overrideCompute =
-      typeof entry.compute === "function" ? wrapTraitCompute(entry.compute) : null;
-    const prior = baseDefinitions.get(key);
-    const compute = overrideCompute ?? prior?.compute;
+    const prior = definitions.get(key);
+    const compute =
+      typeof entry.compute === "function"
+        ? wrapTraitCompute(entry.compute)
+        : prior?.compute;
 
     if (typeof compute !== "function") {
-      continue;
+      return definitions;
     }
 
     const threshold = normalizeThreshold(
@@ -145,10 +163,12 @@ function resolveTraitDefinitions(candidate) {
       prior?.threshold ?? TRAIT_THRESHOLD,
     );
 
-    baseDefinitions.set(key, { key, compute, threshold });
-  }
+    definitions.set(key, { key, compute, threshold });
 
-  return Array.from(baseDefinitions.values());
+    return definitions;
+  }, baseDefinitions);
+
+  return Array.from(mergedDefinitions.values());
 }
 
 const createTraitValueMap = (definitions, initializer) => {
@@ -165,16 +185,6 @@ const createTraitValueMap = (definitions, initializer) => {
   );
 };
 
-const sanitizeInterval = (value, fallback) => {
-  const numeric = Number(value);
-
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-    return fallback;
-  }
-
-  return Math.max(1, Math.floor(numeric));
-};
-
 /**
  * Minimal fixed-capacity ring buffer used by chart history accessors.
  * Keeps insertion O(n) for deterministic order while bounding memory.
@@ -188,19 +198,34 @@ class FixedSizeRingBuffer {
   }
 
   push(value) {
-    if (this.capacity === 0) return;
+    const capacity = this.capacity;
 
-    if (this.length < this.capacity) {
-      const index = (this.start + this.length) % this.capacity;
+    if (capacity === 0) {
+      return;
+    }
 
-      this.buffer[index] = value;
-      this.length += 1;
+    // Avoid modulo operations in the hot push path by using simple wraparound math.
+    const buffer = this.buffer;
+    const start = this.start;
+    const length = this.length;
+
+    if (length < capacity) {
+      let index = start + length;
+
+      if (index >= capacity) {
+        index -= capacity;
+      }
+
+      buffer[index] = value;
+      this.length = length + 1;
 
       return;
     }
 
-    this.buffer[this.start] = value;
-    this.start = (this.start + 1) % this.capacity;
+    buffer[start] = value;
+    const nextStart = start + 1;
+
+    this.start = nextStart === capacity ? 0 : nextStart;
   }
 
   values() {
@@ -246,6 +271,10 @@ const createEmptyMatingSnapshot = () => ({
   complementaritySuccessSum: 0,
   strategyPenaltySum: 0,
   strategyPressureSum: 0,
+  noveltyPressureSum: 0,
+  diversityOpportunitySum: 0,
+  diversityOpportunityWeight: 0,
+  diversityOpportunityAvailabilitySum: 0,
   blocks: 0,
   lastBlockReason: null,
 });
@@ -284,14 +313,25 @@ export default class Stats {
   #traitKeys;
   #traitComputes;
   #traitThresholds;
+  #rng;
+  #pairSampleScratch;
+  #pairSampleSelection;
+  #pairIndexScratch;
+  #diversityDnaScratch;
+  #dnaSimilarityCache;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
-   * @param {{traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>}} [options]
-   *   Optional configuration allowing callers to extend or override tracked trait metrics.
+   * @param {{
+   *   traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>,
+   *   traitResampleInterval?: number,
+   *   diversitySampleInterval?: number,
+   *   rng?: () => number,
+   * }} [options]
+   *   Optional configuration allowing callers to extend or override tracked trait metrics and randomness.
    */
   constructor(historySize = 10000, options = {}) {
     this.historySize = historySize;
-    const { traitDefinitions, traitResampleInterval, diversitySampleInterval } =
+    const { traitDefinitions, traitResampleInterval, diversitySampleInterval, rng } =
       options ?? {};
 
     this.traitDefinitions = resolveTraitDefinitions(traitDefinitions);
@@ -305,8 +345,15 @@ export default class Stats {
     );
     this.#traitSums = new Float64Array(this.traitDefinitions.length);
     this.#traitActiveCounts = new Float64Array(this.traitDefinitions.length);
-    this.traitResampleInterval = sanitizeInterval(traitResampleInterval, 120);
-    this.diversitySampleInterval = sanitizeInterval(diversitySampleInterval, 4);
+    this.#rng = typeof rng === "function" ? rng : DEFAULT_RANDOM;
+    this.traitResampleInterval = sanitizePositiveInteger(traitResampleInterval, {
+      fallback: 120,
+      min: 1,
+    });
+    this.diversitySampleInterval = sanitizePositiveInteger(diversitySampleInterval, {
+      fallback: 4,
+      min: 1,
+    });
     this.lastDiversitySample = 0;
     this.#nextTraitResampleTick = 0;
     this.#nextDiversitySampleTick = 0;
@@ -328,6 +375,8 @@ export default class Stats {
     this.diversityPressure = 0;
     this.behavioralEvenness = 0;
     this.strategyPressure = 0;
+    this.diversityOpportunity = 0;
+    this.diversityOpportunityAvailability = 0;
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
     this.lifeEventSequence = 0;
     this.deathCauseTotals = Object.create(null);
@@ -337,6 +386,11 @@ export default class Stats {
       history: createHistoryRing(240),
     };
     this.starvationRateSmoothed = 0;
+    this.#pairSampleScratch = new Uint32Array(0);
+    this.#pairSampleSelection = new Set();
+    this.#pairIndexScratch = { first: 0, second: 0 };
+    this.#diversityDnaScratch = [];
+    this.#dnaSimilarityCache = new WeakMap();
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -481,28 +535,34 @@ export default class Stats {
       }
     }
 
+    const coerceFinite = (candidate) => {
+      const numeric = toFiniteOrNull(candidate);
+
+      return numeric != null ? numeric : null;
+    };
+
     for (const [metric, descriptor] of Object.entries(summary)) {
       if (!metric) continue;
 
       let value = null;
       let accumulate = true;
       let sampleCount = null;
-
-      if (
+      const isObjectDescriptor =
         descriptor != null &&
         typeof descriptor === "object" &&
-        !Array.isArray(descriptor)
-      ) {
-        if (descriptor.value != null) {
-          const numericValue = Number(descriptor.value);
+        !Array.isArray(descriptor);
 
-          if (Number.isFinite(numericValue)) {
+      if (isObjectDescriptor) {
+        if (descriptor.value != null) {
+          const numericValue = coerceFinite(descriptor.value);
+
+          if (numericValue != null) {
             value = numericValue;
           }
         } else {
-          const numericValue = Number(descriptor);
+          const numericValue = coerceFinite(descriptor);
 
-          if (Number.isFinite(numericValue)) {
+          if (numericValue != null) {
             value = numericValue;
           }
         }
@@ -512,22 +572,22 @@ export default class Stats {
         }
 
         if (descriptor.count != null) {
-          const numericCount = Number(descriptor.count);
+          const numericCount = coerceFinite(descriptor.count);
 
-          if (Number.isFinite(numericCount)) {
+          if (numericCount != null) {
             sampleCount = numericCount;
           }
         } else if (descriptor.samples != null) {
-          const numericSamples = Number(descriptor.samples);
+          const numericSamples = coerceFinite(descriptor.samples);
 
-          if (Number.isFinite(numericSamples)) {
+          if (numericSamples != null) {
             sampleCount = numericSamples;
           }
         }
       } else {
-        const numericValue = Number(descriptor);
+        const numericValue = coerceFinite(descriptor);
 
-        if (Number.isFinite(numericValue)) {
+        if (numericValue != null) {
           value = numericValue;
         }
       }
@@ -555,6 +615,7 @@ export default class Stats {
     successfulComplementarity = 0,
     meanStrategyPenalty = 1,
     diverseSuccessRate = 0,
+    diversityOpportunity = 0,
   ) {
     const target = clamp01(this.diversityTarget ?? DIVERSITY_TARGET_DEFAULT);
 
@@ -576,6 +637,9 @@ export default class Stats {
     const penaltyAverage = clamp01(
       Number.isFinite(meanStrategyPenalty) ? meanStrategyPenalty : 1,
     );
+    const opportunityShortfall = clamp01(
+      Number.isFinite(diversityOpportunity) ? diversityOpportunity : 0,
+    );
     const penaltySlack = penaltyAverage;
     const penaltyRelief = clamp01(1 - penaltyAverage);
     const successRate = clamp01(
@@ -590,8 +654,9 @@ export default class Stats {
     const evennessDemand = evennessShortfall * (0.3 + geneticShortfall * 0.4);
     const successDemand =
       successShortfall * (0.25 + penaltySlack * 0.35 + (1 - evennessValue) * 0.25);
+    const opportunityDemand = opportunityShortfall * (0.25 + geneticShortfall * 0.35);
     const combinedShortfall = clamp01(
-      geneticShortfall * 0.65 + evennessDemand + successDemand,
+      geneticShortfall * 0.6 + evennessDemand + successDemand + opportunityDemand,
     );
     const complementRelief = complementValue * 0.35;
     const targetPressure = Math.max(0, combinedShortfall - complementRelief);
@@ -604,12 +669,13 @@ export default class Stats {
 
     const monotonyDemand =
       evennessShortfall * (0.45 + geneticShortfall * 0.35) * (0.7 + penaltySlack * 0.6);
+    const opportunityDrag = opportunityShortfall * (0.2 + geneticShortfall * 0.3);
     const monotonyDemandScaled = clamp01(monotonyDemand * (1 + successShortfall * 0.5));
     const complementReliefStrategy = clamp01(
       complementValue * (0.25 + geneticShortfall * 0.3) * (0.8 + penaltyRelief * 0.4),
     );
     const rawStrategyPressure = clamp01(
-      monotonyDemandScaled - complementReliefStrategy,
+      monotonyDemandScaled + opportunityDrag - complementReliefStrategy,
     );
     const prevStrategy = Number.isFinite(this.strategyPressure)
       ? this.strategyPressure
@@ -628,13 +694,15 @@ export default class Stats {
       return 0;
     }
 
-    const values = [];
+    const values = Object.values(fractions).reduce((acc, raw) => {
+      if (!Number.isFinite(raw) || raw <= 0) {
+        return acc;
+      }
 
-    for (const raw of Object.values(fractions)) {
-      if (!Number.isFinite(raw) || raw <= 0) continue;
+      acc.push(clamp01(raw));
 
-      values.push(clamp01(raw));
-    }
+      return acc;
+    }, []);
 
     if (values.length === 0) return 0;
     if (values.length === 1) return 0;
@@ -646,15 +714,15 @@ export default class Stats {
     }
 
     const invSum = 1 / sum;
-    let entropy = 0;
-
-    for (const value of values) {
+    const entropy = values.reduce((total, value) => {
       const probability = value * invSum;
 
-      if (!(probability > 0)) continue;
+      if (!(probability > 0)) {
+        return total;
+      }
 
-      entropy -= probability * Math.log(probability);
-    }
+      return total - probability * Math.log(probability);
+    }, 0);
 
     const maxEntropy = Math.log(values.length);
 
@@ -702,15 +770,19 @@ export default class Stats {
 
     this.#traitPresenceView.population = 0;
 
-    if (!this.#traitKeys) return;
+    if (!Array.isArray(this.#traitKeys)) return;
 
-    for (let i = 0; i < this.#traitKeys.length; i += 1) {
-      const key = this.#traitKeys[i];
-
+    this.#traitKeys.forEach((key) => {
       averages[key] = 0;
       fractions[key] = 0;
       counts[key] = 0;
-    }
+    });
+  }
+
+  #resolveTraitValue(compute, cell) {
+    const rawValue = typeof compute === "function" ? compute(cell) : 0;
+
+    return Number.isFinite(rawValue) ? clamp01(rawValue) : 0;
   }
 
   #applyTraitSample(cell, direction) {
@@ -723,26 +795,142 @@ export default class Stats {
 
     const sums = this.#traitSums;
     const activeCounts = this.#traitActiveCounts;
-    const computes = this.#traitComputes;
     const thresholds = this.#traitThresholds;
 
-    for (let i = 0; i < computes.length; i += 1) {
-      const compute = computes[i];
-      const threshold = thresholds[i];
-      const rawValue = compute ? compute(cell) : 0;
-      const value = Number.isFinite(rawValue) ? clamp01(rawValue) : 0;
-      const nextSum = sums[i] + value * direction;
+    this.#traitComputes.forEach((compute, index) => {
+      const threshold = thresholds[index];
+      const value = this.#resolveTraitValue(compute, cell);
+      const nextSum = sums[index] + value * direction;
 
-      sums[i] = nextSum >= 0 ? nextSum : 0;
+      sums[index] = nextSum >= 0 ? nextSum : 0;
 
       if (value >= threshold) {
-        const nextCount = activeCounts[i] + direction;
+        const nextCount = activeCounts[index] + direction;
 
-        activeCounts[i] = nextCount > 0 ? nextCount : 0;
+        activeCounts[index] = nextCount > 0 ? nextCount : 0;
       }
-    }
+    });
 
     this.#traitPresenceDirty = true;
+  }
+
+  #resolveDnaSeed(dna) {
+    if (!dna || typeof dna.seed !== "function") {
+      return null;
+    }
+
+    try {
+      const value = dna.seed();
+
+      return Number.isFinite(value) ? value : null;
+    } catch (error) {
+      warnOnce(DIVERSITY_SIMILARITY_WARNING, error);
+
+      return null;
+    }
+  }
+
+  #obtainDnaCacheRecord(dna, seed) {
+    if (!dna) {
+      return null;
+    }
+
+    if (!this.#dnaSimilarityCache) {
+      this.#dnaSimilarityCache = new WeakMap();
+    }
+
+    let record = this.#dnaSimilarityCache.get(dna);
+
+    if (record && seed != null && record.seed !== seed) {
+      record = null;
+    }
+
+    if (!record) {
+      record = { seed: seed ?? null, map: new WeakMap() };
+      this.#dnaSimilarityCache.set(dna, record);
+    } else if (record.seed == null && seed != null) {
+      record.seed = seed;
+    }
+
+    return record;
+  }
+
+  #resolveDnaSimilarity(dnaA, dnaB) {
+    if (!dnaA || !dnaB) {
+      return null;
+    }
+
+    if (dnaA === dnaB) {
+      return 1;
+    }
+
+    const similarityFn = dnaA?.similarity;
+
+    if (typeof similarityFn !== "function") {
+      return null;
+    }
+
+    const seedA = this.#resolveDnaSeed(dnaA);
+    const seedB = this.#resolveDnaSeed(dnaB);
+    const cacheA = this.#obtainDnaCacheRecord(dnaA, seedA);
+    const cached = cacheA?.map?.get(dnaB);
+
+    if (typeof cached === "number") {
+      return cached;
+    }
+
+    let similarity;
+
+    try {
+      similarity = similarityFn.call(dnaA, dnaB);
+    } catch (error) {
+      warnOnce(DIVERSITY_SIMILARITY_WARNING, error);
+
+      return null;
+    }
+
+    if (!Number.isFinite(similarity)) {
+      return null;
+    }
+
+    cacheA?.map?.set(dnaB, similarity);
+
+    const cacheB = this.#obtainDnaCacheRecord(dnaB, seedB);
+
+    cacheB?.map?.set(dnaA, similarity);
+
+    return similarity;
+  }
+
+  #resolvePairFromIndex(index, populationSize) {
+    const totalPairs = (populationSize * (populationSize - 1)) / 2;
+
+    if (!(index >= 0 && index < totalPairs)) {
+      return null;
+    }
+
+    const t = 2 * populationSize - 1;
+    const discriminant = t * t - 8 * index;
+
+    if (!(discriminant >= 0)) {
+      return null;
+    }
+
+    const first = Math.max(0, Math.floor((t - Math.sqrt(discriminant)) / 2));
+    const offset = (first * (2 * populationSize - first - 1)) / 2;
+    const second = first + 1 + (index - offset);
+
+    if (!(second >= 0 && second < populationSize)) {
+      return null;
+    }
+
+    const pair =
+      this.#pairIndexScratch ?? (this.#pairIndexScratch = { first: 0, second: 0 });
+
+    pair.first = first;
+    pair.second = second;
+
+    return pair;
   }
 
   #rebuildTraitAggregates(cellSources) {
@@ -753,31 +941,43 @@ export default class Stats {
     this.#traitSums.fill(0);
     this.#traitActiveCounts.fill(0);
 
+    if (pool.length === 0) {
+      this.#traitPopulation = 0;
+      this.#needsTraitRebuild = false;
+      this.#traitPresenceDirty = true;
+
+      return;
+    }
+
+    const traitSums = this.#traitSums;
+    const traitActiveCounts = this.#traitActiveCounts;
+    const traitCount = computes.length;
+    const hasOwn = Object.prototype.hasOwnProperty;
+
     let population = 0;
 
     for (let i = 0; i < pool.length; i += 1) {
       const source = pool[i];
-      const cell =
-        source &&
-        typeof source === "object" &&
-        Object.prototype.hasOwnProperty.call(source, "cell")
-          ? source.cell
-          : source;
+      let cell = source;
 
-      if (!cell || typeof cell !== "object") continue;
+      if (source && typeof source === "object" && hasOwn.call(source, "cell")) {
+        cell = source.cell;
+      }
+
+      if (!cell || typeof cell !== "object") {
+        continue;
+      }
 
       population += 1;
 
-      for (let t = 0; t < computes.length; t += 1) {
-        const compute = computes[t];
-        const threshold = thresholds[t];
-        const rawValue = compute ? compute(cell) : 0;
-        const value = Number.isFinite(rawValue) ? clamp01(rawValue) : 0;
+      for (let traitIndex = 0; traitIndex < traitCount; traitIndex += 1) {
+        const compute = computes[traitIndex];
+        const threshold = thresholds[traitIndex];
+        const value = compute(cell) || 0;
 
-        this.#traitSums[t] += value;
-
+        traitSums[traitIndex] += value;
         if (value >= threshold) {
-          this.#traitActiveCounts[t] += 1;
+          traitActiveCounts[traitIndex] += 1;
         }
       }
     }
@@ -798,10 +998,9 @@ export default class Stats {
 
     view.population = resolvedPopulation;
 
-    for (let i = 0; i < this.#traitKeys.length; i += 1) {
-      const key = this.#traitKeys[i];
-      const sum = this.#traitSums[i];
-      const count = this.#traitActiveCounts[i];
+    this.#traitKeys.forEach((key, index) => {
+      const sum = this.#traitSums[index];
+      const count = this.#traitActiveCounts[index];
       const normalizedCount = count > 0 ? count : 0;
       const average = resolvedPopulation > 0 ? clamp01(sum * invPop) : 0;
       const fraction = resolvedPopulation > 0 ? clamp01(normalizedCount * invPop) : 0;
@@ -809,7 +1008,7 @@ export default class Stats {
       view.averages[key] = average;
       view.fractions[key] = fraction;
       view.counts[key] = Math.max(0, Math.round(normalizedCount));
-    }
+    });
 
     return view;
   }
@@ -829,17 +1028,18 @@ export default class Stats {
       return null;
     }
 
-    let total = 0;
-    let best = entries[0];
+    const { total, best } = entries.reduce(
+      (accumulator, entry) => {
+        accumulator.total += entry.value;
 
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i];
+        if (entry.value > accumulator.best.value) {
+          accumulator.best = entry;
+        }
 
-      total += entry.value;
-      if (entry.value > best.value) {
-        best = entry;
-      }
-    }
+        return accumulator;
+      },
+      { total: 0, best: entries[0] },
+    );
 
     if (best.value <= 0) {
       return null;
@@ -1018,6 +1218,10 @@ export default class Stats {
   // Sample mean pairwise distance between up to maxPairSamples random pairs.
   estimateDiversity(cellSources, maxPairSamples = 200) {
     if (!Array.isArray(cellSources) || cellSources.length < 2) {
+      if (Array.isArray(this.#diversityDnaScratch)) {
+        this.#diversityDnaScratch.length = 0;
+      }
+
       return 0;
     }
 
@@ -1027,35 +1231,46 @@ export default class Stats {
       : numericMaxSamples === Infinity
         ? Infinity
         : 0;
-    const validCells = [];
 
-    for (let i = 0; i < cellSources.length; i += 1) {
-      const source = cellSources[i];
+    let validDna = this.#diversityDnaScratch;
+
+    if (!Array.isArray(validDna)) {
+      validDna = [];
+      this.#diversityDnaScratch = validDna;
+    }
+
+    validDna.length = 0;
+
+    const hasOwn = Object.prototype.hasOwnProperty;
+    const sourceCount = cellSources.length;
+
+    for (let index = 0; index < sourceCount; index += 1) {
+      const source = cellSources[index];
       const cell =
-        source &&
-        typeof source === "object" &&
-        Object.prototype.hasOwnProperty.call(source, "cell")
+        source && typeof source === "object" && hasOwn.call(source, "cell")
           ? source.cell
           : source;
 
-      if (
-        cell &&
-        typeof cell === "object" &&
-        typeof cell.dna?.similarity === "function"
-      ) {
-        validCells.push(cell);
+      const dna = cell?.dna;
+
+      if (dna && typeof dna.similarity === "function") {
+        validDna.push(dna);
       }
     }
 
-    const populationSize = validCells.length;
+    const populationSize = validDna.length;
 
     if (populationSize < 2) {
+      validDna.length = 0;
+
       return 0;
     }
 
     const possiblePairs = (populationSize * (populationSize - 1)) / 2;
 
     if (!(possiblePairs > 0)) {
+      validDna.length = 0;
+
       return 0;
     }
 
@@ -1064,77 +1279,118 @@ export default class Stats {
       let count = 0;
 
       for (let i = 0; i < populationSize - 1; i += 1) {
-        const a = validCells[i];
+        const dnaA = validDna[i];
 
         for (let j = i + 1; j < populationSize; j += 1) {
-          const b = validCells[j];
+          const dnaB = validDna[j];
 
-          sum += 1 - a.dna.similarity(b.dna);
+          const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
+
+          if (!Number.isFinite(similarity)) {
+            continue;
+          }
+
+          sum += 1 - similarity;
           count += 1;
         }
       }
+
+      validDna.length = 0;
 
       return count > 0 ? sum / count : 0;
     }
 
     const sampleLimit = Math.min(sanitizedMaxSamples, possiblePairs);
-    const seen = new Set();
-    const pairs = [];
-    const population = populationSize;
-    const maxAttempts = sampleLimit * 6;
-    let attempts = 0;
-
-    while (pairs.length < sampleLimit && attempts < maxAttempts) {
-      attempts += 1;
-      const first = (Math.random() * population) | 0;
-      let second = (Math.random() * (population - 1)) | 0;
-
-      if (second >= first) {
-        second += 1;
+    const rng = this.#rng ?? DEFAULT_RANDOM;
+    const sampleIndex = (range) => {
+      if (!(range > 0)) {
+        return 0;
       }
 
-      const low = first < second ? first : second;
-      const high = first < second ? second : first;
-      const key = low * population + high;
+      let roll = rng();
 
-      if (seen.has(key)) {
-        continue;
+      if (!Number.isFinite(roll)) {
+        roll = DEFAULT_RANDOM();
       }
 
-      seen.add(key);
-      pairs.push([low, high]);
+      const fractional = roll - Math.trunc(roll);
+      const normalized = fractional >= 0 ? fractional : fractional + 1;
+
+      return Math.min(range - 1, Math.floor(normalized * range));
+    };
+
+    let samples = this.#pairSampleScratch;
+
+    if (!samples || samples.length < sampleLimit) {
+      samples = new Uint32Array(sampleLimit);
+      this.#pairSampleScratch = samples;
     }
 
-    if (pairs.length < sampleLimit) {
-      for (let i = 0; i < population && pairs.length < sampleLimit; i += 1) {
-        for (let j = i + 1; j < population && pairs.length < sampleLimit; j += 1) {
-          const key = i * population + j;
+    const selected = this.#pairSampleSelection;
 
-          if (seen.has(key)) {
-            continue;
-          }
+    selected.clear();
 
-          seen.add(key);
-          pairs.push([i, j]);
-        }
+    const startIndex = possiblePairs - sampleLimit;
+
+    for (let i = startIndex; i < possiblePairs; i += 1) {
+      const candidate = sampleIndex(i + 1);
+
+      if (selected.has(candidate)) {
+        selected.add(i);
+      } else {
+        selected.add(candidate);
       }
     }
 
-    if (pairs.length === 0) {
+    if (selected.size < sampleLimit) {
+      for (let i = 0; i < possiblePairs && selected.size < sampleLimit; i += 1) {
+        selected.add(i);
+      }
+    }
+
+    const sampledView = samples.subarray(0, sampleLimit);
+    let filled = 0;
+
+    for (const value of selected) {
+      if (filled >= sampleLimit) break;
+      sampledView[filled] = value;
+      filled += 1;
+    }
+
+    selected.clear();
+
+    if (filled === 0) {
       return 0;
     }
 
     let sum = 0;
+    let count = 0;
 
-    for (let i = 0; i < pairs.length; i += 1) {
-      const [aIndex, bIndex] = pairs[i];
-      const a = validCells[aIndex];
-      const b = validCells[bIndex];
+    for (let i = 0; i < filled; i += 1) {
+      const comboIndex = sampledView[i];
+      const pair = this.#resolvePairFromIndex(comboIndex, populationSize);
 
-      sum += 1 - a.dna.similarity(b.dna);
+      if (!pair) {
+        continue;
+      }
+
+      const dnaA = validDna[pair.first];
+      const dnaB = validDna[pair.second];
+      const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
+
+      if (!Number.isFinite(similarity)) {
+        continue;
+      }
+
+      sum += 1 - similarity;
+      count += 1;
     }
 
-    return sum / pairs.length;
+    const result = count > 0 ? sum / count : 0;
+
+    validDna.length = 0;
+
+    return result;
   }
 
   /**
@@ -1148,6 +1404,9 @@ export default class Stats {
       ? Math.max(0, Math.floor(rawPopulation))
       : 0;
     const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
+    const populationSources = Array.isArray(snapshot?.populationCells)
+      ? snapshot.populationCells
+      : entries;
     const totalEnergy = Number.isFinite(snapshot?.totalEnergy)
       ? snapshot.totalEnergy
       : 0;
@@ -1168,7 +1427,7 @@ export default class Stats {
       tick >= this.#nextTraitResampleTick;
 
     if (shouldRebuildTraits) {
-      this.#rebuildTraitAggregates(entries);
+      this.#rebuildTraitAggregates(populationSources);
       this.#nextTraitResampleTick = tick + this.traitResampleInterval;
     }
 
@@ -1187,7 +1446,7 @@ export default class Stats {
       this.#diversityPopulationBaseline !== pop;
 
     if (shouldSampleDiversity) {
-      this.lastDiversitySample = this.estimateDiversity(entries);
+      this.lastDiversitySample = this.estimateDiversity(populationSources);
       this.#diversityPopulationBaseline = pop;
       this.#nextDiversitySampleTick = tick + this.diversitySampleInterval;
     }
@@ -1210,6 +1469,15 @@ export default class Stats {
       choiceCount > 0 ? mateStats.strategyPenaltySum / choiceCount : 1;
     const meanStrategyPressure =
       choiceCount > 0 ? mateStats.strategyPressureSum / choiceCount : 0;
+    const meanMateNoveltyPressure =
+      choiceCount > 0 ? mateStats.noveltyPressureSum / choiceCount : 0;
+    const opportunityWeight = mateStats.diversityOpportunityWeight || 0;
+    const diversityOpportunity =
+      opportunityWeight > 0 ? mateStats.diversityOpportunitySum / opportunityWeight : 0;
+    const diversityOpportunityAvailability =
+      opportunityWeight > 0
+        ? mateStats.diversityOpportunityAvailabilitySum / opportunityWeight
+        : 0;
 
     this.#updateDiversityPressure(
       diversity,
@@ -1217,17 +1485,23 @@ export default class Stats {
       successfulComplementarity,
       meanStrategyPenalty,
       diverseSuccessRate,
+      diversityOpportunity,
     );
+
+    this.diversityOpportunity = diversityOpportunity;
+    this.diversityOpportunityAvailability = diversityOpportunityAvailability;
 
     this.pushHistory("population", pop);
     this.pushHistory("diversity", diversity);
     this.pushHistory("diversityPressure", this.diversityPressure);
+    this.pushHistory("diversityOpportunity", diversityOpportunity);
     this.pushHistory("energy", meanEnergy);
     this.pushHistory("growth", this.births - this.deaths);
     this.pushHistory("birthsPerTick", this.births);
     this.pushHistory("deathsPerTick", this.deaths);
     this.pushHistory("diversePairingRate", diverseChoiceRate);
     this.pushHistory("meanDiversityAppetite", meanAppetite);
+    this.pushHistory("mateNoveltyPressure", meanMateNoveltyPressure);
     if (typeof this.mutationMultiplier === "number") {
       this.pushHistory("mutationMultiplier", this.mutationMultiplier);
     }
@@ -1273,6 +1547,8 @@ export default class Stats {
       diversity,
       diversityPressure: this.diversityPressure,
       diversityTarget: this.diversityTarget,
+      diversityOpportunity,
+      diversityOpportunityAvailability,
       traitPresence,
       mateChoices: choiceCount,
       successfulMatings: successCount,
@@ -1284,6 +1560,7 @@ export default class Stats {
       behaviorEvenness,
       meanStrategyPenalty,
       meanStrategyPressure,
+      mateNoveltyPressure: meanMateNoveltyPressure,
       strategyPressure: this.strategyPressure,
       curiositySelections: mateStats.selectionModes.curiosity,
       lastMating: this.lastMatingDebug,
@@ -1296,11 +1573,11 @@ export default class Stats {
   }
 
   setMatingDiversityThreshold(value) {
-    const numeric = Number(value);
+    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
 
-    if (!Number.isFinite(numeric)) return;
+    if (clamped === null) return;
 
-    this.matingDiversityThreshold = clamp(numeric, 0, 1);
+    this.matingDiversityThreshold = clamped;
   }
 
   /**
@@ -1321,6 +1598,10 @@ export default class Stats {
     strategyPenaltyMultiplier = 1,
     strategyPressure = undefined,
     threshold,
+    noveltyPressure = undefined,
+    diversityOpportunity = 0,
+    diversityOpportunityWeight = undefined,
+    diversityOpportunityAvailability = undefined,
   } = {}) {
     if (!this.mating) {
       this.mating = createEmptyMatingSnapshot();
@@ -1347,6 +1628,29 @@ export default class Stats {
     if (Number.isFinite(strategyPressure)) {
       this.mating.strategyPressureSum += clamp01(strategyPressure);
     }
+    if (Number.isFinite(noveltyPressure)) {
+      this.mating.noveltyPressureSum += clamp01(noveltyPressure);
+    }
+    const opportunityScore = clamp01(
+      Number.isFinite(diversityOpportunity) ? diversityOpportunity : 0,
+    );
+    const opportunityWeight = clamp01(
+      Number.isFinite(diversityOpportunityWeight) ? diversityOpportunityWeight : 0,
+    );
+    const opportunityAvailability = clamp01(
+      Number.isFinite(diversityOpportunityAvailability)
+        ? diversityOpportunityAvailability
+        : opportunityScore > 0
+          ? 1
+          : 0,
+    );
+
+    if (opportunityWeight > 0) {
+      this.mating.diversityOpportunitySum += opportunityScore * opportunityWeight;
+      this.mating.diversityOpportunityWeight += opportunityWeight;
+      this.mating.diversityOpportunityAvailabilitySum +=
+        opportunityAvailability * opportunityWeight;
+    }
 
     if (success) {
       this.mating.successes++;
@@ -1368,6 +1672,10 @@ export default class Stats {
       behaviorComplementarity: complementarity,
       strategyPenaltyMultiplier,
       strategyPressure,
+      noveltyPressure,
+      diversityOpportunity: opportunityScore,
+      diversityOpportunityWeight: opportunityWeight,
+      diversityOpportunityAvailability: opportunityAvailability,
       blockedReason: this.mating.lastBlockReason || undefined,
     };
     // Consume the one-time reason so the next mating record does not reuse it.
@@ -1563,6 +1871,10 @@ export default class Stats {
       birthsPer100Ticks,
       deathsPer100Ticks,
     };
+  }
+
+  setRandomGenerator(randomFn) {
+    this.#rng = typeof randomFn === "function" ? randomFn : DEFAULT_RANDOM;
   }
 
   setMutationMultiplier(multiplier = 1) {

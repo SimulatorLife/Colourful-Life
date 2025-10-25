@@ -31,6 +31,10 @@ where practical.
 - Collapsed dashboard panels now defer metrics, life events, and leaderboard
   rendering work, cutting 50 closed-panel metrics refreshes from ~73.9 ms to
   ~0.84 ms by queueing the latest payload until the panel is reopened.
+- README, architecture overview, and developer guide now cross-link workflow
+  basics and highlight quick verification commands (`npm test`, `npm run lint`,
+  `npm run format:check`) so contributors land on accurate setup guidance
+  without bouncing between documents.
 - Automatic reseeding has been removed from decay pools, grid resets, and
   geometry changes; the world now stays empty unless `reseed: true` is
   explicitly requested, keeping lineage growth compliant with Simulation Law 7.
@@ -42,6 +46,13 @@ where practical.
 - Refreshed documentation across the README, developer guide, and architecture
   notes to highlight the UI bridge, fitness scoring module, Husky hook setup,
   and new formatting scripts so contributor workflows mirror the current code.
+- Grouped configuration override guidance across the README, developer guide,
+  and architecture overview while tightening the quick-start flow to call out
+  `npm run prepare`, cache resets, and the supporting documentation map.
+- Streamlined the README quick start, developer guide, and public hosting
+  instructions to surface npm script aliases (including `npm run benchmark` and
+  `npm run deploy:public`), clarify publishing steps, and reduce duplicated
+  onboarding guidance.
 - Reproduction acceptance now blends neural policy intent with the genome's
   baseline instincts using DNA-tuned weights that react to opportunity,
   scarcity, neural fatigue, and network confidence, replacing the former
@@ -51,11 +62,14 @@ where practical.
 - Expanded JSDoc coverage for overlay helpers (celebration glow, life events,
   density/energy/fitness heatmaps, selection zones) so exported drawing
   utilities remain self-documenting.
-- Relocated the "Dashboard Refresh Interval" slider into Evolution Insights so
-  cadence controls live alongside the analytics they govern while keeping the
-  leaderboard on the shared refresh schedule.
+- Relocated the "Dashboard Refresh Interval" slider into the Leaderboard panel
+  so cadence controls sit beside the scoreboard they pace while clarifying that
+  Evolution Insights shares the same refresh schedule.
+- Moved the "Low Diversity Penalty ×" slider into the Similarity Thresholds
+  section so reproduction tuning lives alongside the diversity cutoff and
+  ally/enemy similarity sliders.
 - Lowered the default energy regeneration rate to `0.012`, trimmed diffusion to
-  `0.05`, and raised the density penalty to `0.42` so crowded hubs return less
+  `0.05`, and set the density penalty to `0.39` so crowded hubs return less
   energy each tick while sparse tiles still recover reliably.
 - Increased the reproduction viability buffer by 15 % so offspring only spawn
   when parents stockpile meaningful reserves instead of skimming the minimum
@@ -75,6 +89,8 @@ where practical.
 - The `COLOURFUL_LIFE_DECAY_SPAWN_MIN_ENERGY` override and decay-triggered
   reseeding hook have been retired; decay now only returns energy, leaving
   population recovery to living lineages or explicit reseed requests.
+- Retired the unused `scripts/profile-active-snapshot.mjs` benchmarking helper
+  to shrink the maintenance surface for profiling utilities.
 
 ### Fixed
 
@@ -110,11 +126,11 @@ where practical.
   ~0.27 to ~0.30 and raised successful matings from 5/241 to 6/269, easing
   reproduction stalls while preserving the diversity incentive in crowded
   stretches.
-- Relocated the "Pause When Hidden" toggle beneath the playback controls so the
-  auto-pause behaviour lives alongside the Pause/Step actions it complements
-  while remaining easy to discover, and kept it disabled by default so
-  unattended, long-running simulations continue advancing when the browser tab
-  loses focus.
+- Relocated the "Pause When Hidden" toggle to live directly beneath the
+  playback controls in the Simulation Controls panel so the focus-dependent
+  behaviour sits alongside the cadence actions it influences, and kept it
+  disabled by default so unattended, long-running simulations continue
+  advancing when the browser tab loses focus.
 - Shifted the playback speed slider beneath the Pause/Step controls so cadence
   adjustments live with the playback actions they influence.
 - Removed the wall linger penalty control and supporting plumbing from the

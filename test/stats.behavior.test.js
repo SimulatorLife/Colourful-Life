@@ -24,6 +24,79 @@ const toEntries = (cells) =>
       }))
     : [];
 
+const createSequenceRng = (sequence) => {
+  let index = 0;
+
+  return () => {
+    if (!Array.isArray(sequence) || sequence.length === 0) {
+      return 0;
+    }
+
+    const value = sequence[index % sequence.length];
+
+    index += 1;
+
+    return value;
+  };
+};
+
+const mapCombinationIndexToPair = (index, populationSize) => {
+  let remaining = index;
+  let first = 0;
+  let span = populationSize - 1;
+
+  while (span > 0 && remaining >= span) {
+    remaining -= span;
+    span -= 1;
+    first += 1;
+  }
+
+  return { first, second: first + 1 + remaining };
+};
+
+const sampleCombinationIndices = (populationSize, sampleLimit, rng) => {
+  const possiblePairs = (populationSize * (populationSize - 1)) / 2;
+
+  if (!(possiblePairs > 0) || !(sampleLimit > 0)) {
+    return [];
+  }
+
+  const limit = Math.min(sampleLimit, possiblePairs);
+  const selected = new Set();
+  const sampleIndex = (range) => {
+    if (!(range > 0)) return 0;
+
+    let roll = rng();
+
+    if (!Number.isFinite(roll)) {
+      roll = Math.random();
+    }
+
+    const fractional = roll - Math.trunc(roll);
+    const normalized = fractional >= 0 ? fractional : fractional + 1;
+
+    return Math.min(range - 1, Math.floor(normalized * range));
+  };
+
+  for (let i = possiblePairs - limit; i < possiblePairs; i += 1) {
+    const pick = sampleIndex(i + 1);
+
+    if (selected.has(pick)) {
+      selected.add(i);
+    } else {
+      selected.add(pick);
+    }
+  }
+
+  if (selected.size < limit) {
+    for (let i = 0; i < possiblePairs && selected.size < limit; i += 1) {
+      selected.add(i);
+    }
+  }
+
+  return Array.from(selected);
+};
+
 test("computeTraitPresence clamps trait values and tracks active fractions", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats(4);
@@ -65,7 +138,6 @@ test("computeTraitPresence clamps trait values and tracks active fractions", asy
 
 test("estimateDiversity enumerates unique pairs when sample budget covers population", async () => {
   const { default: Stats } = await statsModulePromise;
-  const stats = new Stats();
   const similarityMatrix = new Map([
     ["0|1", 0.1],
     ["0|2", 0.3],
@@ -92,30 +164,15 @@ test("estimateDiversity enumerates unique pairs when sample budget covers popula
     1 - similarityMatrix.get("1|2"),
   ];
   const expected = distances.reduce((sum, value) => sum + value, 0) / distances.length;
-  const originalRandom = Math.random;
   const sequence = [0.1, 0.5, 0.4, 0.1, 0.2, 0.9];
-  let index = 0;
+  const stats = new Stats(undefined, { rng: createSequenceRng(sequence) });
+  const actual = stats.estimateDiversity(cells, 10);
 
-  Math.random = () => {
-    const value = sequence[index % sequence.length];
-
-    index += 1;
-
-    return value;
-  };
-
-  try {
-    const actual = stats.estimateDiversity(cells, 10);
-
-    approxEqual(actual, expected, 1e-9);
-  } finally {
-    Math.random = originalRandom;
-  }
+  approxEqual(actual, expected, 1e-9);
 });
 
 test("estimateDiversity samples target quota even when most cells lack genomes", async () => {
   const { default: Stats } = await statsModulePromise;
-  const stats = new Stats();
   const similarityMatrix = new Map([
     ["0|1", 0.15],
     ["0|2", 0.4],
@@ -142,20 +199,63 @@ test("estimateDiversity samples target quota even when most cells lack genomes",
   const validCells = [0, 1, 2, 3].map((id) => makeCell(id));
   const inertCells = Array.from({ length: 120 }, () => ({}));
   const cells = [...validCells, ...inertCells];
+  const rng = () => 0;
+  const stats = new Stats(undefined, { rng });
+  const actual = stats.estimateDiversity(cells, 3);
+  const indices = sampleCombinationIndices(validCells.length, 3, rng);
+  const expectedContributions = indices.map((pairIndex) => {
+    const { first, second } = mapCombinationIndexToPair(pairIndex, validCells.length);
+    const low = Math.min(first, second);
+    const high = Math.max(first, second);
+    const key = `${low}|${high}`;
+
+    return 1 - similarityMatrix.get(key);
+  });
+  const expected =
+    expectedContributions.reduce((sum, value) => sum + value, 0) /
+    expectedContributions.length;
+
+  approxEqual(actual, expected, 1e-9);
+});
+
+test("estimateDiversity uses injected RNG without touching Math.random", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const similarityMatrix = new Map([
+    ["0|1", 0.2],
+    ["0|2", 0.55],
+    ["0|3", 0.35],
+    ["1|2", 0.6],
+    ["1|3", 0.45],
+    ["2|3", 0.5],
+  ]);
+  const makeCell = (id) =>
+    createCell({
+      dna: {
+        id,
+        reproductionProb: () => 0,
+        similarity(otherDna) {
+          const a = Math.min(id, otherDna.id);
+          const b = Math.max(id, otherDna.id);
+          const key = `${a}|${b}`;
+
+          return similarityMatrix.get(key) ?? 1;
+        },
+      },
+    });
+  const cells = [0, 1, 2, 3].map((id) => makeCell(id));
+  const sequence = [0.82, 0.14, 0.61, 0.37, 0.48, 0.29];
+  const sampleLimit = 2;
+  const expectedStats = new Stats(undefined, { rng: createSequenceRng(sequence) });
+  const expected = expectedStats.estimateDiversity(cells, sampleLimit);
   const originalRandom = Math.random;
 
-  Math.random = () => 0;
+  Math.random = () => {
+    throw new Error("Math.random should not be called when a custom RNG is provided.");
+  };
 
   try {
-    const actual = stats.estimateDiversity(cells, 3);
-    const expectedContributions = [
-      1 - similarityMatrix.get("0|1"),
-      1 - similarityMatrix.get("0|2"),
-      1 - similarityMatrix.get("0|3"),
-    ];
-    const expected =
-      expectedContributions.reduce((sum, value) => sum + value, 0) /
-      expectedContributions.length;
+    const stats = new Stats(undefined, { rng: createSequenceRng(sequence) });
+    const actual = stats.estimateDiversity(cells, sampleLimit);
 
     approxEqual(actual, expected, 1e-9);
   } finally {
@@ -194,6 +294,10 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
     behaviorComplementarity: 0.8,
     strategyPenaltyMultiplier: 0.6,
     strategyPressure: 0.3,
+    noveltyPressure: 0.4,
+    diversityOpportunity: 0.4,
+    diversityOpportunityWeight: 1,
+    diversityOpportunityAvailability: 0.5,
   });
 
   assert.is(stats.mating.choices, 1);
@@ -208,11 +312,19 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   approxEqual(stats.mating.complementaritySuccessSum, 0.8, 1e-9);
   approxEqual(stats.mating.strategyPenaltySum, 0.6, 1e-9);
   approxEqual(stats.mating.strategyPressureSum, 0.3, 1e-9);
+  approxEqual(stats.mating.noveltyPressureSum, 0.4, 1e-9);
+  approxEqual(stats.mating.diversityOpportunitySum, 0.4, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityWeight, 1, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityAvailabilitySum, 0.5, 1e-9);
   assert.equal(stats.lastMatingDebug.blockedReason, "Too similar");
   assert.is(stats.lastMatingDebug.threshold, 0.6);
   approxEqual(stats.lastMatingDebug.behaviorComplementarity, 0.8, 1e-9);
   approxEqual(stats.lastMatingDebug.strategyPenaltyMultiplier, 0.6, 1e-9);
   approxEqual(stats.lastMatingDebug.strategyPressure, 0.3, 1e-9);
+  approxEqual(stats.lastMatingDebug.noveltyPressure, 0.4, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunity, 0.4, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityWeight, 1, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityAvailability, 0.5, 1e-9);
   assert.is(stats.mating.lastBlockReason, null);
 
   stats.recordMateChoice({
@@ -234,11 +346,19 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   approxEqual(stats.mating.complementaritySuccessSum, 0.8, 1e-9);
   approxEqual(stats.mating.strategyPenaltySum, 1.6, 1e-9);
   approxEqual(stats.mating.strategyPressureSum, 0.3, 1e-9);
+  approxEqual(stats.mating.noveltyPressureSum, 0.4, 1e-9);
+  approxEqual(stats.mating.diversityOpportunitySum, 0.4, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityWeight, 1, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityAvailabilitySum, 0.5, 1e-9);
   assert.equal(stats.lastMatingDebug.success, false);
   assert.is(stats.lastMatingDebug.threshold, 0.6);
   approxEqual(stats.lastMatingDebug.behaviorComplementarity, 0.1, 1e-9);
   approxEqual(stats.lastMatingDebug.strategyPenaltyMultiplier, 1, 1e-9);
   assert.is(stats.lastMatingDebug.strategyPressure, undefined);
+  assert.is(stats.lastMatingDebug.noveltyPressure, undefined);
+  approxEqual(stats.lastMatingDebug.diversityOpportunity, 0, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityWeight, 0, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityAvailability, 0, 1e-9);
 
   stats.recordReproductionBlocked({ reason: "Blocked by reproductive zone" });
 
@@ -297,6 +417,10 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
     complementaritySuccessSum: 0.6,
     strategyPenaltySum: 1.7,
     strategyPressureSum: 0.4,
+    noveltyPressureSum: 0.9,
+    diversityOpportunitySum: 0.6,
+    diversityOpportunityWeight: 2,
+    diversityOpportunityAvailabilitySum: 1.2,
     blocks: 1,
     lastBlockReason: "Still recent",
   };
@@ -340,6 +464,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(result.meanAge, 4.5);
   assert.is(result.diversity, 0.42);
   assert.is(result.diversityPressure, 0);
+  approxEqual(result.diversityOpportunity, 0.3, 1e-9);
+  approxEqual(result.diversityOpportunityAvailability, 0.6, 1e-9);
   assert.is(result.diversityTarget, stats.getDiversityTarget());
   assert.equal(result.traitPresence, stats.traitPresence);
   assert.is(result.mateChoices, 2);
@@ -352,6 +478,7 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   approxEqual(result.behaviorEvenness, 1, 1e-9);
   approxEqual(result.meanStrategyPenalty, 0.85, 1e-9);
   approxEqual(result.meanStrategyPressure, 0.2, 1e-9);
+  approxEqual(result.mateNoveltyPressure, 0.45, 1e-9);
   approxEqual(result.strategyPressure, stats.getStrategyPressure(), 1e-9);
   assert.is(result.curiositySelections, 1);
   assert.equal(result.lastMating, stats.lastMatingDebug);
@@ -364,6 +491,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(stats.history.population.length, 1);
   assert.is(stats.history.diversity.length, 1);
   assert.is(stats.history.diversityPressure.length, 1);
+  assert.is(stats.history.diversityOpportunity.length, 1);
+  approxEqual(stats.history.diversityOpportunity[0], 0.3, 1e-9);
   assert.is(stats.history.energy.length, 1);
   assert.is(stats.history.growth.length, 1);
   assert.is(stats.history.birthsPerTick.length, 1);
@@ -373,6 +502,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(stats.history.diversePairingRate.length, 1);
   assert.is(stats.history.diversePairingRate[0], 0.5);
   assert.is(stats.history.meanDiversityAppetite.length, 1);
+  assert.is(stats.history.mateNoveltyPressure.length, 1);
+  approxEqual(stats.history.mateNoveltyPressure[0], 0.45, 1e-9);
   assert.is(stats.history.mutationMultiplier.length, 1);
 
   assert.is(stats.traitHistory.presence.cooperation.length, 1);
@@ -390,6 +521,7 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
       poolSizeSum: 0,
       strategyPenaltySum: 0,
       strategyPressureSum: 0,
+      noveltyPressureSum: 0,
     };
     stats.births = i;
     stats.deaths = 0;
@@ -411,6 +543,7 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(stats.history.deathsPerTick.length, 3);
   assert.is(stats.history.diversePairingRate.length, 3);
   assert.is(stats.history.meanDiversityAppetite.length, 3);
+  assert.is(stats.history.mateNoveltyPressure.length, 3);
   assert.is(stats.history.mutationMultiplier.length, 3);
   assert.is(stats.traitHistory.presence.cooperation.length, 3);
   assert.is(stats.traitHistory.average.cooperation.length, 3);
@@ -456,6 +589,7 @@ test("diversity pressure escalates when diverse mating success stalls", async ()
     complementaritySuccessSum: 0.5,
     strategyPenaltySum: 8,
     strategyPressureSum: 1.5,
+    noveltyPressureSum: 0,
   };
 
   const cells = [
@@ -668,6 +802,7 @@ test("diversity pressure responds to behavioral stagnation and complementary suc
     complementaritySuccessSum: 0.1,
     strategyPenaltySum: 1,
     strategyPressureSum: 0,
+    noveltyPressureSum: 0,
   };
 
   stats.updateFromSnapshot({
@@ -697,6 +832,7 @@ test("diversity pressure responds to behavioral stagnation and complementary suc
     complementaritySuccessSum: 0.9,
     strategyPenaltySum: 1,
     strategyPressureSum: 0,
+    noveltyPressureSum: 0,
   };
 
   stats.diversitySequence.push(0.34);
@@ -758,6 +894,7 @@ test("strategy pressure intensifies when monotony escapes penalties", async () =
     complementaritySuccessSum: 0.15,
     strategyPenaltySum: 1,
     strategyPressureSum: 0,
+    noveltyPressureSum: 0,
   };
   unchecked.updateFromSnapshot(snapshot);
 
@@ -779,6 +916,7 @@ test("strategy pressure intensifies when monotony escapes penalties", async () =
     complementaritySuccessSum: 0.15,
     strategyPenaltySum: 0.5,
     strategyPressureSum: 0,
+    noveltyPressureSum: 0,
   };
   relieved.updateFromSnapshot(snapshot);
 

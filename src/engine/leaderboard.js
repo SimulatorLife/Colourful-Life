@@ -1,7 +1,19 @@
-import { createRankedBuffer, sanitizeNumber } from "./utils.js";
+import { createRankedBuffer, sanitizeNumber } from "../utils.js";
 
 function sanitizeCoordinate(value) {
   return sanitizeNumber(value, { fallback: null });
+}
+
+function resolveStatValue(primary, secondary, fallback = 0) {
+  if (Number.isFinite(primary)) {
+    return primary;
+  }
+
+  if (Number.isFinite(secondary)) {
+    return secondary;
+  }
+
+  return fallback;
 }
 
 /**
@@ -48,18 +60,24 @@ export function computeLeaderboard(snapshot, topN = 5) {
   const topItems = createRankedBuffer(sanitizedTopN, compareItems);
 
   for (const entry of entries) {
-    const { cell, fitness } = entry || {};
-
-    if (!cell || !Number.isFinite(fitness)) {
+    if (!entry || typeof entry !== "object") {
       continue;
     }
 
+    const { cell, fitness } = entry;
+
+    if (!Number.isFinite(fitness)) {
+      continue;
+    }
+
+    const colorCandidate = entry.color ?? cell?.color;
+
     const item = {
       fitness,
-      offspring: Number.isFinite(cell?.offspring) ? cell.offspring : 0,
-      fightsWon: Number.isFinite(cell?.fightsWon) ? cell.fightsWon : 0,
-      age: Number.isFinite(cell?.age) ? cell.age : 0,
-      color: cell?.color,
+      offspring: resolveStatValue(entry?.offspring, cell?.offspring),
+      fightsWon: resolveStatValue(entry?.fightsWon, cell?.fightsWon),
+      age: resolveStatValue(entry?.age, cell?.age),
+      color: colorCandidate,
     };
     const row = sanitizeCoordinate(entry?.row);
     const col = sanitizeCoordinate(entry?.col);

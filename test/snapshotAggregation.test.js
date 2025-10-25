@@ -1,7 +1,7 @@
 import { assert, test } from "#tests/harness";
 
 const gridManagerModulePromise = import("../src/grid/gridManager.js");
-const leaderboardModulePromise = import("../src/leaderboard.js");
+const leaderboardModulePromise = import("../src/engine/leaderboard.js");
 
 function createStubCell(data) {
   return {
@@ -261,8 +261,15 @@ test("computeLeaderboard tolerates entries missing cell data", async () => {
 
   const leaderboard = computeLeaderboard(snapshot, 5);
 
-  assert.is(leaderboard.length, 1);
+  assert.is(leaderboard.length, 2);
   assert.equal(leaderboard[0], {
+    fitness: 10,
+    offspring: 0,
+    fightsWon: 0,
+    age: 0,
+    color: undefined,
+  });
+  assert.equal(leaderboard[1], {
     fitness: 5,
     offspring: 0,
     fightsWon: 0,

@@ -11,11 +11,11 @@ import {
 import {
   clamp,
   clamp01,
-  warnOnce,
-  toPlainObject,
-  invokeWithErrorBoundary,
   coerceBoolean,
+  sanitizeNumber,
+  toPlainObject,
 } from "../utils.js";
+import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
 const AUTO_PAUSE_DESCRIPTION =
   "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
@@ -41,6 +41,154 @@ const DEATH_CAUSE_COLOR_MAP = Object.freeze({
 // an "Other" bucket. Consumers can override via `ui.layout.deathBreakdownMaxEntries`.
 const DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES = 4;
 const DEATH_BREAKDOWN_OTHER_COLOR = "rgba(255, 255, 255, 0.28)";
+
+const DEFAULT_TRAIT_DISPLAY_CONFIG = Object.freeze({
+  cooperation: Object.freeze({
+    name: "Cooperation",
+    colors: Object.freeze({
+      presence: Object.freeze({
+        colorVar: "--color-trait-cooperation-presence",
+        fallbackColor: "#74b9ff",
+      }),
+      intensity: Object.freeze({
+        colorVar: "--color-trait-cooperation-intensity",
+        fallbackColor: "#a0c4ff",
+      }),
+    }),
+  }),
+  fighting: Object.freeze({
+    name: "Fighting",
+    colors: Object.freeze({
+      presence: Object.freeze({
+        colorVar: "--color-trait-fighting-presence",
+        fallbackColor: "#ff7675",
+      }),
+      intensity: Object.freeze({
+        colorVar: "--color-trait-fighting-intensity",
+        fallbackColor: "#ff9aa2",
+      }),
+    }),
+  }),
+  breeding: Object.freeze({
+    name: "Breeding",
+    colors: Object.freeze({
+      presence: Object.freeze({
+        colorVar: "--color-trait-breeding-presence",
+        fallbackColor: "#f6c177",
+      }),
+      intensity: Object.freeze({
+        colorVar: "--color-trait-breeding-intensity",
+        fallbackColor: "#fcd29f",
+      }),
+    }),
+  }),
+  sight: Object.freeze({
+    name: "Sight",
+    colors: Object.freeze({
+      presence: Object.freeze({
+        colorVar: "--color-trait-sight-presence",
+        fallbackColor: "#55efc4",
+      }),
+      intensity: Object.freeze({
+        colorVar: "--color-trait-sight-intensity",
+        fallbackColor: "#81f4d0",
+      }),
+    }),
+  }),
+});
+
+function toPascalCase(value) {
+  if (typeof value !== "string" || value.length === 0) return "";
+
+  return value
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join("");
+}
+
+function formatTraitLabel(key) {
+  if (typeof key !== "string" || key.length === 0) {
+    return "Trait";
+  }
+
+  const cleaned = key.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+
+  if (cleaned.length === 0) {
+    return "Trait";
+  }
+
+  return cleaned.replace(/\b(\w)/g, (match) => match.toUpperCase());
+}
+
+function generateTraitColors(key) {
+  if (typeof key !== "string" || key.length === 0) {
+    return {
+      presence: "#7f8cff",
+      intensity: "#a3aefc",
+    };
+  }
+
+  let hash = 0;
+
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash << 5) - hash + key.charCodeAt(i);
+    hash |= 0;
+  }
+
+  const hue = Math.abs(hash) % 360;
+
+  return {
+    presence: `hsl(${hue}, 65%, 62%)`,
+    intensity: `hsl(${(hue + 18) % 360}, 65%, 74%)`,
+  };
+}
+
+function resolveTraitDisplayConfigs(stats) {
+  const definitions = Array.isArray(stats?.traitDefinitions)
+    ? stats.traitDefinitions
+    : null;
+  const defaultKeys = Object.keys(DEFAULT_TRAIT_DISPLAY_CONFIG);
+  const sourceDefinitions =
+    definitions && definitions.length > 0
+      ? definitions
+      : defaultKeys.map((key) => ({ key }));
+  const seen = new Set();
+
+  return sourceDefinitions
+    .map((definition) =>
+      typeof definition?.key === "string" ? definition.key.trim() : "",
+    )
+    .filter((key) => {
+      if (!key) return false;
+      if (seen.has(key)) return false;
+      seen.add(key);
+
+      return true;
+    })
+    .map((key) => {
+      const base = DEFAULT_TRAIT_DISPLAY_CONFIG[key];
+
+      if (base) {
+        return {
+          key,
+          label: base.name,
+          colors: base.colors,
+        };
+      }
+
+      const generated = generateTraitColors(key);
+
+      return {
+        key,
+        label: formatTraitLabel(key),
+        colors: {
+          presence: { colorVar: null, fallbackColor: generated.presence },
+          intensity: { colorVar: null, fallbackColor: generated.intensity },
+        },
+      };
+    });
+}
 
 /**
  * Formats numeric values that may occasionally be non-finite. When the value
@@ -86,6 +234,8 @@ export default class UIManager {
 
     const defaults = resolveSimulationDefaults(initialSettings);
 
+    this._defaultSettings = Object.freeze({ ...defaults });
+
     this.simulationCallbacks = normalizedCallbacks;
     this.actions = actionFns;
     this.obstaclePresets = Array.isArray(obstaclePresets) ? obstaclePresets : [];
@@ -109,10 +259,10 @@ export default class UIManager {
     this.zoneSummaryList = null;
     this._checkboxIdSequence = 0;
     this.stepButton = null;
+    this.burstButton = null;
+    this._documentKeydownListener = null;
     this.metricsPlaceholder = null;
-    this.profilingPanel = null;
-    this.profilingBox = null;
-    this.profilingPlaceholder = null;
+    this._sliderInputs = new Map();
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
     this.lifeEventsSummary = null;
@@ -126,12 +276,13 @@ export default class UIManager {
     this.lifeEventsSummaryRate = null;
     this._pendingMetrics = null;
     this._pendingLeaderboardEntries = null;
-    this._pendingProfilingMetrics = null;
     this._pendingLifeEventsStats = null;
     this.deathBreakdownList = null;
     this.deathBreakdownEmptyState = null;
     this.sparkMetricDescriptors = [];
     this.traitSparkDescriptors = [];
+    this._traitSparkKeys = null;
+    this.traitSparkGrid = null;
     this.playbackSpeedSlider = null;
     this.speedPresetButtons = [];
     this.dashboardCadenceSlider = null;
@@ -159,7 +310,6 @@ export default class UIManager {
     this.enemySimilarity = defaults.enemySimilarity;
     this.eventStrengthMultiplier = defaults.eventStrengthMultiplier;
     this.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
-    this.maxConcurrentEvents = defaults.maxConcurrentEvents;
     this.speedMultiplier = defaults.speedMultiplier;
     const baseUpdatesCandidate =
       Number.isFinite(this.speedMultiplier) && this.speedMultiplier > 0
@@ -182,10 +332,11 @@ export default class UIManager {
     this.matingDiversityThreshold = defaults.matingDiversityThreshold;
     this.lowDiversityReproMultiplier = defaults.lowDiversityReproMultiplier;
     this.lowDiversitySlider = null;
+    this.initialTileEnergyFraction = defaults.initialTileEnergyFraction;
+    this.initialTileEnergySlider = null;
     this.energyRegenRate = defaults.energyRegenRate; // base logistic regen rate (0..0.2)
     this.energyDiffusionRate = defaults.energyDiffusionRate; // neighbor diffusion rate (0..0.5)
     this.leaderboardIntervalMs = defaults.leaderboardIntervalMs;
-    this.profileGridMetrics = defaults.profileGridMetrics;
     this._lastSlowUiRender = Number.NEGATIVE_INFINITY; // shared throttle for fast-updating UI bits
     this._lastInteractionTotals = { fights: 0, cooperations: 0 };
     this.simulationClock = {
@@ -207,7 +358,6 @@ export default class UIManager {
       this.obstaclePreset = initialObstaclePreset;
     }
     this.autoPauseCheckbox = null;
-    this.profileGridSelect = null;
     // Build UI
     this.root = document.querySelector(mountSelector) || document.body;
 
@@ -239,6 +389,7 @@ export default class UIManager {
     this.speedResetHotkeySet = this.#resolveHotkeySet(layoutConfig.speedResetHotkeys, [
       "0",
     ]);
+    this.burstHotkeySet = this.#resolveHotkeySet(layoutConfig.burstHotkeys, ["b"]);
 
     const canvasEl =
       layoutConfig.canvasElement || this.#resolveNode(layoutConfig.canvasSelector);
@@ -253,70 +404,18 @@ export default class UIManager {
     }
     this.controlsPanel = this.#buildControlsPanel();
     this.insightsPanel = this.#buildInsightsPanel();
-    this.profilingPanel = this.#buildProfilingPanel();
     this.lifeEventsPanel = this.#buildLifeEventsPanel();
     this.dashboardGrid.appendChild(this.controlsPanel);
     this.dashboardGrid.appendChild(this.insightsPanel);
-    this.dashboardGrid.appendChild(this.profilingPanel);
     this.dashboardGrid.appendChild(this.lifeEventsPanel);
 
     // Keyboard toggle
-    document.addEventListener("keydown", (event) => {
-      if (!event?.key) return;
-      if (this.#shouldIgnoreHotkey(event)) return;
-
-      const key = this.#normalizeHotkeyValue(event.key);
-
-      if (!key) return;
-
-      if (this.pauseHotkeySet.has(key)) {
-        event.preventDefault();
-        this.togglePause();
-
-        return;
-      }
-
-      if (this.stepHotkeySet.has(key)) {
-        event.preventDefault();
-
-        if (this.paused) {
-          this.#executeStep();
-        } else {
-          const nowPaused = this.togglePause();
-
-          if (nowPaused) {
-            this.#executeStep();
-          }
-        }
-
-        return;
-      }
-
-      if (this.speedIncreaseHotkeySet.has(key)) {
-        event.preventDefault();
-        const steps = event.shiftKey ? 5 : 1;
-
-        this.#bumpSpeedMultiplier(steps);
-
-        return;
-      }
-
-      if (this.speedDecreaseHotkeySet.has(key)) {
-        event.preventDefault();
-        const steps = event.shiftKey ? 5 : 1;
-
-        this.#bumpSpeedMultiplier(-steps);
-
-        return;
-      }
-
-      if (this.speedResetHotkeySet.has(key)) {
-        event.preventDefault();
-        this.#resetSpeedMultiplier();
-
-        return;
-      }
-    });
+    if (document?.addEventListener) {
+      this._documentKeydownListener = (event) => {
+        this.#handleDocumentKeydown(event);
+      };
+      document.addEventListener("keydown", this._documentKeydownListener);
+    }
   }
 
   #normalizeHotkeyValue(value) {
@@ -349,6 +448,95 @@ export default class UIManager {
     }
 
     return normalized.replace(/[-_\s]+/g, "");
+  }
+
+  #handleDocumentKeydown(event) {
+    if (!event?.key) return;
+    if (this.#shouldIgnoreHotkey(event)) return;
+
+    const key = this.#normalizeHotkeyValue(event.key);
+
+    if (!key) return;
+
+    if (this.pauseHotkeySet.has(key)) {
+      event.preventDefault();
+      this.togglePause();
+
+      return;
+    }
+
+    if (this.stepHotkeySet.has(key)) {
+      event.preventDefault();
+
+      if (this.paused) {
+        this.#executeStep();
+      } else {
+        const nowPaused = this.togglePause();
+
+        if (nowPaused) {
+          this.#executeStep();
+        }
+      }
+
+      return;
+    }
+
+    if (this.burstHotkeySet?.has(key)) {
+      event.preventDefault();
+      this.#triggerBurst({ shiftKey: event.shiftKey });
+
+      return;
+    }
+
+    if (this.speedIncreaseHotkeySet.has(key)) {
+      event.preventDefault();
+      const steps = event.shiftKey ? 5 : 1;
+
+      this.#bumpSpeedMultiplier(steps);
+
+      return;
+    }
+
+    if (this.speedDecreaseHotkeySet.has(key)) {
+      event.preventDefault();
+      const steps = event.shiftKey ? 5 : 1;
+
+      this.#bumpSpeedMultiplier(-steps);
+
+      return;
+    }
+
+    if (this.speedResetHotkeySet.has(key)) {
+      event.preventDefault();
+      this.#resetSpeedMultiplier();
+    }
+  }
+
+  #triggerBurst(options = {}) {
+    const shiftKey = Boolean(options?.shiftKey);
+    const burstOptions = shiftKey
+      ? { count: 400, radius: 9 }
+      : { count: 200, radius: 6 };
+
+    if (typeof this.actions.burst === "function") {
+      try {
+        this.actions.burst(burstOptions);
+      } catch (error) {
+        warnOnce("Burst action handler threw.", error);
+      }
+
+      return;
+    }
+
+    if (typeof window === "undefined") return;
+
+    try {
+      if (window.grid?.burstRandomCells) {
+        window.grid.burstRandomCells(burstOptions);
+      }
+    } catch (error) {
+      warnOnce("Global burst handler threw.", error);
+    }
   }
 
   #resolveHotkeySet(candidate, fallbackKeys = ["p"]) {
@@ -462,6 +650,25 @@ export default class UIManager {
     const match = this.obstaclePresets.find((preset) => preset?.id === candidate);
 
     return match ? match.id : null;
+  }
+
+  #pickRandomObstaclePresetId() {
+    if (!Array.isArray(this.obstaclePresets) || this.obstaclePresets.length === 0) {
+      return null;
+    }
+
+    const validPresets = this.obstaclePresets.filter((preset) => preset?.id);
+
+    if (validPresets.length === 0) return null;
+
+    const obstacleCandidates = validPresets.filter((preset) => preset.id !== "none");
+    const pool = obstacleCandidates.length > 0 ? obstacleCandidates : validPresets;
+
+    if (pool.length === 0) return null;
+
+    const index = Math.floor(Math.random() * pool.length);
+
+    return pool[index]?.id ?? null;
   }
 
   #readGridDimensions() {
@@ -596,6 +803,7 @@ export default class UIManager {
 
     if (!controls?.summaryEl) return normalized;
 
+    const isBusy = Boolean(controls.geometryBusy);
     const rawValues = options.raw ?? values ?? {};
     const hasEmpty = Boolean(options.hasEmpty);
     const hasInvalid = Boolean(options.hasInvalid);
@@ -625,6 +833,20 @@ export default class UIManager {
         : `${formatNumber(widthPx)} × ${formatNumber(heightPx)}`;
     }
 
+    if (isBusy) {
+      controls.summaryEl.setAttribute("data-state", "busy");
+      controls.summaryEl.setAttribute("aria-busy", "true");
+      if (controls.summaryStatusEl) {
+        controls.summaryStatusEl.textContent = "Applying…";
+      }
+      if (controls.applyButton) {
+        controls.applyButton.disabled = true;
+        controls.applyButton.setAttribute("aria-disabled", "true");
+      }
+
+      return normalized;
+    }
+
     const differsFromCurrent =
       source !== "sync" &&
       !isIncomplete &&
@@ -639,6 +861,7 @@ export default class UIManager {
         : "current";
 
     controls.summaryEl.setAttribute("data-state", state);
+    controls.summaryEl.setAttribute("aria-busy", "false");
 
     if (controls.summaryStatusEl) {
       let statusText = "Current";
@@ -655,6 +878,7 @@ export default class UIManager {
       const defaultNote = controls.summaryDefaultNote;
 
       noteEl.classList.remove("geometry-summary__note--warning");
+      noteEl.classList.remove("geometry-summary__note--success");
 
       if (isIncomplete) {
         noteEl.textContent = hasInvalid
@@ -740,6 +964,192 @@ export default class UIManager {
     return adjustments;
   }
 
+  #geometryValuesEqual(a = {}, b = {}) {
+    const keys = ["cellSize", "rows", "cols"];
+
+    return keys.every((key) => {
+      const aValue = Number(a?.[key]);
+      const bValue = Number(b?.[key]);
+
+      if (!Number.isFinite(aValue) && !Number.isFinite(bValue)) return true;
+
+      return aValue === bValue;
+    });
+  }
+
+  #formatGeometryDimensions(values = {}) {
+    const cols = Number(values?.cols);
+    const rows = Number(values?.rows);
+    const cellSize = Number(values?.cellSize);
+    const parts = [];
+
+    if (Number.isFinite(cols) && Number.isFinite(rows)) {
+      parts.push(`${cols.toLocaleString()} × ${rows.toLocaleString()} cells`);
+    }
+
+    if (Number.isFinite(cols) && Number.isFinite(rows) && Number.isFinite(cellSize)) {
+      const width = Math.round(cols * cellSize);
+      const height = Math.round(rows * cellSize);
+
+      parts.push(`${width.toLocaleString()} × ${height.toLocaleString()} px`);
+    } else if (Number.isFinite(cellSize) && parts.length > 0) {
+      parts.push(`${cellSize.toLocaleString()} px tiles`);
+    }
+
+    return parts.join(" • ");
+  }
+
+  #showGeometryAppliedMessage(values = {}, options = {}) {
+    const controls = this.geometryControls;
+    const noteEl = controls?.summaryNoteEl;
+
+    if (!noteEl) return;
+
+    noteEl.classList.remove("geometry-summary__note--warning");
+    const summary = this.#formatGeometryDimensions(values);
+    const adjustments = Array.isArray(options.adjustments)
+      ? options.adjustments.filter(Boolean)
+      : [];
+
+    if (options.changed) {
+      noteEl.classList.add("geometry-summary__note--success");
+      const prefix = options.reseed ? "World resized and reseeded" : "World resized";
+      const baseMessage = summary ? `${prefix}: ${summary}.` : `${prefix}.`;
+      const adjustmentNote =
+        adjustments.length > 0
+          ? ` Adjusted to stay within limits: ${this.#formatReadableList(adjustments)}.`
+          : "";
+
+      noteEl.textContent = `${baseMessage}${adjustmentNote}`;
+    } else {
+      noteEl.classList.remove("geometry-summary__note--success");
+      noteEl.textContent = summary
+        ? `No changes needed. World already sized at ${summary}.`
+        : "No changes needed. World already at the requested size.";
+    }
+  }
+
+  #setGeometryBusy(isBusy, details = {}) {
+    const controls = this.geometryControls;
+
+    if (!controls?.applyButton) return false;
+
+    const button = controls.applyButton;
+    const summary = controls.summaryEl;
+    const statusEl = controls.summaryStatusEl;
+
+    if (isBusy) {
+      if (controls.geometryBusy) return false;
+
+      controls.geometryBusy = true;
+      if (!controls.applyButtonDefaultLabel) {
+        controls.applyButtonDefaultLabel = button.textContent || "Apply Geometry";
+      }
+      if (!controls.applyButtonDefaultTitle) {
+        controls.applyButtonDefaultTitle = button.title || "Apply Geometry";
+      }
+      if (!controls.applyButtonDefaultAriaLabel) {
+        const ariaLabel = this.#readElementAttribute(button, "aria-label");
+
+        controls.applyButtonDefaultAriaLabel =
+          ariaLabel ||
+          controls.applyButtonDefaultTitle ||
+          controls.applyButtonDefaultLabel;
+      }
+
+      button.disabled = true;
+      button.setAttribute("aria-disabled", "true");
+      button.setAttribute("data-busy", "true");
+
+      const targetSummary = this.#formatGeometryDimensions(details.target);
+      let busyNote =
+        details.note ||
+        (details.reseed
+          ? "Resizing and reseeding the world. This may take a moment."
+          : "Resizing the world. This may take a moment.");
+
+      if (targetSummary) {
+        busyNote = `${busyNote} Target: ${targetSummary}.`;
+      }
+
+      button.textContent = details.label || "Applying…";
+      button.title = busyNote;
+      button.setAttribute("aria-label", busyNote);
+
+      if (summary) {
+        summary.setAttribute("data-state", "busy");
+        summary.setAttribute("aria-busy", "true");
+      }
+      if (statusEl) {
+        statusEl.textContent = "Applying…";
+      }
+      if (controls.summaryNoteEl) {
+        controls.summaryNoteEl.textContent = busyNote;
+        controls.summaryNoteEl.classList.remove("geometry-summary__note--warning");
+        controls.summaryNoteEl.classList.remove("geometry-summary__note--success");
+      }
+
+      return true;
+    }
+
+    if (!controls.geometryBusy) return false;
+
+    controls.geometryBusy = false;
+    if (typeof button.removeAttribute === "function")
+      button.removeAttribute("data-busy");
+    else button.setAttribute("data-busy", "false");
+    button.title = controls.applyButtonDefaultTitle || "Apply Geometry";
+    const defaultAriaLabel =
+      controls.applyButtonDefaultAriaLabel ||
+      controls.applyButtonDefaultTitle ||
+      controls.applyButtonDefaultLabel ||
+      "Apply Geometry";
+
+    button.setAttribute("aria-label", defaultAriaLabel);
+    button.textContent = controls.applyButtonDefaultLabel || "Apply Geometry";
+
+    if (summary) {
+      summary.setAttribute("aria-busy", "false");
+    }
+
+    const appliedValues = details.applied ?? {};
+    const normalizedApplied = this.#normalizeGeometryValues(appliedValues, {
+      cellSize: this.currentCellSize,
+      rows: this.gridRows,
+      cols: this.gridCols,
+    });
+    const previousValues = this.#normalizeGeometryValues(
+      details.previous ?? {},
+      normalizedApplied,
+      {
+        clampToBounds: false,
+      },
+    );
+    const changed = !this.#geometryValuesEqual(previousValues, normalizedApplied);
+
+    const rawRequest = details.raw ?? appliedValues ?? {};
+
+    this.#updateGeometrySummary(normalizedApplied, {
+      raw: rawRequest,
+      source: "sync",
+    });
+
+    const adjustmentList = this.#describeGeometryAdjustments(
+      rawRequest,
+      normalizedApplied,
+    );
+
+    this.#showGeometryAppliedMessage(normalizedApplied, {
+      changed,
+      reseed: Boolean(details.reseed),
+      adjustments: adjustmentList,
+    });
+
+    button.setAttribute("aria-disabled", button.disabled ? "true" : "false");
+
+    return true;
+  }
+
   #formatReadableList(items = []) {
     const list = Array.isArray(items) ? items.filter(Boolean) : [];
 
@@ -801,6 +1211,13 @@ export default class UIManager {
 
     this.#ensureMainRowMounted(anchor);
     this.canvasContainer.appendChild(targetCanvas);
+  }
+
+  destroy() {
+    if (this._documentKeydownListener && document?.removeEventListener) {
+      document.removeEventListener("keydown", this._documentKeydownListener);
+      this._documentKeydownListener = null;
+    }
   }
 
   #ensureMainRowMounted(anchor) {
@@ -1064,6 +1481,25 @@ export default class UIManager {
     return null;
   }
 
+  #readElementAttribute(element, name) {
+    if (!element || typeof name !== "string" || name.length === 0) return null;
+    if (typeof element.getAttribute === "function") {
+      try {
+        return element.getAttribute(name);
+      } catch {
+        // Ignore environments without standard DOM attribute helpers.
+      }
+    }
+
+    if (element.attributes && typeof element.attributes === "object") {
+      const value = element.attributes[name];
+
+      if (value != null) return value;
+    }
+
+    return null;
+  }
+
   #scheduleUpdate() {
     if (typeof this.simulationCallbacks?.requestFrame === "function") {
       this.simulationCallbacks.requestFrame();
@@ -1103,9 +1539,39 @@ export default class UIManager {
     });
   }
 
-  #updateSetting(key, value) {
+  #updateSetting(key, value, { notify = true } = {}) {
     this[key] = value;
-    this.#notifySettingChange(key, value);
+    if (notify) {
+      this.#notifySettingChange(key, value);
+    }
+  }
+
+  #registerSliderElement(key, element) {
+    if (!key || !element) return;
+    if (!this._sliderInputs) {
+      this._sliderInputs = new Map();
+    }
+
+    this._sliderInputs.set(key, element);
+  }
+
+  #syncSliderInput(key, value) {
+    if (!key) return;
+
+    const slider = this._sliderInputs?.get(key);
+
+    if (slider?.updateDisplay) {
+      slider.updateDisplay(value);
+    }
+
+    if (
+      key === "leaderboardIntervalMs" &&
+      this.dashboardCadenceSlider &&
+      this.dashboardCadenceSlider !== slider &&
+      this.dashboardCadenceSlider.updateDisplay
+    ) {
+      this.dashboardCadenceSlider.updateDisplay(value);
+    }
   }
 
   #sanitizeSpeedMultiplier(value) {
@@ -1132,6 +1598,26 @@ export default class UIManager {
     const displayValue = isWhole ? Math.round(rounded) : rounded.toFixed(1);
 
     return `${displayValue}×`;
+  }
+
+  #formatMultiplierDisplay(value, decimals = 2) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return "—";
+
+    const precision = Number.isFinite(decimals)
+      ? Math.max(0, Math.min(4, decimals))
+      : 0;
+    const factor = precision > 0 ? 10 ** precision : 1;
+    const rounded =
+      precision > 0 ? Math.round(numeric * factor) / factor : Math.round(numeric);
+    let text = precision > 0 ? rounded.toFixed(precision) : String(rounded);
+
+    if (precision > 0) {
+      text = text.replace(/(\.\d*?[1-9])0+$/u, "$1").replace(/\.0+$/u, "");
+    }
+
+    return `${text}×`;
   }
 
   #buildSpeedHotkeyHint() {
@@ -1750,9 +2236,12 @@ export default class UIManager {
 
     if (this.lifeEventsSummaryRate) {
       if (Number.isFinite(eventsPer100) && eventsPer100 > 0) {
-        this.lifeEventsSummaryRate.textContent = `Rolling 100-tick avg: ≈${eventsPer100.toFixed(1)} events`;
+        const formattedEvents = eventsPer100.toFixed(1);
+
+        this.lifeEventsSummaryRate.textContent = `Rolling 100-tick avg: ≈${formattedEvents} events per 100 ticks`;
       } else {
-        this.lifeEventsSummaryRate.textContent = "Rolling 100-tick avg: no events";
+        this.lifeEventsSummaryRate.textContent =
+          "Rolling 100-tick avg: no events per 100 ticks";
       }
     }
   }
@@ -2042,16 +2531,6 @@ export default class UIManager {
     this.renderMetrics(stats, snapshot, environment);
   }
 
-  #flushPendingProfiling() {
-    if (!this._pendingProfilingMetrics || this.#isPanelCollapsed(this.profilingPanel)) {
-      return;
-    }
-    const { rendering } = this._pendingProfilingMetrics;
-
-    this._pendingProfilingMetrics = null;
-    this.#renderProfilingMetrics(rendering);
-  }
-
   #flushPendingLeaderboard() {
     if (!this._pendingLeaderboardEntries || this.#isPanelCollapsed(this.leaderPanel)) {
       return;
@@ -2092,8 +2571,6 @@ export default class UIManager {
     this.#buildGeometryControls(body);
 
     const sliderContext = this.#buildSliderGroups(body);
-
-    this.sliderContext = sliderContext;
 
     this.#buildOverlayToggles(body);
 
@@ -2150,18 +2627,35 @@ export default class UIManager {
     this.#applyButtonHotkeys(this.stepButton, this.stepHotkeySet);
     this.#updateStepButtonState();
 
-    addControlButton({
+    const burstHotkeys = this.#formatHotkeyList(this.burstHotkeySet);
+    const burstTitlePieces = ["Spawn a cluster of new cells at a random spot."];
+
+    if (burstHotkeys.length > 0) {
+      burstTitlePieces.push(`Shortcut: ${burstHotkeys}.`);
+    }
+
+    const burstShiftHint =
+      burstHotkeys.length > 0
+        ? "Hold Shift for a stronger burst, whether clicking or using the shortcut."
+        : "Hold Shift for a stronger burst.";
+
+    burstTitlePieces.push(burstShiftHint);
+
+    const burstTitle = burstTitlePieces.join(" ");
+
+    this.burstButton = addControlButton({
       id: "burstButton",
       label: "Burst New Cells",
-      title: "Spawn a cluster of new cells at a random spot",
-      onClick: () => {
-        if (typeof this.actions.burst === "function") this.actions.burst();
-        else if (window.grid && typeof window.grid.burstRandomCells === "function")
-          window.grid.burstRandomCells();
+      title: burstTitle,
+      onClick: (event) => {
+        this.#triggerBurst({ shiftKey: Boolean(event?.shiftKey) });
       },
     });
 
-    this.resetWorldButton = addControlButton({
+    this.burstButton.setAttribute("aria-label", burstTitle);
+    this.#applyButtonHotkeys(this.burstButton, this.burstHotkeySet);
+
+    addControlButton({
       id: "resetWorldButton",
       label: "Regenerate World",
       title:
@@ -2202,6 +2696,7 @@ export default class UIManager {
         this.#setSpeedMultiplier(value);
       },
     });
+    this.#registerSliderElement("speedMultiplier", this.playbackSpeedSlider);
     this.speedStep = normalizedSpeedStep;
 
     const speedPresetRow = createControlButtonRow(body, {
@@ -2319,17 +2814,50 @@ export default class UIManager {
     applyButton.className = "geometry-actions__apply";
     applyButton.textContent = "Apply Geometry";
     applyButton.title = "Resize the grid using the values above.";
+    applyButton.setAttribute("aria-label", "Apply the grid using the values above.");
     applyButton.addEventListener("click", (event) => {
-      this.#applyWorldGeometry(
-        {
-          cellSize: Number.parseFloat(cellSizeInput.value),
-          rows: Number.parseFloat(rowsInput.value),
-          cols: Number.parseFloat(colsInput.value),
-        },
-        {
-          reseed: Boolean(event?.shiftKey),
-        },
-      );
+      const request = {
+        cellSize: Number.parseFloat(cellSizeInput.value),
+        rows: Number.parseFloat(rowsInput.value),
+        cols: Number.parseFloat(colsInput.value),
+      };
+      const reseed = Boolean(event?.shiftKey);
+      const previous = {
+        cellSize: this.currentCellSize,
+        rows: this.gridRows,
+        cols: this.gridCols,
+      };
+      const targetPreview = this.#normalizeGeometryValues(request, previous, {
+        clampToBounds: false,
+      });
+
+      if (!this.#setGeometryBusy(true, { reseed, target: targetPreview })) {
+        return;
+      }
+
+      const execute = () => {
+        let applied = null;
+
+        try {
+          applied = this.#applyWorldGeometry(request, { reseed });
+        } finally {
+          this.#setGeometryBusy(false, {
+            applied,
+            raw: request,
+            reseed,
+            previous,
+          });
+        }
+      };
+
+      const raf =
+        typeof window !== "undefined" &&
+        typeof window.requestAnimationFrame === "function"
+          ? window.requestAnimationFrame.bind(window)
+          : null;
+
+      if (raf) raf(() => execute());
+      else execute();
     });
     actions.appendChild(applyButton);
 
@@ -2354,6 +2882,7 @@ export default class UIManager {
     summary.setAttribute("role", "status");
     summary.setAttribute("aria-live", "polite");
     summary.setAttribute("aria-atomic", "true");
+    summary.setAttribute("aria-busy", "false");
 
     const summaryHeader = document.createElement("div");
 
@@ -2405,17 +2934,23 @@ export default class UIManager {
 
     geometryGrid.appendChild(summary);
 
+    const defaultAriaLabel = this.#readElementAttribute(applyButton, "aria-label");
+
     this.geometryControls = {
       cellSizeInput,
       rowsInput,
       colsInput,
       applyButton,
+      applyButtonDefaultLabel: applyButton.textContent,
+      applyButtonDefaultTitle: applyButton.title,
+      applyButtonDefaultAriaLabel: defaultAriaLabel,
       summaryEl: summary,
       summaryStatusEl: summaryStatus,
       summaryNoteEl: summaryNote,
       summaryDefaultNote: summaryNote.textContent,
       previewCellsEl: cellsValueEl,
       previewPixelsEl: pixelsValueEl,
+      geometryBusy: false,
     };
 
     const handlePreviewChange = () => {
@@ -2498,8 +3033,8 @@ export default class UIManager {
       };
     };
 
-    const renderSlider = (cfg, parent = body) =>
-      createSliderRow(parent, {
+    const renderSlider = (cfg, parent = body) => {
+      const input = createSliderRow(parent, {
         label: cfg.label,
         min: cfg.min,
         max: cfg.max,
@@ -2509,6 +3044,13 @@ export default class UIManager {
         format: cfg.format,
         onInput: getSliderSetter(cfg),
       });
+
+      if (cfg?.key) {
+        this.#registerSliderElement(cfg.key, input);
+      }
+
+      return input;
+    };
 
     const thresholdConfigs = [
       withSliderConfig("societySimilarity", {
@@ -2550,7 +3092,7 @@ export default class UIManager {
         max: 3,
         step: 0.05,
         title: "Scales the impact of environmental events (0..3)",
-        format: (v) => v.toFixed(2),
+        format: (v) => this.#formatMultiplierDisplay(v, 2),
         getValue: () => this.eventStrengthMultiplier,
         setValue: (v) => this.#updateSetting("eventStrengthMultiplier", v),
       }),
@@ -2560,7 +3102,7 @@ export default class UIManager {
         max: 3,
         step: 0.1,
         title: "How often events spawn (0 disables new events)",
-        format: (v) => v.toFixed(1),
+        format: (v) => this.#formatMultiplierDisplay(v, 1),
         getValue: () => this.eventFrequencyMultiplier,
         setValue: (v) => this.#updateSetting("eventFrequencyMultiplier", v),
       }),
@@ -2574,9 +3116,20 @@ export default class UIManager {
         step: 0.05,
         title:
           "Scales how strongly population density affects energy, aggression, and breeding (0..2)",
-        format: (v) => v.toFixed(2),
+        format: (v) => this.#formatMultiplierDisplay(v, 2),
         getValue: () => this.densityEffectMultiplier,
         setValue: (v) => this.#updateSetting("densityEffectMultiplier", v),
+      }),
+      withSliderConfig("initialTileEnergyFraction", {
+        label: "Empty Tile Energy",
+        min: 0,
+        max: 1,
+        step: 0.05,
+        title:
+          "Fraction of the energy cap applied to empty tiles during resets and world refreshes (0..1)",
+        format: (v) => `${Math.round(v * 100)}%`,
+        getValue: () => this.initialTileEnergyFraction,
+        setValue: (v) => this.setInitialTileEnergyFraction(v),
       }),
       withSliderConfig("energyRegenRate", {
         label: "Energy Regen Rate",
@@ -2607,11 +3160,12 @@ export default class UIManager {
       step: 0.05,
       title:
         "Multiplier applied to reproduction chance when diversity is below the threshold (0 disables births)",
-      format: (v) => v.toFixed(2),
+      format: (v) => this.#formatMultiplierDisplay(v, 2),
       getValue: () => this.lowDiversityReproMultiplier,
       setValue: (v) => this.#updateSetting("lowDiversityReproMultiplier", v),
-      position: "beforeOverlays",
     });
+
+    thresholdConfigs.push(lowDiversitySliderConfig);
 
     const generalConfigs = [
       withSliderConfig("mutationMultiplier", {
@@ -2621,7 +3175,7 @@ export default class UIManager {
         step: 0.05,
         title:
           "Scales averaged parental mutation chance and range for offspring (0 disables mutation)",
-        format: (v) => v.toFixed(2),
+        format: (v) => this.#formatMultiplierDisplay(v, 2),
         getValue: () => this.mutationMultiplier,
         setValue: (v) => this.#updateSetting("mutationMultiplier", v),
         position: "beforeOverlays",
@@ -2650,7 +3204,6 @@ export default class UIManager {
         setValue: (v) => this.#updateSetting("combatTerritoryEdgeFactor", v),
         position: "beforeOverlays",
       }),
-      lowDiversitySliderConfig,
     ];
 
     this.leaderboardCadenceConfig = withSliderConfig("leaderboardIntervalMs", {
@@ -2668,7 +3221,20 @@ export default class UIManager {
     createSectionHeading(body, "Similarity Thresholds");
     const thresholdsGroup = createControlGrid(body);
 
-    thresholdConfigs.forEach((cfg) => renderSlider(cfg, thresholdsGroup));
+    thresholdConfigs.forEach((cfg) => {
+      const input = renderSlider(cfg, thresholdsGroup);
+
+      if (cfg.key === "lowDiversityReproMultiplier") {
+        this.lowDiversitySlider = input;
+      }
+    });
+
+    const thresholdsHint = document.createElement("p");
+
+    thresholdsHint.className = "control-hint";
+    thresholdsHint.textContent =
+      "Tune how cells classify allies, enemies, and viable mates. Births below the diversity threshold use the penalty multiplier.";
+    body.appendChild(thresholdsHint);
 
     createSectionHeading(body, "Environmental Events");
     const eventsGroup = createControlGrid(body);
@@ -2681,12 +3247,27 @@ export default class UIManager {
     generalConfigs
       .filter((cfg) => cfg.position === "beforeOverlays")
       .forEach((cfg) => {
-        const input = renderSlider(cfg, generalGroup);
-
-        if (cfg.key === "lowDiversityReproMultiplier") {
-          this.lowDiversitySlider = input;
-        }
+        renderSlider(cfg, generalGroup);
       });
+
+    const resetRow = createControlButtonRow(body);
+    const resetButton = document.createElement("button");
+
+    resetButton.type = "button";
+    resetButton.textContent = "Restore Default Tuning";
+    resetButton.title =
+      "Reapply the canonical similarity, event, energy, mutation, combat, and cadence settings.";
+    resetButton.addEventListener("click", () => {
+      this.resetSimulationTuning();
+    });
+    resetRow.appendChild(resetButton);
+
+    const resetHint = document.createElement("p");
+
+    resetHint.className = "control-hint";
+    resetHint.textContent =
+      "Resets all sliders and playback speed to the project defaults for a clean baseline.";
+    body.appendChild(resetHint);
 
     return {
       renderSlider,
@@ -2797,11 +3378,29 @@ export default class UIManager {
         if (presetSelect) presetSelect.value = clearedPreset;
         applyPreset(clearedPreset);
       });
+
+      const shuffleButton = document.createElement("button");
+
+      shuffleButton.type = "button";
+      shuffleButton.textContent = "Shuffle Layout";
+      shuffleButton.title = "Apply a random obstacle preset from the catalog.";
+      shuffleButton.addEventListener("click", () => {
+        const randomPresetId = this.#pickRandomObstaclePresetId();
+
+        if (!randomPresetId) return;
+
+        this.obstaclePreset = randomPresetId;
+        if (presetSelect) presetSelect.value = randomPresetId;
+        applyPreset(randomPresetId);
+      });
+
       if (selectLine) {
         selectLine.classList.add("control-line--inline-actions");
         selectLine.appendChild(clearButton);
+        selectLine.appendChild(shuffleButton);
       } else {
         obstacleGrid.appendChild(clearButton);
+        obstacleGrid.appendChild(shuffleButton);
       }
     }
   }
@@ -2878,106 +3477,17 @@ export default class UIManager {
     createSectionHeading(body, "Energy Dynamics");
     const energyGroup = createControlGrid(body);
 
-    sliderContext.energyConfigs.forEach((cfg) =>
-      sliderContext.renderSlider(cfg, energyGroup),
-    );
+    sliderContext.energyConfigs.forEach((cfg) => {
+      const input = sliderContext.renderSlider(cfg, energyGroup);
+
+      if (cfg.key === "initialTileEnergyFraction") {
+        this.initialTileEnergySlider = input;
+      }
+    });
 
     sliderContext.generalConfigs
       .filter((cfg) => cfg.position === "afterEnergy")
       .forEach((cfg) => sliderContext.renderSlider(cfg, sliderContext.generalGroup));
-  }
-
-  #buildProfilingPanel() {
-    const { panel, body } = this.#createPanel("Profiling", {
-      collapsed: true,
-      onToggle: (expanded) => {
-        if (expanded) {
-          this.#flushPendingProfiling();
-        }
-      },
-    });
-
-    panel.id = "profiling";
-    panel.classList.add("profiling-panel");
-
-    const intro = document.createElement("p");
-
-    intro.className = "metrics-intro";
-    intro.textContent =
-      "Tune instrumentation and inspect renderer timings to diagnose performance.";
-    body.appendChild(intro);
-
-    const instrumentationSection = document.createElement("section");
-
-    instrumentationSection.className = "metrics-section";
-    instrumentationSection.setAttribute(
-      "aria-label",
-      "Profiling instrumentation controls",
-    );
-    const instrumentationHeading = document.createElement("h4");
-
-    instrumentationHeading.className = "metrics-section-title";
-    instrumentationHeading.textContent = "Instrumentation";
-    instrumentationSection.appendChild(instrumentationHeading);
-
-    const instrumentationBody = document.createElement("div");
-
-    instrumentationBody.className = "metrics-section-body";
-    instrumentationSection.appendChild(instrumentationBody);
-    body.appendChild(instrumentationSection);
-
-    const instrumentationGrid = createControlGrid(
-      instrumentationBody,
-      "control-grid--compact",
-    );
-
-    const profilingOptions = [
-      {
-        value: "auto",
-        label: "Auto",
-        description: "Capture profiling data when the dashboard requests metrics.",
-      },
-      {
-        value: "always",
-        label: "Always On",
-        description: "Always collect grid profiling metrics each tick.",
-      },
-      {
-        value: "never",
-        label: "Off",
-        description: "Disable grid profiling to minimise overhead.",
-      },
-    ];
-
-    this.profileGridSelect = createSelectRow(instrumentationGrid, {
-      label: "Grid Profiling",
-      title:
-        "Controls how often grid-level profiling metrics are captured for the dashboard and insights panels.",
-      value: this.profileGridMetrics,
-      options: profilingOptions,
-      onChange: (value) => {
-        this.setProfileGridMetrics(value);
-      },
-    });
-
-    const instrumentationHint = document.createElement("p");
-
-    instrumentationHint.className = "control-hint";
-    instrumentationHint.textContent =
-      "Choose when the grid records profiling samples for the dashboard.";
-    instrumentationBody.appendChild(instrumentationHint);
-
-    this.profilingBox = document.createElement("div");
-    this.profilingBox.className = "metrics-box";
-    this.profilingBox.setAttribute("role", "status");
-    this.profilingBox.setAttribute("aria-live", "polite");
-    body.appendChild(this.profilingBox);
-
-    this.#showProfilingPlaceholder(
-      "Run the simulation to collect performance samples.",
-    );
-
-    return panel;
   }
 
   #buildInsightsPanel() {
@@ -2994,51 +3504,8 @@ export default class UIManager {
 
     intro.className = "metrics-intro";
     intro.textContent =
-      "Track population health, energy, and behavioral trends as the simulation unfolds.";
+      "Track population health, energy, and behavioral trends as the simulation unfolds. Adjust the shared refresh cadence from the Leaderboard panel.";
     body.appendChild(intro);
-
-    const cadenceSection = document.createElement("section");
-
-    cadenceSection.className = "metrics-section";
-    cadenceSection.setAttribute("aria-label", "Dashboard refresh cadence controls");
-    const cadenceHeading = document.createElement("h4");
-
-    cadenceHeading.className = "metrics-section-title";
-    cadenceHeading.textContent = "Update Frequency";
-    cadenceSection.appendChild(cadenceHeading);
-
-    const cadenceBody = document.createElement("div");
-
-    cadenceBody.className = "metrics-section-body";
-    cadenceSection.appendChild(cadenceBody);
-    body.appendChild(cadenceSection);
-
-    const cadenceGrid = createControlGrid(cadenceBody, "control-grid--compact");
-    const cadenceConfig = this.leaderboardCadenceConfig;
-
-    this.dashboardCadenceSlider = null;
-
-    if (cadenceConfig) {
-      const slider = createSliderRow(cadenceGrid, {
-        label: cadenceConfig.label,
-        min: cadenceConfig.min,
-        max: cadenceConfig.max,
-        step: cadenceConfig.step,
-        value: cadenceConfig.getValue(),
-        title: cadenceConfig.title,
-        format: cadenceConfig.format,
-        onInput: cadenceConfig.setValue,
-      });
-
-      this.dashboardCadenceSlider = slider;
-    }
-
-    const cadenceHint = document.createElement("p");
-
-    cadenceHint.className = "control-hint";
-    cadenceHint.textContent =
-      "Controls how often Evolution Insights and the leaderboard request fresh data.";
-    cadenceBody.appendChild(cadenceHint);
 
     this.metricsBox = document.createElement("div");
     this.metricsBox.className = "metrics-box";
@@ -3227,164 +3694,7 @@ export default class UIManager {
     traitSection.appendChild(traitGrid);
     body.appendChild(traitSection);
 
-    const traitConfigs = [
-      {
-        key: "cooperation",
-        name: "Cooperation",
-        colors: {
-          presence: {
-            colorVar: "--color-trait-cooperation-presence",
-            fallbackColor: "#74b9ff",
-          },
-          intensity: {
-            colorVar: "--color-trait-cooperation-intensity",
-            fallbackColor: "#a0c4ff",
-          },
-        },
-      },
-      {
-        key: "fighting",
-        name: "Fighting",
-        colors: {
-          presence: {
-            colorVar: "--color-trait-fighting-presence",
-            fallbackColor: "#ff7675",
-          },
-          intensity: {
-            colorVar: "--color-trait-fighting-intensity",
-            fallbackColor: "#ff9aa2",
-          },
-        },
-      },
-      {
-        key: "breeding",
-        name: "Breeding",
-        colors: {
-          presence: {
-            colorVar: "--color-trait-breeding-presence",
-            fallbackColor: "#f6c177",
-          },
-          intensity: {
-            colorVar: "--color-trait-breeding-intensity",
-            fallbackColor: "#fcd29f",
-          },
-        },
-      },
-      {
-        key: "sight",
-        name: "Sight",
-        colors: {
-          presence: {
-            colorVar: "--color-trait-sight-presence",
-            fallbackColor: "#55efc4",
-          },
-          intensity: {
-            colorVar: "--color-trait-sight-intensity",
-            fallbackColor: "#81f4d0",
-          },
-        },
-      },
-    ];
-
-    const traitSparkDescriptors = [];
-
-    traitConfigs.forEach((trait) => {
-      const card = document.createElement("div");
-
-      card.className = "sparkline-card sparkline-card--trait";
-      card.setAttribute("role", "group");
-      card.setAttribute("aria-label", `${trait.name} trait trends`);
-      card.setAttribute("data-trait", trait.key);
-
-      const header = document.createElement("div");
-
-      header.className = "sparkline-trait-header";
-      const nameEl = document.createElement("span");
-
-      nameEl.className = "sparkline-trait-name";
-      nameEl.textContent = trait.name;
-      header.appendChild(nameEl);
-
-      const contextEl = document.createElement("span");
-
-      contextEl.className = "sparkline-trait-context";
-      contextEl.textContent = "Presence vs intensity";
-      header.appendChild(contextEl);
-
-      card.appendChild(header);
-
-      const metrics = [
-        {
-          label: "Activity (presence %)",
-          property: `sparkTrait${trait.name}Presence`,
-          traitKey: trait.key,
-          traitType: "presence",
-          colorVar: trait.colors.presence.colorVar,
-          fallbackColor: trait.colors.presence.fallbackColor,
-          ariaLabel: `${trait.name} presence trend over time`,
-        },
-        {
-          label: "Intensity (avg level)",
-          property: `sparkTrait${trait.name}Average`,
-          traitKey: trait.key,
-          traitType: "average",
-          colorVar: trait.colors.intensity.colorVar,
-          fallbackColor: trait.colors.intensity.fallbackColor,
-          ariaLabel: `${trait.name} intensity trend over time`,
-        },
-      ];
-
-      metrics.forEach((metric, index) => {
-        const row = document.createElement("div");
-
-        row.className = "sparkline-trait-row";
-        if (index > 0) row.classList.add("sparkline-trait-row--separated");
-
-        const rowCaption = document.createElement("div");
-
-        rowCaption.className = "sparkline-caption sparkline-caption--trait";
-        const dot = document.createElement("span");
-
-        dot.className = "sparkline-color-dot";
-        if (metric.colorVar) {
-          dot.style.background = `var(${metric.colorVar}, ${metric.fallbackColor})`;
-        } else if (metric.fallbackColor) {
-          dot.style.background = metric.fallbackColor;
-        }
-        const labelText = document.createElement("span");
-
-        labelText.className = "sparkline-caption-text";
-        labelText.textContent = metric.label;
-        rowCaption.appendChild(dot);
-        rowCaption.appendChild(labelText);
-
-        const canvas = document.createElement("canvas");
-
-        canvas.className = "sparkline sparkline--trait";
-        canvas.width = 220;
-        canvas.height = 48;
-        canvas.setAttribute("role", "img");
-        canvas.setAttribute("aria-label", metric.ariaLabel);
-        canvas.title = metric.label;
-
-        row.appendChild(rowCaption);
-        row.appendChild(canvas);
-        card.appendChild(row);
-
-        this[metric.property] = canvas;
-        traitSparkDescriptors.push({
-          property: metric.property,
-          traitKey: metric.traitKey,
-          traitType: metric.traitType,
-          colorVar: metric.colorVar,
-          fallbackColor: metric.fallbackColor,
-        });
-      });
-
-      traitGrid.appendChild(card);
-    });
-
-    this.traitSparkDescriptors = traitSparkDescriptors;
+    this.traitSparkGrid = traitGrid;
 
     return panel;
   }
@@ -3629,6 +3939,9 @@ export default class UIManager {
     const changed = this.autoPauseOnBlur !== nextValue;
 
     this.autoPauseOnBlur = nextValue;
+    if (!this.autoPauseOnBlur && this.autoPausePending) {
+      this.autoPausePending = false;
+    }
     if (this.autoPauseCheckbox) {
       this.autoPauseCheckbox.checked = this.autoPauseOnBlur;
     }
@@ -3648,24 +3961,6 @@ export default class UIManager {
 
     this.autoPausePending = nextValue;
     this.#updatePauseIndicator();
-  }
-
-  setProfileGridMetrics(preference, { notify = true } = {}) {
-    const normalized = resolveSimulationDefaults({
-      profileGridMetrics: preference,
-    }).profileGridMetrics;
-    const changed = this.profileGridMetrics !== normalized;
-
-    this.profileGridMetrics = normalized;
-    if (this.profileGridSelect) {
-      this.profileGridSelect.value = normalized;
-    }
-
-    if (changed && notify) {
-      this.#notifySettingChange("profileGridMetrics", this.profileGridMetrics);
-    }
-
-    return this.profileGridMetrics;
   }
 
   // Getters for simulation
@@ -3698,6 +3993,9 @@ export default class UIManager {
   }
   getEventFrequencyMultiplier() {
     return this.eventFrequencyMultiplier;
+  }
+  getInitialTileEnergyFraction() {
+    return this.initialTileEnergyFraction;
   }
   getEnergyRegenRate() {
     return this.energyRegenRate;
@@ -3735,12 +4033,26 @@ export default class UIManager {
     return this.showLifeEventMarkers;
   }
 
+  setInitialTileEnergyFraction(value, { notify = true } = {}) {
+    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
+
+    if (clamped === null) return;
+
+    this.initialTileEnergyFraction = clamped;
+
+    if (this.initialTileEnergySlider?.updateDisplay) {
+      this.initialTileEnergySlider.updateDisplay(clamped);
+    }
+
+    if (notify) {
+      this.#notifySettingChange("initialTileEnergyFraction", clamped);
+    }
+  }
+
   setLowDiversityReproMultiplier(value, { notify = true } = {}) {
-    const numeric = Number(value);
+    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
 
-    if (!Number.isFinite(numeric)) return;
-
-    const clamped = clamp(numeric, 0, 1);
+    if (clamped === null) return;
     const changed = this.lowDiversityReproMultiplier !== clamped;
 
     this.lowDiversityReproMultiplier = clamped;
@@ -3752,6 +4064,52 @@ export default class UIManager {
     if (changed && notify) {
       this.#notifySettingChange("lowDiversityReproMultiplier", clamped);
     }
+  }
+
+  resetSimulationTuning({ notify = true } = {}) {
+    const defaults = this._defaultSettings;
+
+    if (!defaults) return false;
+
+    const applySetting = (key, value) => {
+      if (value === undefined) return;
+
+      this.#updateSetting(key, value, { notify });
+      this.#syncSliderInput(key, value);
+    };
+
+    applySetting("societySimilarity", defaults.societySimilarity);
+    applySetting("enemySimilarity", defaults.enemySimilarity);
+    applySetting("matingDiversityThreshold", defaults.matingDiversityThreshold);
+    applySetting("eventStrengthMultiplier", defaults.eventStrengthMultiplier);
+    applySetting("eventFrequencyMultiplier", defaults.eventFrequencyMultiplier);
+    applySetting("densityEffectMultiplier", defaults.densityEffectMultiplier);
+    applySetting("energyRegenRate", defaults.energyRegenRate);
+    applySetting("energyDiffusionRate", defaults.energyDiffusionRate);
+    applySetting("mutationMultiplier", defaults.mutationMultiplier);
+    applySetting("combatEdgeSharpness", defaults.combatEdgeSharpness);
+    applySetting("combatTerritoryEdgeFactor", defaults.combatTerritoryEdgeFactor);
+    applySetting("leaderboardIntervalMs", defaults.leaderboardIntervalMs);
+
+    if (defaults.lowDiversityReproMultiplier !== undefined) {
+      this.setLowDiversityReproMultiplier(defaults.lowDiversityReproMultiplier, {
+        notify,
+      });
+    }
+
+    if (defaults.initialTileEnergyFraction !== undefined) {
+      this.setInitialTileEnergyFraction(defaults.initialTileEnergyFraction, {
+        notify,
+      });
+    }
+
+    if (defaults.speedMultiplier !== undefined) {
+      this.#setSpeedMultiplier(defaults.speedMultiplier);
+    }
+
+    this.#scheduleUpdate();
+
+    return true;
   }
 
   #showMetricsPlaceholder(message) {
@@ -3772,151 +4130,6 @@ export default class UIManager {
     if (this.metricsPlaceholder?.parentElement === this.metricsBox) {
       this.metricsPlaceholder.remove();
     }
-  }
-
-  #showProfilingPlaceholder(message) {
-    if (!this.profilingBox) return;
-    if (!this.profilingPlaceholder) {
-      this.profilingPlaceholder = document.createElement("div");
-      this.profilingPlaceholder.className = "metrics-empty-state";
-    }
-    if (typeof message === "string" && message.length > 0) {
-      this.profilingPlaceholder.textContent = message;
-    }
-
-    this.profilingBox.innerHTML = "";
-    this.profilingBox.appendChild(this.profilingPlaceholder);
-  }
-
-  #hideProfilingPlaceholder() {
-    if (this.profilingPlaceholder?.parentElement === this.profilingBox) {
-      this.profilingPlaceholder.remove();
-    }
-  }
-
-  #updateProfilingPanel(rendering) {
-    if (!this.profilingBox) return;
-
-    if (this.#isPanelCollapsed(this.profilingPanel)) {
-      this._pendingProfilingMetrics = { rendering };
-
-      return;
-    }
-
-    this._pendingProfilingMetrics = null;
-    this.#renderProfilingMetrics(rendering);
-  }
-
-  #renderProfilingMetrics(rendering) {
-    if (!this.profilingBox) return;
-
-    const hasData =
-      rendering &&
-      typeof rendering === "object" &&
-      Object.values(rendering).some((value) => value != null);
-
-    if (!hasData) {
-      this.#showProfilingPlaceholder(
-        "Run the simulation to collect performance samples.",
-      );
-
-      return;
-    }
-
-    this.#hideProfilingPlaceholder();
-    this.profilingBox.innerHTML = "";
-
-    const section = document.createElement("section");
-
-    section.className = "metrics-section";
-    section.setAttribute("aria-label", "Rendering performance metrics");
-    const heading = document.createElement("h4");
-
-    heading.className = "metrics-section-title";
-    heading.textContent = "Rendering Health";
-    section.appendChild(heading);
-
-    const body = document.createElement("div");
-
-    body.className = "metrics-section-body";
-    section.appendChild(body);
-    this.profilingBox.appendChild(section);
-
-    const appendRow = (config) => {
-      this.#appendControlRow(body, config);
-    };
-
-    const finiteOrDash = (value, formatter = String) =>
-      formatIfFinite(value, formatter, "—");
-    const msOrDash = (value) => finiteOrDash(value, (v) => `${v.toFixed(2)} ms`);
-    const fpsOrDash = (value) => finiteOrDash(value, (v) => `${v.toFixed(1)} fps`);
-    const integerOrDash = (value) =>
-      finiteOrDash(value, (v) => Math.round(v).toLocaleString());
-
-    const rendererLabel = [
-      typeof rendering.mode === "string" ? rendering.mode : null,
-      typeof rendering.refreshType === "string" && rendering.refreshType !== "none"
-        ? rendering.refreshType
-        : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-
-    appendRow({
-      label: "Renderer",
-      value: rendererLabel || "—",
-      title: "Active renderer mode and most recent refresh strategy.",
-    });
-    appendRow({
-      label: "Estimated FPS",
-      value: fpsOrDash(rendering.fps),
-      title: "Frames per second derived from the smoothed frame time.",
-    });
-    appendRow({
-      label: "Frame (last)",
-      value: msOrDash(rendering.lastFrameMs),
-      title: "Time required to render the most recent frame.",
-    });
-    appendRow({
-      label: "Frame (avg)",
-      value: msOrDash(rendering.avgFrameMs),
-      title: "Smoothed average frame duration over recent samples.",
-    });
-    appendRow({
-      label: "Cell Paint (last)",
-      value: msOrDash(rendering.lastCellLoopMs),
-      title: "Time spent updating cell pixels in the most recent frame.",
-    });
-    appendRow({
-      label: "Cell Paint (avg)",
-      value: msOrDash(rendering.avgCellLoopMs),
-      title: "Average time spent updating cells across recent frames.",
-    });
-    appendRow({
-      label: "Obstacle Paint (last)",
-      value: msOrDash(rendering.lastObstacleLoopMs),
-      title: "Time spent redrawing obstacles in the most recent frame.",
-    });
-    appendRow({
-      label: "Obstacle Paint (avg)",
-      value: msOrDash(rendering.avgObstacleLoopMs),
-      title: "Average time spent redrawing obstacles.",
-    });
-    appendRow({
-      label: "Tiles Processed",
-      value: integerOrDash(rendering.lastProcessedTiles),
-      title: "Tiles touched by the renderer during the last frame.",
-    });
-    appendRow({
-      label: "Dirty Tiles",
-      value: integerOrDash(rendering.lastDirtyTileCount),
-      title: "Dirty tiles that triggered updates during the last frame.",
-    });
-    appendRow({
-      label: "Visible Cells",
-      value: integerOrDash(rendering.lastPaintedCells),
-      title: "Active cells present in the grid during the last frame.",
-    });
   }
 
   #resetSimulationClock() {
@@ -4046,9 +4259,9 @@ export default class UIManager {
     this.renderLifeEvents(stats, snapshot);
 
     const snapshotData = snapshot && typeof snapshot === "object" ? snapshot : {};
-    const { rendering, ...insightSnapshot } = snapshotData;
+    const insightSnapshot = { ...snapshotData };
 
-    this.#updateProfilingPanel(rendering);
+    delete insightSnapshot.rendering;
 
     if (!this.metricsBox) return;
 
@@ -4071,6 +4284,7 @@ export default class UIManager {
 
     this.#hideMetricsPlaceholder();
     this.metricsBox.innerHTML = "";
+    this.#ensureTraitSparklineCards(stats);
     const s = insightSnapshot;
     const totals = (stats && stats.totals) || {};
     const lastTotals = this._lastInteractionTotals || { fights: 0, cooperations: 0 };
@@ -4082,15 +4296,67 @@ export default class UIManager {
     const interactionTotal = fightDelta + coopDelta;
 
     const appendMetricRow = (container, { label, value, title, valueClass }) => {
-      this.#appendControlRow(container, { label, value, title, valueClass });
+      const card = document.createElement("article");
+
+      card.className = "metrics-stat";
+      card.setAttribute("role", "group");
+      if (typeof label === "string" && label.length > 0) {
+        card.setAttribute("data-metric-label", label);
+      }
+
+      const labelEl = document.createElement("span");
+
+      labelEl.className = "metrics-stat-label";
+      labelEl.textContent = label ?? "";
+
+      const valueEl = document.createElement("span");
+
+      valueEl.className = "metrics-stat-value";
+      const normalizedValueClass =
+        valueClass === "control-value--left" ? "metrics-stat-value--left" : valueClass;
+
+      if (typeof normalizedValueClass === "string" && normalizedValueClass.length > 0) {
+        valueEl.classList.add(normalizedValueClass);
+      }
+
+      let displayValue = "—";
+      const isDomNode = typeof Node !== "undefined" && value instanceof Node;
+
+      if (isDomNode) {
+        displayValue = value.textContent?.trim() || "—";
+        valueEl.appendChild(value);
+      } else if (value != null) {
+        displayValue = String(value);
+        valueEl.textContent = displayValue;
+      } else {
+        valueEl.textContent = displayValue;
+      }
+
+      card.appendChild(labelEl);
+      card.appendChild(valueEl);
+
+      if (typeof title === "string" && title.length > 0) {
+        card.title = title;
+        card.setAttribute("aria-label", `${label}: ${displayValue}`);
+      } else {
+        card.title = `${label}: ${displayValue}`;
+        card.setAttribute("aria-label", card.title);
+      }
+
+      container.appendChild(card);
+
+      return card;
     };
 
     const createSection = (title, options = {}) => {
-      const { wide = false } = options;
+      const { wide = false, layout = "grid", accent } = options;
       const section = document.createElement("section");
 
       section.className = "metrics-section";
       if (wide) section.classList.add("metrics-section--wide");
+      if (typeof accent === "string" && accent.length > 0) {
+        section.style.setProperty("--metrics-section-accent", accent);
+      }
       const heading = document.createElement("h4");
 
       heading.className = "metrics-section-title";
@@ -4099,6 +4365,9 @@ export default class UIManager {
       const body = document.createElement("div");
 
       body.className = "metrics-section-body";
+      if (layout === "grid") {
+        body.classList.add("metrics-section-body--grid");
+      }
       section.appendChild(body);
       this.metricsBox.appendChild(section);
 
@@ -4162,8 +4431,52 @@ export default class UIManager {
       (value) => Math.max(0, Math.floor(value)).toLocaleString(),
       "—",
     );
+    const baseCadence =
+      Number.isFinite(this.baseUpdatesPerSecond) && this.baseUpdatesPerSecond > 0
+        ? this.baseUpdatesPerSecond
+        : SIMULATION_DEFAULTS.updatesPerSecond;
+    const cadenceDisplay = formatIfFinite(
+      clockState?.updatesPerSecond,
+      (value) => {
+        const decimals = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+        const factor = 10 ** decimals;
+        const rounded = Math.round(value * factor) / factor;
+        const formatted =
+          decimals === 0
+            ? Math.round(rounded).toLocaleString()
+            : rounded
+                .toFixed(decimals)
+                .replace(/(\.\d*?[1-9])0+$/u, "$1")
+                .replace(/\.0+$/u, "");
+        const cadenceText = `${formatted} updates/sec`;
 
-    const clockSection = createSection("Simulation Clock");
+        if (Number.isFinite(baseCadence) && baseCadence > 0) {
+          const multiplierText = this.#formatSpeedDisplay(value / baseCadence);
+
+          if (multiplierText && multiplierText !== "—") {
+            return `${cadenceText} (${multiplierText})`;
+          }
+        }
+
+        return cadenceText;
+      },
+      "—",
+    );
+    const cadenceTitleParts = [
+      "Effective updates processed per simulated second derived from the playback speed controls.",
+    ];
+
+    if (Number.isFinite(baseCadence) && baseCadence > 0) {
+      const baseLabel = Math.round(baseCadence).toLocaleString();
+
+      cadenceTitleParts.push(`Base cadence: ${baseLabel} updates/sec.`);
+    }
+
+    const cadenceTitle = cadenceTitleParts.join(" ");
+
+    const clockSection = createSection("Simulation Clock", {
+      accent: "var(--color-metric-growth)",
+    });
 
     appendMetricRow(clockSection, {
       label: "Elapsed Time",
@@ -4176,8 +4489,15 @@ export default class UIManager {
       value: tickDisplay,
       title: "Total simulation ticks processed since the current world spawned.",
     });
+    appendMetricRow(clockSection, {
+      label: "Current Cadence",
+      value: cadenceDisplay,
+      title: cadenceTitle,
+    });
 
-    const populationSection = createSection("Population Snapshot");
+    const populationSection = createSection("Population Snapshot", {
+      accent: "var(--color-metric-population)",
+    });
 
     appendMetricRow(populationSection, {
       label: "Population",
@@ -4209,7 +4529,9 @@ export default class UIManager {
         title: "Global multiplier applied to mutation chance and range for offspring",
       });
     }
-    const interactionSection = createSection("Interaction Pulse");
+    const interactionSection = createSection("Interaction Pulse", {
+      accent: "var(--color-life-birth)",
+    });
 
     appendMetricRow(interactionSection, {
       label: "Skirmishes",
@@ -4228,7 +4550,9 @@ export default class UIManager {
         "Share of cooperative interactions vs total interactions recorded for this update",
     });
 
-    const vitalitySection = createSection("Vitality Signals");
+    const vitalitySection = createSection("Vitality Signals", {
+      accent: "var(--color-metric-energy)",
+    });
 
     appendMetricRow(vitalitySection, {
       label: "Mean Energy",
@@ -4246,7 +4570,9 @@ export default class UIManager {
       title: "Estimated mean pairwise genetic distance",
     });
 
-    const environmentSection = createSection("Environmental Events");
+    const environmentSection = createSection("Environmental Events", {
+      accent: "var(--color-metric-event-strength)",
+    });
 
     appendMetricRow(environmentSection, {
       label: "Global Strength Multiplier",
@@ -4282,7 +4608,9 @@ export default class UIManager {
       });
     }
 
-    const reproductionSection = createSection("Reproduction Trends");
+    const reproductionSection = createSection("Reproduction Trends", {
+      accent: "var(--color-metric-mutation)",
+    });
 
     if (typeof s.blockedMatings === "number") {
       appendMetricRow(reproductionSection, {
@@ -4344,7 +4672,11 @@ export default class UIManager {
       : null;
 
     if (traitPresence) {
-      const traitSection = createSection("Trait Presence", { wide: true });
+      const traitSection = createSection("Trait Presence", {
+        wide: true,
+        layout: "stack",
+        accent: "var(--color-metric-diversity)",
+      });
       const traitGroup = document.createElement("div");
 
       traitGroup.className = "metrics-group trait-metrics";
@@ -4466,80 +4798,84 @@ export default class UIManager {
       }
 
       if (hasPopulation) {
-        const traitPalette = {
-          cooperation: "#74b9ff",
-          fighting: "#ff7675",
-          breeding: "#f39c12",
-          sight: "#55efc4",
-        };
-        const traitConfigs = [
-          { key: "cooperation", label: "Cooperation" },
-          { key: "fighting", label: "Fighting" },
-          { key: "breeding", label: "Breeding" },
-          { key: "sight", label: "Sight" },
-        ];
-        const traitList = document.createElement("ul");
+        const traitConfigs = resolveTraitDisplayConfigs(stats);
 
-        traitList.className = "trait-bar-list";
-        traitList.setAttribute("role", "list");
+        if (traitConfigs.length > 0) {
+          const traitList = document.createElement("ul");
 
-        for (let i = 0; i < traitConfigs.length; i++) {
-          const trait = traitConfigs[i];
-          const countRaw = traitPresence.counts?.[trait.key] ?? 0;
-          const fractionRaw = traitPresence.fractions?.[trait.key] ?? 0;
-          const count = Number.isFinite(countRaw) ? countRaw : 0;
-          const fraction = clamp01(Number.isFinite(fractionRaw) ? fractionRaw : 0);
-          const percentText = `${(fraction * 100).toFixed(0)}%`;
-          const countText = count.toLocaleString();
-          const tooltipBase =
-            "Active cells have a normalized value ≥ 60% for this trait.";
-          const item = document.createElement("li");
+          traitList.className = "trait-bar-list";
+          traitList.setAttribute("role", "list");
 
-          item.className = "trait-bar-item";
+          for (let i = 0; i < traitConfigs.length; i++) {
+            const trait = traitConfigs[i];
+            const countRaw = traitPresence.counts?.[trait.key] ?? 0;
+            const fractionRaw = traitPresence.fractions?.[trait.key] ?? 0;
+            const count = Number.isFinite(countRaw) ? countRaw : 0;
+            const fraction = clamp01(Number.isFinite(fractionRaw) ? fractionRaw : 0);
+            const percentText = `${(fraction * 100).toFixed(0)}%`;
+            const countText = count.toLocaleString();
+            const tooltipBase =
+              "Active cells have a normalized value ≥ 60% for this trait.";
+            const item = document.createElement("li");
 
-          const header = document.createElement("div");
+            item.className = "trait-bar-item";
+            item.setAttribute("data-trait", trait.key);
 
-          header.className = "trait-bar-header";
-          const labelEl = document.createElement("span");
+            const header = document.createElement("div");
 
-          labelEl.className = "trait-bar-label";
-          labelEl.textContent = trait.label;
-          header.appendChild(labelEl);
+            header.className = "trait-bar-header";
+            const labelEl = document.createElement("span");
 
-          const valueEl = document.createElement("span");
+            labelEl.className = "trait-bar-label";
+            labelEl.textContent = trait.label;
+            header.appendChild(labelEl);
 
-          valueEl.className = "trait-bar-value";
-          valueEl.textContent = `${countText} cells (${percentText})`;
-          header.appendChild(valueEl);
+            const valueEl = document.createElement("span");
 
-          item.appendChild(header);
+            valueEl.className = "trait-bar-value";
+            valueEl.textContent = `${countText} cells (${percentText})`;
+            header.appendChild(valueEl);
 
-          const meter = document.createElement("div");
+            item.appendChild(header);
 
-          meter.className = "trait-bar-meter";
-          meter.setAttribute("role", "meter");
-          meter.setAttribute("aria-label", `${trait.label} presence`);
-          meter.setAttribute("aria-valuemin", "0");
-          meter.setAttribute("aria-valuemax", "1");
-          meter.setAttribute("aria-valuenow", fraction.toFixed(2));
-          meter.setAttribute(
-            "aria-valuetext",
-            `${percentText} of living cells show high ${trait.label.toLowerCase()}`,
-          );
-          meter.title = `${tooltipBase} ${percentText} of the population exceeds the threshold.`;
+            const meter = document.createElement("div");
 
-          const fill = document.createElement("div");
+            meter.className = "trait-bar-meter";
+            meter.setAttribute("role", "meter");
+            meter.setAttribute("aria-label", `${trait.label} presence`);
+            meter.setAttribute("aria-valuemin", "0");
+            meter.setAttribute("aria-valuemax", "1");
+            meter.setAttribute("aria-valuenow", fraction.toFixed(2));
+            meter.setAttribute(
+              "aria-valuetext",
+              `${percentText} of living cells show high ${trait.label.toLowerCase()}`,
+            );
+            meter.title = `${tooltipBase} ${percentText} of the population exceeds the threshold.`;
 
-          fill.className = "trait-bar-fill";
-          fill.style.width = `${(fraction * 100).toFixed(0)}%`;
-          fill.style.background = traitPalette[trait.key] || "#74b9ff";
-          meter.appendChild(fill);
+            const fill = document.createElement("div");
 
-          item.appendChild(meter);
-          traitList.appendChild(item);
+            fill.className = "trait-bar-fill";
+            fill.style.width = `${(fraction * 100).toFixed(0)}%`;
+
+            const presenceColor = trait.colors.presence;
+
+            fill.style.background = presenceColor.colorVar
+              ? `var(${presenceColor.colorVar}, ${presenceColor.fallbackColor})`
+              : presenceColor.fallbackColor;
+            meter.appendChild(fill);
+
+            item.appendChild(meter);
+            traitList.appendChild(item);
+          }
+
+          traitBody.appendChild(traitList);
+        } else {
+          const emptyState = document.createElement("p");
+
+          emptyState.className = "trait-empty-state";
+          emptyState.textContent = "No living cells to sample for trait presence yet.";
+          traitBody.appendChild(emptyState);
         }
-
-        traitBody.appendChild(traitList);
       } else {
         const emptyState = document.createElement("p");
 
@@ -4574,6 +4910,142 @@ export default class UIManager {
         },
       );
     }
+  }
+
+  #ensureTraitSparklineCards(stats) {
+    if (!this.traitSparkGrid) return;
+
+    const configs = resolveTraitDisplayConfigs(stats);
+    const keys = configs.map((config) => config.key);
+    const keysUnchanged =
+      Array.isArray(this._traitSparkKeys) &&
+      this._traitSparkKeys.length === keys.length &&
+      this._traitSparkKeys.every((key, index) => key === keys[index]);
+
+    if (keysUnchanged) {
+      return;
+    }
+
+    if (Array.isArray(this.traitSparkDescriptors)) {
+      this.traitSparkDescriptors.forEach(({ property }) => {
+        if (property && Object.hasOwn(this, property)) {
+          delete this[property];
+        }
+      });
+    }
+
+    this.traitSparkGrid.innerHTML = "";
+
+    if (configs.length === 0) {
+      this.traitSparkDescriptors = [];
+      this._traitSparkKeys = [];
+
+      return;
+    }
+
+    const descriptors = [];
+
+    configs.forEach((trait) => {
+      const label = trait.label;
+      const key = trait.key;
+      const baseId = toPascalCase(key) || "Trait";
+      const card = document.createElement("div");
+
+      card.className = "sparkline-card sparkline-card--trait";
+      card.setAttribute("role", "group");
+      card.setAttribute("aria-label", `${label} trait trends`);
+      card.setAttribute("data-trait", key);
+
+      const header = document.createElement("div");
+
+      header.className = "sparkline-trait-header";
+      const nameEl = document.createElement("span");
+
+      nameEl.className = "sparkline-trait-name";
+      nameEl.textContent = label;
+      header.appendChild(nameEl);
+
+      const contextEl = document.createElement("span");
+
+      contextEl.className = "sparkline-trait-context";
+      contextEl.textContent = "Presence vs intensity";
+      header.appendChild(contextEl);
+
+      card.appendChild(header);
+
+      const metrics = [
+        {
+          label: "Activity (presence %)",
+          property: `sparkTrait${baseId}Presence`,
+          traitKey: key,
+          traitType: "presence",
+          colorVar: trait.colors.presence.colorVar,
+          fallbackColor: trait.colors.presence.fallbackColor,
+          ariaLabel: `${label} presence trend over time`,
+        },
+        {
+          label: "Intensity (avg level)",
+          property: `sparkTrait${baseId}Average`,
+          traitKey: key,
+          traitType: "average",
+          colorVar: trait.colors.intensity.colorVar,
+          fallbackColor: trait.colors.intensity.fallbackColor,
+          ariaLabel: `${label} intensity trend over time`,
+        },
+      ];
+
+      metrics.forEach((metric, index) => {
+        const row = document.createElement("div");
+
+        row.className = "sparkline-trait-row";
+        if (index > 0) row.classList.add("sparkline-trait-row--separated");
+
+        const rowCaption = document.createElement("div");
+
+        rowCaption.className = "sparkline-caption sparkline-caption--trait";
+        const dot = document.createElement("span");
+
+        dot.className = "sparkline-color-dot";
+        if (metric.colorVar) {
+          dot.style.background = `var(${metric.colorVar}, ${metric.fallbackColor})`;
+        } else if (metric.fallbackColor) {
+          dot.style.background = metric.fallbackColor;
+        }
+        const labelText = document.createElement("span");
+
+        labelText.className = "sparkline-caption-text";
+        labelText.textContent = metric.label;
+        rowCaption.appendChild(dot);
+        rowCaption.appendChild(labelText);
+
+        const canvas = document.createElement("canvas");
+
+        canvas.className = "sparkline sparkline--trait";
+        canvas.width = 220;
+        canvas.height = 48;
+        canvas.setAttribute("role", "img");
+        canvas.setAttribute("aria-label", metric.ariaLabel);
+        canvas.title = metric.label;
+
+        row.appendChild(rowCaption);
+        row.appendChild(canvas);
+        card.appendChild(row);
+
+        this[metric.property] = canvas;
+        descriptors.push({
+          property: metric.property,
+          traitKey: metric.traitKey,
+          traitType: metric.traitType,
+          colorVar: metric.colorVar,
+          fallbackColor: metric.fallbackColor,
+        });
+      });
+
+      this.traitSparkGrid.appendChild(card);
+    });
+
+    this.traitSparkDescriptors = descriptors;
+    this._traitSparkKeys = keys;
   }
 
   renderLifeEvents(stats, metrics) {
@@ -4643,16 +5115,44 @@ export default class UIManager {
 
       createSectionHeading(controlsWrapper, "Update Frequency");
 
+      const cadenceGrid = createControlGrid(controlsWrapper, "control-grid--compact");
+      const cadenceConfig = this.leaderboardCadenceConfig;
+
+      this.dashboardCadenceSlider = null;
+
+      if (cadenceConfig) {
+        const slider = createSliderRow(cadenceGrid, {
+          label: cadenceConfig.label,
+          min: cadenceConfig.min,
+          max: cadenceConfig.max,
+          step: cadenceConfig.step,
+          value: cadenceConfig.getValue(),
+          title: cadenceConfig.title,
+          format: cadenceConfig.format,
+          onInput: cadenceConfig.setValue,
+        });
+
+        this.dashboardCadenceSlider = slider;
+        this.#registerSliderElement("leaderboardIntervalMs", slider);
+      }
+
       const cadenceNote = document.createElement("p");
 
       cadenceNote.className = "control-hint";
       cadenceNote.textContent =
-        "Adjust the refresh cadence from Evolution Insights to update this leaderboard.";
+        "Controls how often the leaderboard and Evolution Insights request fresh data.";
       controlsWrapper.appendChild(cadenceNote);
 
-      const entriesContainer = document.createElement("div");
+      const entriesContainer = document.createElement("ol");
 
       entriesContainer.className = "leaderboard-entries";
+      entriesContainer.setAttribute("role", "list");
+      entriesContainer.setAttribute("aria-live", "polite");
+      entriesContainer.setAttribute("aria-busy", "false");
+      entriesContainer.setAttribute(
+        "aria-label",
+        "Top organisms ranked by overall fitness",
+      );
       body.appendChild(entriesContainer);
 
       this.leaderBody = entriesContainer;
@@ -4681,13 +5181,16 @@ export default class UIManager {
 
     this._pendingLeaderboardEntries = null;
     target.innerHTML = "";
+    target.setAttribute("aria-busy", "true");
 
     if (entries.length === 0) {
-      const empty = document.createElement("div");
+      const empty = document.createElement("li");
 
       empty.className = "leaderboard-empty-state";
+      empty.setAttribute("role", "listitem");
       empty.textContent = "Run the simulation to populate the leaderboard.";
       target.appendChild(empty);
+      target.setAttribute("aria-busy", "false");
 
       return;
     }
@@ -4701,11 +5204,22 @@ export default class UIManager {
         ? entry.fitness
         : Number.NaN;
       const brain = entry.brain ?? {};
-      const card = document.createElement("article");
+      const card = document.createElement("li");
 
       card.className = "leaderboard-entry";
-      card.setAttribute("role", "group");
-      card.setAttribute("aria-label", `Rank ${index + 1} organism performance`);
+      card.setAttribute("role", "listitem");
+      card.tabIndex = 0;
+
+      const readableRank = index + 1;
+
+      card.setAttribute(
+        "aria-label",
+        `Rank ${readableRank} organism with fitness ${formatFloat(summaryFitness)}`,
+      );
+
+      if (index === 0) {
+        card.classList.add("leaderboard-entry--top");
+      }
 
       const swatchColor =
         typeof entry.color === "string" && entry.color.trim().length > 0
@@ -4803,5 +5317,7 @@ export default class UIManager {
       card.appendChild(statsContainer);
       target.appendChild(card);
     });
+
+    target.setAttribute("aria-busy", "false");
   }
 }

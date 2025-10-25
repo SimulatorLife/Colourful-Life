@@ -155,6 +155,65 @@ test("accumulateEventModifiers reuses result buffers when skipping applied event
   assert.is(secondResult.appliedEvents, firstResult.appliedEvents);
 });
 
+test("accumulateEventModifiers restores applied event array after disabling collection", async () => {
+  const [{ accumulateEventModifiers }] = await Promise.all([
+    import("../src/energySystem.js"),
+  ]);
+
+  const resultBuffer = {
+    regenMultiplier: 0,
+    regenAdd: 0,
+    drainAdd: 0,
+    appliedEvents: [],
+  };
+
+  const baseOptions = {
+    row: 0,
+    col: 0,
+    isEventAffecting: () => true,
+    getEventEffect: (type) =>
+      type === "boost"
+        ? {
+            regenScale: { base: 1, change: 0.1, min: 0 },
+            regenAdd: 0.2,
+            drainAdd: 0,
+          }
+        : null,
+    result: resultBuffer,
+  };
+
+  const skipped = accumulateEventModifiers({
+    ...baseOptions,
+    events: [],
+    collectAppliedEvents: false,
+  });
+
+  assert.is(skipped, resultBuffer);
+  assert.equal(skipped.appliedEvents, []);
+
+  const firstCollection = accumulateEventModifiers({
+    ...baseOptions,
+    events: [{ eventType: "boost", strength: 0.5, affectedArea: baseArea }],
+  });
+
+  assert.is(firstCollection, resultBuffer);
+  assert.is(firstCollection.appliedEvents.length, 1);
+  assert.equal(firstCollection.appliedEvents[0].event.eventType, "boost");
+
+  const reused = accumulateEventModifiers({
+    ...baseOptions,
+    events: [
+      { eventType: "boost", strength: 0.25, affectedArea: baseArea },
+      { eventType: "ignored", strength: 0, affectedArea: baseArea },
+    ],
+  });
+
+  assert.is(reused, resultBuffer);
+  assert.is(reused.appliedEvents, firstCollection.appliedEvents);
+  assert.is(reused.appliedEvents.length, 1);
+  assert.equal(reused.appliedEvents[0].event.eventType, "boost");
+});
+
 test("computeTileEnergyUpdate applies density penalties and diffusion", async () => {
   const [
     { computeTileEnergyUpdate },
@@ -197,7 +256,7 @@ test("computeTileEnergyUpdate applies density penalties and diffusion", async ()
     neighborCount: 2,
   });
 
-  approxEqual(scalarResult.nextEnergy, 2.56856, 1e-3);
+  approxEqual(scalarResult.nextEnergy, 2.57027, 1e-3);
   approxEqual(scalarResult.drain, 0.075, 1e-6);
 
   const arrayResult = computeTileEnergyUpdate({

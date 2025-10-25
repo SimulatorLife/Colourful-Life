@@ -195,24 +195,52 @@ test("resolveSimulationDefaults keeps event frequency overrides opt-in", async (
   );
 });
 
-test("resolveSimulationDefaults normalizes profileGridMetrics overrides", async () => {
-  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+test("resolveSimulationDefaults sanitizes numeric multipliers", async () => {
+  const {
+    resolveSimulationDefaults,
+    SIMULATION_DEFAULTS,
+    ENERGY_REGEN_RATE_DEFAULT,
+    ENERGY_DIFFUSION_RATE_DEFAULT,
+  } = await configModulePromise;
+  const sanitized = resolveSimulationDefaults({
+    mutationMultiplier: "invalid",
+    densityEffectMultiplier: -3,
+    societySimilarity: 1.5,
+    enemySimilarity: "-0.8",
+    eventStrengthMultiplier: "NaN",
+    energyRegenRate: "oops",
+    energyDiffusionRate: -1,
+    combatEdgeSharpness: "0.05",
+    combatTerritoryEdgeFactor: 4,
+    matingDiversityThreshold: -1,
+    lowDiversityReproMultiplier: "2",
+    leaderboardIntervalMs: -250,
+    leaderboardSize: -2,
+  });
 
-  const defaults = resolveSimulationDefaults();
+  assert.is(sanitized.mutationMultiplier, SIMULATION_DEFAULTS.mutationMultiplier);
+  assert.is(sanitized.densityEffectMultiplier, 0);
+  assert.is(sanitized.societySimilarity, 1);
+  assert.is(sanitized.enemySimilarity, 0);
+  assert.is(
+    sanitized.eventStrengthMultiplier,
+    SIMULATION_DEFAULTS.eventStrengthMultiplier,
+  );
+  assert.is(sanitized.energyRegenRate, ENERGY_REGEN_RATE_DEFAULT);
+  assert.is(sanitized.energyDiffusionRate, 0);
+  assert.is(sanitized.combatEdgeSharpness, 0.1);
+  assert.is(sanitized.combatTerritoryEdgeFactor, 1);
+  assert.is(sanitized.matingDiversityThreshold, 0);
+  assert.is(sanitized.lowDiversityReproMultiplier, 1);
+  assert.is(sanitized.leaderboardIntervalMs, 0);
+  assert.is(sanitized.leaderboardSize, 0);
+});
 
-  assert.is(defaults.profileGridMetrics, SIMULATION_DEFAULTS.profileGridMetrics);
+test("resolveSimulationDefaults floors leaderboard size overrides", async () => {
+  const { resolveSimulationDefaults } = await configModulePromise;
+  const sanitized = resolveSimulationDefaults({ leaderboardSize: "11.8" });
 
-  const enabled = resolveSimulationDefaults({ profileGridMetrics: "enabled" });
-  const autoAlias = resolveSimulationDefaults({ profileGridMetrics: "stats" });
-  const disabled = resolveSimulationDefaults({ profileGridMetrics: 0 });
-  const forced = resolveSimulationDefaults({ profileGridMetrics: true });
-  const unknown = resolveSimulationDefaults({ profileGridMetrics: "mystery" });
-
-  assert.is(enabled.profileGridMetrics, "always");
-  assert.is(forced.profileGridMetrics, "always");
-  assert.is(disabled.profileGridMetrics, "never");
-  assert.is(autoAlias.profileGridMetrics, "auto");
-  assert.is(unknown.profileGridMetrics, SIMULATION_DEFAULTS.profileGridMetrics);
+  assert.is(sanitized.leaderboardSize, 11);
 });
 
 test("resolveSimulationDefaults derives cadence from speed overrides", async () => {
@@ -232,6 +260,24 @@ test("resolveSimulationDefaults backfills speed multiplier from cadence override
 
   assert.is(defaults.updatesPerSecond, 45);
   assert.is(defaults.speedMultiplier, 45 / SIMULATION_DEFAULTS.updatesPerSecond);
+});
+
+test("resolveSimulationDefaults clamps initial tile energy overrides", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+
+  const capped = resolveSimulationDefaults({ initialTileEnergyFraction: 1.25 });
+
+  assert.is(capped.initialTileEnergyFraction, 1);
+
+  const fallback = resolveSimulationDefaults({
+    initialTileEnergyFraction: "not-a-number",
+  });
+
+  assert.is(
+    fallback.initialTileEnergyFraction,
+    SIMULATION_DEFAULTS.initialTileEnergyFraction,
+    "non-numeric overrides should fall back to the baseline",
+  );
 });
 
 test("UIManager constructor seeds settings from resolveSimulationDefaults", async () => {
@@ -257,7 +303,6 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.enemySimilarity, defaults.enemySimilarity);
   assert.is(uiManager.eventStrengthMultiplier, defaults.eventStrengthMultiplier);
   assert.is(uiManager.eventFrequencyMultiplier, defaults.eventFrequencyMultiplier);
-  assert.is(uiManager.maxConcurrentEvents, defaults.maxConcurrentEvents);
   assert.is(uiManager.speedMultiplier, defaults.speedMultiplier);
   assert.is(uiManager.densityEffectMultiplier, defaults.densityEffectMultiplier);
   assert.is(uiManager.mutationMultiplier, defaults.mutationMultiplier);
@@ -319,9 +364,9 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     leaderboardIntervalMs: defaults.leaderboardIntervalMs,
     matingDiversityThreshold: defaults.matingDiversityThreshold,
     lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
+    initialTileEnergyFraction: defaults.initialTileEnergyFraction,
     autoPauseOnBlur: defaults.autoPauseOnBlur,
     autoPausePending: false,
-    profileGridMetrics: defaults.profileGridMetrics,
   };
 
   expectedState.gridRows = engine.rows;

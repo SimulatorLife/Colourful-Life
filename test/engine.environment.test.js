@@ -1,5 +1,10 @@
 import { assert, test } from "#tests/harness";
-import { resolveCanvas, resolveTimingProviders } from "../src/engine/environment.js";
+import {
+  createHeadlessCanvas,
+  resolveCanvas,
+  resolveHeadlessCanvasSize,
+  resolveTimingProviders,
+} from "../src/engine/environment.js";
 
 test("resolveCanvas returns explicit canvas when supplied", () => {
   const explicitCanvas = { id: "preferred" };
@@ -140,4 +145,50 @@ test("resolveTimingProviders falls back to timeout-based scheduling when unavail
     globalThis.setTimeout = originalSetTimeout;
     globalThis.clearTimeout = originalClearTimeout;
   }
+});
+
+test("resolveHeadlessCanvasSize applies layout overrides", () => {
+  const result = resolveHeadlessCanvasSize({
+    rows: 50,
+    cols: 70,
+    cellSize: 4,
+    canvasSize: { width: 600 },
+    height: 420,
+  });
+
+  assert.equal(result, { width: 600, height: 420 });
+});
+
+test("createHeadlessCanvas returns stub context", () => {
+  const canvas = createHeadlessCanvas({ width: 300, height: 150 });
+  const context = canvas.getContext("2d");
+
+  assert.equal(
+    Object.keys(context).sort(),
+    [
+      "beginPath",
+      "canvas",
+      "clearRect",
+      "createLinearGradient",
+      "fillRect",
+      "fillStyle",
+      "fillText",
+      "font",
+      "imageSmoothingEnabled",
+      "lineWidth",
+      "resetTransform",
+      "restore",
+      "save",
+      "scale",
+      "setTransform",
+      "stroke",
+      "strokeRect",
+      "strokeStyle",
+      "strokeText",
+      "textAlign",
+      "textBaseline",
+    ].sort(),
+  );
+  assert.is(canvas.width, 300);
+  assert.is(canvas.height, 150);
 });

@@ -3,9 +3,9 @@ import {
   clamp,
   randomRange,
   sanitizeNumber,
-  warnOnce,
-  invokeWithErrorBoundary,
+  sanitizePositiveInteger,
 } from "../utils.js";
+import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 import { defaultIsEventAffecting } from "./eventContext.js";
 
 export { defaultIsEventAffecting as isEventAffecting };
@@ -273,15 +273,11 @@ export default class EventManager {
   }
 
   setDimensions(rows, cols) {
-    const nextRows = sanitizeNumber(rows, {
+    const nextRows = sanitizePositiveInteger(rows, {
       fallback: this.rows,
-      min: 1,
-      round: Math.floor,
     });
-    const nextCols = sanitizeNumber(cols, {
+    const nextCols = sanitizePositiveInteger(cols, {
       fallback: this.cols,
-      min: 1,
-      round: Math.floor,
     });
 
     if (nextRows === this.rows && nextCols === this.cols) {
@@ -373,9 +369,26 @@ export default class EventManager {
   }
 
   updateEvent(frequencyMultiplier = 1, maxConcurrent = 2) {
-    // Update existing events and remove finished
-    this.activeEvents.forEach((ev) => (ev.remaining = Math.max(0, ev.remaining - 1)));
-    this.activeEvents = this.activeEvents.filter((ev) => ev.remaining > 0);
+    // Update existing events and remove finished without reallocating the array
+    let writeIndex = 0;
+
+    for (let readIndex = 0; readIndex < this.activeEvents.length; readIndex += 1) {
+      const ev = this.activeEvents[readIndex];
+
+      ev.remaining = Math.max(0, ev.remaining - 1);
+
+      if (ev.remaining > 0) {
+        if (writeIndex !== readIndex) {
+          this.activeEvents[writeIndex] = ev;
+        }
+
+        writeIndex += 1;
+      }
+    }
+
+    if (writeIndex < this.activeEvents.length) {
+      this.activeEvents.length = writeIndex;
+    }
 
     // Spawn new events when cooldown expires
     if (this.cooldown > 0) this.cooldown--;

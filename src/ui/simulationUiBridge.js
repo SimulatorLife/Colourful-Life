@@ -1,13 +1,14 @@
 import UIManager from "./uiManager.js";
 import { createHeadlessUiManager } from "./headlessUiManager.js";
-import { toPlainObject, invokeWithErrorBoundary } from "../utils.js";
+import { toPlainObject } from "../utils.js";
+import { invokeWithErrorBoundary } from "../utils/error.js";
 
 function normalizeLayoutOptions({ engine, uiOptions = {}, sanitizedDefaults = {} }) {
   const normalizedUi = toPlainObject(uiOptions);
   const layoutConfig = toPlainObject(normalizedUi.layout);
   const initialSettings = {
-    ...sanitizedDefaults,
     ...toPlainObject(layoutConfig.initialSettings),
+    ...toPlainObject(sanitizedDefaults),
   };
 
   return {
@@ -32,6 +33,25 @@ function createHeadlessOptions({
     ...normalizedUi,
     selectionManager: engine?.selectionManager ?? normalizedUi.selectionManager ?? null,
   };
+
+  if (typeof mergedOptions.togglePause !== "function") {
+    mergedOptions.togglePause =
+      typeof simulationCallbacks.togglePause === "function"
+        ? simulationCallbacks.togglePause
+        : undefined;
+  }
+  if (typeof mergedOptions.pause !== "function") {
+    mergedOptions.pause =
+      typeof simulationCallbacks.pause === "function"
+        ? simulationCallbacks.pause
+        : undefined;
+  }
+  if (typeof mergedOptions.resume !== "function") {
+    mergedOptions.resume =
+      typeof simulationCallbacks.resume === "function"
+        ? simulationCallbacks.resume
+        : undefined;
+  }
   const userOnSettingChange = mergedOptions.onSettingChange;
   const simulationOnSettingChange = simulationCallbacks.onSettingChange;
 
@@ -113,10 +133,12 @@ function subscribeEngineToUi(engine, uiManager) {
       }
 
       if (
-        changes?.profileGridMetrics !== undefined &&
-        typeof uiManager.setProfileGridMetrics === "function"
+        changes?.initialTileEnergyFraction !== undefined &&
+        typeof uiManager.setInitialTileEnergyFraction === "function"
       ) {
-        uiManager.setProfileGridMetrics(changes.profileGridMetrics, { notify: false });
+        uiManager.setInitialTileEnergyFraction(changes.initialTileEnergyFraction, {
+          notify: false,
+        });
       }
 
       const geometryChanged =
@@ -229,14 +251,6 @@ export function bindSimulationToUi({
     }
   }
 
-  if (uiManager && typeof uiManager.setProfileGridMetrics === "function") {
-    const profileMode = engine?.state?.profileGridMetrics;
-
-    if (typeof profileMode === "string") {
-      uiManager.setProfileGridMetrics(profileMode, { notify: false });
-    }
-  }
-
   if (uiManager && typeof uiManager.setAutoPausePending === "function") {
     const pending = engine?.state?.autoPausePending;
 
@@ -245,7 +259,7 @@ export function bindSimulationToUi({
     }
   }
 
-  const unsubscribers = headless ? [] : subscribeEngineToUi(engine, uiManager);
+  const unsubscribers = subscribeEngineToUi(engine, uiManager);
 
   return {
     uiManager,

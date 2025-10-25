@@ -32,7 +32,15 @@ export function lerp(a, b, t) {
  * @returns {number} Clamped value.
  */
 export function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
+  if (value < min) {
+    return min;
+  }
+
+  if (value > max) {
+    return max;
+  }
+
+  return value;
 }
 
 /**
@@ -121,7 +129,13 @@ export function sanitizeNumber(
     round = false,
   } = {},
 ) {
-  const numeric = Number(value);
+  let numeric;
+
+  try {
+    numeric = Number(value);
+  } catch (error) {
+    return fallback;
+  }
 
   if (!Number.isFinite(numeric)) return fallback;
 
@@ -139,6 +153,74 @@ export function sanitizeNumber(
   if (Number.isFinite(max)) sanitized = Math.min(max, sanitized);
 
   return Number.isFinite(sanitized) ? sanitized : fallback;
+}
+
+/**
+ * Normalizes loosely-typed input into a positive integer using the provided
+ * fallback when coercion fails. Useful for dimension-like values (rows, cols,
+ * cell sizes) that must stay above a minimum bound. Values are floored to the
+ * nearest integer to preserve historical behaviour.
+ *
+ * @param {any} value - Candidate value to normalize.
+ * @param {Object} [options]
+ * @param {number} [options.fallback=1] - Value returned when normalization
+ *   fails. The fallback is also clamped to the provided range.
+ * @param {number} [options.min=1] - Minimum allowed integer. When inputs fall
+ *   below this boundary the fallback is returned.
+ * @param {number} [options.max=Number.POSITIVE_INFINITY] - Maximum allowed
+ *   integer. When inputs exceed this boundary the fallback is returned.
+ * @returns {number} Normalized positive integer value.
+ */
+export function sanitizePositiveInteger(
+  value,
+  { fallback = 1, min = 1, max = Number.POSITIVE_INFINITY } = {},
+) {
+  const fallbackCandidate = sanitizeNumber(fallback, {
+    fallback: min,
+    round: Math.floor,
+  });
+  const fallbackFloored = Number.isFinite(fallbackCandidate)
+    ? Math.floor(fallbackCandidate)
+    : min;
+  const sanitizedFallback = clamp(Math.max(min, fallbackFloored), min, max);
+  const candidate = sanitizeNumber(value, {
+    fallback: Number.NaN,
+    round: Math.floor,
+  });
+
+  if (!Number.isFinite(candidate)) {
+    return sanitizedFallback;
+  }
+
+  const floored = Math.floor(candidate);
+
+  if (floored < min || floored > max) {
+    return sanitizedFallback;
+  }
+
+  return floored;
+}
+
+/**
+ * Returns the first finite, positive number from the provided candidates. When
+ * no candidate qualifies, the supplied fallback is returned instead.
+ *
+ * @param {Iterable<any>} candidates - Values inspected in order.
+ * @param {number|null} [fallback=null] - Value used when no positive number is found.
+ * @returns {number|null} First finite positive candidate or the fallback when none qualify.
+ */
+export function pickFirstFinitePositive(candidates, fallback = null) {
+  if (!candidates) return fallback;
+
+  for (const candidate of candidates) {
+    const numeric = toFiniteOrNull(candidate);
+
+    if (numeric != null && numeric > 0) {
+      return numeric;
+    }
+  }
+
+  return fallback;
 }
 
 /**
@@ -173,9 +255,13 @@ export function toFiniteOrNull(value) {
     return Number.isFinite(numeric) ? numeric : null;
   }
 
-  const numeric = Number(value);
+  try {
+    const numeric = Number(value);
 
-  return Number.isFinite(numeric) ? numeric : null;
+    return Number.isFinite(numeric) ? numeric : null;
+  } catch (error) {
+    return null;
+  }
 }
 
 /**
@@ -194,27 +280,79 @@ export function toPlainObject(candidate) {
 
 /**
  * Deep clones the sensor/node trace payloads used by the brain debugger so the
- * UI can mutate copies without affecting simulation state.
+ * UI can mutate copies without affecting simulation state. Modern runtimes
+ * expose `structuredClone`, so we delegate directly to the platform helper.
  *
  * @param {Object} trace - Snapshot returned by `brain.snapshot()`.
  * @returns {Object|null} Cloned trace.
  */
-export function cloneTracePayload(trace) {
-  if (!trace) return null;
+const STRUCTURED_CLONE_IMPL =
+  typeof globalThis !== "undefined" && typeof globalThis.structuredClone === "function"
+    ? globalThis.structuredClone.bind(globalThis)
+    : null;
 
-  return {
-    sensors: Array.isArray(trace.sensors)
-      ? trace.sensors.map((entry) => ({ ...entry }))
-      : [],
-    nodes: Array.isArray(trace.nodes)
-      ? trace.nodes.map((entry) => ({
-          ...entry,
-          inputs: Array.isArray(entry.inputs)
-            ? entry.inputs.map((input) => ({ ...input }))
-            : [],
-        }))
-      : [],
-  };
+function isPlainObject(value) {
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+
+  const proto = Object.getPrototypeOf(value);
+
+  return proto === Object.prototype || proto === null;
+}
+
+function clonePlainBranch(value) {
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const length = value.length;
+    const clone = new Array(length);
+
+    for (let i = 0; i < length; i += 1) {
+      clone[i] = clonePlainBranch(value[i]);
+    }
+
+    return clone;
+  }
+
+  if (!isPlainObject(value)) {
+    if (!STRUCTURED_CLONE_IMPL) {
+      throw new Error(
+        "cloneTracePayload encountered an unsupported value without structuredClone support.",
+      );
+    }
+
+    return STRUCTURED_CLONE_IMPL(value);
+  }
+
+  const clone = {};
+  const keys = Object.keys(value);
+
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+
+    clone[key] = clonePlainBranch(value[key]);
+  }
+
+  return clone;
+}
+
+export function cloneTracePayload(trace) {
+  if (trace == null) return null;
+
+  if (!isPlainObject(trace)) {
+    if (!STRUCTURED_CLONE_IMPL) {
+      throw new Error(
+        "cloneTracePayload requires structuredClone support; the current environment does not provide it.",
+      );
+    }
+
+    return STRUCTURED_CLONE_IMPL(trace);
+  }
+
+  return clonePlainBranch(trace);
 }
 
 /**
@@ -240,8 +378,18 @@ export function createRankedBuffer(limit, compare) {
     add(entry) {
       if (entry == null || capacity === 0) return;
 
+      const size = entries.length;
+
+      if (size >= capacity) {
+        const comparison = comparator(entry, entries[size - 1]);
+
+        if (!(comparison < 0)) {
+          return;
+        }
+      }
+
       let low = 0;
-      let high = entries.length;
+      let high = size;
 
       // Binary-search insertion keeps the collection sorted without re-sorting after each push.
       while (low < high) {
@@ -257,7 +405,7 @@ export function createRankedBuffer(limit, compare) {
 
       const insertionIndex = low;
 
-      if (insertionIndex >= capacity && entries.length >= capacity) return;
+      if (insertionIndex >= capacity && size >= capacity) return;
 
       entries.splice(insertionIndex, 0, entry);
 
@@ -271,13 +419,16 @@ export function createRankedBuffer(limit, compare) {
   };
 }
 
-/*
- * Deterministic PRNG factory (Mulberry32)
+/**
+ * Internal Mulberry32 generator used to create deterministic RNG instances.
+ *
+ * @param {number} seed - Unsigned 32-bit integer used to seed the generator.
+ * @returns {() => number} Deterministic function producing values in [0, 1).
  */
 function mulberry32(seed) {
   let a = seed >>> 0;
 
-  return function () {
+  return () => {
     a += 0x6d2b79f5;
     let t = a;
 
@@ -297,131 +448,4 @@ function mulberry32(seed) {
  */
 export function createRNG(seed) {
   return mulberry32(seed);
-}
-
-const warnedMessages = new Set();
-const reportedErrors = new Set();
-
-function logWithOptionalError(method, message, error) {
-  const consoleRef = globalThis.console;
-  const logger = consoleRef?.[method];
-
-  if (typeof logger !== "function") return;
-
-  logger.call(consoleRef, message, ...(error ? [error] : []));
-}
-
-/**
- * Reports an error to the console with an optional deduplication toggle so
- * recoverable failures can surface diagnostic details without spamming logs.
- *
- * @param {string} message - Human-readable description of the error context.
- * @param {Error} [error] - Optional error object for stack/metadata.
- * @param {{once?: boolean}} [options] - Log control flags.
- */
-export function reportError(message, error, options = {}) {
-  if (typeof message !== "string" || message.length === 0) return;
-
-  const { once = false } = options ?? {};
-
-  if (once === true) {
-    const errorKey = `${message}::$${error?.name ?? ""}::$${error?.message ?? ""}`;
-
-    if (reportedErrors.has(errorKey)) return;
-    reportedErrors.add(errorKey);
-  }
-
-  logWithOptionalError("error", message, error);
-}
-
-/**
- * Logs a warning message once per unique combination of message and error
- * details. Useful for surfacing recoverable issues without flooding the
- * console each frame/tick.
- *
- * @param {string} message - Human-readable description of the warning.
- * @param {Error} [error] - Optional error object for context.
- */
-export function warnOnce(message, error) {
-  if (typeof message !== "string" || message.length === 0) return;
-
-  // Compose a stable key so repeated warnings collapse regardless of object identity.
-  const warningKey = `${message}::$${error?.name ?? ""}::$${error?.message ?? ""}`;
-
-  if (warnedMessages.has(warningKey)) return;
-  warnedMessages.add(warningKey);
-
-  logWithOptionalError("warn", message, error);
-}
-
-/**
- * Invokes a callback while shielding callers from exceptions. When the
- * callback throws, the error is surfaced via {@link reportError} with an
- * optional custom message. The helper keeps the common "try/catch +
- * reportError" pattern DRY across UI and simulation modules.
- *
- * @template T
- * @param {((...args: any[]) => T)|null|undefined} callback - Optional callback.
- * @param {any[]} [args=[]] - Arguments forwarded to the callback.
- * @param {{
- *   message?: string | ((...args: any[]) => string),
- *   once?: boolean,
- *   thisArg?: any,
- *   reporter?: (message: string, error: Error, options?: { once?: boolean }) => void,
- *   onError?: (error: Error) => void,
- * }} [options] - Error reporting behaviour.
- * @returns {T|undefined} Result of the callback when invoked successfully.
- */
-export function invokeWithErrorBoundary(callback, args = [], options = {}) {
-  if (typeof callback !== "function") return undefined;
-
-  const {
-    message,
-    once = false,
-    thisArg,
-    reporter = reportError,
-    onError,
-  } = options ?? {};
-
-  try {
-    return callback.apply(thisArg, args);
-  } catch (error) {
-    let resolvedMessage = message;
-
-    if (typeof message === "function") {
-      try {
-        resolvedMessage = message(...args);
-      } catch (messageError) {
-        resolvedMessage = null;
-        logWithOptionalError(
-          "warn",
-          "Error message generator threw; using fallback.",
-          messageError,
-        );
-      }
-    }
-
-    const fallbackMessage =
-      typeof resolvedMessage === "string" && resolvedMessage.length > 0
-        ? resolvedMessage
-        : "Callback threw; continuing without interruption.";
-
-    const reporterFn = typeof reporter === "function" ? reporter : reportError;
-
-    reporterFn(fallbackMessage, error, { once });
-
-    if (typeof onError === "function") {
-      try {
-        onError(error);
-      } catch (onErrorError) {
-        logWithOptionalError(
-          "warn",
-          "Error boundary onError handler threw; ignoring.",
-          onErrorError,
-        );
-      }
-    }
-  }
-
-  return undefined;
 }

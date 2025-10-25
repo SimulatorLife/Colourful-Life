@@ -1,7 +1,9 @@
 import EventManager from "./events/eventManager.js";
 import GridManager from "./grid/gridManager.js";
 import Stats from "./stats.js";
-import { computeLeaderboard } from "./leaderboard.js";
+import { computeLeaderboard } from "./engine/leaderboard.js";
+import TelemetryController from "./engine/telemetryController.js";
+import createSelectionManagerStub from "./grid/selectionManagerStub.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -14,60 +16,16 @@ import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
 import {
   clamp,
   sanitizeNumber,
+  sanitizePositiveInteger,
   toFiniteOrNull,
-  invokeWithErrorBoundary,
   coerceBoolean,
 } from "./utils.js";
+import { invokeWithErrorBoundary } from "./utils/error.js";
 import {
   ensureCanvasDimensions,
   resolveCanvas,
   resolveTimingProviders,
 } from "./engine/environment.js";
-
-function createSelectionManagerStub(rows, cols) {
-  const state = { rows: Math.max(0, rows ?? 0), cols: Math.max(0, cols ?? 0) };
-
-  const updateDimensions = (r, c) => {
-    state.rows = Math.max(0, r ?? state.rows ?? 0);
-    state.cols = Math.max(0, c ?? state.cols ?? 0);
-  };
-
-  return {
-    setDimensions(rows, cols) {
-      updateDimensions(rows, cols);
-    },
-    getPatterns() {
-      return [];
-    },
-    togglePattern() {
-      return false;
-    },
-    getActiveZones() {
-      return [];
-    },
-    hasActiveZones() {
-      return false;
-    },
-    isInActiveZone() {
-      return true;
-    },
-    validateReproductionArea() {
-      return { allowed: true };
-    },
-    getActiveZoneRenderData() {
-      return [];
-    },
-    describeActiveZones() {
-      return "All tiles eligible";
-    },
-    get rows() {
-      return state.rows;
-    },
-    get cols() {
-      return state.cols;
-    },
-  };
-}
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
@@ -147,7 +105,16 @@ export default class SimulationEngine {
       throw new Error("SimulationEngine requires a canvas element.");
     }
 
-    const ctx = resolvedCanvas.getContext("2d");
+    const getContext =
+      typeof resolvedCanvas.getContext === "function"
+        ? resolvedCanvas.getContext
+        : null;
+
+    if (!getContext) {
+      throw new Error("SimulationEngine requires a 2D canvas context.");
+    }
+
+    const ctx = getContext.call(resolvedCanvas, "2d");
 
     if (!ctx) {
       throw new Error("SimulationEngine requires a 2D canvas context.");
@@ -176,6 +143,11 @@ export default class SimulationEngine {
     this.cellSize = cellSize;
     this.rows = rows;
     this.cols = cols;
+    this.canvasPixelRatio = this.#resolveDevicePixelRatio(win);
+    this.canvasLogicalWidth = width;
+    this.canvasLogicalHeight = height;
+    this._pixelRatioCleanup = null;
+    this.#applyCanvasResolution(width, height);
     this._obstaclePresets = resolveObstaclePresetCatalog(config.obstaclePresets);
     const { now, raf, caf } = resolveTimingProviders({
       window: win,
@@ -224,7 +196,50 @@ export default class SimulationEngine {
       startWithEvent:
         (defaults.eventFrequencyMultiplier ?? 1) > 0 && maxConcurrentEvents > 0,
     });
-    this.stats = new Stats();
+    this.stats = new Stats(undefined, { rng });
+    this.telemetry = new TelemetryController({
+      stats: this.stats,
+      computeLeaderboard,
+      leaderboardSize: defaults.leaderboardSize,
+      now: this.now,
+    });
+    Object.defineProperties(this, {
+      pendingSlowUiUpdate: {
+        configurable: true,
+        enumerable: false,
+        get: () => this.telemetry.hasPending(),
+        set: (value) => {
+          if (value) {
+            this.telemetry.markPending();
+          } else {
+            this.telemetry.clearPending();
+          }
+        },
+      },
+      lastSnapshot: {
+        configurable: true,
+        enumerable: false,
+        get: () => this.telemetry.snapshot,
+      },
+      lastMetrics: {
+        configurable: true,
+        enumerable: false,
+        get: () => this.telemetry.metrics,
+      },
+      lastSlowUiRender: {
+        configurable: true,
+        enumerable: false,
+        get: () => this.telemetry.getLastEmissionTimestamp(),
+        set: (value) => {
+          this.telemetry.resetThrottle(value);
+        },
+      },
+      lastRenderStats: {
+        configurable: true,
+        enumerable: false,
+        get: () => this.telemetry.metrics?.rendering ?? null,
+      },
+    });
     const resolveSelectionManager = () => {
       if (selectionManager && typeof selectionManager === "object") {
         return selectionManager;
@@ -258,6 +273,7 @@ export default class SimulationEngine {
       ctx: this.ctx,
       cellSize: this.cellSize,
       stats: this.stats,
+      initialTileEnergyFraction: defaults.initialTileEnergyFraction,
       selectionManager: this.selectionManager,
       initialObstaclePreset,
       initialObstaclePresetOptions: config.initialObstaclePresetOptions,
@@ -267,7 +283,6 @@ export default class SimulationEngine {
       rng,
       brainSnapshotCollector,
       performanceNow: this.now,
-      profileGridMetrics: defaults.profileGridMetrics,
     });
 
     if (win) {
@@ -305,9 +320,9 @@ export default class SimulationEngine {
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
+      initialTileEnergyFraction: defaults.initialTileEnergyFraction,
       autoPauseOnBlur: this.autoPauseOnBlur,
       autoPausePending: false,
-      profileGridMetrics: defaults.profileGridMetrics,
       gridRows: rows,
       gridCols: cols,
       cellSize,
@@ -326,11 +341,9 @@ export default class SimulationEngine {
     });
 
     // Flag signalling that leaderboard/metrics should be recalculated once the throttle allows it.
-    this.pendingSlowUiUpdate = false;
-    this.lastMetrics = null;
-    this.lastRenderStats = null;
-    this.lastSnapshot = this.grid.getLastSnapshot();
-    this.lastSlowUiRender = Number.NEGATIVE_INFINITY;
+    this.telemetry.setInitialSnapshot(this.grid.getLastSnapshot());
+    this.telemetry.clearPending();
+    this.telemetry.resetThrottle(Number.NEGATIVE_INFINITY);
     this.lastUpdateTime = 0;
     this.running = false;
     this.frameHandle = null;
@@ -338,6 +351,7 @@ export default class SimulationEngine {
     this.listeners = new Map();
 
     this._autoPauseCleanup = this.#installAutoPauseHandlers(win, doc);
+    this._pixelRatioCleanup = this.#installPixelRatioListener(win);
 
     if (autoStart) {
       this.start();
@@ -423,7 +437,7 @@ export default class SimulationEngine {
 
     if (changed) {
       if (changes.leaderboardIntervalMs !== undefined) {
-        this.lastSlowUiRender = Number.NEGATIVE_INFINITY;
+        this.telemetry.resetThrottle(Number.NEGATIVE_INFINITY);
       }
 
       this.emit("state", { state: this.getStateSnapshot(), changes });
@@ -436,10 +450,23 @@ export default class SimulationEngine {
     const changed = this.#updateState(partial);
 
     if (changed) {
-      this.pendingSlowUiUpdate = true;
+      this.telemetry.markPending();
     }
 
     return changed;
+  }
+
+  #sanitizeAndSetState(key, value, options, { markPending = true } = {}) {
+    const { fallback = this.state[key], ...rest } = options ?? {};
+    const sanitized = sanitizeNumber(value, { fallback, ...rest });
+
+    if (markPending) {
+      this.#updateStateAndFlag({ [key]: sanitized });
+    } else {
+      this.#updateState({ [key]: sanitized });
+    }
+
+    return sanitized;
   }
 
   #setAutoPausePending(pending) {
@@ -474,6 +501,86 @@ export default class SimulationEngine {
 
     this.resume();
     this.#setAutoPausePending(false);
+  }
+
+  #resolveDevicePixelRatio(win) {
+    const ratio = Number(win?.devicePixelRatio);
+
+    if (!Number.isFinite(ratio) || ratio <= 0) {
+      return 1;
+    }
+
+    return Math.min(ratio, 4);
+  }
+
+  #applyCanvasResolution(width, height) {
+    const canvas = this.canvas;
+    const ctx = this.ctx;
+
+    if (!canvas || !ctx) {
+      return;
+    }
+
+    const logicalWidth = Math.max(1, Math.round(Number(width) || 0));
+    const logicalHeight = Math.max(1, Math.round(Number(height) || 0));
+
+    this.canvasLogicalWidth = logicalWidth;
+    this.canvasLogicalHeight = logicalHeight;
+
+    const ratio =
+      Number.isFinite(this.canvasPixelRatio) && this.canvasPixelRatio > 0
+        ? this.canvasPixelRatio
+        : 1;
+    const scaledWidth = Math.max(1, Math.round(logicalWidth * ratio));
+    const scaledHeight = Math.max(1, Math.round(logicalHeight * ratio));
+
+    if (canvas.width !== scaledWidth) canvas.width = scaledWidth;
+    if (canvas.height !== scaledHeight) canvas.height = scaledHeight;
+
+    if (typeof ctx.setTransform === "function") {
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    } else {
+      if (typeof ctx.resetTransform === "function") {
+        ctx.resetTransform();
+      }
+      if (typeof ctx.scale === "function") {
+        ctx.scale(ratio, ratio);
+      }
+    }
+
+    if (ctx.imageSmoothingEnabled != null) {
+      ctx.imageSmoothingEnabled = false;
+    }
+  }
+
+  #installPixelRatioListener(win) {
+    if (!win || typeof win.addEventListener !== "function") {
+      return () => {};
+    }
+
+    const handleResize = () => {
+      const nextRatio = this.#resolveDevicePixelRatio(win);
+
+      if (!Number.isFinite(nextRatio) || nextRatio <= 0) {
+        return;
+      }
+
+      if (Math.abs(nextRatio - (this.canvasPixelRatio ?? 1)) < 0.001) {
+        return;
+      }
+
+      this.canvasPixelRatio = nextRatio;
+      const width = this.canvasLogicalWidth ?? this.cols * this.cellSize;
+      const height = this.canvasLogicalHeight ?? this.rows * this.cellSize;
+
+      this.#applyCanvasResolution(width, height);
+    };
+
+    win.addEventListener("resize", handleResize);
+
+    return () => {
+      win.removeEventListener("resize", handleResize);
+    };
   }
 
   #installAutoPauseHandlers(win, doc) {
@@ -538,8 +645,8 @@ export default class SimulationEngine {
       const area = event?.affectedArea ?? {};
       const rawWidth = Number.isFinite(area.width) ? area.width : 0;
       const rawHeight = Number.isFinite(area.height) ? area.height : 0;
-      const width = Math.max(0, Math.min(this.cols, Math.round(rawWidth)));
-      const height = Math.max(0, Math.min(this.rows, Math.round(rawHeight)));
+      const width = clamp(Math.round(rawWidth), 0, this.cols);
+      const height = clamp(Math.round(rawHeight), 0, this.rows);
       const coverageTiles = width * height;
       const coverageRatio = coverageTiles > 0 ? coverageTiles / totalTiles : 0;
       const remainingTicks = Math.max(0, Math.floor(event?.remaining ?? 0));
@@ -599,10 +706,10 @@ export default class SimulationEngine {
    * Pause and events:
    * - When paused the grid still redraws, but no `tick` event is emitted and throttled UI updates
    *   remain pending until the next unpaused frame.
-   * - `pendingSlowUiUpdate` is flipped to `true` whenever GridManager produces a new snapshot and
-   *   Stats ingest fresh metrics. The `leaderboardIntervalMs` throttle guards how often the
-   *   expensive leaderboard aggregation runs, ensuring UI work is batched even if simulation ticks
-   *   faster.
+   * - The telemetry controller flags slow UI updates as pending whenever GridManager produces a new
+   *   snapshot and Stats ingest fresh metrics. The `leaderboardIntervalMs` throttle guards how
+   *   often the expensive leaderboard aggregation runs, ensuring UI work is batched even if
+   *   simulation ticks faster.
    * - Grid mutations are delegated to `GridManager.update`, which consumes the current tuning
    *   values. The returned snapshot feeds directly into `Stats.updateFromSnapshot`, tying together
    *   world state, statistics, and UI surfaces.
@@ -622,7 +729,9 @@ export default class SimulationEngine {
     const interval = 1000 / Math.max(1, this.state.updatesPerSecond);
     const elapsed = effectiveTimestamp - this.lastUpdateTime;
     const shouldAdvance =
-      (!paused && elapsed >= interval) || (allowPausedTick && paused);
+      (force && (!paused || allowPausedTick)) ||
+      (!paused && elapsed >= interval) ||
+      (allowPausedTick && paused);
 
     if (shouldAdvance) {
       this.lastUpdateTime = effectiveTimestamp;
@@ -655,19 +764,20 @@ export default class SimulationEngine {
           this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
       });
 
-      this.lastSnapshot = snapshot;
       this.stats.logEvent?.(
         this.eventManager.currentEvent,
         this.state.eventStrengthMultiplier ?? 1,
       );
       this.stats.setMutationMultiplier?.(this.state.mutationMultiplier ?? 1);
-      this.lastMetrics = this.stats.updateFromSnapshot?.(snapshot);
+
+      const metrics = this.telemetry.ingestSnapshot(snapshot);
       // Defer leaderboard/metrics publication until the throttle window allows another emit.
-      this.pendingSlowUiUpdate = true;
+
+      this.telemetry.markPending();
 
       this.emit("tick", {
         snapshot,
-        metrics: this.lastMetrics,
+        metrics,
         timestamp: effectiveTimestamp,
       });
     }
@@ -677,11 +787,7 @@ export default class SimulationEngine {
     });
 
     if (renderSnapshot) {
-      this.lastRenderStats = renderSnapshot;
-
-      if (this.lastMetrics) {
-        this.lastMetrics = { ...this.lastMetrics, rendering: renderSnapshot };
-      }
+      this.telemetry.includeRenderStats(renderSnapshot);
     }
 
     const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
@@ -703,7 +809,7 @@ export default class SimulationEngine {
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
-      snapshot: this.lastSnapshot,
+      snapshot: this.telemetry.snapshot,
       activeEvents: this.eventManager.activeEvents,
       getEventColor: this.eventManager.getColor?.bind(this.eventManager),
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
@@ -712,42 +818,26 @@ export default class SimulationEngine {
       currentTick: lifeEventTick,
     });
 
-    if (this.pendingSlowUiUpdate) {
-      const interval = Math.max(0, this.state.leaderboardIntervalMs ?? 0);
-
-      if (interval === 0 || effectiveTimestamp - this.lastSlowUiRender >= interval) {
-        this.lastSlowUiRender = effectiveTimestamp;
-
-        if (this.lastMetrics) {
-          this.emit("metrics", {
-            stats: this.stats,
-            metrics: this.lastMetrics,
-            environment: {
-              activeEvents: this.#summarizeActiveEvents(),
-              updatesPerSecond: Math.max(
-                1,
-                Math.round(this.state.updatesPerSecond ?? 60),
-              ),
-              eventStrengthMultiplier: Number.isFinite(
-                this.state.eventStrengthMultiplier,
-              )
-                ? this.state.eventStrengthMultiplier
-                : 1,
-              combatTerritoryEdgeFactor:
-                this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
-            },
-          });
-        }
-
-        const top = this.lastSnapshot ? computeLeaderboard(this.lastSnapshot, 5) : [];
-
-        this.emit("leaderboard", { entries: top });
-        this.pendingSlowUiUpdate = false;
-      }
+    if (this.telemetry.hasPending()) {
+      this.telemetry.publishIfDue({
+        timestamp: effectiveTimestamp,
+        interval: this.state.leaderboardIntervalMs,
+        getEnvironment: () => ({
+          activeEvents: this.#summarizeActiveEvents(),
+          updatesPerSecond: Math.max(1, Math.round(this.state.updatesPerSecond ?? 60)),
+          eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
+            ? this.state.eventStrengthMultiplier
+            : 1,
+          combatTerritoryEdgeFactor:
+            this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
+        }),
+        emitMetrics: (payload) => this.emit("metrics", payload),
+        emitLeaderboard: (payload) => this.emit("leaderboard", payload),
+      });
     }
 
     if (scheduleNext) {
-      const shouldContinue = !paused || this.pendingSlowUiUpdate;
+      const shouldContinue = !paused || this.telemetry.hasPending();
 
       if (shouldContinue) {
         this.#scheduleNextFrame();
@@ -788,6 +878,7 @@ export default class SimulationEngine {
 
   pause() {
     this.setPaused(true);
+    this.#setAutoPausePending(false);
 
     return this.isPaused();
   }
@@ -815,37 +906,29 @@ export default class SimulationEngine {
     const presetOptions = opts.presetOptions;
     const reseed = opts.reseed === true;
 
-    let targetCellSize = sanitizeNumber(opts.cellSize, {
+    const targetCellSize = sanitizePositiveInteger(opts.cellSize, {
       fallback: this.cellSize,
-      round: Math.round,
     });
-    let targetRows = sanitizeNumber(opts.rows, {
+    const targetRows = sanitizePositiveInteger(opts.rows, {
       fallback: this.rows,
-      round: Math.floor,
     });
-    let targetCols = sanitizeNumber(opts.cols, {
+    const targetCols = sanitizePositiveInteger(opts.cols, {
       fallback: this.cols,
-      round: Math.floor,
     });
 
-    if (!Number.isFinite(targetCellSize) || targetCellSize < 1) {
-      targetCellSize = this.cellSize;
-    }
-
-    if (!Number.isFinite(targetRows) || targetRows < 1) {
-      targetRows = this.rows;
-    }
-
-    if (!Number.isFinite(targetCols) || targetCols < 1) {
-      targetCols = this.cols;
-    }
-
-    const changed =
+    const geometryChanged =
       targetCellSize !== this.cellSize ||
       targetRows !== this.rows ||
       targetCols !== this.cols;
+    const wantsPresetUpdate =
+      randomizeObstacles ||
+      (typeof obstaclePreset === "string" && obstaclePreset.trim().length > 0) ||
+      typeof presetOptions === "function" ||
+      (presetOptions &&
+        typeof presetOptions === "object" &&
+        Object.keys(presetOptions).length > 0);
 
-    if (!changed) {
+    if (!geometryChanged && !wantsPresetUpdate && !reseed) {
       return { cellSize: this.cellSize, rows: this.rows, cols: this.cols };
     }
 
@@ -853,14 +936,14 @@ export default class SimulationEngine {
     const wasPaused = this.isPaused();
 
     this.stop();
+    this.#setAutoPausePending(false);
 
     this.cellSize = targetCellSize;
     this.rows = targetRows;
     this.cols = targetCols;
 
     if (this.canvas) {
-      this.canvas.width = this.cols * this.cellSize;
-      this.canvas.height = this.rows * this.cellSize;
+      this.#applyCanvasResolution(this.cols * this.cellSize, this.rows * this.cellSize);
     }
 
     if (this.selectionManager?.setDimensions) {
@@ -935,15 +1018,12 @@ export default class SimulationEngine {
       this.ctx.clearRect(0, 0, this.canvas?.width ?? 0, this.canvas?.height ?? 0);
     }
 
-    this.lastSnapshot =
+    const snapshot =
       typeof this.grid?.buildSnapshot === "function" ? this.grid.buildSnapshot() : null;
-    this.lastMetrics =
-      this.lastSnapshot && typeof this.stats?.updateFromSnapshot === "function"
-        ? this.stats.updateFromSnapshot(this.lastSnapshot)
-        : null;
 
-    this.pendingSlowUiUpdate = true;
-    this.lastSlowUiRender = Number.NEGATIVE_INFINITY;
+    this.telemetry.ingestSnapshot(snapshot);
+    this.telemetry.markPending();
+    this.telemetry.resetThrottle(Number.NEGATIVE_INFINITY);
     this.lastUpdateTime = this.now();
 
     this.#updateState({
@@ -970,6 +1050,7 @@ export default class SimulationEngine {
     const wasPaused = this.isPaused();
 
     this.stop();
+    this.#setAutoPausePending(false);
 
     if (typeof this.stats?.resetAll === "function") {
       this.stats.resetAll();
@@ -1017,41 +1098,28 @@ export default class SimulationEngine {
       });
     }
 
-    this.lastSnapshot =
+    const snapshot =
       typeof this.grid?.buildSnapshot === "function" ? this.grid.buildSnapshot() : null;
 
     if (typeof this.stats?.setMutationMultiplier === "function") {
       this.stats.setMutationMultiplier(this.state.mutationMultiplier ?? 1);
     }
 
-    this.lastMetrics =
-      this.lastSnapshot && typeof this.stats?.updateFromSnapshot === "function"
-        ? this.stats.updateFromSnapshot(this.lastSnapshot)
-        : null;
-
-    const environment = {
-      activeEvents: this.#summarizeActiveEvents(),
-      updatesPerSecond: Math.max(1, Math.round(this.state.updatesPerSecond ?? 60)),
-      eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
-        ? this.state.eventStrengthMultiplier
-        : 1,
-      combatTerritoryEdgeFactor:
-        this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
-    };
-
-    if (this.lastMetrics) {
-      this.emit("metrics", {
-        stats: this.stats,
-        metrics: this.lastMetrics,
-        environment,
-      });
-    }
-
-    const leaderboard = this.lastSnapshot
-      ? computeLeaderboard(this.lastSnapshot, 5)
-      : [];
-
-    this.emit("leaderboard", { entries: leaderboard });
+    this.telemetry.ingestSnapshot(snapshot);
+    this.telemetry.publishNow({
+      timestamp: this.now(),
+      getEnvironment: () => ({
+        activeEvents: this.#summarizeActiveEvents(),
+        updatesPerSecond: Math.max(1, Math.round(this.state.updatesPerSecond ?? 60)),
+        eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
+          ? this.state.eventStrengthMultiplier
+          : 1,
+        combatTerritoryEdgeFactor:
+          this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
+      }),
+      emitMetrics: (payload) => this.emit("metrics", payload),
+      emitLeaderboard: (payload) => this.emit("leaderboard", payload),
+    });
 
     const showObstacles = this.state.showObstacles ?? true;
 
@@ -1075,7 +1143,7 @@ export default class SimulationEngine {
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
-      snapshot: this.lastSnapshot,
+      snapshot: this.telemetry.snapshot,
       activeEvents: this.eventManager?.activeEvents,
       getEventColor: this.eventManager?.getColor?.bind(this.eventManager),
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
@@ -1084,8 +1152,8 @@ export default class SimulationEngine {
       currentTick: lifeEventTick,
     });
 
-    this.lastSlowUiRender = this.now();
-    this.pendingSlowUiUpdate = false;
+    this.telemetry.resetThrottle(this.now());
+    this.telemetry.clearPending();
 
     if (wasRunning) {
       this.start();
@@ -1110,6 +1178,11 @@ export default class SimulationEngine {
     if (typeof this._autoPauseCleanup === "function") {
       this._autoPauseCleanup();
       this._autoPauseCleanup = null;
+    }
+
+    if (typeof this._pixelRatioCleanup === "function") {
+      this._pixelRatioCleanup();
+      this._pixelRatioCleanup = null;
     }
 
     this.stop();
@@ -1167,12 +1240,9 @@ export default class SimulationEngine {
   }
 
   setEventFrequencyMultiplier(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.eventFrequencyMultiplier,
+    this.#sanitizeAndSetState("eventFrequencyMultiplier", value, {
       min: 0,
     });
-
-    this.#updateStateAndFlag({ eventFrequencyMultiplier: sanitized });
   }
 
   setMaxConcurrentEvents(value) {
@@ -1185,40 +1255,28 @@ export default class SimulationEngine {
   }
 
   setMutationMultiplier(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.mutationMultiplier,
+    this.#sanitizeAndSetState("mutationMultiplier", value, {
       min: 0,
     });
-
-    this.#updateStateAndFlag({ mutationMultiplier: sanitized });
   }
 
   setCombatEdgeSharpness(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.combatEdgeSharpness,
+    this.#sanitizeAndSetState("combatEdgeSharpness", value, {
       min: 0.1,
     });
-
-    this.#updateStateAndFlag({ combatEdgeSharpness: sanitized });
   }
 
   setCombatTerritoryEdgeFactor(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.combatTerritoryEdgeFactor,
+    this.#sanitizeAndSetState("combatTerritoryEdgeFactor", value, {
       min: 0,
       max: 1,
     });
-
-    this.#updateStateAndFlag({ combatTerritoryEdgeFactor: sanitized });
   }
 
   setDensityEffectMultiplier(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.densityEffectMultiplier,
+    this.#sanitizeAndSetState("densityEffectMultiplier", value, {
       min: 0,
     });
-
-    this.#updateStateAndFlag({ densityEffectMultiplier: sanitized });
   }
 
   setSimilarityThresholds({ societySimilarity, enemySimilarity }) {
@@ -1246,12 +1304,9 @@ export default class SimulationEngine {
   }
 
   setEventStrengthMultiplier(value) {
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.state.eventStrengthMultiplier,
+    this.#sanitizeAndSetState("eventStrengthMultiplier", value, {
       min: 0,
     });
-
-    this.#updateStateAndFlag({ eventStrengthMultiplier: sanitized });
   }
 
   setEnergyRates({ regen, diffusion }) {
@@ -1276,13 +1331,39 @@ export default class SimulationEngine {
     }
   }
 
-  setLeaderboardInterval(value) {
+  setInitialTileEnergyFraction(value, { refreshEmptyTiles = true } = {}) {
     const sanitized = sanitizeNumber(value, {
-      fallback: this.state.leaderboardIntervalMs,
+      fallback: this.state.initialTileEnergyFraction,
       min: 0,
+      max: 1,
     });
 
-    this.#updateState({ leaderboardIntervalMs: sanitized });
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const previous = Number.isFinite(this.state.initialTileEnergyFraction)
+      ? this.state.initialTileEnergyFraction
+      : SIMULATION_DEFAULTS.initialTileEnergyFraction;
+    const changed = Math.abs(previous - sanitized) > 1e-6;
+
+    this.grid?.setInitialTileEnergyFraction?.(sanitized, {
+      refreshEmptyTiles,
+      forceRefresh: refreshEmptyTiles && !changed,
+    });
+
+    this.#updateState({ initialTileEnergyFraction: sanitized });
+  }
+
+  setLeaderboardInterval(value) {
+    this.#sanitizeAndSetState(
+      "leaderboardIntervalMs",
+      value,
+      {
+        min: 0,
+      },
+      { markPending: false },
+    );
   }
 
   setOverlayVisibility({
@@ -1361,6 +1442,9 @@ export default class SimulationEngine {
       case "energyDiffusionRate":
         this.setEnergyRates({ diffusion: value });
         break;
+      case "initialTileEnergyFraction":
+        this.setInitialTileEnergyFraction(value);
+        break;
       case "mutationMultiplier":
         this.setMutationMultiplier(value);
         break;
@@ -1369,9 +1453,6 @@ export default class SimulationEngine {
         break;
       case "lowDiversityReproMultiplier":
         this.setLowDiversityReproMultiplier(value);
-        break;
-      case "profileGridMetrics":
-        this.setProfileGridMetrics(value);
         break;
       case "speedMultiplier": {
         const sanitized = sanitizeNumber(value, {
@@ -1410,11 +1491,9 @@ export default class SimulationEngine {
   }
 
   setMatingDiversityThreshold(value) {
-    const numeric = Number(value);
+    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
 
-    if (!Number.isFinite(numeric)) return;
-
-    const clamped = clamp(numeric, 0, 1);
+    if (clamped === null) return;
 
     if (this.state.matingDiversityThreshold === clamped) return;
 
@@ -1436,11 +1515,9 @@ export default class SimulationEngine {
   }
 
   setLowDiversityReproMultiplier(value) {
-    const numeric = Number(value);
+    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
 
-    if (!Number.isFinite(numeric)) return;
-
-    const clamped = clamp(numeric, 0, 1);
+    if (clamped === null) return;
 
     if (this.state.lowDiversityReproMultiplier === clamped) return;
 
@@ -1454,24 +1531,6 @@ export default class SimulationEngine {
     });
 
     this.#updateState({ lowDiversityReproMultiplier: clamped });
-  }
-
-  setProfileGridMetrics(value) {
-    if (!this.grid) return;
-
-    let mode = null;
-
-    if (typeof this.grid.setProfileGridMetrics === "function") {
-      mode = this.grid.setProfileGridMetrics(value);
-    }
-
-    if (typeof mode !== "string" && typeof this.grid.profileGridMetrics === "string") {
-      mode = this.grid.profileGridMetrics;
-    }
-
-    if (typeof mode === "string" && this.state.profileGridMetrics !== mode) {
-      this.#updateState({ profileGridMetrics: mode });
-    }
   }
 
   burstRandomCells(options = {}) {

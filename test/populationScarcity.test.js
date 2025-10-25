@@ -4,6 +4,7 @@ import { resolvePopulationScarcityMultiplier } from "../src/grid/populationScarc
 import Cell from "../src/cell.js";
 import DNA, { GENE_LOCI } from "../src/genome.js";
 import { MAX_TILE_ENERGY } from "../src/config.js";
+import { clamp01 } from "../src/utils.js";
 
 function buildDNA({
   fertility = 0.5,
@@ -21,12 +22,6 @@ function buildDNA({
   dna.genes[GENE_LOCI.RISK] = Math.round(clamp01(risk) * 255);
 
   return dna;
-}
-
-function clamp01(value) {
-  if (!Number.isFinite(value)) return 0;
-
-  return Math.max(0, Math.min(1, value));
 }
 
 test("population scarcity multiplier grows with fertile cooperative genomes", () => {

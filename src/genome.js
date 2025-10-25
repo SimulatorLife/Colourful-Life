@@ -1,6 +1,10 @@
 import { clamp, createRNG, randomRange } from "./utils.js";
 import Brain, { NEURAL_GENE_BYTES } from "./brain.js";
-import { ACTIVITY_BASE_RATE, MUTATION_CHANCE_BASELINE } from "./config.js";
+import {
+  ACTIVITY_BASE_RATE,
+  MUTATION_CHANCE_BASELINE,
+  OFFSPRING_VIABILITY_BUFFER,
+} from "./config.js";
 
 const ACTIVITY_RATE_SPAN = 0.7;
 
@@ -57,9 +61,9 @@ const MUTATING_TYPED_ARRAY_METHODS = new Set([
 ]);
 
 const clampGene = (value) => {
-  if (Number.isNaN(value)) return 0;
+  const normalized = Number.isNaN(value) ? 0 : value | 0;
 
-  return Math.max(0, Math.min(255, value | 0));
+  return clamp(normalized, 0, 255);
 };
 
 export class DNA {
@@ -363,15 +367,10 @@ export class DNA {
     if (!this.hasNeuralGenes()) return [];
 
     const count = this.neuralGeneCount();
-    const genes = [];
 
-    for (let i = 0; i < count; i++) {
-      const gene = this.#decodeNeuralGene(i);
-
-      if (gene) genes.push(gene);
-    }
-
-    return genes;
+    return Array.from({ length: count }, (_, index) =>
+      this.#decodeNeuralGene(index),
+    ).filter(Boolean);
   }
 
   updateBrainMetrics({ neuronCount, connectionCount } = {}) {
@@ -415,16 +414,10 @@ export class DNA {
   // Expand genome to a 6x5 weight matrix in [-1,1]
   weights() {
     const rnd = this.prngFor("weights");
-    const rows = [];
 
-    for (let a = 0; a < 6; a++) {
-      const row = [];
-
-      for (let i = 0; i < 5; i++) row.push(rnd() * 2 - 1);
-      rows.push(row);
-    }
-
-    return rows;
+    return Array.from({ length: 6 }, () =>
+      Array.from({ length: 5 }, () => rnd() * 2 - 1),
+    );
   }
 
   movementGenes() {
@@ -595,6 +588,30 @@ export class DNA {
     const jitter = (rng() - 0.5) * 0.04;
 
     return clamp(blended + jitter, 0.5, 0.96);
+  }
+
+  offspringViabilityBuffer(globalBuffer = OFFSPRING_VIABILITY_BUFFER) {
+    const rng = this.prngFor("offspringViabilityBuffer");
+    const gestation = this.geneFraction(GENE_LOCI.GESTATION_EFFICIENCY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const baseline = clamp(
+      Number.isFinite(globalBuffer) ? globalBuffer : OFFSPRING_VIABILITY_BUFFER,
+      1,
+      2,
+    );
+    const caution = clamp(0.85 + parental * 0.35 + (1 - risk) * 0.4, 0.7, 1.6);
+    const support = clamp(
+      0.8 + efficiency * 0.3 + gestation * 0.35 + recovery * 0.2,
+      0.75,
+      1.6,
+    );
+    const temperament = clamp(caution / support, 0.65, 1.45);
+    const jitter = 1 + (rng() - 0.5) * 0.08;
+
+    return clamp(baseline * temperament * jitter, 1, 2);
   }
 
   // How strongly aging increases maintenance costs and reduces fertility
@@ -2138,19 +2155,75 @@ export class DNA {
     if (!other) return 0;
 
     const { squared = false, inverseMaxDistance } = options ?? {};
+    const selfGenes = this.#genesTarget;
+    const selfLength = selfGenes.length;
+    const otherObject = typeof other === "object" && other !== null ? other : null;
     const otherLength =
-      typeof other?.length === "number" ? other.length : (other?.genes?.length ?? 0);
-    const geneCount = Math.max(this.length, otherLength);
-    let distSq = 0;
-
-    for (let i = 0; i < geneCount; i++) {
-      const delta = this.geneAt(i) - (other.geneAt?.(i) ?? other?.genes?.[i] ?? 0);
-
-      distSq += delta * delta;
-    }
+      typeof otherObject?.length === "number"
+        ? otherObject.length
+        : (otherObject?.genes?.length ?? 0);
+    const geneCount = Math.max(selfLength, otherLength);
 
     if (geneCount === 0) {
       return 1;
+    }
+
+    const directGenes =
+      other instanceof DNA
+        ? other.#genesTarget
+        : other instanceof Uint8Array
+          ? other
+          : otherObject?.genes instanceof Uint8Array
+            ? otherObject.genes
+            : Array.isArray(other)
+              ? other
+              : Array.isArray(otherObject?.genes)
+                ? otherObject.genes
+                : null;
+    const fallbackGenes = !directGenes && otherObject?.genes ? otherObject.genes : null;
+    const fallbackGeneAt =
+      !directGenes && typeof otherObject?.geneAt === "function"
+        ? otherObject.geneAt.bind(otherObject)
+        : null;
+
+    let distSq = 0;
+
+    if (directGenes) {
+      const otherLen = directGenes.length;
+
+      for (let i = 0; i < geneCount; i++) {
+        const a = i < selfLength ? selfGenes[i] : 0;
+        const b = i < otherLen ? directGenes[i] : 0;
+        const delta = a - b;
+
+        distSq += delta * delta;
+      }
+    } else {
+      const fallbackLen =
+        fallbackGenes && typeof fallbackGenes.length === "number"
+          ? fallbackGenes.length
+          : 0;
+
+      for (let i = 0; i < geneCount; i++) {
+        const a = i < selfLength ? selfGenes[i] : 0;
+        let b = 0;
+
+        if (fallbackGeneAt) {
+          const candidate = fallbackGeneAt(i);
+
+          if (Number.isFinite(candidate)) {
+            b = candidate;
+          } else if (i < fallbackLen) {
+            b = fallbackGenes[i];
+          }
+        } else if (i < fallbackLen) {
+          b = fallbackGenes[i];
+        }
+
+        const delta = a - (Number.isFinite(b) ? b : 0);
+
+        distSq += delta * delta;
+      }
     }
 
     const invMax =

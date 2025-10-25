@@ -80,7 +80,7 @@ function createMetricsStatsFixture() {
         breeding: [0.3, 0.31, 0.32],
         sight: [0.7, 0.72, 0.74],
       },
-      intensity: {
+      average: {
         cooperation: [0.55, 0.56, 0.57],
         fighting: [0.35, 0.36, 0.37],
         breeding: [0.28, 0.29, 0.3],
@@ -546,6 +546,62 @@ test("insights panel defers metrics work while collapsed", async () => {
       null,
       "metrics queue should clear after flush",
     );
+  } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
+test("trait metrics render custom definitions", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        getCellSize: () => 5,
+      },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    openPanel(uiManager.insightsPanel);
+
+    const stats = createMetricsStatsFixture();
+
+    stats.traitDefinitions = [{ key: "cooperation" }, { key: "camouflage" }];
+    stats.traitPresence = {
+      population: 50,
+      counts: { cooperation: 30, camouflage: 20 },
+      fractions: { cooperation: 0.6, camouflage: 0.4 },
+    };
+    stats.traitHistory = {
+      presence: { cooperation: [0.6], camouflage: [0.4] },
+      average: { cooperation: [0.5], camouflage: [0.3] },
+    };
+
+    const snapshot = createSnapshotFixture();
+    const environment = { eventStrengthMultiplier: 1, activeEvents: [] };
+
+    uiManager.renderMetrics(stats, snapshot, environment);
+
+    const traitBar = uiManager.metricsBox.querySelector(
+      '.trait-bar-item[data-trait="camouflage"]',
+    );
+    const traitSpark = uiManager.insightsPanel.querySelector(
+      '.sparkline-card[data-trait="camouflage"]',
+    );
+
+    assert.ok(traitBar, "custom trait should render in trait presence list");
+    assert.ok(traitSpark, "custom trait should render sparkline card");
   } finally {
     restoreCanvas();
     restore();

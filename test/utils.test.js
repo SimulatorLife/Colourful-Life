@@ -4,16 +4,17 @@ import {
   lerp,
   clamp,
   clamp01,
+  coerceBoolean,
   sanitizeNumber,
+  sanitizePositiveInteger,
+  pickFirstFinitePositive,
   cloneTracePayload,
   createRankedBuffer,
   createRNG,
-  invokeWithErrorBoundary,
-  reportError,
   toFiniteOrNull,
   toPlainObject,
-  warnOnce,
 } from "../src/utils.js";
+import { invokeWithErrorBoundary, warnOnce } from "../src/utils/error.js";
 
 function* cycle(values) {
   let index = 0;
@@ -39,6 +40,58 @@ test("numeric helpers clamp and interpolate values deterministically", () => {
   assert.is(clamp(-1, 0, 4), 0);
   assert.is(clamp01("0.7"), 0.7);
   assert.is(clamp01(Number.POSITIVE_INFINITY), 0);
+});
+
+test("coerceBoolean normalizes boolean-like values with sane fallbacks", () => {
+  assert.is(coerceBoolean(true), true);
+  assert.is(coerceBoolean(false), false);
+
+  assert.is(coerceBoolean(null, true), true, "null returns fallback");
+  assert.is(coerceBoolean(undefined, true), true, "undefined returns fallback");
+
+  assert.is(coerceBoolean(0), false);
+  assert.is(coerceBoolean(1), true);
+  assert.is(coerceBoolean(-2), true);
+  assert.is(
+    coerceBoolean(Number.POSITIVE_INFINITY, false),
+    false,
+    "non-finite numbers use fallback",
+  );
+  assert.is(coerceBoolean(Number.NaN, true), true, "NaN values use fallback");
+
+  assert.is(coerceBoolean("true"), true);
+  assert.is(coerceBoolean("FALSE"), false);
+  assert.is(coerceBoolean("  yes  "), true);
+  assert.is(coerceBoolean("Off"), false);
+  assert.is(coerceBoolean("2"), true, "numeric strings are coerced");
+  assert.is(coerceBoolean("0"), false, "numeric string zero coerces to false");
+  assert.is(
+    coerceBoolean("maybe", false),
+    false,
+    "non-numeric/keyword strings fall back",
+  );
+  assert.is(coerceBoolean("   ", true), true, "empty strings after trim use fallback");
+
+  assert.is(coerceBoolean({}), true, "objects coerce via Boolean constructor");
+  assert.is(coerceBoolean(Symbol("token")), true, "symbols coerce to true");
+});
+
+test("pickFirstFinitePositive selects the earliest positive candidate", () => {
+  assert.is(
+    pickFirstFinitePositive([null, undefined, "", "5", 3]),
+    5,
+    "stringified numbers are converted",
+  );
+  assert.is(
+    pickFirstFinitePositive([0, -2, Number.NaN, "-5", BigInt(7)]),
+    7,
+    "BigInt candidates are coerced when finite",
+  );
+  assert.is(
+    pickFirstFinitePositive([0, null, undefined], 42),
+    42,
+    "fallback is returned when no candidate qualifies",
+  );
 });
 
 test("cloneTracePayload performs deep copies of sensors and nodes", () => {
@@ -74,6 +127,81 @@ test("cloneTracePayload performs deep copies of sensors and nodes", () => {
   assert.is(cloneTracePayload(null), null);
 });
 
+test("cloneTracePayload clones traces when structuredClone is unavailable", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "structuredClone");
+  const moduleUrl = new URL("../src/utils.js", import.meta.url);
+
+  moduleUrl.searchParams.set("noStructuredCloneClone", Date.now().toString());
+
+  try {
+    Object.defineProperty(globalThis, "structuredClone", {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
+
+    const { cloneTracePayload: localCloneTracePayload } = await import(moduleUrl.href);
+    const trace = {
+      sensors: [
+        { id: "energy", value: 0.5 },
+        { id: "neighbors", value: 3 },
+      ],
+      nodes: [
+        {
+          id: "hidden-1",
+          bias: 0.1,
+          inputs: [
+            { id: "input-1", weight: 0.2 },
+            { id: "input-2", weight: 0.3 },
+          ],
+        },
+      ],
+    };
+
+    const clone = localCloneTracePayload(trace);
+
+    assert.ok(clone !== trace);
+    assert.ok(clone.sensors[0] !== trace.sensors[0]);
+    assert.ok(clone.nodes[0] !== trace.nodes[0]);
+    assert.ok(clone.nodes[0].inputs[0] !== trace.nodes[0].inputs[0]);
+  } finally {
+    if (descriptor) {
+      Object.defineProperty(globalThis, "structuredClone", descriptor);
+    } else {
+      delete globalThis.structuredClone;
+    }
+  }
+});
+
+test("cloneTracePayload surfaces a clear error when encountering unsupported structures", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "structuredClone");
+  const moduleUrl = new URL("../src/utils.js", import.meta.url);
+
+  moduleUrl.searchParams.set("noStructuredCloneError", Date.now().toString());
+
+  try {
+    Object.defineProperty(globalThis, "structuredClone", {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
+
+    const { cloneTracePayload: localCloneTracePayload } = await import(moduleUrl.href);
+
+    assert.throws(
+      () => localCloneTracePayload({ sensors: [], nodes: [new Map()] }),
+      /structuredClone support/,
+      "unsupported values still surface a descriptive error",
+    );
+  } finally {
+    if (descriptor) {
+      Object.defineProperty(globalThis, "structuredClone", descriptor);
+    } else {
+      delete globalThis.structuredClone;
+    }
+  }
+});
+
 test("sanitizeNumber normalizes input with bounds and rounding strategies", () => {
   assert.is(
     sanitizeNumber("17.2", { min: 10, max: 20 }),
@@ -100,6 +228,44 @@ test("sanitizeNumber normalizes input with bounds and rounding strategies", () =
     }),
     42,
     "falls back when rounding produces non-finite values",
+  );
+  assert.is(
+    sanitizeNumber(Symbol("nope"), { fallback: 9 }),
+    9,
+    "returns fallback when conversion throws",
+  );
+});
+
+test("sanitizePositiveInteger coerces dimension-like input safely", () => {
+  assert.is(
+    sanitizePositiveInteger("9.7", { fallback: 5 }),
+    9,
+    "floors numeric-like strings",
+  );
+  assert.is(
+    sanitizePositiveInteger("oops", { fallback: 4 }),
+    4,
+    "falls back for invalid input",
+  );
+  assert.is(
+    sanitizePositiveInteger(0, { fallback: 3 }),
+    3,
+    "returns fallback when input falls below minimum bound",
+  );
+  assert.is(
+    sanitizePositiveInteger(500, { fallback: 3, max: 100 }),
+    3,
+    "returns fallback when exceeding max bound",
+  );
+  assert.is(
+    sanitizePositiveInteger(undefined, { fallback: 0 }),
+    1,
+    "clamps fallback into the minimum bound",
+  );
+  assert.is(
+    sanitizePositiveInteger(500, { fallback: 250, max: 100 }),
+    100,
+    "clamps fallback into the configured range",
   );
 });
 
@@ -199,7 +365,7 @@ test("warnOnce ignores non-string or empty messages", () => {
   assert.equal(calls[0], ["gamma-message"]);
 });
 
-test("reportError logs errors and supports optional deduplication", () => {
+test("invokeWithErrorBoundary reports errors through console.error by default", () => {
   const originalError = console.error;
   const calls = [];
 
@@ -208,34 +374,20 @@ test("reportError logs errors and supports optional deduplication", () => {
   };
 
   try {
-    const firstError = new Error("alpha");
-    const secondError = new Error("beta");
-
-    reportError("first message", firstError);
-    reportError("first message", firstError);
-
-    reportError("dedup message", firstError, { once: true });
-    reportError("dedup message", firstError, { once: true });
-    reportError("dedup message", secondError, { once: true });
-
-    reportError("message only");
-    reportError("", secondError);
+    invokeWithErrorBoundary(
+      () => {
+        throw new Error("boom");
+      },
+      [],
+      { message: "default reporter" },
+    );
   } finally {
     console.error = originalError;
   }
 
-  assert.is(calls.length, 5);
-  assert.equal(
-    calls.map((args) => args[0]),
-    [
-      "first message",
-      "first message",
-      "dedup message",
-      "dedup message",
-      "message only",
-    ],
-  );
-  assert.is(calls[0][1], calls[1][1]);
+  assert.is(calls.length, 1);
+  assert.is(calls[0][0], "default reporter");
+  assert.ok(calls[0][1] instanceof Error);
 });
 
 test("invokeWithErrorBoundary supports custom reporters and onError hooks", () => {
@@ -327,4 +479,5 @@ test("toFiniteOrNull converts numeric-like values and discards invalid input", (
   assert.is(toFiniteOrNull("abc"), null);
   assert.is(toFiniteOrNull(Number.POSITIVE_INFINITY), null);
   assert.is(toFiniteOrNull(Number.NaN), null);
+  assert.is(toFiniteOrNull(Symbol("invalid")), null);
 });

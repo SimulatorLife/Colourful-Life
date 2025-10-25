@@ -1,0 +1,120 @@
+const warnedMessages = new Set();
+
+const defaultErrorReporter = (message, error) => {
+  if (typeof message !== "string" || message.length === 0) return;
+
+  logWithOptionalError("error", message, error);
+};
+
+/**
+ * Safely proxies console logging so optional error objects can be appended
+ * without triggering runtime failures when the console is unavailable or
+ * missing the requested method.
+ *
+ * @param {keyof Console | string} method - Console method name such as "warn" or "error".
+ * @param {string} message - Human-friendly diagnostic message.
+ * @param {unknown} [error] - Optional error-like payload forwarded for context.
+ */
+function logWithOptionalError(method, message, error) {
+  const consoleRef = globalThis.console;
+  const logger = consoleRef?.[method];
+
+  if (typeof logger !== "function") return;
+
+  logger.call(consoleRef, message, ...(error ? [error] : []));
+}
+
+/**
+ * Emits a warning-level log the first time a distinct message/error pair is
+ * observed. Useful for cautionary telemetry where repeated warnings would flood
+ * the console without providing new information.
+ *
+ * @param {string} message - Description of the warning condition.
+ * @param {unknown} [error] - Optional contextual error payload.
+ * @returns {void}
+ */
+export function warnOnce(message, error) {
+  if (typeof message !== "string" || message.length === 0) return;
+
+  const warningKey = `${message}::$${error?.name ?? ""}::$${error?.message ?? ""}`;
+
+  if (warnedMessages.has(warningKey)) return;
+  warnedMessages.add(warningKey);
+
+  logWithOptionalError("warn", message, error);
+}
+
+/**
+ * Invokes a callback while trapping synchronous errors so the caller's control
+ * flow can continue. A reporter hook receives failures, and `once` flags allow
+ * reporters to optionally dedupe repeated emissions.
+ *
+ * @template TResult
+ * @param {(...args: any[]) => TResult} callback - Function executed inside the boundary.
+ * @param {any[]} [args=[]] - Arguments forwarded to the callback.
+ * @param {Object} [options]
+ * @param {string|((...args: any[]) => string)} [options.message] - Optional
+ *   message or generator invoked when an error surfaces.
+ * @param {boolean} [options.once=false] - Whether identical failures are
+ *   reported at most once.
+ * @param {any} [options.thisArg] - Value applied as `this` during invocation.
+ * @param {(message: string, error: unknown, opts?: { once?: boolean }) => void}
+ *   [options.reporter=defaultErrorReporter] - Custom error reporter.
+ * @param {(error: unknown) => void} [options.onError] - Handler executed when a
+ *   failure occurs.
+ * @returns {TResult|undefined} Callback result when successful; `undefined`
+ *   after handling an error.
+ */
+export function invokeWithErrorBoundary(callback, args = [], options = {}) {
+  if (typeof callback !== "function") return undefined;
+
+  const {
+    message,
+    once = false,
+    thisArg,
+    reporter = defaultErrorReporter,
+    onError,
+  } = options ?? {};
+
+  try {
+    return callback.apply(thisArg, args);
+  } catch (error) {
+    let resolvedMessage = message;
+
+    if (typeof message === "function") {
+      try {
+        resolvedMessage = message(...args);
+      } catch (messageError) {
+        resolvedMessage = null;
+        logWithOptionalError(
+          "warn",
+          "Error message generator threw; using fallback.",
+          messageError,
+        );
+      }
+    }
+
+    const fallbackMessage =
+      typeof resolvedMessage === "string" && resolvedMessage.length > 0
+        ? resolvedMessage
+        : "Callback threw; continuing without interruption.";
+
+    const reporterFn = typeof reporter === "function" ? reporter : defaultErrorReporter;
+
+    reporterFn(fallbackMessage, error, { once });
+
+    if (typeof onError === "function") {
+      try {
+        onError(error);
+      } catch (onErrorError) {
+        logWithOptionalError(
+          "warn",
+          "Error boundary onError handler threw; ignoring.",
+          onErrorError,
+        );
+      }
+    }
+  }
+
+  return undefined;
+}

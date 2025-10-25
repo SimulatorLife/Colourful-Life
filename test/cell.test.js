@@ -11,6 +11,7 @@ let createRNG;
 let InteractionSystem;
 let Brain;
 let OUTPUT_GROUPS;
+let OFFSPRING_VIABILITY_BUFFER;
 
 function investmentFor(
   energy,
@@ -68,6 +69,7 @@ test.before(async () => {
   ({ clamp, lerp, randomRange, createRNG } = await import("../src/utils.js"));
   ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
   ({ default: Brain, OUTPUT_GROUPS } = await import("../src/brain.js"));
+  ({ OFFSPRING_VIABILITY_BUFFER } = await import("../src/config.js"));
   if (typeof global.window === "undefined") global.window = globalThis;
   if (!window.GridManager) window.GridManager = {};
   if (typeof window.GridManager.maxTileEnergy !== "number") {
@@ -549,6 +551,91 @@ test("neural rest confidence amplifies recovery boost", () => {
   );
 });
 
+test("pursue movement leans on targeting selection when available", () => {
+  const dna = new DNA(120, 120, 120);
+  const cell = new Cell(0, 0, dna, 6);
+  const movementSensors = new Array(Brain.SENSOR_COUNT).fill(0);
+
+  cell.brain = {
+    connectionCount: 3,
+    evaluateGroup(group) {
+      if (group === "movement") {
+        return {
+          values: { rest: -4, pursue: 5, avoid: -3, cohere: -3, explore: -2 },
+          activationCount: 1,
+          sensors: movementSensors.slice(),
+        };
+      }
+
+      return {
+        values: null,
+        activationCount: 0,
+        sensors: movementSensors.slice(),
+      };
+    },
+  };
+
+  const nearEnemy = {
+    row: 0,
+    col: 1,
+    target: { row: 0, col: 1, energy: 8, age: 1, lifespan: 6 },
+  };
+  const farEnemy = {
+    row: 2,
+    col: 0,
+    target: { row: 2, col: 0, energy: 5, age: 1, lifespan: 6 },
+  };
+  const enemies = [nearEnemy, farEnemy];
+  const chooseCalls = [];
+
+  cell.chooseEnemyTarget = (list) => {
+    chooseCalls.push(list);
+
+    return list[1];
+  };
+
+  let moved = null;
+  let randomFallback = false;
+
+  cell.executeMovementStrategy([], 0, 0, [], enemies, [], {
+    rows: 5,
+    cols: 5,
+    localDensity: 0.1,
+    densityEffectMultiplier: 1,
+    moveToTarget: (_grid, _row, _col, targetRow, targetCol) => {
+      moved = { row: targetRow, col: targetCol };
+    },
+    moveAwayFromTarget: () => {},
+    moveRandomly: () => {
+      randomFallback = true;
+    },
+    getEnergyAt: () => 0,
+    tryMove: () => false,
+    isTileBlocked: () => false,
+    tileEnergy: 0.4,
+    tileEnergyDelta: 0,
+    maxTileEnergy: 12,
+  });
+
+  assert.is(chooseCalls.length, 1, "pursue should consult targeting selection");
+  assert.ok(moved, "pursuit should attempt a directed move");
+  assert.is(moved?.row, 2, "movement should chase the targeted enemy row");
+  assert.is(moved?.col, 0, "movement should chase the targeted enemy col");
+  assert.is(randomFallback, false, "successful pursuit should avoid random fallback");
+
+  const outcome = cell._decisionContextIndex.get("movement")?.outcome ?? null;
+
+  assert.ok(outcome?.pursueTarget, "pursuit should record a target summary");
+  assert.is(outcome.pursueTarget.row, 2, "summary should capture pursued row");
+  assert.is(outcome.pursueTarget.col, 0, "summary should capture pursued col");
+  assert.equal(outcome.pursueTarget.source, "targeting");
+  assert.is(
+    outcome.pursueUsedTargetingNetwork,
+    false,
+    "stubbed targeting should report non-neural selection",
+  );
+});
+
 test("legacy cautious fallback retreats when DNA signals vulnerability", () => {
   const dna = new DNA(40, 40, 40);
 
@@ -699,8 +786,8 @@ test("legacy cautious fallback holds position when traits signal confidence", ()
 test("breed spends parental investment energy without creating extra energy", () => {
   const dnaA = new DNA(10, 120, 200);
   const dnaB = new DNA(200, 80, 40);
-  const parentA = new Cell(4, 5, dnaA, 9);
-  const parentB = new Cell(4, 5, dnaB, 10);
+  const parentA = new Cell(4, 5, dnaA, 12);
+  const parentB = new Cell(4, 5, dnaB, 12);
   const energyBeforeA = parentA.energy;
   const energyBeforeB = parentB.energy;
   const investFracA = dnaA.parentalInvestmentFrac();
@@ -711,7 +798,12 @@ test("breed spends parental investment energy without creating extra energy", ()
   const demandFracA = dnaA.offspringEnergyDemandFrac();
   const demandFracB = dnaB.offspringEnergyDemandFrac();
   const transferEfficiency = combinedTransferEfficiency(dnaA, dnaB);
-  const viabilityThreshold = maxTileEnergy * Math.max(demandFracA, demandFracB) * 1.15;
+  const viabilityBuffer = Math.max(
+    dnaA.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+    dnaB.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+  );
+  const viabilityThreshold =
+    maxTileEnergy * Math.max(demandFracA, demandFracB) * viabilityBuffer;
   const requiredTotalInvestment =
     viabilityThreshold / Math.max(transferEfficiency, 1e-6);
   const weightSum = Math.max(1e-6, Math.abs(investFracA) + Math.abs(investFracB));
@@ -976,8 +1068,12 @@ test("breed clamps investment so parents stop at starvation threshold", () => {
   const demandFracA = dnaA.offspringEnergyDemandFrac();
   const demandFracB = dnaB.offspringEnergyDemandFrac();
   const transferEfficiency = combinedTransferEfficiency(dnaA, dnaB);
+  const viabilityBuffer = Math.max(
+    dnaA.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+    dnaB.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+  );
   const viabilityThreshold =
-    reproductionMax * Math.max(demandFracA, demandFracB) * 1.15;
+    reproductionMax * Math.max(demandFracA, demandFracB) * viabilityBuffer;
   const requiredTotalInvestment =
     viabilityThreshold / Math.max(transferEfficiency, 1e-6);
   const investFracA = dnaA.parentalInvestmentFrac();
@@ -1136,21 +1232,29 @@ test("gestation efficiency genes modulate delivered offspring energy", () => {
   const highDnaA = configureGenome(240);
   const highDnaB = configureGenome(250);
   const maxTileEnergy = window.GridManager.maxTileEnergy;
-  const lowParentA = new Cell(1, 1, lowDnaA, 9);
-  const lowParentB = new Cell(1, 1, lowDnaB, 9);
-  const highParentA = new Cell(1, 1, highDnaA, 9);
-  const highParentB = new Cell(1, 1, highDnaB, 9);
+  const lowParentA = new Cell(1, 1, lowDnaA, 11);
+  const lowParentB = new Cell(1, 1, lowDnaB, 11);
+  const highParentA = new Cell(1, 1, highDnaA, 11);
+  const highParentB = new Cell(1, 1, highDnaB, 11);
   const lowDemandA = lowDnaA.offspringEnergyDemandFrac();
   const lowDemandB = lowDnaB.offspringEnergyDemandFrac();
   const highDemandA = highDnaA.offspringEnergyDemandFrac();
   const highDemandB = highDnaB.offspringEnergyDemandFrac();
   const lowEfficiency = combinedTransferEfficiency(lowDnaA, lowDnaB);
   const highEfficiency = combinedTransferEfficiency(highDnaA, highDnaB);
+  const lowViabilityBuffer = Math.max(
+    lowDnaA.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+    lowDnaB.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+  );
+  const highViabilityBuffer = Math.max(
+    highDnaA.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+    highDnaB.offspringViabilityBuffer(OFFSPRING_VIABILITY_BUFFER),
+  );
   const lowRequiredTotal =
-    (maxTileEnergy * Math.max(lowDemandA, lowDemandB) * 1.15) /
+    (maxTileEnergy * Math.max(lowDemandA, lowDemandB) * lowViabilityBuffer) /
     Math.max(lowEfficiency, 1e-6);
   const highRequiredTotal =
-    (maxTileEnergy * Math.max(highDemandA, highDemandB) * 1.15) /
+    (maxTileEnergy * Math.max(highDemandA, highDemandB) * highViabilityBuffer) /
     Math.max(highEfficiency, 1e-6);
   const lowFracA = lowDnaA.parentalInvestmentFrac();
   const lowFracB = lowDnaB.parentalInvestmentFrac();
@@ -1646,6 +1750,105 @@ test("selectMateWeighted honors mate sampling curiosity bias", () => {
 
   assert.is(mode, "curiosity", "high curiosity genomes sample tail candidates");
   assert.is(chosen, diverse, "curiosity pick should favor diverse mates");
+});
+
+test("repetitive low-diversity matings build novelty pressure that shifts mate scoring", () => {
+  const dna = new DNA(40, 60, 80);
+  const cell = new Cell(0, 0, dna, 6);
+  const similarTarget = new Cell(0, 1, new DNA(45, 65, 85), 6);
+  const diverseTarget = new Cell(0, 2, new DNA(200, 15, 15), 6);
+
+  cell.matePreferenceBias = 0.6;
+  cell.diversityAppetite = 0;
+  cell._mateSelectionNoiseRng = () => 0.5;
+
+  const baselineSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.95,
+  });
+  const baselineDiverse = cell.evaluateMateCandidate({
+    target: diverseTarget,
+    precomputedSimilarity: 0.15,
+  });
+
+  for (let i = 0; i < 5; i += 1) {
+    cell.recordMatingOutcome({
+      diversity: 0.05,
+      success: true,
+      penalized: true,
+      penaltyMultiplier: 0.6,
+      strategyPenaltyMultiplier: 0.7,
+    });
+  }
+
+  const pressuredSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.95,
+  });
+  const pressuredDiverse = cell.evaluateMateCandidate({
+    target: diverseTarget,
+    precomputedSimilarity: 0.15,
+  });
+
+  assert.ok(
+    pressuredSimilar.preferenceScore < baselineSimilar.preferenceScore,
+    "novelty pressure should reduce preference for repetitive mates",
+  );
+  assert.ok(
+    pressuredSimilar.selectionWeight < baselineSimilar.selectionWeight,
+    "novelty pressure should diminish selection weight for repetitive mates",
+  );
+  assert.ok(
+    pressuredDiverse.preferenceScore >= baselineDiverse.preferenceScore,
+    "diverse mates remain as appealing or stronger under novelty pressure",
+  );
+});
+
+test("diverse matings relieve accumulated novelty pressure penalties", () => {
+  const dna = new DNA(70, 90, 40);
+  const cell = new Cell(0, 0, dna, 5);
+  const similarTarget = new Cell(0, 1, new DNA(75, 95, 45), 5);
+
+  cell.matePreferenceBias = 0.45;
+  cell.diversityAppetite = 0.1;
+  cell._mateSelectionNoiseRng = () => 0.5;
+
+  for (let i = 0; i < 4; i += 1) {
+    cell.recordMatingOutcome({
+      diversity: 0.08,
+      success: true,
+      penalized: true,
+      penaltyMultiplier: 0.55,
+      strategyPenaltyMultiplier: 0.75,
+    });
+  }
+
+  const pressuredSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.92,
+  });
+
+  cell.recordMatingOutcome({
+    diversity: 0.88,
+    success: true,
+    penalized: false,
+    penaltyMultiplier: 1,
+    strategyPenaltyMultiplier: 1,
+  });
+
+  const relievedSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.92,
+  });
+
+  assert.ok(
+    relievedSimilar.preferenceScore > pressuredSimilar.preferenceScore,
+    "diverse success should unwind novelty penalty pressure",
+  );
+  assert.ok(
+    relievedSimilar.selectionWeight > pressuredSimilar.selectionWeight,
+    "diverse success should restore selection weight toward balance",
+  );
 });
 
 test("breed uses DNA inheritStrategy to compute offspring strategy", () => {

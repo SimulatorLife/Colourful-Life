@@ -32,9 +32,12 @@ You can pick any remote name. If you choose a name other than `public`, export
 Run the helper script added to `scripts/`:
 
 ```bash
-npm install
-./scripts/publish-public-build.sh
+npm ci
+npm run deploy:public
 ```
+
+The npm script invokes `./scripts/publish-public-build.sh`; run it directly if
+you prefer to call the shell script yourself.
 
 The script performs the following steps:
 

@@ -1,5 +1,6 @@
 import { MAX_TILE_ENERGY } from "../config.js";
-import { clamp, clamp01, lerp, toPlainObject, warnOnce } from "../utils.js";
+import { clamp, clamp01, lerp, toPlainObject } from "../utils.js";
+import { warnOnce } from "../utils/error.js";
 
 const DEFAULT_FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
@@ -212,25 +213,32 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
 }
 
 function createFitnessPalette(steps, hue) {
-  const palette = [];
   const minLightness = 32;
   const maxLightness = 82;
   const saturation = 88;
+  const numericSteps = Number(steps);
 
-  if (steps <= 1) {
+  if (!Number.isFinite(numericSteps)) {
+    return [];
+  }
+
+  const stepCount = Math.max(0, Math.ceil(numericSteps));
+
+  if (stepCount <= 1) {
     const midLightness = (minLightness + maxLightness) / 2;
 
     return [`hsl(${hue}, ${saturation}%, ${midLightness.toFixed(1)}%)`];
   }
 
-  for (let i = 0; i < steps; i++) {
-    const t = i / (steps - 1);
-    const lightness = maxLightness - (maxLightness - minLightness) * t;
+  const denominator = numericSteps - 1;
+  const span = maxLightness - minLightness;
 
-    palette.push(`hsl(${hue}, ${saturation}%, ${lightness.toFixed(1)}%)`);
-  }
+  return Array.from({ length: stepCount }, (_, index) => {
+    const t = denominator !== 0 ? index / denominator : 0;
+    const lightness = maxLightness - span * t;
 
-  return palette;
+    return `hsl(${hue}, ${saturation}%, ${lightness.toFixed(1)}%)`;
+  });
 }
 
 /**
@@ -339,9 +347,65 @@ function drawObstacleMask(
       const y = r * cellSize;
 
       ctx.fillRect(x, y, cellSize, cellSize);
-      ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
     }
   }
+
+  const canStroke =
+    typeof ctx.beginPath === "function" &&
+    typeof ctx.moveTo === "function" &&
+    typeof ctx.lineTo === "function" &&
+    typeof ctx.stroke === "function";
+
+  if (canStroke) {
+    ctx.beginPath();
+    const halfPixel = 0.5;
+
+    for (let r = 0; r < rows; r++) {
+      const rowMask = mask[r];
+
+      if (!rowMask) continue;
+      const prevRow = r > 0 ? mask[r - 1] : null;
+      const nextRow = r + 1 < rows ? mask[r + 1] : null;
+
+      for (let c = 0; c < cols; c++) {
+        if (!rowMask[c]) continue;
+
+        const x = c * cellSize;
+        const y = r * cellSize;
+        const leftBlocked = c > 0 && rowMask[c - 1];
+        const rightBlocked = c + 1 < cols && rowMask[c + 1];
+        const topBlocked = prevRow ? prevRow[c] : false;
+        const bottomBlocked = nextRow ? nextRow[c] : false;
+
+        if (!topBlocked) {
+          ctx.moveTo(x, y + halfPixel);
+          ctx.lineTo(x + cellSize, y + halfPixel);
+        }
+
+        if (!bottomBlocked) {
+          const bottomY = y + cellSize - halfPixel;
+
+          ctx.moveTo(x, bottomY);
+          ctx.lineTo(x + cellSize, bottomY);
+        }
+
+        if (!leftBlocked) {
+          ctx.moveTo(x + halfPixel, y);
+          ctx.lineTo(x + halfPixel, y + cellSize);
+        }
+
+        if (!rightBlocked) {
+          const rightX = x + cellSize - halfPixel;
+
+          ctx.moveTo(rightX, y);
+          ctx.lineTo(rightX, y + cellSize);
+        }
+      }
+    }
+
+    ctx.stroke();
+  }
+
   ctx.restore();
 }
 
@@ -516,16 +580,9 @@ export function densityToRgba(normalizedValue, { opaque = false } = {}) {
     { t: 1, color: [220, 36, 31] },
   ];
 
-  let start = stops[0];
-  let end = stops[stops.length - 1];
-
-  for (let i = 1; i < stops.length; i++) {
-    if (t <= stops[i].t) {
-      start = stops[i - 1];
-      end = stops[i];
-      break;
-    }
-  }
+  const endIndex = stops.findIndex((stop, index) => index > 0 && t <= stop.t);
+  const start = endIndex > 0 ? stops[endIndex - 1] : stops[0];
+  const end = endIndex > 0 ? stops[endIndex] : (stops[stops.length - 1] ?? stops[0]);
 
   const segmentSpan = end.t - start.t || 1;
   const localT = (t - start.t) / segmentSpan;
@@ -621,6 +678,20 @@ function getSelectionZoneEntries(selectionManager) {
   }
 }
 
+function* iterateRenderableRects(rects) {
+  if (!Array.isArray(rects)) return;
+
+  for (const rect of rects) {
+    if (!rect) continue;
+
+    const { rowSpan = 1, colSpan = 1 } = rect;
+
+    if (rowSpan <= 0 || colSpan <= 0) continue;
+
+    yield rect;
+  }
+}
+
 /**
  * Outlines active reproduction zones supplied by the selection manager.
  *
@@ -654,14 +725,8 @@ export function drawSelectionZones(selectionManager, ctx, cellSize) {
     }
 
     ctx.fillStyle = color;
-    for (let i = 0; i < rects.length; i++) {
-      const rect = rects[i];
-
-      if (!rect) continue;
-
+    for (const rect of iterateRenderableRects(rects)) {
       const { row, col, rowSpan = 1, colSpan = 1 } = rect;
-
-      if (rowSpan <= 0 || colSpan <= 0) continue;
 
       ctx.fillRect(
         col * cellSize,

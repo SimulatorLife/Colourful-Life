@@ -4,86 +4,54 @@ import SelectionManager from "./grid/selectionManager.js";
 import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { bindSimulationToUi } from "./ui/simulationUiBridge.js";
 import { resolveSimulationDefaults } from "./config.js";
-import { toPlainObject, toFiniteOrNull } from "./utils.js";
+import { toPlainObject } from "./utils.js";
+import {
+  createHeadlessCanvas,
+  resolveHeadlessCanvasSize,
+} from "./engine/environment.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
-function resolveHeadlessCanvasSize(config = {}) {
-  const toFinite = toFiniteOrNull;
+/**
+ * Derives width/height overrides for headless canvases so both the generated
+ * canvas and simulation config stay in sync. Returns `null` when no positive
+ * dimensions are supplied by the resolver.
+ */
+function buildHeadlessCanvasOverrides(config, size) {
+  if (!size) return null;
 
-  const rawCellSize = toFinite(config?.cellSize);
-  const cellSize = rawCellSize != null && rawCellSize > 0 ? rawCellSize : 5;
-  const rawRows = toFinite(config?.rows);
-  const rawCols = toFinite(config?.cols);
-  const rows = rawRows != null && rawRows > 0 ? rawRows : null;
-  const cols = rawCols != null && rawCols > 0 ? rawCols : null;
-  const defaultWidth = (cols ?? 120) * cellSize;
-  const defaultHeight = (rows ?? 120) * cellSize;
-  const pickFirstPositive = (candidates, fallback) =>
-    candidates
-      .map((candidate) => toFinite(candidate))
-      .find((value) => value != null && value > 0) ?? fallback;
+  const width = Number.isFinite(size.width) && size.width > 0 ? size.width : null;
+  const height = Number.isFinite(size.height) && size.height > 0 ? size.height : null;
 
-  return {
-    width: pickFirstPositive(
-      [
-        config?.width,
-        config?.canvasWidth,
-        config?.canvasSize?.width,
-        cols != null ? cols * cellSize : null,
-      ],
-      defaultWidth,
-    ),
-    height: pickFirstPositive(
-      [
-        config?.height,
-        config?.canvasHeight,
-        config?.canvasSize?.height,
-        rows != null ? rows * cellSize : null,
-      ],
-      defaultHeight,
-    ),
-  };
-}
+  if (width == null && height == null) {
+    return null;
+  }
 
-function createHeadlessCanvas(config = {}) {
-  const { width, height } = resolveHeadlessCanvasSize(config);
-  const context = {
-    canvas: null,
-    fillStyle: "#000",
-    strokeStyle: "#000",
-    lineWidth: 1,
-    font: "",
-    textBaseline: "top",
-    textAlign: "left",
-    clearRect() {},
-    fillRect() {},
-    strokeRect() {},
-    save() {},
-    restore() {},
-    beginPath() {},
-    stroke() {},
-    createLinearGradient() {
-      return {
-        addColorStop() {},
-      };
-    },
-    fillText() {},
-    strokeText() {},
-  };
-  const canvas = {
-    width,
-    height,
-    getContext(type) {
-      if (type !== "2d") return null;
+  const canvasSize = { ...toPlainObject(config?.canvasSize) };
 
-      return context;
-    },
+  if (width != null) {
+    canvasSize.width = width;
+  }
+
+  if (height != null) {
+    canvasSize.height = height;
+  }
+
+  const overrides = {
+    canvasSize,
   };
 
-  context.canvas = canvas;
+  if (width != null) {
+    overrides.width = width;
+    overrides.canvasWidth = width;
+  }
 
-  return canvas;
+  if (height != null) {
+    overrides.height = height;
+    overrides.canvasHeight = height;
+  }
+
+  return overrides;
 }
 
 /**
@@ -99,6 +67,10 @@ function createHeadlessCanvas(config = {}) {
  * - `config` (`Object`): base configuration forwarded to the engine. Supports
  *   `config.ui` for {@link UIManager} overrides (e.g. `mountSelector`,
  *   `layout`, `actions`) and `config.paused` to start paused.
+ *   `config.initialTileEnergyFraction` can be provided to set the fraction of
+ *   the tile energy cap applied to empty tiles during world resets and
+ *   constructor seeding. The value is clamped to the 0..1 range and defaults to
+ *   0.5.
  * - `headless` (`boolean`, default `false`): create a headless UI adapter via
  *   {@link createHeadlessUiManager} instead of mounting the {@link UIManager}.
  * - `autoStart` (`boolean`, default `true`): whether to call `engine.start()`
@@ -195,52 +167,24 @@ export function createSimulation({
   const headlessCanvasSize = headless
     ? resolveHeadlessCanvasSize(configWithLayoutDefaults)
     : null;
+  const headlessOverrides = headless
+    ? buildHeadlessCanvasOverrides(configWithLayoutDefaults, headlessCanvasSize)
+    : null;
+  let createdHeadlessCanvas = false;
 
   if (headless && !resolvedCanvas) {
-    const sizeOverrides = headlessCanvasSize ?? {};
-    const canvasSizeConfig = {
-      ...toPlainObject(configWithLayoutDefaults.canvasSize),
-    };
+    const canvasConfig = headlessOverrides
+      ? { ...configWithLayoutDefaults, ...headlessOverrides }
+      : configWithLayoutDefaults;
 
-    if (sizeOverrides.width > 0) {
-      canvasSizeConfig.width = sizeOverrides.width;
-    }
-
-    if (sizeOverrides.height > 0) {
-      canvasSizeConfig.height = sizeOverrides.height;
-    }
-
-    resolvedCanvas = createHeadlessCanvas({
-      ...configWithLayoutDefaults,
-      width: sizeOverrides.width,
-      height: sizeOverrides.height,
-      canvasWidth: sizeOverrides.width,
-      canvasHeight: sizeOverrides.height,
-      canvasSize: canvasSizeConfig,
-    });
+    resolvedCanvas = createHeadlessCanvas(canvasConfig);
+    createdHeadlessCanvas = true;
   }
 
-  if (headless && headlessCanvasSize) {
-    const sizeOverrides = headlessCanvasSize;
-    const canvasSizeConfig = {
-      ...toPlainObject(configWithLayoutDefaults.canvasSize),
-    };
-
-    if (sizeOverrides.width > 0) {
-      canvasSizeConfig.width = sizeOverrides.width;
-    }
-
-    if (sizeOverrides.height > 0) {
-      canvasSizeConfig.height = sizeOverrides.height;
-    }
-
+  if (createdHeadlessCanvas && headlessOverrides) {
     configWithLayoutDefaults = {
       ...configWithLayoutDefaults,
-      width: sizeOverrides.width,
-      height: sizeOverrides.height,
-      canvasWidth: sizeOverrides.width,
-      canvasHeight: sizeOverrides.height,
-      canvasSize: canvasSizeConfig,
+      ...headlessOverrides,
     };
   }
 
@@ -278,7 +222,11 @@ export function createSimulation({
 
   const uiOptions = config.ui ?? {};
   const baseActions = {
-    burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
+    burst: (options = {}) => {
+      const { count = 200, radius = 6 } = options;
+
+      return engine.burstRandomCells({ count, radius });
+    },
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
     obstaclePresets: engine.obstaclePresets,
     getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
@@ -292,6 +240,8 @@ export function createSimulation({
   const simulationCallbacks = {
     requestFrame: () => engine.requestFrame(),
     togglePause: () => engine.togglePause(),
+    pause: () => engine.pause(),
+    resume: () => engine.resume(),
     step: () => engine.step(),
     onSettingChange: (key, value) => engine.updateSetting(key, value),
     resetWorld: (options) => engine.resetWorld(options),
@@ -337,6 +287,9 @@ export function createSimulation({
     update: (timestamp) => engine.tick(timestamp),
     resetWorld: (options) => engine.resetWorld(options),
     destroy: () => {
+      if (uiManager && typeof uiManager.destroy === "function") {
+        uiManager.destroy();
+      }
       while (unsubscribers.length) {
         const unsub = unsubscribers.pop();
 

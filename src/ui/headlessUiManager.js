@@ -1,5 +1,6 @@
 import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
-import { sanitizeNumber, invokeWithErrorBoundary, coerceBoolean } from "../utils.js";
+import { sanitizeNumber, coerceBoolean } from "../utils.js";
+import { invokeWithErrorBoundary } from "../utils/error.js";
 
 /**
  * Creates a lightweight {@link UIManager}-compatible adapter for environments
@@ -28,6 +29,7 @@ import { sanitizeNumber, invokeWithErrorBoundary, coerceBoolean } from "../utils
  * @param {number} [options.eventStrengthMultiplier] Event strength multiplier.
  * @param {number} [options.energyRegenRate] Baseline energy regeneration.
  * @param {number} [options.energyDiffusionRate] Ambient energy spread.
+ * @param {number} [options.initialTileEnergyFraction] Fraction of tile energy cap applied to empty tiles.
  * @param {number} [options.combatEdgeSharpness] Sharpness multiplier for combat odds.
  * @param {number} [options.combatTerritoryEdgeFactor] Territory influence multiplier for combat odds.
  * @param {number} [options.matingDiversityThreshold] Genetic similarity tolerance for mating.
@@ -37,11 +39,12 @@ import { sanitizeNumber, invokeWithErrorBoundary, coerceBoolean } from "../utils
  * @param {boolean} [options.showDensity] Whether population density overlays are shown.
  * @param {boolean} [options.showFitness] Whether fitness overlays are shown.
  * @param {number} [options.leaderboardIntervalMs] Minimum time between leaderboard updates.
- * @param {string} [options.profileGridMetrics] Profiling mode for grid instrumentation ("auto", "always", "never").
  * @param {Object} [options.selectionManager=null] Shared selection manager instance.
  * @returns {{
  *   isPaused: () => boolean,
  *   setPaused: (value: boolean) => void,
+ *   setPauseState: (value: boolean) => void,
+ *   togglePause: () => boolean,
  *   getUpdatesPerSecond: () => number,
  *   setUpdatesPerSecond: (value: number) => void,
  *   getEventFrequencyMultiplier: () => number,
@@ -54,6 +57,8 @@ import { sanitizeNumber, invokeWithErrorBoundary, coerceBoolean } from "../utils
  *   setEnergyRegenRate: (value: number) => void,
  *   getEnergyDiffusionRate: () => number,
  *   setEnergyDiffusionRate: (value: number) => void,
+ *   getInitialTileEnergyFraction: () => number,
+ *   setInitialTileEnergyFraction: (value: number) => void,
  *   getMatingDiversityThreshold: () => number,
  *   setMatingDiversityThreshold: (value: number) => void,
  *   getLowDiversityReproMultiplier: () => number,
@@ -62,8 +67,6 @@ import { sanitizeNumber, invokeWithErrorBoundary, coerceBoolean } from "../utils
  *   getShowEnergy: () => boolean,
  *   getShowDensity: () => boolean,
  *   getShowFitness: () => boolean,
- *   getProfileGridMetrics: () => string,
- *   setProfileGridMetrics: (value: string) => void,
  *   shouldRenderSlowUi: (timestamp: number) => boolean,
  *   renderMetrics: Function,
  *   renderLeaderboard: Function,
@@ -73,7 +76,14 @@ import { sanitizeNumber, invokeWithErrorBoundary, coerceBoolean } from "../utils
  * }} Headless UI facade that keeps simulation code agnostic to environment.
  */
 export function createHeadlessUiManager(options = {}) {
-  const { selectionManager, onSettingChange, ...overrides } = options || {};
+  const {
+    selectionManager,
+    onSettingChange,
+    pause: pauseControl,
+    resume: resumeControl,
+    togglePause: toggleControl,
+    ...overrides
+  } = options || {};
   const defaults = resolveSimulationDefaults(overrides);
   const settings = { ...defaults };
 
@@ -87,6 +97,45 @@ export function createHeadlessUiManager(options = {}) {
       ? baseUpdatesCandidate
       : SIMULATION_DEFAULTS.updatesPerSecond;
 
+  const callPause = () => {
+    if (typeof pauseControl === "function") {
+      const result = pauseControl();
+
+      return typeof result === "boolean" ? result : true;
+    }
+
+    if (typeof toggleControl === "function") {
+      const result = toggleControl();
+
+      return typeof result === "boolean" ? result : !settings.paused;
+    }
+
+    return true;
+  };
+
+  const callResume = () => {
+    if (typeof resumeControl === "function") {
+      const result = resumeControl();
+
+      return typeof result === "boolean" ? result : false;
+    }
+
+    if (typeof toggleControl === "function") {
+      const result = toggleControl();
+
+      return typeof result === "boolean" ? result : !settings.paused;
+    }
+
+    return false;
+  };
+
+  const applyPauseState = (nextPaused) => {
+    settings.paused = nextPaused;
+    if (!settings.paused && settings.autoPausePending) {
+      settings.autoPausePending = false;
+    }
+  };
+
   let lastSlowUiRender = Number.NEGATIVE_INFINITY;
   const updateIfFinite = (key, value, options = {}) => {
     const { min, max, round } = options || {};
@@ -98,6 +147,7 @@ export function createHeadlessUiManager(options = {}) {
     });
 
     if (!Number.isFinite(sanitized)) return false;
+    if (Object.is(settings[key], sanitized)) return false;
 
     settings[key] = sanitized;
 
@@ -114,7 +164,34 @@ export function createHeadlessUiManager(options = {}) {
   return {
     isPaused: () => settings.paused,
     setPaused: (value) => {
-      settings.paused = Boolean(value);
+      const next = Boolean(value);
+
+      if (settings.paused === next) return;
+
+      const result = next ? callPause() : callResume();
+      const resolved = typeof result === "boolean" ? result : next;
+
+      applyPauseState(resolved);
+    },
+    setPauseState: (value) => {
+      const next = Boolean(value);
+
+      if (settings.paused === next) return;
+
+      applyPauseState(next);
+    },
+    togglePause: () => {
+      const result =
+        typeof toggleControl === "function"
+          ? toggleControl()
+          : settings.paused
+            ? callResume()
+            : callPause();
+      const resolved = typeof result === "boolean" ? result : !settings.paused;
+
+      applyPauseState(resolved);
+
+      return settings.paused;
     },
     getUpdatesPerSecond: () => settings.updatesPerSecond,
     setUpdatesPerSecond: (value) => {
@@ -131,6 +208,11 @@ export function createHeadlessUiManager(options = {}) {
         notify("eventFrequencyMultiplier", settings.eventFrequencyMultiplier);
       }
     },
+    setEventStrengthMultiplier: (value) => {
+      if (updateIfFinite("eventStrengthMultiplier", value, { min: 0 })) {
+        notify("eventStrengthMultiplier", settings.eventStrengthMultiplier);
+      }
+    },
     getMaxConcurrentEvents: () => settings.maxConcurrentEvents,
     getMutationMultiplier: () => settings.mutationMultiplier,
     setMutationMultiplier: (value) => {
@@ -139,8 +221,23 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getDensityEffectMultiplier: () => settings.densityEffectMultiplier,
+    setDensityEffectMultiplier: (value) => {
+      if (updateIfFinite("densityEffectMultiplier", value, { min: 0 })) {
+        notify("densityEffectMultiplier", settings.densityEffectMultiplier);
+      }
+    },
     getSocietySimilarity: () => settings.societySimilarity,
+    setSocietySimilarity: (value) => {
+      if (updateIfFinite("societySimilarity", value, { min: 0, max: 1 })) {
+        notify("societySimilarity", settings.societySimilarity);
+      }
+    },
     getEnemySimilarity: () => settings.enemySimilarity,
+    setEnemySimilarity: (value) => {
+      if (updateIfFinite("enemySimilarity", value, { min: 0, max: 1 })) {
+        notify("enemySimilarity", settings.enemySimilarity);
+      }
+    },
     getEventStrengthMultiplier: () => settings.eventStrengthMultiplier,
     getCombatEdgeSharpness: () => settings.combatEdgeSharpness,
     getCombatTerritoryEdgeFactor: () => settings.combatTerritoryEdgeFactor,
@@ -156,6 +253,15 @@ export function createHeadlessUiManager(options = {}) {
         notify("energyDiffusionRate", settings.energyDiffusionRate);
       }
     },
+    getInitialTileEnergyFraction: () => settings.initialTileEnergyFraction,
+    setInitialTileEnergyFraction: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("initialTileEnergyFraction", value, { min: 0, max: 1 }) &&
+        shouldNotify
+      ) {
+        notify("initialTileEnergyFraction", settings.initialTileEnergyFraction);
+      }
+    },
     getMatingDiversityThreshold: () => settings.matingDiversityThreshold,
     setMatingDiversityThreshold: (value) => {
       if (updateIfFinite("matingDiversityThreshold", value, { min: 0, max: 1 })) {
@@ -163,13 +269,16 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getLowDiversityReproMultiplier: () => settings.lowDiversityReproMultiplier,
-    setLowDiversityReproMultiplier: (value) => {
-      if (updateIfFinite("lowDiversityReproMultiplier", value, { min: 0, max: 1 })) {
+    setLowDiversityReproMultiplier: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("lowDiversityReproMultiplier", value, { min: 0, max: 1 }) &&
+        shouldNotify
+      ) {
         notify("lowDiversityReproMultiplier", settings.lowDiversityReproMultiplier);
       }
     },
     setCombatEdgeSharpness: (value) => {
-      if (updateIfFinite("combatEdgeSharpness", value)) {
+      if (updateIfFinite("combatEdgeSharpness", value, { min: 0.1 })) {
         notify("combatEdgeSharpness", settings.combatEdgeSharpness);
       }
     },
@@ -193,6 +302,46 @@ export function createHeadlessUiManager(options = {}) {
     getShowDensity: () => settings.showDensity,
     getShowFitness: () => settings.showFitness,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
+    setShowObstacles: (value) => {
+      const normalized = coerceBoolean(value, settings.showObstacles);
+
+      if (settings.showObstacles === normalized) return;
+
+      settings.showObstacles = normalized;
+      notify("showObstacles", settings.showObstacles);
+    },
+    setShowEnergy: (value) => {
+      const normalized = coerceBoolean(value, settings.showEnergy);
+
+      if (settings.showEnergy === normalized) return;
+
+      settings.showEnergy = normalized;
+      notify("showEnergy", settings.showEnergy);
+    },
+    setShowDensity: (value) => {
+      const normalized = coerceBoolean(value, settings.showDensity);
+
+      if (settings.showDensity === normalized) return;
+
+      settings.showDensity = normalized;
+      notify("showDensity", settings.showDensity);
+    },
+    setShowFitness: (value) => {
+      const normalized = coerceBoolean(value, settings.showFitness);
+
+      if (settings.showFitness === normalized) return;
+
+      settings.showFitness = normalized;
+      notify("showFitness", settings.showFitness);
+    },
+    setShowLifeEventMarkers: (value) => {
+      const normalized = coerceBoolean(value, settings.showLifeEventMarkers);
+
+      if (settings.showLifeEventMarkers === normalized) return;
+
+      settings.showLifeEventMarkers = normalized;
+      notify("showLifeEventMarkers", settings.showLifeEventMarkers);
+    },
     getLeaderboardIntervalMs: () => settings.leaderboardIntervalMs,
     setLeaderboardIntervalMs: (value) => {
       if (
@@ -203,17 +352,6 @@ export function createHeadlessUiManager(options = {}) {
       ) {
         notify("leaderboardIntervalMs", settings.leaderboardIntervalMs);
       }
-    },
-    getProfileGridMetrics: () => settings.profileGridMetrics,
-    setProfileGridMetrics: (value) => {
-      const normalized = resolveSimulationDefaults({
-        profileGridMetrics: value,
-      }).profileGridMetrics;
-
-      if (settings.profileGridMetrics === normalized) return;
-
-      settings.profileGridMetrics = normalized;
-      notify("profileGridMetrics", settings.profileGridMetrics);
     },
     shouldRenderSlowUi: (timestamp) => {
       if (!Number.isFinite(timestamp)) return false;
@@ -228,7 +366,7 @@ export function createHeadlessUiManager(options = {}) {
     renderMetrics: () => {},
     renderLeaderboard: () => {},
     getAutoPauseOnBlur: () => settings.autoPauseOnBlur,
-    setAutoPauseOnBlur: (value) => {
+    setAutoPauseOnBlur: (value, { notify: shouldNotify = true } = {}) => {
       const normalized = coerceBoolean(value, settings.autoPauseOnBlur);
 
       if (settings.autoPauseOnBlur === normalized) return;
@@ -237,7 +375,9 @@ export function createHeadlessUiManager(options = {}) {
       if (!settings.autoPauseOnBlur) {
         settings.autoPausePending = false;
       }
-      notify("autoPauseOnBlur", settings.autoPauseOnBlur);
+      if (shouldNotify) {
+        notify("autoPauseOnBlur", settings.autoPauseOnBlur);
+      }
     },
     getAutoPausePending: () => settings.autoPausePending,
     setAutoPausePending: (value) => {

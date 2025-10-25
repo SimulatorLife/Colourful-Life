@@ -54,13 +54,8 @@ function baselineCoverage(manager) {
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      for (let z = 0; z < zones.length; z++) {
-        const zone = zones[z];
-
-        if (zone?.contains?.(r, c)) {
-          cells.add(`${r}:${c}`);
-          break;
-        }
+      if (zones.some((zone) => zone?.contains?.(r, c))) {
+        cells.add(`${r}:${c}`);
       }
     }
   }

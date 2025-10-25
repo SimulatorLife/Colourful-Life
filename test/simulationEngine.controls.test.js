@@ -17,6 +17,50 @@ function createEngine(modules) {
   });
 }
 
+test("SimulationEngine surfaces a helpful error when the canvas lacks getContext", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+
+  assert.throws(
+    () =>
+      new SimulationEngine({
+        canvas: { width: 10, height: 10 },
+        autoStart: false,
+        performanceNow: () => 0,
+        requestAnimationFrame: () => 0,
+        cancelAnimationFrame: () => {},
+      }),
+    /SimulationEngine requires a 2D canvas context\./,
+    "should throw descriptive error when canvas is missing getContext",
+  );
+});
+
+test("SimulationEngine disables environmental events by default", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+    });
+
+    assert.is(
+      engine.state.eventFrequencyMultiplier,
+      0,
+      "baseline state should keep the event frequency multiplier at zero",
+    );
+    assert.is(engine.eventManager.activeEvents.length, 0);
+    assert.is(engine.eventManager.currentEvent, null);
+  } finally {
+    restore();
+  }
+});
+
 test("SimulationEngine skips initial events when frequency multiplier is zero", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
@@ -276,6 +320,69 @@ test("setWorldGeometry only repopulates when reseed is requested", async () => {
   );
 
   engine.destroy?.();
+});
+
+test("setWorldGeometry applies obstacle changes without resizing", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(120, 120),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      rng: () => 0,
+    });
+
+    engine.grid.clearObstacles();
+    engine.grid.currentObstaclePreset = "none";
+
+    const baselineObstacles = engine.grid.obstacles.some((row) => row.some(Boolean));
+
+    assert.is(baselineObstacles, false, "baseline grid should be obstacle free");
+
+    const result = engine.setWorldGeometry({ obstaclePreset: "midline" });
+
+    assert.is(
+      result.rows,
+      engine.rows,
+      "rows remain unchanged when only preset changes",
+    );
+    assert.is(
+      result.cols,
+      engine.cols,
+      "cols remain unchanged when only preset changes",
+    );
+    assert.is(
+      engine.grid.currentObstaclePreset,
+      "midline",
+      "engine updates the current obstacle preset",
+    );
+    assert.ok(
+      engine.grid.obstacles.some((row) => row.some(Boolean)),
+      "applying a preset paints obstacles",
+    );
+
+    engine.grid.clearObstacles();
+    engine.grid.currentObstaclePreset = "none";
+
+    engine.setWorldGeometry({ randomizeObstacles: true });
+
+    assert.notEqual(
+      engine.grid.currentObstaclePreset,
+      "none",
+      "randomization selects a preset",
+    );
+    assert.ok(
+      engine.grid.obstacles.some((row) => row.some(Boolean)),
+      "randomized preset repaints obstacles",
+    );
+  } finally {
+    restore();
+  }
 });
 
 test("pausing stops the animation loop until work is requested", async () => {
@@ -538,6 +645,55 @@ test("autoPauseOnBlur setter keeps engine state aligned", async () => {
       engine._autoPauseResumePending,
       false,
       "disabling autopause clears any pending auto-resume markers",
+    );
+  } finally {
+    restore();
+  }
+});
+
+test("pause clears pending auto-resume flags", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine._autoPauseResumePending = true;
+    engine.state.autoPausePending = true;
+
+    engine.pause();
+
+    assert.is(engine._autoPauseResumePending, false);
+    assert.is(engine.state.autoPausePending, false);
+  } finally {
+    restore();
+  }
+});
+
+test("resetWorld clears pending auto-resume flags when stopped", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.state.paused = true;
+    engine._autoPauseResumePending = true;
+    engine.state.autoPausePending = true;
+
+    engine.stop();
+
+    engine.resetWorld();
+
+    assert.is(
+      engine._autoPauseResumePending,
+      false,
+      "resetWorld clears the internal auto-resume flag when the loop is stopped",
+    );
+    assert.is(
+      engine.state.autoPausePending,
+      false,
+      "resetWorld clears autoPausePending in engine state when stopped",
     );
   } finally {
     restore();

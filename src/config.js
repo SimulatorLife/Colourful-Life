@@ -1,4 +1,9 @@
-import { clamp, sanitizeNumber, coerceBoolean } from "./utils.js";
+import {
+  clamp,
+  sanitizeNumber,
+  sanitizePositiveInteger,
+  coerceBoolean,
+} from "./utils.js";
 
 // Centralized simulation config defaults
 const DEFAULT_MAX_TILE_ENERGY = 2;
@@ -6,14 +11,38 @@ const DEFAULT_MAX_TILE_ENERGY = 2;
 // showed regeneration recovering ~7% more energy per tick (0.0036 → 0.0039).
 // The softer clamp cushions high-traffic hubs without eliminating the density
 // pressure that keeps sparse foragers advantaged.
-const DEFAULT_REGEN_DENSITY_PENALTY = 0.42;
+const DEFAULT_REGEN_DENSITY_PENALTY = 0.39;
+// High-density probe (computeTileEnergyUpdate, density 0.85, energy 1.2)
+// showed regen climbing from ~0.00309 → ~0.00321 energy per tick when the
+// penalty eased to 0.39, enough headroom for crowded hubs to stop drifting
+// into starvation while still suppressing runaway refills in traffic pockets.
 const DEFAULT_CONSUMPTION_DENSITY_PENALTY = 0.3;
 const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
-const DEFAULT_DECAY_RETURN_FRACTION = 0.9;
+// Dialed back from 0.90 after a 45×45 headless run (`scripts/profile-energy.mjs`
+// with 0.8 seed density, 40-tick warmup, 200-tick sample) trimmed cumulative
+// starvation deaths from 875 → 861 while nudging the surviving population
+// from 114 → 116. The lighter recycling still honours the decay loop but
+// leaves a touch more scarcity in high-traffic graves so crowded clusters stop
+// bouncing between feast and famine every decay pulse.
+const DEFAULT_DECAY_RETURN_FRACTION = 0.88;
+const DEFAULT_DECAY_IMMEDIATE_SHARE = 0.25;
+const DEFAULT_DECAY_MAX_AGE = 240;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Slightly calmer baseline keeps resting viable when resources tighten.
 const DEFAULT_ACTIVITY_BASE_RATE = 0.28;
 const DEFAULT_MUTATION_CHANCE = 0.15;
+const DEFAULT_INITIAL_TILE_ENERGY_FRACTION = 0.5;
+// Relaxed from 1.15 after a 60×60 dense seeding probe
+// (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
+// where the final population recovered from ~218 → ~225 survivors.
+// The gentler surplus requirement still forces parents to stockpile beyond
+// their pickier demand fraction but keeps collapse loops from starving
+// recovering lineages before births can land.
+const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.12;
+// Telemetry defaults to highlighting the top five lineages. Expose the size so
+// headless consumers and UI presets can extend the leaderboard without touching
+// the engine internals.
+const DEFAULT_LEADERBOARD_SIZE = 5;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
@@ -49,6 +78,8 @@ export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();
 export const DECAY_RETURN_FRACTION = resolveDecayReturnFraction();
+export const DECAY_IMMEDIATE_SHARE = resolveDecayImmediateShare();
+export const DECAY_MAX_AGE = resolveDecayMaxAge();
 
 function resolveEnvNumber(
   env,
@@ -184,6 +215,45 @@ export function resolveDecayReturnFraction(env = RUNTIME_ENV) {
 }
 
 /**
+ * Resolves the fraction of recycled energy that spills immediately into
+ * neighbouring tiles when an organism decays. Environment overrides make the
+ * instantaneous redistribution tunable so deployments can emphasize on-the-spot
+ * feasts or longer, smouldering reserves without touching simulation code.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Immediate share fraction constrained to the 0..1 interval.
+ */
+export function resolveDecayImmediateShare(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE", {
+    fallback: DEFAULT_DECAY_IMMEDIATE_SHARE,
+    min: 0,
+    max: 1,
+    clampResult: true,
+  });
+}
+
+/**
+ * Resolves the maximum number of ticks a decay pool persists before it fully
+ * dissipates. Allowing deployments to extend or shorten this window makes the
+ * post-mortem energy trickle tunable without altering simulation code.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Positive integer limit on decay lifetime.
+ */
+export function resolveDecayMaxAge(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_DECAY_MAX_AGE;
+
+  return sanitizePositiveInteger(raw, {
+    fallback: DEFAULT_DECAY_MAX_AGE,
+    min: 1,
+  });
+}
+
+/**
  * Resolves the minimum normalized trait value required for stats to count an
  * organism as "active" in a category. Defaults to {@link
  * DEFAULT_TRAIT_ACTIVATION_THRESHOLD} but allows deployments to tune the
@@ -248,6 +318,29 @@ export function resolveMutationChance(env = RUNTIME_ENV) {
 }
 
 export const MUTATION_CHANCE_BASELINE = resolveMutationChance();
+/**
+ * Resolves the multiplier applied to the higher of two parents' minimum energy
+ * demand when determining whether offspring are viable. This keeps the
+ * reproduction gate configurable so deployments can tighten or loosen how much
+ * surplus energy lineages must hold before investing in offspring.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Viability multiplier clamped to the 1..2 interval.
+ */
+export function resolveOffspringViabilityBuffer(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER", {
+    fallback: DEFAULT_OFFSPRING_VIABILITY_BUFFER,
+    min: 1,
+    max: 2,
+    clampResult: true,
+  });
+}
+
+export const OFFSPRING_VIABILITY_BUFFER = resolveOffspringViabilityBuffer();
+export const INITIAL_TILE_ENERGY_FRACTION_DEFAULT =
+  DEFAULT_INITIAL_TILE_ENERGY_FRACTION;
 
 export const SIMULATION_DEFAULTS = Object.freeze({
   paused: false,
@@ -266,12 +359,14 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
   combatEdgeSharpness: COMBAT_EDGE_SHARPNESS_DEFAULT,
   combatTerritoryEdgeFactor: COMBAT_TERRITORY_EDGE_FACTOR,
+  initialTileEnergyFraction: DEFAULT_INITIAL_TILE_ENERGY_FRACTION,
   showObstacles: true,
   showEnergy: false,
   showDensity: false,
   showFitness: false,
   showLifeEventMarkers: false,
   leaderboardIntervalMs: 750,
+  leaderboardSize: DEFAULT_LEADERBOARD_SIZE,
   // Lowered from 0.45 after a 300-tick headless sample (60x60 grid, RNG seed
   // 12345) nudged mean diversity from ~0.27 to ~0.30 and bumped successful
   // matings from five to six without eliminating scarcity pressure. The softer
@@ -287,7 +382,6 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   lowDiversityReproMultiplier: 0.57,
   speedMultiplier: 1,
   autoPauseOnBlur: false,
-  profileGridMetrics: "auto",
 });
 
 const BOOLEAN_DEFAULT_KEYS = Object.freeze([
@@ -299,71 +393,6 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showLifeEventMarkers",
   "autoPauseOnBlur",
 ]);
-
-const PROFILING_MODE_ALWAYS = "always";
-const PROFILING_MODE_NEVER = "never";
-const PROFILING_MODE_AUTO = "auto";
-
-const PROFILING_KEYWORD_MAP = Object.freeze({
-  always: PROFILING_MODE_ALWAYS,
-  auto: PROFILING_MODE_AUTO,
-  automatic: PROFILING_MODE_AUTO,
-  default: PROFILING_MODE_AUTO,
-  enable: PROFILING_MODE_ALWAYS,
-  enabled: PROFILING_MODE_ALWAYS,
-  disable: PROFILING_MODE_NEVER,
-  disabled: PROFILING_MODE_NEVER,
-  metrics: PROFILING_MODE_ALWAYS,
-  never: PROFILING_MODE_NEVER,
-  off: PROFILING_MODE_NEVER,
-  on: PROFILING_MODE_ALWAYS,
-  profile: PROFILING_MODE_ALWAYS,
-  profiling: PROFILING_MODE_ALWAYS,
-  stats: PROFILING_MODE_AUTO,
-  true: PROFILING_MODE_ALWAYS,
-  false: PROFILING_MODE_NEVER,
-  yes: PROFILING_MODE_ALWAYS,
-  no: PROFILING_MODE_NEVER,
-});
-
-function normalizeProfileGridMetrics(value, fallback = PROFILING_MODE_AUTO) {
-  const fallbackMode =
-    typeof fallback === "string" && fallback.length > 0
-      ? fallback
-      : PROFILING_MODE_AUTO;
-
-  if (value === true) return PROFILING_MODE_ALWAYS;
-  if (value === false) return PROFILING_MODE_NEVER;
-
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      return fallbackMode;
-    }
-
-    if (value > 0) return PROFILING_MODE_ALWAYS;
-    if (value === 0) return PROFILING_MODE_NEVER;
-
-    return fallbackMode;
-  }
-
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-
-    if (normalized.length === 0) {
-      return fallbackMode;
-    }
-
-    if (Object.hasOwn(PROFILING_KEYWORD_MAP, normalized)) {
-      return PROFILING_KEYWORD_MAP[normalized];
-    }
-  }
-
-  if (value == null) {
-    return fallbackMode;
-  }
-
-  return fallbackMode;
-}
 
 /**
  * Resolves simulation defaults while allowing selective overrides.
@@ -401,13 +430,6 @@ export function resolveSimulationDefaults(overrides = {}) {
   } else {
     merged.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
   }
-
-  merged.profileGridMetrics = normalizeProfileGridMetrics(
-    Object.hasOwn(overrides, "profileGridMetrics")
-      ? overrides.profileGridMetrics
-      : merged.profileGridMetrics,
-    defaults.profileGridMetrics ?? PROFILING_MODE_AUTO,
-  );
 
   const concurrencyValue = Number(merged.maxConcurrentEvents);
 
@@ -463,6 +485,35 @@ export function resolveSimulationDefaults(overrides = {}) {
         ? numericSpeed
         : defaults.speedMultiplier;
   }
+
+  const initialEnergyFraction = Number(merged.initialTileEnergyFraction);
+
+  if (Number.isFinite(initialEnergyFraction)) {
+    merged.initialTileEnergyFraction = clamp(initialEnergyFraction, 0, 1);
+  } else {
+    merged.initialTileEnergyFraction = defaults.initialTileEnergyFraction;
+  }
+
+  const sanitizeNumeric = (key, options = {}) => {
+    merged[key] = sanitizeNumber(merged[key], {
+      fallback: defaults[key],
+      ...options,
+    });
+  };
+
+  sanitizeNumeric("mutationMultiplier", { min: 0 });
+  sanitizeNumeric("densityEffectMultiplier", { min: 0 });
+  sanitizeNumeric("societySimilarity", { min: 0, max: 1 });
+  sanitizeNumeric("enemySimilarity", { min: 0, max: 1 });
+  sanitizeNumeric("eventStrengthMultiplier", { min: 0 });
+  sanitizeNumeric("energyRegenRate", { min: 0 });
+  sanitizeNumeric("energyDiffusionRate", { min: 0 });
+  sanitizeNumeric("combatEdgeSharpness", { min: 0.1 });
+  sanitizeNumeric("combatTerritoryEdgeFactor", { min: 0, max: 1 });
+  sanitizeNumeric("leaderboardIntervalMs", { min: 0 });
+  sanitizeNumeric("leaderboardSize", { min: 0, round: Math.floor });
+  sanitizeNumeric("matingDiversityThreshold", { min: 0, max: 1 });
+  sanitizeNumeric("lowDiversityReproMultiplier", { min: 0, max: 1 });
 
   return merged;
 }

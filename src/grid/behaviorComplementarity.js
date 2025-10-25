@@ -50,18 +50,22 @@ export function computeBehaviorComplementarity(organismA, organismB) {
 
   if (!genesA || !genesB) return 0;
 
-  let sum = 0;
-  let count = 0;
+  const { sum, count } = INTERACTION_KEYS.reduce(
+    (accumulator, key) => {
+      const valueA = normalizeInteractionGene(genesA, key);
+      const valueB = normalizeInteractionGene(genesB, key);
 
-  for (const key of INTERACTION_KEYS) {
-    const valueA = normalizeInteractionGene(genesA, key);
-    const valueB = normalizeInteractionGene(genesB, key);
+      if (valueA == null || valueB == null) {
+        return accumulator;
+      }
 
-    if (valueA == null || valueB == null) continue;
+      accumulator.sum += Math.abs(valueA - valueB);
+      accumulator.count += 1;
 
-    sum += Math.abs(valueA - valueB);
-    count++;
-  }
+      return accumulator;
+    },
+    { sum: 0, count: 0 },
+  );
 
   if (count === 0) return 0;
 

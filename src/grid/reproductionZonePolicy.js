@@ -1,10 +1,18 @@
-import { warnOnce } from "../utils.js";
+import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
 function isFunction(fn) {
   return typeof fn === "function";
 }
 
 const ALLOW_ALL = Object.freeze({ allowed: true });
+
+const WARNINGS = Object.freeze({
+  activeZones:
+    "Selection manager threw while resolving whether reproduction zones are active.",
+  validation: "Selection manager threw during reproduction validation.",
+  membership:
+    "Selection manager threw while evaluating spawn candidate zone membership.",
+});
 
 function coerceValidationResult(result) {
   if (result && typeof result === "object" && "allowed" in result) {
@@ -46,9 +54,18 @@ export default class ReproductionZonePolicy {
   hasActiveZones() {
     const manager = this.#selectionManager;
 
-    return Boolean(
-      manager && isFunction(manager.hasActiveZones) && manager.hasActiveZones(),
-    );
+    if (!manager || !isFunction(manager.hasActiveZones)) {
+      return false;
+    }
+
+    const result = invokeWithErrorBoundary(manager.hasActiveZones, [], {
+      thisArg: manager,
+      message: WARNINGS.activeZones,
+      reporter: warnOnce,
+      once: true,
+    });
+
+    return Boolean(result);
   }
 
   validateArea({ parentA, parentB, spawn } = {}) {
@@ -58,15 +75,18 @@ export default class ReproductionZonePolicy {
       return ALLOW_ALL;
     }
 
-    try {
-      return coerceValidationResult(
-        manager.validateReproductionArea({ parentA, parentB, spawn }),
-      );
-    } catch (error) {
-      warnOnce("Selection manager threw during reproduction validation.", error);
+    const result = invokeWithErrorBoundary(
+      manager.validateReproductionArea,
+      [{ parentA, parentB, spawn }],
+      {
+        thisArg: manager,
+        message: WARNINGS.validation,
+        reporter: warnOnce,
+        once: true,
+      },
+    );
 
-      return ALLOW_ALL;
-    }
+    return coerceValidationResult(result);
   }
 
   filterSpawnCandidates(candidates) {
@@ -86,8 +106,54 @@ export default class ReproductionZonePolicy {
       return candidates;
     }
 
-    const filtered = candidates.filter(({ r, c }) => tester.call(manager, r, c));
+    let encounteredError = false;
+    const filtered = candidates.filter(({ r, c }) => {
+      const result = invokeWithErrorBoundary(tester, [r, c], {
+        thisArg: manager,
+        message: WARNINGS.membership,
+        reporter: warnOnce,
+        once: true,
+        onError: () => {
+          encounteredError = true;
+        },
+      });
+
+      return Boolean(result);
+    });
+
+    if (encounteredError) {
+      return candidates;
+    }
 
     return filtered.length > 0 ? filtered : candidates;
+  }
+
+  clearActiveZones() {
+    const manager = this.#selectionManager;
+
+    if (!manager) {
+      return;
+    }
+
+    if (typeof manager.clearActiveZones === "function") {
+      manager.clearActiveZones();
+
+      return;
+    }
+
+    if (
+      typeof manager.getPatterns === "function" &&
+      typeof manager.togglePattern === "function"
+    ) {
+      const patterns = manager.getPatterns();
+
+      if (Array.isArray(patterns)) {
+        for (const pattern of patterns) {
+          if (pattern?.id) {
+            manager.togglePattern(pattern.id, false);
+          }
+        }
+      }
+    }
   }
 }

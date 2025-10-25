@@ -16,46 +16,56 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 Colourful Life targets **Node.js 18 or newer**. After cloning the repository:
 
-```bash
-npm ci
-npm run start            # Parcel dev server with hot reloading
+1. Install dependencies with `npm ci` (or `npm install` if you prefer a non-clean install). Re-run `npm run prepare` whenever you first clone or pull changes that touch `.husky/` so the Git hooks stay active.
+2. Launch the Parcel dev server with `npm run start`, then visit `http://localhost:1234`.
+3. Open a second terminal for `npm test` whenever you change shared helpers or simulation logic. Pair it with `npm run lint` / `npm run format:check` to keep style drift from slipping into pull requests.
+4. If Parcel ever behaves strangely, run `npm run clean` to clear `dist/` and `.parcel-cache/` before restarting the dev server.
 
-# Optional helpers
-npm run build            # Production bundle written to dist/
-npm run clean            # Remove dist/ and the Parcel cache via scripts/clean-parcel.mjs
-npm run format           # Format code with Prettier
-npm run format:check     # Validate formatting without writing
-npm run format:workflows # Format GitHub workflow files (ignores .gitignore rules)
-npm run lint             # ESLint across JS modules and inline HTML
-npm run lint:fix         # ESLint with autofix enabled
-npm test                 # Node.js test suites
-npm run prepare          # Reinstall Husky hooks when the .husky folder changes
-```
+Parcel provides hot module reloading while you edit. Use `npm run build` when you need an optimized bundle in `dist/`, and see [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, and testing expectations once the quick start is familiar.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
 ### Configuration overrides
 
-Tune baseline energy and density behaviour without editing source by setting environment variables before starting the dev server or running headless scripts:
+[`src/config.js`](src/config.js) sanitizes a handful of environment variables before the simulation boots so experiments can adjust energy flow, neural temperament, and reproduction without editing source. Set them before starting the dev server or running headless scripts:
+
+**Energy and density**
 
 - `COLOURFUL_LIFE_MAX_TILE_ENERGY` — Raises or lowers the per-tile energy cap used by the energy system and heatmap legends.
-- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` — Adjusts how strongly local population density suppresses energy regeneration (0 disables the penalty, 1 matches the default cap).
-- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` — Tunes the harvesting penalty applied when crowded organisms attempt to consume energy from a tile, allowing experiments with more competitive or laissez-faire ecosystems.
-- `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Adjusts the normalized cutoff the stats system uses when counting organisms as "active" for a trait, keeping telemetry aligned with looser or stricter interpretations of participation.
-- `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` — Scales how strongly territorial advantage influences combat odds. Values outside 0–1 fall back to the default defined in [`src/config.js`](src/config.js).
-- `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` — Controls what fraction of an organism's remaining energy returns to the environment when it dies, letting you explore harsher decay losses or more generous recycling without code changes.
-- `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` — Raises or lowers the baseline neural activity genomes inherit before their DNA modifiers apply, letting you globally calm or energise populations without editing source.
-- `COLOURFUL_LIFE_MUTATION_CHANCE` — Sets the default mutation probability applied when genomes reproduce without their own override, keeping evolutionary churn adjustable from the environment.
+- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` — Controls how strongly crowding suppresses regeneration (0 disables the penalty, 1 matches the default coefficient).
+- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` — Adjusts the harvesting tax organisms pay when gathering from packed tiles so you can model cooperative or cut-throat ecosystems.
 
-Values outside their accepted ranges fall back to the defaults defined in [`src/config.js`](src/config.js) so experiments remain predictable across environments and overlays stay aligned with the active configuration.
+**Lifecycle and territory**
+
+- `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` — Determines what fraction of a corpse's remaining energy returns to the grid as it decomposes.
+- `COLOURFUL_LIFE_DECAY_MAX_AGE` — Limits how long post-mortem energy lingers before dissipating.
+- `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` — Scales territorial advantage in combat. Values outside 0–1 are clamped back to the default.
+
+**Neural activity and evolution**
+
+- `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` — Adjusts the baseline neural activity genomes inherit before DNA modifiers apply.
+- `COLOURFUL_LIFE_MUTATION_CHANCE` — Sets the default mutation probability applied when genomes reproduce without their own override.
+- `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Tunes the normalized cutoff the stats system uses when counting organisms as "active" for a trait.
+- `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` — Scales how much surplus energy parents must bank beyond the strictest genome's demand before gestation begins.
+
+Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/config.js) so overlays remain aligned with the active configuration. The [developer guide](docs/developer-guide.md#configuration-overrides) walks through how these knobs interact when running longer experiments.
 
 ### Life event marker overlay
 
-Enable **Life Event Markers** in the Overlays panel to spotlight where births and deaths just occurred. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps.
+Enable **Life Event Markers** in the Overlays panel to spotlight where births and deaths just occurred. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps. Architecture details live in [`docs/architecture-overview.md`](docs/architecture-overview.md#ui-and-overlays) for readers interested in extending the renderer.
 
 ### Obstacle layout presets
 
 Select a **Layout Preset** in the Obstacles panel to immediately swap the grid's obstacle mask. The dropdown now applies changes as soon as you choose a preset, streamlining the workflow when experimenting with layouts. Use **Clear Obstacles** to reset the field if you need a blank slate again.
+Hit **Shuffle Layout** to roll a random preset from the catalog without reaching for the dropdown—perfect for sparking new map ideas mid-run.
+
+### Empty tile energy slider
+
+Find **Empty Tile Energy** in the Energy Dynamics panel to instantly rebalance how much resource sits on empty terrain. Drag the slider to rehydrate barren ground up to the shown percentage of the tile cap, or dial it down to create harsher survival conditions. Adjustments apply immediately to vacant tiles and set the baseline used for future world regenerations, so you can experiment with lush gardens or austere wastelands without restarting the app.
+
+### Restore default tuning
+
+Nudged a dozen sliders into a corner and want to get back to the canonical baseline? Hit **Restore Default Tuning** in the Simulation Controls panel. The button snaps similarity thresholds, environmental multipliers, energy flow rates, mutation and combat modifiers, playback speed, and the dashboard refresh cadence back to their default values so you can restart experiments without manually retracing every tweak.
 
 ### Keyboard shortcuts
 
@@ -78,7 +88,7 @@ The simulation runs on cooperating modules housed in `src/`:
 - **Genetics and brains** (`src/genome.js`, `src/brain.js`) — DNA factories encode traits ranging from combat appetite to neural wiring. Brains interpret sensor inputs, adapt gains over time, and emit movement/interaction intents.
 - **Interaction system** (`src/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
 - **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and color overlays.
-- **Stats & leaderboard** (`src/stats.js`, `src/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface active environmental event summaries (intensity, coverage, and remaining duration), and select the top-performing organisms. Organism age readings surfaced here and in the UI are measured in simulation ticks so observers can translate them into seconds using the active tick rate.
+- **Stats & leaderboard** (`src/stats.js`, `src/engine/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface active environmental event summaries (intensity, coverage, and remaining duration), and select the top-performing organisms. Organism age readings surfaced here and in the UI are measured in simulation ticks so observers can translate them into seconds using the active tick rate.
   The Evolution Insights panel also exposes a simulation clock that reports both elapsed simulated time and the total tick count so observers no longer need to estimate pacing manually.
 - **Fitness scoring** (`src/fitness.mjs`) — Computes composite organism fitness used by the leaderboard, overlays, and telemetry, blending survival, reproduction, and energy trends.
 - **UI manager** (`src/ui/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/ui/headlessUiManager.js` mirrors the interface for tests and Node scripts.
@@ -91,7 +101,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 
 ## Headless and embedded usage
 
-`createSimulation` exported from [`src/main.js`](src/main.js) stitches together the engine, UI, overlays, and lifecycle helpers. Pass `{ headless: true }` to obtain a headless controller for automation or tests and inject `{ requestAnimationFrame, cancelAnimationFrame, performanceNow }` to supply deterministic timing in non-browser environments. The helper will:
+`createSimulation` exported from [`src/main.js`](src/main.js) stitches together the engine, UI, overlays, and lifecycle helpers. Pass `{ headless: true }` to obtain a headless controller for automation or tests and inject `{ requestAnimationFrame, cancelAnimationFrame, performanceNow }` to supply deterministic timing in non-browser environments. The helper will (see the [developer guide's headless checklist](docs/developer-guide.md#tooling) for supporting scripts and environment tips):
 
 - Resolve or create a canvas using [`resolveCanvas`](src/engine/environment.js) and [`ensureCanvasDimensions`](src/engine/environment.js).
 - Construct the grid, stats, selection manager, and event manager, exposing them on the returned controller (`{ grid, stats, selectionManager, eventManager }`).
@@ -120,7 +130,7 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 - **Linting** — `npm run lint` enforces the ESLint + Prettier ruleset across JavaScript and inline HTML. Use `npm run lint:fix` to auto-resolve minor issues.
 - **Testing** — `npm test` runs the Node.js test suites. Tests cover grid utilities, selection logic, and regression harnesses. Add cases when behaviours change.
 - **Profiling** — `node scripts/profile-energy.mjs` benchmarks the energy preparation loop. Adjust rows/cols via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and the stub `cellSize` with `PERF_CELL_SIZE` environment variables. Enable the heavier SimulationEngine benchmark with `PERF_INCLUDE_SIM=1` when you specifically need tick timings.
-- **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap. Use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures, `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` to retune telemetry cutoffs, `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` to calm or emphasise territorial combat bias, `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` to globally energise or relax genomes, and `COLOURFUL_LIFE_MUTATION_CHANCE` to adjust baseline evolutionary churn without modifying source defaults.
+- **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap. Use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures, `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` to retune telemetry cutoffs, `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` to calm or emphasise territorial combat bias, `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` and `COLOURFUL_LIFE_DECAY_MAX_AGE` to shape post-mortem energy recycling, `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` to globally energise or relax genomes, `COLOURFUL_LIFE_MUTATION_CHANCE` to adjust baseline evolutionary churn, and `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` to demand more or less surplus energy before births without modifying source defaults (the relaxed `1.12` baseline lifted a dense 60×60 headless probe from ~218 → 225 survivors after 120 ticks while keeping scarcity pressure intact).
 - **Headless usage** — `createSimulation` accepts `{ headless: true }` to return a controller without mounting DOM controls. Inject `requestAnimationFrame`, `performanceNow`, or RNG hooks for deterministic automation.
 - **Documentation** — Follow the conventions in [`docs/developer-guide.md`](docs/developer-guide.md) when updating code comments, tests, or user-facing docs.
 
@@ -140,16 +150,17 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 ## Key scripts and commands
 
-| Command                                                                | Purpose                                                                                                                                                |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `npm run start`                                                        | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.                                                           |
-| `npm run build`                                                        | Produce an optimized production bundle in `dist/`.                                                                                                     |
-| `npm run clean`                                                        | Remove `dist/` and `.parcel-cache/` via `scripts/clean-parcel.mjs`. Pass `--dry-run` to validate without deleting files.                               |
-| `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                                                         |
-| `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions.                                   |
-| `npm test`                                                             | Execute the Node.js test suites covering simulation and UI modules.                                                                                    |
-| `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                                                                 |
-| `node scripts/profile-energy.mjs`                                      | Benchmark the energy preparation loop with configurable grid sizes via environment variables; add `PERF_INCLUDE_SIM=1` to time SimulationEngine ticks. |
+| Command                                                                | Purpose                                                                                                                       |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `npm run start`                                                        | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.                                  |
+| `npm run build`                                                        | Produce an optimized production bundle in `dist/`.                                                                            |
+| `npm run clean [-- --dry-run]`                                         | Remove `dist/` and `.parcel-cache/` via `scripts/clean-parcel.mjs`, or preview the removals first with `--dry-run`.           |
+| `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                                |
+| `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions.          |
+| `npm test`                                                             | Execute the Node.js test suites covering simulation and UI modules.                                                           |
+| `npm run benchmark`                                                    | Profile the energy preparation loop via `scripts/profile-energy.mjs`; combine with `PERF_*` variables to mirror CI scenarios. |
+| `npm run deploy:public`                                                | Publish the production bundle to a public Git repository using `scripts/publish-public-build.sh`.                             |
+| `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                                        |
 
 ## Further reading
 
@@ -164,4 +175,5 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 - [`docs/architecture-overview.md`](docs/architecture-overview.md) details module boundaries, update loops, subsystem hand-offs, and the UI bridge.
 - [`docs/developer-guide.md`](docs/developer-guide.md) covers environment setup, workflow practices, and expectations for testing and documentation.
+- [`docs/public-hosting.md`](docs/public-hosting.md) explains how to publish the compiled build to a separate public repository or GitHub Pages site.
 - [`CHANGELOG.md`](CHANGELOG.md) captures notable changes between releases so contributors can track evolution over time.

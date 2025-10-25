@@ -34,11 +34,18 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   manager.setEventFrequencyMultiplier(-0.1);
   manager.setEventFrequencyMultiplier("oops");
 
+  manager.setDensityEffectMultiplier(0.8);
+  manager.setDensityEffectMultiplier(-1);
+  manager.setDensityEffectMultiplier("oops");
+
   manager.setEnergyRegenRate(0.12);
   manager.setEnergyRegenRate(-0.3);
 
   manager.setEnergyDiffusionRate(0.45);
   manager.setEnergyDiffusionRate("oops");
+
+  manager.setInitialTileEnergyFraction(0.8);
+  manager.setInitialTileEnergyFraction("oops");
 
   manager.setAutoPauseOnBlur(true);
 
@@ -54,9 +61,12 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
     ["leaderboardIntervalMs", 1250],
     ["eventFrequencyMultiplier", 1.25],
     ["eventFrequencyMultiplier", 0],
+    ["densityEffectMultiplier", 0.8],
+    ["densityEffectMultiplier", 0],
     ["energyRegenRate", 0.12],
     ["energyRegenRate", 0],
     ["energyDiffusionRate", 0.45],
+    ["initialTileEnergyFraction", 0.8],
     ["autoPauseOnBlur", true],
   ]);
 
@@ -68,9 +78,81 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   assert.is(manager.getMaxConcurrentEvents(), 0);
   assert.is(manager.getLeaderboardIntervalMs(), 1250);
   assert.is(manager.getEventFrequencyMultiplier(), 0);
+  assert.is(manager.getDensityEffectMultiplier(), 0);
   assert.is(manager.getEnergyRegenRate(), 0);
   assert.is(manager.getEnergyDiffusionRate(), 0.45);
+  assert.is(manager.getInitialTileEnergyFraction(), 0.8);
   assert.is(manager.getAutoPauseOnBlur(), true);
+});
+
+test("createHeadlessUiManager clamps combat sharpness to the engine minimum", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  manager.setCombatEdgeSharpness(-2.5);
+
+  assert.equal(notifications, [["combatEdgeSharpness", 0.1]]);
+  assert.is(manager.getCombatEdgeSharpness(), 0.1);
+});
+
+test("createHeadlessUiManager pause controls delegate to simulation callbacks", () => {
+  const calls = [];
+  const manager = createHeadlessUiManager({
+    pause: () => {
+      calls.push("pause");
+
+      return true;
+    },
+    resume: () => {
+      calls.push("resume");
+
+      return false;
+    },
+  });
+
+  assert.is(manager.isPaused(), false);
+
+  manager.setPaused(true);
+  assert.equal(calls, ["pause"]);
+  assert.is(manager.isPaused(), true);
+
+  manager.setPaused(true);
+  assert.equal(calls, ["pause"]);
+
+  manager.togglePause();
+  assert.equal(calls, ["pause", "resume"]);
+  assert.is(manager.isPaused(), false);
+
+  manager.setPauseState(true);
+  assert.is(manager.isPaused(), true);
+
+  manager.setPauseState(false);
+  assert.is(manager.isPaused(), false);
+});
+
+test("createHeadlessUiManager falls back to togglePause when dedicated controls missing", () => {
+  const toggled = [];
+  let paused = false;
+  const manager = createHeadlessUiManager({
+    togglePause: () => {
+      paused = !paused;
+      toggled.push(paused);
+
+      return paused;
+    },
+  });
+
+  manager.setPauseState(paused);
+
+  manager.setPaused(true);
+  assert.equal(toggled, [true]);
+  assert.is(manager.isPaused(), true);
+
+  manager.setPaused(false);
+  assert.equal(toggled, [true, false]);
+  assert.is(manager.isPaused(), false);
 });
 
 test("createHeadlessUiManager shouldRenderSlowUi enforces the cadence window", () => {
@@ -118,6 +200,26 @@ test("createHeadlessUiManager exposes leaderboard cadence controls", () => {
   assert.is(manager.shouldRenderSlowUi(120), true);
 });
 
+test("createHeadlessUiManager allows adjusting the event strength multiplier", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    eventStrengthMultiplier: 1.1,
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  assert.type(manager.setEventStrengthMultiplier, "function");
+
+  manager.setEventStrengthMultiplier(-1);
+  manager.setEventStrengthMultiplier("oops");
+  manager.setEventStrengthMultiplier(2.4);
+
+  assert.equal(notifications, [
+    ["eventStrengthMultiplier", 0],
+    ["eventStrengthMultiplier", 2.4],
+  ]);
+  assert.is(manager.getEventStrengthMultiplier(), 2.4);
+});
+
 test("createHeadlessUiManager allows adjusting the mutation multiplier", () => {
   const notifications = [];
   const manager = createHeadlessUiManager({
@@ -136,6 +238,79 @@ test("createHeadlessUiManager allows adjusting the mutation multiplier", () => {
     ["mutationMultiplier", 1.5],
   ]);
   assert.is(manager.getMutationMultiplier(), 1.5);
+});
+
+test("createHeadlessUiManager allows adjusting similarity thresholds", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    societySimilarity: 0.6,
+    enemySimilarity: 0.3,
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  assert.type(manager.setSocietySimilarity, "function");
+  assert.type(manager.setEnemySimilarity, "function");
+
+  manager.setSocietySimilarity("nan");
+  manager.setSocietySimilarity(0.9);
+  manager.setSocietySimilarity("0.4");
+
+  manager.setEnemySimilarity(2);
+  manager.setEnemySimilarity("oops");
+
+  assert.equal(notifications, [
+    ["societySimilarity", 0.9],
+    ["societySimilarity", 0.4],
+    ["enemySimilarity", 1],
+  ]);
+
+  assert.is(manager.getSocietySimilarity(), 0.4);
+  assert.is(manager.getEnemySimilarity(), 1);
+});
+
+test("createHeadlessUiManager exposes overlay visibility toggles", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    showObstacles: false,
+    showEnergy: true,
+    showDensity: false,
+    showFitness: false,
+    showLifeEventMarkers: true,
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  assert.is(manager.getShowObstacles(), false);
+  assert.is(manager.getShowEnergy(), true);
+  assert.is(manager.getShowDensity(), false);
+  assert.is(manager.getShowFitness(), false);
+  assert.is(manager.getShowLifeEventMarkers(), true);
+
+  manager.setShowObstacles("true");
+  manager.setShowObstacles(true); // should not notify again
+
+  manager.setShowEnergy("false");
+  manager.setShowEnergy(0); // no change
+
+  manager.setShowDensity("1");
+
+  manager.setShowFitness("yes");
+
+  manager.setShowLifeEventMarkers("no");
+  manager.setShowLifeEventMarkers(false); // no change
+
+  assert.equal(notifications, [
+    ["showObstacles", true],
+    ["showEnergy", false],
+    ["showDensity", true],
+    ["showFitness", true],
+    ["showLifeEventMarkers", false],
+  ]);
+
+  assert.is(manager.getShowObstacles(), true);
+  assert.is(manager.getShowEnergy(), false);
+  assert.is(manager.getShowDensity(), true);
+  assert.is(manager.getShowFitness(), true);
+  assert.is(manager.getShowLifeEventMarkers(), false);
 });
 
 test("createHeadlessUiManager setAutoPauseOnBlur normalizes string inputs", () => {
