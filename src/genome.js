@@ -4,6 +4,7 @@ import {
   ACTIVITY_BASE_RATE,
   MUTATION_CHANCE_BASELINE,
   OFFSPRING_VIABILITY_BUFFER,
+  DECAY_RETURN_FRACTION,
 } from "./config.js";
 
 const ACTIVITY_RATE_SPAN = 0.7;
@@ -897,6 +898,40 @@ export class DNA {
     const relief = baseline + (1 - baseline) * eased;
 
     return clamp(relief, 0.05, 1);
+  }
+
+  decayEnergyReturnFraction(globalFraction = DECAY_RETURN_FRACTION) {
+    const baseline = clamp(
+      Number.isFinite(globalFraction) ? globalFraction : DECAY_RETURN_FRACTION,
+      0,
+      0.98,
+    );
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
+    const coldResist = this.geneFraction(GENE_LOCI.RESIST_COLD);
+    const droughtResist = this.geneFraction(GENE_LOCI.RESIST_DROUGHT);
+    const heatResist = this.geneFraction(GENE_LOCI.RESIST_HEAT);
+    const resilience = (recovery + efficiency + capacity + coldResist) / 4;
+    const weathering = (droughtResist + heatResist) / 2;
+    const structureScore = density;
+    const conservationScore =
+      0.4 * structureScore + 0.35 * resilience + 0.25 * weathering;
+    const rng = this.prngFor("decayEnergyReturnFraction");
+    const jitter = (rng() - 0.5) * 0.06;
+    const centered = conservationScore - 0.5 + jitter;
+    const upwardAllowance = Math.min(0.35, 0.18 + baseline * 0.4);
+    const downwardAllowance = Math.min(0.4, 0.2 + (1 - baseline) * 0.45);
+    const adjustment =
+      centered >= 0 ? centered * upwardAllowance : centered * downwardAllowance;
+    const bounded = clamp(
+      baseline + adjustment,
+      Math.max(0, baseline - downwardAllowance),
+      Math.min(0.98, baseline + upwardAllowance),
+    );
+
+    return clamp(bounded, 0.05, 0.98);
   }
 
   metabolicProfile() {
