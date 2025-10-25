@@ -1609,6 +1609,7 @@ export default class GridManager {
     this.#ensureOccupantRegenBuffers(rows, cols);
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
+    this.obstacleRowCounts = new Uint32Array(rows);
     this.#resetObstacleRenderCache();
     this.eventManager = resolvedEventManager;
     this.eventContext = createEventContext(eventContext);
@@ -2441,6 +2442,10 @@ export default class GridManager {
       this.#markObstacleRenderDirty();
     }
 
+    if (this.obstacleRowCounts) {
+      this.obstacleRowCounts.fill(0);
+    }
+
     this.currentObstaclePreset = "none";
   }
 
@@ -2451,6 +2456,11 @@ export default class GridManager {
     if (!blocked) {
       if (wasBlocked) {
         this.obstacles[row][col] = false;
+        if (this.obstacleRowCounts) {
+          const counts = this.obstacleRowCounts;
+
+          if (counts[row] > 0) counts[row] -= 1;
+        }
         this.#markObstacleRenderDirty();
       } else {
         this.obstacles[row][col] = false;
@@ -2462,6 +2472,9 @@ export default class GridManager {
     this.obstacles[row][col] = true;
 
     if (!wasBlocked) {
+      if (this.obstacleRowCounts) {
+        this.obstacleRowCounts[row] += 1;
+      }
       const occupant = this.grid[row][col];
 
       if (occupant && evict) {
@@ -2868,6 +2881,7 @@ export default class GridManager {
     this.#ensureOccupantRegenBuffers(rowsInt, colsInt);
     this.#initializeDecayBuffers(rowsInt, colsInt);
     this.obstacles = Array.from({ length: rowsInt }, () => Array(colsInt).fill(false));
+    this.obstacleRowCounts = new Uint32Array(rowsInt);
     this.#resetObstacleRenderCache();
     this.#resetImageDataBuffer();
     this.densityCounts = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
@@ -2993,6 +3007,9 @@ export default class GridManager {
           this.#occupantRegenVersion[row][col] = 0;
         }
       }
+    }
+    if (this.obstacleRowCounts) {
+      this.obstacleRowCounts.fill(0);
     }
 
     this.activeCells.clear();
@@ -3481,6 +3498,7 @@ export default class GridManager {
       dirtyCount > 0 &&
       dirtyCount < totalTiles &&
       dirtyCount / totalTiles <= ENERGY_SPARSE_SCAN_RATIO;
+    const obstacleRowCounts = this.obstacleRowCounts;
 
     const processTileBase = (
       r,
@@ -3488,12 +3506,13 @@ export default class GridManager {
       energyRow,
       nextRow,
       deltaRow,
+      hasDeltaRow,
       densityRow,
       obstacleRow,
       gridRow,
       upEnergyRow,
-      downEnergyRow,
       upObstacleRow,
+      downEnergyRow,
       downObstacleRow,
       occupantRegenRow,
       occupantRegenVersionRow,
@@ -3501,25 +3520,23 @@ export default class GridManager {
       regenAdd = 0,
       drain = 0,
     ) => {
-      if (!nextRow || !energyRow) return;
-
       const isObstacle = obstacleRow && obstacleRow[c];
 
       if (isObstacle) {
         nextRow[c] = 0;
         energyRow[c] = 0;
-        if (deltaRow) deltaRow[c] = 0;
+        if (hasDeltaRow) deltaRow[c] = 0;
 
         return;
       }
 
-      let density = densityRow ? densityRow[c] : undefined;
+      let densityValue = densityRow ? densityRow[c] : undefined;
 
-      if (density == null) {
-        density = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
+      if (densityValue == null) {
+        densityValue = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
       }
 
-      let effectiveDensity = (density ?? 0) * normalizedDensityMultiplier;
+      let effectiveDensity = (densityValue ?? 0) * normalizedDensityMultiplier;
 
       if (effectiveDensity <= 0) {
         effectiveDensity = 0;
@@ -3527,26 +3544,20 @@ export default class GridManager {
         effectiveDensity = 1;
       }
 
-      const currentEnergy = energyRow[c] ?? 0;
+      const currentEnergy = energyRow[c];
       let regen = 0;
 
       if (positiveMaxTileEnergy > 0) {
         const deficit = positiveMaxTileEnergy - currentEnergy;
 
         if (deficit > 0) {
-          regen = regenRate * deficit;
+          const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
+
+          if (regenPenalty > 0) {
+            regen = regenRate * deficit * regenPenalty;
+          }
         }
       }
-
-      const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
-
-      if (regenPenalty <= 0) {
-        regen = 0;
-      } else {
-        regen *= regenPenalty;
-      }
-
-      regen = regen * regenMultiplier + regenAdd;
 
       let diffusion = 0;
 
@@ -3579,7 +3590,19 @@ export default class GridManager {
         }
       }
 
-      let nextEnergy = currentEnergy + regen - drain + diffusion;
+      if (regenMultiplier !== 1) {
+        regen *= regenMultiplier;
+      }
+
+      if (regenAdd !== 0) {
+        regen += regenAdd;
+      }
+
+      let nextEnergy = currentEnergy + regen + diffusion;
+
+      if (drain !== 0) {
+        nextEnergy -= drain;
+      }
 
       if (nextEnergy <= 0) {
         nextEnergy = 0;
@@ -3595,14 +3618,15 @@ export default class GridManager {
 
         nextRow[c] = 0;
         energyRow[c] = 0;
-        if (deltaRow) deltaRow[c] = 0;
+        if (hasDeltaRow) deltaRow[c] = 0;
 
         return;
       }
 
       nextRow[c] = nextEnergy;
+      energyRow[c] = nextEnergy;
 
-      if (deltaRow) {
+      if (hasDeltaRow) {
         let normalizedDelta = (nextEnergy - currentEnergy) * invMaxTileEnergy;
 
         if (normalizedDelta < -1) {
@@ -3662,13 +3686,21 @@ export default class GridManager {
           if (!energyRow || !nextRow) continue;
 
           const deltaRow = deltaGrid ? deltaGrid[r] : null;
+          const hasDeltaRow = Boolean(deltaRow);
           const densityRow = hasDensityGrid ? densityGrid[r] : null;
-          const obstacleRow = obstacles[r];
+          const rowObstacleCount = obstacleRowCounts ? obstacleRowCounts[r] : 0;
+          const obstacleRow = rowObstacleCount > 0 ? obstacles[r] : null;
           const gridRow = this.grid[r];
           const upEnergyRow = r > 0 ? energyGrid[r - 1] : null;
+          const upObstacleRow =
+            r > 0 && obstacleRowCounts && obstacleRowCounts[r - 1] > 0
+              ? obstacles[r - 1]
+              : null;
           const downEnergyRow = r < rows - 1 ? energyGrid[r + 1] : null;
-          const upObstacleRow = r > 0 ? obstacles[r - 1] : null;
-          const downObstacleRow = r < rows - 1 ? obstacles[r + 1] : null;
+          const downObstacleRow =
+            r < rows - 1 && obstacleRowCounts && obstacleRowCounts[r + 1] > 0
+              ? obstacles[r + 1]
+              : null;
           const occupantRegenRow = occupantRegenGrid ? occupantRegenGrid[r] : null;
           const occupantRegenVersionRow = occupantRegenVersion
             ? occupantRegenVersion[r]
@@ -3737,18 +3769,18 @@ export default class GridManager {
                 energyRow,
                 nextRow,
                 deltaRow,
+                hasDeltaRow,
                 densityRow,
                 obstacleRow,
                 gridRow,
                 upEnergyRow,
-                downEnergyRow,
                 upObstacleRow,
+                downEnergyRow,
                 downObstacleRow,
                 occupantRegenRow,
                 occupantRegenVersionRow,
               );
               processedTileCount += 1;
-              energyRow[c] = nextRow[c];
             }
 
             continue;
@@ -3774,12 +3806,13 @@ export default class GridManager {
                 energyRow,
                 nextRow,
                 deltaRow,
+                hasDeltaRow,
                 densityRow,
                 obstacleRow,
                 gridRow,
                 upEnergyRow,
-                downEnergyRow,
                 upObstacleRow,
+                downEnergyRow,
                 downObstacleRow,
                 occupantRegenRow,
                 occupantRegenVersionRow,
@@ -3793,12 +3826,13 @@ export default class GridManager {
                 energyRow,
                 nextRow,
                 deltaRow,
+                hasDeltaRow,
                 densityRow,
                 obstacleRow,
                 gridRow,
                 upEnergyRow,
-                downEnergyRow,
                 upObstacleRow,
+                downEnergyRow,
                 downObstacleRow,
                 occupantRegenRow,
                 occupantRegenVersionRow,
@@ -3808,7 +3842,6 @@ export default class GridManager {
               );
             }
             processedTileCount += 1;
-            energyRow[c] = nextRow[c];
           }
         }
       }
@@ -3821,13 +3854,21 @@ export default class GridManager {
         const energyRow = energyGrid[r];
         const nextRow = next[r];
         const deltaRow = deltaGrid ? deltaGrid[r] : null;
+        const hasDeltaRow = Boolean(deltaRow);
         const densityRow = hasDensityGrid ? densityGrid[r] : null;
-        const obstacleRow = obstacles[r];
+        const rowObstacleCount = obstacleRowCounts ? obstacleRowCounts[r] : 0;
+        const obstacleRow = rowObstacleCount > 0 ? obstacles[r] : null;
         const gridRow = this.grid[r];
         const upEnergyRow = r > 0 ? energyGrid[r - 1] : null;
+        const upObstacleRow =
+          r > 0 && obstacleRowCounts && obstacleRowCounts[r - 1] > 0
+            ? obstacles[r - 1]
+            : null;
         const downEnergyRow = r < rows - 1 ? energyGrid[r + 1] : null;
-        const upObstacleRow = r > 0 ? obstacles[r - 1] : null;
-        const downObstacleRow = r < rows - 1 ? obstacles[r + 1] : null;
+        const downObstacleRow =
+          r < rows - 1 && obstacleRowCounts && obstacleRowCounts[r + 1] > 0
+            ? obstacles[r + 1]
+            : null;
         const occupantRegenRow = occupantRegenGrid ? occupantRegenGrid[r] : null;
         const occupantRegenVersionRow = occupantRegenVersion
           ? occupantRegenVersion[r]
@@ -3886,12 +3927,13 @@ export default class GridManager {
                 energyRow,
                 nextRow,
                 deltaRow,
+                hasDeltaRow,
                 densityRow,
                 obstacleRow,
                 gridRow,
                 upEnergyRow,
-                downEnergyRow,
                 upObstacleRow,
+                downEnergyRow,
                 downObstacleRow,
                 occupantRegenRow,
                 occupantRegenVersionRow,
@@ -3905,12 +3947,13 @@ export default class GridManager {
                 energyRow,
                 nextRow,
                 deltaRow,
+                hasDeltaRow,
                 densityRow,
                 obstacleRow,
                 gridRow,
                 upEnergyRow,
-                downEnergyRow,
                 upObstacleRow,
+                downEnergyRow,
                 downObstacleRow,
                 occupantRegenRow,
                 occupantRegenVersionRow,
@@ -3937,12 +3980,13 @@ export default class GridManager {
               energyRow,
               nextRow,
               deltaRow,
+              hasDeltaRow,
               densityRow,
               obstacleRow,
               gridRow,
               upEnergyRow,
-              downEnergyRow,
               upObstacleRow,
+              downEnergyRow,
               downObstacleRow,
               occupantRegenRow,
               occupantRegenVersionRow,
@@ -3964,12 +4008,13 @@ export default class GridManager {
             energyRow,
             nextRow,
             deltaRow,
+            hasDeltaRow,
             densityRow,
             obstacleRow,
             gridRow,
             upEnergyRow,
-            downEnergyRow,
             upObstacleRow,
+            downEnergyRow,
             downObstacleRow,
             occupantRegenRow,
             occupantRegenVersionRow,
