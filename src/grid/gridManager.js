@@ -3069,6 +3069,10 @@ export default class GridManager {
     const segmentedModifiersScratch = { regenMultiplier: 1, regenAdd: 0, drain: 0 };
 
     if (hasEvents && usingSegmentedEvents && eventOptions) {
+      // When events can be segmented, precompute the contribution of each
+      // individual event once. Later tile evaluations simply multiply these
+      // cached values instead of rebuilding the modifier set for every tile,
+      // eliminating a major O(n_events * n_tiles) hotspot in dense areas.
       segmentedEventContributions = new Map();
       const previousRow = eventOptions.row;
       const previousCol = eventOptions.col;
@@ -3166,6 +3170,8 @@ export default class GridManager {
       }
 
       if (segmentedEventContributions) {
+        // Aggregating cached segments keeps the modifier resolution path
+        // simple while still respecting multiplicative regen effects.
         let regenMultiplier = 1;
         let regenAdd = 0;
         let drain = 0;
