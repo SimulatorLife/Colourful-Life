@@ -507,6 +507,54 @@ test("overlay visibility coercion handles string inputs", async () => {
   }
 });
 
+test("overlay visibility changes request a redraw while paused", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+  const scheduled = [];
+
+  try {
+    let handle = 0;
+    const engine = new modules.SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: (cb) => {
+        scheduled.push(cb);
+
+        return ++handle;
+      },
+      cancelAnimationFrame: () => {},
+    });
+
+    engine.start();
+    engine.pause();
+
+    while (scheduled.length) {
+      const callback = scheduled.shift();
+
+      callback?.(0);
+    }
+
+    assert.is(
+      scheduled.length,
+      0,
+      "paused engines should clear pending frames without rearming the loop",
+    );
+
+    engine.setOverlayVisibility({ showEnergy: true });
+
+    assert.is(
+      scheduled.length,
+      1,
+      "overlay toggles while paused should request a redraw",
+    );
+
+    engine.destroy?.();
+  } finally {
+    restore();
+  }
+});
+
 test("setAutoPauseOnBlur coerces string inputs", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
