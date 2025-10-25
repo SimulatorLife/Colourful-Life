@@ -202,6 +202,28 @@ export function sanitizePositiveInteger(
 }
 
 /**
+ * Returns the first finite, positive number from the provided candidates. When
+ * no candidate qualifies, the supplied fallback is returned instead.
+ *
+ * @param {Iterable<any>} candidates - Values inspected in order.
+ * @param {number|null} [fallback=null] - Value used when no positive number is found.
+ * @returns {number|null} First finite positive candidate or the fallback when none qualify.
+ */
+export function pickFirstFinitePositive(candidates, fallback = null) {
+  if (!candidates) return fallback;
+
+  for (const candidate of candidates) {
+    const numeric = toFiniteOrNull(candidate);
+
+    if (numeric != null && numeric > 0) {
+      return numeric;
+    }
+  }
+
+  return fallback;
+}
+
+/**
  * Converts an arbitrary value to a finite `number` or `null` when conversion
  * fails. Useful when callers need to discard invalid inputs such as `NaN`,
  * infinities, empty strings, or non-numeric primitives before applying further

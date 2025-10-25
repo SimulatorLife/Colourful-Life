@@ -7,6 +7,7 @@ import {
   coerceBoolean,
   sanitizeNumber,
   sanitizePositiveInteger,
+  pickFirstFinitePositive,
   cloneTracePayload,
   createRankedBuffer,
   createRNG,
@@ -73,6 +74,24 @@ test("coerceBoolean normalizes boolean-like values with sane fallbacks", () => {
 
   assert.is(coerceBoolean({}), true, "objects coerce via Boolean constructor");
   assert.is(coerceBoolean(Symbol("token")), true, "symbols coerce to true");
+});
+
+test("pickFirstFinitePositive selects the earliest positive candidate", () => {
+  assert.is(
+    pickFirstFinitePositive([null, undefined, "", "5", 3]),
+    5,
+    "stringified numbers are converted",
+  );
+  assert.is(
+    pickFirstFinitePositive([0, -2, Number.NaN, "-5", BigInt(7)]),
+    7,
+    "BigInt candidates are coerced when finite",
+  );
+  assert.is(
+    pickFirstFinitePositive([0, null, undefined], 42),
+    42,
+    "fallback is returned when no candidate qualifies",
+  );
 });
 
 test("cloneTracePayload performs deep copies of sensors and nodes", () => {
