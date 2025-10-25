@@ -122,6 +122,14 @@ change behaviour without touching source:
 - `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` tempers or emphasises territorial
   advantage in combat. Values outside 0–1 are clamped back to the default.
 
+**Telemetry and dashboards**
+
+- `config.leaderboardSize` (or
+  `resolveSimulationDefaults({ leaderboardSize })`) controls how many organisms
+  the telemetry stream surfaces to the Evolution Insights leaderboard. Values
+  below zero clamp to zero so headless runs can disable the leaderboard entirely
+  without rewriting the engine wiring.
+
 **Neural activity and evolution**
 
 - `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` globally adjusts the baseline neural

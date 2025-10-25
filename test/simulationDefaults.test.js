@@ -215,6 +215,7 @@ test("resolveSimulationDefaults sanitizes numeric multipliers", async () => {
     matingDiversityThreshold: -1,
     lowDiversityReproMultiplier: "2",
     leaderboardIntervalMs: -250,
+    leaderboardSize: -2,
   });
 
   assert.is(sanitized.mutationMultiplier, SIMULATION_DEFAULTS.mutationMultiplier);
@@ -232,6 +233,14 @@ test("resolveSimulationDefaults sanitizes numeric multipliers", async () => {
   assert.is(sanitized.matingDiversityThreshold, 0);
   assert.is(sanitized.lowDiversityReproMultiplier, 1);
   assert.is(sanitized.leaderboardIntervalMs, 0);
+  assert.is(sanitized.leaderboardSize, 0);
+});
+
+test("resolveSimulationDefaults floors leaderboard size overrides", async () => {
+  const { resolveSimulationDefaults } = await configModulePromise;
+  const sanitized = resolveSimulationDefaults({ leaderboardSize: "11.8" });
+
+  assert.is(sanitized.leaderboardSize, 11);
 });
 
 test("resolveSimulationDefaults derives cadence from speed overrides", async () => {
