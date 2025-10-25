@@ -228,6 +228,8 @@ export default class UIManager {
 
     const defaults = resolveSimulationDefaults(initialSettings);
 
+    this._defaultSettings = Object.freeze({ ...defaults });
+
     this.simulationCallbacks = normalizedCallbacks;
     this.actions = actionFns;
     this.obstaclePresets = Array.isArray(obstaclePresets) ? obstaclePresets : [];
@@ -253,6 +255,7 @@ export default class UIManager {
     this.stepButton = null;
     this._documentKeydownListener = null;
     this.metricsPlaceholder = null;
+    this._sliderInputs = new Map();
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
     this.lifeEventsSummary = null;
@@ -1494,9 +1497,39 @@ export default class UIManager {
     });
   }
 
-  #updateSetting(key, value) {
+  #updateSetting(key, value, { notify = true } = {}) {
     this[key] = value;
-    this.#notifySettingChange(key, value);
+    if (notify) {
+      this.#notifySettingChange(key, value);
+    }
+  }
+
+  #registerSliderElement(key, element) {
+    if (!key || !element) return;
+    if (!this._sliderInputs) {
+      this._sliderInputs = new Map();
+    }
+
+    this._sliderInputs.set(key, element);
+  }
+
+  #syncSliderInput(key, value) {
+    if (!key) return;
+
+    const slider = this._sliderInputs?.get(key);
+
+    if (slider?.updateDisplay) {
+      slider.updateDisplay(value);
+    }
+
+    if (
+      key === "leaderboardIntervalMs" &&
+      this.dashboardCadenceSlider &&
+      this.dashboardCadenceSlider !== slider &&
+      this.dashboardCadenceSlider.updateDisplay
+    ) {
+      this.dashboardCadenceSlider.updateDisplay(value);
+    }
   }
 
   #sanitizeSpeedMultiplier(value) {
@@ -2601,6 +2634,7 @@ export default class UIManager {
         this.#setSpeedMultiplier(value);
       },
     });
+    this.#registerSliderElement("speedMultiplier", this.playbackSpeedSlider);
     this.speedStep = normalizedSpeedStep;
 
     const speedPresetRow = createControlButtonRow(body, {
@@ -2937,8 +2971,8 @@ export default class UIManager {
       };
     };
 
-    const renderSlider = (cfg, parent = body) =>
-      createSliderRow(parent, {
+    const renderSlider = (cfg, parent = body) => {
+      const input = createSliderRow(parent, {
         label: cfg.label,
         min: cfg.min,
         max: cfg.max,
@@ -2948,6 +2982,13 @@ export default class UIManager {
         format: cfg.format,
         onInput: getSliderSetter(cfg),
       });
+
+      if (cfg?.key) {
+        this.#registerSliderElement(cfg.key, input);
+      }
+
+      return input;
+    };
 
     const thresholdConfigs = [
       withSliderConfig("societySimilarity", {
@@ -3137,6 +3178,25 @@ export default class UIManager {
           this.lowDiversitySlider = input;
         }
       });
+
+    const resetRow = createControlButtonRow(body);
+    const resetButton = document.createElement("button");
+
+    resetButton.type = "button";
+    resetButton.textContent = "Restore Default Tuning";
+    resetButton.title =
+      "Reapply the canonical similarity, event, energy, mutation, combat, and cadence settings.";
+    resetButton.addEventListener("click", () => {
+      this.resetSimulationTuning();
+    });
+    resetRow.appendChild(resetButton);
+
+    const resetHint = document.createElement("p");
+
+    resetHint.className = "control-hint";
+    resetHint.textContent =
+      "Resets all sliders and playback speed to the project defaults for a clean baseline.";
+    body.appendChild(resetHint);
 
     return {
       renderSlider,
@@ -3937,6 +3997,52 @@ export default class UIManager {
     if (changed && notify) {
       this.#notifySettingChange("lowDiversityReproMultiplier", clamped);
     }
+  }
+
+  resetSimulationTuning({ notify = true } = {}) {
+    const defaults = this._defaultSettings;
+
+    if (!defaults) return false;
+
+    const applySetting = (key, value) => {
+      if (value === undefined) return;
+
+      this.#updateSetting(key, value, { notify });
+      this.#syncSliderInput(key, value);
+    };
+
+    applySetting("societySimilarity", defaults.societySimilarity);
+    applySetting("enemySimilarity", defaults.enemySimilarity);
+    applySetting("matingDiversityThreshold", defaults.matingDiversityThreshold);
+    applySetting("eventStrengthMultiplier", defaults.eventStrengthMultiplier);
+    applySetting("eventFrequencyMultiplier", defaults.eventFrequencyMultiplier);
+    applySetting("densityEffectMultiplier", defaults.densityEffectMultiplier);
+    applySetting("energyRegenRate", defaults.energyRegenRate);
+    applySetting("energyDiffusionRate", defaults.energyDiffusionRate);
+    applySetting("mutationMultiplier", defaults.mutationMultiplier);
+    applySetting("combatEdgeSharpness", defaults.combatEdgeSharpness);
+    applySetting("combatTerritoryEdgeFactor", defaults.combatTerritoryEdgeFactor);
+    applySetting("leaderboardIntervalMs", defaults.leaderboardIntervalMs);
+
+    if (defaults.lowDiversityReproMultiplier !== undefined) {
+      this.setLowDiversityReproMultiplier(defaults.lowDiversityReproMultiplier, {
+        notify,
+      });
+    }
+
+    if (defaults.initialTileEnergyFraction !== undefined) {
+      this.setInitialTileEnergyFraction(defaults.initialTileEnergyFraction, {
+        notify,
+      });
+    }
+
+    if (defaults.speedMultiplier !== undefined) {
+      this.#setSpeedMultiplier(defaults.speedMultiplier);
+    }
+
+    this.#scheduleUpdate();
+
+    return true;
   }
 
   #showMetricsPlaceholder(message) {
@@ -4960,6 +5066,7 @@ export default class UIManager {
         });
 
         this.dashboardCadenceSlider = slider;
+        this.#registerSliderElement("leaderboardIntervalMs", slider);
       }
 
       const cadenceNote = document.createElement("p");
