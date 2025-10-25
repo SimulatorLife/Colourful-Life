@@ -52,6 +52,8 @@ const DEFAULT_NEURAL_CONNECTIONS = 16;
 const DEFAULT_TOTAL_GENE_COUNT =
   BASE_GENE_COUNT + DEFAULT_NEURAL_CONNECTIONS * NEURAL_GENE_BYTES;
 
+export const SHARED_RNG_CACHE_MAX_ENTRIES = 256;
+
 const MUTATING_TYPED_ARRAY_METHODS = new Set([
   "copyWithin",
   "fill",
@@ -226,6 +228,7 @@ export class DNA {
       }
 
       this._sharedRngCache.set(cacheKey, h >>> 0);
+      this.#pruneSharedRngCache();
     }
 
     return createRNG(this._sharedRngCache.get(cacheKey));
@@ -255,6 +258,40 @@ export class DNA {
     if (this._sharedRngCache) this._sharedRngCache.clear();
     if (this._inverseMaxDistanceCache) this._inverseMaxDistanceCache.clear();
     this._cachedReproductionProb = null;
+  }
+
+  #pruneSharedRngCache(limit = SHARED_RNG_CACHE_MAX_ENTRIES) {
+    const cache = this._sharedRngCache;
+
+    if (!cache) {
+      return;
+    }
+
+    const maxEntries = Math.max(0, Math.floor(limit ?? 0));
+
+    if (maxEntries === 0) {
+      cache.clear();
+
+      return;
+    }
+
+    if (cache.size <= maxEntries) {
+      return;
+    }
+
+    let excess = cache.size - maxEntries;
+    const iterator = cache.keys();
+
+    while (excess > 0) {
+      const { value, done } = iterator.next();
+
+      if (done) {
+        break;
+      }
+
+      cache.delete(value);
+      excess -= 1;
+    }
   }
 
   #resolveInverseMaxDistance(geneCount) {
