@@ -1,9 +1,7 @@
 import EventManager from "./events/eventManager.js";
 import GridManager from "./grid/gridManager.js";
-import Stats from "./stats.js";
-import { computeLeaderboard } from "./engine/leaderboard.js";
-import TelemetryController from "./engine/telemetryController.js";
 import createSelectionManagerStub from "./grid/selectionManagerStub.js";
+import createSimulationRuntimeServices from "./engine/simulationRuntimeServices.js";
 import {
   ENERGY_DIFFUSION_RATE_DEFAULT,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -196,50 +194,15 @@ export default class SimulationEngine {
       startWithEvent:
         (defaults.eventFrequencyMultiplier ?? 1) > 0 && maxConcurrentEvents > 0,
     });
-    this.stats = new Stats(undefined, { rng });
-    this.telemetry = new TelemetryController({
-      stats: this.stats,
-      computeLeaderboard,
+    const runtimeServices = createSimulationRuntimeServices({
+      rng,
       leaderboardSize: defaults.leaderboardSize,
       now: this.now,
     });
-    Object.defineProperties(this, {
-      pendingSlowUiUpdate: {
-        configurable: true,
-        enumerable: false,
-        get: () => this.telemetry.hasPending(),
-        set: (value) => {
-          if (value) {
-            this.telemetry.markPending();
-          } else {
-            this.telemetry.clearPending();
-          }
-        },
-      },
-      lastSnapshot: {
-        configurable: true,
-        enumerable: false,
-        get: () => this.telemetry.snapshot,
-      },
-      lastMetrics: {
-        configurable: true,
-        enumerable: false,
-        get: () => this.telemetry.metrics,
-      },
-      lastSlowUiRender: {
-        configurable: true,
-        enumerable: false,
-        get: () => this.telemetry.getLastEmissionTimestamp(),
-        set: (value) => {
-          this.telemetry.resetThrottle(value);
-        },
-      },
-      lastRenderStats: {
-        configurable: true,
-        enumerable: false,
-        get: () => this.telemetry.metrics?.rendering ?? null,
-      },
-    });
+
+    this.stats = runtimeServices.stats;
+    this.telemetry = runtimeServices.telemetry;
+    runtimeServices.attachTo(this);
     const resolveSelectionManager = () => {
       if (selectionManager && typeof selectionManager === "object") {
         return selectionManager;
