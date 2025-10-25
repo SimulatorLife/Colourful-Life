@@ -39,6 +39,10 @@ const DEFAULT_INITIAL_TILE_ENERGY_FRACTION = 0.5;
 // their pickier demand fraction but keeps collapse loops from starving
 // recovering lineages before births can land.
 const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.12;
+// Telemetry defaults to highlighting the top five lineages. Expose the size so
+// headless consumers and UI presets can extend the leaderboard without touching
+// the engine internals.
+const DEFAULT_LEADERBOARD_SIZE = 5;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
@@ -362,6 +366,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showFitness: false,
   showLifeEventMarkers: false,
   leaderboardIntervalMs: 750,
+  leaderboardSize: DEFAULT_LEADERBOARD_SIZE,
   // Lowered from 0.45 after a 300-tick headless sample (60x60 grid, RNG seed
   // 12345) nudged mean diversity from ~0.27 to ~0.30 and bumped successful
   // matings from five to six without eliminating scarcity pressure. The softer
@@ -506,6 +511,7 @@ export function resolveSimulationDefaults(overrides = {}) {
   sanitizeNumeric("combatEdgeSharpness", { min: 0.1 });
   sanitizeNumeric("combatTerritoryEdgeFactor", { min: 0, max: 1 });
   sanitizeNumeric("leaderboardIntervalMs", { min: 0 });
+  sanitizeNumeric("leaderboardSize", { min: 0, round: Math.floor });
   sanitizeNumeric("matingDiversityThreshold", { min: 0, max: 1 });
   sanitizeNumeric("lowDiversityReproMultiplier", { min: 0, max: 1 });
 

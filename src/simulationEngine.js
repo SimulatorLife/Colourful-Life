@@ -200,7 +200,7 @@ export default class SimulationEngine {
     this.telemetry = new TelemetryController({
       stats: this.stats,
       computeLeaderboard,
-      leaderboardSize: 5,
+      leaderboardSize: defaults.leaderboardSize,
       now: this.now,
     });
     Object.defineProperties(this, {
