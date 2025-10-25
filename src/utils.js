@@ -307,14 +307,7 @@ function clonePlainBranch(value) {
   }
 
   if (Array.isArray(value)) {
-    const length = value.length;
-    const clone = new Array(length);
-
-    for (let i = 0; i < length; i += 1) {
-      clone[i] = clonePlainBranch(value[i]);
-    }
-
-    return clone;
+    return value.map(clonePlainBranch);
   }
 
   if (!isPlainObject(value)) {
@@ -327,16 +320,9 @@ function clonePlainBranch(value) {
     return STRUCTURED_CLONE_IMPL(value);
   }
 
-  const clone = {};
-  const keys = Object.keys(value);
-
-  for (let i = 0; i < keys.length; i += 1) {
-    const key = keys[i];
-
-    clone[key] = clonePlainBranch(value[key]);
-  }
-
-  return clone;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [key, clonePlainBranch(child)]),
+  );
 }
 
 export function cloneTracePayload(trace) {

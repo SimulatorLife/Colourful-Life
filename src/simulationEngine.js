@@ -1385,7 +1385,11 @@ export default class SimulationEngine {
 
     if (entries.length === 0) return;
 
-    this.#updateState(Object.fromEntries(entries));
+    const changed = this.#updateState(Object.fromEntries(entries));
+
+    if (changed) {
+      this.requestFrame();
+    }
   }
 
   setBrainSnapshotCollector(collector) {
