@@ -3552,11 +3552,32 @@ export default class UIManager {
     if (this.obstaclePresets.length > 0) {
       const applyPreset = (id) => {
         const args = [id, { clearExisting: true }];
+        const resolveMessage = (presetId) =>
+          `Obstacle preset handler threw while applying "${presetId}"; continuing with previous layout.`;
 
-        if (typeof this.actions.applyObstaclePreset === "function")
-          this.actions.applyObstaclePreset(...args);
-        else if (window.grid?.applyObstaclePreset)
-          window.grid.applyObstaclePreset(...args);
+        if (typeof this.actions.applyObstaclePreset === "function") {
+          invokeWithErrorBoundary(this.actions.applyObstaclePreset, args, {
+            thisArg: this.actions,
+            message: resolveMessage,
+            reporter: warnOnce,
+            once: true,
+          });
+
+          return;
+        }
+
+        if (typeof window === "undefined") return;
+
+        const globalApply = window.grid?.applyObstaclePreset;
+
+        if (typeof globalApply === "function") {
+          invokeWithErrorBoundary(globalApply, args, {
+            thisArg: window.grid,
+            message: resolveMessage,
+            reporter: warnOnce,
+            once: true,
+          });
+        }
       };
 
       const presetSelect = createSelectRow(obstacleGrid, {
