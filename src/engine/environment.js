@@ -154,11 +154,15 @@ export function resolveCanvas(canvas, documentRef) {
  * @throws {Error} When no width/height can be resolved.
  */
 export function ensureCanvasDimensions(canvas, config) {
-  const toFiniteDimension = toFiniteOrNull;
+  const toPositiveDimension = (candidate) => {
+    const numeric = toFiniteOrNull(candidate);
+
+    return numeric != null && numeric > 0 ? numeric : null;
+  };
 
   const pickDimension = (candidates) =>
     candidates.reduce(
-      (selected, candidate) => selected ?? toFiniteDimension(candidate),
+      (selected, candidate) => selected ?? toPositiveDimension(candidate),
       null,
     );
 
@@ -178,8 +182,8 @@ export function ensureCanvasDimensions(canvas, config) {
   if (canvas && width != null) canvas.width = width;
   if (canvas && height != null) canvas.height = height;
 
-  const canvasWidth = toFiniteDimension(canvas?.width);
-  const canvasHeight = toFiniteDimension(canvas?.height);
+  const canvasWidth = toPositiveDimension(canvas?.width);
+  const canvasHeight = toPositiveDimension(canvas?.height);
 
   if (canvasWidth != null && canvasHeight != null) {
     return { width: canvasWidth, height: canvasHeight };
