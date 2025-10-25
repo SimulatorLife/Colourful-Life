@@ -1,4 +1,5 @@
 import { MAX_TILE_ENERGY } from "../config.js";
+import { pickFirstFinitePositive } from "../utils.js";
 import { clearTileEnergyBuffers } from "./energyUtils.js";
 
 /**
@@ -156,10 +157,10 @@ export default class GridInteractionAdapter {
   }
 
   maxTileEnergy() {
-    const positiveOverride = [
+    const positiveOverride = pickFirstFinitePositive([
       this.gridManager?.maxTileEnergy,
       globalThis?.GridManager?.maxTileEnergy,
-    ].find((value) => Number.isFinite(value) && value > 0);
+    ]);
 
     return positiveOverride ?? MAX_TILE_ENERGY;
   }

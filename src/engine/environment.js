@@ -1,4 +1,4 @@
-import { toFiniteOrNull } from "../utils.js";
+import { pickFirstFinitePositive, toFiniteOrNull } from "../utils.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
@@ -25,23 +25,17 @@ const defaultCancelAnimationFrame = (id) => clearTimeout(id);
  * @returns {{width:number,height:number}} Normalized canvas dimensions.
  */
 export function resolveHeadlessCanvasSize(config = {}) {
-  const toFinite = toFiniteOrNull;
-
-  const rawCellSize = toFinite(config?.cellSize);
+  const rawCellSize = toFiniteOrNull(config?.cellSize);
   const cellSize = rawCellSize != null && rawCellSize > 0 ? rawCellSize : 5;
-  const rawRows = toFinite(config?.rows);
-  const rawCols = toFinite(config?.cols);
+  const rawRows = toFiniteOrNull(config?.rows);
+  const rawCols = toFiniteOrNull(config?.cols);
   const rows = rawRows != null && rawRows > 0 ? rawRows : null;
   const cols = rawCols != null && rawCols > 0 ? rawCols : null;
   const defaultWidth = (cols ?? 120) * cellSize;
   const defaultHeight = (rows ?? 120) * cellSize;
-  const pickFirstPositive = (candidates, fallback) =>
-    candidates
-      .map((candidate) => toFinite(candidate))
-      .find((value) => value != null && value > 0) ?? fallback;
 
   return {
-    width: pickFirstPositive(
+    width: pickFirstFinitePositive(
       [
         config?.width,
         config?.canvasWidth,
@@ -50,7 +44,7 @@ export function resolveHeadlessCanvasSize(config = {}) {
       ],
       defaultWidth,
     ),
-    height: pickFirstPositive(
+    height: pickFirstFinitePositive(
       [
         config?.height,
         config?.canvasHeight,
