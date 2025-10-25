@@ -24,6 +24,7 @@ const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
 // from 114 → 116. The lighter recycling still honours the decay loop but
 // leaves a touch more scarcity in high-traffic graves so crowded clusters stop
 // bouncing between feast and famine every decay pulse.
+const DEFAULT_DECAY_RELEASE_BASE = 0.12;
 const DEFAULT_DECAY_RETURN_FRACTION = 0.88;
 // Bumping the immediate splash from 0.25 → 0.26 during the dense 60×60 probe
 // (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
@@ -87,6 +88,28 @@ export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();
 export const DECAY_RETURN_FRACTION = resolveDecayReturnFraction();
 export const DECAY_IMMEDIATE_SHARE = resolveDecayImmediateShare();
 export const DECAY_MAX_AGE = resolveDecayMaxAge();
+
+/**
+ * Resolves the baseline energy returned to the environment whenever a decay
+ * pool releases stored resources. The override lets deployments amplify or
+ * soften the minimum trickle recycled from fallen organisms while keeping the
+ * value bounded by the maximum tile capacity.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Baseline decay release clamped to the 0..MAX_TILE_ENERGY range.
+ */
+export function resolveDecayReleaseBase(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_DECAY_RELEASE_BASE", {
+    fallback: DEFAULT_DECAY_RELEASE_BASE,
+    min: 0,
+    max: MAX_TILE_ENERGY,
+    clampResult: true,
+  });
+}
+
+export const DECAY_RELEASE_BASE = resolveDecayReleaseBase();
 
 function resolveEnvNumber(
   env,

@@ -206,6 +206,34 @@ test("DECAY_IMMEDIATE_SHARE exposes the environment-aware default", async () => 
   assert.is(DECAY_IMMEDIATE_SHARE, 0.26);
 });
 
+test("DECAY_RELEASE_BASE exposes the environment-aware default", async () => {
+  const { DECAY_RELEASE_BASE } = await configModulePromise;
+
+  assert.is(DECAY_RELEASE_BASE, 0.12);
+});
+
+test("resolveDecayReleaseBase respects overrides", async () => {
+  const { resolveDecayReleaseBase } = await configModulePromise;
+
+  assert.is(
+    resolveDecayReleaseBase({ COLOURFUL_LIFE_DECAY_RELEASE_BASE: "0.32" }),
+    0.32,
+  );
+});
+
+test("resolveDecayReleaseBase clamps invalid overrides", async () => {
+  const { resolveDecayReleaseBase } = await configModulePromise;
+
+  assert.is(resolveDecayReleaseBase({ COLOURFUL_LIFE_DECAY_RELEASE_BASE: "-0.5" }), 0);
+
+  assert.is(resolveDecayReleaseBase({ COLOURFUL_LIFE_DECAY_RELEASE_BASE: "12" }), 2);
+
+  assert.is(
+    resolveDecayReleaseBase({ COLOURFUL_LIFE_DECAY_RELEASE_BASE: "NaN" }),
+    0.12,
+  );
+});
+
 test("resolveDecayImmediateShare respects overrides", async () => {
   const { resolveDecayImmediateShare } = await configModulePromise;
 
