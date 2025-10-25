@@ -294,17 +294,18 @@ export default class GridManager {
       };
     }
 
-    let best = 0;
-    let aboveThreshold = 0;
+    const { best, aboveThreshold } = list.reduce(
+      (acc, entry) => {
+        const raw = entry?.diversity;
+        const value = clamp(Number.isFinite(raw) ? raw : 0, 0, 1);
 
-    for (let i = 0; i < count; i += 1) {
-      const entry = list[i];
-      const raw = entry?.diversity;
-      const value = clamp(Number.isFinite(raw) ? raw : 0, 0, 1);
+        if (value > acc.best) acc.best = value;
+        if (value >= threshold) acc.aboveThreshold += 1;
 
-      if (value > best) best = value;
-      if (value >= threshold) aboveThreshold += 1;
-    }
+        return acc;
+      },
+      { best: 0, aboveThreshold: 0 },
+    );
 
     const gap = clamp(best - chosen, 0, 1);
     const availableAbove = Math.max(0, aboveThreshold - (chosen >= threshold ? 1 : 0));
