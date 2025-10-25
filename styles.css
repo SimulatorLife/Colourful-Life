@@ -955,6 +955,12 @@ canvas {
   display: grid;
   gap: var(--space-sm);
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: stretch;
+}
+
+.life-events-summary--empty .life-events-summary__item {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .life-events-timeline {
@@ -976,8 +982,59 @@ canvas {
 }
 
 .life-events-timeline__summary {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.life-events-timeline__summary-message {
   margin: 0;
   font-size: 0.78rem;
+  color: var(--color-text-subtle);
+}
+
+.life-events-timeline__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+}
+
+.life-events-timeline__stat {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  min-width: 0;
+}
+
+.life-events-timeline__stat-label {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.life-events-timeline__stat-metric {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.life-events-timeline__stat-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.life-events-timeline__stat-note {
+  font-size: 0.7rem;
   color: var(--color-text-subtle);
 }
 
@@ -1034,7 +1091,7 @@ canvas {
 .life-events-summary__item {
   position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
   padding: 12px 14px;
@@ -1115,6 +1172,7 @@ canvas {
   color: var(--color-text);
   font-variant-numeric: tabular-nums;
   margin-left: auto;
+  align-self: center;
 }
 
 .life-events-summary__trend {
