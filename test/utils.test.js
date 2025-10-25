@@ -108,31 +108,26 @@ test("cloneTracePayload performs deep copies of sensors and nodes", () => {
   assert.is(cloneTracePayload(null), null);
 });
 
-test("cloneTracePayload falls back when structuredClone is unavailable", () => {
-  const original = globalThis.structuredClone;
-  const trace = {
-    sensors: [{ id: "energy", value: 0.4 }],
-    nodes: [{ id: "hidden", bias: 0 }],
-  };
+test("cloneTracePayload surfaces a clear error when structuredClone is unavailable", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "structuredClone");
 
   try {
-    // Simulate environments such as older Safari releases that lack structuredClone.
-    delete globalThis.structuredClone;
+    Object.defineProperty(globalThis, "structuredClone", {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
 
-    const clone = cloneTracePayload(trace);
-
-    assert.ok(clone !== trace);
-    assert.ok(Array.isArray(clone.sensors));
-    assert.is(clone.sensors[0].value, 0.4);
-
-    clone.sensors[0].value = 1;
-
-    assert.is(trace.sensors[0].value, 0.4);
+    assert.throws(
+      () => cloneTracePayload({ sensors: [] }),
+      /structuredClone support/,
+      "callers receive a descriptive error when the platform lacks structuredClone",
+    );
   } finally {
-    if (original === undefined) {
-      delete globalThis.structuredClone;
+    if (descriptor) {
+      Object.defineProperty(globalThis, "structuredClone", descriptor);
     } else {
-      globalThis.structuredClone = original;
+      delete globalThis.structuredClone;
     }
   }
 });
