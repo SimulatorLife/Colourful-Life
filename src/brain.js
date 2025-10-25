@@ -302,27 +302,27 @@ export default class Brain {
         return 0;
       }
 
-      let sum = 0;
-      let nodeInputs = null;
+      const { sum, nodeInputs } = incoming.reduce(
+        (accumulator, { source, weight }) => {
+          const sourceValue = computeNode(source);
 
-      if (traceEnabled) {
-        nodeInputs = [];
-      }
+          accumulator.sum += weight * sourceValue;
 
-      for (let i = 0; i < incoming.length; i++) {
-        const { source, weight } = incoming[i];
-        const sourceValue = computeNode(source);
+          if (traceEnabled) {
+            accumulator.nodeInputs.push({
+              source,
+              weight,
+              value: sourceValue,
+            });
+          }
 
-        sum += weight * sourceValue;
-
-        if (traceEnabled) {
-          nodeInputs.push({
-            source,
-            weight,
-            value: sourceValue,
-          });
-        }
-      }
+          return accumulator;
+        },
+        {
+          sum: 0,
+          nodeInputs: traceEnabled ? [] : null,
+        },
+      );
 
       visiting.delete(nodeId);
       activationCount++;
