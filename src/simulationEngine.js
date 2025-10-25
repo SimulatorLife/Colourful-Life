@@ -105,7 +105,16 @@ export default class SimulationEngine {
       throw new Error("SimulationEngine requires a canvas element.");
     }
 
-    const ctx = resolvedCanvas.getContext("2d");
+    const getContext =
+      typeof resolvedCanvas.getContext === "function"
+        ? resolvedCanvas.getContext
+        : null;
+
+    if (!getContext) {
+      throw new Error("SimulationEngine requires a 2D canvas context.");
+    }
+
+    const ctx = getContext.call(resolvedCanvas, "2d");
 
     if (!ctx) {
       throw new Error("SimulationEngine requires a 2D canvas context.");

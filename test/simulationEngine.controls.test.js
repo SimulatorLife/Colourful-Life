@@ -17,6 +17,24 @@ function createEngine(modules) {
   });
 }
 
+test("SimulationEngine surfaces a helpful error when the canvas lacks getContext", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+
+  assert.throws(
+    () =>
+      new SimulationEngine({
+        canvas: { width: 10, height: 10 },
+        autoStart: false,
+        performanceNow: () => 0,
+        requestAnimationFrame: () => 0,
+        cancelAnimationFrame: () => {},
+      }),
+    /SimulationEngine requires a 2D canvas context\./,
+    "should throw descriptive error when canvas is missing getContext",
+  );
+});
+
 test("SimulationEngine disables environmental events by default", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
