@@ -115,3 +115,20 @@ test("generic panel bodies hide horizontal overflow and reserve gutter space", (
     "panel bodies should reserve a stable gutter when scrollbars appear",
   );
 });
+
+test("game canvas respects intrinsic aspect ratio", () => {
+  const css = loadStyles();
+  const match = css.match(/#gameCanvas\s*\{[^}]*\}/s);
+
+  assert.ok(match, "expected to locate the #gameCanvas rule in styles.css");
+  assert.match(
+    match[0],
+    /height\s*:\s*auto\s*;/,
+    "canvas height should flow from its intrinsic dimensions",
+  );
+  assert.notMatch(
+    match[0],
+    /aspect-ratio\s*:/,
+    "game canvas should not be forced to a fixed aspect ratio",
+  );
+});
