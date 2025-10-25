@@ -1807,12 +1807,44 @@ export default class GridManager {
   }
 
   #scanForCell(cell) {
-    for (let r = 0; r < this.rows; r++) {
+    const rows = this.rows;
+    const cols = this.cols;
+    const occupancyRows = this.#rowOccupancy;
+
+    if (Array.isArray(occupancyRows) && occupancyRows.length === rows) {
+      for (let r = 0; r < rows; r++) {
+        const bucket = occupancyRows[r];
+
+        if (!bucket || bucket.size === 0) continue;
+
+        const gridRow = this.grid[r];
+
+        if (!gridRow) continue;
+
+        for (const c of bucket) {
+          if (c < 0 || c >= cols) {
+            bucket.delete(c);
+
+            continue;
+          }
+
+          if (gridRow[c] === cell) {
+            return { row: r, col: c };
+          }
+
+          if (!gridRow[c]) {
+            bucket.delete(c);
+          }
+        }
+      }
+    }
+
+    for (let r = 0; r < rows; r++) {
       const gridRow = this.grid[r];
 
       if (!gridRow) continue;
 
-      for (let c = 0; c < this.cols; c++) {
+      for (let c = 0; c < cols; c++) {
         if (gridRow[c] === cell) {
           return { row: r, col: c };
         }
