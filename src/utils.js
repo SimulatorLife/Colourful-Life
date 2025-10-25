@@ -264,22 +264,73 @@ export function toPlainObject(candidate) {
  * @param {Object} trace - Snapshot returned by `brain.snapshot()`.
  * @returns {Object|null} Cloned trace.
  */
+const STRUCTURED_CLONE_IMPL =
+  typeof globalThis !== "undefined" && typeof globalThis.structuredClone === "function"
+    ? globalThis.structuredClone.bind(globalThis)
+    : null;
+
+function isPlainObject(value) {
+  if (value == null || typeof value !== "object") {
+    return false;
+  }
+
+  const proto = Object.getPrototypeOf(value);
+
+  return proto === Object.prototype || proto === null;
+}
+
+function clonePlainBranch(value) {
+  if (value == null || typeof value !== "object") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const length = value.length;
+    const clone = new Array(length);
+
+    for (let i = 0; i < length; i += 1) {
+      clone[i] = clonePlainBranch(value[i]);
+    }
+
+    return clone;
+  }
+
+  if (!isPlainObject(value)) {
+    if (!STRUCTURED_CLONE_IMPL) {
+      throw new Error(
+        "cloneTracePayload encountered an unsupported value without structuredClone support.",
+      );
+    }
+
+    return STRUCTURED_CLONE_IMPL(value);
+  }
+
+  const clone = {};
+  const keys = Object.keys(value);
+
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+
+    clone[key] = clonePlainBranch(value[key]);
+  }
+
+  return clone;
+}
+
 export function cloneTracePayload(trace) {
   if (trace == null) return null;
 
-  const structuredCloneImpl =
-    typeof globalThis !== "undefined" &&
-    typeof globalThis.structuredClone === "function"
-      ? globalThis.structuredClone.bind(globalThis)
-      : null;
+  if (!isPlainObject(trace)) {
+    if (!STRUCTURED_CLONE_IMPL) {
+      throw new Error(
+        "cloneTracePayload requires structuredClone support; the current environment does not provide it.",
+      );
+    }
 
-  if (!structuredCloneImpl) {
-    throw new Error(
-      "cloneTracePayload requires structuredClone support; the current environment does not provide it.",
-    );
+    return STRUCTURED_CLONE_IMPL(trace);
   }
 
-  return structuredCloneImpl(trace);
+  return clonePlainBranch(trace);
 }
 
 /**
