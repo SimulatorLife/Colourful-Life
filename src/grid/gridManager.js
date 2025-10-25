@@ -44,8 +44,9 @@ import {
   DECAY_MAX_AGE,
   DECAY_RELEASE_BASE,
   INITIAL_TILE_ENERGY_FRACTION_DEFAULT,
+  BRAIN_SNAPSHOT_LIMIT_DEFAULT,
 } from "../config.js";
-const BRAIN_SNAPSHOT_LIMIT = 5;
+const DEFAULT_BRAIN_SNAPSHOT_LIMIT = BRAIN_SNAPSHOT_LIMIT_DEFAULT;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 const EMPTY_TARGET_LIST = Object.freeze([]);
@@ -1578,6 +1579,7 @@ export default class GridManager {
       obstaclePresets,
       rng,
       brainSnapshotCollector,
+      brainSnapshotLimit,
     } = options;
     const {
       eventManager: resolvedEventManager,
@@ -1702,7 +1704,13 @@ export default class GridManager {
       combatTerritoryEdgeFactor: GridManager.combatTerritoryEdgeFactor,
     });
     this.populationScarcitySignal = 0;
+    const resolvedBrainSnapshotLimit = sanitizePositiveInteger(brainSnapshotLimit, {
+      fallback: DEFAULT_BRAIN_SNAPSHOT_LIMIT,
+      min: 0,
+    });
+
     this.brainSnapshotCollector = toBrainSnapshotCollector(brainSnapshotCollector);
+    this.brainSnapshotLimit = resolvedBrainSnapshotLimit;
     this.boundTryMove = (
       gridArr,
       sourceRow,
@@ -2103,6 +2111,21 @@ export default class GridManager {
 
   setBrainSnapshotCollector(collector) {
     this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
+  }
+
+  setBrainSnapshotLimit(limit) {
+    const fallback =
+      Number.isFinite(this.brainSnapshotLimit) && this.brainSnapshotLimit >= 0
+        ? this.brainSnapshotLimit
+        : DEFAULT_BRAIN_SNAPSHOT_LIMIT;
+    const sanitized = sanitizePositiveInteger(limit, {
+      fallback,
+      min: 0,
+    });
+
+    this.brainSnapshotLimit = sanitized;
+
+    return this.brainSnapshotLimit;
   }
 
   setInitialTileEnergyFraction(fraction, options = {}) {
@@ -6786,8 +6809,12 @@ export default class GridManager {
       maxFitness: 0,
       entries,
     };
+    const brainSnapshotLimit =
+      Number.isFinite(this.brainSnapshotLimit) && this.brainSnapshotLimit >= 0
+        ? this.brainSnapshotLimit
+        : DEFAULT_BRAIN_SNAPSHOT_LIMIT;
     const topBrainEntries = createRankedBuffer(
-      BRAIN_SNAPSHOT_LIMIT,
+      brainSnapshotLimit,
       (a, b) => (b?.fitness ?? -Infinity) - (a?.fitness ?? -Infinity),
     );
 
@@ -6847,7 +6874,7 @@ export default class GridManager {
     const collector =
       this.brainSnapshotCollector ?? toBrainSnapshotCollector(GLOBAL.BrainDebugger);
     const collected = collector
-      ? collector(ranked, { limit: BRAIN_SNAPSHOT_LIMIT, gridManager: this, snapshot })
+      ? collector(ranked, { limit: brainSnapshotLimit, gridManager: this, snapshot })
       : ranked;
 
     snapshot.populationCells = populationCells;

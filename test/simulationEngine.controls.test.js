@@ -664,6 +664,30 @@ test("setBrainSnapshotCollector stores collector and forwards to grid", async ()
   }
 });
 
+test("setBrainSnapshotLimit updates state and forwards to grid", async () => {
+  const modules = await loadSimulationModules();
+  const { restore, calls } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    const result = engine.setBrainSnapshotLimit(3);
+
+    assert.is(result, 3);
+    assert.is(engine.brainSnapshotLimit, 3);
+    assert.is(engine.state.brainSnapshotLimit, 3);
+    assert.equal(calls.grid.setBrainSnapshotLimit.at(-1), [3]);
+
+    engine.updateSetting("brainSnapshotLimit", 4);
+
+    assert.is(engine.brainSnapshotLimit, 4);
+    assert.is(engine.state.brainSnapshotLimit, 4);
+    assert.equal(calls.grid.setBrainSnapshotLimit.at(-1), [4]);
+  } finally {
+    restore();
+  }
+});
+
 test("autoPauseOnBlur setter keeps engine state aligned", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
