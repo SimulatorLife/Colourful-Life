@@ -4400,10 +4400,25 @@ export default class UIManager {
     return this.leaderboardIntervalMs;
   }
   shouldRenderSlowUi(now) {
-    const interval = Math.max(0, this.leaderboardIntervalMs);
+    const timestamp = Number(now);
 
-    if (interval === 0 || now - this._lastSlowUiRender >= interval) {
-      this._lastSlowUiRender = now;
+    if (!Number.isFinite(timestamp)) {
+      return false;
+    }
+
+    const intervalCandidate = Number(this.leaderboardIntervalMs);
+    const interval = Number.isFinite(intervalCandidate)
+      ? Math.max(0, intervalCandidate)
+      : 0;
+
+    if (timestamp < this._lastSlowUiRender) {
+      this._lastSlowUiRender = timestamp;
+
+      return true;
+    }
+
+    if (interval === 0 || timestamp - this._lastSlowUiRender >= interval) {
+      this._lastSlowUiRender = timestamp;
 
       return true;
     }

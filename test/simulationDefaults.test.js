@@ -422,4 +422,5 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.ok(ui.shouldRenderSlowUi(0));
   assert.ok(!ui.shouldRenderSlowUi(defaults.leaderboardIntervalMs - 1));
   assert.ok(ui.shouldRenderSlowUi(defaults.leaderboardIntervalMs));
+  assert.ok(ui.shouldRenderSlowUi(0)); // rewound timestamp forces immediate refresh
 });
