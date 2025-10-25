@@ -295,6 +295,9 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
     strategyPenaltyMultiplier: 0.6,
     strategyPressure: 0.3,
     noveltyPressure: 0.4,
+    diversityOpportunity: 0.4,
+    diversityOpportunityWeight: 1,
+    diversityOpportunityAvailability: 0.5,
   });
 
   assert.is(stats.mating.choices, 1);
@@ -310,12 +313,18 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   approxEqual(stats.mating.strategyPenaltySum, 0.6, 1e-9);
   approxEqual(stats.mating.strategyPressureSum, 0.3, 1e-9);
   approxEqual(stats.mating.noveltyPressureSum, 0.4, 1e-9);
+  approxEqual(stats.mating.diversityOpportunitySum, 0.4, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityWeight, 1, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityAvailabilitySum, 0.5, 1e-9);
   assert.equal(stats.lastMatingDebug.blockedReason, "Too similar");
   assert.is(stats.lastMatingDebug.threshold, 0.6);
   approxEqual(stats.lastMatingDebug.behaviorComplementarity, 0.8, 1e-9);
   approxEqual(stats.lastMatingDebug.strategyPenaltyMultiplier, 0.6, 1e-9);
   approxEqual(stats.lastMatingDebug.strategyPressure, 0.3, 1e-9);
   approxEqual(stats.lastMatingDebug.noveltyPressure, 0.4, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunity, 0.4, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityWeight, 1, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityAvailability, 0.5, 1e-9);
   assert.is(stats.mating.lastBlockReason, null);
 
   stats.recordMateChoice({
@@ -338,12 +347,18 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   approxEqual(stats.mating.strategyPenaltySum, 1.6, 1e-9);
   approxEqual(stats.mating.strategyPressureSum, 0.3, 1e-9);
   approxEqual(stats.mating.noveltyPressureSum, 0.4, 1e-9);
+  approxEqual(stats.mating.diversityOpportunitySum, 0.4, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityWeight, 1, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityAvailabilitySum, 0.5, 1e-9);
   assert.equal(stats.lastMatingDebug.success, false);
   assert.is(stats.lastMatingDebug.threshold, 0.6);
   approxEqual(stats.lastMatingDebug.behaviorComplementarity, 0.1, 1e-9);
   approxEqual(stats.lastMatingDebug.strategyPenaltyMultiplier, 1, 1e-9);
   assert.is(stats.lastMatingDebug.strategyPressure, undefined);
   assert.is(stats.lastMatingDebug.noveltyPressure, undefined);
+  approxEqual(stats.lastMatingDebug.diversityOpportunity, 0, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityWeight, 0, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityAvailability, 0, 1e-9);
 
   stats.recordReproductionBlocked({ reason: "Blocked by reproductive zone" });
 
@@ -403,6 +418,9 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
     strategyPenaltySum: 1.7,
     strategyPressureSum: 0.4,
     noveltyPressureSum: 0.9,
+    diversityOpportunitySum: 0.6,
+    diversityOpportunityWeight: 2,
+    diversityOpportunityAvailabilitySum: 1.2,
     blocks: 1,
     lastBlockReason: "Still recent",
   };
@@ -446,6 +464,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(result.meanAge, 4.5);
   assert.is(result.diversity, 0.42);
   assert.is(result.diversityPressure, 0);
+  approxEqual(result.diversityOpportunity, 0.3, 1e-9);
+  approxEqual(result.diversityOpportunityAvailability, 0.6, 1e-9);
   assert.is(result.diversityTarget, stats.getDiversityTarget());
   assert.equal(result.traitPresence, stats.traitPresence);
   assert.is(result.mateChoices, 2);
@@ -471,6 +491,8 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(stats.history.population.length, 1);
   assert.is(stats.history.diversity.length, 1);
   assert.is(stats.history.diversityPressure.length, 1);
+  assert.is(stats.history.diversityOpportunity.length, 1);
+  approxEqual(stats.history.diversityOpportunity[0], 0.3, 1e-9);
   assert.is(stats.history.energy.length, 1);
   assert.is(stats.history.growth.length, 1);
   assert.is(stats.history.birthsPerTick.length, 1);

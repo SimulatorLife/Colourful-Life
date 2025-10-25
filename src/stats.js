@@ -18,6 +18,7 @@ const HISTORY_SERIES_KEYS = [
   "population",
   "diversity",
   "diversityPressure",
+  "diversityOpportunity",
   "energy",
   "growth",
   "birthsPerTick",
@@ -247,6 +248,9 @@ const createEmptyMatingSnapshot = () => ({
   strategyPenaltySum: 0,
   strategyPressureSum: 0,
   noveltyPressureSum: 0,
+  diversityOpportunitySum: 0,
+  diversityOpportunityWeight: 0,
+  diversityOpportunityAvailabilitySum: 0,
   blocks: 0,
   lastBlockReason: null,
 });
@@ -344,6 +348,8 @@ export default class Stats {
     this.diversityPressure = 0;
     this.behavioralEvenness = 0;
     this.strategyPressure = 0;
+    this.diversityOpportunity = 0;
+    this.diversityOpportunityAvailability = 0;
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
     this.lifeEventSequence = 0;
     this.deathCauseTotals = Object.create(null);
@@ -579,6 +585,7 @@ export default class Stats {
     successfulComplementarity = 0,
     meanStrategyPenalty = 1,
     diverseSuccessRate = 0,
+    diversityOpportunity = 0,
   ) {
     const target = clamp01(this.diversityTarget ?? DIVERSITY_TARGET_DEFAULT);
 
@@ -600,6 +607,9 @@ export default class Stats {
     const penaltyAverage = clamp01(
       Number.isFinite(meanStrategyPenalty) ? meanStrategyPenalty : 1,
     );
+    const opportunityShortfall = clamp01(
+      Number.isFinite(diversityOpportunity) ? diversityOpportunity : 0,
+    );
     const penaltySlack = penaltyAverage;
     const penaltyRelief = clamp01(1 - penaltyAverage);
     const successRate = clamp01(
@@ -614,8 +624,9 @@ export default class Stats {
     const evennessDemand = evennessShortfall * (0.3 + geneticShortfall * 0.4);
     const successDemand =
       successShortfall * (0.25 + penaltySlack * 0.35 + (1 - evennessValue) * 0.25);
+    const opportunityDemand = opportunityShortfall * (0.25 + geneticShortfall * 0.35);
     const combinedShortfall = clamp01(
-      geneticShortfall * 0.65 + evennessDemand + successDemand,
+      geneticShortfall * 0.6 + evennessDemand + successDemand + opportunityDemand,
     );
     const complementRelief = complementValue * 0.35;
     const targetPressure = Math.max(0, combinedShortfall - complementRelief);
@@ -628,12 +639,13 @@ export default class Stats {
 
     const monotonyDemand =
       evennessShortfall * (0.45 + geneticShortfall * 0.35) * (0.7 + penaltySlack * 0.6);
+    const opportunityDrag = opportunityShortfall * (0.2 + geneticShortfall * 0.3);
     const monotonyDemandScaled = clamp01(monotonyDemand * (1 + successShortfall * 0.5));
     const complementReliefStrategy = clamp01(
       complementValue * (0.25 + geneticShortfall * 0.3) * (0.8 + penaltyRelief * 0.4),
     );
     const rawStrategyPressure = clamp01(
-      monotonyDemandScaled - complementReliefStrategy,
+      monotonyDemandScaled + opportunityDrag - complementReliefStrategy,
     );
     const prevStrategy = Number.isFinite(this.strategyPressure)
       ? this.strategyPressure
@@ -1284,6 +1296,13 @@ export default class Stats {
       choiceCount > 0 ? mateStats.strategyPressureSum / choiceCount : 0;
     const meanMateNoveltyPressure =
       choiceCount > 0 ? mateStats.noveltyPressureSum / choiceCount : 0;
+    const opportunityWeight = mateStats.diversityOpportunityWeight || 0;
+    const diversityOpportunity =
+      opportunityWeight > 0 ? mateStats.diversityOpportunitySum / opportunityWeight : 0;
+    const diversityOpportunityAvailability =
+      opportunityWeight > 0
+        ? mateStats.diversityOpportunityAvailabilitySum / opportunityWeight
+        : 0;
 
     this.#updateDiversityPressure(
       diversity,
@@ -1291,11 +1310,16 @@ export default class Stats {
       successfulComplementarity,
       meanStrategyPenalty,
       diverseSuccessRate,
+      diversityOpportunity,
     );
+
+    this.diversityOpportunity = diversityOpportunity;
+    this.diversityOpportunityAvailability = diversityOpportunityAvailability;
 
     this.pushHistory("population", pop);
     this.pushHistory("diversity", diversity);
     this.pushHistory("diversityPressure", this.diversityPressure);
+    this.pushHistory("diversityOpportunity", diversityOpportunity);
     this.pushHistory("energy", meanEnergy);
     this.pushHistory("growth", this.births - this.deaths);
     this.pushHistory("birthsPerTick", this.births);
@@ -1348,6 +1372,8 @@ export default class Stats {
       diversity,
       diversityPressure: this.diversityPressure,
       diversityTarget: this.diversityTarget,
+      diversityOpportunity,
+      diversityOpportunityAvailability,
       traitPresence,
       mateChoices: choiceCount,
       successfulMatings: successCount,
@@ -1398,6 +1424,9 @@ export default class Stats {
     strategyPressure = undefined,
     threshold,
     noveltyPressure = undefined,
+    diversityOpportunity = 0,
+    diversityOpportunityWeight = undefined,
+    diversityOpportunityAvailability = undefined,
   } = {}) {
     if (!this.mating) {
       this.mating = createEmptyMatingSnapshot();
@@ -1427,6 +1456,26 @@ export default class Stats {
     if (Number.isFinite(noveltyPressure)) {
       this.mating.noveltyPressureSum += clamp01(noveltyPressure);
     }
+    const opportunityScore = clamp01(
+      Number.isFinite(diversityOpportunity) ? diversityOpportunity : 0,
+    );
+    const opportunityWeight = clamp01(
+      Number.isFinite(diversityOpportunityWeight) ? diversityOpportunityWeight : 0,
+    );
+    const opportunityAvailability = clamp01(
+      Number.isFinite(diversityOpportunityAvailability)
+        ? diversityOpportunityAvailability
+        : opportunityScore > 0
+          ? 1
+          : 0,
+    );
+
+    if (opportunityWeight > 0) {
+      this.mating.diversityOpportunitySum += opportunityScore * opportunityWeight;
+      this.mating.diversityOpportunityWeight += opportunityWeight;
+      this.mating.diversityOpportunityAvailabilitySum +=
+        opportunityAvailability * opportunityWeight;
+    }
 
     if (success) {
       this.mating.successes++;
@@ -1449,6 +1498,9 @@ export default class Stats {
       strategyPenaltyMultiplier,
       strategyPressure,
       noveltyPressure,
+      diversityOpportunity: opportunityScore,
+      diversityOpportunityWeight: opportunityWeight,
+      diversityOpportunityAvailability: opportunityAvailability,
       blockedReason: this.mating.lastBlockReason || undefined,
     };
     // Consume the one-time reason so the next mating record does not reuse it.

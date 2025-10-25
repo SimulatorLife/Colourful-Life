@@ -266,6 +266,58 @@ export default class GridManager {
     return clamp(drive * 0.7 + environment * 0.3, 0, 1);
   }
 
+  static #summarizeMateDiversityOpportunity({
+    candidates = [],
+    chosenDiversity = 0,
+    diversityThreshold = 0,
+  } = {}) {
+    const list = Array.isArray(candidates) ? candidates : [];
+    const count = list.length;
+    const threshold = clamp(
+      Number.isFinite(diversityThreshold) ? diversityThreshold : 0,
+      0,
+      1,
+    );
+    const chosen = clamp(Number.isFinite(chosenDiversity) ? chosenDiversity : 0, 0, 1);
+
+    if (count <= 1) {
+      return {
+        score: 0,
+        availability: 0,
+        weight: 0,
+        gap: 0,
+      };
+    }
+
+    let best = 0;
+    let aboveThreshold = 0;
+
+    for (let i = 0; i < count; i += 1) {
+      const entry = list[i];
+      const raw = entry?.diversity;
+      const value = clamp(Number.isFinite(raw) ? raw : 0, 0, 1);
+
+      if (value > best) best = value;
+      if (value >= threshold) aboveThreshold += 1;
+    }
+
+    const gap = clamp(best - chosen, 0, 1);
+    const availableAbove = Math.max(0, aboveThreshold - (chosen >= threshold ? 1 : 0));
+    const availability = clamp(count > 0 ? availableAbove / count : 0, 0, 1);
+    let score = gap * (0.6 + availability * 0.25);
+
+    if (chosen < threshold && availability > 0) {
+      score += availability * 0.35;
+    }
+
+    return {
+      score: clamp(score, 0, 1),
+      availability,
+      weight: 1,
+      gap,
+    };
+  }
+
   #getSegmentWindowScratch() {
     if (!this.#segmentWindowScratch) {
       this.#segmentWindowScratch = [];
@@ -5440,6 +5492,7 @@ export default class GridManager {
     behaviorComplementarity = 0,
     strategyPressure = 0,
     scarcity = 0,
+    diversityOpportunity = 0,
   } = {}) {
     const sliderFloor = clamp(Number.isFinite(floor) ? floor : 0, 0, 1);
 
@@ -5485,6 +5538,11 @@ export default class GridManager {
       0,
       1,
     );
+    const opportunitySignal = clamp(
+      Number.isFinite(diversityOpportunity) ? diversityOpportunity : 0,
+      0,
+      1,
+    );
 
     const pressure = clamp(
       Number.isFinite(diversityPressure) ? diversityPressure : 0,
@@ -5507,6 +5565,14 @@ export default class GridManager {
     severity *= 1 + pressure * 0.75;
     severity *= 1 + evennessDrag * (0.35 + 0.25 * combinedDrive);
     severity *= 1 + strategyPressureValue * evennessDrag * (0.25 + closeness * 0.2);
+
+    if (opportunitySignal > 0) {
+      const opportunityDemand =
+        opportunitySignal *
+        (0.22 + pressure * 0.25 + combinedDrive * 0.2 + probabilitySlack * 0.15);
+
+      severity += opportunityDemand;
+    }
 
     if (complementarity > 0 && evennessDrag > 0) {
       const reliefScale =
@@ -5719,6 +5785,20 @@ export default class GridManager {
 
     let effectiveReproProb = clamp(reproProb ?? 0, 0, 1);
     let scarcityMultiplier = 1;
+    const opportunityCandidates =
+      evaluated.length > 0
+        ? evaluated
+        : typeof cell.scorePotentialMates === "function"
+          ? cell.scorePotentialMates(matePool, reproductionContext)
+          : EMPTY_TARGET_LIST;
+    const diversityOpportunitySummary = GridManager.#summarizeMateDiversityOpportunity({
+      candidates: opportunityCandidates,
+      chosenDiversity: diversity,
+      diversityThreshold: pairDiversityThreshold,
+    });
+    const diversityOpportunityScore = diversityOpportunitySummary.score;
+    const diversityOpportunityWeight = diversityOpportunitySummary.weight;
+    const diversityOpportunityAvailability = diversityOpportunitySummary.availability;
 
     if (diversity < pairDiversityThreshold) {
       penalizedForSimilarity = true;
@@ -5737,6 +5817,7 @@ export default class GridManager {
         behaviorComplementarity,
         strategyPressure,
         scarcity: scarcitySignal,
+        diversityOpportunity: diversityOpportunityScore,
       });
 
       diversityPenaltyMultiplier = clamp(diversityPenaltyMultiplier, 0, 1);
@@ -5780,6 +5861,11 @@ export default class GridManager {
         const diversityGap = clamp(pairDiversityThreshold - diversity, 0, 1);
 
         monotonySeverity *= 1 + diversityGap * 0.35;
+      }
+
+      if (diversityOpportunityScore > 0) {
+        monotonySeverity *= 1 + diversityOpportunityScore * 0.28;
+        monotonySeverity += diversityOpportunityScore * 0.08;
       }
 
       monotonySeverity = clamp(monotonySeverity, 0, 0.55);
@@ -6104,6 +6190,9 @@ export default class GridManager {
         threshold: pairDiversityThreshold,
         populationScarcityMultiplier: scarcityMultiplier,
         noveltyPressure: combinedNovelty,
+        diversityOpportunity: diversityOpportunityScore,
+        diversityOpportunityWeight,
+        diversityOpportunityAvailability,
       });
     }
 
@@ -6117,6 +6206,7 @@ export default class GridManager {
           behaviorComplementarity,
           strategyPenaltyMultiplier,
           populationScarcityMultiplier: scarcityMultiplier,
+          diversityOpportunity: diversityOpportunityScore,
         });
       }
     };
