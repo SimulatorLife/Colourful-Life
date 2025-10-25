@@ -662,7 +662,16 @@ export default class Cell {
   }
 
   scorePotentialMates(potentialMates = [], context = {}) {
-    const scored = [];
+    const scored = Array.isArray(this._mateScoreScratch)
+      ? this._mateScoreScratch
+      : (this._mateScoreScratch = []);
+
+    scored.length = 0;
+
+    if (!Array.isArray(potentialMates) || potentialMates.length === 0) {
+      return scored;
+    }
+
     const parentRow = Number.isFinite(context?.parentRow)
       ? context.parentRow
       : Number.isFinite(this.row)
@@ -673,6 +682,10 @@ export default class Cell {
       : Number.isFinite(this.col)
         ? this.col
         : null;
+    const applyDistancePenalty = parentRow != null && parentCol != null;
+    const neuralInfluence = this.#resolveNeuralMateInfluence();
+    const applyNeuralLift = neuralInfluence > 0;
+    const safeMinWeight = 0.0001;
 
     for (let i = 0; i < potentialMates.length; i++) {
       const mate = potentialMates[i];
@@ -710,20 +723,22 @@ export default class Cell {
           }
         }
 
-        if (Number.isFinite(evaluated?.neuralAffinity)) {
-          const influence = this.#resolveNeuralMateInfluence();
+        if (applyNeuralLift && Number.isFinite(evaluated?.neuralAffinity)) {
+          const baseWeight = evaluated.selectionWeight;
+          const normalizedBase = Number.isFinite(baseWeight)
+            ? Math.max(safeMinWeight, baseWeight)
+            : safeMinWeight;
+          const neuralSignal = evaluated.neuralAffinity;
+          const neuralLift = Math.max(
+            safeMinWeight,
+            normalizedBase * 0.5 + neuralSignal,
+          );
+          const blended = lerp(normalizedBase, neuralLift, neuralInfluence);
 
-          if (influence > 0) {
-            const baseWeight = Math.max(0.0001, evaluated.selectionWeight || 0);
-            const neuralSignal = evaluated.neuralAffinity;
-            const neuralLift = Math.max(0.0001, baseWeight * 0.5 + neuralSignal);
-            const blended = lerp(baseWeight, neuralLift, influence);
-
-            evaluated.selectionWeight = Math.max(0.0001, blended);
-          }
+          evaluated.selectionWeight = Math.max(safeMinWeight, blended);
         }
 
-        if (parentRow != null && parentCol != null) {
+        if (applyDistancePenalty) {
           const targetRow = Number.isFinite(mate.row)
             ? mate.row
             : Number.isFinite(mate.target?.row)
