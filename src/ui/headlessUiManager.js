@@ -29,6 +29,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @param {number} [options.eventStrengthMultiplier] Event strength multiplier.
  * @param {number} [options.energyRegenRate] Baseline energy regeneration.
  * @param {number} [options.energyDiffusionRate] Ambient energy spread.
+ * @param {number} [options.initialTileEnergyFraction] Fraction of tile energy cap applied to empty tiles.
  * @param {number} [options.combatEdgeSharpness] Sharpness multiplier for combat odds.
  * @param {number} [options.combatTerritoryEdgeFactor] Territory influence multiplier for combat odds.
  * @param {number} [options.matingDiversityThreshold] Genetic similarity tolerance for mating.
@@ -56,6 +57,8 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  *   setEnergyRegenRate: (value: number) => void,
  *   getEnergyDiffusionRate: () => number,
  *   setEnergyDiffusionRate: (value: number) => void,
+ *   getInitialTileEnergyFraction: () => number,
+ *   setInitialTileEnergyFraction: (value: number) => void,
  *   getMatingDiversityThreshold: () => number,
  *   setMatingDiversityThreshold: (value: number) => void,
  *   getLowDiversityReproMultiplier: () => number,
@@ -237,6 +240,12 @@ export function createHeadlessUiManager(options = {}) {
     setEnergyDiffusionRate: (value) => {
       if (updateIfFinite("energyDiffusionRate", value, { min: 0 })) {
         notify("energyDiffusionRate", settings.energyDiffusionRate);
+      }
+    },
+    getInitialTileEnergyFraction: () => settings.initialTileEnergyFraction,
+    setInitialTileEnergyFraction: (value) => {
+      if (updateIfFinite("initialTileEnergyFraction", value, { min: 0, max: 1 })) {
+        notify("initialTileEnergyFraction", settings.initialTileEnergyFraction);
       }
     },
     getMatingDiversityThreshold: () => settings.matingDiversityThreshold,

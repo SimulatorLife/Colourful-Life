@@ -1324,6 +1324,30 @@ export default class SimulationEngine {
     }
   }
 
+  setInitialTileEnergyFraction(value, { refreshEmptyTiles = true } = {}) {
+    const sanitized = sanitizeNumber(value, {
+      fallback: this.state.initialTileEnergyFraction,
+      min: 0,
+      max: 1,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const previous = Number.isFinite(this.state.initialTileEnergyFraction)
+      ? this.state.initialTileEnergyFraction
+      : SIMULATION_DEFAULTS.initialTileEnergyFraction;
+    const changed = Math.abs(previous - sanitized) > 1e-6;
+
+    this.grid?.setInitialTileEnergyFraction?.(sanitized, {
+      refreshEmptyTiles,
+      forceRefresh: refreshEmptyTiles && !changed,
+    });
+
+    this.#updateState({ initialTileEnergyFraction: sanitized });
+  }
+
   setLeaderboardInterval(value) {
     const sanitized = sanitizeNumber(value, {
       fallback: this.state.leaderboardIntervalMs,
@@ -1408,6 +1432,9 @@ export default class SimulationEngine {
         break;
       case "energyDiffusionRate":
         this.setEnergyRates({ diffusion: value });
+        break;
+      case "initialTileEnergyFraction":
+        this.setInitialTileEnergyFraction(value);
         break;
       case "mutationMultiplier":
         this.setMutationMultiplier(value);

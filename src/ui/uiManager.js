@@ -322,6 +322,8 @@ export default class UIManager {
     this.matingDiversityThreshold = defaults.matingDiversityThreshold;
     this.lowDiversityReproMultiplier = defaults.lowDiversityReproMultiplier;
     this.lowDiversitySlider = null;
+    this.initialTileEnergyFraction = defaults.initialTileEnergyFraction;
+    this.initialTileEnergySlider = null;
     this.energyRegenRate = defaults.energyRegenRate; // base logistic regen rate (0..0.2)
     this.energyDiffusionRate = defaults.energyDiffusionRate; // neighbor diffusion rate (0..0.5)
     this.leaderboardIntervalMs = defaults.leaderboardIntervalMs;
@@ -3015,6 +3017,17 @@ export default class UIManager {
         getValue: () => this.densityEffectMultiplier,
         setValue: (v) => this.#updateSetting("densityEffectMultiplier", v),
       }),
+      withSliderConfig("initialTileEnergyFraction", {
+        label: "Empty Tile Energy",
+        min: 0,
+        max: 1,
+        step: 0.05,
+        title:
+          "Fraction of the energy cap applied to empty tiles during resets and world refreshes (0..1)",
+        format: (v) => `${Math.round(v * 100)}%`,
+        getValue: () => this.initialTileEnergyFraction,
+        setValue: (v) => this.setInitialTileEnergyFraction(v),
+      }),
       withSliderConfig("energyRegenRate", {
         label: "Energy Regen Rate",
         min: 0,
@@ -3333,9 +3346,13 @@ export default class UIManager {
     createSectionHeading(body, "Energy Dynamics");
     const energyGroup = createControlGrid(body);
 
-    sliderContext.energyConfigs.forEach((cfg) =>
-      sliderContext.renderSlider(cfg, energyGroup),
-    );
+    sliderContext.energyConfigs.forEach((cfg) => {
+      const input = sliderContext.renderSlider(cfg, energyGroup);
+
+      if (cfg.key === "initialTileEnergyFraction") {
+        this.initialTileEnergySlider = input;
+      }
+    });
 
     sliderContext.generalConfigs
       .filter((cfg) => cfg.position === "afterEnergy")
@@ -3846,6 +3863,9 @@ export default class UIManager {
   getEventFrequencyMultiplier() {
     return this.eventFrequencyMultiplier;
   }
+  getInitialTileEnergyFraction() {
+    return this.initialTileEnergyFraction;
+  }
   getEnergyRegenRate() {
     return this.energyRegenRate;
   }
@@ -3880,6 +3900,24 @@ export default class UIManager {
   }
   getShowLifeEventMarkers() {
     return this.showLifeEventMarkers;
+  }
+
+  setInitialTileEnergyFraction(value, { notify = true } = {}) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) return;
+
+    const clamped = clamp(numeric, 0, 1);
+
+    this.initialTileEnergyFraction = clamped;
+
+    if (this.initialTileEnergySlider?.updateDisplay) {
+      this.initialTileEnergySlider.updateDisplay(clamped);
+    }
+
+    if (notify) {
+      this.#notifySettingChange("initialTileEnergyFraction", clamped);
+    }
   }
 
   setLowDiversityReproMultiplier(value, { notify = true } = {}) {

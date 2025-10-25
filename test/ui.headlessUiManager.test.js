@@ -44,6 +44,9 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   manager.setEnergyDiffusionRate(0.45);
   manager.setEnergyDiffusionRate("oops");
 
+  manager.setInitialTileEnergyFraction(0.8);
+  manager.setInitialTileEnergyFraction("oops");
+
   manager.setAutoPauseOnBlur(true);
 
   assert.equal(notifications, [
@@ -63,6 +66,7 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
     ["energyRegenRate", 0.12],
     ["energyRegenRate", 0],
     ["energyDiffusionRate", 0.45],
+    ["initialTileEnergyFraction", 0.8],
     ["autoPauseOnBlur", true],
   ]);
 
@@ -77,6 +81,7 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   assert.is(manager.getDensityEffectMultiplier(), 0);
   assert.is(manager.getEnergyRegenRate(), 0);
   assert.is(manager.getEnergyDiffusionRate(), 0.45);
+  assert.is(manager.getInitialTileEnergyFraction(), 0.8);
   assert.is(manager.getAutoPauseOnBlur(), true);
 });
 

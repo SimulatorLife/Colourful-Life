@@ -48,6 +48,13 @@ export const UI_SLIDER_CONFIG = Object.freeze({
     step: 0.05,
     floor: 0,
   },
+  initialTileEnergyFraction: {
+    default: SIMULATION_DEFAULTS.initialTileEnergyFraction,
+    min: 0,
+    max: 1,
+    step: 0.05,
+    floor: 0,
+  },
   mutationMultiplier: {
     default: SIMULATION_DEFAULTS.mutationMultiplier,
     min: 0,
