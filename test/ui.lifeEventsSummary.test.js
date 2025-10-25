@@ -96,6 +96,17 @@ function createMetricsStatsFixture() {
       window: 120,
       eventsPer100Ticks: 0,
     }),
+    getLifeEventTimeline: () => ({
+      window: 120,
+      bucketSize: 10,
+      startTick: 0,
+      endTick: 0,
+      totalBirths: 0,
+      totalDeaths: 0,
+      maxBirths: 0,
+      maxDeaths: 0,
+      buckets: [{ index: 0, startTick: 0, endTick: 0, births: 0, deaths: 0 }],
+    }),
   };
 }
 
@@ -158,6 +169,21 @@ function createLifeEventStatsFixture() {
       eventsPer100Ticks: 8.3,
       birthsPer100Ticks: 5,
       deathsPer100Ticks: 3.3,
+    }),
+    getLifeEventTimeline: () => ({
+      window: 120,
+      bucketSize: 10,
+      startTick: 300,
+      endTick: 419,
+      totalBirths: 6,
+      totalDeaths: 4,
+      maxBirths: 3,
+      maxDeaths: 2,
+      buckets: [
+        { index: 0, startTick: 300, endTick: 309, births: 3, deaths: 1 },
+        { index: 1, startTick: 310, endTick: 319, births: 2, deaths: 2 },
+        { index: 2, startTick: 320, endTick: 329, births: 1, deaths: 1 },
+      ],
     }),
   };
 }
@@ -662,6 +688,108 @@ test("life events only render after the panel expands", async () => {
       uiManager._pendingLifeEventsStats,
       null,
       "life events queue should clear after rendering",
+    );
+  } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
+test("life event timeline summarises cadence when events arrive", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements({ width: 320, height: 96 });
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      { getCellSize: () => 5 },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    openPanel(uiManager.insightsPanel);
+    openPanel(uiManager.lifeEventsPanel);
+
+    const stats = createLifeEventStatsFixture();
+    const snapshot = createSnapshotFixture();
+
+    uiManager.renderMetrics(stats, snapshot, {
+      eventStrengthMultiplier: 1,
+      activeEvents: [],
+    });
+
+    assert.ok(uiManager.lifeEventsTimelineSummary, "timeline summary should render");
+    assert.is(
+      uiManager.lifeEventsTimelineSummary.textContent,
+      "Last 120 ticks · 6 births (peak 3/10-tick) · 4 deaths (peak 2/10-tick)",
+      "timeline summary should highlight total and peak cadence",
+    );
+    assert.equal(
+      uiManager.lifeEventsTimelineEmptyState.hidden,
+      true,
+      "timeline empty hint should hide when activity is present",
+    );
+    assert.is(
+      uiManager.lifeEventsTimelineCanvas.getAttribute("aria-hidden"),
+      null,
+      "timeline canvas should expose data to assistive technology",
+    );
+  } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
+test("life event timeline shows empty state until events occur", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements({ width: 320, height: 96 });
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      { getCellSize: () => 5 },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    openPanel(uiManager.insightsPanel);
+    openPanel(uiManager.lifeEventsPanel);
+
+    const stats = createMetricsStatsFixture();
+    const snapshot = createSnapshotFixture();
+    const environment = { eventStrengthMultiplier: 1, activeEvents: [] };
+
+    uiManager.renderMetrics(stats, snapshot, environment);
+
+    assert.ok(uiManager.lifeEventsTimelineSummary, "timeline summary should exist");
+    assert.is(
+      uiManager.lifeEventsTimelineSummary.textContent,
+      "Run the simulation to chart birth and death cadence.",
+      "timeline summary should prompt players when there are no events",
+    );
+    assert.equal(
+      uiManager.lifeEventsTimelineEmptyState.hidden,
+      false,
+      "empty hint should remain visible without events",
+    );
+    assert.is(
+      uiManager.lifeEventsTimelineCanvas.getAttribute("aria-hidden"),
+      "true",
+      "timeline canvas should hide from assistive tech when empty",
     );
   } finally {
     restoreCanvas();

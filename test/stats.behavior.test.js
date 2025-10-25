@@ -763,6 +763,86 @@ test("life event ticks align with the active simulation tick", async () => {
   assert.is(deathEvent.tick, stats.totals.ticks);
 });
 
+test("life event timeline groups births and deaths by recent buckets", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+
+  stats.resetAll();
+
+  let population = 0;
+  const runTick = (births, deaths) => {
+    stats.resetTick();
+    for (let i = 0; i < births; i += 1) {
+      const cell = createCell({ row: i, col: i, energy: 5 });
+
+      stats.onBirth(cell, { row: cell.row, col: cell.col, energy: cell.energy });
+    }
+    for (let i = 0; i < deaths; i += 1) {
+      stats.onDeath({ row: i, col: i, cause: "combat" });
+    }
+
+    population = Math.max(0, population + births - deaths);
+    stats.updateFromSnapshot({
+      population,
+      totalEnergy: 0,
+      totalAge: 0,
+      entries: [],
+    });
+  };
+
+  runTick(2, 0);
+  runTick(0, 1);
+  runTick(1, 1);
+  runTick(0, 1);
+  runTick(0, 0);
+
+  const timeline = stats.getLifeEventTimeline(5, 2);
+
+  assert.ok(Array.isArray(timeline.buckets), "timeline should expose bucket series");
+  assert.is(timeline.buckets.length, 3, "window should collapse into 3 buckets");
+  assert.is(timeline.bucketSize, 2, "bucket size should respect the request");
+  assert.is(timeline.window, 5, "window should reflect inclusive tick span");
+  assert.is(timeline.startTick, 1, "window should start from the oldest sampled tick");
+  assert.is(
+    timeline.endTick,
+    stats.totals.ticks,
+    "window should end at the latest tick",
+  );
+  assert.is(timeline.buckets[0].births, 2);
+  assert.is(timeline.buckets[0].deaths, 1);
+  assert.is(timeline.buckets[1].births, 1);
+  assert.is(timeline.buckets[1].deaths, 2);
+  assert.is(timeline.buckets[2].births, 0);
+  assert.is(timeline.buckets[2].deaths, 0);
+  assert.is(timeline.totalBirths, 3, "birth totals should sum across buckets");
+  assert.is(timeline.totalDeaths, 3, "death totals should sum across buckets");
+  assert.is(timeline.maxBirths, 2, "peak births should track the largest bucket");
+  assert.is(timeline.maxDeaths, 2, "peak deaths should track the largest bucket");
+});
+
+test("life event timeline returns zeroed buckets when history is empty", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+
+  stats.resetAll();
+
+  const timeline = stats.getLifeEventTimeline(10, 3);
+
+  assert.ok(Array.isArray(timeline.buckets));
+  assert.is(timeline.buckets.length, 1, "should return at least one bucket");
+  assert.is(
+    timeline.window,
+    1,
+    "empty timeline should default to a single tick window",
+  );
+  assert.is(timeline.totalBirths, 0);
+  assert.is(timeline.totalDeaths, 0);
+  assert.is(timeline.maxBirths, 0);
+  assert.is(timeline.maxDeaths, 0);
+  assert.is(timeline.buckets[0].births, 0);
+  assert.is(timeline.buckets[0].deaths, 0);
+});
+
 test("diversity pressure responds to behavioral stagnation and complementary success", async () => {
   const { default: Stats } = await statsModulePromise;
 

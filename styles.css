@@ -956,6 +956,80 @@ canvas {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
+.life-events-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.life-events-timeline__title {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text);
+}
+
+.life-events-timeline__summary {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-subtle);
+}
+
+.life-events-timeline__chart {
+  position: relative;
+  width: 100%;
+}
+
+.life-events-timeline__canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.life-events-timeline__empty {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-subtle);
+}
+
+.life-events-timeline__legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+}
+
+.life-events-timeline__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--color-text-subtle);
+}
+
+.life-events-timeline__legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--color-text-subtle);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.life-events-timeline__legend-item--birth .life-events-timeline__legend-swatch {
+  background: var(--color-life-birth);
+}
+
+.life-events-timeline__legend-item--death .life-events-timeline__legend-swatch {
+  background: var(--color-life-death);
+}
+
 .life-events-summary__item {
   position: relative;
   display: flex;

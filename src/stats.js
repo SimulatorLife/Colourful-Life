@@ -1873,6 +1873,126 @@ export default class Stats {
     };
   }
 
+  getLifeEventTimeline(windowSize = LIFE_EVENT_RATE_DEFAULT_WINDOW, bucketSize = 12) {
+    const numericWindow = Math.floor(Number(windowSize));
+    const numericBucketSize = Math.floor(Number(bucketSize));
+    const bucketSpan =
+      Number.isFinite(numericBucketSize) && numericBucketSize > 0
+        ? numericBucketSize
+        : 1;
+    const latestTick = Number.isFinite(this.totals?.ticks) ? this.totals.ticks : 0;
+    const endExclusive = latestTick + 1;
+
+    if (!Number.isFinite(numericWindow) || numericWindow <= 0) {
+      const startTick = Math.max(0, endExclusive - bucketSpan);
+
+      return {
+        window: 0,
+        bucketSize: bucketSpan,
+        startTick,
+        endTick: endExclusive - 1,
+        totalBirths: 0,
+        totalDeaths: 0,
+        maxBirths: 0,
+        maxDeaths: 0,
+        buckets: [
+          {
+            index: 0,
+            startTick,
+            endTick: endExclusive - 1,
+            births: 0,
+            deaths: 0,
+          },
+        ],
+      };
+    }
+
+    const windowStart = Math.max(0, endExclusive - numericWindow);
+    const span = endExclusive - windowStart;
+    const inclusiveWindow = Math.max(1, Math.min(numericWindow, span));
+    const bucketCount = Math.max(1, Math.ceil(span / bucketSpan));
+    const buckets = Array.from({ length: bucketCount }, (_, index) => {
+      const startTick = windowStart + index * bucketSpan;
+      const endTick = Math.min(startTick + bucketSpan, endExclusive);
+
+      return {
+        index,
+        startTick,
+        endTick: endTick - 1,
+        births: 0,
+        deaths: 0,
+      };
+    });
+
+    const values = this.lifeEventLog?.values?.();
+
+    if (!Array.isArray(values) || values.length === 0) {
+      return {
+        window: inclusiveWindow,
+        bucketSize: bucketSpan,
+        startTick: windowStart,
+        endTick: endExclusive - 1,
+        totalBirths: 0,
+        totalDeaths: 0,
+        maxBirths: 0,
+        maxDeaths: 0,
+        buckets,
+      };
+    }
+
+    let totalBirths = 0;
+    let totalDeaths = 0;
+
+    for (const event of values) {
+      if (!event) continue;
+
+      const tick = Number.isFinite(event.tick) ? event.tick : null;
+
+      if (tick == null || tick < windowStart) {
+        continue;
+      }
+
+      const boundedTick = Math.min(tick, endExclusive - 1);
+      const bucketIndex = Math.min(
+        buckets.length - 1,
+        Math.floor((boundedTick - windowStart) / bucketSpan),
+      );
+
+      const bucket = buckets[bucketIndex];
+
+      if (!bucket) continue;
+
+      if (event.type === "birth") {
+        bucket.births += 1;
+        totalBirths += 1;
+      } else if (event.type === "death") {
+        bucket.deaths += 1;
+        totalDeaths += 1;
+      }
+    }
+
+    const maxBirths = buckets.reduce(
+      (max, bucket) => (bucket.births > max ? bucket.births : max),
+      0,
+    );
+    const maxDeaths = buckets.reduce(
+      (max, bucket) => (bucket.deaths > max ? bucket.deaths : max),
+      0,
+    );
+
+    return {
+      window: inclusiveWindow,
+      bucketSize: bucketSpan,
+      startTick: windowStart,
+      endTick: endExclusive - 1,
+      totalBirths,
+      totalDeaths,
+      maxBirths,
+      maxDeaths,
+      buckets,
+    };
+  }
+
   setRandomGenerator(randomFn) {
     this.#rng = typeof randomFn === "function" ? randomFn : DEFAULT_RANDOM;
   }
