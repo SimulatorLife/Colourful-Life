@@ -51,6 +51,7 @@ export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) 
     "getLastSnapshot",
     "setMatingDiversityOptions",
     "setBrainSnapshotCollector",
+    "setBrainSnapshotLimit",
   ];
   const statsMethods = [
     "resetTick",

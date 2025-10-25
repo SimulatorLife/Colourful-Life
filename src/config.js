@@ -49,6 +49,7 @@ const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.12;
 // headless consumers and UI presets can extend the leaderboard without touching
 // the engine internals.
 const DEFAULT_LEADERBOARD_SIZE = 5;
+const DEFAULT_BRAIN_SNAPSHOT_LIMIT = 5;
 
 export const LEADERBOARD_INTERVAL_MIN_MS = 100;
 const RUNTIME_ENV =
@@ -371,6 +372,7 @@ export function resolveOffspringViabilityBuffer(env = RUNTIME_ENV) {
 export const OFFSPRING_VIABILITY_BUFFER = resolveOffspringViabilityBuffer();
 export const INITIAL_TILE_ENERGY_FRACTION_DEFAULT =
   DEFAULT_INITIAL_TILE_ENERGY_FRACTION;
+export const BRAIN_SNAPSHOT_LIMIT_DEFAULT = DEFAULT_BRAIN_SNAPSHOT_LIMIT;
 
 export const SIMULATION_DEFAULTS = Object.freeze({
   paused: false,
@@ -397,6 +399,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showLifeEventMarkers: false,
   leaderboardIntervalMs: 750,
   leaderboardSize: DEFAULT_LEADERBOARD_SIZE,
+  brainSnapshotLimit: DEFAULT_BRAIN_SNAPSHOT_LIMIT,
   // Lowered from 0.45 after a 300-tick headless sample (60x60 grid, RNG seed
   // 12345) nudged mean diversity from ~0.27 to ~0.30 and bumped successful
   // matings from five to six without eliminating scarcity pressure. The softer
@@ -542,6 +545,7 @@ export function resolveSimulationDefaults(overrides = {}) {
   sanitizeNumeric("combatTerritoryEdgeFactor", { min: 0, max: 1 });
   sanitizeNumeric("leaderboardIntervalMs", { min: LEADERBOARD_INTERVAL_MIN_MS });
   sanitizeNumeric("leaderboardSize", { min: 0, round: Math.floor });
+  sanitizeNumeric("brainSnapshotLimit", { min: 0, round: Math.floor });
   sanitizeNumeric("matingDiversityThreshold", { min: 0, max: 1 });
   sanitizeNumeric("lowDiversityReproMultiplier", { min: 0, max: 1 });
 

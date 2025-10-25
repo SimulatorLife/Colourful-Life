@@ -135,6 +135,75 @@ test("buildSnapshot feeds sorted top entries to the brain snapshot collector", a
   }
 });
 
+test("buildSnapshot honours a custom brain snapshot limit", async () => {
+  const { default: GridManager } = await gridManagerModulePromise;
+  const originalInit = GridManager.prototype.init;
+
+  try {
+    let capturedEntries = null;
+    let captureOptions = null;
+
+    const collector = (entries, options) => {
+      capturedEntries = Array.isArray(entries)
+        ? entries.map((entry) => ({ ...entry }))
+        : entries;
+      captureOptions = options;
+
+      return [];
+    };
+
+    GridManager.prototype.init = function initStub() {};
+    const gm = new GridManager(2, 3, {
+      eventManager: { activeEvents: [] },
+      ctx: { fillStyle: null, fillRect() {} },
+      cellSize: 1,
+      stats: { onBirth() {}, onDeath() {}, onFight() {}, onCooperate() {} },
+      brainSnapshotCollector: collector,
+      brainSnapshotLimit: 2,
+    });
+
+    const energies = [10, 60, 20, 40, 50, 30];
+    let index = 0;
+
+    for (let row = 0; row < gm.rows; row += 1) {
+      for (let col = 0; col < gm.cols; col += 1) {
+        const energy = energies[index] ?? 0;
+
+        gm.grid[row][col] = createStubCell({
+          energy,
+          age: 0,
+          lifespan: 0,
+          fightsWon: 0,
+          fightsLost: 0,
+          offspring: 0,
+          brain: {
+            snapshot() {
+              return {};
+            },
+            neuronCount: 1,
+            connectionCount: 1,
+          },
+        });
+        index += 1;
+      }
+    }
+
+    gm.rebuildActiveCells();
+
+    gm.buildSnapshot(100);
+
+    assert.ok(Array.isArray(capturedEntries));
+    assert.is(capturedEntries.length, 2);
+    assert.is(captureOptions?.limit, 2);
+    const fitnesses = capturedEntries.map((entry) => entry.fitness);
+    const sorted = [...fitnesses].sort((a, b) => b - a);
+
+    assert.equal(fitnesses, sorted);
+  } finally {
+    GridManager.prototype.init = originalInit;
+  }
+});
+
 test("computeLeaderboard returns top entries in descending fitness order", async () => {
   const { computeLeaderboard } = await leaderboardModulePromise;
 

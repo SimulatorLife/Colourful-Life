@@ -9,6 +9,7 @@ import {
   COMBAT_TERRITORY_EDGE_FACTOR,
   SIMULATION_DEFAULTS,
   resolveSimulationDefaults,
+  BRAIN_SNAPSHOT_LIMIT_DEFAULT,
 } from "./config.js";
 import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
 import {
@@ -166,6 +167,14 @@ export default class SimulationEngine {
     );
 
     defaults.maxConcurrentEvents = maxConcurrentEvents;
+    const brainSnapshotLimit = sanitizePositiveInteger(defaults.brainSnapshotLimit, {
+      fallback: Number.isFinite(SIMULATION_DEFAULTS.brainSnapshotLimit)
+        ? SIMULATION_DEFAULTS.brainSnapshotLimit
+        : BRAIN_SNAPSHOT_LIMIT_DEFAULT,
+      min: 0,
+    });
+
+    defaults.brainSnapshotLimit = brainSnapshotLimit;
 
     const baseUpdatesCandidate =
       Number.isFinite(defaults.speedMultiplier) && defaults.speedMultiplier > 0
@@ -230,7 +239,6 @@ export default class SimulationEngine {
         ? "random"
         : "none";
 
-    this.brainSnapshotCollector = brainSnapshotCollector ?? null;
     this.grid = new GridManager(rows, cols, {
       eventManager: this.eventManager,
       ctx: this.ctx,
@@ -245,8 +253,12 @@ export default class SimulationEngine {
       obstaclePresets: this._obstaclePresets,
       rng,
       brainSnapshotCollector,
+      brainSnapshotLimit,
       performanceNow: this.now,
     });
+
+    this.brainSnapshotCollector = brainSnapshotCollector ?? null;
+    this.brainSnapshotLimit = brainSnapshotLimit;
 
     if (win) {
       win.grid = this.grid;
@@ -281,6 +293,7 @@ export default class SimulationEngine {
       showFitness: defaults.showFitness,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
+      brainSnapshotLimit,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
       initialTileEnergyFraction: defaults.initialTileEnergyFraction,
@@ -1360,6 +1373,27 @@ export default class SimulationEngine {
     this.grid?.setBrainSnapshotCollector(collector);
   }
 
+  setBrainSnapshotLimit(value) {
+    const fallback =
+      Number.isFinite(this.brainSnapshotLimit) && this.brainSnapshotLimit >= 0
+        ? this.brainSnapshotLimit
+        : (SIMULATION_DEFAULTS.brainSnapshotLimit ?? BRAIN_SNAPSHOT_LIMIT_DEFAULT);
+    const sanitized = sanitizePositiveInteger(value, {
+      fallback,
+      min: 0,
+    });
+
+    if (this.brainSnapshotLimit === sanitized) {
+      return this.brainSnapshotLimit;
+    }
+
+    this.brainSnapshotLimit = sanitized;
+    this.grid?.setBrainSnapshotLimit?.(sanitized);
+    this.#updateState({ brainSnapshotLimit: sanitized });
+
+    return this.brainSnapshotLimit;
+  }
+
   setAutoPauseOnBlur(value) {
     const enabled = coerceBoolean(value, this.autoPauseOnBlur);
 
@@ -1441,6 +1475,9 @@ export default class SimulationEngine {
       }
       case "leaderboardIntervalMs":
         this.setLeaderboardInterval(value);
+        break;
+      case "brainSnapshotLimit":
+        this.setBrainSnapshotLimit(value);
         break;
       case "showObstacles":
       case "showEnergy":
