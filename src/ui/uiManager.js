@@ -42,6 +42,14 @@ const DEATH_CAUSE_COLOR_MAP = Object.freeze({
 const DEFAULT_DEATH_BREAKDOWN_MAX_ENTRIES = 4;
 const DEATH_BREAKDOWN_OTHER_COLOR = "rgba(255, 255, 255, 0.28)";
 
+const LIFE_EVENT_TIMELINE_DEFAULT_WINDOW = 120;
+const LIFE_EVENT_TIMELINE_TARGET_BUCKETS = 12;
+const LIFE_EVENT_TIMELINE_MIN_BUCKET_SIZE = 4;
+const LIFE_EVENT_TIMELINE_CANVAS = Object.freeze({
+  width: 320,
+  height: 96,
+});
+
 const DEFAULT_TRAIT_DISPLAY_CONFIG = Object.freeze({
   cooperation: Object.freeze({
     name: "Cooperation",
@@ -274,6 +282,10 @@ export default class UIManager {
     this.lifeEventsSummaryNet = null;
     this.lifeEventsSummaryDirection = null;
     this.lifeEventsSummaryRate = null;
+    this.lifeEventsTimelineCard = null;
+    this.lifeEventsTimelineCanvas = null;
+    this.lifeEventsTimelineSummary = null;
+    this.lifeEventsTimelineEmptyState = null;
     this._pendingMetrics = null;
     this._pendingLeaderboardEntries = null;
     this._pendingLifeEventsStats = null;
@@ -2246,6 +2258,174 @@ export default class UIManager {
     }
   }
 
+  #renderLifeEventTimeline(timeline) {
+    if (!this.lifeEventsTimelineCanvas) {
+      return;
+    }
+
+    const canvas = this.lifeEventsTimelineCanvas;
+    const summary = this.lifeEventsTimelineSummary;
+    const emptyState = this.lifeEventsTimelineEmptyState;
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      if (summary) {
+        summary.textContent = "Run the simulation to chart birth and death cadence.";
+      }
+      if (emptyState) emptyState.hidden = false;
+
+      return;
+    }
+
+    const buckets = Array.isArray(timeline?.buckets) ? timeline.buckets : [];
+    const bucketSpan =
+      Number.isFinite(timeline?.bucketSize) && timeline.bucketSize > 0
+        ? Math.floor(timeline.bucketSize)
+        : LIFE_EVENT_TIMELINE_MIN_BUCKET_SIZE;
+    const totalBirths = Number.isFinite(timeline?.totalBirths)
+      ? Math.max(0, Math.floor(timeline.totalBirths))
+      : buckets.reduce(
+          (sum, bucket) => sum + Math.max(0, Math.floor(bucket?.births || 0)),
+          0,
+        );
+    const totalDeaths = Number.isFinite(timeline?.totalDeaths)
+      ? Math.max(0, Math.floor(timeline.totalDeaths))
+      : buckets.reduce(
+          (sum, bucket) => sum + Math.max(0, Math.floor(bucket?.deaths || 0)),
+          0,
+        );
+    const maxBirths = Number.isFinite(timeline?.maxBirths)
+      ? Math.max(0, Math.floor(timeline.maxBirths))
+      : buckets.reduce(
+          (max, bucket) =>
+            bucket && Number.isFinite(bucket.births) && bucket.births > max
+              ? Math.floor(bucket.births)
+              : max,
+          0,
+        );
+    const maxDeaths = Number.isFinite(timeline?.maxDeaths)
+      ? Math.max(0, Math.floor(timeline.maxDeaths))
+      : buckets.reduce(
+          (max, bucket) =>
+            bucket && Number.isFinite(bucket.deaths) && bucket.deaths > max
+              ? Math.floor(bucket.deaths)
+              : max,
+          0,
+        );
+    const maxCount = Math.max(maxBirths, maxDeaths);
+    const windowTicks =
+      Number.isFinite(timeline?.window) && timeline.window > 0
+        ? Math.round(timeline.window)
+        : Math.max(1, bucketSpan * Math.max(1, buckets.length));
+    const bucketLabel = bucketSpan === 1 ? "tick" : `${bucketSpan}-tick`;
+
+    if (summary) {
+      if (maxCount > 0) {
+        const birthLabel = totalBirths === 1 ? "birth" : "births";
+        const deathLabel = totalDeaths === 1 ? "death" : "deaths";
+
+        summary.textContent = `Last ${windowTicks} ticks · ${totalBirths} ${birthLabel} (peak ${maxBirths}/${bucketLabel}) · ${totalDeaths} ${deathLabel} (peak ${maxDeaths}/${bucketLabel})`;
+      } else {
+        summary.textContent = "Run the simulation to chart birth and death cadence.";
+      }
+    }
+
+    if (maxCount > 0) {
+      canvas.setAttribute(
+        "aria-label",
+        `Birth and death cadence across the last ${windowTicks} ticks.`,
+      );
+      canvas.removeAttribute("aria-hidden");
+    } else {
+      canvas.setAttribute(
+        "aria-label",
+        "Birth and death cadence will appear once events are recorded.",
+      );
+      canvas.setAttribute("aria-hidden", "true");
+    }
+
+    if (emptyState) {
+      emptyState.hidden = maxCount > 0;
+    }
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const paddingX = 16;
+    const paddingY = 10;
+    const chartWidth = Math.max(0, width - paddingX * 2);
+    const chartHeight = Math.max(0, height - paddingY * 2);
+    const baseline = Math.round(paddingY + chartHeight / 2) + 0.5;
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(paddingX, baseline);
+    ctx.lineTo(width - paddingX, baseline);
+    ctx.stroke();
+
+    if (!(maxCount > 0 && buckets.length > 0)) {
+      ctx.restore();
+
+      return;
+    }
+
+    const birthColor = this.#resolveCssColor("--color-life-birth", "#4caf50");
+    const deathColor = this.#resolveCssColor("--color-life-death", "#e74c3c");
+    const scale = chartHeight > 0 ? chartHeight / 2 / maxCount : 0;
+    const spacing = buckets.length > 1 ? chartWidth / (buckets.length - 1) : 0;
+    const barWidth =
+      buckets.length > 1
+        ? Math.max(4, Math.min(18, spacing * 0.5))
+        : Math.min(48, chartWidth * 0.6);
+
+    for (let index = 0; index < buckets.length; index += 1) {
+      const bucket = buckets[index] || {};
+      const centerX =
+        buckets.length > 1 ? paddingX + spacing * index : paddingX + chartWidth / 2;
+      const births = Math.max(0, Number.isFinite(bucket.births) ? bucket.births : 0);
+      const deaths = Math.max(0, Number.isFinite(bucket.deaths) ? bucket.deaths : 0);
+
+      if (births > 0) {
+        const heightPx = births * scale;
+
+        ctx.fillStyle = birthColor;
+        ctx.fillRect(centerX - barWidth / 2, baseline - heightPx, barWidth, heightPx);
+      }
+
+      if (deaths > 0) {
+        const heightPx = deaths * scale;
+
+        ctx.fillStyle = deathColor;
+        ctx.fillRect(centerX - barWidth / 2, baseline, barWidth, heightPx);
+      }
+    }
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+
+    for (let index = 0; index < buckets.length; index += 1) {
+      const bucket = buckets[index] || {};
+      const centerX =
+        buckets.length > 1 ? paddingX + spacing * index : paddingX + chartWidth / 2;
+      const net =
+        (Number.isFinite(bucket.births) ? bucket.births : 0) -
+        (Number.isFinite(bucket.deaths) ? bucket.deaths : 0);
+      const y = baseline - clamp(net, -maxCount, maxCount) * scale;
+
+      if (index === 0) {
+        ctx.moveTo(centerX, y);
+      } else {
+        ctx.lineTo(centerX, y);
+      }
+    }
+
+    ctx.stroke();
+    ctx.restore();
+  }
+
   #renderLifeEvents(stats, metrics = null) {
     if (!this.lifeEventList) return;
 
@@ -2259,6 +2439,30 @@ export default class UIManager {
         : null;
     const deathBreakdown =
       metrics?.deathBreakdown != null ? metrics.deathBreakdown : stats?.deathBreakdown;
+
+    const windowCandidate = Number.isFinite(trendSummary?.window)
+      ? Math.max(1, Math.round(trendSummary.window))
+      : LIFE_EVENT_TIMELINE_DEFAULT_WINDOW;
+    const bucketEstimate = Math.max(
+      1,
+      Math.round(windowCandidate / LIFE_EVENT_TIMELINE_TARGET_BUCKETS),
+    );
+    const bucketSize = Math.min(
+      Math.max(bucketEstimate, LIFE_EVENT_TIMELINE_MIN_BUCKET_SIZE),
+      windowCandidate,
+    );
+    let timeline = null;
+
+    if (typeof stats?.getLifeEventTimeline === "function") {
+      timeline = stats.getLifeEventTimeline(windowCandidate, bucketSize);
+    } else if (
+      metrics?.lifeEventTimeline &&
+      typeof metrics.lifeEventTimeline === "object"
+    ) {
+      timeline = metrics.lifeEventTimeline;
+    }
+
+    this.#renderLifeEventTimeline(timeline);
 
     this.lifeEventList.innerHTML = "";
 
@@ -3849,6 +4053,107 @@ export default class UIManager {
 
     this.lifeEventsSummary.appendChild(trendSummary);
     lifeBody.appendChild(this.lifeEventsSummary);
+
+    const timelineCard = document.createElement("div");
+
+    timelineCard.className = "life-events-timeline";
+    timelineCard.setAttribute(
+      "aria-label",
+      "Birth and death cadence across the recent observation window",
+    );
+
+    const timelineTitle = document.createElement("h5");
+
+    timelineTitle.className = "life-events-timeline__title";
+    timelineTitle.textContent = "Birth & Death Cadence";
+    timelineCard.appendChild(timelineTitle);
+
+    const timelineSummary = document.createElement("p");
+
+    timelineSummary.className = "life-events-timeline__summary control-hint";
+    timelineSummary.textContent =
+      "Run the simulation to chart birth and death cadence.";
+    timelineCard.appendChild(timelineSummary);
+
+    const timelineChart = document.createElement("div");
+
+    timelineChart.className = "life-events-timeline__chart";
+    const timelineCanvas = document.createElement("canvas");
+
+    timelineCanvas.className = "life-events-timeline__canvas";
+    timelineCanvas.width = LIFE_EVENT_TIMELINE_CANVAS.width;
+    timelineCanvas.height = LIFE_EVENT_TIMELINE_CANVAS.height;
+    timelineCanvas.setAttribute(
+      "aria-label",
+      "Birth and death cadence across the recent observation window",
+    );
+    timelineCanvas.setAttribute("role", "img");
+    timelineChart.appendChild(timelineCanvas);
+    timelineCard.appendChild(timelineChart);
+
+    const timelineEmpty = document.createElement("p");
+
+    timelineEmpty.className = "life-events-timeline__empty control-hint";
+    timelineEmpty.textContent = "No events recorded in the recent window yet.";
+    timelineCard.appendChild(timelineEmpty);
+
+    const timelineLegend = document.createElement("div");
+
+    timelineLegend.className = "life-events-timeline__legend";
+    timelineLegend.setAttribute("role", "list");
+
+    const createLegendItem = (label, modifierClass, colorVar, fallbackColor) => {
+      const item = document.createElement("span");
+
+      item.className = ["life-events-timeline__legend-item", modifierClass]
+        .filter(Boolean)
+        .join(" ");
+      item.setAttribute("role", "listitem");
+
+      const swatch = document.createElement("span");
+
+      swatch.className = "life-events-timeline__legend-swatch";
+      if (colorVar) {
+        swatch.style.background = `var(${colorVar}, ${fallbackColor})`;
+      } else if (fallbackColor) {
+        swatch.style.background = fallbackColor;
+      }
+
+      const text = document.createElement("span");
+
+      text.className = "life-events-timeline__legend-label";
+      text.textContent = label;
+
+      item.appendChild(swatch);
+      item.appendChild(text);
+
+      return item;
+    };
+
+    timelineLegend.appendChild(
+      createLegendItem(
+        "Births",
+        "life-events-timeline__legend-item--birth",
+        "--color-life-birth",
+        "#4caf50",
+      ),
+    );
+    timelineLegend.appendChild(
+      createLegendItem(
+        "Deaths",
+        "life-events-timeline__legend-item--death",
+        "--color-life-death",
+        "#e74c3c",
+      ),
+    );
+    timelineCard.appendChild(timelineLegend);
+
+    lifeBody.appendChild(timelineCard);
+
+    this.lifeEventsTimelineCard = timelineCard;
+    this.lifeEventsTimelineCanvas = timelineCanvas;
+    this.lifeEventsTimelineSummary = timelineSummary;
+    this.lifeEventsTimelineEmptyState = timelineEmpty;
 
     const breakdownCard = document.createElement("div");
 
