@@ -157,6 +157,8 @@ export default class GridManager {
   #sparseDirtyColumnsScratch = null;
   #sparseDirtyRowsScratch = null;
   #densityPrefixScratch = null;
+  #occupantRegenVersion = null;
+  #occupantRegenRevision = 0;
   #imageDataCanvas = null;
   #imageDataCtx = null;
   #imageData = null;
@@ -401,6 +403,72 @@ export default class GridManager {
     }
 
     return this.#eventRowsScratch;
+  }
+
+  #ensureOccupantRegenBuffers(rowCount, colCount) {
+    const rows = Math.max(0, Math.floor(Number.isFinite(rowCount) ? rowCount : 0));
+    const cols = Math.max(0, Math.floor(Number.isFinite(colCount) ? colCount : 0));
+
+    if (
+      !Array.isArray(this.pendingOccupantRegen) ||
+      this.pendingOccupantRegen.length !== rows
+    ) {
+      this.pendingOccupantRegen = Array.from({ length: rows }, () =>
+        Array(cols).fill(0),
+      );
+    } else {
+      for (let r = 0; r < rows; r++) {
+        const existing = this.pendingOccupantRegen[r];
+
+        if (!existing || existing.length !== cols) {
+          this.pendingOccupantRegen[r] = Array(cols).fill(0);
+        }
+      }
+    }
+
+    if (
+      !Array.isArray(this.#occupantRegenVersion) ||
+      this.#occupantRegenVersion.length !== rows
+    ) {
+      this.#occupantRegenVersion = Array.from(
+        { length: rows },
+        () => new Uint32Array(cols),
+      );
+    } else {
+      for (let r = 0; r < rows; r++) {
+        const versionRow = this.#occupantRegenVersion[r];
+
+        if (!versionRow || versionRow.length !== cols) {
+          this.#occupantRegenVersion[r] = new Uint32Array(cols);
+        }
+      }
+    }
+
+    if (
+      !Number.isFinite(this.#occupantRegenRevision) ||
+      this.#occupantRegenRevision < 0
+    ) {
+      this.#occupantRegenRevision = 0;
+    }
+  }
+
+  #advanceOccupantRegenRevision() {
+    let nextRevision = Math.trunc(this.#occupantRegenRevision) + 1;
+
+    if (!Number.isFinite(nextRevision) || nextRevision >= 0xffffffff) {
+      nextRevision = 1;
+      const versionGrid = this.#occupantRegenVersion;
+
+      if (Array.isArray(versionGrid)) {
+        for (let i = 0; i < versionGrid.length; i++) {
+          versionGrid[i]?.fill?.(0);
+        }
+      }
+    }
+
+    this.#occupantRegenRevision = nextRevision;
+
+    return nextRevision;
   }
 
   #ensureDensityPrefix(rowCount, colCount) {
@@ -1357,7 +1425,7 @@ export default class GridManager {
     );
     this.energyNext = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.energyDeltaGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
-    this.pendingOccupantRegen = Array.from({ length: rows }, () => Array(cols).fill(0));
+    this.#ensureOccupantRegenBuffers(rows, cols);
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
     this.#resetObstacleRenderCache();
@@ -2580,9 +2648,7 @@ export default class GridManager {
     this.energyDeltaGrid = Array.from({ length: rowsInt }, () =>
       Array(colsInt).fill(0),
     );
-    this.pendingOccupantRegen = Array.from({ length: rowsInt }, () =>
-      Array(colsInt).fill(0),
-    );
+    this.#ensureOccupantRegenBuffers(rowsInt, colsInt);
     this.#initializeDecayBuffers(rowsInt, colsInt);
     this.obstacles = Array.from({ length: rowsInt }, () => Array(colsInt).fill(false));
     this.#resetObstacleRenderCache();
@@ -2704,6 +2770,9 @@ export default class GridManager {
         if (densityRow) densityRow[col] = 0;
         if (this.pendingOccupantRegen?.[row]) {
           this.pendingOccupantRegen[row][col] = 0;
+        }
+        if (this.#occupantRegenVersion?.[row]) {
+          this.#occupantRegenVersion[row][col] = 0;
         }
       }
     }
@@ -2940,11 +3009,30 @@ export default class GridManager {
     const evs = Array.isArray(events) ? events : events ? [events] : EMPTY_EVENT_LIST;
     const hasEvents = evs.length > 0;
     const hasDensityGrid = Array.isArray(densityGrid);
+    let occupantRegenGrid = this.pendingOccupantRegen;
+    let occupantRegenVersion = this.#occupantRegenVersion;
+
+    if (
+      !Array.isArray(occupantRegenGrid) ||
+      occupantRegenGrid.length !== rows ||
+      (rows > 0 &&
+        (!Array.isArray(occupantRegenGrid[0]) ||
+          occupantRegenGrid[0].length !== cols)) ||
+      !Array.isArray(occupantRegenVersion) ||
+      occupantRegenVersion.length !== rows ||
+      (rows > 0 &&
+        (!occupantRegenVersion[0] || occupantRegenVersion[0].length !== cols))
+    ) {
+      this.#ensureOccupantRegenBuffers(rows, cols);
+      occupantRegenGrid = this.pendingOccupantRegen;
+      occupantRegenVersion = this.#occupantRegenVersion;
+    }
+
     const energyGrid = this.energyGrid;
     const next = this.energyNext;
     const deltaGrid = this.energyDeltaGrid;
     const obstacles = this.obstacles;
-    const occupantRegenGrid = this.pendingOccupantRegen;
+    const occupantRevision = this.#advanceOccupantRegenRevision();
     const { isEventAffecting, getEventEffect } =
       this.eventContext ?? defaultEventContext;
     const regenRate = Number.isFinite(R) ? R : 0;
@@ -3052,6 +3140,7 @@ export default class GridManager {
       upObstacleRow,
       downObstacleRow,
       occupantRegenRow,
+      occupantRegenVersionRow,
       regenMultiplier = 1,
       regenAdd = 0,
       drain = 0,
@@ -3146,6 +3235,7 @@ export default class GridManager {
 
       if (occupant) {
         if (occupantRegenRow) occupantRegenRow[c] = nextEnergy;
+        if (occupantRegenVersionRow) occupantRegenVersionRow[c] = occupantRevision;
 
         nextRow[c] = 0;
         energyRow[c] = 0;
@@ -3184,6 +3274,7 @@ export default class GridManager {
           upObstacleRow,
           downObstacleRow,
           occupantRegenRow,
+          occupantRegenVersionRow,
           eventsForTile,
         ) => {
           let regenMultiplier = 1;
@@ -3222,6 +3313,7 @@ export default class GridManager {
             upObstacleRow,
             downObstacleRow,
             occupantRegenRow,
+            occupantRegenVersionRow,
             regenMultiplier,
             regenAdd,
             drain,
@@ -3276,6 +3368,7 @@ export default class GridManager {
           upObstacleRow,
           downObstacleRow,
           occupantRegenRow,
+          occupantRegenVersionRow,
         ) =>
           processTileBase(
             r,
@@ -3291,6 +3384,7 @@ export default class GridManager {
             upObstacleRow,
             downObstacleRow,
             occupantRegenRow,
+            occupantRegenVersionRow,
           );
 
     let processedTileCount = 0;
@@ -3348,24 +3442,11 @@ export default class GridManager {
           const upObstacleRow = r > 0 ? obstacles[r - 1] : null;
           const downObstacleRow = r < rows - 1 ? obstacles[r + 1] : null;
           const occupantRegenRow = occupantRegenGrid ? occupantRegenGrid[r] : null;
+          const occupantRegenVersionRow = occupantRegenVersion
+            ? occupantRegenVersion[r]
+            : null;
 
           const columnCount = columns.length;
-
-          if (occupantRegenRow) {
-            const preferFill = columnCount * 2 >= cols;
-
-            if (preferFill) {
-              occupantRegenRow.fill(0);
-            } else {
-              for (let j = 0; j < columnCount; j++) {
-                const targetCol = columns[j];
-
-                if (targetCol >= 0 && targetCol < cols) {
-                  occupantRegenRow[targetCol] = 0;
-                }
-              }
-            }
-          }
 
           const rowEvents = hasEvents
             ? eventsByRow
@@ -3488,6 +3569,7 @@ export default class GridManager {
               upObstacleRow,
               downObstacleRow,
               occupantRegenRow,
+              occupantRegenVersionRow,
               regenMultiplier,
               regenAdd,
               drain,
@@ -3514,8 +3596,9 @@ export default class GridManager {
         const upObstacleRow = r > 0 ? obstacles[r - 1] : null;
         const downObstacleRow = r < rows - 1 ? obstacles[r + 1] : null;
         const occupantRegenRow = occupantRegenGrid ? occupantRegenGrid[r] : null;
-
-        if (occupantRegenRow) occupantRegenRow.fill(0);
+        const occupantRegenVersionRow = occupantRegenVersion
+          ? occupantRegenVersion[r]
+          : null;
 
         const rowEvents = hasEvents
           ? eventsByRow
@@ -3629,6 +3712,7 @@ export default class GridManager {
               upObstacleRow,
               downObstacleRow,
               occupantRegenRow,
+              occupantRegenVersionRow,
               regenMultiplier,
               regenAdd,
               drain,
@@ -3660,6 +3744,7 @@ export default class GridManager {
             upObstacleRow,
             downObstacleRow,
             occupantRegenRow,
+            occupantRegenVersionRow,
             eventsForRow,
           );
           processedTileCount += 1;
@@ -5225,12 +5310,19 @@ export default class GridManager {
 
     let pendingRegen = 0;
 
-    if (this.pendingOccupantRegen) {
+    if (this.pendingOccupantRegen && this.#occupantRegenVersion) {
       const regenRow = this.pendingOccupantRegen[row];
+      const versionRow = this.#occupantRegenVersion[row];
 
-      if (regenRow && Number.isFinite(regenRow[col]) && regenRow[col] > 0) {
-        pendingRegen = regenRow[col];
+      if (regenRow && versionRow && versionRow[col] === this.#occupantRegenRevision) {
+        const stored = regenRow[col];
+
+        if (Number.isFinite(stored) && stored > 0) {
+          pendingRegen = stored;
+        }
+
         regenRow[col] = 0;
+        versionRow[col] = 0;
       }
     }
 
