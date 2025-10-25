@@ -178,6 +178,7 @@ export default class GridManager {
   #rowOccupancy = [];
   #tickSimilarityCache = new WeakMap();
   #tickSimilarityVersion = -1;
+  #populationCellsScratch = null;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -364,6 +365,16 @@ export default class GridManager {
     }
 
     return scratch;
+  }
+
+  #acquirePopulationCellScratch() {
+    if (!Array.isArray(this.#populationCellsScratch)) {
+      this.#populationCellsScratch = [];
+    } else {
+      this.#populationCellsScratch.length = 0;
+    }
+
+    return this.#populationCellsScratch;
   }
 
   #ensureTrackedCell(cell) {
@@ -6623,7 +6634,7 @@ export default class GridManager {
   buildSnapshot(maxTileEnergy) {
     const cap = typeof maxTileEnergy === "number" ? maxTileEnergy : this.maxTileEnergy;
     const entries = [];
-    const populationCells = [];
+    const populationCells = this.#acquirePopulationCellScratch();
     const snapshot = {
       rows: this.rows,
       cols: this.cols,
