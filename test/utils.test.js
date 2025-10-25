@@ -4,6 +4,7 @@ import {
   lerp,
   clamp,
   clamp01,
+  coerceBoolean,
   sanitizeNumber,
   sanitizePositiveInteger,
   cloneTracePayload,
@@ -38,6 +39,40 @@ test("numeric helpers clamp and interpolate values deterministically", () => {
   assert.is(clamp(-1, 0, 4), 0);
   assert.is(clamp01("0.7"), 0.7);
   assert.is(clamp01(Number.POSITIVE_INFINITY), 0);
+});
+
+test("coerceBoolean normalizes boolean-like values with sane fallbacks", () => {
+  assert.is(coerceBoolean(true), true);
+  assert.is(coerceBoolean(false), false);
+
+  assert.is(coerceBoolean(null, true), true, "null returns fallback");
+  assert.is(coerceBoolean(undefined, true), true, "undefined returns fallback");
+
+  assert.is(coerceBoolean(0), false);
+  assert.is(coerceBoolean(1), true);
+  assert.is(coerceBoolean(-2), true);
+  assert.is(
+    coerceBoolean(Number.POSITIVE_INFINITY, false),
+    false,
+    "non-finite numbers use fallback",
+  );
+  assert.is(coerceBoolean(Number.NaN, true), true, "NaN values use fallback");
+
+  assert.is(coerceBoolean("true"), true);
+  assert.is(coerceBoolean("FALSE"), false);
+  assert.is(coerceBoolean("  yes  "), true);
+  assert.is(coerceBoolean("Off"), false);
+  assert.is(coerceBoolean("2"), true, "numeric strings are coerced");
+  assert.is(coerceBoolean("0"), false, "numeric string zero coerces to false");
+  assert.is(
+    coerceBoolean("maybe", false),
+    false,
+    "non-numeric/keyword strings fall back",
+  );
+  assert.is(coerceBoolean("   ", true), true, "empty strings after trim use fallback");
+
+  assert.is(coerceBoolean({}), true, "objects coerce via Boolean constructor");
+  assert.is(coerceBoolean(Symbol("token")), true, "symbols coerce to true");
 });
 
 test("cloneTracePayload performs deep copies of sensors and nodes", () => {
