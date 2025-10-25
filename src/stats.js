@@ -229,13 +229,26 @@ class FixedSizeRingBuffer {
   }
 
   values() {
-    if (this.length === 0 || this.capacity === 0) return [];
+    const length = this.length;
+    const capacity = this.capacity;
 
-    return Array.from({ length: this.length }, (_, index) => {
-      const bufferIndex = (this.start + index) % this.capacity;
+    if (length === 0 || capacity === 0) return [];
 
-      return this.buffer[bufferIndex];
-    });
+    const result = new Array(length);
+    const buffer = this.buffer;
+    let index = 0;
+    let bufferIndex = this.start;
+
+    while (index < length) {
+      result[index++] = buffer[bufferIndex];
+      bufferIndex += 1;
+
+      if (bufferIndex === capacity) {
+        bufferIndex = 0;
+      }
+    }
+
+    return result;
   }
 
   clear() {
