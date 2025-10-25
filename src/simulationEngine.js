@@ -914,6 +914,7 @@ export default class SimulationEngine {
     const wasPaused = this.isPaused();
 
     this.stop();
+    this.#setAutoPausePending(false);
 
     this.cellSize = targetCellSize;
     this.rows = targetRows;
@@ -1027,6 +1028,7 @@ export default class SimulationEngine {
     const wasPaused = this.isPaused();
 
     this.stop();
+    this.#setAutoPausePending(false);
 
     if (typeof this.stats?.resetAll === "function") {
       this.stats.resetAll();

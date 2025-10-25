@@ -651,3 +651,33 @@ test("pause clears pending auto-resume flags", async () => {
     restore();
   }
 });
+
+test("resetWorld clears pending auto-resume flags when stopped", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.state.paused = true;
+    engine._autoPauseResumePending = true;
+    engine.state.autoPausePending = true;
+
+    engine.stop();
+
+    engine.resetWorld();
+
+    assert.is(
+      engine._autoPauseResumePending,
+      false,
+      "resetWorld clears the internal auto-resume flag when the loop is stopped",
+    );
+    assert.is(
+      engine.state.autoPausePending,
+      false,
+      "resetWorld clears autoPausePending in engine state when stopped",
+    );
+  } finally {
+    restore();
+  }
+});
