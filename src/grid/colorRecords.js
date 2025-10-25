@@ -47,8 +47,14 @@ export const EMPTY_COLOR_RECORD = Object.freeze({
 });
 
 function rememberColor(normalized, record) {
-  if (COLOR_CACHE_LIMIT <= 0 || COLOR_CACHE.has(normalized)) {
-    return COLOR_CACHE.get(normalized) ?? record;
+  if (COLOR_CACHE_LIMIT <= 0) {
+    return record;
+  }
+
+  const cached = COLOR_CACHE.get(normalized);
+
+  if (cached !== undefined || COLOR_CACHE.has(normalized)) {
+    return cached;
   }
 
   COLOR_CACHE.set(normalized, record);
@@ -59,15 +65,16 @@ function rememberColor(normalized, record) {
     return record;
   }
 
-  const evictKey = COLOR_CACHE_KEYS[colorCacheEvictIndex];
+  const evictIndex = colorCacheEvictIndex;
+  const evictKey = COLOR_CACHE_KEYS[evictIndex];
 
   if (evictKey !== undefined) {
     COLOR_CACHE.delete(evictKey);
   }
 
-  COLOR_CACHE_KEYS[colorCacheEvictIndex] = normalized;
+  COLOR_CACHE_KEYS[evictIndex] = normalized;
   colorCacheEvictIndex =
-    COLOR_CACHE_LIMIT > 0 ? (colorCacheEvictIndex + 1) % COLOR_CACHE_LIMIT : 0;
+    COLOR_CACHE_LIMIT > 0 ? (evictIndex + 1) % COLOR_CACHE_LIMIT : 0;
 
   return record;
 }
@@ -149,13 +156,15 @@ export function resolveColorRecord(color) {
     return EMPTY_COLOR_RECORD;
   }
 
-  if (COLOR_CACHE.has(normalized)) {
-    return COLOR_CACHE.get(normalized);
+  const cached = COLOR_CACHE.get(normalized);
+
+  if (cached !== undefined || COLOR_CACHE.has(normalized)) {
+    return cached;
   }
 
   let record = EMPTY_COLOR_RECORD;
 
-  if (normalized.startsWith("#")) {
+  if (normalized.charCodeAt(0) === 35 /* # */) {
     const match = HEX_PATTERN.exec(normalized);
 
     if (match) {
@@ -174,11 +183,13 @@ export function resolveColorRecord(color) {
     const match = RGB_PATTERN.exec(normalized);
 
     if (match) {
-      const r = clamp(parseInt(match[1], 10) || 0, 0, 255);
-      const g = clamp(parseInt(match[2], 10) || 0, 0, 255);
-      const b = clamp(parseInt(match[3], 10) || 0, 0, 255);
-      const alpha = match[4] != null ? Number.parseFloat(match[4]) : 1;
-      const a = clamp(Math.round((Number.isFinite(alpha) ? alpha : 1) * 255), 0, 255);
+      const r = clamp(Number.parseInt(match[1], 10) || 0, 0, 255);
+      const g = clamp(Number.parseInt(match[2], 10) || 0, 0, 255);
+      const b = clamp(Number.parseInt(match[3], 10) || 0, 0, 255);
+      const alphaMatch = match[4];
+      const alpha = alphaMatch != null ? Number.parseFloat(alphaMatch) : 1;
+      const normalizedAlpha = Number.isFinite(alpha) ? alpha : 1;
+      const a = clamp(Math.round(normalizedAlpha * 255), 0, 255);
 
       record = createColorRecord(r, g, b, a);
     }
