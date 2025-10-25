@@ -316,6 +316,7 @@ export default class Stats {
   #rng;
   #pairSampleScratch;
   #pairSampleSelection;
+  #pairIndexScratch;
   #diversityDnaScratch;
   #dnaSimilarityCache;
   /**
@@ -387,6 +388,7 @@ export default class Stats {
     this.starvationRateSmoothed = 0;
     this.#pairSampleScratch = new Uint32Array(0);
     this.#pairSampleSelection = new Set();
+    this.#pairIndexScratch = { first: 0, second: 0 };
     this.#diversityDnaScratch = [];
     this.#dnaSimilarityCache = new WeakMap();
 
@@ -900,6 +902,37 @@ export default class Stats {
     return similarity;
   }
 
+  #resolvePairFromIndex(index, populationSize) {
+    const totalPairs = (populationSize * (populationSize - 1)) / 2;
+
+    if (!(index >= 0 && index < totalPairs)) {
+      return null;
+    }
+
+    const t = 2 * populationSize - 1;
+    const discriminant = t * t - 8 * index;
+
+    if (!(discriminant >= 0)) {
+      return null;
+    }
+
+    const first = Math.max(0, Math.floor((t - Math.sqrt(discriminant)) / 2));
+    const offset = (first * (2 * populationSize - first - 1)) / 2;
+    const second = first + 1 + (index - offset);
+
+    if (!(second >= 0 && second < populationSize)) {
+      return null;
+    }
+
+    const pair =
+      this.#pairIndexScratch ?? (this.#pairIndexScratch = { first: 0, second: 0 });
+
+    pair.first = first;
+    pair.second = second;
+
+    return pair;
+  }
+
   #rebuildTraitAggregates(cellSources) {
     const pool = Array.isArray(cellSources) ? cellSources : [];
     const computes = this.#traitComputes;
@@ -1297,64 +1330,60 @@ export default class Stats {
 
     selected.clear();
 
-    let filled = 0;
     const startIndex = possiblePairs - sampleLimit;
 
     for (let i = startIndex; i < possiblePairs; i += 1) {
       const candidate = sampleIndex(i + 1);
-      const pick = selected.has(candidate) ? i : candidate;
 
-      selected.add(pick);
-      samples[filled] = pick;
+      if (selected.has(candidate)) {
+        selected.add(i);
+      } else {
+        selected.add(candidate);
+      }
+    }
+
+    if (selected.size < sampleLimit) {
+      for (let i = 0; i < possiblePairs && selected.size < sampleLimit; i += 1) {
+        selected.add(i);
+      }
+    }
+
+    const sampledView = samples.subarray(0, sampleLimit);
+    let filled = 0;
+
+    for (const value of selected) {
+      if (filled >= sampleLimit) break;
+      sampledView[filled] = value;
       filled += 1;
     }
+
+    selected.clear();
 
     if (filled === 0) {
       return 0;
     }
 
-    const sortedSamples = samples.subarray(0, filled);
-
-    sortedSamples.sort((a, b) => a - b);
-
     let sum = 0;
     let count = 0;
-    let rowOffset = 0;
-    let sampleIdx = 0;
 
-    for (
-      let first = 0;
-      first < populationSize - 1 && sampleIdx < sortedSamples.length;
-      first += 1
-    ) {
-      const combosForFirst = populationSize - first - 1;
-      const rowEnd = rowOffset + combosForFirst;
+    for (let i = 0; i < filled; i += 1) {
+      const comboIndex = sampledView[i];
+      const pair = this.#resolvePairFromIndex(comboIndex, populationSize);
 
-      while (sampleIdx < sortedSamples.length) {
-        const comboIndex = sortedSamples[sampleIdx];
-
-        if (comboIndex >= rowEnd) {
-          break;
-        }
-
-        const second = first + 1 + (comboIndex - rowOffset);
-        const dnaA = validDna[first];
-        const dnaB = validDna[second];
-        const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
-
-        if (!Number.isFinite(similarity)) {
-          sampleIdx += 1;
-
-          continue;
-        }
-
-        sum += 1 - similarity;
-        count += 1;
-
-        sampleIdx += 1;
+      if (!pair) {
+        continue;
       }
 
-      rowOffset = rowEnd;
+      const dnaA = validDna[pair.first];
+      const dnaB = validDna[pair.second];
+      const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
+
+      if (!Number.isFinite(similarity)) {
+        continue;
+      }
+
+      sum += 1 - similarity;
+      count += 1;
     }
 
     const result = count > 0 ? sum / count : 0;
