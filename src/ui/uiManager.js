@@ -2236,9 +2236,12 @@ export default class UIManager {
 
     if (this.lifeEventsSummaryRate) {
       if (Number.isFinite(eventsPer100) && eventsPer100 > 0) {
-        this.lifeEventsSummaryRate.textContent = `Rolling 100-tick avg: ≈${eventsPer100.toFixed(1)} events`;
+        const formattedEvents = eventsPer100.toFixed(1);
+
+        this.lifeEventsSummaryRate.textContent = `Rolling 100-tick avg: ≈${formattedEvents} events per 100 ticks`;
       } else {
-        this.lifeEventsSummaryRate.textContent = "Rolling 100-tick avg: no events";
+        this.lifeEventsSummaryRate.textContent =
+          "Rolling 100-tick avg: no events per 100 ticks";
       }
     }
   }
