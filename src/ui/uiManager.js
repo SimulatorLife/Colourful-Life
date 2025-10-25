@@ -253,6 +253,7 @@ export default class UIManager {
     this.zoneSummaryList = null;
     this._checkboxIdSequence = 0;
     this.stepButton = null;
+    this.burstButton = null;
     this._documentKeydownListener = null;
     this.metricsPlaceholder = null;
     this._sliderInputs = new Map();
@@ -382,6 +383,7 @@ export default class UIManager {
     this.speedResetHotkeySet = this.#resolveHotkeySet(layoutConfig.speedResetHotkeys, [
       "0",
     ]);
+    this.burstHotkeySet = this.#resolveHotkeySet(layoutConfig.burstHotkeys, ["b"]);
 
     const canvasEl =
       layoutConfig.canvasElement || this.#resolveNode(layoutConfig.canvasSelector);
@@ -473,6 +475,13 @@ export default class UIManager {
       return;
     }
 
+    if (this.burstHotkeySet?.has(key)) {
+      event.preventDefault();
+      this.#triggerBurst({ shiftKey: event.shiftKey });
+
+      return;
+    }
+
     if (this.speedIncreaseHotkeySet.has(key)) {
       event.preventDefault();
       const steps = event.shiftKey ? 5 : 1;
@@ -494,6 +503,33 @@ export default class UIManager {
     if (this.speedResetHotkeySet.has(key)) {
       event.preventDefault();
       this.#resetSpeedMultiplier();
+    }
+  }
+
+  #triggerBurst(options = {}) {
+    const shiftKey = Boolean(options?.shiftKey);
+    const burstOptions = shiftKey
+      ? { count: 400, radius: 9 }
+      : { count: 200, radius: 6 };
+
+    if (typeof this.actions.burst === "function") {
+      try {
+        this.actions.burst(burstOptions);
+      } catch (error) {
+        warnOnce("Burst action handler threw.", error);
+      }
+
+      return;
+    }
+
+    if (typeof window === "undefined") return;
+
+    try {
+      if (window.grid?.burstRandomCells) {
+        window.grid.burstRandomCells(burstOptions);
+      }
+    } catch (error) {
+      warnOnce("Global burst handler threw.", error);
     }
   }
 
@@ -2582,16 +2618,33 @@ export default class UIManager {
     this.#applyButtonHotkeys(this.stepButton, this.stepHotkeySet);
     this.#updateStepButtonState();
 
-    addControlButton({
+    const burstHotkeys = this.#formatHotkeyList(this.burstHotkeySet);
+    const burstTitlePieces = ["Spawn a cluster of new cells at a random spot."];
+
+    if (burstHotkeys.length > 0) {
+      burstTitlePieces.push(`Shortcut: ${burstHotkeys}.`);
+    }
+
+    const burstShiftHint =
+      burstHotkeys.length > 0
+        ? "Hold Shift for a stronger burst, whether clicking or using the shortcut."
+        : "Hold Shift for a stronger burst.";
+
+    burstTitlePieces.push(burstShiftHint);
+
+    const burstTitle = burstTitlePieces.join(" ");
+
+    this.burstButton = addControlButton({
       id: "burstButton",
       label: "Burst New Cells",
-      title: "Spawn a cluster of new cells at a random spot",
-      onClick: () => {
-        if (typeof this.actions.burst === "function") this.actions.burst();
-        else if (window.grid && typeof window.grid.burstRandomCells === "function")
-          window.grid.burstRandomCells();
+      title: burstTitle,
+      onClick: (event) => {
+        this.#triggerBurst({ shiftKey: Boolean(event?.shiftKey) });
       },
     });
+
+    this.burstButton.setAttribute("aria-label", burstTitle);
+    this.#applyButtonHotkeys(this.burstButton, this.burstHotkeySet);
 
     addControlButton({
       id: "resetWorldButton",

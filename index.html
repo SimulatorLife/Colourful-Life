@@ -40,7 +40,11 @@
         },
         "#app",
         {
-          burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
+          burst: (options = {}) => {
+            const { count = 200, radius = 6 } = options;
+
+            engine.burstRandomCells({ count, radius });
+          },
           applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
           obstaclePresets: engine.obstaclePresets,
           getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),

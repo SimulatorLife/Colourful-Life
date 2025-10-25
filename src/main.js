@@ -222,7 +222,11 @@ export function createSimulation({
 
   const uiOptions = config.ui ?? {};
   const baseActions = {
-    burst: () => engine.burstRandomCells({ count: 200, radius: 6 }),
+    burst: (options = {}) => {
+      const { count = 200, radius = 6 } = options;
+
+      return engine.burstRandomCells({ count, radius });
+    },
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
     obstaclePresets: engine.obstaclePresets,
     getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
