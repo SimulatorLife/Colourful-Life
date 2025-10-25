@@ -4,6 +4,18 @@ function sanitizeCoordinate(value) {
   return sanitizeNumber(value, { fallback: null });
 }
 
+function resolveStatValue(primary, secondary, fallback = 0) {
+  if (Number.isFinite(primary)) {
+    return primary;
+  }
+
+  if (Number.isFinite(secondary)) {
+    return secondary;
+  }
+
+  return fallback;
+}
+
 /**
  * Generates a ranked leaderboard from the latest grid snapshot. The helper
  * ranks entries by their raw fitness and attaches optional brain telemetry so
@@ -58,28 +70,13 @@ export function computeLeaderboard(snapshot, topN = 5) {
       continue;
     }
 
-    const offspringCandidate = Number.isFinite(entry.offspring)
-      ? entry.offspring
-      : Number.isFinite(cell?.offspring)
-        ? cell.offspring
-        : 0;
-    const fightsWonCandidate = Number.isFinite(entry.fightsWon)
-      ? entry.fightsWon
-      : Number.isFinite(cell?.fightsWon)
-        ? cell.fightsWon
-        : 0;
-    const ageCandidate = Number.isFinite(entry.age)
-      ? entry.age
-      : Number.isFinite(cell?.age)
-        ? cell.age
-        : 0;
     const colorCandidate = entry.color ?? cell?.color;
 
     const item = {
       fitness,
-      offspring: offspringCandidate,
-      fightsWon: fightsWonCandidate,
-      age: ageCandidate,
+      offspring: resolveStatValue(entry?.offspring, cell?.offspring),
+      fightsWon: resolveStatValue(entry?.fightsWon, cell?.fightsWon),
+      age: resolveStatValue(entry?.age, cell?.age),
       color: colorCandidate,
     };
     const row = sanitizeCoordinate(entry?.row);
