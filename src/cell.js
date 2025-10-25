@@ -5726,22 +5726,197 @@ export default class Cell {
     return { probability, usedNetwork: true };
   }
 
-  #legacyChooseInteractionAction(localDensity = 0, densityEffectMultiplier = 1) {
-    const { avoid, fight, cooperate } = this.interactionGenes;
-    const effD = clamp(localDensity * densityEffectMultiplier, 0, 1);
-    const fightMul = lerp(this.density.fight.min, this.density.fight.max, effD);
-    const coopMul = lerp(this.density.cooperate.max, this.density.cooperate.min, effD);
-    const fightW = Math.max(0.0001, fight * fightMul);
-    const coopW = Math.max(0.0001, cooperate * coopMul);
-    const avoidW = Math.max(0.0001, avoid);
-    const total = avoidW + fightW + coopW;
-    const rng = this.resolveRng("legacyInteractionChoice");
-    const roll = randomRange(0, total, rng);
+  #fallbackInteractionDecision({
+    localDensity = 0,
+    densityEffectMultiplier = 1,
+    enemies = [],
+    allies = [],
+    maxTileEnergy = MAX_TILE_ENERGY,
+    tileEnergy = null,
+    tileEnergyDelta = 0,
+  } = {}) {
+    const genes = this.interactionGenes || {
+      avoid: 0.33,
+      fight: 0.33,
+      cooperate: 0.34,
+    };
+    const avoidBase = Math.max(0.0001, genes.avoid ?? 0);
+    const fightBase = Math.max(0.0001, genes.fight ?? 0);
+    const cooperateBase = Math.max(0.0001, genes.cooperate ?? 0);
+    const effDensity = clamp(localDensity * densityEffectMultiplier, 0, 1);
+    const comfort = clamp(
+      Number.isFinite(this._crowdingTolerance)
+        ? this._crowdingTolerance
+        : Number.isFinite(this.baseCrowdingTolerance)
+          ? this.baseCrowdingTolerance
+          : 0.5,
+      0,
+      1,
+    );
+    const crowdPressure = effDensity > comfort ? effDensity - comfort : 0;
+    const crowdRelief = effDensity < comfort ? comfort - effDensity : 0;
+    const energyCap =
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1;
+    const normalizedEnergy = clamp((this.energy ?? 0) / energyCap, 0, 1);
+    const tileLevel =
+      tileEnergy != null && Number.isFinite(tileEnergy)
+        ? clamp(tileEnergy, 0, 1)
+        : normalizedEnergy;
+    const scarcity = clamp(1 - tileLevel, 0, 1);
+    const energyTrend = clamp(tileEnergyDelta ?? 0, -1, 1);
+    const riskTolerance = clamp(this.#resolveRiskTolerance(), 0, 1);
+    const resilience = clamp(this.dna?.recoveryRate?.() ?? 0.35, 0, 1);
+    const interactionMomentum = this.#resolveInteractionMomentum();
+    const { scarcityMemory, confidenceMemory } = this.#riskMemorySensorValues();
+    const allyCount = Array.isArray(allies) ? allies.length : 0;
+    const enemyCount = Array.isArray(enemies) ? enemies.length : 0;
+    const allyKinship = this.#averageSimilarity(allies);
+    const allyPresence = allyCount > 0 ? clamp(allyCount / 4, 0, 1) : 0;
+    const cooperativeDriveRaw =
+      typeof this.dna?.cooperateShareFrac === "function"
+        ? this.dna.cooperateShareFrac({
+            energyDelta: energyTrend,
+            kinship: allyKinship,
+          })
+        : 0.3;
+    const cooperativeDrive = clamp(cooperativeDriveRaw, 0, 1);
+    const currentRow = Number.isFinite(this.row) ? this.row : 0;
+    const currentCol = Number.isFinite(this.col) ? this.col : 0;
+    let enemyThreat = 0;
+    let advantage = 0;
 
-    if (roll < avoidW) return "avoid";
-    if (roll < avoidW + fightW) return "fight";
+    if (enemyCount > 0) {
+      let totalThreat = 0;
+      let totalEnergy = 0;
+      let considered = 0;
 
-    return "cooperate";
+      for (const descriptor of enemies) {
+        const target = descriptor?.target;
+
+        if (!target) continue;
+
+        const enemyEnergy = clamp(
+          (Number.isFinite(target.energy) ? target.energy : 0) / energyCap,
+          0,
+          2,
+        );
+        const enemyRow = Number.isFinite(descriptor?.row)
+          ? descriptor.row
+          : Number.isFinite(target?.row)
+            ? target.row
+            : currentRow;
+        const enemyCol = Number.isFinite(descriptor?.col)
+          ? descriptor.col
+          : Number.isFinite(target?.col)
+            ? target.col
+            : currentCol;
+        const distance = Math.max(
+          Math.abs(enemyRow - currentRow),
+          Math.abs(enemyCol - currentCol),
+        );
+        const proximity = distance <= 0 ? 1 : 1 / Math.max(1, distance);
+        const similarity = Number.isFinite(descriptor?.precomputedSimilarity)
+          ? descriptor.precomputedSimilarity
+          : this.#safeSimilarityTo(target, {
+              context: "interaction fallback threat similarity",
+              fallback: 0,
+            });
+        const hostility = clamp(
+          1 - (Number.isFinite(similarity) ? similarity : 0),
+          0,
+          1,
+        );
+
+        totalEnergy += enemyEnergy;
+        totalThreat += enemyEnergy * 0.6 + hostility * 0.4 + proximity * 0.5;
+        considered++;
+      }
+
+      if (considered > 0) {
+        const averageEnergy = totalEnergy / considered;
+
+        advantage = clamp(normalizedEnergy - averageEnergy, -1, 1);
+        enemyThreat = clamp(totalThreat / considered + enemyCount * 0.05, 0, 3);
+      }
+    }
+
+    let avoidScore =
+      avoidBase +
+      enemyThreat * (0.5 + (1 - riskTolerance) * 0.4) +
+      crowdPressure * (0.4 + (1 - riskTolerance) * 0.2) +
+      scarcity * (0.35 + (1 - resilience) * 0.25) +
+      Math.max(0, -advantage) * (0.45 + (1 - resilience) * 0.35);
+
+    avoidScore += Math.max(0, -confidenceMemory) * 0.2;
+    avoidScore += scarcityMemory * 0.3;
+    avoidScore += Math.max(0, -energyTrend) * 0.15;
+    avoidScore = Math.max(0.0001, avoidScore);
+
+    let fightScore =
+      fightBase +
+      advantage * (0.7 + riskTolerance * 0.6) +
+      riskTolerance * 0.3 +
+      crowdRelief * 0.15 +
+      (interactionMomentum > 0
+        ? interactionMomentum * 0.4
+        : interactionMomentum * 0.1) +
+      Math.max(0, confidenceMemory) * 0.25 +
+      Math.max(0, energyTrend) * 0.15;
+
+    fightScore -=
+      Math.max(0, enemyThreat - Math.max(0, advantage)) *
+      (0.35 + (1 - resilience) * 0.2);
+    fightScore = Math.max(0.0001, fightScore);
+
+    let cooperateScore =
+      cooperateBase +
+      allyPresence * 0.35 +
+      allyKinship * 0.5 +
+      cooperativeDrive * 0.6 +
+      crowdRelief * 0.35 +
+      (1 - scarcity) * 0.4 +
+      Math.max(0, -interactionMomentum) * 0.2;
+
+    cooperateScore -= enemyThreat * 0.25;
+    cooperateScore -= Math.max(0, crowdPressure) * 0.1;
+    cooperateScore = Math.max(0.0001, cooperateScore);
+
+    const totalScore = avoidScore + fightScore + cooperateScore;
+
+    if (!(totalScore > 0)) {
+      return {
+        action: "avoid",
+        probabilities: { avoid: 1, fight: 0, cooperate: 0 },
+        scores: { avoid: avoidScore, fight: fightScore, cooperate: cooperateScore },
+      };
+    }
+
+    const probabilities = {
+      avoid: avoidScore / totalScore,
+      fight: fightScore / totalScore,
+      cooperate: cooperateScore / totalScore,
+    };
+    const fallbackRng = this.resolveRng(
+      "interactionFallback",
+      this.resolveRng("legacyInteractionChoice"),
+    );
+    const roll = randomRange(0, totalScore, fallbackRng);
+
+    let action = "cooperate";
+
+    if (roll < avoidScore) {
+      action = "avoid";
+    } else if (roll < avoidScore + fightScore) {
+      action = "fight";
+    }
+
+    return {
+      action,
+      probabilities,
+      scores: { avoid: avoidScore, fight: fightScore, cooperate: cooperateScore },
+    };
   }
 
   chooseInteractionAction({
@@ -5754,7 +5929,15 @@ export default class Cell {
     tileEnergyDelta = 0,
   } = {}) {
     const fallback = () =>
-      this.#legacyChooseInteractionAction(localDensity, densityEffectMultiplier);
+      this.#fallbackInteractionDecision({
+        localDensity,
+        densityEffectMultiplier,
+        enemies,
+        allies,
+        maxTileEnergy,
+        tileEnergy,
+        tileEnergyDelta,
+      });
     const sensors = this.#interactionSensors({
       localDensity,
       densityEffectMultiplier,
@@ -5806,11 +5989,24 @@ export default class Cell {
       });
     }
 
-    const fallbackAction = fallback();
+    const fallbackDecision = fallback();
+    const fallbackAction = fallbackDecision?.action ?? null;
+    const fallbackProbabilities =
+      fallbackDecision?.probabilities &&
+      typeof fallbackDecision.probabilities === "object"
+        ? fallbackDecision.probabilities
+        : fallbackAction
+          ? {
+              avoid: fallbackAction === "avoid" ? 1 : 0,
+              fight: fallbackAction === "fight" ? 1 : 0,
+              cooperate: fallbackAction === "cooperate" ? 1 : 0,
+            }
+          : null;
 
     this.#assignDecisionOutcome("interaction", {
       action: fallbackAction,
       usedNetwork: false,
+      probabilities: fallbackProbabilities,
     });
 
     return fallbackAction;
