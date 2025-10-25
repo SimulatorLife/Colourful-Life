@@ -217,6 +217,86 @@ test("population scarcity emits signal without forced reseeding", async () => {
   );
 });
 
+function computeExpectedScarcity(rows, cols, population) {
+  const area = Math.max(1, Math.floor(rows) * Math.floor(cols));
+  const minPopulation = area < 100 ? 0 : Math.max(15, Math.round(area * 0.025));
+
+  if (minPopulation <= 0 || population >= minPopulation) {
+    return 0;
+  }
+
+  const occupancy = Math.min(Math.max(population / area, 0), 1);
+  const deficit = Math.min(
+    Math.max((minPopulation - population) / minPopulation, 0),
+    1,
+  );
+
+  return Math.min(Math.max(deficit * (0.6 + (1 - occupancy) * 0.4), 0), 1);
+}
+
+test("resize recalculates population scarcity immediately", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class ScarcityGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new ScarcityGridManager(12, 12, {
+    eventManager: { activeEvents: [] },
+    stats: {},
+    ctx: {},
+    cellSize: 1,
+  });
+
+  gm.activeCells.clear();
+  gm.grid.forEach((row) => row.fill(null));
+  gm.populationScarcitySignal = 0.2;
+
+  const nextRows = gm.rows + 6;
+  const nextCols = gm.cols + 4;
+
+  gm.resize(nextRows, nextCols, { reseed: false });
+
+  const expected = computeExpectedScarcity(nextRows, nextCols, gm.activeCells.size);
+
+  assert.is(gm.activeCells.size, 0, "resize should preserve empty population");
+  assert.is(
+    gm.populationScarcitySignal,
+    expected,
+    "resize should recompute scarcity signal for new geometry",
+  );
+});
+
+test("resetWorld refreshes population scarcity", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class ScarcityGridManager extends GridManager {
+    init() {}
+  }
+
+  const gm = new ScarcityGridManager(20, 18, {
+    eventManager: { activeEvents: [] },
+    stats: {},
+    ctx: {},
+    cellSize: 1,
+  });
+
+  gm.activeCells.clear();
+  gm.grid.forEach((row) => row.fill(null));
+  gm.populationScarcitySignal = 0.65;
+
+  gm.resetWorld({ reseed: false });
+
+  const expected = computeExpectedScarcity(gm.rows, gm.cols, gm.activeCells.size);
+
+  assert.is(gm.activeCells.size, 0, "reset should leave the grid empty");
+  assert.is(
+    gm.populationScarcitySignal,
+    expected,
+    "reset should recompute scarcity signal",
+  );
+});
+
 test("resetWorld only repopulates when reseed is explicitly requested", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
 

@@ -2853,6 +2853,7 @@ export default class GridManager {
     this.recalculateDensityCounts();
     this.rebuildActiveCells();
     this.#enforceEnergyExclusivity({ previousEnergyGrid: null });
+    this.populationScarcitySignal = this.#computePopulationScarcitySignal();
 
     return { rows: this.rows, cols: this.cols, cellSize: this.cellSize };
   }
@@ -2939,6 +2940,7 @@ export default class GridManager {
 
     this.recalculateDensityCounts();
     this.rebuildActiveCells();
+    this.populationScarcitySignal = this.#computePopulationScarcitySignal();
   }
 
   #seedInitialPopulation(targetPopulation) {
