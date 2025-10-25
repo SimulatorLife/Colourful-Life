@@ -4329,8 +4329,12 @@ export default class GridManager {
   }
 
   computeDensityGrid(radius = GridManager.DENSITY_RADIUS) {
+    const normalizedRadius = Math.max(
+      0,
+      Math.floor(Number.isFinite(radius) ? radius : 0),
+    );
     const useCache =
-      radius === this.densityRadius &&
+      normalizedRadius === this.densityRadius &&
       this.densityCounts &&
       this.densityTotals &&
       this.densityLiveGrid;
@@ -4341,13 +4345,64 @@ export default class GridManager {
       return this.densityGrid.map((row) => row.slice());
     }
 
-    const out = Array.from({ length: this.rows }, () => Array(this.cols).fill(0));
+    const rows = this.rows;
+    const cols = this.cols;
 
-    for (let row = 0; row < this.rows; row++) {
-      for (let col = 0; col < this.cols; col++) {
-        const { count, total } = this.#countNeighbors(row, col, radius);
+    if (rows === 0 || cols === 0) {
+      return [];
+    }
 
-        out[row][col] = total > 0 ? count / total : 0;
+    if (normalizedRadius === 0) {
+      return Array.from({ length: rows }, () => Array(cols).fill(0));
+    }
+
+    const prefix = this.#ensureDensityPrefix(rows, cols);
+
+    for (let r = 1; r <= rows; r++) {
+      const prefixRow = prefix[r];
+      const prevRow = prefix[r - 1];
+      const gridRow = this.grid[r - 1];
+      let rowSum = 0;
+
+      for (let c = 1; c <= cols; c++) {
+        const occupied = gridRow?.[c - 1] ? 1 : 0;
+
+        rowSum += occupied;
+        prefixRow[c] = prevRow[c] + rowSum;
+      }
+    }
+
+    const totals =
+      normalizedRadius === this.densityRadius && this.densityTotals
+        ? this.densityTotals
+        : this.#buildDensityTotals(normalizedRadius);
+    const out = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+    for (let r = 0; r < rows; r++) {
+      const outRow = out[r];
+      const totalsRow = totals[r];
+      const gridRow = this.grid[r];
+      const minRow = r - normalizedRadius < 0 ? 0 : r - normalizedRadius;
+      const maxRow = r + normalizedRadius >= rows ? rows - 1 : r + normalizedRadius;
+      const topIndex = minRow;
+      const bottomIndex = maxRow + 1;
+
+      for (let c = 0; c < cols; c++) {
+        const minCol = c - normalizedRadius < 0 ? 0 : c - normalizedRadius;
+        const maxCol = c + normalizedRadius >= cols ? cols - 1 : c + normalizedRadius;
+        const leftIndex = minCol;
+        const rightIndex = maxCol + 1;
+        const regionSum =
+          prefix[bottomIndex][rightIndex] -
+          prefix[topIndex][rightIndex] -
+          prefix[bottomIndex][leftIndex] +
+          prefix[topIndex][leftIndex];
+        const occupied = gridRow?.[c] ? 1 : 0;
+        const neighborCount = regionSum - occupied;
+        const totalNeighbors = totalsRow?.[c] ?? 0;
+
+        outRow[c] =
+          totalNeighbors > 0 ? clamp(neighborCount / totalNeighbors, 0, 1) : 0;
       }
     }
 
