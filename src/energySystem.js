@@ -196,9 +196,11 @@ export function accumulateEventModifiers({
     providedResult.drainAdd = drainAdd;
 
     if (shouldCollect) {
-      const targetEvents = Array.isArray(providedResult.appliedEvents)
-        ? providedResult.appliedEvents
-        : (providedResult.appliedEvents = []);
+      const existingApplied = providedResult.appliedEvents;
+      const targetEvents =
+        Array.isArray(existingApplied) && !Object.isFrozen(existingApplied)
+          ? existingApplied
+          : (providedResult.appliedEvents = []);
 
       targetEvents.length = 0;
 
