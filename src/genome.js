@@ -254,6 +254,7 @@ export class DNA {
     if (this._rngCache) this._rngCache.clear();
     if (this._sharedRngCache) this._sharedRngCache.clear();
     if (this._inverseMaxDistanceCache) this._inverseMaxDistanceCache.clear();
+    this._cachedReproductionProb = null;
   }
 
   #resolveInverseMaxDistance(geneCount) {
@@ -633,6 +634,10 @@ export class DNA {
   }
 
   reproductionProb() {
+    if (Number.isFinite(this._cachedReproductionProb)) {
+      return this._cachedReproductionProb;
+    }
+
     const rnd = this.prngFor("reproductionProb");
     const risk = this.geneFraction(GENE_LOCI.RISK);
     const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
@@ -648,7 +653,11 @@ export class DNA {
     const synergyAdj = 0.75 + 0.35 * synergy; // 0.75..1.10
     const noise = 0.9 + rnd() * 0.2; // 0.9..1.1
 
-    return Math.min(0.9, Math.max(0.05, base * synergyAdj * noise));
+    const probability = Math.min(0.9, Math.max(0.05, base * synergyAdj * noise));
+
+    this._cachedReproductionProb = probability;
+
+    return probability;
   }
 
   reproductionCooldownTicks() {
