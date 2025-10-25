@@ -543,6 +543,36 @@ test("createSimulation controller step delegates to engine.step", async () => {
   }
 });
 
+test("createSimulation controller update delegates to engine.tick", async () => {
+  const { createSimulation } = await simulationModulePromise;
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+  });
+
+  let calls = 0;
+  const delegatedReturn = { delegated: true, args: null };
+  const originalTick = simulation.engine.tick;
+
+  try {
+    simulation.engine.tick = (...args) => {
+      calls += 1;
+      delegatedReturn.args = args;
+
+      return delegatedReturn;
+    };
+
+    const result = simulation.update("custom-timestamp");
+
+    assert.is(calls, 1, "controller update should call engine.tick exactly once");
+    assert.is(result, delegatedReturn, "controller returns engine.tick result");
+    assert.equal(delegatedReturn.args, ["custom-timestamp"]);
+  } finally {
+    simulation.engine.tick = originalTick;
+    simulation.destroy();
+  }
+});
+
 test("step control calls engine.step when using createSimulation", async () => {
   const { createSimulation } = await simulationModulePromise;
 

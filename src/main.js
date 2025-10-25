@@ -282,6 +282,7 @@ export function createSimulation({
     stop: () => engine.stop(),
     step: (timestamp) => engine.step(timestamp),
     tick: (timestamp) => engine.tick(timestamp),
+    update: (timestamp) => engine.tick(timestamp),
     pause: () => engine.pause(),
     resume: () => engine.resume(),
     resetWorld: (options) => engine.resetWorld(options),
