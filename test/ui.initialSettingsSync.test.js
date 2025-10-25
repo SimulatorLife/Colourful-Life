@@ -268,3 +268,38 @@ test("layout initial settings yield to sanitized config overrides", async () => 
     restore();
   }
 });
+
+test("layout initial settings clamp leaderboard cadence to minimum", async () => {
+  const restore = setupDom();
+
+  try {
+    const [{ createSimulation }, { LEADERBOARD_INTERVAL_MIN_MS }] = await Promise.all([
+      import("../src/main.js"),
+      import("../src/config.js"),
+    ]);
+
+    const simulation = createSimulation({
+      canvas: new MockCanvas(120, 120),
+      autoStart: false,
+      config: {
+        ui: {
+          layout: {
+            initialSettings: {
+              leaderboardIntervalMs: LEADERBOARD_INTERVAL_MIN_MS / 2,
+            },
+          },
+        },
+      },
+    });
+
+    assert.is(
+      simulation.engine.state.leaderboardIntervalMs,
+      LEADERBOARD_INTERVAL_MIN_MS,
+    );
+    assert.is(simulation.uiManager.leaderboardIntervalMs, LEADERBOARD_INTERVAL_MIN_MS);
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});

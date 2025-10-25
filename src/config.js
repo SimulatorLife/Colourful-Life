@@ -43,6 +43,8 @@ const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.12;
 // headless consumers and UI presets can extend the leaderboard without touching
 // the engine internals.
 const DEFAULT_LEADERBOARD_SIZE = 5;
+
+export const LEADERBOARD_INTERVAL_MIN_MS = 100;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
@@ -510,7 +512,7 @@ export function resolveSimulationDefaults(overrides = {}) {
   sanitizeNumeric("energyDiffusionRate", { min: 0 });
   sanitizeNumeric("combatEdgeSharpness", { min: 0.1 });
   sanitizeNumeric("combatTerritoryEdgeFactor", { min: 0, max: 1 });
-  sanitizeNumeric("leaderboardIntervalMs", { min: 0 });
+  sanitizeNumeric("leaderboardIntervalMs", { min: LEADERBOARD_INTERVAL_MIN_MS });
   sanitizeNumeric("leaderboardSize", { min: 0, round: Math.floor });
   sanitizeNumeric("matingDiversityThreshold", { min: 0, max: 1 });
   sanitizeNumeric("lowDiversityReproMultiplier", { min: 0, max: 1 });
