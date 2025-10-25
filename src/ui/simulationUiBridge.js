@@ -123,6 +123,20 @@ function subscribeEngineToUi(engine, uiManager) {
         uiManager.setAutoPausePending(changes.autoPausePending);
       }
 
+      if (typeof uiManager.setUpdatesPerSecond === "function") {
+        if (changes?.updatesPerSecond !== undefined) {
+          uiManager.setUpdatesPerSecond(changes.updatesPerSecond, { notify: false });
+        } else if (changes?.speedMultiplier !== undefined) {
+          const currentUpdates = Number.isFinite(engine?.state?.updatesPerSecond)
+            ? engine.state.updatesPerSecond
+            : undefined;
+
+          if (currentUpdates !== undefined) {
+            uiManager.setUpdatesPerSecond(currentUpdates, { notify: false });
+          }
+        }
+      }
+
       if (
         changes?.lowDiversityReproMultiplier !== undefined &&
         typeof uiManager.setLowDiversityReproMultiplier === "function"

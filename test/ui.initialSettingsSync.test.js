@@ -303,3 +303,38 @@ test("layout initial settings clamp leaderboard cadence to minimum", async () =>
     restore();
   }
 });
+
+test("engine cadence sync handles values below the slider minimum", async () => {
+  const restore = setupDom();
+
+  try {
+    const [{ createSimulation }, { SIMULATION_DEFAULTS }] = await Promise.all([
+      import("../src/main.js"),
+      import("../src/config.js"),
+    ]);
+    const simulation = createSimulation({
+      canvas: new MockCanvas(160, 160),
+      autoStart: false,
+    });
+
+    const base =
+      Number.isFinite(simulation.uiManager.baseUpdatesPerSecond) &&
+      simulation.uiManager.baseUpdatesPerSecond > 0
+        ? simulation.uiManager.baseUpdatesPerSecond
+        : SIMULATION_DEFAULTS.updatesPerSecond;
+
+    simulation.engine.setUpdatesPerSecond(3);
+
+    assert.is(simulation.engine.state.updatesPerSecond, 3);
+    assert.is(simulation.uiManager.getUpdatesPerSecond(), 3);
+    assert.is(simulation.uiManager.speedMultiplier, 3 / base);
+    assert.is(
+      simulation.uiManager.playbackSpeedSlider.value,
+      String(simulation.uiManager.speedMultiplier),
+    );
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});
