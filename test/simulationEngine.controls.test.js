@@ -632,3 +632,22 @@ test("autoPauseOnBlur setter keeps engine state aligned", async () => {
     restore();
   }
 });
+
+test("pause clears pending auto-resume flags", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine._autoPauseResumePending = true;
+    engine.state.autoPausePending = true;
+
+    engine.pause();
+
+    assert.is(engine._autoPauseResumePending, false);
+    assert.is(engine.state.autoPausePending, false);
+  } finally {
+    restore();
+  }
+});

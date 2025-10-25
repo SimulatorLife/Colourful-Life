@@ -856,6 +856,7 @@ export default class SimulationEngine {
 
   pause() {
     this.setPaused(true);
+    this.#setAutoPausePending(false);
 
     return this.isPaused();
   }
