@@ -153,53 +153,68 @@ export default class TelemetryController {
   }
 
   #emit({ getEnvironment, emitMetrics, emitLeaderboard }) {
-    const environment =
-      typeof getEnvironment === "function"
-        ? (invokeWithErrorBoundary(getEnvironment, [], {
-            message: WARNINGS.getEnvironment,
-            reporter: warnOnce,
-            once: true,
-          }) ?? null)
-        : (getEnvironment ?? null);
+    const environment = this.#resolveEnvironment(getEnvironment);
 
-    if (typeof emitMetrics === "function" && this.#lastMetrics) {
-      invokeWithErrorBoundary(
-        emitMetrics,
-        [
-          {
-            stats: this.stats,
-            metrics: this.#lastMetrics,
-            environment,
-          },
-        ],
-        {
-          message: WARNINGS.emitMetrics,
-          reporter: warnOnce,
-          once: true,
-        },
-      );
+    this.#emitMetrics(emitMetrics, environment);
+    this.#emitLeaderboard(emitLeaderboard);
+  }
+
+  #resolveEnvironment(getEnvironment) {
+    if (typeof getEnvironment !== "function") {
+      return getEnvironment ?? null;
     }
 
-    if (typeof emitLeaderboard === "function") {
-      const rawEntries = this.#lastSnapshot
-        ? invokeWithErrorBoundary(
-            this.#computeLeaderboard,
-            [this.#lastSnapshot, this.#leaderboardSize],
-            {
-              message: WARNINGS.computeLeaderboard,
-              reporter: warnOnce,
-              once: true,
-            },
-          )
-        : [];
-      const entries = Array.isArray(rawEntries) ? rawEntries : [];
+    const resolved = invokeWithErrorBoundary(getEnvironment, [], {
+      message: WARNINGS.getEnvironment,
+      reporter: warnOnce,
+      once: true,
+    });
 
-      invokeWithErrorBoundary(emitLeaderboard, [{ entries }], {
-        message: WARNINGS.emitLeaderboard,
+    return resolved ?? null;
+  }
+
+  #emitMetrics(emitMetrics, environment) {
+    if (typeof emitMetrics !== "function") return;
+    if (!this.#lastMetrics) return;
+
+    invokeWithErrorBoundary(
+      emitMetrics,
+      [
+        {
+          stats: this.stats,
+          metrics: this.#lastMetrics,
+          environment,
+        },
+      ],
+      {
+        message: WARNINGS.emitMetrics,
         reporter: warnOnce,
         once: true,
-      });
-    }
+      },
+    );
+  }
+
+  #emitLeaderboard(emitLeaderboard) {
+    if (typeof emitLeaderboard !== "function") return;
+
+    const rawEntries = this.#lastSnapshot
+      ? invokeWithErrorBoundary(
+          this.#computeLeaderboard,
+          [this.#lastSnapshot, this.#leaderboardSize],
+          {
+            message: WARNINGS.computeLeaderboard,
+            reporter: warnOnce,
+            once: true,
+          },
+        )
+      : [];
+    const entries = Array.isArray(rawEntries) ? rawEntries : [];
+
+    invokeWithErrorBoundary(emitLeaderboard, [{ entries }], {
+      message: WARNINGS.emitLeaderboard,
+      reporter: warnOnce,
+      once: true,
+    });
   }
 
   #resolveTimestamp(candidate) {
