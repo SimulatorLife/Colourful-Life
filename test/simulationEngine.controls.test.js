@@ -17,6 +17,32 @@ function createEngine(modules) {
   });
 }
 
+test("SimulationEngine disables environmental events by default", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+    });
+
+    assert.is(
+      engine.state.eventFrequencyMultiplier,
+      0,
+      "baseline state should keep the event frequency multiplier at zero",
+    );
+    assert.is(engine.eventManager.activeEvents.length, 0);
+    assert.is(engine.eventManager.currentEvent, null);
+  } finally {
+    restore();
+  }
+});
+
 test("SimulationEngine skips initial events when frequency multiplier is zero", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
