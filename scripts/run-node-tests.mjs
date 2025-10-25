@@ -237,6 +237,7 @@ export async function runNodeTests(rawArgs = []) {
         ? `No test files found for ${paths.join(", ")}.`
         : "No test files found under the test directory.",
     );
+
     return 1;
   }
 
