@@ -278,7 +278,7 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     setCombatEdgeSharpness: (value) => {
-      if (updateIfFinite("combatEdgeSharpness", value)) {
+      if (updateIfFinite("combatEdgeSharpness", value, { min: 0.1 })) {
         notify("combatEdgeSharpness", settings.combatEdgeSharpness);
       }
     },

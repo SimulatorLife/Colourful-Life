@@ -85,6 +85,18 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   assert.is(manager.getAutoPauseOnBlur(), true);
 });
 
+test("createHeadlessUiManager clamps combat sharpness to the engine minimum", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  manager.setCombatEdgeSharpness(-2.5);
+
+  assert.equal(notifications, [["combatEdgeSharpness", 0.1]]);
+  assert.is(manager.getCombatEdgeSharpness(), 0.1);
+});
+
 test("createHeadlessUiManager pause controls delegate to simulation callbacks", () => {
   const calls = [];
   const manager = createHeadlessUiManager({
