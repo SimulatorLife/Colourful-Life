@@ -100,6 +100,9 @@ where practical.
   without duplicate scan logic lingering in the repository.
 - Retired the unused `scripts/profile-active-snapshot.mjs` benchmarking helper
   to shrink the maintenance surface for profiling utilities.
+- Trimmed the stale `scripts/profile-traits.js` benchmark harness now that
+  Stats trait aggregation is covered by automated tests, keeping the profiling
+  suite focused on maintained scenarios.
 
 ### Fixed
 
