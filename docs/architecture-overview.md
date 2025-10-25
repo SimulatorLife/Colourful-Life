@@ -76,7 +76,9 @@ This document captures how the Colourful Life simulation composes its core syste
   [`src/config.js`](../src/config.js), letting experiments tweak caps, regeneration
   suppression, harvesting taxes, reproduction scarcity, and trait activity
   sensitivity without patching source. The sanitized values are consumed by both
-  the energy computations and overlays so telemetry stays in sync.
+  the energy computations and overlays so telemetry stays in sync, and the
+  [developer guide's configuration section](developer-guide.md#configuration-overrides)
+  outlines how to combine them during longer experiments.
 
 ### Events
 
