@@ -25,6 +25,7 @@ const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
 // leaves a touch more scarcity in high-traffic graves so crowded clusters stop
 // bouncing between feast and famine every decay pulse.
 const DEFAULT_DECAY_RETURN_FRACTION = 0.88;
+const DEFAULT_DECAY_IMMEDIATE_SHARE = 0.25;
 const DEFAULT_DECAY_MAX_AGE = 240;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Slightly calmer baseline keeps resting viable when resources tighten.
@@ -73,6 +74,7 @@ export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();
 export const DECAY_RETURN_FRACTION = resolveDecayReturnFraction();
+export const DECAY_IMMEDIATE_SHARE = resolveDecayImmediateShare();
 export const DECAY_MAX_AGE = resolveDecayMaxAge();
 
 function resolveEnvNumber(
@@ -202,6 +204,26 @@ export function resolveCombatTerritoryEdgeFactor(env = RUNTIME_ENV) {
 export function resolveDecayReturnFraction(env = RUNTIME_ENV) {
   return resolveEnvNumber(env, "COLOURFUL_LIFE_DECAY_RETURN_FRACTION", {
     fallback: DEFAULT_DECAY_RETURN_FRACTION,
+    min: 0,
+    max: 1,
+    clampResult: true,
+  });
+}
+
+/**
+ * Resolves the fraction of recycled energy that spills immediately into
+ * neighbouring tiles when an organism decays. Environment overrides make the
+ * instantaneous redistribution tunable so deployments can emphasize on-the-spot
+ * feasts or longer, smouldering reserves without touching simulation code.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Immediate share fraction constrained to the 0..1 interval.
+ */
+export function resolveDecayImmediateShare(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE", {
+    fallback: DEFAULT_DECAY_IMMEDIATE_SHARE,
     min: 0,
     max: 1,
     clampResult: true,

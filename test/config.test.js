@@ -200,6 +200,40 @@ test("resolveDecayReturnFraction clamps invalid overrides", async () => {
   );
 });
 
+test("DECAY_IMMEDIATE_SHARE exposes the environment-aware default", async () => {
+  const { DECAY_IMMEDIATE_SHARE } = await configModulePromise;
+
+  assert.is(DECAY_IMMEDIATE_SHARE, 0.25);
+});
+
+test("resolveDecayImmediateShare respects overrides", async () => {
+  const { resolveDecayImmediateShare } = await configModulePromise;
+
+  assert.is(
+    resolveDecayImmediateShare({ COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE: "0.4" }),
+    0.4,
+  );
+});
+
+test("resolveDecayImmediateShare clamps invalid overrides", async () => {
+  const { resolveDecayImmediateShare } = await configModulePromise;
+
+  assert.is(
+    resolveDecayImmediateShare({ COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE: "-0.1" }),
+    0,
+  );
+
+  assert.is(
+    resolveDecayImmediateShare({ COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE: "1.3" }),
+    1,
+  );
+
+  assert.is(
+    resolveDecayImmediateShare({ COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE: "NaN" }),
+    0.25,
+  );
+});
+
 test("DECAY_MAX_AGE exposes the environment-aware default", async () => {
   const { DECAY_MAX_AGE } = await configModulePromise;
 

@@ -114,6 +114,9 @@ change behaviour without touching source:
 
 - `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` determines how much energy corpses
   return to nearby tiles as they decompose.
+- `COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE` sets the fraction of that recycled
+  energy that splashes into neighbouring tiles on the same tick instead of
+  smouldering in the decay reservoir.
 - `COLOURFUL_LIFE_DECAY_MAX_AGE` caps how long the decay reservoir persists
   before fully dissipating.
 - `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` tempers or emphasises territorial
