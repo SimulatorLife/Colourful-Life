@@ -5143,9 +5143,16 @@ export default class UIManager {
         "Controls how often the leaderboard and Evolution Insights request fresh data.";
       controlsWrapper.appendChild(cadenceNote);
 
-      const entriesContainer = document.createElement("div");
+      const entriesContainer = document.createElement("ol");
 
       entriesContainer.className = "leaderboard-entries";
+      entriesContainer.setAttribute("role", "list");
+      entriesContainer.setAttribute("aria-live", "polite");
+      entriesContainer.setAttribute("aria-busy", "false");
+      entriesContainer.setAttribute(
+        "aria-label",
+        "Top organisms ranked by overall fitness",
+      );
       body.appendChild(entriesContainer);
 
       this.leaderBody = entriesContainer;
@@ -5174,13 +5181,16 @@ export default class UIManager {
 
     this._pendingLeaderboardEntries = null;
     target.innerHTML = "";
+    target.setAttribute("aria-busy", "true");
 
     if (entries.length === 0) {
-      const empty = document.createElement("div");
+      const empty = document.createElement("li");
 
       empty.className = "leaderboard-empty-state";
+      empty.setAttribute("role", "listitem");
       empty.textContent = "Run the simulation to populate the leaderboard.";
       target.appendChild(empty);
+      target.setAttribute("aria-busy", "false");
 
       return;
     }
@@ -5194,11 +5204,22 @@ export default class UIManager {
         ? entry.fitness
         : Number.NaN;
       const brain = entry.brain ?? {};
-      const card = document.createElement("article");
+      const card = document.createElement("li");
 
       card.className = "leaderboard-entry";
-      card.setAttribute("role", "group");
-      card.setAttribute("aria-label", `Rank ${index + 1} organism performance`);
+      card.setAttribute("role", "listitem");
+      card.tabIndex = 0;
+
+      const readableRank = index + 1;
+
+      card.setAttribute(
+        "aria-label",
+        `Rank ${readableRank} organism with fitness ${formatFloat(summaryFitness)}`,
+      );
+
+      if (index === 0) {
+        card.classList.add("leaderboard-entry--top");
+      }
 
       const swatchColor =
         typeof entry.color === "string" && entry.color.trim().length > 0
@@ -5296,5 +5317,7 @@ export default class UIManager {
       card.appendChild(statsContainer);
       target.appendChild(card);
     });
+
+    target.setAttribute("aria-busy", "false");
   }
 }
