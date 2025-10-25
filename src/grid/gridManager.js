@@ -156,6 +156,7 @@ export default class GridManager {
   #eventModifierScratch = null;
   #sparseDirtyColumnsScratch = null;
   #sparseDirtyRowsScratch = null;
+  #deltaDirtyRowsScratch = null;
   #densityPrefixScratch = null;
   #occupantRegenVersion = null;
   #occupantRegenRevision = 0;
@@ -418,6 +419,14 @@ export default class GridManager {
     }
 
     return this.#eventModifierScratch;
+  }
+
+  #getDeltaDirtyRows() {
+    if (!this.#deltaDirtyRowsScratch) {
+      this.#deltaDirtyRowsScratch = new Set();
+    }
+
+    return this.#deltaDirtyRowsScratch;
   }
 
   #prepareSparseDirtyColumns(rowCount) {
@@ -3151,6 +3160,7 @@ export default class GridManager {
     const energyGrid = this.energyGrid;
     const next = this.energyNext;
     const deltaGrid = this.energyDeltaGrid;
+    const deltaDirtyRows = deltaGrid ? this.#getDeltaDirtyRows() : null;
     const obstacles = this.obstacles;
     const occupantRevision = this.#advanceOccupantRegenRevision();
     const { isEventAffecting, getEventEffect } =
@@ -3650,10 +3660,22 @@ export default class GridManager {
         strategy = "sparse-dirty";
 
         if (deltaGrid) {
-          for (let r = 0; r < rows; r++) {
-            const deltaRow = deltaGrid[r];
+          if (deltaDirtyRows && deltaDirtyRows.size > 0) {
+            for (const rowIndex of deltaDirtyRows) {
+              const deltaRow = deltaGrid[rowIndex];
+
+              if (deltaRow) deltaRow.fill(0);
+            }
+
+            deltaDirtyRows.clear();
+          }
+
+          for (let i = 0; i < sparseRows.length; i++) {
+            const dirtyRow = sparseRows[i];
+            const deltaRow = deltaGrid[dirtyRow];
 
             if (deltaRow) deltaRow.fill(0);
+            if (deltaDirtyRows) deltaDirtyRows.add(dirtyRow);
           }
         }
 
@@ -3892,6 +3914,10 @@ export default class GridManager {
           processedTileCount += 1;
         }
       }
+    }
+
+    if (deltaDirtyRows && strategy !== "sparse-dirty") {
+      deltaDirtyRows.clear();
     }
 
     if (profileEnabled) {
