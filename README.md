@@ -39,6 +39,7 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 **Lifecycle and territory**
 
 - `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` — Determines what fraction of a corpse's remaining energy returns to the grid as it decomposes.
+- `COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE` — Sets how much of that recycled energy splashes into neighbouring tiles immediately instead of lingering in the decay reservoir.
 - `COLOURFUL_LIFE_DECAY_MAX_AGE` — Limits how long post-mortem energy lingers before dissipating.
 - `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` — Scales territorial advantage in combat. Values outside 0–1 are clamped back to the default.
 

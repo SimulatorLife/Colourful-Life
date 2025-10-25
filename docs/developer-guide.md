@@ -9,7 +9,7 @@ walks through the initial clone-and-run steps before you dive into the details b
 
 ## Environment setup
 
-1. Install Node.js 18 or newer.
+1. Install Node.js 25.0.0 (the version pinned in `.nvmrc`). Run `nvm use` after cloning to align your runtime automatically.
 2. Clone the repository and install dependencies with `npm ci` (or `npm install`
    if you are intentionally skipping a clean install). Re-run `npm run prepare`
    after the initial install and any time `.husky/` changes so Git hooks stay

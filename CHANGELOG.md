@@ -28,6 +28,10 @@ where practical.
 
 ### Changed
 
+- Clarified the Node.js 25.0.0 requirement in the developer guide and added the
+  `COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE` override to the README so onboarding
+  steps and configuration references match the current runtime and
+  environment hooks.
 - Collapsed dashboard panels now defer metrics, life events, and leaderboard
   rendering work, cutting 50 closed-panel metrics refreshes from ~73.9 ms to
   ~0.84 ms by queueing the latest payload until the panel is reopened.
