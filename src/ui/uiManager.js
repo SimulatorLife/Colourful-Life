@@ -4276,8 +4276,22 @@ export default class UIManager {
         ? derivedMultiplier
         : this.speedMultiplier;
 
-    this.#setSpeedMultiplier(safeMultiplier, { notify });
-    this.simulationClock.lastUpdatesPerSecond = Math.max(1, this.getUpdatesPerSecond());
+    if (Number.isFinite(safeMultiplier) && safeMultiplier > 0) {
+      this.#updateSetting("speedMultiplier", safeMultiplier, { notify });
+      this.#updateSpeedMultiplierUI(safeMultiplier);
+    }
+
+    const resolvedCadence = Math.max(1, sanitized);
+
+    if (!this.simulationClock || typeof this.simulationClock !== "object") {
+      this.simulationClock = {
+        ticks: 0,
+        elapsedSeconds: 0,
+        lastUpdatesPerSecond: resolvedCadence,
+      };
+    } else {
+      this.simulationClock.lastUpdatesPerSecond = resolvedCadence;
+    }
   }
 
   setAutoPausePending(pending) {
