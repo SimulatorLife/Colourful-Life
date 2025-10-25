@@ -49,6 +49,8 @@ const LIFE_EVENT_TIMELINE_CANVAS = Object.freeze({
   width: 320,
   height: 96,
 });
+const LIFE_EVENT_TIMELINE_EMPTY_MESSAGE =
+  "Run the simulation to chart birth and death cadence.";
 
 const DEFAULT_TRAIT_DISPLAY_CONFIG = Object.freeze({
   cooperation: Object.freeze({
@@ -285,6 +287,11 @@ export default class UIManager {
     this.lifeEventsTimelineCard = null;
     this.lifeEventsTimelineCanvas = null;
     this.lifeEventsTimelineSummary = null;
+    this.lifeEventsTimelineSummaryMessage = null;
+    this.lifeEventsTimelineStats = null;
+    this.lifeEventsTimelineWindowStat = null;
+    this.lifeEventsTimelineBirthStat = null;
+    this.lifeEventsTimelineDeathStat = null;
     this.lifeEventsTimelineEmptyState = null;
     this._pendingMetrics = null;
     this._pendingLeaderboardEntries = null;
@@ -2264,14 +2271,37 @@ export default class UIManager {
     }
 
     const canvas = this.lifeEventsTimelineCanvas;
-    const summary = this.lifeEventsTimelineSummary;
+    const summaryMessage = this.lifeEventsTimelineSummaryMessage;
+    const statsGroup = this.lifeEventsTimelineStats;
+    const windowStat = this.lifeEventsTimelineWindowStat;
+    const birthStat = this.lifeEventsTimelineBirthStat;
+    const deathStat = this.lifeEventsTimelineDeathStat;
     const emptyState = this.lifeEventsTimelineEmptyState;
     const ctx = canvas.getContext("2d");
 
-    if (!ctx) {
-      if (summary) {
-        summary.textContent = "Run the simulation to chart birth and death cadence.";
+    const resetStats = () => {
+      if (statsGroup) {
+        statsGroup.hidden = true;
       }
+      if (windowStat) {
+        windowStat.valueEl.textContent = "—";
+        windowStat.noteEl.textContent = windowStat.defaultNote;
+      }
+      if (birthStat) {
+        birthStat.valueEl.textContent = "—";
+        birthStat.noteEl.textContent = birthStat.defaultNote;
+      }
+      if (deathStat) {
+        deathStat.valueEl.textContent = "—";
+        deathStat.noteEl.textContent = deathStat.defaultNote;
+      }
+    };
+
+    if (!ctx) {
+      if (summaryMessage) {
+        summaryMessage.textContent = LIFE_EVENT_TIMELINE_EMPTY_MESSAGE;
+      }
+      resetStats();
       if (emptyState) emptyState.hidden = false;
 
       return;
@@ -2317,23 +2347,43 @@ export default class UIManager {
       Number.isFinite(timeline?.window) && timeline.window > 0
         ? Math.round(timeline.window)
         : Math.max(1, bucketSpan * Math.max(1, buckets.length));
-    const bucketLabel = bucketSpan === 1 ? "tick" : `${bucketSpan}-tick`;
+    const bucketSizeLabel =
+      bucketSpan === 1 ? "1 tick" : `${bucketSpan.toLocaleString()} ticks`;
+    const perBucketLabel =
+      bucketSpan === 1 ? "per tick" : `per ${bucketSpan.toLocaleString()}-tick bucket`;
 
-    if (summary) {
+    if (summaryMessage) {
       if (maxCount > 0) {
-        const birthLabel = totalBirths === 1 ? "birth" : "births";
-        const deathLabel = totalDeaths === 1 ? "death" : "deaths";
-
-        summary.textContent = `Last ${windowTicks} ticks · ${totalBirths} ${birthLabel} (peak ${maxBirths}/${bucketLabel}) · ${totalDeaths} ${deathLabel} (peak ${maxDeaths}/${bucketLabel})`;
+        summaryMessage.textContent = `Last ${windowTicks.toLocaleString()} ticks of births and deaths.`;
       } else {
-        summary.textContent = "Run the simulation to chart birth and death cadence.";
+        summaryMessage.textContent = LIFE_EVENT_TIMELINE_EMPTY_MESSAGE;
+      }
+    }
+
+    if (statsGroup) {
+      if (maxCount > 0) {
+        statsGroup.hidden = false;
+        if (windowStat) {
+          windowStat.valueEl.textContent = `${windowTicks.toLocaleString()} ticks`;
+          windowStat.noteEl.textContent = `Bucket size: ${bucketSizeLabel}`;
+        }
+        if (birthStat) {
+          birthStat.valueEl.textContent = totalBirths.toLocaleString();
+          birthStat.noteEl.textContent = `Peak ${Math.max(0, maxBirths).toLocaleString()} ${perBucketLabel}`;
+        }
+        if (deathStat) {
+          deathStat.valueEl.textContent = totalDeaths.toLocaleString();
+          deathStat.noteEl.textContent = `Peak ${Math.max(0, maxDeaths).toLocaleString()} ${perBucketLabel}`;
+        }
+      } else {
+        resetStats();
       }
     }
 
     if (maxCount > 0) {
       canvas.setAttribute(
         "aria-label",
-        `Birth and death cadence across the last ${windowTicks} ticks.`,
+        `Birth and death cadence across the last ${windowTicks.toLocaleString()} ticks.`,
       );
       canvas.removeAttribute("aria-hidden");
     } else {
@@ -2342,6 +2392,7 @@ export default class UIManager {
         "Birth and death cadence will appear once events are recorded.",
       );
       canvas.setAttribute("aria-hidden", "true");
+      resetStats();
     }
 
     if (emptyState) {
@@ -4006,6 +4057,7 @@ export default class UIManager {
         .join(" ");
 
       item.className = normalizedClass;
+      item.setAttribute("role", "listitem");
       if (typeof item.setAttribute === "function") {
         if (typeof label === "string" && label.length > 0) {
           item.setAttribute("data-label", label);
@@ -4051,7 +4103,7 @@ export default class UIManager {
 
     this.lifeEventsSummary = document.createElement("div");
     this.lifeEventsSummary.className = "life-events-summary";
-    this.lifeEventsSummary.setAttribute("role", "status");
+    this.lifeEventsSummary.setAttribute("role", "list");
     this.lifeEventsSummary.setAttribute("aria-live", "polite");
     this.lifeEventsSummary.setAttribute(
       "aria-label",
@@ -4140,11 +4192,65 @@ export default class UIManager {
     timelineTitle.textContent = "Birth & Death Cadence";
     timelineCard.appendChild(timelineTitle);
 
-    const timelineSummary = document.createElement("p");
+    const timelineSummary = document.createElement("div");
 
-    timelineSummary.className = "life-events-timeline__summary control-hint";
-    timelineSummary.textContent =
-      "Run the simulation to chart birth and death cadence.";
+    timelineSummary.className = "life-events-timeline__summary";
+    timelineSummary.setAttribute("role", "group");
+    timelineSummary.setAttribute("aria-live", "polite");
+    timelineSummary.setAttribute(
+      "aria-label",
+      "Summary of recent birth and death cadence",
+    );
+
+    const timelineSummaryMessage = document.createElement("p");
+
+    timelineSummaryMessage.className =
+      "life-events-timeline__summary-message control-hint";
+    timelineSummaryMessage.textContent = LIFE_EVENT_TIMELINE_EMPTY_MESSAGE;
+    timelineSummary.appendChild(timelineSummaryMessage);
+
+    const timelineStats = document.createElement("dl");
+
+    timelineStats.className = "life-events-timeline__stats";
+    timelineStats.setAttribute("aria-label", "Birth and death cadence summary");
+    timelineStats.hidden = true;
+
+    const createTimelineStat = (label, noteText) => {
+      const wrapper = document.createElement("div");
+
+      wrapper.className = "life-events-timeline__stat";
+
+      const term = document.createElement("dt");
+
+      term.className = "life-events-timeline__stat-label";
+      term.textContent = label;
+
+      const metric = document.createElement("dd");
+
+      metric.className = "life-events-timeline__stat-metric";
+      const valueEl = document.createElement("span");
+
+      valueEl.className = "life-events-timeline__stat-value";
+      valueEl.textContent = "—";
+      const noteEl = document.createElement("span");
+
+      noteEl.className = "life-events-timeline__stat-note";
+      noteEl.textContent = noteText;
+
+      metric.appendChild(valueEl);
+      metric.appendChild(noteEl);
+      wrapper.appendChild(term);
+      wrapper.appendChild(metric);
+      timelineStats.appendChild(wrapper);
+
+      return { valueEl, noteEl, defaultNote: noteText };
+    };
+
+    const windowStat = createTimelineStat("Window", "Bucket size: —");
+    const birthStat = createTimelineStat("Births", "Peak — per bucket");
+    const deathStat = createTimelineStat("Deaths", "Peak — per bucket");
+
+    timelineSummary.appendChild(timelineStats);
     timelineCard.appendChild(timelineSummary);
 
     const timelineChart = document.createElement("div");
@@ -4225,6 +4331,11 @@ export default class UIManager {
     this.lifeEventsTimelineCard = timelineCard;
     this.lifeEventsTimelineCanvas = timelineCanvas;
     this.lifeEventsTimelineSummary = timelineSummary;
+    this.lifeEventsTimelineSummaryMessage = timelineSummaryMessage;
+    this.lifeEventsTimelineStats = timelineStats;
+    this.lifeEventsTimelineWindowStat = windowStat;
+    this.lifeEventsTimelineBirthStat = birthStat;
+    this.lifeEventsTimelineDeathStat = deathStat;
     this.lifeEventsTimelineEmptyState = timelineEmpty;
 
     const breakdownCard = document.createElement("div");
