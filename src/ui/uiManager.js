@@ -5235,8 +5235,7 @@ export default class UIManager {
           traitList.className = "trait-bar-list";
           traitList.setAttribute("role", "list");
 
-          for (let i = 0; i < traitConfigs.length; i++) {
-            const trait = traitConfigs[i];
+          traitConfigs.forEach((trait) => {
             const countRaw = traitPresence.counts?.[trait.key] ?? 0;
             const fractionRaw = traitPresence.fractions?.[trait.key] ?? 0;
             const count = Number.isFinite(countRaw) ? countRaw : 0;
@@ -5295,7 +5294,7 @@ export default class UIManager {
 
             item.appendChild(meter);
             traitList.appendChild(item);
-          }
+          });
 
           traitBody.appendChild(traitList);
         } else {
