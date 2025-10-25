@@ -6244,6 +6244,25 @@ export default class Cell {
     const conserveProb = clamp(probabilitiesByKey.conserve ?? 0, 0, 1);
     const reciprocateProb = clamp(probabilitiesByKey.reciprocate ?? 0, 0, 1);
     const amplifyProb = clamp(probabilitiesByKey.amplify ?? 0, 0, 1);
+    const probabilitySummary = [
+      { key: "conserve", probability: conserveProb },
+      { key: "reciprocate", probability: reciprocateProb },
+      { key: "amplify", probability: amplifyProb },
+    ];
+    let dominantIntent = probabilitySummary[0];
+    let runnerUpIntent = { key: null, probability: 0 };
+
+    for (let i = 0; i < probabilitySummary.length; i++) {
+      const entry = probabilitySummary[i];
+
+      if (entry.probability > dominantIntent.probability) {
+        runnerUpIntent = dominantIntent;
+        dominantIntent = entry;
+      } else if (entry.probability > runnerUpIntent.probability) {
+        runnerUpIntent = entry;
+      }
+    }
+
     const preference = clamp(amplifyProb - conserveProb, -1, 1);
     const balanceLean = clamp(reciprocateProb - 1 / Math.max(1, entries.length), -1, 1);
     const kin = clamp(Number.isFinite(kinship) ? kinship : 0, 0, 1);
@@ -6254,17 +6273,54 @@ export default class Cell {
       1,
     );
     const energyDelta = clamp(partnerNorm - self, -1, 1);
-    const needBoost = Math.max(0, energyDelta);
-    const cautionDrag = Math.max(0, -energyDelta);
+    const selfNeed = Math.max(0, energyDelta);
+    const partnerNeed = Math.max(0, -energyDelta);
     const opportunity = clamp(sensors.opportunitySignal ?? 0, -1, 1);
-
+    const totalProbability = probabilitySummary.reduce(
+      (sum, entry) => sum + entry.probability,
+      0,
+    );
+    const conserveAnchor = clamp(
+      baseShare * (0.35 + kin * 0.2) -
+        selfNeed * (0.4 + (1 - kin) * 0.2) +
+        partnerNeed * 0.12 -
+        Math.min(0, opportunity) * 0.1,
+      0,
+      1,
+    );
+    const reciprocateAnchor = clamp(baseShare + (partnerNeed - selfNeed) * 0.35, 0, 1);
+    const amplifyAnchor = clamp(
+      baseShare +
+        partnerNeed * (0.6 + kin * 0.3 + Math.max(0, opportunity) * 0.3) -
+        selfNeed * 0.2 +
+        Math.max(0, opportunity) * 0.2,
+      0,
+      1,
+    );
+    const anchorByKey = {
+      conserve: conserveAnchor,
+      reciprocate: reciprocateAnchor,
+      amplify: amplifyAnchor,
+    };
     let neuralTarget = baseShare;
 
-    neuralTarget += preference * (0.55 + kin * 0.3 + needBoost * 0.45);
-    neuralTarget += balanceLean * 0.2;
-    neuralTarget += opportunity * (amplifyProb - conserveProb) * 0.1;
-    neuralTarget -= cautionDrag * (0.28 + (1 - kin) * 0.2 + conserveProb * 0.25);
-    neuralTarget = clamp(neuralTarget, 0, 1);
+    if (totalProbability > 1e-6) {
+      let weightedTarget = 0;
+
+      for (let i = 0; i < probabilitySummary.length; i++) {
+        const entry = probabilitySummary[i];
+        const anchor = anchorByKey[entry.key];
+
+        weightedTarget += entry.probability * (anchor ?? baseShare);
+      }
+
+      neuralTarget = clamp(weightedTarget / totalProbability, 0, 1);
+    }
+
+    const neuralAdvantage = Math.max(
+      0,
+      dominantIntent.probability - runnerUpIntent.probability,
+    );
 
     const evaluation =
       this.brain?.lastEvaluation?.group === "cooperationShare"
@@ -6286,11 +6342,23 @@ export default class Cell {
       neuralTarget,
       neuralMix,
       neuralSignal,
+      neuralAnchors: anchorByKey,
+      neuralDominant: dominantIntent?.key ?? null,
+      neuralAdvantage,
       probabilities: probabilitiesByKey,
       logits: logitsByKey,
     });
 
-    return { share, baseShare, neuralTarget, neuralMix, neuralSignal };
+    return {
+      share,
+      baseShare,
+      neuralTarget,
+      neuralMix,
+      neuralSignal,
+      neuralAnchors: anchorByKey,
+      neuralDominant: dominantIntent?.key ?? null,
+      neuralAdvantage,
+    };
   }
 
   #legacyCooperationShareFraction({
