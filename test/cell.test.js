@@ -1007,7 +1007,7 @@ test("neural cooperation decisions modulate share fractions", () => {
   assert.ok(neuralShare <= 1, "share fraction remains clamped");
 });
 
-test("legacy interaction keeps cooperation share at baseline", () => {
+test("emergent fallback keeps cooperation share at baseline", () => {
   const dna = new DNA(40, 200, 60);
 
   dna.cooperateShareFrac = ({ energyDelta = 0, kinship = 0 } = {}) =>
@@ -1017,7 +1017,10 @@ test("legacy interaction keeps cooperation share at baseline", () => {
   cell.energy = 4;
   cell.brain = { connectionCount: 0 };
   cell.interactionGenes = { avoid: 0, fight: 0, cooperate: 1 };
-  cell._rngCache = new Map([["legacyInteractionChoice", () => 0.5]]);
+  cell._rngCache = new Map([
+    ["interactionFallback", () => 0.99],
+    ["legacyInteractionChoice", () => 0.99],
+  ]);
 
   const partnerDna = new DNA(60, 40, 90);
   const partner = { dna: partnerDna, energy: 1 };
@@ -1052,6 +1055,70 @@ test("legacy interaction keeps cooperation share at baseline", () => {
   assert.ok(
     Math.abs(intent.metadata.shareFraction - baselineShare) <= 1e-12,
     "fallback keeps share at baseline",
+  );
+});
+
+test("interaction fallback shifts with environmental pressures", () => {
+  const dna = new DNA(120, 40, 60);
+  const cell = new Cell(4, 4, dna, 6);
+
+  cell.brain = { connectionCount: 0 };
+  cell.interactionGenes = { avoid: 0.8, fight: 0.6, cooperate: 0.4 };
+
+  const hostileDna = new DNA(200, 200, 20);
+  const hostile = { dna: hostileDna, energy: 12, row: 4, col: 5 };
+  const hostileDescriptor = {
+    target: hostile,
+    row: hostile.row,
+    col: hostile.col,
+    precomputedSimilarity: 0.05,
+  };
+
+  cell._rngCache = new Map([
+    ["interactionFallback", () => 0],
+    ["legacyInteractionChoice", () => 0],
+  ]);
+
+  const avoidAction = cell.chooseInteractionAction({
+    localDensity: 0.95,
+    densityEffectMultiplier: 1,
+    enemies: [hostileDescriptor],
+    allies: [],
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+    tileEnergy: 0.05,
+    tileEnergyDelta: -0.6,
+  });
+
+  assert.is(avoidAction, "avoid", "threat-heavy context prefers retreat");
+
+  const allyDna = new DNA(60, 240, 180);
+  const ally = { dna: allyDna, energy: 5, row: 4, col: 3 };
+  const allyDescriptor = {
+    target: ally,
+    row: ally.row,
+    col: ally.col,
+    precomputedSimilarity: clamp(cell.similarityTo(ally), 0, 1),
+  };
+
+  cell._rngCache.set("interactionFallback", () => 0.999);
+  cell._rngCache.set("legacyInteractionChoice", () => 0.999);
+  cell.interactionGenes = { avoid: 0.2, fight: 0.15, cooperate: 1.4 };
+  cell.energy = 7;
+
+  const cooperateAction = cell.chooseInteractionAction({
+    localDensity: 0.1,
+    densityEffectMultiplier: 1,
+    enemies: [],
+    allies: [allyDescriptor],
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+    tileEnergy: 0.9,
+    tileEnergyDelta: 0.45,
+  });
+
+  assert.is(
+    cooperateAction,
+    "cooperate",
+    "resource-rich ally support encourages cooperation",
   );
 });
 
