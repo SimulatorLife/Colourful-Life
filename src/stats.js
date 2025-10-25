@@ -616,6 +616,7 @@ export default class Stats {
     meanStrategyPenalty = 1,
     diverseSuccessRate = 0,
     diversityOpportunity = 0,
+    diversityOpportunityAvailability = 0,
   ) {
     const target = clamp01(this.diversityTarget ?? DIVERSITY_TARGET_DEFAULT);
 
@@ -637,8 +638,16 @@ export default class Stats {
     const penaltyAverage = clamp01(
       Number.isFinite(meanStrategyPenalty) ? meanStrategyPenalty : 1,
     );
-    const opportunityShortfall = clamp01(
+    const opportunityAvailabilityValue = clamp01(
+      Number.isFinite(diversityOpportunityAvailability)
+        ? diversityOpportunityAvailability
+        : 0,
+    );
+    const opportunityValue = clamp01(
       Number.isFinite(diversityOpportunity) ? diversityOpportunity : 0,
+    );
+    const opportunityShortfall = clamp01(
+      opportunityValue * (0.6 + opportunityAvailabilityValue * 0.4),
     );
     const penaltySlack = penaltyAverage;
     const penaltyRelief = clamp01(1 - penaltyAverage);
@@ -654,9 +663,18 @@ export default class Stats {
     const evennessDemand = evennessShortfall * (0.3 + geneticShortfall * 0.4);
     const successDemand =
       successShortfall * (0.25 + penaltySlack * 0.35 + (1 - evennessValue) * 0.25);
-    const opportunityDemand = opportunityShortfall * (0.25 + geneticShortfall * 0.35);
+    const opportunityDemand =
+      opportunityShortfall *
+      (0.25 + geneticShortfall * 0.35 + opportunityAvailabilityValue * 0.25);
+    const availabilityDemand =
+      opportunityAvailabilityValue *
+      (0.2 + geneticShortfall * 0.35 + evennessShortfall * 0.2);
     const combinedShortfall = clamp01(
-      geneticShortfall * 0.6 + evennessDemand + successDemand + opportunityDemand,
+      geneticShortfall * 0.6 +
+        evennessDemand +
+        successDemand +
+        opportunityDemand +
+        availabilityDemand,
     );
     const complementRelief = complementValue * 0.35;
     const targetPressure = Math.max(0, combinedShortfall - complementRelief);
@@ -669,7 +687,10 @@ export default class Stats {
 
     const monotonyDemand =
       evennessShortfall * (0.45 + geneticShortfall * 0.35) * (0.7 + penaltySlack * 0.6);
-    const opportunityDrag = opportunityShortfall * (0.2 + geneticShortfall * 0.3);
+    const opportunityDrag =
+      opportunityShortfall *
+      (0.2 + geneticShortfall * 0.3) *
+      (0.7 + opportunityAvailabilityValue * 0.3);
     const monotonyDemandScaled = clamp01(monotonyDemand * (1 + successShortfall * 0.5));
     const complementReliefStrategy = clamp01(
       complementValue * (0.25 + geneticShortfall * 0.3) * (0.8 + penaltyRelief * 0.4),
@@ -1489,6 +1510,7 @@ export default class Stats {
       meanStrategyPenalty,
       diverseSuccessRate,
       diversityOpportunity,
+      diversityOpportunityAvailability,
     );
 
     this.diversityOpportunity = diversityOpportunity;
@@ -1498,6 +1520,10 @@ export default class Stats {
     this.pushHistory("diversity", diversity);
     this.pushHistory("diversityPressure", this.diversityPressure);
     this.pushHistory("diversityOpportunity", diversityOpportunity);
+    this.pushHistory(
+      "diversityOpportunityAvailability",
+      diversityOpportunityAvailability,
+    );
     this.pushHistory("energy", meanEnergy);
     this.pushHistory("growth", this.births - this.deaths);
     this.pushHistory("birthsPerTick", this.births);

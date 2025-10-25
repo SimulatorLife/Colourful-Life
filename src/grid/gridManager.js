@@ -5658,6 +5658,7 @@ export default class GridManager {
     strategyPressure = 0,
     scarcity = 0,
     diversityOpportunity = 0,
+    diversityOpportunityAvailability = 0,
   } = {}) {
     const sliderFloor = clamp(Number.isFinite(floor) ? floor : 0, 0, 1);
 
@@ -5708,6 +5709,15 @@ export default class GridManager {
       0,
       1,
     );
+    const opportunityAvailability = clamp(
+      Number.isFinite(diversityOpportunityAvailability)
+        ? diversityOpportunityAvailability
+        : opportunitySignal > 0
+          ? 1
+          : 0,
+      0,
+      1,
+    );
 
     const pressure = clamp(
       Number.isFinite(diversityPressure) ? diversityPressure : 0,
@@ -5737,6 +5747,15 @@ export default class GridManager {
         (0.22 + pressure * 0.25 + combinedDrive * 0.2 + probabilitySlack * 0.15);
 
       severity += opportunityDemand;
+    }
+
+    if (opportunityAvailability > 0) {
+      const availabilityDemand =
+        opportunityAvailability *
+        (0.12 + pressure * 0.2 + combinedDrive * 0.15 + probabilitySlack * 0.15);
+
+      severity += availabilityDemand * (0.35 + opportunitySignal * 0.25);
+      severity *= 1 + availabilityDemand * 0.2;
     }
 
     if (complementarity > 0 && evennessDrag > 0) {
@@ -5983,6 +6002,7 @@ export default class GridManager {
         strategyPressure,
         scarcity: scarcitySignal,
         diversityOpportunity: diversityOpportunityScore,
+        diversityOpportunityAvailability,
       });
 
       diversityPenaltyMultiplier = clamp(diversityPenaltyMultiplier, 0, 1);

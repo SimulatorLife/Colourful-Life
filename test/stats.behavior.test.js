@@ -463,7 +463,7 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(result.meanEnergy, 3);
   assert.is(result.meanAge, 4.5);
   assert.is(result.diversity, 0.42);
-  assert.is(result.diversityPressure, 0);
+  approxEqual(result.diversityPressure, 0.00162, 1e-9);
   approxEqual(result.diversityOpportunity, 0.3, 1e-9);
   approxEqual(result.diversityOpportunityAvailability, 0.6, 1e-9);
   assert.is(result.diversityTarget, stats.getDiversityTarget());
