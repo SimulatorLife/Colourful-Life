@@ -4520,6 +4520,9 @@ export default class Cell {
           tileEnergy,
           tileEnergyDelta,
           maxTileEnergy,
+          mates,
+          enemies,
+          society,
         });
 
         if (shouldRetreat) {
@@ -4614,10 +4617,86 @@ export default class Cell {
       tileEnergy = null,
       tileEnergyDelta = 0,
       maxTileEnergy = MAX_TILE_ENERGY,
+      mates = [],
+      enemies = [],
+      society = [],
     } = {},
   ) {
     if (!threat) {
       return { shouldRetreat: false, probability: 0 };
+    }
+
+    const baseline = this.#computeLegacyRetreatImpulse(threat, {
+      row,
+      col,
+      localDensity,
+      densityEffectMultiplier,
+      tileEnergy,
+      tileEnergyDelta,
+      maxTileEnergy,
+    });
+    const neural = this.#neuralCautiousRetreatImpulse({
+      threat,
+      row,
+      col,
+      localDensity,
+      densityEffectMultiplier,
+      tileEnergy,
+      tileEnergyDelta,
+      maxTileEnergy,
+      mates,
+      enemies,
+      society,
+      baseline,
+    });
+
+    let probability = baseline.probability;
+    let neuralDetails = null;
+
+    if (neural) {
+      const weight = clamp(Number.isFinite(neural.weight) ? neural.weight : 0.5, 0, 1);
+
+      probability = lerp(probability, neural.probability, weight);
+      neuralDetails = { ...neural, weight };
+    }
+
+    probability = clamp(Number.isFinite(probability) ? probability : 0, 0, 1);
+
+    const rng = this.resolveRng("legacyCautiousRetreat");
+    const roll = typeof rng === "function" ? rng() : Math.random();
+    const shouldRetreat = Number.isFinite(roll)
+      ? roll < probability
+      : probability >= 0.5;
+
+    if (neuralDetails) {
+      this.#assignDecisionOutcome("movement", {
+        cautiousRetreat: {
+          baselineProbability: baseline.probability,
+          probability,
+          neuralProbability: neuralDetails.probability,
+          neuralWeight: neuralDetails.weight,
+          neuralAdvantage: neuralDetails.advantage,
+        },
+      });
+    }
+
+    return { shouldRetreat, probability };
+  }
+
+  #computeLegacyRetreatImpulse(
+    threat,
+    {
+      row,
+      col,
+      localDensity = 0,
+      densityEffectMultiplier = 1,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
+      maxTileEnergy = MAX_TILE_ENERGY,
+    } = {},
+  ) {
+    if (!threat) {
+      return { probability: 0, metrics: null };
     }
 
     const occupantRow = Number.isFinite(row) ? row : this.row;
@@ -4721,13 +4800,129 @@ export default class Cell {
       0,
       1,
     );
-    const rng = this.resolveRng("legacyCautiousRetreat");
-    const roll = typeof rng === "function" ? rng() : Math.random();
-    const shouldRetreat = Number.isFinite(roll)
-      ? roll < retreatProbability
-      : retreatProbability >= 0.5;
 
-    return { shouldRetreat, probability: retreatProbability };
+    return {
+      probability: retreatProbability,
+      metrics: {
+        cautionDrive,
+        threatDrive,
+        resourceAnchor,
+        confidence,
+        retreatScore,
+        holdScore,
+        scarcitySignal,
+        energyDelta,
+        proximityPressure,
+        eventPressure,
+      },
+    };
+  }
+
+  #neuralCautiousRetreatImpulse({
+    threat,
+    localDensity = 0,
+    densityEffectMultiplier = 1,
+    mates = [],
+    enemies = [],
+    society = [],
+    maxTileEnergy = MAX_TILE_ENERGY,
+    tileEnergy = null,
+    tileEnergyDelta = 0,
+    baseline = null,
+  } = {}) {
+    if (!threat || !this.#canUseNeuralPolicies()) {
+      return null;
+    }
+
+    const sensors = this.#movementSensors({
+      localDensity,
+      densityEffectMultiplier,
+      mates,
+      enemies,
+      society,
+      maxTileEnergy,
+      tileEnergy,
+      tileEnergyDelta,
+    });
+    const preview = this.#previewBrainGroup("movement", sensors);
+
+    if (!preview?.values) {
+      return null;
+    }
+
+    const entries = OUTPUT_GROUPS.movement;
+    const logits = entries.map(({ key }) => Number(preview.values[key]) || 0);
+    const probabilities = softmax(logits);
+    const indexOf = (label) => entries.findIndex((entry) => entry.key === label);
+    const clampProb = (idx) => (idx >= 0 ? clamp(probabilities[idx] ?? 0, 0, 1) : 0);
+    const avoidIndex = indexOf("avoid");
+    const avoidProb = clampProb(avoidIndex);
+
+    if (avoidIndex < 0) {
+      return null;
+    }
+
+    let competitorMax = 0;
+
+    for (let i = 0; i < probabilities.length; i++) {
+      if (i === avoidIndex) continue;
+
+      const candidate = clamp(probabilities[i] ?? 0, 0, 1);
+
+      if (candidate > competitorMax) {
+        competitorMax = candidate;
+      }
+    }
+
+    const advantage = Math.max(0, avoidProb - competitorMax);
+    const restProb = clampProb(indexOf("rest"));
+    const pursueProb = clampProb(indexOf("pursue"));
+    const exploreProb = clampProb(indexOf("explore"));
+    const severity = (() => {
+      const metrics = baseline?.metrics || {};
+      const threatDrive = Number.isFinite(metrics.threatDrive)
+        ? clamp(metrics.threatDrive, 0, 2)
+        : 0;
+      const proximityPressure = Number.isFinite(metrics.proximityPressure)
+        ? clamp(metrics.proximityPressure, 0, 1.5)
+        : 0;
+      const energyDelta = Number.isFinite(metrics.energyDelta)
+        ? clamp(Math.max(0, metrics.energyDelta), 0, 1)
+        : 0;
+      const eventPressure = Number.isFinite(metrics.eventPressure)
+        ? clamp(metrics.eventPressure, 0, 1)
+        : clamp(this.lastEventPressure || 0, 0, 1);
+
+      return clamp(
+        threatDrive * 0.35 +
+          proximityPressure * 0.35 +
+          energyDelta * 0.3 +
+          eventPressure * 0.25,
+        0,
+        1.6,
+      );
+    })();
+    const neuralFatigue = this.#currentNeuralFatigue();
+    const scarcityMemory = clamp(Math.max(0, sensors.scarcityMemory ?? 0), 0, 1);
+    let neuralProbability = avoidProb * (0.65 + advantage * 0.55);
+
+    neuralProbability += severity * 0.25;
+    neuralProbability += neuralFatigue * 0.12 + scarcityMemory * 0.1;
+    neuralProbability -= restProb * 0.18 + pursueProb * 0.22 + exploreProb * 0.08;
+    neuralProbability = clamp(neuralProbability, 0, 1);
+
+    const weight = clamp(0.45 + advantage * 0.35 + severity * 0.25, 0.2, 0.95);
+
+    return {
+      probability: neuralProbability,
+      weight,
+      advantage,
+      avoidProbability: avoidProb,
+      competitorProbability: competitorMax,
+      restProbability: restProb,
+      pursueProbability: pursueProb,
+      exploreProbability: exploreProb,
+    };
   }
 
   executeMovementStrategy(gridArr, row, col, mates, enemies, society, context = {}) {
