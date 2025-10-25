@@ -31,7 +31,13 @@ const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 const DEFAULT_ACTIVITY_BASE_RATE = 0.28;
 const DEFAULT_MUTATION_CHANCE = 0.15;
 const DEFAULT_INITIAL_TILE_ENERGY_FRACTION = 0.5;
-const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.15;
+// Relaxed from 1.15 after a 60×60 dense seeding probe
+// (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
+// where the final population recovered from ~218 → ~225 survivors.
+// The gentler surplus requirement still forces parents to stockpile beyond
+// their pickier demand fraction but keeps collapse loops from starving
+// recovering lineages before births can land.
+const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.12;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
     ? process.env
