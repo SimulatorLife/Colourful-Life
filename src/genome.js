@@ -363,15 +363,10 @@ export class DNA {
     if (!this.hasNeuralGenes()) return [];
 
     const count = this.neuralGeneCount();
-    const genes = [];
 
-    for (let i = 0; i < count; i++) {
-      const gene = this.#decodeNeuralGene(i);
-
-      if (gene) genes.push(gene);
-    }
-
-    return genes;
+    return Array.from({ length: count }, (_, index) =>
+      this.#decodeNeuralGene(index),
+    ).filter(Boolean);
   }
 
   updateBrainMetrics({ neuronCount, connectionCount } = {}) {
@@ -415,16 +410,10 @@ export class DNA {
   // Expand genome to a 6x5 weight matrix in [-1,1]
   weights() {
     const rnd = this.prngFor("weights");
-    const rows = [];
 
-    for (let a = 0; a < 6; a++) {
-      const row = [];
-
-      for (let i = 0; i < 5; i++) row.push(rnd() * 2 - 1);
-      rows.push(row);
-    }
-
-    return rows;
+    return Array.from({ length: 6 }, () =>
+      Array.from({ length: 5 }, () => rnd() * 2 - 1),
+    );
   }
 
   movementGenes() {
