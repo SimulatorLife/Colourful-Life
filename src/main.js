@@ -13,6 +13,48 @@ import {
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 
 /**
+ * Derives width/height overrides for headless canvases so both the generated
+ * canvas and simulation config stay in sync. Returns `null` when no positive
+ * dimensions are supplied by the resolver.
+ */
+function buildHeadlessCanvasOverrides(config, size) {
+  if (!size) return null;
+
+  const width = Number.isFinite(size.width) && size.width > 0 ? size.width : null;
+  const height = Number.isFinite(size.height) && size.height > 0 ? size.height : null;
+
+  if (width == null && height == null) {
+    return null;
+  }
+
+  const canvasSize = { ...toPlainObject(config?.canvasSize) };
+
+  if (width != null) {
+    canvasSize.width = width;
+  }
+
+  if (height != null) {
+    canvasSize.height = height;
+  }
+
+  const overrides = {
+    canvasSize,
+  };
+
+  if (width != null) {
+    overrides.width = width;
+    overrides.canvasWidth = width;
+  }
+
+  if (height != null) {
+    overrides.height = height;
+    overrides.canvasHeight = height;
+  }
+
+  return overrides;
+}
+
+/**
  * Bootstraps a {@link SimulationEngine} instance together with its associated
  * UI layer, returning a collection of helpers for controlling the lifecycle of
  * the simulation. Designed as the primary entry point for consumers embedding
@@ -125,53 +167,24 @@ export function createSimulation({
   const headlessCanvasSize = headless
     ? resolveHeadlessCanvasSize(configWithLayoutDefaults)
     : null;
-  const sizeOverrides = headlessCanvasSize ?? {};
+  const headlessOverrides = headless
+    ? buildHeadlessCanvasOverrides(configWithLayoutDefaults, headlessCanvasSize)
+    : null;
   let createdHeadlessCanvas = false;
 
   if (headless && !resolvedCanvas) {
-    const canvasSizeConfig = {
-      ...toPlainObject(configWithLayoutDefaults.canvasSize),
-    };
+    const canvasConfig = headlessOverrides
+      ? { ...configWithLayoutDefaults, ...headlessOverrides }
+      : configWithLayoutDefaults;
 
-    if (sizeOverrides.width > 0) {
-      canvasSizeConfig.width = sizeOverrides.width;
-    }
-
-    if (sizeOverrides.height > 0) {
-      canvasSizeConfig.height = sizeOverrides.height;
-    }
-
-    resolvedCanvas = createHeadlessCanvas({
-      ...configWithLayoutDefaults,
-      width: sizeOverrides.width,
-      height: sizeOverrides.height,
-      canvasWidth: sizeOverrides.width,
-      canvasHeight: sizeOverrides.height,
-      canvasSize: canvasSizeConfig,
-    });
+    resolvedCanvas = createHeadlessCanvas(canvasConfig);
     createdHeadlessCanvas = true;
   }
 
-  if (headless && headlessCanvasSize && createdHeadlessCanvas) {
-    const canvasSizeConfig = {
-      ...toPlainObject(configWithLayoutDefaults.canvasSize),
-    };
-
-    if (sizeOverrides.width > 0) {
-      canvasSizeConfig.width = sizeOverrides.width;
-    }
-
-    if (sizeOverrides.height > 0) {
-      canvasSizeConfig.height = sizeOverrides.height;
-    }
-
+  if (createdHeadlessCanvas && headlessOverrides) {
     configWithLayoutDefaults = {
       ...configWithLayoutDefaults,
-      width: sizeOverrides.width,
-      height: sizeOverrides.height,
-      canvasWidth: sizeOverrides.width,
-      canvasHeight: sizeOverrides.height,
-      canvasSize: canvasSizeConfig,
+      ...headlessOverrides,
     };
   }
 
