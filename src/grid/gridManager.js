@@ -241,7 +241,7 @@ export default class GridManager {
     cell,
     { localDensity = 0, tileEnergy = 0.5, tileEnergyDelta = 0 } = {},
   ) {
-    if (!cell || typeof cell !== "object") return 0;
+    if (!this.#isCellRecord(cell)) return 0;
 
     const appetite = clamp(cell.diversityAppetite ?? 0, 0, 1);
     const bias = clamp(cell.matePreferenceBias ?? 0, -1, 1);
@@ -378,7 +378,7 @@ export default class GridManager {
   }
 
   #ensureTrackedCell(cell) {
-    if (!cell || typeof cell !== "object") {
+    if (!GridManager.#isCellRecord(cell)) {
       return false;
     }
 
@@ -823,14 +823,18 @@ export default class GridManager {
     if (typeof callback === "function") callback(...args);
   }
 
+  static #isCellRecord(cell) {
+    return cell != null && typeof cell === "object";
+  }
+
   static #updateCellPosition(cell, row, col) {
-    if (!cell || typeof cell !== "object") return;
+    if (!this.#isCellRecord(cell)) return;
     if ("row" in cell) cell.row = row;
     if ("col" in cell) cell.col = col;
   }
 
   static #applyMovementEnergyCost(cell) {
-    if (!cell || typeof cell !== "object" || cell.energy == null || !cell.dna) return;
+    if (!this.#isCellRecord(cell) || cell.energy == null || !cell.dna) return;
 
     const baseCost =
       typeof cell.dna.moveCost === "function" ? cell.dna.moveCost() : 0.005;
@@ -1283,7 +1287,7 @@ export default class GridManager {
   }
 
   #enqueueDecay(row, col, cell) {
-    if (!cell || typeof cell !== "object") return;
+    if (!GridManager.#isCellRecord(cell)) return;
     if (!Number.isInteger(row) || !Number.isInteger(col)) return;
     if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return;
 
@@ -1832,8 +1836,7 @@ export default class GridManager {
 
   #trackCellPosition(cell, row, col) {
     if (
-      !cell ||
-      typeof cell !== "object" ||
+      !GridManager.#isCellRecord(cell) ||
       !Number.isInteger(row) ||
       !Number.isInteger(col)
     ) {
@@ -4037,7 +4040,7 @@ export default class GridManager {
   }
 
   registerDeath(cell, details = {}) {
-    if (!cell || typeof cell !== "object") return;
+    if (!GridManager.#isCellRecord(cell)) return;
 
     const provided = details && typeof details === "object" ? details : {};
     let row = Number.isInteger(provided.row) ? provided.row : null;
