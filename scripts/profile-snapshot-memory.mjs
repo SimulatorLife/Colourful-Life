@@ -28,9 +28,11 @@ function createStubCell(seed) {
 
 function fillGrid(gridManager) {
   let seed = 1;
+
   for (let row = 0; row < ROWS; row += 1) {
     for (let col = 0; col < COLS; col += 1) {
       const cell = createStubCell(seed++);
+
       cell.row = row;
       cell.col = col;
       gridManager.grid[row][col] = cell;
@@ -47,6 +49,7 @@ function forceGc() {
 
 async function main() {
   const originalInit = GridManager.prototype.init;
+
   GridManager.prototype.init = function noop() {};
 
   try {
