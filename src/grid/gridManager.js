@@ -6223,9 +6223,14 @@ export default class GridManager {
 
         candidates.push({ r, c });
       };
+      const neighborOffsets = NEIGHBOR_OFFSETS;
+      const neighborCount = neighborOffsets.length;
       const addNeighbors = (baseRow, baseCol) => {
-        for (const [dr, dc] of NEIGHBOR_OFFSETS) {
-          addCandidate(baseRow + dr, baseCol + dc);
+        // Index iteration avoids array destructuring allocations on this hot path.
+        for (let i = 0; i < neighborCount; i += 1) {
+          const offset = neighborOffsets[i];
+
+          addCandidate(baseRow + offset[0], baseCol + offset[1]);
         }
       };
 
