@@ -313,32 +313,55 @@ export default class GridManager {
       };
     }
 
-    const { best, aboveThreshold } = list.reduce(
-      (acc, entry) => {
+    const values = list
+      .map((entry) => {
         const raw = entry?.diversity;
-        const value = clamp(Number.isFinite(raw) ? raw : 0, 0, 1);
 
-        if (value > acc.best) acc.best = value;
-        if (value >= threshold) acc.aboveThreshold += 1;
+        return clamp(Number.isFinite(raw) ? raw : 0, 0, 1);
+      })
+      .sort((a, b) => b - a);
 
-        return acc;
-      },
-      { best: 0, aboveThreshold: 0 },
+    const best = values[0] ?? 0;
+    const sampleCount = Math.min(values.length, 5);
+    const topAverage =
+      sampleCount > 0
+        ? values.slice(0, sampleCount).reduce((sum, value) => sum + value, 0) /
+          sampleCount
+        : 0;
+    const aboveThresholdCount =
+      threshold > 0
+        ? values.filter((value) => value >= threshold).length
+        : values.length;
+    const availableAbove = Math.max(
+      0,
+      aboveThresholdCount - (chosen >= threshold ? 1 : 0),
     );
-
-    const gap = clamp(best - chosen, 0, 1);
-    const availableAbove = Math.max(0, aboveThreshold - (chosen >= threshold ? 1 : 0));
     const availability = clamp(count > 0 ? availableAbove / count : 0, 0, 1);
-    let score = gap * (0.6 + availability * 0.25);
+    const depth = aboveThresholdCount > 0 ? clamp(aboveThresholdCount / 4, 0, 1) : 0;
+    const gap = clamp(topAverage - chosen, 0, 1);
+    const headroom = clamp(best - threshold, 0, 1);
 
-    if (chosen < threshold && availability > 0) {
-      score += availability * 0.35;
+    let score = gap * (0.5 + availability * 0.3 + depth * 0.2);
+
+    if (chosen < threshold) {
+      score += availability * (0.25 + depth * 0.3);
+      score += headroom * 0.2;
+    } else {
+      score += headroom * 0.1;
     }
 
+    score = clamp(score, 0, 1);
+
+    const weight = clamp(
+      availability * 0.65 + depth * 0.25 + (gap > 0.2 ? 0.1 : 0),
+      0,
+      1,
+    );
+
     return {
-      score: clamp(score, 0, 1),
+      score,
       availability,
-      weight: 1,
+      weight,
       gap,
     };
   }
