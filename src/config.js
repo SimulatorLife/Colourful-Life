@@ -481,13 +481,15 @@ export function resolveSimulationDefaults(overrides = {}) {
     merged.eventFrequencyMultiplier = defaults.eventFrequencyMultiplier;
   }
 
-  const concurrencyValue = Number(merged.maxConcurrentEvents);
+  const concurrencyValue = sanitizeNumber(merged.maxConcurrentEvents, {
+    fallback: defaults.maxConcurrentEvents,
+    min: 0,
+    round: Math.floor,
+  });
 
-  if (!Number.isFinite(concurrencyValue)) {
-    merged.maxConcurrentEvents = defaults.maxConcurrentEvents;
-  } else {
-    merged.maxConcurrentEvents = Math.max(0, Math.floor(concurrencyValue));
-  }
+  merged.maxConcurrentEvents = Number.isFinite(concurrencyValue)
+    ? concurrencyValue
+    : defaults.maxConcurrentEvents;
 
   const hasUpdatesOverride = Object.hasOwn(overrides, "updatesPerSecond");
   const hasSpeedOverride = Object.hasOwn(overrides, "speedMultiplier");
