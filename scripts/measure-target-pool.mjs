@@ -33,6 +33,7 @@ function createGrid(rows, cols) {
     rng: () => 0.5,
     renderStrategy: "canvas",
   });
+
   grid.interactionSystem = { resolveIntent() {} };
 
   return { grid, stats, eventManager };
