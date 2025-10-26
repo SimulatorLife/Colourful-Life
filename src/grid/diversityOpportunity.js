@@ -36,8 +36,8 @@ export function summarizeMateDiversityOpportunity({
   let best = 0;
   let aboveThresholdCount = 0;
 
-  for (let index = 0; index < count; index += 1) {
-    const value = normalizeCandidateValue(list[index]);
+  for (const candidate of list) {
+    const value = normalizeCandidateValue(candidate);
 
     if (value > best) {
       best = value;
@@ -49,20 +49,16 @@ export function summarizeMateDiversityOpportunity({
 
     if (topValues.length < SAMPLE_LIMIT) {
       topValues.push(value);
+    } else {
+      const smallestIndex = topValues.reduce(
+        (lowestIndex, currentValue, currentIndex, array) =>
+          currentValue < array[lowestIndex] ? currentIndex : lowestIndex,
+        0,
+      );
 
-      continue;
-    }
-
-    let smallestIndex = 0;
-
-    for (let i = 1; i < topValues.length; i += 1) {
-      if (topValues[i] < topValues[smallestIndex]) {
-        smallestIndex = i;
+      if (value > topValues[smallestIndex]) {
+        topValues[smallestIndex] = value;
       }
-    }
-
-    if (value > topValues[smallestIndex]) {
-      topValues[smallestIndex] = value;
     }
   }
 
@@ -70,13 +66,7 @@ export function summarizeMateDiversityOpportunity({
   let topAverage = 0;
 
   if (sampleCount > 0) {
-    let sum = 0;
-
-    for (let i = 0; i < sampleCount; i += 1) {
-      sum += topValues[i];
-    }
-
-    topAverage = sum / sampleCount;
+    topAverage = topValues.reduce((total, value) => total + value, 0) / sampleCount;
   }
 
   const availableAbove = Math.max(
