@@ -21,6 +21,7 @@ const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
 // leaves a touch more scarcity in high-traffic graves so crowded clusters stop
 // bouncing between feast and famine every decay pulse.
 const DEFAULT_DECAY_RELEASE_BASE = 0.12;
+const DEFAULT_DECAY_RELEASE_RATE = 0.18;
 const DEFAULT_DECAY_RETURN_FRACTION = 0.88;
 // Bumping the immediate splash from 0.25 → 0.26 during the dense 60×60 probe
 // (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
@@ -123,6 +124,7 @@ export function resolveDecayReleaseBase(env = RUNTIME_ENV) {
 }
 
 export const DECAY_RELEASE_BASE = resolveDecayReleaseBase();
+export const DECAY_RELEASE_RATE = resolveDecayReleaseRate();
 
 function resolveEnvNumber(
   env,
@@ -271,6 +273,26 @@ export function resolveDecayReturnFraction(env = RUNTIME_ENV) {
 export function resolveDecayImmediateShare(env = RUNTIME_ENV) {
   return resolveEnvNumber(env, "COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE", {
     fallback: DEFAULT_DECAY_IMMEDIATE_SHARE,
+    min: 0,
+    max: 1,
+    clampResult: true,
+  });
+}
+
+/**
+ * Resolves the fraction of a decay pool that dissipates each tick after the
+ * baseline release applies. Environment overrides allow deployments to slow or
+ * accelerate how quickly stored energy re-enters the ecosystem while keeping
+ * the value bounded for deterministic tests.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Release rate multiplier constrained to the 0..1 range.
+ */
+export function resolveDecayReleaseRate(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_DECAY_RELEASE_RATE", {
+    fallback: DEFAULT_DECAY_RELEASE_RATE,
     min: 0,
     max: 1,
     clampResult: true,
