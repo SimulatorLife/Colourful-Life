@@ -198,6 +198,26 @@ export function sanitizePositiveInteger(
 }
 
 /**
+ * Normalizes loosely-typed input into a non-negative integer, optionally
+ * constraining the result to an upper bound. Invalid candidates fall back to a
+ * sanitized default that also respects the provided range.
+ *
+ * @param {any} value - Candidate value to normalize.
+ * @param {Object} [options]
+ * @param {number} [options.fallback=0] - Value returned when normalization
+ *   fails. The fallback is also clamped to the provided range.
+ * @param {number} [options.max=Number.POSITIVE_INFINITY] - Maximum allowed
+ *   integer. When inputs exceed this boundary the fallback is returned.
+ * @returns {number} Normalized non-negative integer value.
+ */
+export function sanitizeNonNegativeInteger(
+  value,
+  { fallback = 0, max = Number.POSITIVE_INFINITY } = {},
+) {
+  return sanitizePositiveInteger(value, { fallback, min: 0, max });
+}
+
+/**
  * Returns the first finite, positive number from the provided candidates. When
  * no candidate qualifies, the supplied fallback is returned instead.
  *

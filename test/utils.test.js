@@ -6,6 +6,7 @@ import {
   clamp01,
   sanitizeNumber,
   sanitizePositiveInteger,
+  sanitizeNonNegativeInteger,
   pickFirstFinitePositive,
   createRNG,
   toFiniteOrNull,
@@ -90,6 +91,30 @@ test("sanitizeNumber treats blank strings as missing overrides", () => {
     sanitizePositiveInteger("", { fallback: 9, min: 1 }),
     9,
     "positive integer sanitizer inherits blank string handling",
+  );
+});
+
+test("sanitizeNonNegativeInteger floors candidates and clamps fallbacks", () => {
+  assert.is(sanitizeNonNegativeInteger(7.9), 7);
+  assert.is(
+    sanitizeNonNegativeInteger(-3, { fallback: 2 }),
+    2,
+    "negative values use sanitized fallback",
+  );
+  assert.is(
+    sanitizeNonNegativeInteger("invalid", { fallback: 4 }),
+    4,
+    "non-numeric strings use fallback",
+  );
+  assert.is(
+    sanitizeNonNegativeInteger(12, { fallback: 9, max: 10 }),
+    9,
+    "values exceeding max fall back within range",
+  );
+  assert.is(
+    sanitizeNonNegativeInteger(5, { fallback: -2, max: 4 }),
+    0,
+    "fallback is sanitized to respect range",
   );
 });
 
