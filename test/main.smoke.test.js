@@ -86,6 +86,43 @@ test("createSimulation headless mode infers a canvas when omitted", async () => 
   simulation.destroy();
 });
 
+test("createSimulation reuses a provided selection manager", async () => {
+  const { createSimulation } = await simulationModulePromise;
+  const customSelectionManager = {
+    rows: 0,
+    cols: 0,
+    setDimensions(rows, cols) {
+      this.rows = rows;
+      this.cols = cols;
+    },
+    getPatterns() {
+      return [];
+    },
+    togglePattern() {
+      return false;
+    },
+  };
+
+  const simulation = createSimulation({
+    headless: true,
+    autoStart: false,
+    config: { selectionManager: customSelectionManager },
+  });
+
+  assert.equal(
+    simulation.selectionManager,
+    customSelectionManager,
+    "controller exposes the caller-supplied selection manager",
+  );
+  assert.equal(
+    simulation.grid.selectionManager,
+    customSelectionManager,
+    "grid reuses the caller-supplied selection manager",
+  );
+
+  simulation.destroy();
+});
+
 test("headless canvas respects numeric strings for dimensions", async () => {
   const { createSimulation } = await simulationModulePromise;
 
