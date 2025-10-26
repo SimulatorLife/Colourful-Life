@@ -292,6 +292,7 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
     showDensity: false,
     showFitness: false,
     showLifeEventMarkers: true,
+    showAuroraVeil: true,
     onSettingChange: (key, value) => notifications.push([key, value]),
   });
 
@@ -300,6 +301,7 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
   assert.is(manager.getShowDensity(), false);
   assert.is(manager.getShowFitness(), false);
   assert.is(manager.getShowLifeEventMarkers(), true);
+  assert.is(manager.getShowAuroraVeil(), true);
 
   manager.setShowObstacles("true");
   manager.setShowObstacles(true); // should not notify again
@@ -314,12 +316,16 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
   manager.setShowLifeEventMarkers("no");
   manager.setShowLifeEventMarkers(false); // no change
 
+  manager.setShowAuroraVeil("off");
+  manager.setShowAuroraVeil(0); // no change
+
   assert.equal(notifications, [
     ["showObstacles", true],
     ["showEnergy", false],
     ["showDensity", true],
     ["showFitness", true],
     ["showLifeEventMarkers", false],
+    ["showAuroraVeil", false],
   ]);
 
   assert.is(manager.getShowObstacles(), true);
@@ -327,6 +333,7 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
   assert.is(manager.getShowDensity(), true);
   assert.is(manager.getShowFitness(), true);
   assert.is(manager.getShowLifeEventMarkers(), false);
+  assert.is(manager.getShowAuroraVeil(), false);
 });
 
 test("createHeadlessUiManager setAutoPauseOnBlur normalizes string inputs", () => {

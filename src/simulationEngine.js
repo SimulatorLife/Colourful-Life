@@ -293,6 +293,7 @@ export default class SimulationEngine {
       showDensity: defaults.showDensity,
       showFitness: defaults.showFitness,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
+      showAuroraVeil: defaults.showAuroraVeil,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       leaderboardSize: defaults.leaderboardSize,
       brainSnapshotLimit,
@@ -769,14 +770,15 @@ export default class SimulationEngine {
     }
 
     const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
+    const includeAuroraVeil = Boolean(this.state.showAuroraVeil);
+    const totalTicks = Number.isFinite(this.stats?.totals?.ticks)
+      ? this.stats.totals.ticks
+      : null;
     const recentLifeEvents =
       includeLifeEventMarkers && typeof this.stats?.getRecentLifeEvents === "function"
         ? this.stats.getRecentLifeEvents()
         : null;
-    const lifeEventTick =
-      includeLifeEventMarkers && Number.isFinite(this.stats?.totals?.ticks)
-        ? this.stats.totals.ticks
-        : null;
+    const lifeEventTick = includeLifeEventMarkers ? totalTicks : null;
 
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
@@ -784,6 +786,7 @@ export default class SimulationEngine {
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
       showLifeEventMarkers: includeLifeEventMarkers,
+      showAuroraVeil: includeAuroraVeil,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
@@ -793,7 +796,7 @@ export default class SimulationEngine {
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
       selectionManager: this.selectionManager,
       lifeEvents: recentLifeEvents,
-      currentTick: lifeEventTick,
+      currentTick: totalTicks,
     });
 
     if (this.telemetry.hasPending()) {
@@ -1103,14 +1106,15 @@ export default class SimulationEngine {
 
     this.grid?.draw?.({ showObstacles });
     const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
+    const includeAuroraVeil = Boolean(this.state.showAuroraVeil);
+    const totalTicks = Number.isFinite(this.stats?.totals?.ticks)
+      ? this.stats.totals.ticks
+      : null;
     const recentLifeEvents =
       includeLifeEventMarkers && typeof this.stats?.getRecentLifeEvents === "function"
         ? this.stats.getRecentLifeEvents()
         : null;
-    const lifeEventTick =
-      includeLifeEventMarkers && Number.isFinite(this.stats?.totals?.ticks)
-        ? this.stats.totals.ticks
-        : null;
+    const lifeEventTick = includeLifeEventMarkers ? totalTicks : null;
 
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
@@ -1118,6 +1122,7 @@ export default class SimulationEngine {
       showFitness: this.state.showFitness ?? false,
       showObstacles,
       showLifeEventMarkers: includeLifeEventMarkers,
+      showAuroraVeil: includeAuroraVeil,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
@@ -1127,7 +1132,7 @@ export default class SimulationEngine {
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
       selectionManager: this.selectionManager,
       lifeEvents: recentLifeEvents,
-      currentTick: lifeEventTick,
+      currentTick: totalTicks,
     });
 
     this.telemetry.resetThrottle(this.now());
@@ -1374,6 +1379,7 @@ export default class SimulationEngine {
     showDensity,
     showFitness,
     showLifeEventMarkers,
+    showAuroraVeil,
   }) {
     const entries = Object.entries({
       showObstacles,
@@ -1381,6 +1387,7 @@ export default class SimulationEngine {
       showDensity,
       showFitness,
       showLifeEventMarkers,
+      showAuroraVeil,
     })
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => [key, coerceBoolean(value, Boolean(this.state?.[key]))]);
@@ -1513,6 +1520,7 @@ export default class SimulationEngine {
       case "showDensity":
       case "showFitness":
       case "showLifeEventMarkers":
+      case "showAuroraVeil":
         this.setOverlayVisibility({ [key]: value });
         break;
       case "autoPauseOnBlur":
