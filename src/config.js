@@ -389,7 +389,7 @@ export const BRAIN_SNAPSHOT_LIMIT_DEFAULT = DEFAULT_BRAIN_SNAPSHOT_LIMIT;
 export const SIMULATION_DEFAULTS = Object.freeze({
   paused: false,
   updatesPerSecond: 60,
-  // Law 5 (External Influence Restraint): disable environmental events until
+  // Law 6 (External Influence Restraint): disable environmental events until
   // the user opts in via controls. The multiplier remains configurable but
   // defaults to zero so simulations begin without background interventions.
   eventFrequencyMultiplier: 0,
