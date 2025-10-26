@@ -127,7 +127,7 @@ test("cloneTracePayload performs deep copies of sensors and nodes", () => {
   assert.is(cloneTracePayload(null), null);
 });
 
-test("cloneTracePayload clones traces when structuredClone is unavailable", async () => {
+test("cloneTracePayload requires structuredClone support", async () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "structuredClone");
   const moduleUrl = new URL("../src/utils.js", import.meta.url);
 
@@ -141,29 +141,12 @@ test("cloneTracePayload clones traces when structuredClone is unavailable", asyn
     });
 
     const { cloneTracePayload: localCloneTracePayload } = await import(moduleUrl.href);
-    const trace = {
-      sensors: [
-        { id: "energy", value: 0.5 },
-        { id: "neighbors", value: 3 },
-      ],
-      nodes: [
-        {
-          id: "hidden-1",
-          bias: 0.1,
-          inputs: [
-            { id: "input-1", weight: 0.2 },
-            { id: "input-2", weight: 0.3 },
-          ],
-        },
-      ],
-    };
 
-    const clone = localCloneTracePayload(trace);
-
-    assert.ok(clone !== trace);
-    assert.ok(clone.sensors[0] !== trace.sensors[0]);
-    assert.ok(clone.nodes[0] !== trace.nodes[0]);
-    assert.ok(clone.nodes[0].inputs[0] !== trace.nodes[0].inputs[0]);
+    assert.throws(
+      () => localCloneTracePayload({ sensors: [], nodes: [] }),
+      /structuredClone support/,
+      "environments without structuredClone receive an explicit error",
+    );
   } finally {
     if (descriptor) {
       Object.defineProperty(globalThis, "structuredClone", descriptor);
@@ -173,33 +156,12 @@ test("cloneTracePayload clones traces when structuredClone is unavailable", asyn
   }
 });
 
-test("cloneTracePayload surfaces a clear error when encountering unsupported structures", async () => {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "structuredClone");
-  const moduleUrl = new URL("../src/utils.js", import.meta.url);
-
-  moduleUrl.searchParams.set("noStructuredCloneError", Date.now().toString());
-
-  try {
-    Object.defineProperty(globalThis, "structuredClone", {
-      configurable: true,
-      writable: true,
-      value: undefined,
-    });
-
-    const { cloneTracePayload: localCloneTracePayload } = await import(moduleUrl.href);
-
-    assert.throws(
-      () => localCloneTracePayload({ sensors: [], nodes: [new Map()] }),
-      /structuredClone support/,
-      "unsupported values still surface a descriptive error",
-    );
-  } finally {
-    if (descriptor) {
-      Object.defineProperty(globalThis, "structuredClone", descriptor);
-    } else {
-      delete globalThis.structuredClone;
-    }
-  }
+test("cloneTracePayload surfaces a clear error when structuredClone rejects", () => {
+  assert.throws(
+    () => cloneTracePayload({ sensors: [() => {}], nodes: [] }),
+    /structuredClone/,
+    "structuredClone failures bubble up with context",
+  );
 });
 
 test("sanitizeNumber normalizes input with bounds and rounding strategies", () => {
