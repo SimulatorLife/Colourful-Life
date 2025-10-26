@@ -4,6 +4,7 @@ import {
   loadSimulationModules,
   patchSimulationPrototypes,
 } from "./helpers/simulationEngine.js";
+import { LEADERBOARD_INTERVAL_MIN_MS } from "../src/config.js";
 
 function createEngine(modules) {
   const { SimulationEngine } = modules;
@@ -193,6 +194,39 @@ test("setMaxConcurrentEvents floors values and schedules slow UI work", async ()
     engine.setMaxConcurrentEvents(-2);
 
     assert.is(engine.state.maxConcurrentEvents, 0);
+  } finally {
+    restore();
+  }
+});
+
+test("setLeaderboardInterval enforces minimum throttle", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.setLeaderboardInterval(50);
+    assert.is(
+      engine.state.leaderboardIntervalMs,
+      LEADERBOARD_INTERVAL_MIN_MS,
+      "values below the minimum clamp to the configured floor",
+    );
+
+    engine.setLeaderboardInterval(0);
+    assert.is(engine.state.leaderboardIntervalMs, 0, "zero disables throttling");
+
+    engine.setLeaderboardInterval(-25);
+    assert.is(
+      engine.state.leaderboardIntervalMs,
+      0,
+      "negative values fall back to the previous cadence",
+    );
+
+    const updated = engine.setLeaderboardInterval(500);
+
+    assert.is(updated, 500, "setter returns the normalized value");
+    assert.is(engine.state.leaderboardIntervalMs, 500);
   } finally {
     restore();
   }
