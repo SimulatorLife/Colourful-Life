@@ -867,3 +867,41 @@ test("resetWorld clears pending auto-resume flags when stopped", async () => {
     restore();
   }
 });
+
+test("SimulationEngine.burstRandomCells returns the number of spawned cells", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const { SimulationEngine } = modules;
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(30, 30),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      rng: () => 0,
+    });
+
+    engine.resetWorld();
+    engine.grid.clearObstacles();
+    engine.grid.currentObstaclePreset = "none";
+
+    const before = engine.grid.activeCells?.size ?? 0;
+    const placed = engine.burstRandomCells({ count: 12, radius: 3 });
+    const after = engine.grid.activeCells?.size ?? 0;
+
+    assert.type(placed, "number", "engine burstRandomCells should return a count");
+    assert.ok(
+      placed > 0,
+      "burstRandomCells should report placed cells when space is available",
+    );
+    assert.is(
+      after - before,
+      placed,
+      "returned count should match the number of new active cells",
+    );
+  } finally {
+    restore();
+  }
+});

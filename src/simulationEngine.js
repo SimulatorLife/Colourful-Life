@@ -1586,7 +1586,7 @@ export default class SimulationEngine {
   }
 
   burstRandomCells(options = {}) {
-    this.grid.burstRandomCells(options);
+    return this.grid.burstRandomCells(options);
   }
 
   applyObstaclePreset(id, options) {
