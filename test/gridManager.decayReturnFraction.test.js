@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import GridManager from "../src/grid/gridManager.js";
 import DNA, { GENE_LOCI } from "../src/genome.js";
 import { DECAY_RETURN_FRACTION } from "../src/config.js";
+import { clamp01 } from "../src/utils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -98,10 +99,6 @@ function createDNAWithTraits({
   dna.genes[GENE_LOCI.RESIST_COLD] = Math.round(clamp01(cold) * 255);
 
   return dna;
-}
-
-function clamp01(value) {
-  return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
 }
 
 test("DNA influences decay return fraction", () => {

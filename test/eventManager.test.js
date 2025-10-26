@@ -1,10 +1,12 @@
 import { assert, test } from "#tests/harness";
-
-const DEFAULT_RANDOM_EVENT_CONFIG = {
-  durationRange: { min: 300, max: 900 },
-  strengthRange: { min: 0.25, max: 1 },
-  span: { min: 10, ratio: 1 / 3 },
-};
+import EventManager, {
+  sanitizeRandomEventConfig,
+  sampleEventSpan,
+  clampEventStart,
+  isEventAffecting,
+} from "../src/events/eventManager.js";
+import { EVENT_TYPES } from "../src/events/eventEffects.js";
+import { randomRange } from "../src/utils.js";
 
 function makeSequenceRng(sequence) {
   let index = 0;
@@ -26,120 +28,6 @@ function makeSequenceRng(sequence) {
   return rng;
 }
 
-function sanitizeRange(range, fallback, { min: minBound } = {}) {
-  const candidate = range ?? {};
-  const rawMin = Number.isFinite(candidate.min)
-    ? candidate.min
-    : Array.isArray(candidate) && Number.isFinite(candidate[0])
-      ? candidate[0]
-      : undefined;
-  const rawMax = Number.isFinite(candidate.max)
-    ? candidate.max
-    : Array.isArray(candidate) && Number.isFinite(candidate[1])
-      ? candidate[1]
-      : undefined;
-
-  if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) {
-    return { ...fallback };
-  }
-
-  let min = rawMin;
-  let max = rawMax;
-
-  if (min > max) {
-    [min, max] = [max, min];
-  }
-
-  if (Number.isFinite(minBound)) {
-    min = Math.max(min, minBound);
-  }
-
-  if (max < min) {
-    return { ...fallback };
-  }
-
-  return { min, max };
-}
-
-function sanitizeSpanConfig(candidate, fallback) {
-  if (!candidate || typeof candidate !== "object") {
-    return { ...fallback };
-  }
-
-  const min = Number(candidate.min);
-  const ratio = Number(candidate.ratio ?? candidate.fraction ?? candidate.maxFraction);
-  const sanitizedMin = Number.isFinite(min)
-    ? Math.max(1, Math.floor(min))
-    : fallback.min;
-  let sanitizedRatio = Number.isFinite(ratio) ? ratio : fallback.ratio;
-
-  if (!Number.isFinite(sanitizedRatio)) {
-    sanitizedRatio = fallback.ratio;
-  }
-
-  sanitizedRatio = Math.min(Math.max(sanitizedRatio, 0), 1);
-
-  return { min: sanitizedMin, ratio: sanitizedRatio };
-}
-
-function normalizeRandomEventConfig(candidate) {
-  if (!candidate || typeof candidate !== "object") {
-    return {
-      durationRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.durationRange },
-      strengthRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.strengthRange },
-      span: { ...DEFAULT_RANDOM_EVENT_CONFIG.span },
-    };
-  }
-
-  return {
-    durationRange: sanitizeRange(
-      candidate.durationRange,
-      DEFAULT_RANDOM_EVENT_CONFIG.durationRange,
-      {
-        min: 1,
-      },
-    ),
-    strengthRange: sanitizeRange(
-      candidate.strengthRange,
-      DEFAULT_RANDOM_EVENT_CONFIG.strengthRange,
-      {
-        min: 0,
-      },
-    ),
-    span: sanitizeSpanConfig(candidate.span, DEFAULT_RANDOM_EVENT_CONFIG.span),
-  };
-}
-
-function sampleEventSpanFromSequence(
-  size,
-  sample,
-  spanConfig = DEFAULT_RANDOM_EVENT_CONFIG.span,
-) {
-  const maxSpan = Math.max(1, Math.floor(size));
-  const minCandidate = Number.isFinite(spanConfig?.min)
-    ? Math.max(1, Math.floor(spanConfig.min))
-    : DEFAULT_RANDOM_EVENT_CONFIG.span.min;
-  const ratio = Number.isFinite(spanConfig?.ratio)
-    ? Math.min(Math.max(spanConfig.ratio, 0), 1)
-    : DEFAULT_RANDOM_EVENT_CONFIG.span.ratio;
-  const minSpan = Math.min(minCandidate, maxSpan);
-  const spanCandidate = Math.max(minSpan, Math.floor(maxSpan * ratio));
-  const upperExclusive = spanCandidate === minSpan ? minSpan + 1 : spanCandidate + 1;
-  const raw = Math.floor(sample(minSpan, upperExclusive));
-
-  return Math.max(1, Math.min(maxSpan, raw));
-}
-
-function clampEventStart(rawStart, span, limit) {
-  const maxStart = Math.max(0, Math.floor(limit) - span);
-
-  if (maxStart <= 0) {
-    return 0;
-  }
-
-  return Math.min(maxStart, Math.max(0, rawStart));
-}
-
 function expectedEventFromSequence(
   sequence,
   rows,
@@ -147,18 +35,22 @@ function expectedEventFromSequence(
   eventTypes,
   randomEventConfig,
 ) {
-  let idx = 0;
-
-  const sample = (min, max) => min + sequence[idx++] * (max - min);
-  const config = normalizeRandomEventConfig(randomEventConfig);
-  const { durationRange, strengthRange, span } = config;
-  const eventType = eventTypes[Math.floor(sample(0, eventTypes.length))];
-  const duration = Math.floor(sample(durationRange.min, durationRange.max));
-  const strength = sample(strengthRange.min, strengthRange.max);
-  const rawX = Math.floor(sample(0, cols));
-  const rawY = Math.floor(sample(0, rows));
-  const width = sampleEventSpanFromSequence(cols, sample, span);
-  const height = sampleEventSpanFromSequence(rows, sample, span);
+  const rng = makeSequenceRng(sequence.slice());
+  const config = sanitizeRandomEventConfig(randomEventConfig);
+  const pool =
+    Array.isArray(eventTypes) && eventTypes.length > 0
+      ? eventTypes
+      : EventManager.DEFAULT_EVENT_TYPES;
+  const fallbackPool = pool.length > 0 ? pool : EventManager.DEFAULT_EVENT_TYPES;
+  const eventType = fallbackPool[Math.floor(randomRange(0, fallbackPool.length, rng))];
+  const duration = Math.floor(
+    randomRange(config.durationRange.min, config.durationRange.max, rng),
+  );
+  const strength = randomRange(config.strengthRange.min, config.strengthRange.max, rng);
+  const rawX = Math.floor(randomRange(0, cols, rng));
+  const rawY = Math.floor(randomRange(0, rows, rng));
+  const width = sampleEventSpan(cols, rng, config.span);
+  const height = sampleEventSpan(rows, rng, config.span);
   const x = clampEventStart(rawX, width, cols);
   const y = clampEventStart(rawY, height, rows);
 
@@ -171,8 +63,7 @@ function expectedEventFromSequence(
   };
 }
 
-test("EventManager leaves external influence dormant by default", async () => {
-  const { default: EventManager } = await import("../src/events/eventManager.js");
+test("EventManager leaves external influence dormant by default", () => {
   const rows = 40;
   const cols = 60;
   const rng = makeSequenceRng([0.1, 0.2, 0.3]);
@@ -183,11 +74,7 @@ test("EventManager leaves external influence dormant by default", async () => {
   assert.is(rng.getCalls(), 0, "external events should not consume RNG when disabled");
 });
 
-test("EventManager respects injected RNG for deterministic events", async () => {
-  const [{ default: EventManager }, { EVENT_TYPES }] = await Promise.all([
-    import("../src/events/eventManager.js"),
-    import("../src/events/eventEffects.js"),
-  ]);
+test("EventManager respects injected RNG for deterministic events", () => {
   const rows = 40;
   const cols = 60;
   const sequence = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7];
@@ -199,16 +86,14 @@ test("EventManager respects injected RNG for deterministic events", async () => 
   assert.is(rng.getCalls(), sequence.length);
 });
 
-test("EventManager can disable the initial event when requested", async () => {
-  const { default: EventManager } = await import("../src/events/eventManager.js");
+test("EventManager can disable the initial event when requested", () => {
   const manager = new EventManager(12, 18, Math.random, { startWithEvent: false });
 
   assert.is(manager.activeEvents.length, 0);
   assert.is(manager.currentEvent, null);
 });
 
-test("EventManager allows overriding event colors via options", async () => {
-  const { default: EventManager } = await import("../src/events/eventManager.js");
+test("EventManager allows overriding event colors via options", () => {
   const rows = 10;
   const cols = 10;
   const customColors = {
@@ -245,11 +130,7 @@ test("EventManager allows overriding event colors via options", async () => {
   );
 });
 
-test("randomEventConfig customizes generated event ranges", async () => {
-  const [{ default: EventManager }, { EVENT_TYPES }] = await Promise.all([
-    import("../src/events/eventManager.js"),
-    import("../src/events/eventEffects.js"),
-  ]);
+test("randomEventConfig customizes generated event ranges", () => {
   const rows = 12;
   const cols = 18;
   const sequence = [0.11, 0.42, 0.37, 0.58, 0.23, 0.71, 0.19];
@@ -270,11 +151,7 @@ test("randomEventConfig customizes generated event ranges", async () => {
   assert.is(rng.getCalls(), sequence.length);
 });
 
-test("randomEventConfig accepts deterministic ranges", async () => {
-  const [{ default: EventManager }, { EVENT_TYPES }] = await Promise.all([
-    import("../src/events/eventManager.js"),
-    import("../src/events/eventEffects.js"),
-  ]);
+test("randomEventConfig accepts deterministic ranges", () => {
   const rows = 20;
   const cols = 24;
   const sequence = [0.05, 0.33, 0.72, 0.1, 0.25, 0.4, 0.6];
@@ -299,8 +176,7 @@ test("randomEventConfig accepts deterministic ranges", async () => {
   assert.is(rng.getCalls(), sequence.length);
 });
 
-test("generateRandomEvent keeps affected area within the grid bounds", async () => {
-  const { default: EventManager } = await import("../src/events/eventManager.js");
+test("generateRandomEvent keeps affected area within the grid bounds", () => {
   const rows = 4;
   const cols = 6;
   const manager = new EventManager(rows, cols, Math.random, { startWithEvent: false });
@@ -322,8 +198,7 @@ test("generateRandomEvent keeps affected area within the grid bounds", async () 
   }
 });
 
-test("isEventAffecting checks if coordinates fall within event area", async () => {
-  const { isEventAffecting } = await import("../src/events/eventManager.js");
+test("isEventAffecting checks if coordinates fall within event area", () => {
   const event = {
     affectedArea: { x: 5, y: 10, width: 3, height: 4 },
   };

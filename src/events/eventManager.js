@@ -30,7 +30,7 @@ const WARNINGS = Object.freeze({
   pickEventType: "Custom event type picker threw; falling back to default selector.",
 });
 
-const DEFAULT_RANDOM_EVENT_CONFIG = Object.freeze({
+export const DEFAULT_RANDOM_EVENT_CONFIG = Object.freeze({
   durationRange: Object.freeze({ min: 300, max: 900 }),
   strengthRange: Object.freeze({ min: 0.25, max: 1 }),
   span: Object.freeze({ min: 10, ratio: 1 / 3 }),
@@ -97,7 +97,7 @@ function sanitizeSpanConfig(candidate, fallback) {
   return { min, ratio };
 }
 
-function sanitizeRandomEventConfig(candidate) {
+export function sanitizeRandomEventConfig(candidate) {
   if (!candidate || typeof candidate !== "object") {
     return {
       durationRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.durationRange },
@@ -123,7 +123,11 @@ function sanitizeRandomEventConfig(candidate) {
   return { durationRange, strengthRange, span };
 }
 
-function sampleEventSpan(limit, rng, spanConfig = DEFAULT_RANDOM_EVENT_CONFIG.span) {
+export function sampleEventSpan(
+  limit,
+  rng,
+  spanConfig = DEFAULT_RANDOM_EVENT_CONFIG.span,
+) {
   const maxSpan = Math.max(1, Math.floor(limit));
   const minCandidate = Number.isFinite(spanConfig?.min)
     ? Math.max(1, Math.floor(spanConfig.min))
@@ -139,7 +143,7 @@ function sampleEventSpan(limit, rng, spanConfig = DEFAULT_RANDOM_EVENT_CONFIG.sp
   return Math.max(1, Math.min(maxSpan, raw));
 }
 
-function clampEventStart(rawStart, span, limit) {
+export function clampEventStart(rawStart, span, limit) {
   const maxStart = Math.max(0, Math.floor(limit) - span);
 
   if (maxStart <= 0) {
