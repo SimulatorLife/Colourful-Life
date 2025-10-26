@@ -990,7 +990,7 @@ canvas {
 .life-events-summary {
   display: grid;
   gap: var(--space-sm);
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   align-items: stretch;
 }
 
@@ -1183,6 +1183,10 @@ canvas {
   background: var(--color-life-death);
 }
 
+.life-events-summary__item--total::before {
+  background: var(--color-metric-growth);
+}
+
 .life-events-summary__item--muted {
   border-color: rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.04);
@@ -1229,14 +1233,29 @@ canvas {
 .life-events-summary__item--death .life-events-summary__period {
   color: var(--color-life-death);
 }
+.life-events-summary__item--total .life-events-summary__period {
+  color: var(--color-metric-growth);
+}
 
 .life-events-summary__count {
   font-size: 18px;
   font-weight: 600;
   color: var(--color-text);
   font-variant-numeric: tabular-nums;
+  line-height: 1.2;
   margin-left: auto;
   align-self: center;
+}
+
+.life-events-summary__empty-message {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--color-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-subtle);
+  text-align: center;
+  line-height: 1.5;
 }
 
 .life-events-summary__trend {
