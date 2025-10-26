@@ -2509,6 +2509,48 @@ export default class UIManager {
       }
     }
 
+    const rect =
+      typeof canvas.getBoundingClientRect === "function"
+        ? canvas.getBoundingClientRect()
+        : null;
+    const cssWidth =
+      rect && rect.width > 0
+        ? rect.width
+        : canvas.clientWidth > 0
+          ? canvas.clientWidth
+          : canvas.width > 0
+            ? canvas.width
+            : LIFE_EVENT_TIMELINE_CANVAS.width;
+    const cssHeight =
+      rect && rect.height > 0
+        ? rect.height
+        : canvas.clientHeight > 0
+          ? canvas.clientHeight
+          : canvas.height > 0
+            ? canvas.height
+            : LIFE_EVENT_TIMELINE_CANVAS.height;
+    const rawPixelRatio =
+      typeof window !== "undefined" && Number.isFinite(window.devicePixelRatio)
+        ? window.devicePixelRatio
+        : Number.isFinite(globalThis?.devicePixelRatio)
+          ? globalThis.devicePixelRatio
+          : 1;
+    const pixelRatio = Math.max(1, Math.min(4, rawPixelRatio));
+    const renderWidth = Math.max(1, Math.round(cssWidth * pixelRatio));
+    const renderHeight = Math.max(1, Math.round(cssHeight * pixelRatio));
+
+    if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
+      canvas.width = renderWidth;
+      canvas.height = renderHeight;
+    }
+
+    ctx.save();
+    ctx.scale(pixelRatio, pixelRatio);
+    const width = renderWidth / pixelRatio;
+    const height = renderHeight / pixelRatio;
+
+    ctx.clearRect(0, 0, width, height);
+
     if (maxCount > 0) {
       canvas.setAttribute(
         "aria-label",
@@ -2528,16 +2570,12 @@ export default class UIManager {
       emptyState.hidden = maxCount > 0;
     }
 
-    const width = canvas.width;
-    const height = canvas.height;
     const paddingX = 16;
     const paddingY = 10;
     const chartWidth = Math.max(0, width - paddingX * 2);
     const chartHeight = Math.max(0, height - paddingY * 2);
     const baseline = Math.round(paddingY + chartHeight / 2) + 0.5;
 
-    ctx.clearRect(0, 0, width, height);
-    ctx.save();
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.lineWidth = 1;
     ctx.beginPath();
