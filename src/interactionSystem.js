@@ -116,6 +116,26 @@ function resolveTrait01(cell, traitName, fallback = 0.5) {
   return clamp01(value);
 }
 
+/**
+ * Estimates the positional advantage awarded to the attacker based on how
+ * densely populated each combatant's neighborhood is. The adapter resolves the
+ * current density values, allowing callers to mock the grid in tests while the
+ * helper handles clamping and nullish inputs. Returning `0` keeps downstream
+ * combat odds stable when density data is unavailable.
+ *
+ * @param {{
+ *   adapter?: GridInteractionAdapter|null,
+ *   attackerRow?: number,
+ *   attackerCol?: number,
+ *   targetRow?: number,
+ *   targetCol?: number,
+ *   densityGrid?: number[][],
+ *   densityEffectMultiplier?: number,
+ *   territoryEdgeFactor?: number,
+ * }} params - Context describing the fight location and scaling factors.
+ * @returns {number} Signed advantage in the `[-2, 2]` range favoring the
+ *   attacker when positive.
+ */
 function computeDensityAdvantage({
   adapter,
   attackerRow,
@@ -143,6 +163,30 @@ function computeDensityAdvantage({
   return densityDelta * clamp(effect, 0, 2) * edgeFactor;
 }
 
+/**
+ * Computes the attacker's odds of winning a fight by blending raw combat power
+ * with risk tolerance, recovery traits, and territorial density. The logistic
+ * output keeps probabilities bounded while the `edge` field reports the
+ * pre-logistic combined advantage for telemetry consumers.
+ *
+ * @param {{
+ *   attacker: import("./cell.js").default,
+ *   defender: import("./cell.js").default,
+ *   attackerPower: number,
+ *   defenderPower: number,
+ *   adapter?: GridInteractionAdapter|null,
+ *   attackerRow?: number,
+ *   attackerCol?: number,
+ *   targetRow?: number,
+ *   targetCol?: number,
+ *   densityGrid?: number[][],
+ *   densityEffectMultiplier?: number,
+ *   combatEdgeSharpness?: number,
+ *   combatTerritoryEdgeFactor?: number,
+ * }} params - Combatants plus optional environmental context.
+ * @returns {{ attackerWinChance: number, edge: number }} Odds summary where
+ *   `attackerWinChance` is normalized to `[0, 1]`.
+ */
 function computeCombatOdds({
   attacker,
   defender,
