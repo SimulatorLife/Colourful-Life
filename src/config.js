@@ -397,6 +397,8 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showDensity: false,
   showFitness: false,
   showLifeEventMarkers: false,
+  showTraitOverlay: false,
+  traitOverlayKey: null,
   leaderboardIntervalMs: 750,
   leaderboardSize: DEFAULT_LEADERBOARD_SIZE,
   brainSnapshotLimit: DEFAULT_BRAIN_SNAPSHOT_LIMIT,
@@ -424,6 +426,7 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showDensity",
   "showFitness",
   "showLifeEventMarkers",
+  "showTraitOverlay",
   "autoPauseOnBlur",
 ]);
 
@@ -450,6 +453,14 @@ export function resolveSimulationDefaults(overrides = {}) {
 
   for (const key of BOOLEAN_DEFAULT_KEYS) {
     merged[key] = coerceBoolean(merged[key], defaults[key]);
+  }
+
+  if (typeof merged.traitOverlayKey === "string") {
+    const trimmed = merged.traitOverlayKey.trim();
+
+    merged.traitOverlayKey = trimmed.length > 0 ? trimmed : null;
+  } else {
+    merged.traitOverlayKey = null;
   }
 
   if (
