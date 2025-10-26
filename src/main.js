@@ -155,6 +155,11 @@ export function createSimulation({
     }
   }
 
+  const providedSelectionManager =
+    configWithLayoutDefaults.selectionManager != null &&
+    typeof configWithLayoutDefaults.selectionManager === "object"
+      ? configWithLayoutDefaults.selectionManager
+      : undefined;
   const selectionManagerFactory =
     typeof configWithLayoutDefaults.selectionManagerFactory === "function"
       ? configWithLayoutDefaults.selectionManagerFactory
@@ -172,9 +177,15 @@ export function createSimulation({
 
   const sanitizedDefaults = resolveSimulationDefaults(configWithLayoutDefaults);
 
+  const engineConfig = { ...configWithLayoutDefaults };
+
+  if (Object.hasOwn(engineConfig, "selectionManager")) {
+    delete engineConfig.selectionManager;
+  }
+
   const engine = new SimulationEngine({
     canvas: resolvedCanvas,
-    config: configWithLayoutDefaults,
+    config: engineConfig,
     rng,
     requestAnimationFrame: injectedRaf,
     cancelAnimationFrame: injectedCaf,
@@ -184,6 +195,7 @@ export function createSimulation({
     autoStart: false,
     brainSnapshotCollector: resolvedBrainSnapshotCollector,
     drawOverlays: overlayRenderer,
+    selectionManager: providedSelectionManager,
     selectionManagerFactory,
   });
 
