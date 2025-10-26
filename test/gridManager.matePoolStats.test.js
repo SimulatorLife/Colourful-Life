@@ -232,3 +232,109 @@ test("handleReproduction weights diversity opportunity by available variety", as
   approxEqual(choice.diversityOpportunityWeight, expectedWeight, 1e-9);
   approxEqual(choice.diversityOpportunityAvailability, availability, 1e-9);
 });
+
+test("novelty pressure intensifies penalties for repetitive low-diversity pairings", async () => {
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+
+  async function evaluatePenalty(novelty) {
+    const recorded = [];
+    const stats = {
+      onBirth() {},
+      onDeath() {},
+      recordMateChoice(data) {
+        recorded.push(data);
+      },
+      recordReproductionBlocked() {},
+      getDiversityPressure: () => 0.3,
+      getBehavioralEvenness: () => 0.55,
+      getStrategyPressure: () => 0.2,
+    };
+
+    const gm = await TestGridManagerFactory.create({ stats });
+
+    gm.setMatingDiversityOptions({ threshold: 0.6, lowDiversityMultiplier: 0.5 });
+
+    const parentDna = new DNA(0, 0, 0);
+
+    parentDna.reproductionThresholdFrac = () => 0;
+    parentDna.parentalInvestmentFrac = () => 0.5;
+
+    const mateDna = new DNA(0, 0, 0);
+
+    mateDna.reproductionThresholdFrac = () => 0;
+    mateDna.parentalInvestmentFrac = () => 0.5;
+
+    const parent = new Cell(5, 5, parentDna, gm.maxTileEnergy);
+
+    parent.computeReproductionProbability = () => 1;
+    parent.decideReproduction = () => ({ probability: 1 });
+    parent.resolveSharedRng = () => () => 1;
+    parent._mateNoveltyPressure = novelty;
+
+    gm.setCell(5, 5, parent);
+
+    const mate = new Cell(5, 6, mateDna, gm.maxTileEnergy);
+
+    mate.computeReproductionProbability = () => 1;
+    mate.decideReproduction = () => ({ probability: 1 });
+    mate._mateNoveltyPressure = novelty;
+
+    gm.setCell(5, 6, mate);
+
+    const candidate = {
+      row: mate.row,
+      col: mate.col,
+      target: mate,
+      classification: "mate",
+      precomputedSimilarity: 0.9,
+      similarity: 0.9,
+      diversity: 0.1,
+      selectionWeight: 1,
+      preferenceScore: 1,
+    };
+
+    const mates = [candidate];
+
+    parent.selectMateWeighted = () => ({
+      chosen: candidate,
+      evaluated: [candidate],
+      mode: "preference",
+    });
+
+    parent.findBestMate = () => candidate;
+
+    const result = gm.handleReproduction(
+      5,
+      5,
+      parent,
+      { mates, society: [] },
+      {
+        stats,
+        densityGrid: gm.densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 0,
+      },
+    );
+
+    assert.is(result, false, "expected reproduction to fail deterministically");
+    assert.is(recorded.length, 1, "expected a single mate-choice sample");
+
+    return recorded[0].penaltyMultiplier;
+  }
+
+  const baseline = await evaluatePenalty(0);
+  const pressured = await evaluatePenalty(0.9);
+
+  assert.ok(
+    pressured < baseline,
+    "novelty pressure should reduce the retained probability mass",
+  );
+
+  const reduction = baseline - pressured;
+
+  assert.ok(
+    reduction > 0.05,
+    "expected novelty pressure to apply a measurable additional penalty",
+  );
+});
