@@ -1,5 +1,4 @@
 import js from "@eslint/js";
-import htmlPlugin from "eslint-plugin-html";
 import globals from "globals";
 import eslintConfigPrettier from "eslint-config-prettier";
 
@@ -29,7 +28,6 @@ export default [
     },
     plugins: {
       ...js.configs.recommended.plugins,
-      html: htmlPlugin,
     },
     rules: {
       ...js.configs.recommended.rules,
@@ -46,12 +44,6 @@ export default [
           next: ["const", "let", "var"],
         },
       ],
-    },
-  },
-  {
-    files: ["**/*.html"],
-    plugins: {
-      html: htmlPlugin,
     },
   },
   eslintConfigPrettier,
