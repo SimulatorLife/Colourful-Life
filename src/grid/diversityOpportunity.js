@@ -2,6 +2,19 @@ import { clamp } from "../utils/math.js";
 
 const SAMPLE_LIMIT = 5;
 
+function rememberTopValue(values, candidate) {
+  if (values.length < SAMPLE_LIMIT || candidate > values[values.length - 1]) {
+    values.push(candidate);
+    values.sort((a, b) => b - a);
+
+    if (values.length > SAMPLE_LIMIT) {
+      values.length = SAMPLE_LIMIT;
+    }
+  }
+
+  return values;
+}
+
 function normalizeCandidateValue(candidate) {
   const raw = candidate?.diversity;
   const value = Number.isFinite(raw) ? raw : 0;
@@ -32,35 +45,24 @@ export function summarizeMateDiversityOpportunity({
     };
   }
 
-  const topValues = [];
-  let best = 0;
-  let aboveThresholdCount = 0;
+  const { best, aboveThresholdCount, topValues } = list.reduce(
+    (acc, candidate) => {
+      const value = normalizeCandidateValue(candidate);
 
-  for (const candidate of list) {
-    const value = normalizeCandidateValue(candidate);
-
-    if (value > best) {
-      best = value;
-    }
-
-    if (value >= threshold) {
-      aboveThresholdCount += 1;
-    }
-
-    if (topValues.length < SAMPLE_LIMIT) {
-      topValues.push(value);
-    } else {
-      const smallestIndex = topValues.reduce(
-        (lowestIndex, currentValue, currentIndex, array) =>
-          currentValue < array[lowestIndex] ? currentIndex : lowestIndex,
-        0,
-      );
-
-      if (value > topValues[smallestIndex]) {
-        topValues[smallestIndex] = value;
+      if (value > acc.best) {
+        acc.best = value;
       }
-    }
-  }
+
+      if (value >= threshold) {
+        acc.aboveThresholdCount += 1;
+      }
+
+      rememberTopValue(acc.topValues, value);
+
+      return acc;
+    },
+    { best: 0, aboveThresholdCount: 0, topValues: [] },
+  );
 
   const sampleCount = Math.min(topValues.length, SAMPLE_LIMIT, count);
   let topAverage = 0;
