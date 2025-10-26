@@ -4564,6 +4564,17 @@ export default class Cell {
     return clamp(penalty, 0, 1);
   }
 
+  getCrowdingPreference({ fallback = 0.5 } = {}) {
+    const baseline = Number.isFinite(this.baseCrowdingTolerance)
+      ? this.baseCrowdingTolerance
+      : fallback;
+    const adapted = Number.isFinite(this._crowdingTolerance)
+      ? this._crowdingTolerance
+      : baseline;
+
+    return clamp(adapted, 0, 1);
+  }
+
   getDecisionTelemetry(limit = 5) {
     const history = Array.isArray(this.decisionHistory) ? this.decisionHistory : [];
     const normalizedLimit = Number.isFinite(limit)
