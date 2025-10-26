@@ -17,8 +17,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "format:workflows": "prettier --ignore-path .gitignore --write \".github/workflows/**/*.yml\"",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix --max-warnings=0",
     "deploy:public": "./scripts/publish-public-build.sh",
     "prepare": "husky"
   },
@@ -38,7 +38,7 @@
   "homepage": "https://github.com/henrylkirk/Colourful-Life#readme",
   "lint-staged": {
     "*.{js,html}": [
-      "eslint --fix",
+      "eslint --max-warnings=0 --fix",
       "prettier --write"
     ],
     "*.{css,md,json}": [
