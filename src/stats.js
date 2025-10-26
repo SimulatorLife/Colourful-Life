@@ -193,7 +193,9 @@ const createTraitValueMap = (definitions, initializer) => {
  */
 class FixedSizeRingBuffer {
   constructor(size = 0) {
-    this.capacity = Math.max(0, Math.floor(size));
+    const capacity = sanitizePositiveInteger(size, { fallback: 0, min: 0 });
+
+    this.capacity = capacity;
     this.buffer = new Array(this.capacity || 0);
     this.start = 0;
     this.length = 0;
@@ -345,7 +347,12 @@ export default class Stats {
    *   Optional configuration allowing callers to extend or override tracked trait metrics and randomness.
    */
   constructor(historySize = 10000, options = {}) {
-    this.historySize = historySize;
+    const normalizedHistorySize = sanitizePositiveInteger(historySize, {
+      fallback: 10000,
+      min: 0,
+    });
+
+    this.historySize = normalizedHistorySize;
     const { traitDefinitions, traitResampleInterval, diversitySampleInterval, rng } =
       options ?? {};
 
