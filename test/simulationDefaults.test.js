@@ -250,7 +250,7 @@ test("resolveSimulationDefaults sanitizes numeric multipliers", async () => {
   assert.is(sanitized.combatTerritoryEdgeFactor, 1);
   assert.is(sanitized.matingDiversityThreshold, 0);
   assert.is(sanitized.lowDiversityReproMultiplier, 1);
-  assert.is(sanitized.leaderboardIntervalMs, LEADERBOARD_INTERVAL_MIN_MS);
+  assert.is(sanitized.leaderboardIntervalMs, 0);
   assert.is(sanitized.leaderboardSize, 0);
 });
 
@@ -260,6 +260,13 @@ test("resolveSimulationDefaults clamps leaderboard interval below the UI floor",
   const sanitized = resolveSimulationDefaults({ leaderboardIntervalMs: 80 });
 
   assert.is(sanitized.leaderboardIntervalMs, LEADERBOARD_INTERVAL_MIN_MS);
+});
+
+test("resolveSimulationDefaults allows disabling the leaderboard throttle", async () => {
+  const { resolveSimulationDefaults } = await configModulePromise;
+  const sanitized = resolveSimulationDefaults({ leaderboardIntervalMs: 0 });
+
+  assert.is(sanitized.leaderboardIntervalMs, 0);
 });
 
 test("resolveSimulationDefaults floors leaderboard size overrides", async () => {
