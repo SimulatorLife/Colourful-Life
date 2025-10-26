@@ -98,6 +98,9 @@ where practical.
 - The `COLOURFUL_LIFE_DECAY_SPAWN_MIN_ENERGY` override and decay-triggered
   reseeding hook have been retired; decay now only returns energy, leaving
   population recovery to living lineages or explicit reseed requests.
+- Removed the unused `scripts/benchmarks/stats-trait-aggregate.bench.mjs`
+  benchmark harness so historical trait aggregation experiments don't linger in
+  the tree now that automated coverage protects the optimised implementation.
 - Removed the unused `scripts/profile-findTargets-scan.mjs` benchmark so the
   profiling suite sticks to the maintained `profile-find-targets.mjs` harness
   without duplicate scan logic lingering in the repository.
