@@ -9,18 +9,11 @@ walks through the initial clone-and-run steps before you dive into the details b
 
 ## Environment setup
 
-1. Install Node.js 25.0.0 (the version pinned in `.nvmrc`). Run `nvm use` after cloning to align your runtime automatically.
-2. Clone the repository and install dependencies with `npm ci` (or `npm install`
-   if you are intentionally skipping a clean install). Re-run `npm run prepare`
-   after the initial install and any time `.husky/` changes so Git hooks stay
-   active.
-3. Run `npm run start` to launch the Parcel development server at
-   `http://localhost:1234`.
-4. Run `npm test` in a second terminal whenever you touch shared utilities or
-   simulation logic. Pair it with `npm run lint` / `npm run format:check` to
-   catch style drift before opening a pull request.
-5. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/`
-   and `.parcel-cache/` before restarting the dev server.
+1. Install Node.js 25.x (the `.nvmrc` pins to 25.0.0) and run `nvm use` after cloning so your shell matches the expected runtime.
+2. Install dependencies with `npm ci` (or `npm install` when you explicitly need a non-clean install), then run `npm run prepare` so Husky hooks stay active after fresh clones or `.husky/` updates.
+3. Launch the Parcel development server via `npm run start` and open `http://localhost:1234`.
+4. Keep a second terminal running `npm test`, `npm run lint`, and `npm run format:check` while you iterate on shared utilities, simulation logic, or documentation changes.
+5. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/` and `.parcel-cache/` before restarting the dev server.
 
 ### Quality-of-life tips
 
@@ -36,7 +29,7 @@ walks through the initial clone-and-run steps before you dive into the details b
   for easy pacing comparisons.
 - Parcel performs hot module replacement during development. Use
   `npm run build` when you need a fresh production bundle in `dist/` for manual
-  verification or publishing.
+  verification or publishing, and refer back to the [README quick start](../README.md#quick-start) whenever you onboard a new environment.
 
 ## Coding standards
 
