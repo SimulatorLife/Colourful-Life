@@ -2407,6 +2407,18 @@ export default class UIManager {
     const deathStat = this.lifeEventsTimelineDeathStat;
     const emptyState = this.lifeEventsTimelineEmptyState;
     const ctx = canvas.getContext("2d");
+    const defaultCanvasLabel =
+      "Birth and death cadence across the recent observation window";
+    const setCanvasLabel = (text) => {
+      if (!canvas) return;
+
+      const label =
+        typeof text === "string" && text.trim().length > 0
+          ? text.trim()
+          : defaultCanvasLabel;
+
+      canvas.setAttribute("aria-label", label);
+    };
 
     const resetStats = () => {
       if (statsGroup) {
@@ -2432,6 +2444,7 @@ export default class UIManager {
       }
       resetStats();
       if (emptyState) emptyState.hidden = false;
+      setCanvasLabel(defaultCanvasLabel);
 
       return;
     }
@@ -2507,6 +2520,27 @@ export default class UIManager {
       } else {
         resetStats();
       }
+    }
+
+    if (maxCount > 0) {
+      const peakBirthText = Math.max(0, maxBirths).toLocaleString();
+      const peakDeathText = Math.max(0, maxDeaths).toLocaleString();
+      const totalBirthText = totalBirths.toLocaleString();
+      const totalDeathText = totalDeaths.toLocaleString();
+      const labelSegments = [
+        `Birth and death cadence over the last ${windowTicks.toLocaleString()} ticks.`,
+        `Totals: ${totalBirthText} births and ${totalDeathText} deaths.`,
+      ];
+
+      if (maxBirths > 0 || maxDeaths > 0) {
+        labelSegments.push(
+          `Peak births ${peakBirthText} ${perBucketLabel}, peak deaths ${peakDeathText} ${perBucketLabel}.`,
+        );
+      }
+
+      setCanvasLabel(labelSegments.join(" "));
+    } else {
+      setCanvasLabel("No life events recorded in the observed window yet.");
     }
 
     const rect =
@@ -4413,25 +4447,24 @@ export default class UIManager {
     this.lifeEventsSummary.appendChild(trendSummary);
     lifeBody.appendChild(this.lifeEventsSummary);
 
-    const timelineCard = document.createElement("div");
+    const timelineCard = document.createElement("figure");
 
     timelineCard.className = "life-events-timeline";
-    timelineCard.setAttribute(
-      "aria-label",
-      "Birth and death cadence across the recent observation window",
-    );
+    timelineCard.setAttribute("role", "group");
+    const timelineTitleId = `${body.id || "life-events"}-timeline-title`;
+
+    timelineCard.setAttribute("aria-labelledby", timelineTitleId);
 
     const timelineTitle = document.createElement("h5");
 
     timelineTitle.className = "life-events-timeline__title";
     timelineTitle.textContent = "Birth & Death Cadence";
+    timelineTitle.id = timelineTitleId;
     timelineCard.appendChild(timelineTitle);
 
-    const timelineSummary = document.createElement("div");
+    const timelineSummary = document.createElement("figcaption");
 
     timelineSummary.className = "life-events-timeline__summary";
-    timelineSummary.setAttribute("role", "group");
-    timelineSummary.setAttribute("aria-live", "polite");
     timelineSummary.setAttribute(
       "aria-label",
       "Summary of recent birth and death cadence",
@@ -4442,12 +4475,20 @@ export default class UIManager {
     timelineSummaryMessage.className =
       "life-events-timeline__summary-message control-hint";
     timelineSummaryMessage.textContent = LIFE_EVENT_TIMELINE_EMPTY_MESSAGE;
+    const timelineSummaryMessageId = `${timelineTitleId}-summary`;
+
+    timelineSummaryMessage.id = timelineSummaryMessageId;
+    timelineSummaryMessage.setAttribute("role", "status");
+    timelineSummaryMessage.setAttribute("aria-live", "polite");
+    timelineSummaryMessage.setAttribute("aria-atomic", "true");
     timelineSummary.appendChild(timelineSummaryMessage);
+    timelineCard.setAttribute("aria-describedby", timelineSummaryMessageId);
 
     const timelineStats = document.createElement("dl");
 
     timelineStats.className = "life-events-timeline__stats";
     timelineStats.setAttribute("aria-label", "Birth and death cadence summary");
+    timelineStats.setAttribute("aria-live", "polite");
     timelineStats.hidden = true;
 
     const createTimelineStat = (label, noteText) => {
@@ -4514,6 +4555,7 @@ export default class UIManager {
 
     timelineLegend.className = "life-events-timeline__legend";
     timelineLegend.setAttribute("role", "list");
+    timelineLegend.setAttribute("aria-label", "Timeline legend");
 
     const createLegendItem = (label, modifierClass, colorVar, fallbackColor) => {
       const item = document.createElement("span");

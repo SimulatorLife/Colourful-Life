@@ -1020,12 +1020,15 @@ canvas {
 .life-events-timeline__summary {
   display: grid;
   gap: var(--space-sm);
+  margin: 0;
+  justify-items: stretch;
 }
 
 .life-events-timeline__summary-message {
   margin: 0;
   font-size: 0.78rem;
   color: var(--color-text-subtle);
+  max-width: 60ch;
 }
 
 .life-events-timeline__stats {
@@ -1044,6 +1047,10 @@ canvas {
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.04);
   min-width: 0;
+}
+
+.life-events-timeline__stat {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .life-events-timeline__stat-label {
@@ -1089,6 +1096,27 @@ canvas {
   margin: 0;
   font-size: 0.75rem;
   color: var(--color-text-subtle);
+}
+
+@media (min-width: 720px) {
+  .life-events-timeline__summary {
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+    align-items: start;
+  }
+
+  .life-events-timeline__stats {
+    justify-self: end;
+  }
+
+  .life-events-timeline__stat {
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 6px 12px;
+  }
+
+  .life-events-timeline__stat-metric {
+    align-items: flex-end;
+    text-align: right;
+  }
 }
 
 .life-events-timeline__legend {
