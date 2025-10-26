@@ -5971,27 +5971,112 @@ export default class UIManager {
 
   drawSpark(canvas, data, color = "#88d") {
     if (!canvas) return;
-    const series = Array.isArray(data) ? data : [];
+
     const ctx = canvas.getContext("2d");
-    const w = canvas.width;
-    const h = canvas.height;
+    const series = Array.isArray(data) ? data : [];
+    const length = series.length;
+    const w = Number(canvas.width) || 0;
+    const h = Number(canvas.height) || 0;
+
+    if (!ctx || w <= 0 || h <= 0) {
+      return;
+    }
 
     ctx.clearRect(0, 0, w, h);
-    if (series.length < 2) return;
-    const min = Math.min(...series);
-    const max = Math.max(...series);
-    const span = max - min || 1;
+
+    if (length < 2) {
+      return;
+    }
+
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    let allFiniteNumbers = true;
+
+    for (let i = 0; i < length; i++) {
+      const candidate = series[i];
+
+      if (typeof candidate === "number") {
+        if (!Number.isFinite(candidate)) {
+          allFiniteNumbers = false;
+          continue;
+        }
+
+        if (candidate < min) min = candidate;
+        if (candidate > max) max = candidate;
+      } else {
+        const numeric = Number(candidate);
+
+        if (!Number.isFinite(numeric)) {
+          allFiniteNumbers = false;
+          continue;
+        }
+
+        allFiniteNumbers = false;
+        if (numeric < min) min = numeric;
+        if (numeric > max) max = numeric;
+      }
+    }
+
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      min = 0;
+      max = 0;
+    }
+
+    let span = max - min;
+
+    if (!Number.isFinite(span) || span <= 0) {
+      span = 1;
+    }
+
+    const lastIndex = length - 1;
+    const widthScale = lastIndex > 0 ? (w - 1) / lastIndex : 0;
+    const heightScale = h - 1;
+    const invSpan = 1 / span;
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    series.forEach((v, i) => {
-      const x = (i / (series.length - 1)) * (w - 1);
-      const y = h - ((v - min) / span) * (h - 1) - 1;
 
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
+    if (allFiniteNumbers) {
+      for (let i = 0; i < length; i++) {
+        const value = series[i];
+        const x = i * widthScale;
+        const y = h - (value - min) * invSpan * heightScale - 1;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+    } else {
+      for (let i = 0; i < length; i++) {
+        const candidate = series[i];
+        let resolvedValue = min;
+
+        if (typeof candidate === "number") {
+          if (Number.isFinite(candidate)) {
+            resolvedValue = candidate;
+          }
+        } else {
+          const numeric = Number(candidate);
+
+          if (Number.isFinite(numeric)) {
+            resolvedValue = numeric;
+          }
+        }
+
+        const x = i * widthScale;
+        const y = h - (resolvedValue - min) * invSpan * heightScale - 1;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+    }
+
     ctx.stroke();
   }
 
