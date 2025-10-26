@@ -18,30 +18,30 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * `renderLeaderboard`) are provided as no-ops to satisfy consumers such as the
  * {@link SimulationEngine} when events are emitted.
  *
- * @param {Object} [options]
- * @param {boolean} [options.paused=false] Whether the simulation starts paused.
- * @param {number} [options.updatesPerSecond=60] Simulation tick frequency.
- * @param {number} [options.eventFrequencyMultiplier] Multiplier for event cadence.
- * @param {number} [options.mutationMultiplier] Mutation rate multiplier.
- * @param {number} [options.densityEffectMultiplier] Density impact multiplier.
- * @param {number} [options.societySimilarity] Preferred similarity for friendly agents.
- * @param {number} [options.enemySimilarity] Preferred similarity for hostile agents.
- * @param {number} [options.eventStrengthMultiplier] Event strength multiplier.
- * @param {number} [options.energyRegenRate] Baseline energy regeneration.
- * @param {number} [options.energyDiffusionRate] Ambient energy spread.
- * @param {number} [options.initialTileEnergyFraction] Fraction of tile energy cap applied to empty tiles.
- * @param {number} [options.combatEdgeSharpness] Sharpness multiplier for combat odds.
- * @param {number} [options.combatTerritoryEdgeFactor] Territory influence multiplier for combat odds.
- * @param {number} [options.matingDiversityThreshold] Genetic similarity tolerance for mating.
- * @param {number} [options.lowDiversityReproMultiplier] Reproduction multiplier applied when diversity is low.
- * @param {boolean} [options.showObstacles] Whether obstacle overlays are shown.
- * @param {boolean} [options.showEnergy] Whether energy overlays are shown.
- * @param {boolean} [options.showDensity] Whether population density overlays are shown.
- * @param {boolean} [options.showFitness] Whether fitness overlays are shown.
- * @param {boolean} [options.showLifeEventMarkers] Whether life event markers are shown.
- * @param {boolean} [options.showAuroraVeil] Whether the aurora whimsy overlay is shown.
- * @param {number} [options.leaderboardIntervalMs] Minimum time between leaderboard updates.
- * @param {Object} [options.selectionManager=null] Shared selection manager instance.
+ * @param {Object} [options] - Optional configuration overrides.
+ * @param {boolean} [options.paused=false] - Whether the simulation starts paused.
+ * @param {number} [options.updatesPerSecond=60] - Simulation tick frequency.
+ * @param {number} [options.eventFrequencyMultiplier] - Multiplier for event cadence.
+ * @param {number} [options.mutationMultiplier] - Mutation rate multiplier.
+ * @param {number} [options.densityEffectMultiplier] - Density impact multiplier.
+ * @param {number} [options.societySimilarity] - Preferred similarity for friendly agents.
+ * @param {number} [options.enemySimilarity] - Preferred similarity for hostile agents.
+ * @param {number} [options.eventStrengthMultiplier] - Event strength multiplier.
+ * @param {number} [options.energyRegenRate] - Baseline energy regeneration.
+ * @param {number} [options.energyDiffusionRate] - Ambient energy spread.
+ * @param {number} [options.initialTileEnergyFraction] - Fraction of tile energy cap applied to empty tiles.
+ * @param {number} [options.combatEdgeSharpness] - Sharpness multiplier for combat odds.
+ * @param {number} [options.combatTerritoryEdgeFactor] - Territory influence multiplier for combat odds.
+ * @param {number} [options.matingDiversityThreshold] - Genetic similarity tolerance for mating.
+ * @param {number} [options.lowDiversityReproMultiplier] - Reproduction multiplier applied when diversity is low.
+ * @param {boolean} [options.showObstacles] - Whether obstacle overlays are shown.
+ * @param {boolean} [options.showEnergy] - Whether energy overlays are shown.
+ * @param {boolean} [options.showDensity] - Whether population density overlays are shown.
+ * @param {boolean} [options.showFitness] - Whether fitness overlays are shown.
+ * @param {boolean} [options.showLifeEventMarkers] - Whether life event markers are shown.
+ * @param {boolean} [options.showAuroraVeil] - Whether the aurora whimsy overlay is shown.
+ * @param {number} [options.leaderboardIntervalMs] - Minimum time between leaderboard updates.
+ * @param {Object} [options.selectionManager=null] - Shared selection manager instance.
  * @returns {{
  *   isPaused: () => boolean,
  *   setPaused: (value: boolean) => void,
@@ -77,7 +77,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  *   getAutoPauseOnBlur: () => boolean,
  *   setAutoPauseOnBlur: (value: boolean) => void,
  *   selectionManager: Object|null,
- * }} Headless UI facade that keeps simulation code agnostic to environment.
+ * }} - Headless UI facade that keeps simulation code agnostic to environment.
  */
 export function createHeadlessUiManager(options = {}) {
   const {
