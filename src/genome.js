@@ -574,7 +574,22 @@ export class DNA {
 
   // Fraction of current energy invested in offspring
   parentalInvestmentFrac() {
-    return 0.2 + 0.5 * this.geneFraction(GENE_LOCI.PARENTAL);
+    const rng = this.prngFor("parentalInvestmentFrac");
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const gestation = this.geneFraction(GENE_LOCI.GESTATION_EFFICIENCY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const nurture = 0.18 + parental * 0.4 + recovery * 0.2;
+    const brood = 0.12 + fertility * 0.28 + cooperation * 0.12;
+    const thrift = 0.18 + efficiency * 0.32 + gestation * 0.22;
+    const daring = 0.1 + risk * 0.4;
+    const weighted = nurture * 0.5 + brood * 0.25 + thrift * 0.25 - daring * 0.3;
+    const jitter = (rng() - 0.5) * 0.04;
+
+    return clamp(weighted + jitter, 0.12, 0.82);
   }
 
   // Minimum fraction of tile energy this genome expects per offspring
