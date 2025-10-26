@@ -7,6 +7,7 @@ import {
   toFiniteOrNull,
 } from "./utils.js";
 import { warnOnce } from "./utils/error.js";
+import { accumulateTraitAggregates } from "./utils/traitAggregation.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;
@@ -1127,45 +1128,17 @@ export default class Stats {
 
   #rebuildTraitAggregates(cellSources) {
     const pool = Array.isArray(cellSources) ? cellSources : [];
-    const computes = this.#traitComputes;
-    const thresholds = this.#traitThresholds;
 
     this.#traitSums.fill(0);
     this.#traitActiveCounts.fill(0);
 
-    if (pool.length === 0) {
-      this.#traitPopulation = 0;
-      this.#needsTraitRebuild = false;
-      this.#traitPresenceDirty = true;
-
-      return;
-    }
-
-    const traitSums = this.#traitSums;
-    const traitActiveCounts = this.#traitActiveCounts;
-
-    const population = pool.reduce((count, source) => {
-      const cell =
-        source && typeof source === "object" && Object.hasOwn(source, "cell")
-          ? source.cell
-          : source;
-
-      if (!cell || typeof cell !== "object") {
-        return count;
-      }
-
-      computes.forEach((compute, traitIndex) => {
-        const value = compute(cell) || 0;
-
-        traitSums[traitIndex] += value;
-
-        if (value >= thresholds[traitIndex]) {
-          traitActiveCounts[traitIndex] += 1;
-        }
-      });
-
-      return count + 1;
-    }, 0);
+    const population = accumulateTraitAggregates(
+      pool,
+      this.#traitComputes,
+      this.#traitThresholds,
+      this.#traitSums,
+      this.#traitActiveCounts,
+    );
 
     this.#traitPopulation = population;
     this.#needsTraitRebuild = false;
