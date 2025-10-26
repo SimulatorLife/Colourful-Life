@@ -1743,6 +1743,42 @@ export class DNA {
     };
   }
 
+  combatLearningProfile() {
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const combat = this.geneFraction(GENE_LOCI.COMBAT);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+
+    return {
+      baseAssimilation: clamp(
+        0.22 + 0.34 * neural + 0.28 * combat - 0.18 * risk,
+        0.05,
+        0.85,
+      ),
+      successAmplifier: clamp(0.35 + 0.4 * combat + 0.22 * strategy, 0.1, 1.1),
+      failureAmplifier: clamp(
+        0.4 + 0.45 * risk + 0.24 * (1 - recovery) + 0.15 * (1 - strategy),
+        0.15,
+        1.2,
+      ),
+      gainInfluence: clamp(0.25 + 0.35 * strategy + 0.22 * neural, 0.05, 0.85),
+      kinshipPenaltyWeight: clamp(0.2 + 0.35 * cooperation + 0.25 * parental, 0.05, 1),
+      threatWeight: clamp(0.25 + 0.4 * strategy + 0.2 * combat, 0.05, 1.15),
+      weaknessWeight: clamp(0.28 + 0.35 * combat + 0.22 * strategy, 0.05, 1.15),
+      attritionWeight: clamp(
+        0.2 + 0.32 * strategy + 0.26 * (1 - cooperation),
+        0.05,
+        1.1,
+      ),
+      proximityWeight: clamp(0.18 + 0.35 * movement + 0.2 * strategy, 0.05, 1.05),
+      riskFlexWeight: clamp(0.32 + 0.36 * strategy + 0.24 * recovery, 0.1, 1.25),
+    };
+  }
+
   // Energy cost characteristics for actions
   moveCost() {
     const movement = this.geneFraction(GENE_LOCI.MOVEMENT);

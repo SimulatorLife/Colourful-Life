@@ -163,6 +163,10 @@ export default class Cell {
       typeof this.dna.neuralReinforcementProfile === "function"
         ? this.dna.neuralReinforcementProfile()
         : null;
+    this.combatLearningProfile =
+      typeof this.dna.combatLearningProfile === "function"
+        ? this.dna.combatLearningProfile()
+        : null;
     this.eventAnticipationProfile =
       typeof this.dna.eventAnticipationProfile === "function"
         ? this.dna.eventAnticipationProfile()
@@ -1195,6 +1199,240 @@ export default class Cell {
           fatigueDelta: 0,
           maxTileEnergy: MAX_TILE_ENERGY,
         });
+      }
+    }
+  }
+
+  recordCombatOutcome({
+    success = false,
+    kinship = null,
+    intensity = 1,
+    winChance = null,
+    energyCost = 0,
+  } = {}) {
+    const brain = this.brain;
+
+    if (
+      !brain ||
+      typeof brain.applyExperienceImprint !== "function" ||
+      !brain.sensorPlasticity?.enabled
+    ) {
+      return;
+    }
+
+    const profile = this.combatLearningProfile || {};
+    const baseAssimilation = clamp(
+      Number.isFinite(profile.baseAssimilation) ? profile.baseAssimilation : 0.28,
+      0.05,
+      0.9,
+    );
+    const successAmplifier = clamp(
+      Number.isFinite(profile.successAmplifier) ? profile.successAmplifier : 0.55,
+      0.1,
+      1.5,
+    );
+    const failureAmplifier = clamp(
+      Number.isFinite(profile.failureAmplifier) ? profile.failureAmplifier : 0.65,
+      0.1,
+      1.5,
+    );
+    const gainInfluence = clamp(
+      Number.isFinite(profile.gainInfluence) ? profile.gainInfluence : 0.4,
+      0,
+      1,
+    );
+    const kinshipPenaltyWeight = clamp(
+      Number.isFinite(profile.kinshipPenaltyWeight)
+        ? profile.kinshipPenaltyWeight
+        : 0.3,
+      0,
+      1.2,
+    );
+    const threatWeight = clamp(
+      Number.isFinite(profile.threatWeight) ? profile.threatWeight : 0.6,
+      0,
+      1.4,
+    );
+    const weaknessWeight = clamp(
+      Number.isFinite(profile.weaknessWeight) ? profile.weaknessWeight : 0.6,
+      0,
+      1.4,
+    );
+    const attritionWeight = clamp(
+      Number.isFinite(profile.attritionWeight) ? profile.attritionWeight : 0.5,
+      0,
+      1.2,
+    );
+    const proximityWeight = clamp(
+      Number.isFinite(profile.proximityWeight) ? profile.proximityWeight : 0.45,
+      0,
+      1.2,
+    );
+    const riskFlexWeight = clamp(
+      Number.isFinite(profile.riskFlexWeight) ? profile.riskFlexWeight : 0.55,
+      0,
+      1.3,
+    );
+
+    const intensityScale = clamp(Number.isFinite(intensity) ? intensity : 1, 0, 2);
+    const expectation = clamp(Number.isFinite(winChance) ? winChance : 0.5, 0, 1);
+    const kinshipClamped = clamp(Number.isFinite(kinship) ? kinship : 0, 0, 1);
+    const kinPenalty = kinshipClamped * kinshipPenaltyWeight;
+    const successBias = clamp(1 - expectation, 0, 1);
+    const failurePressure = clamp(expectation + kinPenalty, 0, 2);
+
+    const assimilationFactor = success
+      ? clamp(
+          baseAssimilation *
+            (0.65 + successAmplifier * 0.35) *
+            (0.7 + intensityScale * 0.15),
+          0.05,
+          0.95,
+        )
+      : clamp(
+          baseAssimilation *
+            (0.65 + failureAmplifier * 0.35) *
+            (0.7 + intensityScale * 0.15),
+          0.05,
+          0.95,
+        );
+
+    const gainBase = clamp(gainInfluence * (0.65 + intensityScale * 0.1), 0, 1);
+
+    const targetingContext = this._decisionContextIndex?.get("targeting") ?? null;
+    const interactionContext = this._decisionContextIndex?.get("interaction") ?? null;
+
+    const readSensor = (key, context) => {
+      if (!context) return Number.NaN;
+      const index = Brain.sensorIndex(key);
+
+      if (!Number.isFinite(index)) return Number.NaN;
+
+      const vector = context.sensorVector;
+
+      if (vector && typeof vector.length === "number" && index < vector.length) {
+        const value = vector[index];
+
+        if (Number.isFinite(value)) {
+          return clamp(value, -1, 1);
+        }
+      }
+
+      if (context.sensors && Number.isFinite(context.sensors[key])) {
+        return clamp(context.sensors[key], -1, 1);
+      }
+
+      return Number.NaN;
+    };
+
+    const adjustments = [];
+
+    const adjustTowards = (key, weight, targetValue) => {
+      if (!Number.isFinite(weight) || weight <= 0) return;
+      if (!Number.isFinite(targetValue)) return;
+
+      adjustments.push({
+        sensor: key,
+        target: clamp(targetValue, -1, 1),
+        assimilation: clamp(assimilationFactor * (0.5 + weight * 0.4), 0.03, 0.95),
+        gainInfluence: clamp(gainBase * (0.4 + weight * 0.5), 0, 1),
+      });
+    };
+
+    const weaknessValue = readSensor("targetWeakness", targetingContext);
+
+    if (Number.isFinite(weaknessValue) && weaknessWeight > 0) {
+      const opportunityBoost = success
+        ? (0.25 + successBias * 0.35 + intensityScale * 0.2) * 0.5
+        : (0.3 + failurePressure * 0.2) * 0.5;
+      const desired = weaknessValue + (1 - weaknessValue) * opportunityBoost;
+
+      adjustTowards("targetWeakness", weaknessWeight, desired);
+    }
+
+    const threatValue = readSensor("targetThreat", targetingContext);
+
+    if (Number.isFinite(threatValue) && threatWeight > 0) {
+      const threatAdjustment = success
+        ? threatValue + (successBias * 0.2 - kinPenalty * 0.25) * threatWeight * 0.3
+        : threatValue - (Math.abs(threatValue) + 0.25) * (0.35 + failurePressure * 0.3);
+
+      adjustTowards("targetThreat", threatWeight, threatAdjustment);
+    }
+
+    const attritionValue = readSensor("targetAttrition", targetingContext);
+
+    if (Number.isFinite(attritionValue) && attritionWeight > 0) {
+      const attritionAdjustment = success
+        ? attritionValue + successBias * attritionWeight * 0.2
+        : attritionValue -
+          (Math.abs(attritionValue) + 0.2) * (0.3 + failurePressure * 0.25);
+
+      adjustTowards("targetAttrition", attritionWeight, attritionAdjustment);
+    }
+
+    const proximityValue = readSensor("targetProximity", targetingContext);
+
+    if (Number.isFinite(proximityValue) && proximityWeight > 0) {
+      const proximityAdjustment = success
+        ? proximityValue + successBias * proximityWeight * 0.15
+        : proximityValue -
+          (Math.abs(proximityValue) + 0.15) * (0.25 + failurePressure * 0.2);
+
+      adjustTowards("targetProximity", proximityWeight, proximityAdjustment);
+    }
+
+    const riskValueRaw = readSensor("riskTolerance", interactionContext);
+    const riskValue = Number.isFinite(riskValueRaw)
+      ? riskValueRaw
+      : clamp(this.#resolveRiskTolerance(), -1, 1);
+
+    if (riskFlexWeight > 0) {
+      const riskAdjustment = success
+        ? riskValue +
+          Math.max(0, (0.12 + successBias * 0.18 - kinPenalty * 0.2) * riskFlexWeight)
+        : riskValue - (0.18 + failurePressure * 0.3) * riskFlexWeight;
+
+      adjustTowards("riskTolerance", riskFlexWeight, riskAdjustment);
+    }
+
+    if (adjustments.length === 0) return;
+
+    brain.applyExperienceImprint({
+      adjustments,
+      assimilation: assimilationFactor,
+      gainInfluence: gainBase,
+    });
+
+    if (typeof brain.applySensorFeedback === "function") {
+      const rewardContext = interactionContext || targetingContext;
+      const sensorVector = rewardContext?.sensorVector;
+
+      if (sensorVector && sensorVector.length > 0) {
+        const rewardBase = success
+          ? (0.32 + successBias * 0.4 - kinPenalty * 0.25) *
+            (0.7 + intensityScale * 0.3)
+          : -(0.38 + failurePressure * 0.35 + kinPenalty * 0.25) *
+            (0.7 + intensityScale * 0.3);
+        const rewardSignal = clamp(rewardBase, -1, 1);
+        const activationCount = Number.isFinite(rewardContext?.activationCount)
+          ? rewardContext.activationCount
+          : 0;
+        const normalizedEnergyCost = Number.isFinite(energyCost)
+          ? Math.max(0, energyCost)
+          : 0;
+
+        if (Math.abs(rewardSignal) > 1e-4) {
+          brain.applySensorFeedback({
+            group: rewardContext.group,
+            sensorVector,
+            activationCount,
+            energyCost: normalizedEnergyCost,
+            fatigueDelta: 0,
+            rewardSignal,
+            maxTileEnergy: MAX_TILE_ENERGY,
+          });
+        }
       }
     }
   }
