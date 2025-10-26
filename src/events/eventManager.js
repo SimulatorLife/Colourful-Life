@@ -369,25 +369,37 @@ export default class EventManager {
   }
 
   updateEvent(frequencyMultiplier = 1, maxConcurrent = 2) {
-    // Update existing events and remove finished without reallocating the array
-    let writeIndex = 0;
+    const events = this.activeEvents;
 
-    for (let readIndex = 0; readIndex < this.activeEvents.length; readIndex += 1) {
-      const ev = this.activeEvents[readIndex];
+    if (!Array.isArray(events)) {
+      this.activeEvents = [];
+
+      return;
+    }
+
+    if (events.length === 0) {
+      return;
+    }
+
+    // Update existing events in place while compacting finished entries without reallocating.
+    const retained = events.reduce((writeIndex, ev) => {
+      if (!ev) {
+        return writeIndex;
+      }
 
       ev.remaining = Math.max(0, ev.remaining - 1);
 
       if (ev.remaining > 0) {
-        if (writeIndex !== readIndex) {
-          this.activeEvents[writeIndex] = ev;
-        }
+        events[writeIndex] = ev;
 
-        writeIndex += 1;
+        return writeIndex + 1;
       }
-    }
 
-    if (writeIndex < this.activeEvents.length) {
-      this.activeEvents.length = writeIndex;
+      return writeIndex;
+    }, 0);
+
+    if (retained < events.length) {
+      events.length = retained;
     }
 
     // Spawn new events when cooldown expires
