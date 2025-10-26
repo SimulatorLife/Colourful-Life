@@ -6,9 +6,11 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
 function normalizeLayoutOptions({ engine, uiOptions = {}, sanitizedDefaults = {} }) {
   const normalizedUi = toPlainObject(uiOptions);
   const layoutConfig = toPlainObject(normalizedUi.layout);
+  const sanitizedInitialSettings = toPlainObject(sanitizedDefaults);
+  const layoutInitialSettings = toPlainObject(layoutConfig.initialSettings);
   const initialSettings = {
-    ...toPlainObject(layoutConfig.initialSettings),
-    ...toPlainObject(sanitizedDefaults),
+    ...sanitizedInitialSettings,
+    ...layoutInitialSettings,
   };
 
   return {
