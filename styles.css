@@ -254,7 +254,14 @@ canvas {
   scrollbar-gutter: stable;
 }
 .controls-panel.expanded {
-  /* Layout overrides handled responsively below. */
+  /* When expanded, allow the panel to scroll with the page so it doesn't cover
+     the neighbouring dashboard panels. */
+  position: static;
+  max-height: none;
+}
+
+.controls-panel.expanded .panel-body {
+  overflow: visible;
 }
 
 @media (max-width: 1180px) {
