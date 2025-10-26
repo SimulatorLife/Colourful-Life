@@ -355,8 +355,11 @@ export default class UIManager {
     this.lifeEventsSummary = null;
     this.lifeEventsSummaryBirthItem = null;
     this.lifeEventsSummaryDeathItem = null;
+    this.lifeEventsSummaryTotalItem = null;
     this.lifeEventsSummaryBirthCount = null;
     this.lifeEventsSummaryDeathCount = null;
+    this.lifeEventsSummaryTotalCount = null;
+    this.lifeEventsSummaryEmptyMessage = null;
     this.lifeEventMarkersToggle = null;
     this.lifeEventsSummaryTrend = null;
     this.lifeEventsSummaryNet = null;
@@ -2457,7 +2460,17 @@ export default class UIManager {
         ? totalCount
         : Math.max(0, (birthCount || 0) + (deathCount || 0));
 
+    updateItem(
+      this.lifeEventsSummaryTotalItem,
+      this.lifeEventsSummaryTotalCount,
+      total,
+    );
+
     this.lifeEventsSummary.classList.toggle("life-events-summary--empty", total === 0);
+
+    if (this.lifeEventsSummaryEmptyMessage) {
+      this.lifeEventsSummaryEmptyMessage.hidden = total > 0;
+    }
 
     const netSource = Number.isFinite(trend?.net)
       ? Math.round(trend.net)
@@ -4465,7 +4478,14 @@ export default class UIManager {
 
     lifeBody.className = "metrics-section-body life-events-body";
 
-    const createSummaryItem = (label, modifierClass, description) => {
+    const createSummaryItem = (label, modifierClass, options = {}) => {
+      const normalizedOptions =
+        typeof options === "string" ? { description: options } : toPlainObject(options);
+      const {
+        description,
+        periodLabel = "Latest tick",
+        singularLabel,
+      } = normalizedOptions || {};
       const item = document.createElement("div");
       const normalizedClass = ["life-events-summary__item", modifierClass]
         .filter(Boolean)
@@ -4476,9 +4496,12 @@ export default class UIManager {
       if (typeof item.setAttribute === "function") {
         if (typeof label === "string" && label.length > 0) {
           item.setAttribute("data-label", label);
-          const singularCandidate = label.toLowerCase().endsWith("s")
-            ? label.slice(0, -1)
-            : label;
+          const singularCandidate =
+            typeof singularLabel === "string" && singularLabel.trim().length > 0
+              ? singularLabel.trim()
+              : label.toLowerCase().endsWith("s")
+                ? label.slice(0, -1)
+                : label;
 
           item.setAttribute("data-singular", singularCandidate.toLowerCase());
         }
@@ -4501,7 +4524,7 @@ export default class UIManager {
       const periodEl = document.createElement("span");
 
       periodEl.className = "life-events-summary__period";
-      periodEl.textContent = "Latest tick";
+      periodEl.textContent = periodLabel;
       textGroup.appendChild(labelEl);
       textGroup.appendChild(periodEl);
 
@@ -4522,7 +4545,7 @@ export default class UIManager {
     this.lifeEventsSummary.setAttribute("aria-live", "polite");
     this.lifeEventsSummary.setAttribute(
       "aria-label",
-      "Latest tick birth and death counts",
+      "Latest tick birth, death, and total event counts",
     );
 
     const birthsSummary = createSummaryItem(
@@ -4535,14 +4558,25 @@ export default class UIManager {
       "life-events-summary__item--death",
       "Deaths recorded during the latest tick.",
     );
+    const totalSummary = createSummaryItem(
+      "Total Events",
+      "life-events-summary__item--total",
+      {
+        description: "Combined births and deaths recorded during the latest tick.",
+        periodLabel: "Births + deaths",
+      },
+    );
 
     this.lifeEventsSummaryBirthItem = birthsSummary.item;
     this.lifeEventsSummaryBirthCount = birthsSummary.countEl;
     this.lifeEventsSummaryDeathItem = deathsSummary.item;
     this.lifeEventsSummaryDeathCount = deathsSummary.countEl;
+    this.lifeEventsSummaryTotalItem = totalSummary.item;
+    this.lifeEventsSummaryTotalCount = totalSummary.countEl;
 
     this.lifeEventsSummary.appendChild(birthsSummary.item);
     this.lifeEventsSummary.appendChild(deathsSummary.item);
+    this.lifeEventsSummary.appendChild(totalSummary.item);
 
     const trendSummary = document.createElement("div");
 
@@ -4592,6 +4626,23 @@ export default class UIManager {
 
     this.lifeEventsSummary.appendChild(trendSummary);
     lifeBody.appendChild(this.lifeEventsSummary);
+
+    const summaryEmptyMessage = document.createElement("p");
+
+    summaryEmptyMessage.className = "life-events-summary__empty-message control-hint";
+    summaryEmptyMessage.textContent =
+      "No births or deaths recorded during the latest tick.";
+    summaryEmptyMessage.hidden = true;
+    const summaryEmptyId = `${body.id || "life-events"}-summary-empty`;
+
+    summaryEmptyMessage.id = summaryEmptyId;
+    summaryEmptyMessage.setAttribute("role", "status");
+    summaryEmptyMessage.setAttribute("aria-live", "polite");
+    summaryEmptyMessage.setAttribute("aria-atomic", "true");
+    lifeBody.appendChild(summaryEmptyMessage);
+
+    this.lifeEventsSummaryEmptyMessage = summaryEmptyMessage;
+    this.lifeEventsSummary.setAttribute("aria-describedby", summaryEmptyId);
 
     const timelineCard = document.createElement("figure");
 
