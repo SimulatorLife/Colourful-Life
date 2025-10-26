@@ -868,6 +868,49 @@ test("resetWorld clears pending auto-resume flags when stopped", async () => {
   }
 });
 
+test("engine.resetWorld clears custom selection zones when requested", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const { SimulationEngine } = modules;
+    const { default: SelectionManager } = await import(
+      "../src/grid/selectionManager.js"
+    );
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      selectionManagerFactory: (rows, cols) => new SelectionManager(rows, cols),
+    });
+    const selectionManager = engine.selectionManager;
+
+    assert.ok(selectionManager, "engine should expose a selection manager");
+
+    const activated = selectionManager.togglePattern("centralSanctuary", true);
+
+    assert.ok(activated, "toggling a zone should mark it active");
+    assert.ok(
+      selectionManager.hasActiveZones(),
+      "selection manager should report active zones after activation",
+    );
+
+    engine.resetWorld({ clearCustomZones: true });
+
+    assert.is(
+      selectionManager.hasActiveZones(),
+      false,
+      "resetWorld should clear active zones when clearCustomZones is true",
+    );
+
+    engine.destroy();
+  } finally {
+    restore();
+  }
+});
+
 test("SimulationEngine.burstRandomCells returns the number of spawned cells", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
