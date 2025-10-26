@@ -28,6 +28,9 @@ where practical.
 
 ### Changed
 
+- Moved the "Dashboard Refresh Interval" slider into the Dashboard Settings
+  panel so cadence controls are discoverable without scanning the individual
+  metrics or leaderboard panes.
 - Clarified the Node.js 25.0.0 requirement in the developer guide and added the
   `COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE` override to the README so onboarding
   steps and configuration references match the current runtime and
