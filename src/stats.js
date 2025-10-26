@@ -329,6 +329,10 @@ export default class Stats {
   #dnaSimilarityCache;
   #diversitySeedScratch;
   #activeDiversitySeeds;
+  #diversityGroupScratch;
+  #diversityGroupMap;
+  #diversityIdentityScratch;
+  #diversityIdentityCounter;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
    * @param {{
@@ -403,6 +407,10 @@ export default class Stats {
     this.#dnaSimilarityCache = new WeakMap();
     this.#diversitySeedScratch = new Map();
     this.#activeDiversitySeeds = null;
+    this.#diversityGroupScratch = [];
+    this.#diversityGroupMap = new Map();
+    this.#diversityIdentityScratch = new WeakMap();
+    this.#diversityIdentityCounter = 0;
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -884,6 +892,82 @@ export default class Stats {
     return record;
   }
 
+  #obtainDiversityIdentityKey(dna) {
+    if (!dna) {
+      return "dna:0";
+    }
+
+    let identityMap = this.#diversityIdentityScratch;
+
+    if (!identityMap) {
+      identityMap = new WeakMap();
+      this.#diversityIdentityScratch = identityMap;
+      this.#diversityIdentityCounter = 0;
+    }
+
+    let key = identityMap.get(dna);
+
+    if (!key) {
+      const next = (this.#diversityIdentityCounter ?? 0) + 1;
+
+      this.#diversityIdentityCounter = next;
+      key = `dna:${next}`;
+      identityMap.set(dna, key);
+    }
+
+    return key;
+  }
+
+  #collectDiversityGroups(dnaList, seedScratch, { resolveSeeds = false } = {}) {
+    let groupScratch = this.#diversityGroupScratch;
+
+    if (!Array.isArray(groupScratch)) {
+      groupScratch = [];
+      this.#diversityGroupScratch = groupScratch;
+    }
+
+    groupScratch.length = 0;
+
+    let groupMap = this.#diversityGroupMap;
+
+    if (!groupMap) {
+      groupMap = new Map();
+      this.#diversityGroupMap = groupMap;
+    } else {
+      groupMap.clear();
+    }
+
+    for (let i = 0; i < dnaList.length; i += 1) {
+      const dna = dnaList[i];
+      let seed = seedScratch?.get(dna);
+
+      if (resolveSeeds) {
+        if (seed === UNRESOLVED_SEED || seed === undefined) {
+          seed = this.#resolveDnaSeed(dna);
+
+          if (seedScratch) {
+            seedScratch.set(dna, seed);
+          }
+        }
+      } else if (seed === UNRESOLVED_SEED) {
+        seed = null;
+      }
+
+      const key = seed != null ? `seed:${seed}` : this.#obtainDiversityIdentityKey(dna);
+      let record = groupMap.get(key);
+
+      if (!record) {
+        record = { dna, seed: seed ?? null, count: 0 };
+        groupMap.set(key, record);
+        groupScratch.push(record);
+      }
+
+      record.count += 1;
+    }
+
+    return groupScratch;
+  }
+
   #resolveDnaSimilarity(dnaA, dnaB) {
     if (!dnaA || !dnaB) {
       return null;
@@ -1347,23 +1431,32 @@ export default class Stats {
       }
 
       if (sanitizedMaxSamples === 0 || possiblePairs <= sanitizedMaxSamples) {
+        const groups = this.#collectDiversityGroups(validDna, seedScratch, {
+          resolveSeeds: true,
+        });
         let sum = 0;
         let count = 0;
 
-        for (let i = 0; i < populationSize - 1; i += 1) {
-          const dnaA = validDna[i];
+        for (let i = 0; i < groups.length; i += 1) {
+          const groupA = groups[i];
+          const countA = groupA.count;
 
-          for (let j = i + 1; j < populationSize; j += 1) {
-            const dnaB = validDna[j];
+          if (countA > 1) {
+            count += (countA * (countA - 1)) / 2;
+          }
 
-            const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
+          for (let j = i + 1; j < groups.length; j += 1) {
+            const groupB = groups[j];
+            const similarity = this.#resolveDnaSimilarity(groupA.dna, groupB.dna);
 
             if (!Number.isFinite(similarity)) {
               continue;
             }
 
-            sum += 1 - similarity;
-            count += 1;
+            const pairCount = countA * groupB.count;
+
+            sum += (1 - similarity) * pairCount;
+            count += pairCount;
           }
         }
 
@@ -1464,6 +1557,13 @@ export default class Stats {
       validDna.length = 0;
       this.#activeDiversitySeeds = null;
       seedScratch?.clear?.();
+      const groupScratch = this.#diversityGroupScratch;
+
+      if (Array.isArray(groupScratch)) {
+        groupScratch.length = 0;
+      }
+
+      this.#diversityGroupMap?.clear?.();
     }
   }
 
