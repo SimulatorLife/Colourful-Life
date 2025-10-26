@@ -3559,6 +3559,128 @@ export default class GridManager {
       regenAdd = 0,
       drain = 0,
     ) => {
+      if (!obstacleRow && !upObstacleRow && !downObstacleRow) {
+        let densityValue = densityRow ? densityRow[c] : undefined;
+
+        if (densityValue == null) {
+          densityValue = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
+        }
+
+        let effectiveDensity = (densityValue ?? 0) * normalizedDensityMultiplier;
+
+        if (effectiveDensity <= 0) {
+          effectiveDensity = 0;
+        } else if (effectiveDensity >= 1) {
+          effectiveDensity = 1;
+        }
+
+        const currentEnergy = energyRow[c];
+        let regen = 0;
+
+        if (positiveMaxTileEnergy > 0) {
+          const deficit = positiveMaxTileEnergy - currentEnergy;
+
+          if (deficit > 0) {
+            const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
+
+            if (regenPenalty > 0) {
+              regen = regenRate * deficit * regenPenalty;
+            }
+          }
+        }
+
+        let diffusion = 0;
+
+        if (useDiffusion) {
+          let neighborSum = 0;
+          let neighborCount = 0;
+
+          if (upEnergyRow) {
+            neighborSum += upEnergyRow[c];
+            neighborCount += 1;
+          }
+
+          if (downEnergyRow) {
+            neighborSum += downEnergyRow[c];
+            neighborCount += 1;
+          }
+
+          if (c > 0) {
+            neighborSum += energyRow[c - 1];
+            neighborCount += 1;
+          }
+
+          if (c < cols - 1) {
+            neighborSum += energyRow[c + 1];
+            neighborCount += 1;
+          }
+
+          if (neighborCount > 0) {
+            diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
+          }
+        }
+
+        if (regenMultiplier !== 1) {
+          regen *= regenMultiplier;
+        }
+
+        if (regenAdd !== 0) {
+          regen += regenAdd;
+        }
+
+        let nextEnergy = currentEnergy + regen + diffusion;
+
+        if (drain !== 0) {
+          nextEnergy -= drain;
+        }
+
+        if (nextEnergy <= 0) {
+          nextEnergy = 0;
+        } else if (positiveMaxTileEnergy > 0 && nextEnergy >= positiveMaxTileEnergy) {
+          nextEnergy = positiveMaxTileEnergy;
+        }
+
+        const occupant = gridRow ? gridRow[c] : null;
+
+        if (occupant) {
+          if (occupantRegenRow) occupantRegenRow[c] = nextEnergy;
+          if (occupantRegenVersionRow) occupantRegenVersionRow[c] = occupantRevision;
+
+          nextRow[c] = 0;
+          energyRow[c] = 0;
+          if (hasDeltaRow) {
+            deltaRow[c] = 0;
+
+            if (trackSparseDelta && deltaDirtyTiles) {
+              deltaDirtyTiles.add(r * cols + c);
+            }
+          }
+
+          return;
+        }
+
+        nextRow[c] = nextEnergy;
+        energyRow[c] = nextEnergy;
+
+        if (hasDeltaRow) {
+          let normalizedDelta = (nextEnergy - currentEnergy) * invMaxTileEnergy;
+
+          if (normalizedDelta < -1) {
+            normalizedDelta = -1;
+          } else if (normalizedDelta > 1) {
+            normalizedDelta = 1;
+          }
+
+          deltaRow[c] = normalizedDelta;
+
+          if (trackSparseDelta && deltaDirtyTiles) {
+            deltaDirtyTiles.add(r * cols + c);
+          }
+        }
+
+        return;
+      }
+
       const isObstacle = obstacleRow && obstacleRow[c];
 
       if (isObstacle) {
