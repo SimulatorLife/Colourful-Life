@@ -1,5 +1,5 @@
 import { assert, test } from "#tests/harness";
-import { computeLeaderboard } from "../src/engine/leaderboard.js";
+import { computeLeaderboard } from "../src/stats/leaderboard.js";
 
 test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots", () => {
   const snapshot = {

@@ -1,7 +1,7 @@
 import { assert, test } from "#tests/harness";
 
 const gridManagerModulePromise = import("../src/grid/gridManager.js");
-const leaderboardModulePromise = import("../src/engine/leaderboard.js");
+const leaderboardModulePromise = import("../src/stats/leaderboard.js");
 
 function createStubCell(data) {
   return {
