@@ -1,5 +1,6 @@
 import { MAX_TILE_ENERGY } from "../config.js";
 import { clamp, clamp01, lerp } from "../utils/math.js";
+import { createRankedBuffer } from "../utils/collections.js";
 import { toPlainObject } from "../utils/object.js";
 import { warnOnce } from "../utils/error.js";
 
@@ -1283,12 +1284,15 @@ export function drawFitnessHeatmap(snapshot, ctx, cellSize, options = {}) {
 
   if (!entries.length) return;
 
-  const sortedEntries = [...entries].sort((a, b) => b.fitness - a.fitness);
   const topPercentCandidate = Number.isFinite(options.topPercent)
     ? clamp(options.topPercent, 0, 1)
     : DEFAULT_FITNESS_TOP_PERCENT;
-  const keepCount = Math.max(1, Math.floor(sortedEntries.length * topPercentCandidate));
-  const topEntries = sortedEntries.slice(0, keepCount);
+  const keepCount = Math.max(1, Math.floor(entries.length * topPercentCandidate));
+  const topEntries = selectTopFitnessEntries(entries, keepCount);
+
+  if (topEntries.length === 0) {
+    return;
+  }
   const palette = createFitnessPalette(FITNESS_GRADIENT_STEPS, FITNESS_BASE_HUE);
   const tierSize = Math.max(1, Math.ceil(topEntries.length / palette.length));
 
@@ -1304,10 +1308,44 @@ export function drawFitnessHeatmap(snapshot, ctx, cellSize, options = {}) {
 
   drawFitnessLegend(ctx, cellSize, cols, rows, palette, {
     highlighted: topEntries.length,
-    total: sortedEntries.length,
+    total: entries.length,
     requestedPercent: topPercentCandidate,
     maxFitness: snapshot.maxFitness,
   });
+}
+
+function compareFitnessEntries(a, b) {
+  const fitnessA = Number.isFinite(a?.fitness) ? a.fitness : -Infinity;
+  const fitnessB = Number.isFinite(b?.fitness) ? b.fitness : -Infinity;
+
+  if (fitnessA === fitnessB) {
+    return 0;
+  }
+
+  return fitnessA > fitnessB ? -1 : 1;
+}
+
+export function selectTopFitnessEntries(entries, keepCount) {
+  const list = Array.isArray(entries) ? entries : [];
+  const limit = Math.max(0, Math.floor(keepCount ?? 0));
+
+  if (limit === 0 || list.length === 0) {
+    return [];
+  }
+
+  const buffer = createRankedBuffer(limit, compareFitnessEntries);
+
+  for (let index = 0; index < list.length; index += 1) {
+    const entry = list[index];
+
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+
+    buffer.add(entry);
+  }
+
+  return buffer.getItems();
 }
 
 function drawFitnessLegend(
