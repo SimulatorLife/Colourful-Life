@@ -3,6 +3,16 @@ import { createHeadlessUiManager } from "./headlessUiManager.js";
 import { toPlainObject } from "../utils/object.js";
 import { invokeWithErrorBoundary } from "../utils/error.js";
 
+const OVERLAY_STATE_KEYS = Object.freeze([
+  "showObstacles",
+  "showEnergy",
+  "showDensity",
+  "showFitness",
+  "showLifeEventMarkers",
+  "showAuroraVeil",
+  "showReproductiveZones",
+]);
+
 function normalizeLayoutOptions({ engine, uiOptions = {}, sanitizedDefaults = {} }) {
   const normalizedUi = toPlainObject(uiOptions);
   const layoutConfig = toPlainObject(normalizedUi.layout);
@@ -184,6 +194,22 @@ function subscribeEngineToUi(engine, uiManager) {
         };
 
         uiManager.setGridGeometry(geometry);
+      }
+
+      if (typeof uiManager.setOverlayVisibility === "function") {
+        const overlayUpdates = {};
+        let overlayChanged = false;
+
+        for (const key of OVERLAY_STATE_KEYS) {
+          if (Object.hasOwn(changes, key)) {
+            overlayUpdates[key] = changes[key];
+            overlayChanged = true;
+          }
+        }
+
+        if (overlayChanged) {
+          uiManager.setOverlayVisibility(overlayUpdates, { notify: false });
+        }
       }
     }),
   ].filter(Boolean);

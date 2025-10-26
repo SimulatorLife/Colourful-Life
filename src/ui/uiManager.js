@@ -70,6 +70,16 @@ const DEFAULT_BURST_OPTIONS = Object.freeze({
   }),
 });
 
+const OVERLAY_TOGGLE_KEYS = Object.freeze([
+  "showObstacles",
+  "showEnergy",
+  "showDensity",
+  "showFitness",
+  "showLifeEventMarkers",
+  "showAuroraVeil",
+  "showReproductiveZones",
+]);
+
 const DEFAULT_TRAIT_DISPLAY_CONFIG = Object.freeze({
   cooperation: Object.freeze({
     name: "Cooperation",
@@ -358,6 +368,7 @@ export default class UIManager {
     this.lifeEventsSummaryBirthCount = null;
     this.lifeEventsSummaryDeathCount = null;
     this.lifeEventMarkersToggle = null;
+    this._overlayCheckboxes = new Map();
     this.lifeEventsSummaryTrend = null;
     this.lifeEventsSummaryNet = null;
     this.lifeEventsSummaryDirection = null;
@@ -2088,6 +2099,30 @@ export default class UIManager {
     body.appendChild(row);
 
     return input;
+  }
+
+  #registerOverlayCheckbox(key, input) {
+    if (!key || !input) return;
+
+    if (!this._overlayCheckboxes) {
+      this._overlayCheckboxes = new Map();
+    }
+
+    if (!this._overlayCheckboxes.has(key)) {
+      this._overlayCheckboxes.set(key, input);
+    }
+  }
+
+  #syncOverlayCheckbox(key, value) {
+    const input = this._overlayCheckboxes?.get(key);
+
+    if (input) {
+      input.checked = Boolean(value);
+    }
+
+    if (key === "showLifeEventMarkers" && this.lifeEventMarkersToggle) {
+      this.lifeEventMarkersToggle.checked = Boolean(value);
+    }
   }
 
   #appendControlRow(container, { label, value, title, color, valueClass }) {
@@ -3961,10 +3996,12 @@ export default class UIManager {
     ];
 
     overlayConfigs.forEach(({ key, label, title, initial }) => {
-      this.#addCheckbox(overlayGrid, label, title, initial, (checked) => {
-        this.#updateSetting(key, checked);
+      const input = this.#addCheckbox(overlayGrid, label, title, initial, (checked) => {
+        this.setOverlayVisibility({ [key]: checked });
         this.#scheduleUpdate();
       });
+
+      this.#registerOverlayCheckbox(key, input);
     });
   }
 
@@ -4444,7 +4481,7 @@ export default class UIManager {
       },
       this.showLifeEventMarkers,
       (checked) => {
-        this.#updateSetting("showLifeEventMarkers", checked);
+        this.setOverlayVisibility({ showLifeEventMarkers: checked });
         this.#scheduleUpdate();
       },
     );
@@ -4860,6 +4897,24 @@ export default class UIManager {
 
     if (changed && notify) {
       this.#notifySettingChange("autoPauseOnBlur", this.autoPauseOnBlur);
+    }
+  }
+
+  setOverlayVisibility(visibility, { notify = true } = {}) {
+    if (!visibility || typeof visibility !== "object") return;
+
+    for (const key of OVERLAY_TOGGLE_KEYS) {
+      if (!Object.hasOwn(visibility, key)) continue;
+
+      const normalized = coerceBoolean(visibility[key], this[key]);
+
+      if (this[key] !== normalized) {
+        this.#updateSetting(key, normalized, { notify });
+      } else {
+        this[key] = normalized;
+      }
+
+      this.#syncOverlayCheckbox(key, normalized);
     }
   }
 
