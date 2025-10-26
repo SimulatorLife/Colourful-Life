@@ -16,11 +16,11 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 Colourful Life targets the Node.js **25.x** series (the included `.nvmrc` pins to 25.0.0). After cloning the repository:
 
-1. Run `nvm use` (install with `nvm install` first if necessary) so your shell matches the pinned Node.js version.
-2. Install dependencies with `npm ci` (fall back to `npm install` when you intentionally need a non-clean install), then run `npm run prepare` so Husky hooks stay active after fresh clones or `.husky/` updates.
+1. Run `nvm use` (install with `nvm install` first if necessary) so your shell matches the pinned Node.js version. `node --version` should report a 25.x build before you continue.
+2. Install dependencies with `npm ci` (fall back to `npm install` only when you intentionally need a non-clean install), then run `npm run prepare` once so Husky hooks stay active after fresh clones or `.husky/` updates.
 3. Start the Parcel dev server with `npm run start` and open `http://localhost:1234`.
-4. Keep a second terminal handy for `npm run check` (or the individual `npm test`, `npm run lint`, and `npm run format:check` commands) whenever you touch shared helpers, simulation logic, or documentation.
-5. Run `npm run clean` if the dev server misbehaves; it clears `dist/` and `.parcel-cache/` before you restart Parcel.
+4. Keep a second terminal handy for `npm run check` before committing. The aggregate command runs `npm run lint`, `npm run format:check`, and `npm test` sequentially so you do not miss regressions. When you prefer faster feedback loops, run the individual commands (`npm test -- --watch` to rerun on file changes, `npm test path/to/file.test.js` to target a single suite) and finish with `npm run check` once you are satisfied.
+5. Run `npm run clean` if the dev server misbehaves; it clears `dist/` and `.parcel-cache/` before you restart Parcel. Append `-- --dry-run` to preview the deletions when you just want to confirm the script resolves the right paths.
 
 Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, and skim [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, and testing expectations once the quick start is familiar.
 
@@ -138,7 +138,7 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 - **Formatting** — Run `npm run format` before committing or rely on the included Prettier integration. `npm run format:check` verifies without writing.
 - **Linting** — `npm run lint` enforces the ESLint + Prettier ruleset across JavaScript and inline HTML. Use `npm run lint:fix` to auto-resolve minor issues.
-- **Testing** — `npm test` runs the Node.js test suites. Tests cover grid utilities, selection logic, and regression harnesses. Add cases when behaviours change.
+- **Testing** — `npm test` runs the energy benchmark in [`scripts/profile-energy.mjs`](scripts/profile-energy.mjs) before executing the Node.js test suites. Pass file paths or directories to narrow the run, or append `-- --watch` for continuous execution while you iterate. Add cases when behaviours change.
 - **Profiling** — `node scripts/profile-energy.mjs` benchmarks the energy preparation loop. Adjust rows/cols via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and the stub `cellSize` with `PERF_CELL_SIZE` environment variables. Enable the heavier SimulationEngine benchmark with `PERF_INCLUDE_SIM=1` when you specifically need tick timings.
 - **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap. Use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures, `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` to retune telemetry cutoffs, `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` to calm or emphasise territorial combat bias, `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` and `COLOURFUL_LIFE_DECAY_MAX_AGE` to shape post-mortem energy recycling, `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` to globally energise or relax genomes, `COLOURFUL_LIFE_MUTATION_CHANCE` to adjust baseline evolutionary churn, and `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` to demand more or less surplus energy before births without modifying source defaults (the relaxed `1.12` baseline lifted a dense 60×60 headless probe from ~218 → 225 survivors after 120 ticks while keeping scarcity pressure intact).
 - **Headless usage** — `createSimulation` accepts `{ headless: true }` to return a controller without mounting DOM controls. Inject `requestAnimationFrame`, `performanceNow`, or RNG hooks for deterministic automation.
@@ -164,10 +164,11 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `npm run start`                                                        | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.                                  |
 | `npm run build`                                                        | Produce an optimized production bundle in `dist/`.                                                                            |
+| `npm run check`                                                        | Run linting, formatting verification, and tests sequentially for a pre-commit confidence sweep.                               |
 | `npm run clean [-- --dry-run]`                                         | Remove `dist/` and `.parcel-cache/` via `scripts/clean-parcel.mjs`, or preview the removals first with `--dry-run`.           |
 | `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                                |
 | `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions.          |
-| `npm test`                                                             | Execute the Node.js test suites covering simulation and UI modules.                                                           |
+| `npm test`                                                             | Run the energy benchmark and then execute the Node.js test suites. Accepts file paths, directories, and `-- --watch`.         |
 | `npm run benchmark`                                                    | Profile the energy preparation loop via `scripts/profile-energy.mjs`; combine with `PERF_*` variables to mirror CI scenarios. |
 | `npm run deploy:public`                                                | Publish the production bundle to a public Git repository using `scripts/publish-public-build.sh`.                             |
 | `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                                        |
