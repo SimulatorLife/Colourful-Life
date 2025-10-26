@@ -1,4 +1,5 @@
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
+import { sanitizeNonNegativeInteger } from "../utils/math.js";
 
 const DEBUG_PROPERTY = "__colourfulLifeBrains";
 const state = {
@@ -70,7 +71,7 @@ const BrainDebugger = {
     return cloneSnapshotList(state.snapshots);
   },
   captureFromEntries(entries = [], { limit = 5 } = {}) {
-    const count = Math.max(0, Math.floor(limit));
+    const count = sanitizeNonNegativeInteger(limit, { fallback: 0 });
 
     if (!Array.isArray(entries) || count === 0) {
       return this.update([]);

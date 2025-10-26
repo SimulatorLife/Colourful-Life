@@ -1,5 +1,5 @@
 import { LEADERBOARD_SIZE_DEFAULT } from "../config.js";
-import { sanitizeNumber } from "../utils/math.js";
+import { sanitizeNonNegativeInteger } from "../utils/math.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 const NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
 
@@ -14,13 +14,14 @@ const WARNINGS = Object.freeze({
 });
 
 function normalizeLeaderboardSize(value, fallback = LEADERBOARD_SIZE_DEFAULT) {
-  const sanitized = sanitizeNumber(value, {
-    fallback,
-    min: 0,
-    round: Math.floor,
-  });
+  const sanitizedFallback = sanitizeNonNegativeInteger(fallback, { fallback: 0 });
+  const numeric = Number(value);
 
-  return Math.max(0, sanitized);
+  if (!Number.isFinite(numeric)) {
+    return sanitizedFallback;
+  }
+
+  return sanitizeNonNegativeInteger(numeric, { fallback: 0 });
 }
 
 function resolveNow(now) {
@@ -237,11 +238,13 @@ export default class TelemetryController {
   }
 
   #normalizeInterval(interval) {
-    if (!Number.isFinite(interval) || interval <= 0) {
+    const numeric = Number(interval);
+
+    if (!Number.isFinite(numeric) || numeric <= 0) {
       return 0;
     }
 
-    return Math.max(0, Math.floor(interval));
+    return sanitizeNonNegativeInteger(numeric, { fallback: 0 });
   }
 
   #computeLeaderboard;
