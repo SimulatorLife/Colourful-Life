@@ -56,6 +56,10 @@ Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/
 
 Enable **Life Event Markers** in the Overlays panel to spotlight where births and deaths just occurred. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps. Architecture details live in [`docs/architecture-overview.md`](docs/architecture-overview.md#ui-and-overlays) for readers interested in extending the renderer.
 
+### Aurora veil overlay
+
+Flip on **Aurora Veil** in the Overlays panel when you want a celebratory flourish without sacrificing clarity. The effect washes the canvas with soft, high-contrast-safe ribbons that sway with the simulation clock and add a few gentle starbursts. It is fully optional, keeps alpha values low so heatmaps and life event markers stay readable, and respects the existing animation cadence so performance remains unchanged.
+
 ### Obstacle layout presets
 
 Select a **Layout Preset** in the Obstacles panel to immediately swap the grid's obstacle mask. The dropdown now applies changes as soon as you choose a preset, streamlining the workflow when experimenting with layouts. Use **Clear Obstacles** to reset the field if you need a blank slate again.

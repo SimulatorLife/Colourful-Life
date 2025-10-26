@@ -372,6 +372,7 @@ export default class UIManager {
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
+    this.showAuroraVeil = defaults.showAuroraVeil;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.autoPausePending = false;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
@@ -3735,6 +3736,13 @@ export default class UIManager {
           "Pinpoint recent births and deaths directly on the grid with fading markers",
         initial: this.showLifeEventMarkers,
       },
+      {
+        key: "showAuroraVeil",
+        label: "Aurora Veil",
+        title:
+          "Wash the canvas with a gentle aurora ribbon that sways with the simulation clock",
+        initial: this.showAuroraVeil,
+      },
     ];
 
     overlayConfigs.forEach(({ key, label, title, initial }) => {
@@ -4738,6 +4746,9 @@ export default class UIManager {
   }
   getShowLifeEventMarkers() {
     return this.showLifeEventMarkers;
+  }
+  getShowAuroraVeil() {
+    return this.showAuroraVeil;
   }
 
   setInitialTileEnergyFraction(value, { notify = true } = {}) {

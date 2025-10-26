@@ -39,6 +39,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @param {boolean} [options.showDensity] Whether population density overlays are shown.
  * @param {boolean} [options.showFitness] Whether fitness overlays are shown.
  * @param {boolean} [options.showLifeEventMarkers] Whether life event markers are shown.
+ * @param {boolean} [options.showAuroraVeil] Whether the aurora whimsy overlay is shown.
  * @param {number} [options.leaderboardIntervalMs] Minimum time between leaderboard updates.
  * @param {Object} [options.selectionManager=null] Shared selection manager instance.
  * @returns {{
@@ -69,6 +70,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  *   getShowDensity: () => boolean,
  *   getShowFitness: () => boolean,
  *   getShowLifeEventMarkers: () => boolean,
+ *   getShowAuroraVeil: () => boolean,
  *   shouldRenderSlowUi: (timestamp: number) => boolean,
  *   renderMetrics: Function,
  *   renderLeaderboard: Function,
@@ -306,6 +308,7 @@ export function createHeadlessUiManager(options = {}) {
     getShowDensity: () => settings.showDensity,
     getShowFitness: () => settings.showFitness,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
+    getShowAuroraVeil: () => settings.showAuroraVeil,
     setShowObstacles: (value) => {
       const normalized = coerceBoolean(value, settings.showObstacles);
 
@@ -345,6 +348,14 @@ export function createHeadlessUiManager(options = {}) {
 
       settings.showLifeEventMarkers = normalized;
       notify("showLifeEventMarkers", settings.showLifeEventMarkers);
+    },
+    setShowAuroraVeil: (value) => {
+      const normalized = coerceBoolean(value, settings.showAuroraVeil);
+
+      if (settings.showAuroraVeil === normalized) return;
+
+      settings.showAuroraVeil = normalized;
+      notify("showAuroraVeil", settings.showAuroraVeil);
     },
     getLeaderboardIntervalMs: () => settings.leaderboardIntervalMs,
     setLeaderboardIntervalMs: (value) => {

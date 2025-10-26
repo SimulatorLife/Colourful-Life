@@ -397,6 +397,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showDensity: false,
   showFitness: false,
   showLifeEventMarkers: false,
+  showAuroraVeil: false,
   leaderboardIntervalMs: 750,
   leaderboardSize: DEFAULT_LEADERBOARD_SIZE,
   brainSnapshotLimit: DEFAULT_BRAIN_SNAPSHOT_LIMIT,
@@ -424,6 +425,7 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showDensity",
   "showFitness",
   "showLifeEventMarkers",
+  "showAuroraVeil",
   "autoPauseOnBlur",
 ]);
 

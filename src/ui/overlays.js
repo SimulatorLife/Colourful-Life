@@ -17,6 +17,160 @@ const DEFAULT_OBSTACLE_MASK_FILL = "rgba(40,40,55,0.35)";
 const DEFAULT_OBSTACLE_MASK_OUTLINE = "rgba(200,200,255,0.35)";
 const OBSTACLE_MASK_LINE_WIDTH_SCALE = 0.12;
 const OBSTACLE_MASK_ALPHA = 0.35;
+const AURORA_LINE_COLOR_ONE = Object.freeze({
+  rgb: "115, 220, 255",
+  baseline: 0.24,
+  amplitude: 0.08,
+  weight: 1.2,
+  phase: 0,
+  speed: 0.012,
+});
+const AURORA_LINE_COLOR_TWO = Object.freeze({
+  rgb: "186, 153, 255",
+  baseline: 0.58,
+  amplitude: 0.06,
+  weight: 1,
+  phase: Math.PI * 0.35,
+  speed: 0.018,
+});
+const AURORA_LINE_COLOR_THREE = Object.freeze({
+  rgb: "255, 196, 220",
+  baseline: 0.82,
+  amplitude: 0.04,
+  weight: 0.9,
+  phase: Math.PI * 0.75,
+  speed: 0.02,
+});
+const AURORA_LINES = Object.freeze([
+  AURORA_LINE_COLOR_ONE,
+  AURORA_LINE_COLOR_TWO,
+  AURORA_LINE_COLOR_THREE,
+]);
+const AURORA_SPARKS = Object.freeze([
+  Object.freeze({ x: 0.16, y: 0.12, radius: 0.8 }),
+  Object.freeze({ x: 0.42, y: 0.18, radius: 1.1 }),
+  Object.freeze({ x: 0.68, y: 0.1, radius: 0.9 }),
+  Object.freeze({ x: 0.82, y: 0.22, radius: 0.75 }),
+  Object.freeze({ x: 0.22, y: 0.62, radius: 1.2 }),
+  Object.freeze({ x: 0.48, y: 0.72, radius: 0.95 }),
+  Object.freeze({ x: 0.74, y: 0.64, radius: 1.05 }),
+  Object.freeze({ x: 0.28, y: 0.88, radius: 0.7 }),
+  Object.freeze({ x: 0.6, y: 0.92, radius: 0.85 }),
+]);
+
+let auroraGradientCache = null;
+
+function ensureAuroraGradient(ctx, width, height) {
+  if (!ctx || !(width > 0) || !(height > 0)) return null;
+
+  if (
+    auroraGradientCache &&
+    auroraGradientCache.width === width &&
+    auroraGradientCache.height === height &&
+    auroraGradientCache.gradient
+  ) {
+    return auroraGradientCache.gradient;
+  }
+
+  if (typeof ctx.createLinearGradient !== "function") {
+    return null;
+  }
+
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+
+  gradient.addColorStop(0, "rgba(70, 170, 255, 0.0)");
+  gradient.addColorStop(0.25, "rgba(70, 190, 255, 0.2)");
+  gradient.addColorStop(0.54, "rgba(189, 135, 255, 0.28)");
+  gradient.addColorStop(0.78, "rgba(255, 192, 220, 0.22)");
+  gradient.addColorStop(1, "rgba(255, 245, 245, 0.08)");
+
+  auroraGradientCache = { width, height, gradient };
+
+  return gradient;
+}
+
+export function resetAuroraGradientCache() {
+  auroraGradientCache = null;
+}
+
+export function drawAuroraVeil(ctx, cellSize, rows, cols, { tick = 0 } = {}) {
+  if (!ctx || !(cellSize > 0) || !(rows > 0) || !(cols > 0)) return;
+
+  const width = cols * cellSize;
+  const height = rows * cellSize;
+
+  if (!(width > 0) || !(height > 0)) return;
+
+  const gradient = ensureAuroraGradient(ctx, width, height);
+
+  if (!gradient) return;
+
+  const shimmerPhase = Number.isFinite(tick) ? tick : 0;
+  const shimmer = 0.6 + 0.4 * Math.sin(shimmerPhase * 0.045);
+  const sparkle = 0.45 + 0.55 * Math.sin(shimmerPhase * 0.08 + Math.PI / 5);
+
+  if (typeof ctx.save === "function") ctx.save();
+
+  if (typeof ctx.globalCompositeOperation === "string") {
+    ctx.globalCompositeOperation = "screen";
+  }
+
+  const baseAlpha = 0.12 * shimmer;
+
+  if (typeof ctx.globalAlpha === "number") {
+    ctx.globalAlpha = baseAlpha;
+  }
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  const strokeAlpha = 0.18 + shimmer * 0.14;
+  const baseLineWidth = Math.max(cellSize * 0.55, 1.2);
+  const step = Math.max(cellSize * 3, 26);
+  const shimmerOffset = shimmerPhase * 0.012;
+
+  for (const band of AURORA_LINES) {
+    if (!band) continue;
+
+    const centerY = height * band.baseline;
+    const amplitude = height * band.amplitude;
+    const weight = Math.max(0.6, band.weight ?? 1);
+    const bandOffset = shimmerOffset * (band.speed ?? 0.01) + (band.phase ?? 0);
+
+    ctx.beginPath();
+    ctx.moveTo(-step, centerY);
+    for (let x = -step; x <= width + step; x += step) {
+      const progress = (x + step) / (width + step * 2);
+      const wave = Math.sin(progress * Math.PI * 2 + bandOffset) * amplitude;
+
+      ctx.lineTo(x, centerY + wave);
+    }
+
+    ctx.strokeStyle = `rgba(${band.rgb}, ${strokeAlpha})`;
+    ctx.lineWidth = baseLineWidth * weight;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+  }
+
+  const sparkleAlpha = 0.16 + sparkle * 0.12;
+
+  ctx.fillStyle = `rgba(255, 255, 255, ${sparkleAlpha})`;
+
+  for (const spark of AURORA_SPARKS) {
+    if (!spark) continue;
+
+    const radius = Math.max(0.6, spark.radius * cellSize * 0.32);
+    const x = spark.x * width;
+    const y = spark.y * height;
+
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (typeof ctx.restore === "function") ctx.restore();
+}
 
 function computeLifeEventAlpha(
   ageTicks,
@@ -756,6 +910,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showDensity,
     showFitness,
     showLifeEventMarkers,
+    showAuroraVeil,
     showObstacles = true,
     maxTileEnergy = MAX_TILE_ENERGY,
     activeEvents,
@@ -770,6 +925,8 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   } = opts;
   let snapshot = providedSnapshot;
   const selectionManager = explicitSelection || grid?.selectionManager;
+  const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
+  const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
 
   if (Array.isArray(activeEvents) && activeEvents.length > 0) {
     drawEventOverlays(ctx, cellSize, activeEvents, getEventColor);
@@ -789,6 +946,9 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   }
   if (showFitness) {
     drawFitnessHeatmap(snapshot, ctx, cellSize, fitnessOverlayOptions);
+  }
+  if (showAuroraVeil) {
+    drawAuroraVeil(ctx, cellSize, rows, cols, { tick: lifeEventCurrentTick });
   }
   if (showLifeEventMarkers && Array.isArray(lifeEvents) && lifeEvents.length > 0) {
     drawLifeEventMarkers(ctx, cellSize, lifeEvents, {
