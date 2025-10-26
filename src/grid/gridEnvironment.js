@@ -43,11 +43,44 @@ function resolveCellSize(options, fallback) {
       ? options.environment
       : null;
 
-  const resolvedSize = [options.cellSize, environment?.cellSize, fallback?.cellSize]
-    .map((candidate) => Number(candidate))
-    .find((numeric) => Number.isFinite(numeric) && numeric > 0);
+  // Avoid the temporary array + map + find churn in the previous implementation.
+  // This helper sits on the grid initialisation hot path, so a tiny reduction in
+  // allocations and predicate calls keeps repeated environment resolution cheap.
+  const optionCandidate = options.cellSize;
 
-  return resolvedSize ?? 8;
+  if (optionCandidate != null) {
+    const numeric = Number(optionCandidate);
+
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return numeric;
+    }
+  }
+
+  if (environment) {
+    const environmentCandidate = environment.cellSize;
+
+    if (environmentCandidate != null) {
+      const numeric = Number(environmentCandidate);
+
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return numeric;
+      }
+    }
+  }
+
+  if (fallback) {
+    const fallbackCandidate = fallback.cellSize;
+
+    if (fallbackCandidate != null) {
+      const numeric = Number(fallbackCandidate);
+
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return numeric;
+      }
+    }
+  }
+
+  return 8;
 }
 
 /**
