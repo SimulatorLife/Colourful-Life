@@ -35,6 +35,39 @@ test("captureFromEntries falls back to cell neuron count when brain reports zero
   BrainDebugger.update([]);
 });
 
+test("captureFromEntries falls back to DNA color when runtime color missing", async () => {
+  const { default: BrainDebugger } = await import("../src/ui/brainDebugger.js");
+  const snapshots = BrainDebugger.captureFromEntries(
+    [
+      {
+        row: 2,
+        col: 3,
+        fitness: 24,
+        cell: {
+          dna: {
+            toColor() {
+              return "#c0ffee";
+            },
+          },
+          brain: {
+            neuronCount: 4,
+            connectionCount: 2,
+            snapshot() {
+              return { connections: [1, 2] };
+            },
+          },
+        },
+      },
+    ],
+    { limit: 1 },
+  );
+
+  assert.is(snapshots.length, 1);
+  assert.is(snapshots[0].color, "#c0ffee");
+
+  BrainDebugger.update([]);
+});
+
 test("captureFromEntries falls back to DNA connection count when brain reports zero", async () => {
   const { default: BrainDebugger } = await import("../src/ui/brainDebugger.js");
   const genes = [{ enabled: true }, { enabled: false }, { enabled: true }];
