@@ -10,6 +10,7 @@ import {
   SIMULATION_DEFAULTS,
   resolveSimulationDefaults,
   BRAIN_SNAPSHOT_LIMIT_DEFAULT,
+  LEADERBOARD_INTERVAL_MIN_MS,
 } from "./config.js";
 import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
 import {
@@ -1363,14 +1364,24 @@ export default class SimulationEngine {
   }
 
   setLeaderboardInterval(value) {
-    this.#sanitizeAndSetState(
-      "leaderboardIntervalMs",
-      value,
-      {
-        min: 0,
-      },
-      { markPending: false },
-    );
+    const fallback = Number.isFinite(this.state.leaderboardIntervalMs)
+      ? this.state.leaderboardIntervalMs
+      : (SIMULATION_DEFAULTS.leaderboardIntervalMs ?? LEADERBOARD_INTERVAL_MIN_MS);
+    const sanitized = sanitizeNumber(value, {
+      fallback,
+      min: 0,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return this.state.leaderboardIntervalMs;
+    }
+
+    const normalized =
+      sanitized <= 0 ? 0 : Math.max(LEADERBOARD_INTERVAL_MIN_MS, sanitized);
+
+    this.#updateState({ leaderboardIntervalMs: normalized });
+
+    return normalized;
   }
 
   setOverlayVisibility({
