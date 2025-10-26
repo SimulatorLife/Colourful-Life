@@ -327,7 +327,8 @@ export default class Stats {
   #traitThresholds;
   #rng;
   #pairSampleScratch;
-  #pairSampleMembership;
+  #pairSampleHash;
+  #pairSampleHashMask;
   #pairIndexScratch;
   #diversityDnaScratch;
   #dnaSimilarityCache;
@@ -411,7 +412,8 @@ export default class Stats {
     };
     this.starvationRateSmoothed = 0;
     this.#pairSampleScratch = new Uint32Array(0);
-    this.#pairSampleMembership = new Map();
+    this.#pairSampleHash = null;
+    this.#pairSampleHashMask = 0;
     this.#pairIndexScratch = { first: 0, second: 0 };
     this.#diversityDnaScratch = [];
     this.#dnaSimilarityCache = new WeakMap();
@@ -1508,41 +1510,73 @@ export default class Stats {
         this.#pairSampleScratch = samples;
       }
 
-      const membership = this.#pairSampleMembership;
-
-      membership.clear();
-
       const sampledView = samples.subarray(0, sampleLimit);
-      const startIndex = possiblePairs - sampleLimit;
-      let filled = 0;
+      let hash = this.#pairSampleHash;
+      let mask = this.#pairSampleHashMask;
+      const requiredCapacity = Math.max(4, sampleLimit * 2);
 
-      const pushSample = (value) => {
-        if (membership.has(value)) {
-          return false;
+      if (!hash || hash.length < requiredCapacity) {
+        let size = 1;
+
+        while (size < requiredCapacity) {
+          size <<= 1;
         }
 
-        membership.set(value, true);
-        sampledView[filled] = value;
-        filled += 1;
+        hash = new Int32Array(size);
+        hash.fill(-1);
+        this.#pairSampleHash = hash;
+        mask = size - 1;
+        this.#pairSampleHashMask = mask;
+      } else {
+        hash.fill(-1);
+        mask = this.#pairSampleHashMask ?? hash.length - 1;
+      }
 
-        return true;
+      let filled = 0;
+
+      const addValue = (value) => {
+        let slot = value & mask;
+
+        while (true) {
+          const existing = hash[slot];
+
+          if (existing === value) {
+            return false;
+          }
+
+          if (existing === -1) {
+            hash[slot] = value;
+            sampledView[filled] = value;
+            filled += 1;
+
+            return true;
+          }
+
+          slot = (slot + 1) & mask;
+        }
       };
 
-      for (let i = startIndex; i < possiblePairs && filled < sampleLimit; i += 1) {
-        const candidate = sampleIndex(i + 1);
+      for (let index = possiblePairs - sampleLimit; index < possiblePairs; index += 1) {
+        const candidate = sampleIndex(index + 1);
 
-        if (!pushSample(candidate)) {
-          pushSample(i);
+        if (addValue(candidate)) {
+          if (filled === sampleLimit) {
+            break;
+          }
+
+          continue;
+        }
+
+        if (addValue(index) && filled === sampleLimit) {
+          break;
         }
       }
 
       if (filled < sampleLimit) {
-        for (let i = 0; i < possiblePairs && filled < sampleLimit; i += 1) {
-          pushSample(i);
+        for (let index = 0; index < possiblePairs && filled < sampleLimit; index += 1) {
+          addValue(index);
         }
       }
-
-      membership.clear();
 
       if (filled === 0) {
         return 0;
