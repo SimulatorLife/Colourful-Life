@@ -5926,7 +5926,21 @@ export default class GridManager {
       return candidates;
     }
 
-    const annotated = candidates.map((candidate) => {
+    const normalizedLimit = Number.isFinite(limit) ? Math.floor(limit) : 12;
+
+    if (normalizedLimit <= 0) {
+      return [];
+    }
+
+    const maxCandidates = normalizedLimit;
+
+    const selected = new Array(maxCandidates);
+    const separations = new Array(maxCandidates);
+    let size = 0;
+
+    for (let i = 0; i < candidates.length; i += 1) {
+      const candidate = candidates[i];
+
       const targetRow = Number.isFinite(candidate?.row)
         ? candidate.row
         : Number.isFinite(candidate?.target?.row)
@@ -5941,18 +5955,43 @@ export default class GridManager {
         Math.abs(targetRow - parentRow),
         Math.abs(targetCol - parentCol),
       );
+      const normalizedSeparation = Number.isFinite(separation)
+        ? separation
+        : Number.POSITIVE_INFINITY;
 
-      return {
-        candidate,
-        separation: Number.isFinite(separation) ? separation : Number.POSITIVE_INFINITY,
-      };
-    });
+      if (size < maxCandidates) {
+        let insertAt = size;
 
-    annotated.sort((a, b) => a.separation - b.separation);
+        while (insertAt > 0 && normalizedSeparation < separations[insertAt - 1]) {
+          selected[insertAt] = selected[insertAt - 1];
+          separations[insertAt] = separations[insertAt - 1];
+          insertAt -= 1;
+        }
 
-    return annotated
-      .slice(0, Math.min(limit, annotated.length))
-      .map((entry) => entry.candidate);
+        selected[insertAt] = candidate;
+        separations[insertAt] = normalizedSeparation;
+        size += 1;
+
+        continue;
+      }
+
+      if (normalizedSeparation >= separations[size - 1]) {
+        continue;
+      }
+
+      let insertAt = size - 1;
+
+      while (insertAt > 0 && normalizedSeparation < separations[insertAt - 1]) {
+        selected[insertAt] = selected[insertAt - 1];
+        separations[insertAt] = separations[insertAt - 1];
+        insertAt -= 1;
+      }
+
+      selected[insertAt] = candidate;
+      separations[insertAt] = normalizedSeparation;
+    }
+
+    return selected.slice(0, size);
   }
 
   handleReproduction(
