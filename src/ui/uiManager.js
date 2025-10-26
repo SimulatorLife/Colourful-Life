@@ -12,6 +12,7 @@ import {
   clamp,
   clamp01,
   coerceBoolean,
+  pickFirstFinitePositive,
   sanitizeNumber,
   toPlainObject,
 } from "../utils.js";
@@ -149,30 +150,24 @@ function formatTraitLabel(key) {
 }
 
 function normalizeBurstOptions(candidate) {
-  const options = candidate && typeof candidate === "object" ? candidate : null;
-  const primarySource = options?.primary;
-  const shiftSource = options?.shift;
+  const { primary: rawPrimary, shift: rawShift } = toPlainObject(candidate);
+  const primarySource = toPlainObject(rawPrimary);
+  const shiftSource = toPlainObject(rawShift);
   const fallbackPrimary = DEFAULT_BURST_OPTIONS.primary;
   const fallbackShift = DEFAULT_BURST_OPTIONS.shift;
 
   const parseCount = (value, fallback) => {
-    const numeric = Number(value);
+    const candidate = pickFirstFinitePositive([value]);
 
-    if (!Number.isFinite(numeric) || numeric <= 0) {
+    if (candidate == null) {
       return fallback;
     }
 
-    return Math.round(numeric);
+    return Math.round(candidate);
   };
 
   const parseRadius = (value, fallback) => {
-    const numeric = Number(value);
-
-    if (!Number.isFinite(numeric) || numeric <= 0) {
-      return fallback;
-    }
-
-    return numeric;
+    return pickFirstFinitePositive([value], fallback) ?? fallback;
   };
 
   const resolveHint = (value, fallback) => {
@@ -187,14 +182,14 @@ function normalizeBurstOptions(candidate) {
 
   return {
     primary: {
-      count: parseCount(primarySource?.count, fallbackPrimary.count),
-      radius: parseRadius(primarySource?.radius, fallbackPrimary.radius),
+      count: parseCount(primarySource.count, fallbackPrimary.count),
+      radius: parseRadius(primarySource.radius, fallbackPrimary.radius),
     },
     shift: {
-      count: parseCount(shiftSource?.count, fallbackShift.count),
-      radius: parseRadius(shiftSource?.radius, fallbackShift.radius),
-      hint: resolveHint(shiftSource?.hint, fallbackShift.hint),
-      shortcutHint: resolveHint(shiftSource?.shortcutHint, fallbackShift.shortcutHint),
+      count: parseCount(shiftSource.count, fallbackShift.count),
+      radius: parseRadius(shiftSource.radius, fallbackShift.radius),
+      hint: resolveHint(shiftSource.hint, fallbackShift.hint),
+      shortcutHint: resolveHint(shiftSource.shortcutHint, fallbackShift.shortcutHint),
     },
   };
 }
