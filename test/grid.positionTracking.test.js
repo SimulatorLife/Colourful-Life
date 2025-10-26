@@ -1,7 +1,7 @@
 import { assert, test } from "#tests/harness";
 import SimulationEngine from "../src/simulationEngine.js";
 import DNA from "../src/genome.js";
-import { createRNG } from "../src/utils.js";
+import { createRNG } from "../src/utils/math.js";
 import { MockCanvas } from "./helpers/simulationEngine.js";
 
 const createCanvasStub = (width, height) => new MockCanvas(width, height);

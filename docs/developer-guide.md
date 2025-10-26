@@ -191,7 +191,7 @@ variables for quick reference during onboarding.
 - Avoid deleting tests unless the covered behaviour has been removed from the
   product. When refactoring, keep or update the assertions.
 - Prefer deterministic randomness in tests using `createRNG` from
-  [`src/utils.js`](../src/utils.js) to keep outcomes reproducible.
+  [`src/utils/math.js`](../src/utils/math.js) to keep outcomes reproducible.
 
 ## Helpful scripts
 

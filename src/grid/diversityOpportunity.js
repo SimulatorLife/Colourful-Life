@@ -1,4 +1,4 @@
-import { clamp } from "../utils.js";
+import { clamp } from "../utils/math.js";
 
 const SAMPLE_LIMIT = 5;
 

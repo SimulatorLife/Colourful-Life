@@ -6,7 +6,7 @@ import EventManager, {
   isEventAffecting,
 } from "../src/events/eventManager.js";
 import { EVENT_TYPES } from "../src/events/eventEffects.js";
-import { randomRange } from "../src/utils.js";
+import { randomRange } from "../src/utils/math.js";
 
 function makeSequenceRng(sequence) {
   let index = 0;

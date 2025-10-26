@@ -1,6 +1,6 @@
 import { assert, test } from "#tests/harness";
 import DNA, { GENE_LOCI } from "../src/genome.js";
-import { createRNG } from "../src/utils.js";
+import { createRNG } from "../src/utils/math.js";
 
 function sampleGenome(seedValue, { sampleTag = "phenotype", sampleCount = 5 } = {}) {
   const rng = createRNG(seedValue);

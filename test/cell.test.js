@@ -67,7 +67,7 @@ test.before(async () => {
   ({ default: Cell } = await import("../src/cell.js"));
   ({ DNA, GENE_LOCI } = await import("../src/genome.js"));
   ({ clamp, clampFinite, lerp, randomRange, createRNG } = await import(
-    "../src/utils.js"
+    "../src/utils/math.js"
   ));
   ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
   ({ default: Brain, OUTPUT_GROUPS } = await import("../src/brain.js"));

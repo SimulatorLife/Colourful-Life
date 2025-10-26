@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import GridManager from "../src/grid/gridManager.js";
 import DNA, { GENE_LOCI } from "../src/genome.js";
 import { DECAY_RETURN_FRACTION } from "../src/config.js";
-import { clamp01 } from "../src/utils.js";
+import { clamp01 } from "../src/utils/math.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

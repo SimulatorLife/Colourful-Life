@@ -21,7 +21,7 @@
  *   current-frame `energyGrid` value is reset.
  * @returns {void}
  */
-import { isArrayLike } from "../utils.js";
+import { isArrayLike } from "../utils/collections.js";
 
 export function clearTileEnergyBuffers(source, row, col, options = {}) {
   if (!source || row == null || col == null) return;

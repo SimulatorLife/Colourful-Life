@@ -5,7 +5,7 @@ import {
   sanitizeNumber,
   sanitizePositiveInteger,
   toFiniteOrNull,
-} from "./utils.js";
+} from "./utils/math.js";
 import { warnOnce } from "./utils/error.js";
 import { accumulateTraitAggregates } from "./utils/traitAggregation.js";
 

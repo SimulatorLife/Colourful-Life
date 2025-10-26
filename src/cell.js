@@ -1,6 +1,7 @@
 import DNA, { GENE_LOCI } from "./genome.js";
 import Brain, { OUTPUT_GROUPS } from "./brain.js";
-import { randomRange, clamp, clampFinite, lerp, cloneTracePayload } from "./utils.js";
+import { randomRange, clamp, clampFinite, lerp } from "./utils/math.js";
+import { cloneTracePayload } from "./utils/object.js";
 import { warnOnce } from "./utils/error.js";
 import { accumulateEventModifiers } from "./energySystem.js";
 import { createEventContext, defaultEventContext } from "./events/eventContext.js";

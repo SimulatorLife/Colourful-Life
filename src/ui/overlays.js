@@ -1,5 +1,6 @@
 import { MAX_TILE_ENERGY } from "../config.js";
-import { clamp, clamp01, lerp, toPlainObject } from "../utils.js";
+import { clamp, clamp01, lerp } from "../utils/math.js";
+import { toPlainObject } from "../utils/object.js";
 import { warnOnce } from "../utils/error.js";
 
 const DEFAULT_FITNESS_TOP_PERCENT = 0.1;

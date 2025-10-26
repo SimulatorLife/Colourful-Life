@@ -4,7 +4,7 @@ import { resolvePopulationScarcityMultiplier } from "../src/grid/populationScarc
 import Cell from "../src/cell.js";
 import DNA, { GENE_LOCI } from "../src/genome.js";
 import { MAX_TILE_ENERGY } from "../src/config.js";
-import { clamp01 } from "../src/utils.js";
+import { clamp01 } from "../src/utils/math.js";
 
 function buildDNA({
   fertility = 0.5,

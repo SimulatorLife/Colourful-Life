@@ -1,4 +1,5 @@
-import { clamp, cloneTracePayload } from "./utils.js";
+import { clamp } from "./utils/math.js";
+import { cloneTracePayload } from "./utils/object.js";
 
 export const NEURAL_GENE_BYTES = 4;
 

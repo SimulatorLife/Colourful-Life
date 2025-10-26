@@ -1,4 +1,5 @@
-import { pickFirstFinitePositive, toFiniteOrNull, toPlainObject } from "../utils.js";
+import { pickFirstFinitePositive, toFiniteOrNull } from "../utils/math.js";
+import { toPlainObject } from "../utils/object.js";
 
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 

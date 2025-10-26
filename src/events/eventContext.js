@@ -1,5 +1,5 @@
 import { getEventEffect } from "./eventEffects.js";
-import { toPlainObject } from "../utils.js";
+import { toPlainObject } from "../utils/object.js";
 
 /**
  * Determines whether the supplied event overlaps the provided grid

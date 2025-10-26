@@ -1,4 +1,4 @@
-import { clamp } from "../utils.js";
+import { clamp } from "../utils/math.js";
 
 const INTERACTION_KEYS = ["cooperate", "fight", "avoid"];
 const INTERACTION_KEY_COUNT = INTERACTION_KEYS.length;

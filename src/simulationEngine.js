@@ -19,8 +19,8 @@ import {
   sanitizeNumber,
   sanitizePositiveInteger,
   toFiniteOrNull,
-  coerceBoolean,
-} from "./utils.js";
+} from "./utils/math.js";
+import { coerceBoolean } from "./utils/primitives.js";
 import { invokeWithErrorBoundary } from "./utils/error.js";
 import {
   ensureCanvasDimensions,

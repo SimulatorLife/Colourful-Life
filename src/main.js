@@ -4,7 +4,7 @@ import SelectionManager from "./grid/selectionManager.js";
 import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { bindSimulationToUi } from "./ui/simulationUiBridge.js";
 import { resolveSimulationDefaults } from "./config.js";
-import { toPlainObject } from "./utils.js";
+import { toPlainObject } from "./utils/object.js";
 import {
   buildHeadlessCanvasOverrides,
   createHeadlessCanvas,
