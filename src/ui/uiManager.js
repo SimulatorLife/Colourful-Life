@@ -125,6 +125,17 @@ const DEFAULT_TRAIT_DISPLAY_CONFIG = Object.freeze({
   }),
 });
 
+const WARNINGS = Object.freeze({
+  burstAction: "Burst action handler threw.",
+  globalBurst: "Global burst handler threw.",
+  resolveCssColor: "Failed to resolve CSS variable color",
+  readObstaclePreset: "Failed to read current obstacle preset from actions.",
+  readGridDimensions: "Failed to read grid dimensions from actions.",
+  updateWorldGeometry: "Failed to update world geometry.",
+  resetWorld: "Reset world handler threw; finishing cleanup.",
+  panelToggle: (title) => `Panel toggle handler for "${title}" threw.`,
+});
+
 function toPascalCase(value) {
   if (typeof value !== "string" || value.length === 0) return "";
 
@@ -618,23 +629,28 @@ export default class UIManager {
     };
 
     if (typeof this.actions.burst === "function") {
-      try {
-        this.actions.burst(burstOptions);
-      } catch (error) {
-        warnOnce("Burst action handler threw.", error);
-      }
+      invokeWithErrorBoundary(this.actions.burst, [burstOptions], {
+        thisArg: this.actions,
+        message: WARNINGS.burstAction,
+        reporter: warnOnce,
+        once: true,
+      });
 
       return;
     }
 
     if (typeof window === "undefined") return;
 
-    try {
-      if (window.grid?.burstRandomCells) {
-        window.grid.burstRandomCells(burstOptions);
-      }
-    } catch (error) {
-      warnOnce("Global burst handler threw.", error);
+    const grid = window.grid;
+    const burstHandler = grid?.burstRandomCells;
+
+    if (typeof burstHandler === "function") {
+      invokeWithErrorBoundary(burstHandler, [burstOptions], {
+        thisArg: grid,
+        message: WARNINGS.globalBurst,
+        reporter: warnOnce,
+        once: true,
+      });
     }
   }
 
@@ -697,19 +713,30 @@ export default class UIManager {
       return fallbackColor;
     }
 
-    try {
-      const root = document?.documentElement;
+    const resolveColor = () => {
+      const doc = typeof document !== "undefined" ? document : globalThis?.document;
+      const root = doc?.documentElement;
 
       if (!root) return fallbackColor;
 
-      const value = getComputedStyle(root).getPropertyValue(variableName).trim();
+      const style =
+        typeof getComputedStyle === "function"
+          ? getComputedStyle(root)
+          : doc?.defaultView?.getComputedStyle?.(root);
+      const value = style?.getPropertyValue?.(variableName)?.trim?.();
 
       return value || fallbackColor;
-    } catch (error) {
-      warnOnce("Failed to resolve CSS variable color", error);
+    };
 
-      return fallbackColor;
-    }
+    const resolved = invokeWithErrorBoundary(resolveColor, [], {
+      message: WARNINGS.resolveCssColor,
+      reporter: warnOnce,
+      once: true,
+    });
+
+    return typeof resolved === "string" && resolved.length > 0
+      ? resolved
+      : fallbackColor;
   }
 
   #shouldIgnoreHotkey(event) {
@@ -738,10 +765,15 @@ export default class UIManager {
     const getter = actionFns?.getCurrentObstaclePreset;
 
     if (typeof getter === "function") {
-      try {
-        candidate = getter();
-      } catch (error) {
-        warnOnce("Failed to read current obstacle preset from actions.", error);
+      const result = invokeWithErrorBoundary(getter, [], {
+        thisArg: actionFns,
+        message: WARNINGS.readObstaclePreset,
+        reporter: warnOnce,
+        once: true,
+      });
+
+      if (result !== undefined) {
+        candidate = result;
       }
     }
 
@@ -789,16 +821,22 @@ export default class UIManager {
     let dimensions = null;
 
     if (typeof this.getGridDimensions === "function") {
-      try {
-        const raw = toPlainObject(this.getGridDimensions());
+      const raw = invokeWithErrorBoundary(
+        () => toPlainObject(this.getGridDimensions()),
+        [],
+        {
+          message: WARNINGS.readGridDimensions,
+          reporter: warnOnce,
+          once: true,
+        },
+      );
 
+      if (raw) {
         dimensions = {
           rows: Number(raw?.rows),
           cols: Number(raw?.cols),
           cellSize: Number(raw?.cellSize ?? fallback.cellSize),
         };
-      } catch (error) {
-        warnOnce("Failed to read grid dimensions from actions.", error);
       }
     }
 
@@ -1381,14 +1419,21 @@ export default class UIManager {
     const request = { ...normalized, ...options };
     let result = null;
 
-    try {
-      result = this.setWorldGeometry(request);
-    } catch (error) {
-      warnOnce("Failed to update world geometry.", error);
-      result = request;
-    }
+    let hadError = false;
 
-    const applied = this.#normalizeGeometryValues(result, normalized);
+    result = invokeWithErrorBoundary(() => this.setWorldGeometry(request), [], {
+      message: WARNINGS.updateWorldGeometry,
+      reporter: warnOnce,
+      once: true,
+      onError: () => {
+        hadError = true;
+      },
+    });
+
+    const applied = this.#normalizeGeometryValues(
+      hadError ? request : result,
+      normalized,
+    );
 
     this.#updateGeometryInputs(applied);
     this.#scheduleUpdate();
@@ -3030,11 +3075,11 @@ export default class UIManager {
       toggle.textContent = shouldCollapse ? "+" : "–";
       toggle.setAttribute("aria-expanded", shouldCollapse ? "false" : "true");
       if (!silent && typeof onToggle === "function") {
-        try {
-          onToggle(!shouldCollapse, panel);
-        } catch (error) {
-          warnOnce(`Panel toggle handler for "${title}" threw.`, error);
-        }
+        invokeWithErrorBoundary(onToggle, [!shouldCollapse, panel], {
+          message: () => WARNINGS.panelToggle(title),
+          reporter: warnOnce,
+          once: true,
+        });
       }
     };
 
@@ -3207,11 +3252,26 @@ export default class UIManager {
         if (!busyActivated) return;
 
         try {
-          if (typeof this.simulationCallbacks?.resetWorld === "function") {
-            this.simulationCallbacks.resetWorld(options);
-          } else if (window.simulationEngine?.resetWorld) {
-            window.simulationEngine.resetWorld(options);
-          }
+          const executeReset = () => {
+            if (typeof this.simulationCallbacks?.resetWorld === "function") {
+              return this.simulationCallbacks.resetWorld(options);
+            }
+
+            if (
+              typeof window !== "undefined" &&
+              typeof window.simulationEngine?.resetWorld === "function"
+            ) {
+              return window.simulationEngine.resetWorld(options);
+            }
+
+            return undefined;
+          };
+
+          invokeWithErrorBoundary(executeReset, [], {
+            message: WARNINGS.resetWorld,
+            reporter: warnOnce,
+            once: true,
+          });
         } finally {
           this.#updateZoneSummary();
           this.#scheduleUpdate();
