@@ -82,10 +82,17 @@ export function createHeadlessCanvas(config = {}) {
     save() {},
     restore() {},
     beginPath() {},
+    closePath() {},
+    moveTo() {},
+    lineTo() {},
+    arc() {},
     stroke() {},
+    fill() {},
+    translate() {},
     setTransform() {},
     resetTransform() {},
     scale() {},
+    drawImage() {},
     createLinearGradient() {
       return {
         addColorStop() {},

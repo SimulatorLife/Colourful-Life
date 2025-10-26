@@ -6,6 +6,7 @@ import {
   resolveHeadlessCanvasSize,
   resolveTimingProviders,
 } from "../src/engine/environment.js";
+import { drawAuroraVeil, drawLifeEventMarkers } from "../src/ui/overlays.js";
 
 test("resolveCanvas returns explicit canvas when supplied", () => {
   const explicitCanvas = { id: "preferred" };
@@ -222,16 +223,22 @@ test("createHeadlessCanvas returns stub context", () => {
   assert.equal(
     Object.keys(context).sort(),
     [
+      "arc",
       "beginPath",
       "canvas",
       "clearRect",
+      "closePath",
       "createLinearGradient",
+      "drawImage",
+      "fill",
       "fillRect",
       "fillStyle",
       "fillText",
       "font",
       "imageSmoothingEnabled",
+      "lineTo",
       "lineWidth",
+      "moveTo",
       "resetTransform",
       "restore",
       "save",
@@ -243,8 +250,37 @@ test("createHeadlessCanvas returns stub context", () => {
       "strokeText",
       "textAlign",
       "textBaseline",
+      "translate",
     ].sort(),
   );
   assert.is(canvas.width, 300);
   assert.is(canvas.height, 150);
+});
+
+test("createHeadlessCanvas stub tolerates overlay rendering helpers", () => {
+  const canvas = createHeadlessCanvas({ width: 200, height: 120 });
+  const ctx = canvas.getContext("2d");
+
+  assert.not.throws(() => {
+    drawAuroraVeil(ctx, 6, 10, 10, { tick: 12 });
+  });
+
+  assert.not.throws(() => {
+    drawLifeEventMarkers(
+      ctx,
+      6,
+      [
+        {
+          type: "death",
+          row: 2,
+          col: 3,
+          tick: 4,
+        },
+      ],
+      {
+        currentTick: 6,
+        fadeTicks: 12,
+      },
+    );
+  });
 });
