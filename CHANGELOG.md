@@ -122,9 +122,10 @@ where practical.
 - Removed the unused `scripts/benchmarks/stats-trait-aggregate.bench.mjs`
   benchmark harness so historical trait aggregation experiments don't linger in
   the tree now that automated coverage protects the optimised implementation.
-- Removed the unused `scripts/profile-findTargets-scan.mjs` benchmark so the
-  profiling suite sticks to the maintained `profile-find-targets.mjs` harness
-  without duplicate scan logic lingering in the repository.
+- Removed the unused `scripts/profile-findTargets-scan.mjs` benchmark and
+  retired the legacy `scripts/profile-find-targets.mjs` harness so the
+  profiling suite sticks to the maintained energy benchmark without duplicate
+  scan logic lingering in the repository.
 - Retired the unused `scripts/profile-active-snapshot.mjs` benchmarking helper
   to shrink the maintenance surface for profiling utilities.
 - Trimmed the stale `scripts/profile-traits.js` benchmark harness now that
