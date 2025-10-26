@@ -347,6 +347,7 @@ export default class GridManager {
   #targetDescriptorUsageAverage = 0;
   #targetUsageAccumulator = 0;
   #rowOccupancy = [];
+  #columnOccupancy = [];
   #tickSimilarityCache = new WeakMap();
   #tickSimilarityVersion = -1;
   #populationCellsScratch = null;
@@ -1742,7 +1743,7 @@ export default class GridManager {
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
-    this.#initializeOccupancy(this.rows);
+    this.#initializeOccupancy(this.rows, this.cols);
     this.maxTileEnergy =
       typeof maxTileEnergy === "number" ? maxTileEnergy : GridManager.maxTileEnergy;
     // Consumers can tune how energetic the world starts without touching the
@@ -1970,15 +1971,23 @@ export default class GridManager {
     };
   }
 
-  #initializeOccupancy(rowCount) {
+  #initializeOccupancy(rowCount, colCount = this.cols) {
     const rows = normalizeDimension(rowCount);
+    const cols = normalizeDimension(colCount);
 
     this.#rowOccupancy = Array.from({ length: rows }, () => new Set());
+    this.#columnOccupancy = Array.from({ length: cols }, () => new Set());
   }
 
   #resetOccupancyTracking() {
-    if (!Array.isArray(this.#rowOccupancy) || this.#rowOccupancy.length !== this.rows) {
-      this.#initializeOccupancy(this.rows);
+    const needsRowReset =
+      !Array.isArray(this.#rowOccupancy) || this.#rowOccupancy.length !== this.rows;
+    const needsColReset =
+      !Array.isArray(this.#columnOccupancy) ||
+      this.#columnOccupancy.length !== this.cols;
+
+    if (needsRowReset || needsColReset) {
+      this.#initializeOccupancy(this.rows, this.cols);
 
       return;
     }
@@ -1988,14 +1997,26 @@ export default class GridManager {
 
       if (bucket) bucket.clear();
     }
+
+    for (let i = 0; i < this.#columnOccupancy.length; i++) {
+      const bucket = this.#columnOccupancy[i];
+
+      if (bucket) bucket.clear();
+    }
   }
 
   #recordOccupancy(row, col) {
     if (!Number.isInteger(row) || !Number.isInteger(col)) return;
     if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return;
 
-    if (!Array.isArray(this.#rowOccupancy) || this.#rowOccupancy.length !== this.rows) {
-      this.#initializeOccupancy(this.rows);
+    const needsRowReset =
+      !Array.isArray(this.#rowOccupancy) || this.#rowOccupancy.length !== this.rows;
+    const needsColReset =
+      !Array.isArray(this.#columnOccupancy) ||
+      this.#columnOccupancy.length !== this.cols;
+
+    if (needsRowReset || needsColReset) {
+      this.#initializeOccupancy(this.rows, this.cols);
     }
 
     let bucket = this.#rowOccupancy[row];
@@ -2006,12 +2027,22 @@ export default class GridManager {
     }
 
     bucket.add(col);
+
+    let columnBucket = this.#columnOccupancy[col];
+
+    if (!columnBucket) {
+      columnBucket = new Set();
+      this.#columnOccupancy[col] = columnBucket;
+    }
+
+    columnBucket.add(row);
   }
 
   #releaseOccupancy(row, col) {
     if (!Number.isInteger(row) || !Number.isInteger(col)) return;
 
     this.#rowOccupancy?.[row]?.delete?.(col);
+    this.#columnOccupancy?.[col]?.delete?.(row);
   }
 
   #shiftOccupancy(fromRow, fromCol, toRow, toCol) {
@@ -3043,7 +3074,7 @@ export default class GridManager {
     this.cols = colsInt;
     this.cellSize = cellSizeValue;
     this.grid = Array.from({ length: rowsInt }, () => Array(colsInt).fill(null));
-    this.#initializeOccupancy(this.rows);
+    this.#initializeOccupancy(this.rows, this.cols);
     this.energyGrid = Array.from({ length: rowsInt }, () => {
       const row = new Float64Array(colsInt);
 
@@ -7529,6 +7560,7 @@ export default class GridManager {
     const defaultHostilityRng = Math.random;
     const shouldSampleEnemyBias = enemyBias > 0;
     const occupancyRows = this.#rowOccupancy;
+    const occupancyColumns = this.#columnOccupancy;
 
     if (sight <= 0) {
       return this.#targetGroupsView;
@@ -7636,6 +7668,44 @@ export default class GridManager {
       }
     };
 
+    const iterateColumnRows = (targetCol, startRow, endRow) => {
+      if (startRow > endRow) return;
+
+      const columnBucket = occupancyColumns?.[targetCol];
+
+      if (!columnBucket || columnBucket.size === 0) {
+        return;
+      }
+
+      const rangeLength = endRow - startRow + 1;
+
+      if (
+        columnBucket instanceof Set &&
+        typeof columnBucket.values === "function" &&
+        columnBucket.size < rangeLength
+      ) {
+        for (const value of columnBucket.values()) {
+          if (value < startRow || value > endRow) continue;
+
+          const bucket = occupancyRows?.[value];
+
+          if (!bucket || !bucket.has(targetCol)) continue;
+
+          processCandidate(value, targetCol, bucket);
+        }
+
+        return;
+      }
+
+      for (let newRow = startRow; newRow <= endRow; newRow++) {
+        const bucket = occupancyRows?.[newRow];
+
+        if (!bucket || !bucket.has(targetCol)) continue;
+
+        processCandidate(newRow, targetCol, bucket);
+      }
+    };
+
     for (let dist = 1; dist <= sight; dist++) {
       const topRow = row - dist;
 
@@ -7669,13 +7739,7 @@ export default class GridManager {
         const startRow = Math.max(minRow, row - dist + 1);
         const endRow = Math.min(maxRow, row + dist - 1);
 
-        for (let newRow = startRow; newRow <= endRow; newRow++) {
-          const bucket = occupancyRows?.[newRow];
-
-          if (!bucket || !bucket.has(leftCol)) continue;
-
-          processCandidate(newRow, leftCol, bucket);
-        }
+        iterateColumnRows(leftCol, startRow, endRow);
       }
 
       const rightCol = col + dist;
@@ -7684,13 +7748,7 @@ export default class GridManager {
         const startRow = Math.max(minRow, row - dist + 1);
         const endRow = Math.min(maxRow, row + dist - 1);
 
-        for (let newRow = startRow; newRow <= endRow; newRow++) {
-          const bucket = occupancyRows?.[newRow];
-
-          if (!bucket || !bucket.has(rightCol)) continue;
-
-          processCandidate(newRow, rightCol, bucket);
-        }
+        iterateColumnRows(rightCol, startRow, endRow);
       }
     }
 
