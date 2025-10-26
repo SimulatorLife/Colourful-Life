@@ -328,6 +328,7 @@ export default class Stats {
   #diversityDnaScratch;
   #dnaSimilarityCache;
   #diversitySeedScratch;
+  #diversitySeedCache;
   #activeDiversitySeeds;
   #diversityGroupScratch;
   #diversityGroupMap;
@@ -406,6 +407,7 @@ export default class Stats {
     this.#diversityDnaScratch = [];
     this.#dnaSimilarityCache = new WeakMap();
     this.#diversitySeedScratch = new Map();
+    this.#diversitySeedCache = new WeakMap();
     this.#activeDiversitySeeds = null;
     this.#diversityGroupScratch = [];
     this.#diversityGroupMap = new Map();
@@ -493,6 +495,9 @@ export default class Stats {
     }
     if (this.performance?.energy) {
       this.performance.energy.lastTiming = null;
+    }
+    if (this.#diversitySeedCache) {
+      this.#diversitySeedCache = new WeakMap();
     }
     this.#tickInProgress = false;
     this.#lifeEventTickBase = this.totals.ticks;
@@ -935,6 +940,13 @@ export default class Stats {
       groupMap.clear();
     }
 
+    let seedCache = this.#diversitySeedCache;
+
+    if (!seedCache) {
+      seedCache = new WeakMap();
+      this.#diversitySeedCache = seedCache;
+    }
+
     for (let i = 0; i < dnaList.length; i += 1) {
       const dna = dnaList[i];
       let seed = seedScratch?.get(dna);
@@ -946,9 +958,13 @@ export default class Stats {
           if (seedScratch) {
             seedScratch.set(dna, seed);
           }
+
+          seedCache.set(dna, seed);
         }
       } else if (seed === UNRESOLVED_SEED) {
         seed = null;
+
+        seedCache.set(dna, seed);
       }
 
       const key = seed != null ? `seed:${seed}` : this.#obtainDiversityIdentityKey(dna);
@@ -982,6 +998,13 @@ export default class Stats {
     }
 
     const activeSeeds = this.#activeDiversitySeeds;
+    let seedCache = this.#diversitySeedCache;
+
+    if (!seedCache) {
+      seedCache = new WeakMap();
+      this.#diversitySeedCache = seedCache;
+    }
+
     let seedA;
 
     if (activeSeeds && activeSeeds.has(dnaA)) {
@@ -990,6 +1013,13 @@ export default class Stats {
       if (seedA === UNRESOLVED_SEED) {
         seedA = this.#resolveDnaSeed(dnaA);
         activeSeeds.set(dnaA, seedA);
+        seedCache.set(dnaA, seedA);
+      }
+    } else if (seedCache.has(dnaA)) {
+      seedA = seedCache.get(dnaA);
+
+      if (activeSeeds) {
+        activeSeeds.set(dnaA, seedA);
       }
     } else {
       seedA = this.#resolveDnaSeed(dnaA);
@@ -997,6 +1027,8 @@ export default class Stats {
       if (activeSeeds) {
         activeSeeds.set(dnaA, seedA);
       }
+
+      seedCache.set(dnaA, seedA);
     }
 
     let seedB;
@@ -1007,6 +1039,13 @@ export default class Stats {
       if (seedB === UNRESOLVED_SEED) {
         seedB = this.#resolveDnaSeed(dnaB);
         activeSeeds.set(dnaB, seedB);
+        seedCache.set(dnaB, seedB);
+      }
+    } else if (seedCache.has(dnaB)) {
+      seedB = seedCache.get(dnaB);
+
+      if (activeSeeds) {
+        activeSeeds.set(dnaB, seedB);
       }
     } else {
       seedB = this.#resolveDnaSeed(dnaB);
@@ -1014,6 +1053,8 @@ export default class Stats {
       if (activeSeeds) {
         activeSeeds.set(dnaB, seedB);
       }
+
+      seedCache.set(dnaB, seedB);
     }
 
     const cacheA = this.#obtainDnaCacheRecord(dnaA, seedA);
@@ -1393,6 +1434,13 @@ export default class Stats {
       seedScratch.clear();
     }
 
+    let seedCache = this.#diversitySeedCache;
+
+    if (!seedCache) {
+      seedCache = new WeakMap();
+      this.#diversitySeedCache = seedCache;
+    }
+
     this.#activeDiversitySeeds = seedScratch;
 
     const sourceCount = cellSources.length;
@@ -1409,7 +1457,9 @@ export default class Stats {
       if (dna && typeof dna.similarity === "function") {
         validDna.push(dna);
 
-        if (!seedScratch.has(dna)) {
+        if (seedCache?.has?.(dna)) {
+          seedScratch.set(dna, seedCache.get(dna));
+        } else if (!seedScratch.has(dna)) {
           seedScratch.set(dna, UNRESOLVED_SEED);
         }
       }
