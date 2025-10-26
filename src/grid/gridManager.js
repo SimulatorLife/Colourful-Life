@@ -101,6 +101,9 @@ function computeCrowdingFeedback({
     return out;
   }
 
+  const useScarcity = norm > 0;
+  const defaultTolerance = 0.5;
+
   for (let i = 0, len = offsets.length; i < len; i++) {
     const offset = offsets[i];
 
@@ -120,28 +123,47 @@ function computeCrowdingFeedback({
     if (!occupant) continue;
 
     let tolerance;
-    const getPreference = occupant.getCrowdingPreference;
+    const adaptedCandidate = occupant._crowdingTolerance;
 
-    if (typeof getPreference === "function") {
-      tolerance = getPreference.call(occupant, { fallback: 0.5 });
-    } else {
-      const baselineCandidate = occupant.baseCrowdingTolerance;
-      const baseline = Number.isFinite(baselineCandidate) ? baselineCandidate : 0.5;
-      const adaptedCandidate = occupant._crowdingTolerance;
-      const adapted = Number.isFinite(adaptedCandidate) ? adaptedCandidate : baseline;
-
-      if (adapted <= 0) {
+    if (Number.isFinite(adaptedCandidate)) {
+      if (adaptedCandidate <= 0) {
         tolerance = 0;
-      } else if (adapted >= 1) {
+      } else if (adaptedCandidate >= 1) {
         tolerance = 1;
       } else {
-        tolerance = adapted;
+        tolerance = adaptedCandidate;
+      }
+    } else {
+      const baselineCandidate = occupant.baseCrowdingTolerance;
+      const baseline = Number.isFinite(baselineCandidate)
+        ? baselineCandidate
+        : defaultTolerance;
+      const getPreference = occupant.getCrowdingPreference;
+
+      if (typeof getPreference === "function") {
+        const resolved = getPreference.call(occupant, { fallback: baseline });
+
+        if (resolved <= 0) {
+          tolerance = 0;
+        } else if (resolved >= 1) {
+          tolerance = 1;
+        } else if (Number.isFinite(resolved)) {
+          tolerance = resolved;
+        } else {
+          tolerance = baseline <= 0 ? 0 : baseline >= 1 ? 1 : baseline;
+        }
+      } else if (baseline <= 0) {
+        tolerance = 0;
+      } else if (baseline >= 1) {
+        tolerance = 1;
+      } else {
+        tolerance = baseline;
       }
     }
 
     toleranceSum += tolerance;
 
-    if (norm > 0) {
+    if (useScarcity) {
       const energyCandidate = occupant.energy;
       const energy = Number.isFinite(energyCandidate) ? energyCandidate : 0;
       let normalizedEnergy = energy * norm;
