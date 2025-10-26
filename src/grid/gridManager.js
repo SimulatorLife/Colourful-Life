@@ -3441,7 +3441,22 @@ export default class GridManager {
     const maxCapRaw =
       typeof cell.dna.harvestCapMax === "function" ? cell.dna.harvestCapMax() : 0.5;
     const maxCap = Math.max(minCap, clamp(maxCapRaw, minCap, 1));
-    const cap = clamp(base * crowdPenalty, minCap, maxCap);
+    const demand =
+      typeof cell.resolveHarvestDemand === "function"
+        ? cell.resolveHarvestDemand({
+            baseRate: base,
+            crowdPenalty,
+            availableEnergy: available,
+            maxTileEnergy: this.maxTileEnergy,
+            minCap,
+            maxCap,
+            localDensity: density,
+            densityEffectMultiplier,
+            tileEnergy: normalizedTileEnergy,
+            tileEnergyDelta,
+          })
+        : base * crowdPenalty;
+    const cap = clamp(demand, minCap, maxCap);
     const take = Math.min(cap, available);
 
     this.energyGrid[row][col] -= take;
