@@ -2,11 +2,10 @@ import {
   randomRange,
   clamp,
   lerp,
-  createRankedBuffer,
   sanitizeNumber,
   sanitizePositiveInteger,
-  isArrayLike,
-} from "../utils.js";
+} from "../utils/math.js";
+import { createRankedBuffer, isArrayLike } from "../utils/collections.js";
 import { warnOnce } from "../utils/error.js";
 import DNA from "../genome.js";
 import Cell from "../cell.js";

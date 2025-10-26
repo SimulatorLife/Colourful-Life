@@ -1,7 +1,7 @@
 import { performance as nodePerformance } from "node:perf_hooks";
 
 const [{ createRNG }, { default: Brain }] = await Promise.all([
-  import("../src/utils.js"),
+  import("../src/utils/math.js"),
   import("../src/brain.js"),
 ]);
 

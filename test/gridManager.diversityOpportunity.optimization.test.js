@@ -2,7 +2,7 @@ import { performance } from "node:perf_hooks";
 import { test, assert } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 import { summarizeMateDiversityOpportunity } from "../src/grid/diversityOpportunity.js";
-import { clamp } from "../src/utils.js";
+import { clamp } from "../src/utils/math.js";
 
 function legacySummarize({
   candidates = [],

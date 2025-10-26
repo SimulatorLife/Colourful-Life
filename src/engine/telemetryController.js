@@ -1,5 +1,5 @@
 import { LEADERBOARD_SIZE_DEFAULT } from "../config.js";
-import { sanitizeNumber } from "../utils.js";
+import { sanitizeNumber } from "../utils/math.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 const NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
 

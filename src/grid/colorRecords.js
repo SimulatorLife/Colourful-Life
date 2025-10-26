@@ -1,4 +1,4 @@
-import { clamp } from "../utils.js";
+import { clamp } from "../utils/math.js";
 import { warnOnce } from "../utils/error.js";
 
 const COLOR_CACHE_LIMIT = 4096;

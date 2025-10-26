@@ -1,4 +1,4 @@
-import { clamp } from "./utils.js";
+import { clamp } from "./utils/math.js";
 
 const EMPTY_APPLIED_EVENTS = Object.freeze([]);
 // Used when no events apply so downstream calculations always receive a

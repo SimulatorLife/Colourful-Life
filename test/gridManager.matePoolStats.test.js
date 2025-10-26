@@ -1,6 +1,6 @@
 import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
-import { clamp } from "../src/utils.js";
+import { clamp } from "../src/utils/math.js";
 
 class TestGridManagerFactory {
   static async create({ rows = 20, cols = 30, stats } = {}) {

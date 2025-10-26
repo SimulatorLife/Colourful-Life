@@ -1,5 +1,5 @@
 import { assert, test } from "#tests/harness";
-import { clamp } from "../src/utils.js";
+import { clamp } from "../src/utils/math.js";
 
 const baseOptions = {
   eventManager: { activeEvents: [] },

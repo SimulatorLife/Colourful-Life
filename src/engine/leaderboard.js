@@ -1,4 +1,5 @@
-import { createRankedBuffer, sanitizeNumber } from "../utils.js";
+import { createRankedBuffer } from "../utils/collections.js";
+import { sanitizeNumber } from "../utils/math.js";
 
 function sanitizeCoordinate(value) {
   return sanitizeNumber(value, { fallback: null });

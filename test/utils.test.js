@@ -4,16 +4,15 @@ import {
   lerp,
   clamp,
   clamp01,
-  coerceBoolean,
   sanitizeNumber,
   sanitizePositiveInteger,
   pickFirstFinitePositive,
-  cloneTracePayload,
-  createRankedBuffer,
   createRNG,
   toFiniteOrNull,
-  toPlainObject,
-} from "../src/utils.js";
+} from "../src/utils/math.js";
+import { coerceBoolean } from "../src/utils/primitives.js";
+import { cloneTracePayload, toPlainObject } from "../src/utils/object.js";
+import { createRankedBuffer } from "../src/utils/collections.js";
 import { invokeWithErrorBoundary, warnOnce } from "../src/utils/error.js";
 
 function* cycle(values) {
@@ -147,7 +146,7 @@ test("cloneTracePayload performs deep copies of sensors and nodes", () => {
 
 test("cloneTracePayload clones traces when structuredClone is unavailable", async () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "structuredClone");
-  const moduleUrl = new URL("../src/utils.js", import.meta.url);
+  const moduleUrl = new URL("../src/utils/object.js", import.meta.url);
 
   moduleUrl.searchParams.set("noStructuredCloneClone", Date.now().toString());
 
@@ -193,7 +192,7 @@ test("cloneTracePayload clones traces when structuredClone is unavailable", asyn
 
 test("cloneTracePayload surfaces a clear error when encountering unsupported structures", async () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "structuredClone");
-  const moduleUrl = new URL("../src/utils.js", import.meta.url);
+  const moduleUrl = new URL("../src/utils/object.js", import.meta.url);
 
   moduleUrl.searchParams.set("noStructuredCloneError", Date.now().toString());
 

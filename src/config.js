@@ -1,9 +1,5 @@
-import {
-  clamp,
-  sanitizeNumber,
-  sanitizePositiveInteger,
-  coerceBoolean,
-} from "./utils.js";
+import { clamp, sanitizeNumber, sanitizePositiveInteger } from "./utils/math.js";
+import { coerceBoolean } from "./utils/primitives.js";
 
 // Centralized simulation config defaults
 const DEFAULT_MAX_TILE_ENERGY = 2;

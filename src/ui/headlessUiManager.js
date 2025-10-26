@@ -1,5 +1,6 @@
 import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
-import { sanitizeNumber, coerceBoolean } from "../utils.js";
+import { sanitizeNumber } from "../utils/math.js";
+import { coerceBoolean } from "../utils/primitives.js";
 import { invokeWithErrorBoundary } from "../utils/error.js";
 
 /**

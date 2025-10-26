@@ -11,11 +11,11 @@ import {
 import {
   clamp,
   clamp01,
-  coerceBoolean,
   pickFirstFinitePositive,
   sanitizeNumber,
-  toPlainObject,
-} from "../utils.js";
+} from "../utils/math.js";
+import { coerceBoolean } from "../utils/primitives.js";
+import { toPlainObject } from "../utils/object.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
 const AUTO_PAUSE_DESCRIPTION =

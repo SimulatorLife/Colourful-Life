@@ -1,4 +1,4 @@
-import { clamp, clamp01 } from "./utils.js";
+import { clamp, clamp01 } from "./utils/math.js";
 import GridInteractionAdapter from "./grid/gridAdapter.js";
 import {
   COMBAT_EDGE_SHARPNESS_DEFAULT,

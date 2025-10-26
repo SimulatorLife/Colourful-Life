@@ -2,7 +2,7 @@ import { performance as nodePerformance } from "node:perf_hooks";
 
 const [{ createRNG }, { default: DNA }, { default: SimulationEngine }] =
   await Promise.all([
-    import("../src/utils.js"),
+    import("../src/utils/math.js"),
     import("../src/genome.js"),
     import("../src/simulationEngine.js"),
   ]);

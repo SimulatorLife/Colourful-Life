@@ -1,5 +1,5 @@
 import { MAX_TILE_ENERGY } from "../config.js";
-import { pickFirstFinitePositive } from "../utils.js";
+import { pickFirstFinitePositive } from "../utils/math.js";
 import { clearTileEnergyBuffers } from "./energyUtils.js";
 
 /**

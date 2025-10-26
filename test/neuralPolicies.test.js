@@ -47,7 +47,7 @@ function setNeuralGene(
 test.before(async () => {
   ({ default: Cell } = await import("../src/cell.js"));
   ({ DNA, GENE_LOCI } = await import("../src/genome.js"));
-  ({ clamp, lerp } = await import("../src/utils.js"));
+  ({ clamp, lerp } = await import("../src/utils/math.js"));
   ({
     default: Brain,
     OUTPUT_GROUPS,

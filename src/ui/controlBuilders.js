@@ -1,4 +1,4 @@
-import { toPlainObject } from "../utils.js";
+import { toPlainObject } from "../utils/object.js";
 
 let controlRowSequence = 0;
 

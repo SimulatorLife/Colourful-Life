@@ -4,7 +4,7 @@ import {
   randomRange,
   sanitizeNumber,
   sanitizePositiveInteger,
-} from "../utils.js";
+} from "../utils/math.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 import { defaultIsEventAffecting } from "./eventContext.js";
 

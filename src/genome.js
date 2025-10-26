@@ -1,4 +1,4 @@
-import { clamp, createRNG, randomRange } from "./utils.js";
+import { clamp, createRNG, randomRange } from "./utils/math.js";
 import Brain, { NEURAL_GENE_BYTES } from "./brain.js";
 import {
   ACTIVITY_BASE_RATE,
