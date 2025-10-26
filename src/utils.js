@@ -44,6 +44,26 @@ export function clamp(value, min, max) {
 }
 
 /**
+ * Clamps a candidate to the `[min, max]` interval after verifying it is finite.
+ * When the candidate is non-finite (including `NaN`, `Infinity`, strings, etc.)
+ * the provided fallback is used instead.
+ *
+ * @param {any} value - Candidate value supplied by callers.
+ * @param {number} min - Lower bound applied to the sanitized result.
+ * @param {number} max - Upper bound applied to the sanitized result.
+ * @param {number} [fallback=min] - Replacement used when `value` is non-finite.
+ * @returns {number} Clamped, finite number.
+ */
+export function clampFinite(value, min, max, fallback = min) {
+  const numeric = Number(value);
+  const fallbackNumeric = Number(fallback);
+  const safeFallback = Number.isFinite(fallbackNumeric) ? fallbackNumeric : min;
+  const candidate = Number.isFinite(numeric) ? numeric : safeFallback;
+
+  return clamp(candidate, min, max);
+}
+
+/**
  * Clamps values to the [0, 1] range, treating non-finite inputs as 0.
  *
  * @param {number} value - Candidate value.

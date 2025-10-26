@@ -1,6 +1,6 @@
 import DNA, { GENE_LOCI } from "./genome.js";
 import Brain, { OUTPUT_GROUPS } from "./brain.js";
-import { randomRange, clamp, lerp, cloneTracePayload } from "./utils.js";
+import { randomRange, clamp, clampFinite, lerp, cloneTracePayload } from "./utils.js";
 import { warnOnce } from "./utils/error.js";
 import { accumulateEventModifiers } from "./energySystem.js";
 import { createEventContext, defaultEventContext } from "./events/eventContext.js";
@@ -408,9 +408,7 @@ export default class Cell {
         0,
         Math.min(parent.energy, parent.energy * investFrac),
       );
-      const targetEnergy =
-        resolvedMaxTileEnergy *
-        clamp(Number.isFinite(demandFrac) ? demandFrac : 0.22, 0, 1);
+      const targetEnergy = resolvedMaxTileEnergy * clampFinite(demandFrac, 0, 1, 0.22);
       const desired = Math.max(desiredBase, targetEnergy, requiredShare);
       const maxSpend = Math.max(0, parent.energy - starvation);
 
@@ -965,7 +963,7 @@ export default class Cell {
     strategyPenaltyMultiplier = 1,
     diversityOpportunity = 0,
   } = {}) {
-    const observed = clamp(Number.isFinite(diversity) ? diversity : 0, 0, 1);
+    const observed = clampFinite(diversity, 0, 1);
     const previousMean = this.#resolveMateDiversityMemory();
     const smoothing = success ? 0.6 : 0.75;
     const nextMean = previousMean * smoothing + observed * (1 - smoothing);
@@ -1069,7 +1067,7 @@ export default class Cell {
       1,
     );
 
-    const diversityClamped = clamp(Number.isFinite(diversity) ? diversity : 0, 0, 1);
+    const diversityClamped = clampFinite(diversity, 0, 1);
     const similarity = clamp(1 - diversityClamped, 0, 1);
     const complementarity = clamp(
       Number.isFinite(behaviorComplementarity) ? behaviorComplementarity : 0,
@@ -4102,7 +4100,7 @@ export default class Cell {
     const overshootDrag =
       1 + Math.max(0, ageFracRaw - 1) * (0.35 + Math.max(0, senescence) * 0.5);
     const combined = linear * curvature * debtPressure * overshootDrag;
-    const loadFactor = clamp(Number.isFinite(load) ? load : 1, 0, 3);
+    const loadFactor = clampFinite(load, 0, 3, 1);
 
     return 1 + (combined - 1) * loadFactor;
   }
@@ -4509,7 +4507,7 @@ export default class Cell {
     const tileScarcity = clamp(1 - tileAbundance, 0, 1);
     const declinePressure = clamp(-(tileEnergyDelta ?? 0), 0, 1);
     const resourceSignal = clamp(this._resourceSignal ?? 0, -1, 1);
-    const expectation = clamp(Number.isFinite(baseRate) ? baseRate : 0, 0, 1.5);
+    const expectation = clampFinite(baseRate, 0, 1.5);
     const availableNorm =
       maxTileEnergy > 0
         ? clamp(
@@ -4869,7 +4867,7 @@ export default class Cell {
       neuralDetails = { ...neural, weight };
     }
 
-    probability = clamp(Number.isFinite(probability) ? probability : 0, 0, 1);
+    probability = clampFinite(probability, 0, 1);
 
     const rng = this.resolveRng("legacyCautiousRetreat");
     const roll = typeof rng === "function" ? rng() : Math.random();

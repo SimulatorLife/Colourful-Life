@@ -5,6 +5,7 @@ let Cell;
 let DNA;
 let GENE_LOCI;
 let clamp;
+let clampFinite;
 let lerp;
 let randomRange;
 let createRNG;
@@ -24,8 +25,7 @@ function investmentFor(
   const safeMax = Number.isFinite(maxTileEnergy)
     ? maxTileEnergy
     : (window.GridManager?.maxTileEnergy ?? 12);
-  const targetEnergy =
-    safeMax * clamp(Number.isFinite(demandFrac) ? demandFrac : 0.22, 0, 1);
+  const targetEnergy = safeMax * clampFinite(demandFrac, 0, 1, 0.22);
   const desiredBase = Math.max(0, Math.min(energy, energy * investFrac));
   const desired = Math.max(desiredBase, targetEnergy, requiredShare);
   const maxSpend = Math.max(0, energy - starvation);
@@ -66,7 +66,9 @@ function withMockedRandom(sequence, fn) {
 test.before(async () => {
   ({ default: Cell } = await import("../src/cell.js"));
   ({ DNA, GENE_LOCI } = await import("../src/genome.js"));
-  ({ clamp, lerp, randomRange, createRNG } = await import("../src/utils.js"));
+  ({ clamp, clampFinite, lerp, randomRange, createRNG } = await import(
+    "../src/utils.js"
+  ));
   ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
   ({ default: Brain, OUTPUT_GROUPS } = await import("../src/brain.js"));
   ({ OFFSPRING_VIABILITY_BUFFER } = await import("../src/config.js"));
