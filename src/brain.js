@@ -90,7 +90,10 @@ const mix = (a, b, t) => a + (b - a) * clamp(Number.isFinite(t) ? t : 0, 0, 1);
 const clampSensorValue = (value) => {
   if (!Number.isFinite(value)) return 0;
 
-  return clamp(value, -1, 1);
+  if (value > 1) return 1;
+  if (value < -1) return -1;
+
+  return value;
 };
 
 /**
