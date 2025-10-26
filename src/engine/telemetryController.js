@@ -1,7 +1,6 @@
+import { LEADERBOARD_SIZE_DEFAULT } from "../config.js";
 import { sanitizeNumber } from "../utils.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
-
-const DEFAULT_LEADERBOARD_SIZE = 5;
 const NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
 
 const WARNINGS = Object.freeze({
@@ -14,7 +13,7 @@ const WARNINGS = Object.freeze({
     "Telemetry leaderboard emitter failed; skipping leaderboard publication.",
 });
 
-function normalizeLeaderboardSize(value, fallback = DEFAULT_LEADERBOARD_SIZE) {
+function normalizeLeaderboardSize(value, fallback = LEADERBOARD_SIZE_DEFAULT) {
   const sanitized = sanitizeNumber(value, {
     fallback,
     min: 0,
@@ -48,7 +47,7 @@ export default class TelemetryController {
   constructor({
     stats = null,
     computeLeaderboard,
-    leaderboardSize = DEFAULT_LEADERBOARD_SIZE,
+    leaderboardSize = LEADERBOARD_SIZE_DEFAULT,
     now,
   } = {}) {
     this.stats = stats;

@@ -52,6 +52,7 @@ const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.12;
 const DEFAULT_LEADERBOARD_SIZE = 5;
 const DEFAULT_BRAIN_SNAPSHOT_LIMIT = 5;
 
+export const LEADERBOARD_SIZE_DEFAULT = DEFAULT_LEADERBOARD_SIZE;
 export const LEADERBOARD_INTERVAL_MIN_MS = 100;
 const RUNTIME_ENV =
   typeof process !== "undefined" && typeof process.env === "object"
@@ -414,7 +415,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showLifeEventMarkers: false,
   showAuroraVeil: false,
   leaderboardIntervalMs: 750,
-  leaderboardSize: DEFAULT_LEADERBOARD_SIZE,
+  leaderboardSize: LEADERBOARD_SIZE_DEFAULT,
   brainSnapshotLimit: DEFAULT_BRAIN_SNAPSHOT_LIMIT,
   // Lowered from 0.45 after a 300-tick headless sample (60x60 grid, RNG seed
   // 12345) nudged mean diversity from ~0.27 to ~0.30 and bumped successful
