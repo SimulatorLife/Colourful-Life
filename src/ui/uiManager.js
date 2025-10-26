@@ -302,6 +302,9 @@ export default class UIManager {
     this.traitSparkDescriptors = [];
     this._traitSparkKeys = null;
     this.traitSparkGrid = null;
+    this._traitOverlaySelectOptions = [];
+    this._traitOverlaySelectKeys = null;
+    this.traitOverlaySelect = null;
     this.playbackSpeedSlider = null;
     this.speedPresetButtons = [];
     this.dashboardSettingsPanel = null;
@@ -369,6 +372,12 @@ export default class UIManager {
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
+    this.showTraitOverlay = defaults.showTraitOverlay;
+    this.traitOverlayKey =
+      typeof defaults.traitOverlayKey === "string" &&
+      defaults.traitOverlayKey.length > 0
+        ? defaults.traitOverlayKey
+        : null;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.autoPausePending = false;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
@@ -3584,6 +3593,13 @@ export default class UIManager {
         initial: this.showFitness,
       },
       {
+        key: "showTraitOverlay",
+        label: "Show Trait Focus",
+        title:
+          "Tint organisms by the selected trait to compare gene expression directly on the grid",
+        initial: this.showTraitOverlay,
+      },
+      {
         key: "showLifeEventMarkers",
         label: "Life Event Markers",
         title:
@@ -3598,6 +3614,105 @@ export default class UIManager {
         this.#scheduleUpdate();
       });
     });
+
+    const traitSelect = createSelectRow(overlayGrid, {
+      label: "Trait Focus",
+      title: "Choose which trait the overlay should highlight.",
+      value: this.traitOverlayKey ?? "",
+      options: [{ value: "", label: "Loading traits…" }],
+      onChange: (value) => {
+        const normalized = typeof value === "string" && value.length > 0 ? value : null;
+
+        this.setTraitOverlayKey(normalized);
+      },
+    });
+
+    traitSelect.classList.add("control-select");
+    traitSelect.disabled = true;
+    this.traitOverlaySelect = traitSelect;
+    this.#refreshTraitOverlaySelect();
+
+    const traitHint = document.createElement("p");
+
+    traitHint.className = "control-hint";
+    traitHint.textContent =
+      "Trait Focus paints living cells using their gene intensity—use it alongside the trait metrics to trace emerging behaviors.";
+    body.appendChild(traitHint);
+  }
+
+  #refreshTraitOverlaySelect() {
+    if (!this.traitOverlaySelect) return;
+
+    const select = this.traitOverlaySelect;
+    const options = Array.isArray(this._traitOverlaySelectOptions)
+      ? this._traitOverlaySelectOptions
+      : [];
+    const currentValue = this.traitOverlayKey ?? "";
+
+    select.innerHTML = "";
+
+    if (options.length === 0) {
+      const placeholder = document.createElement("option");
+
+      placeholder.value = "";
+      placeholder.textContent = "Traits unavailable";
+      select.appendChild(placeholder);
+      select.value = "";
+      select.disabled = true;
+
+      if (this.traitOverlayKey) {
+        this.setTraitOverlayKey(null);
+      }
+
+      return;
+    }
+
+    select.disabled = false;
+
+    options.forEach((option) => {
+      if (!option) return;
+
+      const opt = document.createElement("option");
+
+      opt.value = option.value;
+      opt.textContent = option.label;
+      if (option.description) opt.title = option.description;
+      select.appendChild(opt);
+    });
+
+    const nextValue = options.some((option) => option.value === currentValue)
+      ? currentValue
+      : (options[0]?.value ?? "");
+
+    select.value = nextValue;
+
+    const normalized =
+      typeof nextValue === "string" && nextValue.length > 0 ? nextValue : null;
+
+    if (this.traitOverlayKey !== normalized) {
+      this.setTraitOverlayKey(normalized);
+    }
+  }
+
+  #syncTraitOverlayOptions(stats) {
+    const configs = resolveTraitDisplayConfigs(stats);
+    const options = configs.map((trait) => ({
+      value: trait.key,
+      label: trait.label,
+      description: `Highlight ${trait.label.toLowerCase()} expression`,
+    }));
+    const keys = options.map((option) => option.value);
+    const previous = this._traitOverlaySelectKeys ?? [];
+    const changed =
+      previous.length !== keys.length ||
+      previous.some((key, index) => key !== keys[index]);
+
+    this._traitOverlaySelectOptions = options;
+    this._traitOverlaySelectKeys = keys;
+
+    if (changed || !this.traitOverlaySelect?.options?.length) {
+      this.#refreshTraitOverlaySelect();
+    }
   }
 
   #buildObstacleControls(body) {
@@ -4462,6 +4577,31 @@ export default class UIManager {
     }
   }
 
+  setTraitOverlayKey(value, { notify = true, schedule = true } = {}) {
+    const normalized =
+      typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+
+    if (this.traitOverlayKey === normalized) return;
+
+    this.traitOverlayKey = normalized;
+
+    if (this.traitOverlaySelect) {
+      const nextValue = normalized ?? "";
+
+      if (this.traitOverlaySelect.value !== nextValue) {
+        this.traitOverlaySelect.value = nextValue;
+      }
+    }
+
+    if (schedule) {
+      this.#scheduleUpdate();
+    }
+
+    if (notify) {
+      this.#notifySettingChange("traitOverlayKey", this.traitOverlayKey);
+    }
+  }
+
   setUpdatesPerSecond(value, { notify = true } = {}) {
     const sanitized = sanitizeNumber(value, {
       fallback: null,
@@ -4847,6 +4987,7 @@ export default class UIManager {
     this.#hideMetricsPlaceholder();
     this.metricsBox.innerHTML = "";
     this.#ensureTraitSparklineCards(stats);
+    this.#syncTraitOverlayOptions(stats);
     const s = insightSnapshot;
     const totals = (stats && stats.totals) || {};
     const lastTotals = this._lastInteractionTotals || { fights: 0, cooperations: 0 };

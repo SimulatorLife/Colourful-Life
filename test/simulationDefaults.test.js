@@ -370,6 +370,8 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     showDensity: defaults.showDensity,
     showFitness: defaults.showFitness,
     showLifeEventMarkers: defaults.showLifeEventMarkers,
+    showTraitOverlay: defaults.showTraitOverlay,
+    traitOverlayKey: defaults.traitOverlayKey,
     leaderboardIntervalMs: defaults.leaderboardIntervalMs,
     brainSnapshotLimit: defaults.brainSnapshotLimit,
     matingDiversityThreshold: defaults.matingDiversityThreshold,
@@ -419,6 +421,12 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.is(ui.getShowDensity(), defaults.showDensity);
   assert.is(ui.getShowFitness(), defaults.showFitness);
   assert.is(ui.getShowLifeEventMarkers(), defaults.showLifeEventMarkers);
+  assert.is(ui.getShowTraitOverlay(), defaults.showTraitOverlay);
+  assert.is(ui.getTraitOverlayKey(), defaults.traitOverlayKey);
+  ui.setShowTraitOverlay(true);
+  assert.is(ui.getShowTraitOverlay(), true);
+  ui.setTraitOverlayKey("cooperation");
+  assert.is(ui.getTraitOverlayKey(), "cooperation");
   assert.is(ui.getAutoPauseOnBlur(), defaults.autoPauseOnBlur);
   assert.ok(ui.shouldRenderSlowUi(0));
   assert.ok(!ui.shouldRenderSlowUi(defaults.leaderboardIntervalMs - 1));
