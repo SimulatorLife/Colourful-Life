@@ -65,6 +65,8 @@ const NEIGHBOR_OFFSETS = [
 const DECAY_RELEASE_RATE = 0.18;
 const DECAY_EPSILON = 1e-4;
 const ENERGY_SPARSE_SCAN_RATIO = 0.2;
+const TARGET_DESCRIPTOR_POOL_DECAY = 0.82;
+const TARGET_DESCRIPTOR_POOL_MIN = 256;
 
 function resolveInitialTileEnergyFraction(candidate) {
   const numeric = Number(candidate);
@@ -177,6 +179,8 @@ export default class GridManager {
   };
   #targetGroupsView = null;
   #targetDescriptorPool = [];
+  #targetDescriptorUsageAverage = 0;
+  #targetUsageAccumulator = 0;
   #rowOccupancy = [];
   #tickSimilarityCache = new WeakMap();
   #tickSimilarityVersion = -1;
@@ -6950,6 +6954,12 @@ export default class GridManager {
     return clamp(population / area, 0, 1);
   }
 
+  getTargetDescriptorPoolSize() {
+    return Array.isArray(this.#targetDescriptorPool)
+      ? this.#targetDescriptorPool.length
+      : 0;
+  }
+
   #acquireTargetDescriptor() {
     const descriptor = this.#targetDescriptorPool.pop();
 
@@ -6989,6 +6999,12 @@ export default class GridManager {
       return;
     }
 
+    const count = list.length;
+
+    if (count > 0) {
+      this.#targetUsageAccumulator += count;
+    }
+
     for (let i = 0; i < list.length; i++) {
       const descriptor = list[i];
 
@@ -6999,9 +7015,12 @@ export default class GridManager {
     }
 
     list.length = 0;
+
+    this.#trimTargetDescriptorPool();
   }
 
   #beginTargetScan() {
+    this.#targetUsageAccumulator = 0;
     const scratch = this.#targetScratch;
 
     this.#flushTargetList(scratch.mates);
@@ -7017,6 +7036,56 @@ export default class GridManager {
     this.#flushTargetList(scratch.mates);
     this.#flushTargetList(scratch.enemies);
     this.#flushTargetList(scratch.society);
+
+    const usage = this.#targetUsageAccumulator;
+    const previous = this.#targetDescriptorUsageAverage;
+    const smoothing = TARGET_DESCRIPTOR_POOL_DECAY;
+
+    this.#targetDescriptorUsageAverage = previous * smoothing + usage * (1 - smoothing);
+    this.#targetUsageAccumulator = 0;
+
+    this.#trimTargetDescriptorPool();
+  }
+
+  #resolveTargetDescriptorPoolLimit() {
+    const rows = Math.max(0, Math.floor(Number.isFinite(this.rows) ? this.rows : 0));
+    const cols = Math.max(0, Math.floor(Number.isFinite(this.cols) ? this.cols : 0));
+    const area = rows * cols;
+    const activeCount = this.activeCells?.size ?? 0;
+    const averageUsage = this.#targetDescriptorUsageAverage || 0;
+    const fallback = area > 0 ? Math.min(area, 1024) : 512;
+    let estimate = averageUsage * 1.5 + TARGET_DESCRIPTOR_POOL_MIN;
+
+    if (activeCount > 0) {
+      estimate = Math.max(estimate, activeCount * 0.25);
+    }
+
+    if (!(estimate > 0) || !Number.isFinite(estimate)) {
+      estimate = fallback;
+    }
+
+    if (area > 0) {
+      estimate = Math.min(estimate, area);
+      const minimum = Math.min(area, TARGET_DESCRIPTOR_POOL_MIN);
+
+      estimate = Math.max(minimum, estimate);
+    } else {
+      estimate = Math.max(TARGET_DESCRIPTOR_POOL_MIN, estimate);
+    }
+
+    return Math.floor(estimate);
+  }
+
+  #trimTargetDescriptorPool() {
+    if (!Array.isArray(this.#targetDescriptorPool)) {
+      return;
+    }
+
+    const limit = this.#resolveTargetDescriptorPoolLimit();
+
+    if (this.#targetDescriptorPool.length > limit) {
+      this.#targetDescriptorPool.length = limit;
+    }
   }
 
   #resetTickSimilarityCache() {
