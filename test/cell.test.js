@@ -2034,6 +2034,176 @@ test("recordMatingOutcome penalizes repetitive mates through neural imprint", ()
   );
 });
 
+test("recordCombatOutcome reinforces successful combat cues", () => {
+  const dna = new DNA(90, 120, 150);
+  const cell = new Cell(0, 0, dna, 8);
+  const imprintCalls = [];
+  const feedbackCalls = [];
+  const sensors = new Float32Array(Brain.SENSOR_COUNT);
+  const weaknessIndex = Brain.sensorIndex("targetWeakness");
+  const threatIndex = Brain.sensorIndex("targetThreat");
+  const attritionIndex = Brain.sensorIndex("targetAttrition");
+  const proximityIndex = Brain.sensorIndex("targetProximity");
+  const riskIndex = Brain.sensorIndex("riskTolerance");
+
+  sensors[weaknessIndex] = 0.15;
+  sensors[threatIndex] = 0.3;
+  sensors[attritionIndex] = 0.05;
+  sensors[proximityIndex] = 0.1;
+  sensors[riskIndex] = 0.55;
+
+  cell.brain = {
+    sensorPlasticity: { enabled: true },
+    applyExperienceImprint(payload) {
+      imprintCalls.push(payload);
+    },
+    applySensorFeedback(payload) {
+      feedbackCalls.push(payload);
+    },
+  };
+  cell.combatLearningProfile = {
+    baseAssimilation: 0.32,
+    successAmplifier: 0.82,
+    failureAmplifier: 0.88,
+    gainInfluence: 0.45,
+    kinshipPenaltyWeight: 0.25,
+    threatWeight: 0.65,
+    weaknessWeight: 0.7,
+    attritionWeight: 0.55,
+    proximityWeight: 0.5,
+    riskFlexWeight: 0.6,
+  };
+  cell._decisionContextIndex.set("targeting", {
+    sensorVector: sensors,
+    activationCount: 6,
+    group: "targeting",
+  });
+  cell._decisionContextIndex.set("interaction", {
+    sensorVector: sensors,
+    activationCount: 7,
+    group: "interaction",
+  });
+
+  cell.recordCombatOutcome({
+    success: true,
+    kinship: 0.2,
+    intensity: 1.1,
+    winChance: 0.35,
+    energyCost: 0.2,
+  });
+
+  assert.is(imprintCalls.length, 1, "successful combat should create a single imprint");
+  const imprint = imprintCalls[0];
+  const weaknessAdj = imprint.adjustments.find(
+    (entry) => entry.sensor === "targetWeakness",
+  );
+  const threatAdj = imprint.adjustments.find(
+    (entry) => entry.sensor === "targetThreat",
+  );
+  const riskAdj = imprint.adjustments.find((entry) => entry.sensor === "riskTolerance");
+
+  assert.ok(weaknessAdj, "combat imprint should adjust weakness targeting");
+  assert.ok(
+    weaknessAdj.target > sensors[weaknessIndex],
+    "success should increase preference for weaker opponents",
+  );
+  assert.ok(threatAdj, "combat imprint should adjust threat targeting");
+  assert.ok(
+    threatAdj.target >= sensors[threatIndex],
+    "successful fight should not reduce tolerated threat",
+  );
+  assert.ok(riskAdj, "combat imprint should adjust risk tolerance");
+  assert.ok(
+    riskAdj.target > sensors[riskIndex],
+    "successful fight should raise risk tolerance",
+  );
+  assert.ok(imprint.assimilation > 0, "combat imprint exposes assimilation strength");
+  assert.ok(feedbackCalls.length > 0, "combat imprint should emit neural feedback");
+});
+
+test("recordCombatOutcome dampens risky combat losses", () => {
+  const dna = new DNA(80, 110, 140);
+  const cell = new Cell(0, 0, dna, 8);
+  const imprintCalls = [];
+  const feedbackCalls = [];
+  const sensors = new Float32Array(Brain.SENSOR_COUNT);
+  const weaknessIndex = Brain.sensorIndex("targetWeakness");
+  const threatIndex = Brain.sensorIndex("targetThreat");
+  const riskIndex = Brain.sensorIndex("riskTolerance");
+
+  sensors[weaknessIndex] = 0.05;
+  sensors[threatIndex] = 0.8;
+  sensors[riskIndex] = 0.6;
+
+  cell.brain = {
+    sensorPlasticity: { enabled: true },
+    applyExperienceImprint(payload) {
+      imprintCalls.push(payload);
+    },
+    applySensorFeedback(payload) {
+      feedbackCalls.push(payload);
+    },
+  };
+  cell.combatLearningProfile = {
+    baseAssimilation: 0.28,
+    successAmplifier: 0.7,
+    failureAmplifier: 0.95,
+    gainInfluence: 0.42,
+    kinshipPenaltyWeight: 0.3,
+    threatWeight: 0.7,
+    weaknessWeight: 0.65,
+    attritionWeight: 0.5,
+    proximityWeight: 0.45,
+    riskFlexWeight: 0.58,
+  };
+  cell._decisionContextIndex.set("targeting", {
+    sensorVector: sensors,
+    activationCount: 5,
+    group: "targeting",
+  });
+  cell._decisionContextIndex.set("interaction", {
+    sensorVector: sensors,
+    activationCount: 6,
+    group: "interaction",
+  });
+
+  cell.recordCombatOutcome({
+    success: false,
+    kinship: 0.4,
+    intensity: 1.4,
+    winChance: 0.7,
+    energyCost: 0.4,
+  });
+
+  assert.is(imprintCalls.length, 1, "combat loss should create a corrective imprint");
+  const imprint = imprintCalls[0];
+  const weaknessAdj = imprint.adjustments.find(
+    (entry) => entry.sensor === "targetWeakness",
+  );
+  const threatAdj = imprint.adjustments.find(
+    (entry) => entry.sensor === "targetThreat",
+  );
+  const riskAdj = imprint.adjustments.find((entry) => entry.sensor === "riskTolerance");
+
+  assert.ok(weaknessAdj, "loss imprint should still bias toward weaker opponents");
+  assert.ok(
+    weaknessAdj.target >= sensors[weaknessIndex],
+    "loss should not reduce the incentive to seek weakness",
+  );
+  assert.ok(threatAdj, "loss imprint should adjust threat targeting");
+  assert.ok(
+    threatAdj.target < sensors[threatIndex],
+    "loss should reduce focus on threatening opponents",
+  );
+  assert.ok(riskAdj, "loss imprint should update risk tolerance");
+  assert.ok(
+    riskAdj.target < sensors[riskIndex],
+    "loss should make the organism more cautious",
+  );
+  assert.ok(feedbackCalls.length > 0, "combat loss should trigger feedback");
+  assert.ok(feedbackCalls[0].rewardSignal < 0, "loss feedback should be negative");
+});
+
 test("breed uses DNA inheritStrategy to compute offspring strategy", () => {
   const dnaA = new DNA(10, 20, 30);
   const dnaB = new DNA(40, 50, 60);

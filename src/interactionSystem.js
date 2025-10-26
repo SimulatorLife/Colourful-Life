@@ -244,6 +244,13 @@ function recordFight(stats, winner, loser, context = {}) {
       energyDelta: Number.isFinite(context.winnerCost) ? -context.winnerCost : 0,
       intensity: clamp(context.intensity ?? 1, 0, 2),
     });
+    winner.recordCombatOutcome?.({
+      success: true,
+      kinship: context.kinship,
+      intensity: context.intensity,
+      winChance: context.winChance,
+      energyCost: Number.isFinite(context.winnerCost) ? context.winnerCost : 0,
+    });
   }
 
   if (loser) {
@@ -255,6 +262,13 @@ function recordFight(stats, winner, loser, context = {}) {
       kinship: clamp(context.kinship ?? 0, 0, 1),
       energyDelta: Number.isFinite(context.loserCost) ? -context.loserCost : 0,
       intensity: clamp(context.intensity ?? 1, 0, 2),
+    });
+    loser.recordCombatOutcome?.({
+      success: false,
+      kinship: context.kinship,
+      intensity: context.intensity,
+      winChance: context.winChance,
+      energyCost: Number.isFinite(context.loserCost) ? context.loserCost : 0,
     });
   }
 }
