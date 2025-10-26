@@ -1,6 +1,7 @@
 import { clamp } from "../utils.js";
 
 const INTERACTION_KEYS = ["cooperate", "fight", "avoid"];
+const INTERACTION_KEY_COUNT = INTERACTION_KEYS.length;
 
 function normalizeInteractionGene(genes, key) {
   if (!genes || typeof genes !== "object") return null;
@@ -50,22 +51,25 @@ export function computeBehaviorComplementarity(organismA, organismB) {
 
   if (!genesA || !genesB) return 0;
 
-  const { sum, count } = INTERACTION_KEYS.reduce(
-    (accumulator, key) => {
-      const valueA = normalizeInteractionGene(genesA, key);
-      const valueB = normalizeInteractionGene(genesB, key);
+  let sum = 0;
+  let count = 0;
 
-      if (valueA == null || valueB == null) {
-        return accumulator;
-      }
+  // Manual indexing avoids the temporary accumulator object created by Array.reduce,
+  // trimming a small amount of overhead in this hot path invoked during each pairing
+  // evaluation.
+  for (let index = 0; index < INTERACTION_KEY_COUNT; index += 1) {
+    const key = INTERACTION_KEYS[index];
+    const valueA = normalizeInteractionGene(genesA, key);
 
-      accumulator.sum += Math.abs(valueA - valueB);
-      accumulator.count += 1;
+    if (valueA == null) continue;
 
-      return accumulator;
-    },
-    { sum: 0, count: 0 },
-  );
+    const valueB = normalizeInteractionGene(genesB, key);
+
+    if (valueB == null) continue;
+
+    sum += Math.abs(valueA - valueB);
+    count += 1;
+  }
 
   if (count === 0) return 0;
 
