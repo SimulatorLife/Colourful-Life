@@ -5132,6 +5132,211 @@ export default class Cell {
     };
   }
 
+  #resolveAvoidRetreatTarget({
+    row = this.row,
+    col = this.col,
+    mates = [],
+    enemies = [],
+    society = [],
+    localDensity = 0,
+    densityEffectMultiplier = 1,
+    maxTileEnergy = MAX_TILE_ENERGY,
+  } = {}) {
+    if (!this.#canUseNeuralPolicies()) return null;
+
+    const movementOutcome = this.#getDecisionOutcome("movement");
+
+    if (
+      !movementOutcome ||
+      movementOutcome.usedNetwork !== true ||
+      movementOutcome.action !== "avoid"
+    ) {
+      return null;
+    }
+
+    const probabilities =
+      movementOutcome.probabilities && typeof movementOutcome.probabilities === "object"
+        ? movementOutcome.probabilities
+        : null;
+
+    if (!probabilities) return null;
+
+    const avoidProb = clamp(Number(probabilities.avoid) || 0, 0, 1);
+    const restProb = clamp(Number(probabilities.rest) || 0, 0, 1);
+    const pursueProb = clamp(Number(probabilities.pursue) || 0, 0, 1);
+    const exploreProb = clamp(Number(probabilities.explore) || 0, 0, 1);
+    const cohereProb = clamp(Number(probabilities.cohere) || 0, 0, 1);
+    const competitorMax = Math.max(restProb, pursueProb, exploreProb, cohereProb);
+    const neuralAdvantage = Math.max(0, avoidProb - competitorMax);
+    const neuralWeight = clamp(0.25 + avoidProb * 0.5 + neuralAdvantage * 0.4, 0, 1);
+
+    const effectiveMultiplier = Number.isFinite(densityEffectMultiplier)
+      ? densityEffectMultiplier
+      : 1;
+    const effDensity = clamp(
+      Number.isFinite(localDensity) ? localDensity * effectiveMultiplier : 0,
+      0,
+      1,
+    );
+    const crowdComfort = clamp(
+      Number.isFinite(this._crowdingTolerance)
+        ? this._crowdingTolerance
+        : Number.isFinite(this.baseCrowdingTolerance)
+          ? this.baseCrowdingTolerance
+          : 0.5,
+      0,
+      1,
+    );
+    const crowdPressure = Math.max(0, effDensity - crowdComfort);
+    const originRow = Number.isFinite(row)
+      ? row
+      : Number.isFinite(this.row)
+        ? this.row
+        : 0;
+    const originCol = Number.isFinite(col)
+      ? col
+      : Number.isFinite(this.col)
+        ? this.col
+        : 0;
+    const energyCap = Math.max(
+      1e-4,
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
+    );
+    const selfEnergy = clamp(
+      (Number.isFinite(this.energy) ? this.energy : 0) / energyCap,
+      0,
+      2,
+    );
+
+    let best = null;
+    let bestScore = -Infinity;
+
+    const evaluateCandidate = (entry, type) => {
+      if (!entry || typeof entry !== "object") return null;
+
+      const target = entry.target ?? null;
+
+      if (!target) return null;
+
+      const targetRow = Number.isFinite(entry.row)
+        ? entry.row
+        : Number.isFinite(target.row)
+          ? target.row
+          : null;
+      const targetCol = Number.isFinite(entry.col)
+        ? entry.col
+        : Number.isFinite(target.col)
+          ? target.col
+          : null;
+
+      if (!Number.isFinite(targetRow) || !Number.isFinite(targetCol)) {
+        return null;
+      }
+
+      const distance = Math.max(
+        Math.abs(targetRow - originRow),
+        Math.abs(targetCol - originCol),
+      );
+      const proximity = clamp(1 / (1 + distance), 0, 1);
+      const normalizedEnergy = clamp(
+        Number.isFinite(target.energy) ? target.energy / energyCap : 0,
+        0,
+        2,
+      );
+      const energyDelta = clamp(normalizedEnergy - selfEnergy, -1, 1);
+      const similarity = clamp(
+        this.#safeSimilarityTo(target, {
+          context: `movement avoid focus similarity (${type})`,
+          fallback: type === "enemy" ? 0 : 0.6,
+        }),
+        0,
+        1,
+      );
+
+      let typeBias = 0.6;
+
+      if (type === "enemy") {
+        typeBias = 1;
+      } else if (type === "mate") {
+        typeBias = 0.7;
+      }
+
+      const proximityStress = proximity * (0.45 + neuralWeight * 0.3);
+      let threatSignal = 0;
+
+      if (type === "enemy") {
+        const hostility = 1 - similarity;
+
+        threatSignal =
+          Math.max(0, energyDelta) * (0.6 + neuralWeight * 0.4) +
+          hostility * (0.35 + neuralAdvantage * 0.3);
+      } else {
+        threatSignal =
+          crowdPressure * (0.5 + neuralWeight * 0.35) +
+          similarity * 0.2 +
+          Math.max(0, -energyDelta) * 0.1;
+      }
+
+      const score = typeBias * (threatSignal + proximityStress + neuralAdvantage * 0.2);
+
+      if (!(score > bestScore)) {
+        return null;
+      }
+
+      return {
+        row: targetRow,
+        col: targetCol,
+        entry,
+        type,
+        score,
+        metrics: {
+          distance,
+          proximity,
+          energyDelta,
+          similarity,
+          threatSignal,
+        },
+      };
+    };
+
+    const considerList = (list, type) => {
+      if (!Array.isArray(list) || list.length === 0) return;
+
+      for (let i = 0; i < list.length; i++) {
+        const candidate = evaluateCandidate(list[i], type);
+
+        if (!candidate) continue;
+
+        best = candidate;
+        bestScore = candidate.score;
+      }
+    };
+
+    considerList(enemies, "enemy");
+    considerList(mates, "mate");
+    considerList(society, "ally");
+
+    if (!best) return null;
+
+    return {
+      row: best.row,
+      col: best.col,
+      entry: best.entry,
+      type: best.type,
+      source: `neural:${best.type}`,
+      score: best.score,
+      metrics: best.metrics,
+      neural: {
+        avoidProbability: avoidProb,
+        competitorMax,
+        advantage: neuralAdvantage,
+        weight: neuralWeight,
+      },
+    };
+  }
+
   executeMovementStrategy(gridArr, row, col, mates, enemies, society, context = {}) {
     const {
       localDensity = 0,
@@ -5335,10 +5540,80 @@ export default class Cell {
         break;
       }
       case "avoid": {
-        const threat = nearestEnemy || nearestMate || nearestAlly;
+        let focus = null;
 
-        if (threat && typeof moveAwayFromTarget === "function") {
-          moveAwayFromTarget(gridArr, row, col, threat.row, threat.col, rows, cols);
+        if (decision.usedBrain) {
+          focus = this.#resolveAvoidRetreatTarget({
+            row,
+            col,
+            mates,
+            enemies,
+            society,
+            localDensity,
+            densityEffectMultiplier,
+            maxTileEnergy: movementContext.maxTileEnergy,
+          });
+        }
+
+        const fallbackThreat = nearestEnemy || nearestMate || nearestAlly;
+        let targetRow = focus?.row;
+        let targetCol = focus?.col;
+
+        if (!Number.isFinite(targetRow) || !Number.isFinite(targetCol)) {
+          const candidateRow = Number.isFinite(fallbackThreat?.row)
+            ? fallbackThreat.row
+            : Number.isFinite(fallbackThreat?.target?.row)
+              ? fallbackThreat.target.row
+              : null;
+          const candidateCol = Number.isFinite(fallbackThreat?.col)
+            ? fallbackThreat.col
+            : Number.isFinite(fallbackThreat?.target?.col)
+              ? fallbackThreat.target.col
+              : null;
+
+          targetRow = Number.isFinite(targetRow) ? targetRow : candidateRow;
+          targetCol = Number.isFinite(targetCol) ? targetCol : candidateCol;
+        }
+
+        if (
+          Number.isFinite(targetRow) &&
+          Number.isFinite(targetCol) &&
+          typeof moveAwayFromTarget === "function"
+        ) {
+          moveAwayFromTarget(gridArr, row, col, targetRow, targetCol, rows, cols);
+
+          if (focus) {
+            const metrics = focus.metrics || {};
+
+            this.#assignDecisionOutcome("movement", {
+              avoidFocus: {
+                source: focus.source,
+                type: focus.type,
+                row: Number.isFinite(focus.row) ? focus.row : null,
+                col: Number.isFinite(focus.col) ? focus.col : null,
+                neuralScore: focus.score,
+                neuralAdvantage: focus.neural?.advantage ?? null,
+                neuralWeight: focus.neural?.weight ?? null,
+                avoidProbability: focus.neural?.avoidProbability ?? null,
+                competitorMax: focus.neural?.competitorMax ?? null,
+                metrics: {
+                  distance: Number.isFinite(metrics.distance) ? metrics.distance : null,
+                  proximity: Number.isFinite(metrics.proximity)
+                    ? metrics.proximity
+                    : null,
+                  energyDelta: Number.isFinite(metrics.energyDelta)
+                    ? metrics.energyDelta
+                    : null,
+                  similarity: Number.isFinite(metrics.similarity)
+                    ? metrics.similarity
+                    : null,
+                  threatSignal: Number.isFinite(metrics.threatSignal)
+                    ? metrics.threatSignal
+                    : null,
+                },
+              },
+            });
+          }
 
           return;
         }
