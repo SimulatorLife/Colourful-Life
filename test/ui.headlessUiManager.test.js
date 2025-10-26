@@ -1,5 +1,6 @@
 import { assert, test } from "#tests/harness";
 import { createHeadlessUiManager } from "../src/ui/headlessUiManager.js";
+import { LEADERBOARD_INTERVAL_MIN_MS } from "../src/config.js";
 
 test("createHeadlessUiManager notifies observers only for sanitized updates", () => {
   const notifications = [];
@@ -213,6 +214,7 @@ test("createHeadlessUiManager exposes leaderboard cadence controls", () => {
   assert.is(manager.shouldRenderSlowUi(0), true);
   assert.is(manager.shouldRenderSlowUi(100), false);
   manager.setLeaderboardIntervalMs(50);
+  assert.is(manager.getLeaderboardIntervalMs(), LEADERBOARD_INTERVAL_MIN_MS);
   assert.is(manager.shouldRenderSlowUi(120), true);
 });
 

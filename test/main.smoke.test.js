@@ -86,6 +86,30 @@ test("createSimulation headless mode infers a canvas when omitted", async () => 
   simulation.destroy();
 });
 
+test("headless simulation clamps leaderboard cadence like the engine", async () => {
+  const [{ createSimulation }, { LEADERBOARD_INTERVAL_MIN_MS }] = await Promise.all([
+    simulationModulePromise,
+    import("../src/config.js"),
+  ]);
+
+  const simulation = createSimulation({ headless: true, autoStart: false });
+
+  simulation.uiManager.setLeaderboardIntervalMs(LEADERBOARD_INTERVAL_MIN_MS / 2);
+
+  assert.is(
+    simulation.engine.state.leaderboardIntervalMs,
+    LEADERBOARD_INTERVAL_MIN_MS,
+    "engine clamps leaderboard interval to minimum",
+  );
+  assert.is(
+    simulation.uiManager.getLeaderboardIntervalMs(),
+    LEADERBOARD_INTERVAL_MIN_MS,
+    "headless UI mirrors the clamped leaderboard interval",
+  );
+
+  simulation.destroy();
+});
+
 test("createSimulation reuses a provided selection manager", async () => {
   const { createSimulation } = await simulationModulePromise;
   const customSelectionManager = {

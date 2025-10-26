@@ -1,4 +1,8 @@
-import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
+import {
+  resolveSimulationDefaults,
+  SIMULATION_DEFAULTS,
+  LEADERBOARD_INTERVAL_MIN_MS,
+} from "../config.js";
 import { sanitizeNumber } from "../utils/math.js";
 import { coerceBoolean } from "../utils/primitives.js";
 import { invokeWithErrorBoundary } from "../utils/error.js";
@@ -370,14 +374,21 @@ export function createHeadlessUiManager(options = {}) {
     },
     getLeaderboardIntervalMs: () => settings.leaderboardIntervalMs,
     setLeaderboardIntervalMs: (value) => {
-      if (
-        updateIfFinite("leaderboardIntervalMs", value, {
-          min: 0,
-          round: Math.round,
-        })
-      ) {
-        notify("leaderboardIntervalMs", settings.leaderboardIntervalMs);
-      }
+      const sanitized = sanitizeNumber(value, {
+        fallback: Number.NaN,
+        min: 0,
+        round: Math.round,
+      });
+
+      if (!Number.isFinite(sanitized)) return;
+
+      const normalized =
+        sanitized <= 0 ? 0 : Math.max(LEADERBOARD_INTERVAL_MIN_MS, sanitized);
+
+      if (Object.is(settings.leaderboardIntervalMs, normalized)) return;
+
+      settings.leaderboardIntervalMs = normalized;
+      notify("leaderboardIntervalMs", settings.leaderboardIntervalMs);
     },
     getLeaderboardSize: () => settings.leaderboardSize,
     setLeaderboardSize: (value) => {
