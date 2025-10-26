@@ -282,6 +282,9 @@ export default class GridManager {
   #energyDeltaLastSparse = false;
   #decayActiveScratch = null;
   #crowdingFeedbackScratch = { ...DEFAULT_CROWDING_SUMMARY };
+  #crowdingComfortSums = null;
+  #crowdingScarcitySums = null;
+  #crowdingNeighborCounts = null;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -619,6 +622,142 @@ export default class GridManager {
     }
 
     return this.#eventRowsScratch;
+  }
+
+  #ensureCrowdingFeedbackBuffers(rowCount, colCount) {
+    const { rows, cols } = normalizeDimensions(rowCount, colCount);
+    const size = rows * cols;
+
+    if (size <= 0) {
+      this.#crowdingComfortSums = null;
+      this.#crowdingScarcitySums = null;
+      this.#crowdingNeighborCounts = null;
+
+      return null;
+    }
+
+    if (!this.#crowdingComfortSums || this.#crowdingComfortSums.length !== size) {
+      this.#crowdingComfortSums = new Float32Array(size);
+    } else {
+      this.#crowdingComfortSums.fill(0);
+    }
+
+    if (!this.#crowdingScarcitySums || this.#crowdingScarcitySums.length !== size) {
+      this.#crowdingScarcitySums = new Float32Array(size);
+    } else {
+      this.#crowdingScarcitySums.fill(0);
+    }
+
+    if (!this.#crowdingNeighborCounts || this.#crowdingNeighborCounts.length !== size) {
+      this.#crowdingNeighborCounts = new Uint8Array(size);
+    } else {
+      this.#crowdingNeighborCounts.fill(0);
+    }
+
+    return {
+      comfortSums: this.#crowdingComfortSums,
+      scarcitySums: this.#crowdingScarcitySums,
+      neighborCounts: this.#crowdingNeighborCounts,
+    };
+  }
+
+  #prepareCrowdingFeedbackCache(rowCount, colCount, maxTileEnergy) {
+    const buffers = this.#ensureCrowdingFeedbackBuffers(rowCount, colCount);
+
+    if (!buffers) {
+      return null;
+    }
+
+    const { comfortSums, scarcitySums, neighborCounts } = buffers;
+    const rows = Math.max(0, Math.floor(rowCount));
+    const cols = Math.max(0, Math.floor(colCount));
+    const hasScarcity = Number.isFinite(maxTileEnergy) && maxTileEnergy > 0;
+    const invMaxEnergy = hasScarcity ? 1 / maxTileEnergy : 0;
+    const grid = this.grid;
+
+    for (let row = 0; row < rows; row++) {
+      const gridRow = grid[row];
+
+      if (!gridRow) continue;
+
+      for (let col = 0; col < cols; col++) {
+        const occupant = gridRow[col];
+
+        if (!occupant) continue;
+
+        let tolerance;
+
+        if (typeof occupant.getCrowdingPreference === "function") {
+          tolerance = occupant.getCrowdingPreference({ fallback: 0.5 });
+        } else {
+          const baseline = Number.isFinite(occupant?.baseCrowdingTolerance)
+            ? occupant.baseCrowdingTolerance
+            : 0.5;
+          const adapted = Number.isFinite(occupant?._crowdingTolerance)
+            ? occupant._crowdingTolerance
+            : baseline;
+
+          tolerance = adapted;
+        }
+
+        if (!Number.isFinite(tolerance)) {
+          tolerance = 0.5;
+        } else if (tolerance < 0) {
+          tolerance = 0;
+        } else if (tolerance > 1) {
+          tolerance = 1;
+        }
+
+        let scarcityValue = 0;
+
+        if (hasScarcity) {
+          const energy = Number.isFinite(occupant.energy) ? occupant.energy : 0;
+          let normalizedEnergy = energy * invMaxEnergy;
+
+          if (normalizedEnergy <= 0) {
+            normalizedEnergy = 0;
+          } else if (normalizedEnergy >= 1) {
+            normalizedEnergy = 1;
+          }
+
+          scarcityValue = 1 - normalizedEnergy;
+        }
+
+        for (let i = 0; i < NEIGHBOR_OFFSETS.length; i++) {
+          const offset = NEIGHBOR_OFFSETS[i];
+
+          if (!offset) continue;
+
+          const neighborRow = row + offset[0];
+          const neighborCol = col + offset[1];
+
+          if (
+            neighborRow < 0 ||
+            neighborRow >= rows ||
+            neighborCol < 0 ||
+            neighborCol >= cols
+          ) {
+            continue;
+          }
+
+          const index = neighborRow * cols + neighborCol;
+
+          neighborCounts[index] += 1;
+          comfortSums[index] += tolerance;
+
+          if (hasScarcity) {
+            scarcitySums[index] += scarcityValue;
+          }
+        }
+      }
+    }
+
+    return {
+      comfortSums,
+      scarcitySums,
+      neighborCounts,
+      hasScarcity,
+    };
   }
 
   #ensureOccupantRegenBuffers(rowCount, colCount) {
@@ -3687,6 +3826,11 @@ export default class GridManager {
     let deltaDirtyTiles = null;
 
     const grid = this.grid;
+    const shouldPrecomputeCrowding =
+      normalizedDensityMultiplier > 0 && REGEN_DENSITY_PENALTY > 0;
+    const crowdingCache = shouldPrecomputeCrowding
+      ? this.#prepareCrowdingFeedbackCache(rows, cols, positiveMaxTileEnergy)
+      : null;
     const processTileBase = (
       r,
       c,
@@ -3703,6 +3847,7 @@ export default class GridManager {
       downObstacleRow,
       occupantRegenRow,
       occupantRegenVersionRow,
+      crowdingSummary,
       regenMultiplier = 1,
       regenAdd = 0,
       drain = 0,
@@ -3732,20 +3877,50 @@ export default class GridManager {
             let densityImpact = REGEN_DENSITY_PENALTY * effectiveDensity;
 
             if (densityImpact > 0) {
-              const feedback = computeCrowdingFeedback({
-                grid,
-                row: r,
-                col: c,
-                rows,
-                cols,
-                neighborOffsets: NEIGHBOR_OFFSETS,
-                maxTileEnergy: positiveMaxTileEnergy,
-                result: this.#crowdingFeedbackScratch,
-              });
+              let comfort = 0.5;
+              let scarcitySignal = 0;
+              let neighborCount = 0;
 
-              if (feedback.count > 0) {
-                const comfort = feedback.comfort;
-                const scarcitySignal = feedback.scarcity;
+              if (crowdingSummary) {
+                const index = r * cols + c;
+
+                neighborCount = crowdingSummary.neighborCounts[index] ?? 0;
+
+                if (neighborCount > 0) {
+                  const invCount = 1 / neighborCount;
+
+                  comfort = clamp(crowdingSummary.comfortSums[index] * invCount, 0, 1);
+
+                  if (crowdingSummary.hasScarcity) {
+                    scarcitySignal = clamp(
+                      crowdingSummary.scarcitySums[index] * invCount,
+                      0,
+                      1,
+                    );
+                  } else {
+                    scarcitySignal = 0;
+                  }
+                }
+              }
+
+              if (!crowdingSummary || neighborCount === 0) {
+                const feedback = computeCrowdingFeedback({
+                  grid,
+                  row: r,
+                  col: c,
+                  rows,
+                  cols,
+                  neighborOffsets: NEIGHBOR_OFFSETS,
+                  maxTileEnergy: positiveMaxTileEnergy,
+                  result: this.#crowdingFeedbackScratch,
+                });
+
+                neighborCount = feedback.count;
+                comfort = feedback.comfort;
+                scarcitySignal = feedback.scarcity;
+              }
+
+              if (neighborCount > 0) {
                 const pressure =
                   effectiveDensity > comfort ? effectiveDensity - comfort : 0;
                 const relief =
@@ -4168,6 +4343,7 @@ export default class GridManager {
                 downObstacleRow,
                 occupantRegenRow,
                 occupantRegenVersionRow,
+                crowdingCache,
               );
               processedTileCount += 1;
             }
@@ -4205,6 +4381,7 @@ export default class GridManager {
                 downObstacleRow,
                 occupantRegenRow,
                 occupantRegenVersionRow,
+                crowdingCache,
               );
             } else {
               const modifiers = resolveModifiersForTile(eventsForTile, r, c);
@@ -4225,6 +4402,7 @@ export default class GridManager {
                 downObstacleRow,
                 occupantRegenRow,
                 occupantRegenVersionRow,
+                crowdingCache,
                 modifiers.regenMultiplier,
                 modifiers.regenAdd,
                 modifiers.drain,
@@ -4326,6 +4504,7 @@ export default class GridManager {
                 downObstacleRow,
                 occupantRegenRow,
                 occupantRegenVersionRow,
+                crowdingCache,
               );
             } else {
               const modifiers = resolveModifiersForTile(eventsForTile, r, c);
@@ -4346,6 +4525,7 @@ export default class GridManager {
                 downObstacleRow,
                 occupantRegenRow,
                 occupantRegenVersionRow,
+                crowdingCache,
                 modifiers.regenMultiplier,
                 modifiers.regenAdd,
                 modifiers.drain,
@@ -4379,6 +4559,7 @@ export default class GridManager {
               downObstacleRow,
               occupantRegenRow,
               occupantRegenVersionRow,
+              crowdingCache,
             );
             processedTileCount += 1;
           }
@@ -4407,6 +4588,7 @@ export default class GridManager {
             downObstacleRow,
             occupantRegenRow,
             occupantRegenVersionRow,
+            crowdingCache,
             modifiers.regenMultiplier,
             modifiers.regenAdd,
             modifiers.drain,
