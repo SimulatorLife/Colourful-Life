@@ -243,13 +243,25 @@ function normalizeDimensions(rowCount, colCount) {
   };
 }
 
-const TARGET_DESCRIPTOR_BASE_KEYS = new Set([
+const TARGET_DESCRIPTOR_BASE_KEYS = Object.freeze([
   "row",
   "col",
   "target",
   "classification",
   "precomputedSimilarity",
   "similarity",
+]);
+const TARGET_DESCRIPTOR_BASE_KEY_SET = new Set(TARGET_DESCRIPTOR_BASE_KEYS);
+const TARGET_DESCRIPTOR_DYNAMIC_KEYS = new Set([
+  "noveltyPressure",
+  "diversity",
+  "appetite",
+  "mateBias",
+  "curiosityBonus",
+  "preferenceScore",
+  "selectionWeight",
+  "baseReproductionProbability",
+  "neuralAffinity",
 ]);
 
 const TIMESTAMP_NOW =
@@ -7343,6 +7355,17 @@ export default class GridManager {
       : 0;
   }
 
+  #createTargetDescriptor() {
+    return {
+      row: 0,
+      col: 0,
+      target: null,
+      classification: "",
+      precomputedSimilarity: 0,
+      similarity: 0,
+    };
+  }
+
   #acquireTargetDescriptor() {
     const descriptor = this.#targetDescriptorPool.pop();
 
@@ -7350,13 +7373,7 @@ export default class GridManager {
       return descriptor;
     }
 
-    return {
-      row: 0,
-      col: 0,
-      target: null,
-      classification: "",
-      precomputedSimilarity: 0,
-    };
+    return this.#createTargetDescriptor();
   }
 
   #resetTargetDescriptor(descriptor) {
@@ -7365,12 +7382,32 @@ export default class GridManager {
     descriptor.target = null;
     descriptor.classification = "";
     descriptor.precomputedSimilarity = 0;
-
     descriptor.similarity = 0;
 
-    for (const key in descriptor) {
-      if (!TARGET_DESCRIPTOR_BASE_KEYS.has(key)) {
+    for (const key of TARGET_DESCRIPTOR_DYNAMIC_KEYS) {
+      if (Object.hasOwn(descriptor, key)) {
         descriptor[key] = undefined;
+      }
+    }
+
+    const keys = Object.keys(descriptor);
+
+    if (
+      keys.length >
+      TARGET_DESCRIPTOR_BASE_KEY_SET.size + TARGET_DESCRIPTOR_DYNAMIC_KEYS.size
+    ) {
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+
+        if (
+          TARGET_DESCRIPTOR_BASE_KEY_SET.has(key) ||
+          TARGET_DESCRIPTOR_DYNAMIC_KEYS.has(key)
+        ) {
+          continue;
+        }
+
+        descriptor[key] = undefined;
+        TARGET_DESCRIPTOR_DYNAMIC_KEYS.add(key);
       }
     }
 
@@ -7394,7 +7431,6 @@ export default class GridManager {
       if (!descriptor) continue;
 
       this.#targetDescriptorPool.push(this.#resetTargetDescriptor(descriptor));
-      list[i] = null;
     }
 
     list.length = 0;
