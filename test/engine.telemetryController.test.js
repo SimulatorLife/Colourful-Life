@@ -153,3 +153,116 @@ test("TelemetryController publishNow emits leaderboard with sanitized size", () 
   assert.is(controller.getLastEmissionTimestamp(), 500);
   assert.is(controller.metrics, null);
 });
+
+test("TelemetryController sanitizes retained snapshots for leaderboard consumers", () => {
+  const controller = new TelemetryController();
+  const snapshot = {
+    entries: [
+      {
+        id: "alpha",
+        offspring: Number.NaN,
+        fightsWon: Number.POSITIVE_INFINITY,
+        age: Number.NaN,
+        color: undefined,
+        cell: { offspring: 4, fightsWon: 2, age: 12, color: "#aabbcc" },
+      },
+      {
+        id: "beta",
+        offspring: 3,
+        fightsWon: 1,
+        age: 6,
+        color: null,
+        cell: { color: "#ddeeff" },
+      },
+      null,
+    ],
+    brainSnapshots: [
+      { id: "alpha-brain", color: null, cell: { color: "#ff00ff" } },
+      { id: "beta-brain" },
+    ],
+    populationCells: [{ id: 1 }],
+  };
+
+  controller.setInitialSnapshot(snapshot);
+
+  const retained = controller.snapshot;
+
+  assert.equal(retained.entries[0], {
+    id: "alpha",
+    offspring: 4,
+    fightsWon: 2,
+    age: 12,
+    color: "#aabbcc",
+  });
+  assert.equal(retained.entries[1], {
+    id: "beta",
+    offspring: 3,
+    fightsWon: 1,
+    age: 6,
+    color: "#ddeeff",
+  });
+  assert.is(retained.entries[2], null);
+  assert.equal(retained.brainSnapshots, [
+    { id: "alpha-brain", color: "#aabbcc" },
+    { id: "beta-brain", color: "#ddeeff" },
+  ]);
+  assert.not.ok("populationCells" in retained);
+  assert.not.ok("cell" in retained.entries[0]);
+  assert.not.ok("cell" in retained.entries[1]);
+});
+
+test("TelemetryController guards environment resolution and emitters with error boundaries", () => {
+  const originalWarn = console.warn;
+  const warnings = [];
+
+  console.warn = (...args) => {
+    warnings.push(args);
+  };
+
+  try {
+    const controller = new TelemetryController({
+      stats: {
+        updateFromSnapshot(snapshot) {
+          return { tick: snapshot.tick };
+        },
+      },
+      computeLeaderboard() {
+        throw new Error("leaderboard failure");
+      },
+      now: () => 100,
+    });
+
+    controller.ingestSnapshot({ tick: 7, entries: [{ id: "alpha" }] });
+
+    const published = controller.publishIfDue({
+      getEnvironment: () => {
+        throw new Error("environment failure");
+      },
+      emitMetrics: () => {
+        throw new Error("metrics failure");
+      },
+      emitLeaderboard: () => {
+        throw new Error("leaderboard emit failure");
+      },
+    });
+
+    assert.is(published, true);
+    assert.not.ok(controller.hasPending());
+    assert.equal(controller.metrics, { tick: 7 });
+    assert.equal(controller.snapshot.entries, [
+      { id: "alpha", offspring: 0, fightsWon: 0, age: 0, color: null },
+    ]);
+    assert.is(warnings.length, 4);
+    assert.equal(
+      warnings.map(([message]) => message),
+      [
+        "Telemetry environment resolver failed; continuing without environment context.",
+        "Telemetry metrics emitter failed; skipping metrics publication.",
+        "Telemetry leaderboard computation failed; emitting empty leaderboard.",
+        "Telemetry leaderboard emitter failed; skipping leaderboard publication.",
+      ],
+    );
+  } finally {
+    console.warn = originalWarn;
+  }
+});
