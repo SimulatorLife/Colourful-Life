@@ -17,7 +17,7 @@ import {
   defaultEventContext,
   defaultIsEventAffecting,
 } from "../events/eventContext.js";
-import { accumulateEventModifiers } from "../energySystem.js";
+import { accumulateEventModifiers, resolveEventContribution } from "../energySystem.js";
 import InteractionSystem from "../interactionSystem.js";
 import GridInteractionAdapter from "./gridAdapter.js";
 import { clearTileEnergyBuffers } from "./energyUtils.js";
@@ -355,6 +355,7 @@ export default class GridManager {
   #energyDeltaLastSparse = false;
   #decayActiveScratch = null;
   #crowdingFeedbackScratch = { ...DEFAULT_CROWDING_SUMMARY };
+  #segmentedEventContributionCache = null;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -3111,6 +3112,7 @@ export default class GridManager {
     this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
     this.lastSnapshot = null;
     this.eventEffectCache?.clear?.();
+    this.#segmentedEventContributionCache = null;
     this.minPopulation = GridManager.#computeMinPopulation(rowsInt, colsInt);
 
     if (this.selectionManager?.setDimensions) {
@@ -3233,6 +3235,7 @@ export default class GridManager {
     this.lastSnapshot = null;
     this.densityDirtyTiles?.clear?.();
     this.eventEffectCache?.clear?.();
+    this.#segmentedEventContributionCache = null;
     this.#initializeDecayBuffers(this.rows, this.cols);
     this.#markObstacleRenderDirty();
 
@@ -3526,41 +3529,22 @@ export default class GridManager {
       // cached values instead of rebuilding the modifier set for every tile,
       // eliminating a major O(n_events * n_tiles) hotspot in dense areas.
       segmentedEventContributions = new Map();
-      const previousRow = eventOptions.row;
-      const previousCol = eventOptions.col;
-      const previousEvents = eventOptions.events;
-      const singleEventList = [null];
 
       for (let i = 0; i < evs.length; i++) {
         const ev = evs[i];
 
         if (!ev) continue;
 
-        singleEventList[0] = ev;
-        const area = ev.affectedArea;
-        const sampleRow = area
-          ? Math.min(rows - 1, Math.max(0, Math.floor(area.y ?? 0)))
-          : 0;
-        const sampleCol = area
-          ? Math.min(cols - 1, Math.max(0, Math.floor(area.x ?? 0)))
-          : 0;
-
-        eventOptions.row = sampleRow;
-        eventOptions.col = sampleCol;
-        eventOptions.events = singleEventList;
-
-        const modifiers = accumulateEventModifiers(eventOptions);
-
-        segmentedEventContributions.set(ev, {
-          regenMultiplier: modifiers?.regenMultiplier ?? 1,
-          regenAdd: modifiers?.regenAdd ?? 0,
-          drain: modifiers?.drainAdd ?? 0,
+        const contribution = this.#resolveSegmentedEventContribution(ev, {
+          strengthMultiplier: normalizedEventStrengthMultiplier,
+          getEventEffect,
+          effectCache,
         });
-      }
 
-      eventOptions.row = previousRow;
-      eventOptions.col = previousCol;
-      eventOptions.events = previousEvents;
+        if (contribution) {
+          segmentedEventContributions.set(ev, contribution);
+        }
+      }
     }
     let computeGeneralEventModifiers = null;
 
@@ -7469,6 +7453,67 @@ export default class GridManager {
     if (this.#targetDescriptorPool.length > limit) {
       this.#targetDescriptorPool.length = limit;
     }
+  }
+
+  #ensureSegmentedEventContributionCache() {
+    let cache = this.#segmentedEventContributionCache;
+
+    if (!cache) {
+      cache = new WeakMap();
+      this.#segmentedEventContributionCache = cache;
+    }
+
+    return cache;
+  }
+
+  #resolveSegmentedEventContribution(
+    event,
+    { strengthMultiplier = 1, getEventEffect, effectCache } = {},
+  ) {
+    if (!event) {
+      return null;
+    }
+
+    const cache = this.#ensureSegmentedEventContributionCache();
+    const resolverIdentity =
+      typeof getEventEffect === "function" ? getEventEffect : null;
+    const eventType = typeof event?.eventType === "string" ? event.eventType : null;
+    const numericMultiplier = Number(strengthMultiplier);
+    const multiplier = Number.isFinite(numericMultiplier) ? numericMultiplier : 1;
+    const baseStrength = Number(event?.strength ?? 0);
+    const normalizedBaseStrength = Number.isFinite(baseStrength) ? baseStrength : 0;
+    const strength = normalizedBaseStrength * multiplier;
+
+    const cached = cache.get(event);
+
+    if (
+      cached &&
+      cached.strength === strength &&
+      cached.effectResolver === resolverIdentity &&
+      cached.eventType === eventType
+    ) {
+      return cached;
+    }
+
+    const contribution = resolveEventContribution({
+      event,
+      strengthMultiplier: multiplier,
+      getEventEffect: resolverIdentity ?? undefined,
+      effectCache,
+    });
+
+    const record = {
+      regenMultiplier: contribution?.regenMultiplier ?? 1,
+      regenAdd: contribution?.regenAdd ?? 0,
+      drain: contribution?.drainAdd ?? 0,
+      strength,
+      eventType,
+      effectResolver: resolverIdentity,
+    };
+
+    cache.set(event, record);
+
+    return record;
   }
 
   #resetTickSimilarityCache() {
