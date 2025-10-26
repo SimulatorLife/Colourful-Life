@@ -357,6 +357,17 @@ export function createHeadlessUiManager(options = {}) {
         notify("leaderboardIntervalMs", settings.leaderboardIntervalMs);
       }
     },
+    getLeaderboardSize: () => settings.leaderboardSize,
+    setLeaderboardSize: (value) => {
+      if (
+        updateIfFinite("leaderboardSize", value, {
+          min: 0,
+          round: Math.floor,
+        })
+      ) {
+        notify("leaderboardSize", settings.leaderboardSize);
+      }
+    },
     shouldRenderSlowUi: (timestamp) => {
       if (!Number.isFinite(timestamp)) return false;
 

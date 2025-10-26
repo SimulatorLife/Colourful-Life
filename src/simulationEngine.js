@@ -294,6 +294,7 @@ export default class SimulationEngine {
       showFitness: defaults.showFitness,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
+      leaderboardSize: defaults.leaderboardSize,
       brainSnapshotLimit,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
@@ -1332,6 +1333,30 @@ export default class SimulationEngine {
     this.#updateState({ initialTileEnergyFraction: sanitized });
   }
 
+  setLeaderboardSize(value) {
+    const fallback = Number.isFinite(this.state.leaderboardSize)
+      ? this.state.leaderboardSize
+      : (SIMULATION_DEFAULTS.leaderboardSize ?? 0);
+    const sanitized = sanitizeNumber(value, {
+      fallback,
+      min: 0,
+      round: Math.floor,
+    });
+    const normalized =
+      Number.isFinite(sanitized) && sanitized >= 0 ? sanitized : fallback;
+
+    if (normalized === this.state.leaderboardSize) {
+      return normalized;
+    }
+
+    this.telemetry?.setLeaderboardSize?.(normalized);
+    this.telemetry?.markPending?.();
+    this.telemetry?.resetThrottle?.(Number.NEGATIVE_INFINITY);
+    this.#updateState({ leaderboardSize: normalized });
+
+    return normalized;
+  }
+
   setLeaderboardInterval(value) {
     this.#sanitizeAndSetState(
       "leaderboardIntervalMs",
@@ -1449,6 +1474,9 @@ export default class SimulationEngine {
         break;
       case "mutationMultiplier":
         this.setMutationMultiplier(value);
+        break;
+      case "leaderboardSize":
+        this.setLeaderboardSize(value);
         break;
       case "matingDiversityThreshold":
         this.setMatingDiversityThreshold(value);

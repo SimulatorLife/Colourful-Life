@@ -82,6 +82,18 @@ export default class TelemetryController {
     this.#pending = false;
   }
 
+  setLeaderboardSize(value) {
+    const nextSize = normalizeLeaderboardSize(value, this.#leaderboardSize);
+
+    if (nextSize === this.#leaderboardSize) {
+      return this.#leaderboardSize;
+    }
+
+    this.#leaderboardSize = nextSize;
+
+    return this.#leaderboardSize;
+  }
+
   resetThrottle(timestamp = NEGATIVE_INFINITY) {
     this.#lastSlowEmit = Number.isFinite(timestamp) ? timestamp : NEGATIVE_INFINITY;
   }
