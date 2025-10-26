@@ -37,6 +37,7 @@ const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Slightly calmer baseline keeps resting viable when resources tighten.
 const DEFAULT_ACTIVITY_BASE_RATE = 0.28;
 const DEFAULT_MUTATION_CHANCE = 0.15;
+const DEFAULT_ENERGY_REGEN_RATE = 0.012;
 const DEFAULT_INITIAL_TILE_ENERGY_FRACTION = 0.5;
 // Relaxed from 1.15 after a 60×60 dense seeding probe
 // (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
@@ -81,7 +82,21 @@ export function resolveMaxTileEnergy(env = RUNTIME_ENV) {
 export const MAX_TILE_ENERGY = resolveMaxTileEnergy();
 // Tuned baseline regeneration and diffusion keep crowd pressure meaningful while
 // still letting sparse regions recover enough to support exploration.
-export const ENERGY_REGEN_RATE_DEFAULT = 0.012;
+/**
+ * Resolves the baseline tile regeneration rate applied before density and event
+ * modifiers kick in. Allowing environments to override the default keeps the
+ * ecosystem tunable without code edits while still constraining rates to a
+ * stable 0..1 interval so tests remain deterministic.
+ */
+export function resolveEnergyRegenRate(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_ENERGY_REGEN_RATE", {
+    fallback: DEFAULT_ENERGY_REGEN_RATE,
+    min: 0,
+    max: 1,
+  });
+}
+
+export const ENERGY_REGEN_RATE_DEFAULT = resolveEnergyRegenRate();
 export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.05; // smoothing between tiles (per tick)
 export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
