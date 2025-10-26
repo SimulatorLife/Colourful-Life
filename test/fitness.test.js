@@ -1,7 +1,7 @@
 import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
-const computeFitnessModulePromise = import("../src/fitness.mjs");
+const computeFitnessModulePromise = import("../src/engine/fitness.mjs");
 const configModulePromise = import("../src/config.js");
 
 test("computeFitness defaults to config maxTileEnergy", async () => {

@@ -10,7 +10,7 @@ import {
 import { warnOnce } from "../utils/error.js";
 import DNA from "../genome.js";
 import Cell from "../cell.js";
-import { computeFitness } from "../fitness.mjs";
+import { computeFitness } from "../engine/fitness.mjs";
 import { computeBehaviorComplementarity } from "./behaviorComplementarity.js";
 import {
   createEventContext,
