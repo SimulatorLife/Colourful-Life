@@ -4600,6 +4600,119 @@ export default class Cell {
     return 0.15 + normalized * 0.85;
   }
 
+  resolveHarvestDemand({
+    baseRate = 0,
+    crowdPenalty = 1,
+    availableEnergy = 0,
+    maxTileEnergy = MAX_TILE_ENERGY,
+    minCap = 0,
+    maxCap = 1,
+    localDensity = 0,
+    densityEffectMultiplier = 1,
+    tileEnergy = null,
+    tileEnergyDelta = 0,
+  } = {}) {
+    const safeMinCap = clampFinite(minCap, 0, 1, 0);
+    const safeMaxCapCandidate = clampFinite(maxCap, safeMinCap, 1, safeMinCap);
+    const safeMaxCap = Math.max(safeMinCap, safeMaxCapCandidate);
+    const capacity = Math.max(
+      1e-4,
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
+    );
+    const normalizedEnergy = clamp(
+      Number.isFinite(this.energy) ? this.energy / capacity : 0,
+      0,
+      1,
+    );
+    const hunger = 1 - normalizedEnergy;
+    const scarcity = clamp(
+      tileEnergy != null && Number.isFinite(tileEnergy) ? 1 - tileEnergy : hunger,
+      0,
+      1,
+    );
+    const declinePressure = clamp(
+      -(Number.isFinite(tileEnergyDelta) ? tileEnergyDelta : 0),
+      0,
+      1,
+    );
+    const densityMultiplier = Number.isFinite(densityEffectMultiplier)
+      ? densityEffectMultiplier
+      : 1;
+    const effDensity = clamp(
+      (Number.isFinite(localDensity) ? localDensity : 0) * densityMultiplier,
+      0,
+      1,
+    );
+    const comfort = clamp(
+      Number.isFinite(this._crowdingTolerance)
+        ? this._crowdingTolerance
+        : Number.isFinite(this.baseCrowdingTolerance)
+          ? this.baseCrowdingTolerance
+          : 0.5,
+      0,
+      1,
+    );
+    const crowdPressure = Math.max(0, effDensity - comfort);
+    const crowdRelief = Math.max(0, comfort - effDensity);
+    const metabolism = clamp(
+      Number.isFinite(this.metabolism) ? this.metabolism : 0.35,
+      0.05,
+      3,
+    );
+    const metabolicPull = 1 + hunger * (0.6 + metabolism * 0.35);
+    const scarcityDrive = clamp(
+      this.neuralReinforcementProfile?.scarcityDrive ??
+        this.resourceTrendAdaptation ??
+        0.35,
+      0,
+      1.5,
+    );
+    const scarcityPressure =
+      1 +
+      scarcity * (0.45 + scarcityDrive * 0.35) +
+      declinePressure * (0.2 + scarcityDrive * 0.15);
+    const opportunity = this.#currentOpportunitySignal();
+    const opportunism =
+      1 +
+      Math.max(0, opportunity) * (0.18 + hunger * 0.22) -
+      Math.max(0, -opportunity) * 0.12;
+    const densityAdjustment =
+      1 +
+      crowdRelief * (0.2 + scarcity * 0.2) -
+      crowdPressure * (0.18 + (this.metabolicCrowdingTax || 0) * 0.22);
+    const availableNorm = capacity > 0 ? clamp(availableEnergy / capacity, 0, 1) : 0;
+    const anticipation = clamp(
+      hunger * 0.35 + declinePressure * 0.45 + availableNorm * 0.3,
+      0,
+      1.5,
+    );
+    const adaptive = 1 + anticipation * 0.35;
+    const expectation = clampFinite(baseRate, 0, safeMaxCap);
+    const baseline = expectation * clampFinite(crowdPenalty, 0, 3);
+    let demand =
+      baseline *
+      metabolicPull *
+      scarcityPressure *
+      opportunism *
+      densityAdjustment *
+      adaptive;
+
+    demand = clampFinite(demand, safeMinCap, safeMaxCap);
+
+    const starvationThreshold = this.starvationThreshold(capacity);
+
+    if (this.energy < starvationThreshold) {
+      const deficit = clamp((starvationThreshold - this.energy) / capacity, 0, 1);
+      const urgency = 1 + deficit * (0.4 + scarcity * 0.4 + declinePressure * 0.3);
+
+      demand = clampFinite(demand * urgency, safeMinCap, safeMaxCap);
+    }
+
+    return demand;
+  }
+
   #calculateMetabolicEnergyLoss(effectiveDensity, maxTileEnergy = MAX_TILE_ENERGY) {
     const energyLossConfig = this.density?.energyLoss ?? { min: 1, max: 1 };
     const minLoss = Number.isFinite(energyLossConfig.min) ? energyLossConfig.min : 1;

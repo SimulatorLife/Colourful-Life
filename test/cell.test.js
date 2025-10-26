@@ -342,6 +342,64 @@ test("harvest crowding penalty blends DNA tolerance and environment signals", ()
   );
 });
 
+test("harvest demand scales with hunger, scarcity, and opportunity cues", () => {
+  const dna = new DNA(0, 0, 0);
+  const cell = new Cell(0, 0, dna, 0.3);
+
+  cell.metabolism = 0.4;
+  cell.metabolicCrowdingTax = 0.2;
+  cell.neuralReinforcementProfile = { scarcityDrive: 0.5 };
+  cell.resourceTrendAdaptation = 0.4;
+  cell.baseCrowdingTolerance = 0.5;
+  cell._crowdingTolerance = 0.5;
+  cell.dna.starvationThresholdFrac = () => 0.2;
+
+  const demandContext = {
+    baseRate: 0.2,
+    crowdPenalty: 0.8,
+    availableEnergy: 0.8,
+    maxTileEnergy: 2,
+    minCap: 0.1,
+    maxCap: 0.45,
+    localDensity: 0.3,
+    densityEffectMultiplier: 1.1,
+    tileEnergy: 0.45,
+    tileEnergyDelta: 0.05,
+  };
+
+  const hungryDemand = cell.resolveHarvestDemand(demandContext);
+
+  cell.energy = 1.6;
+  const satiatedDemand = cell.resolveHarvestDemand(demandContext);
+
+  assert.ok(
+    hungryDemand > satiatedDemand,
+    "hungrier organisms should request more energy than satiated ones",
+  );
+
+  cell.energy = 0.3;
+  cell._opportunitySignal = 0.8;
+  const opportunisticDemand = cell.resolveHarvestDemand(demandContext);
+
+  cell._opportunitySignal = -0.8;
+  const cautiousDemand = cell.resolveHarvestDemand(demandContext);
+
+  assert.ok(
+    opportunisticDemand > hungryDemand + 1e-6,
+    "positive opportunity signals should amplify harvesting demand",
+  );
+  assert.ok(
+    cautiousDemand <= hungryDemand + 1e-9,
+    "negative opportunity signals should dampen harvesting demand",
+  );
+
+  assert.ok(
+    opportunisticDemand <= demandContext.maxCap + 1e-9 &&
+      cautiousDemand >= demandContext.minCap - 1e-9,
+    "harvest demand should respect configured caps",
+  );
+});
+
 test("movement sensors update DNA-tuned resource trend signal", () => {
   const dna = new DNA(120, 160, 200);
 
