@@ -1063,6 +1063,7 @@ export default class SimulationEngine {
         obstaclePreset: opts.obstaclePreset,
         presetOptions: opts.presetOptions,
         reseed: opts.reseed === true,
+        clearCustomZones: opts.clearCustomZones === true,
       });
     }
 
