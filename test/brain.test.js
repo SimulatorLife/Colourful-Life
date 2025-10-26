@@ -218,3 +218,43 @@ test("Brain.applyExperienceImprint blends adjustments using sensor keys and clam
   assertCloseTo(brain.sensorExperienceTargets[densityIndex], -0.4, 1e-6);
   assertCloseTo(brain.sensorExperienceTargets[threatIndex], -0.1, 1e-6);
 });
+
+test("Brain.registerActivationFunction injects custom activations without disturbing defaults", () => {
+  Brain.resetActivationFunctions();
+
+  try {
+    const baselineBrain = new Brain({
+      genes: [{ sourceId: 0, targetId: 192, weight: 1.5, activationType: 2 }],
+    });
+    const baselineEvaluation = baselineBrain.evaluateGroup("movement", {});
+
+    assertCloseTo(baselineEvaluation.values.rest, Math.tanh(1.5));
+
+    const customFn = (x) => x * 2;
+    const registered = Brain.registerActivationFunction(42, {
+      name: "double",
+      fn: customFn,
+    });
+
+    assert.ok(registered);
+    assert.is(Brain.getActivationFunction(42).name, "double");
+
+    const customBrain = new Brain({
+      genes: [{ sourceId: 0, targetId: 192, weight: 1.5, activationType: 42 }],
+    });
+    const customEvaluation = customBrain.evaluateGroup("movement", {});
+
+    assertCloseTo(customEvaluation.values.rest, customFn(1.5));
+
+    const preventedOverride = Brain.registerActivationFunction(
+      42,
+      { name: "noop", fn: (x) => x },
+      { overwrite: false },
+    );
+
+    assert.is(preventedOverride, false);
+    assert.is(Brain.getActivationFunction(42).name, "double");
+  } finally {
+    Brain.resetActivationFunctions();
+  }
+});
