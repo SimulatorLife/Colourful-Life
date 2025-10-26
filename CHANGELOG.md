@@ -103,6 +103,15 @@ where practical.
 
 ### Removed
 
+- Retired unused profiling and memory benchmarking harnesses
+  (`scripts/bench-segmented-events.mjs`, `scripts/benchmark-trait-aggregates.mjs`,
+  `scripts/eventManagerMemoryBenchmark.mjs`, `scripts/measure-decay-active-memory.mjs`,
+  `scripts/measure-diversity-memory.js`, `scripts/measure-fitness-overlay-memory.mjs`,
+  `scripts/measure-target-pool.mjs`, `scripts/profile-density.mjs`,
+  `scripts/profile-draw-spark.mjs`, `scripts/profile-memory.mjs`,
+  `scripts/profile-render-loop.mjs`, `scripts/profile-sensor-feedback.mjs`, and
+  `scripts/profile-snapshot-memory.mjs`) so the scripts directory focuses on the
+  maintained automation entry points.
 - Retired the Trait Focus overlay and associated headless controls; trait
   expression metrics now live exclusively in the dashboard cards and
   sparklines, eliminating the per-frame gene sampling pass that duplicated
