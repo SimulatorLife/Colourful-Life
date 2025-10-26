@@ -298,7 +298,7 @@ export default class TelemetryController {
       snapshot.populationCells.length = 0;
     }
 
-    if (Object.prototype.hasOwnProperty.call(snapshot, "populationCells")) {
+    if (Object.hasOwn(snapshot, "populationCells")) {
       delete snapshot.populationCells;
     }
 
