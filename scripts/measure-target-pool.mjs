@@ -33,6 +33,7 @@ function createGrid(rows, cols) {
     rng: () => 0.5,
     renderStrategy: "canvas",
   });
+
   grid.interactionSystem = { resolveIntent() {} };
 
   return { grid, stats, eventManager };
@@ -86,6 +87,7 @@ function saturateTargetPool(grid) {
     };
   };
   grid.consumeEnergy = () => {};
+
   grid.interactionSystem = { resolveIntent() {} };
 
   const processed = new WeakSet();
