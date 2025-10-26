@@ -562,7 +562,16 @@ export function resolveSimulationDefaults(overrides = {}) {
   sanitizeNumeric("energyDiffusionRate", { min: 0 });
   sanitizeNumeric("combatEdgeSharpness", { min: 0.1 });
   sanitizeNumeric("combatTerritoryEdgeFactor", { min: 0, max: 1 });
-  sanitizeNumeric("leaderboardIntervalMs", { min: LEADERBOARD_INTERVAL_MIN_MS });
+  const intervalCandidate = Number(merged.leaderboardIntervalMs);
+
+  if (Number.isFinite(intervalCandidate)) {
+    merged.leaderboardIntervalMs =
+      intervalCandidate <= 0
+        ? 0
+        : Math.max(LEADERBOARD_INTERVAL_MIN_MS, intervalCandidate);
+  } else {
+    merged.leaderboardIntervalMs = defaults.leaderboardIntervalMs;
+  }
   sanitizeNumeric("leaderboardSize", { min: 0, round: Math.floor });
   sanitizeNumeric("brainSnapshotLimit", { min: 0, round: Math.floor });
   sanitizeNumeric("matingDiversityThreshold", { min: 0, max: 1 });
