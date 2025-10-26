@@ -281,16 +281,11 @@ export class DNA {
     }
 
     let excess = cache.size - maxEntries;
-    const iterator = cache.keys();
 
-    while (excess > 0) {
-      const { value, done } = iterator.next();
+    for (const key of cache.keys()) {
+      if (excess <= 0) break;
 
-      if (done) {
-        break;
-      }
-
-      cache.delete(value);
+      cache.delete(key);
       excess -= 1;
     }
   }
