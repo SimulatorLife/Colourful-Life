@@ -1,3 +1,8 @@
+/**
+ * Minimal `classList` implementation used by the mock DOM helpers. Mirrors the
+ * DOMTokenList API surface relied upon by tests without pulling in a full DOM
+ * shim.
+ */
 class MockClassList {
   constructor(owner) {
     this.owner = owner;
@@ -24,8 +29,11 @@ class MockClassList {
     if (!token) return false;
     const shouldAdd = force ?? !this.classes.has(token);
 
-    if (shouldAdd) this.add(token);
-    else this.remove(token);
+    if (shouldAdd) {
+      this.add(token);
+    } else {
+      this.remove(token);
+    }
 
     return shouldAdd;
   }
@@ -35,6 +43,11 @@ class MockClassList {
   }
 }
 
+/**
+ * Lightweight DOM element facsimile that powers UI tests in Node. Supports the
+ * subset of methods/properties exercised by control builders and overlay code
+ * without requiring JSDOM.
+ */
 export class MockElement {
   constructor(tagName = "div") {
     this.tagName = tagName.toUpperCase();
