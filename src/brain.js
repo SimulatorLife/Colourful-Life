@@ -70,21 +70,72 @@ export const OUTPUT_GROUPS = Object.freeze({
   ]),
 });
 
-const ACTIVATION_FUNCS = {
-  0: { name: "identity", fn: (x) => x },
-  1: {
-    name: "sigmoid",
-    fn: (x) => 1 / (1 + Math.exp(-clamp(x, -20, 20))),
-  },
-  2: { name: "tanh", fn: (x) => Math.tanh(clamp(x, -8, 8)) },
-  3: { name: "relu", fn: (x) => (x > 0 ? x : 0) },
-  4: { name: "step", fn: (x) => (x >= 0 ? 1 : 0) },
-  5: { name: "sin", fn: (x) => Math.sin(x) },
-  6: { name: "gaussian", fn: (x) => Math.exp(-x * x) },
-  7: { name: "abs", fn: (x) => Math.abs(x) },
-};
-
 const DEFAULT_ACTIVATION = 2; // tanh
+
+// Built-in activation registry entries; extend via Brain.registerActivationFunction.
+const DEFAULT_ACTIVATION_ENTRIES = Object.freeze([
+  [0, Object.freeze({ name: "identity", fn: (x) => x })],
+  [
+    1,
+    Object.freeze({
+      name: "sigmoid",
+      fn: (x) => 1 / (1 + Math.exp(-clamp(x, -20, 20))),
+    }),
+  ],
+  [2, Object.freeze({ name: "tanh", fn: (x) => Math.tanh(clamp(x, -8, 8)) })],
+  [3, Object.freeze({ name: "relu", fn: (x) => (x > 0 ? x : 0) })],
+  [4, Object.freeze({ name: "step", fn: (x) => (x >= 0 ? 1 : 0) })],
+  [5, Object.freeze({ name: "sin", fn: (x) => Math.sin(x) })],
+  [6, Object.freeze({ name: "gaussian", fn: (x) => Math.exp(-x * x) })],
+  [7, Object.freeze({ name: "abs", fn: (x) => Math.abs(x) })],
+]);
+
+const DEFAULT_ACTIVATION_ENTRY = DEFAULT_ACTIVATION_ENTRIES.find(
+  ([type]) => type === DEFAULT_ACTIVATION,
+)[1];
+
+let activationFunctionRegistry = new Map(DEFAULT_ACTIVATION_ENTRIES);
+
+function normalizeActivationDefinition(definition) {
+  if (typeof definition === "function") {
+    const fn = definition;
+    const name = fn.name && fn.name.length > 0 ? fn.name : "custom";
+
+    return Object.freeze({ name, fn });
+  }
+
+  if (!definition || typeof definition !== "object") {
+    return null;
+  }
+
+  const fn = definition.fn;
+
+  if (typeof fn !== "function") {
+    return null;
+  }
+
+  const nameCandidate =
+    typeof definition.name === "string" && definition.name.trim().length > 0
+      ? definition.name.trim()
+      : fn.name;
+  const name = nameCandidate && nameCandidate.length > 0 ? nameCandidate : "custom";
+
+  return Object.freeze({ name, fn });
+}
+
+function resolveActivationInfo(type) {
+  const numericType = Number(type);
+
+  if (Number.isFinite(numericType) && activationFunctionRegistry.has(numericType)) {
+    return activationFunctionRegistry.get(numericType);
+  }
+
+  return activationFunctionRegistry.get(DEFAULT_ACTIVATION) ?? DEFAULT_ACTIVATION_ENTRY;
+}
+
+function resetActivationFunctionRegistry() {
+  activationFunctionRegistry = new Map(DEFAULT_ACTIVATION_ENTRIES);
+}
 
 const mix = (a, b, t) => a + (b - a) * clamp(Number.isFinite(t) ? t : 0, 0, 1);
 
@@ -110,6 +161,64 @@ export default class Brain {
     if (typeof key !== "string") return undefined;
 
     return SENSOR_LOOKUP.get(key);
+  }
+
+  /**
+   * Registers or overrides an activation function used when evaluating neurons.
+   * Returns `true` when the registry was updated and `false` when the input was
+   * invalid or overwriting was disallowed.
+   *
+   * @param {number} id - Numeric activation type identifier.
+   * @param {Function|{fn: Function, name?: string}} definition - Function or
+   *   descriptor providing the activation implementation.
+   * @param {{overwrite?: boolean}} [options]
+   * @returns {boolean}
+   */
+  static registerActivationFunction(id, definition, { overwrite = true } = {}) {
+    const numericId = Number(id);
+
+    if (!Number.isFinite(numericId)) {
+      return false;
+    }
+
+    const normalized = normalizeActivationDefinition(definition);
+
+    if (!normalized) {
+      return false;
+    }
+
+    if (!overwrite && activationFunctionRegistry.has(numericId)) {
+      return false;
+    }
+
+    activationFunctionRegistry.set(numericId, normalized);
+
+    return true;
+  }
+
+  /**
+   * Restores the activation registry to the built-in defaults.
+   */
+  static resetActivationFunctions() {
+    resetActivationFunctionRegistry();
+  }
+
+  /**
+   * Returns the activation descriptor for a specific type if registered.
+   *
+   * @param {number} id - Activation type identifier.
+   * @returns {{name: string, fn: Function}|null}
+   */
+  static getActivationFunction(id) {
+    const numericId = Number(id);
+
+    if (!Number.isFinite(numericId)) {
+      return null;
+    }
+
+    const info = activationFunctionRegistry.get(numericId);
+
+    return info ?? null;
   }
 
   static fromDNA(dna) {
@@ -331,8 +440,7 @@ export default class Brain {
       visiting.delete(nodeId);
       activationCount++;
       const activationType = this.activationMap.get(nodeId) ?? DEFAULT_ACTIVATION;
-      const activationInfo =
-        ACTIVATION_FUNCS[activationType] || ACTIVATION_FUNCS[DEFAULT_ACTIVATION];
+      const activationInfo = resolveActivationInfo(activationType);
       const output = activationInfo.fn(sum);
 
       cache.set(nodeId, output);
@@ -413,9 +521,7 @@ export default class Brain {
         ([node, type]) => ({
           node,
           activationType: type,
-          activationName: (
-            ACTIVATION_FUNCS[type] || ACTIVATION_FUNCS[DEFAULT_ACTIVATION]
-          ).name,
+          activationName: resolveActivationInfo(type).name,
         }),
       ),
       sensors: this.lastSensors ? [...this.lastSensors] : null,
