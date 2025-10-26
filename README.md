@@ -19,7 +19,7 @@ Colourful Life targets the Node.js **25.x** series (the included `.nvmrc` pins t
 1. Run `nvm use` (install with `nvm install` first if necessary) so your shell matches the pinned Node.js version.
 2. Install dependencies with `npm ci` (fall back to `npm install` when you intentionally need a non-clean install), then run `npm run prepare` so Husky hooks stay active after fresh clones or `.husky/` updates.
 3. Start the Parcel dev server with `npm run start` and open `http://localhost:1234`.
-4. Keep a second terminal handy for `npm test`, `npm run lint`, and `npm run format:check` whenever you touch shared helpers, simulation logic, or documentation.
+4. Keep a second terminal handy for `npm run check` (or the individual `npm test`, `npm run lint`, and `npm run format:check` commands) whenever you touch shared helpers, simulation logic, or documentation.
 5. Run `npm run clean` if the dev server misbehaves; it clears `dist/` and `.parcel-cache/` before you restart Parcel.
 
 Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, and skim [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, and testing expectations once the quick start is familiar.
