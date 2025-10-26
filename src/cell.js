@@ -6443,19 +6443,28 @@ export default class Cell {
       { key: "reciprocate", probability: reciprocateProb },
       { key: "amplify", probability: amplifyProb },
     ];
-    let dominantIntent = probabilitySummary[0];
-    let runnerUpIntent = { key: null, probability: 0 };
+    const { dominantIntent, runnerUpIntent } = probabilitySummary.reduce(
+      (acc, entry, index) => {
+        if (index === 0) {
+          acc.dominantIntent = entry;
 
-    for (let i = 0; i < probabilitySummary.length; i++) {
-      const entry = probabilitySummary[i];
+          return acc;
+        }
 
-      if (entry.probability > dominantIntent.probability) {
-        runnerUpIntent = dominantIntent;
-        dominantIntent = entry;
-      } else if (entry.probability > runnerUpIntent.probability) {
-        runnerUpIntent = entry;
-      }
-    }
+        if (entry.probability > acc.dominantIntent.probability) {
+          acc.runnerUpIntent = acc.dominantIntent;
+          acc.dominantIntent = entry;
+        } else if (entry.probability > acc.runnerUpIntent.probability) {
+          acc.runnerUpIntent = entry;
+        }
+
+        return acc;
+      },
+      {
+        dominantIntent: { key: null, probability: 0 },
+        runnerUpIntent: { key: null, probability: 0 },
+      },
+    );
 
     const preference = clamp(amplifyProb - conserveProb, -1, 1);
     const balanceLean = clamp(reciprocateProb - 1 / Math.max(1, entries.length), -1, 1);
