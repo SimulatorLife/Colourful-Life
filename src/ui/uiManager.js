@@ -2252,17 +2252,14 @@ export default class UIManager {
 
     this.deathBreakdownList.innerHTML = "";
 
-    const entries = [];
+    const entries =
+      breakdown && typeof breakdown === "object"
+        ? Object.entries(breakdown).flatMap(([key, value]) => {
+            const count = Number(value);
 
-    if (breakdown && typeof breakdown === "object") {
-      for (const [key, value] of Object.entries(breakdown)) {
-        const numeric = Number(value);
-
-        if (!Number.isFinite(numeric) || numeric <= 0) continue;
-
-        entries.push({ key, count: numeric });
-      }
-    }
+            return Number.isFinite(count) && count > 0 ? [{ key, count }] : [];
+          })
+        : [];
 
     entries.sort((a, b) => b.count - a.count);
 
