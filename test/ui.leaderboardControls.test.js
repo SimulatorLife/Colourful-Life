@@ -4,7 +4,7 @@ import { findSliderByLabel } from "./helpers/controlQueries.js";
 
 const test = suite("ui leaderboard cadence controls");
 
-test("evolution insights panel exposes dashboard cadence slider", async () => {
+test("dashboard settings panel exposes dashboard cadence slider", async () => {
   const restore = setupDom();
 
   try {
@@ -25,16 +25,38 @@ test("evolution insights panel exposes dashboard cadence slider", async () => {
 
     uiManager.renderLeaderboard([]);
 
+    const settingsPanel = uiManager.dashboardSettingsPanel;
+
+    assert.ok(
+      settingsPanel,
+      "dashboard settings panel should be constructed when cadence config exists",
+    );
+
+    const settingsSlider = findSliderByLabel(
+      settingsPanel,
+      "Dashboard Refresh Interval",
+    );
+
+    assert.ok(
+      settingsSlider,
+      "dashboard settings should surface dashboard cadence slider",
+    );
+    assert.is(
+      settingsSlider.value,
+      String(uiManager.leaderboardIntervalMs),
+      "slider should reflect current cadence",
+    );
+
     const insightsSlider = findSliderByLabel(
       uiManager.insightsPanel,
       "Dashboard Refresh Interval",
     );
 
-    assert.ok(
+    assert.is(
       insightsSlider,
-      "evolution insights should surface dashboard cadence slider",
+      null,
+      "evolution insights panel should no longer host the cadence slider",
     );
-    assert.is(insightsSlider.value, String(uiManager.leaderboardIntervalMs));
 
     const leaderboardSlider = findSliderByLabel(
       uiManager.leaderPanel,
@@ -49,8 +71,8 @@ test("evolution insights panel exposes dashboard cadence slider", async () => {
 
     const nextValue = uiManager.leaderboardIntervalMs + 250;
 
-    insightsSlider.value = String(nextValue);
-    insightsSlider.trigger("input");
+    settingsSlider.value = String(nextValue);
+    settingsSlider.trigger("input");
 
     assert.is(
       uiManager.leaderboardIntervalMs,
