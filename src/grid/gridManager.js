@@ -6172,6 +6172,7 @@ export default class GridManager {
     scarcity = 0,
     diversityOpportunity = 0,
     diversityOpportunityAvailability = 0,
+    noveltyPressure = 0,
   } = {}) {
     const sliderFloor = clamp(Number.isFinite(floor) ? floor : 0, 0, 1);
 
@@ -6238,6 +6239,7 @@ export default class GridManager {
       1,
     );
     const scarcitySignal = clamp(Number.isFinite(scarcity) ? scarcity : 0, 0, 1);
+    const novelty = clamp(Number.isFinite(noveltyPressure) ? noveltyPressure : 0, 0, 1);
     const strategyPressureValue = clamp(
       Number.isFinite(strategyPressure) ? strategyPressure : 0,
       0,
@@ -6269,6 +6271,20 @@ export default class GridManager {
 
       severity += availabilityDemand * (0.35 + opportunitySignal * 0.25);
       severity *= 1 + availabilityDemand * 0.2;
+    }
+
+    if (novelty > 0) {
+      const noveltyDemand =
+        novelty * (0.18 + probabilitySlack * 0.28 + closeness * 0.3 + pressure * 0.25);
+
+      severity += noveltyDemand;
+
+      const noveltyIntensity =
+        novelty * (0.1 + diversityShortfall * 0.25 + opportunitySignal * 0.2);
+
+      if (noveltyIntensity > 0) {
+        severity *= 1 + noveltyIntensity * (0.5 + strategyPressureValue * 0.25);
+      }
     }
 
     if (complementarity > 0 && evennessDrag > 0) {
@@ -6535,6 +6551,21 @@ export default class GridManager {
     const diversityOpportunityScore = diversityOpportunitySummary.score;
     const diversityOpportunityWeight = diversityOpportunitySummary.weight;
     const diversityOpportunityAvailability = diversityOpportunitySummary.availability;
+    const parentNovelty =
+      typeof cell.getMateNoveltyPressure === "function"
+        ? cell.getMateNoveltyPressure()
+        : undefined;
+    const mateNovelty =
+      bestMate.target && typeof bestMate.target.getMateNoveltyPressure === "function"
+        ? bestMate.target.getMateNoveltyPressure()
+        : undefined;
+    const noveltyNumerator =
+      (Number.isFinite(parentNovelty) ? parentNovelty : 0) +
+      (Number.isFinite(mateNovelty) ? mateNovelty : 0);
+    const noveltyDenominator =
+      (Number.isFinite(parentNovelty) ? 1 : 0) + (Number.isFinite(mateNovelty) ? 1 : 0);
+    const combinedNovelty =
+      noveltyDenominator > 0 ? noveltyNumerator / noveltyDenominator : undefined;
 
     if (diversity < pairDiversityThreshold) {
       penalizedForSimilarity = true;
@@ -6555,6 +6586,7 @@ export default class GridManager {
         scarcity: scarcitySignal,
         diversityOpportunity: diversityOpportunityScore,
         diversityOpportunityAvailability,
+        noveltyPressure: combinedNovelty,
       });
 
       diversityPenaltyMultiplier = clamp(diversityPenaltyMultiplier, 0, 1);
@@ -6897,22 +6929,6 @@ export default class GridManager {
     if (blockedInfo && stats?.recordReproductionBlocked) {
       stats.recordReproductionBlocked(blockedInfo);
     }
-
-    const parentNovelty =
-      typeof cell.getMateNoveltyPressure === "function"
-        ? cell.getMateNoveltyPressure()
-        : undefined;
-    const mateNovelty =
-      bestMate.target && typeof bestMate.target.getMateNoveltyPressure === "function"
-        ? bestMate.target.getMateNoveltyPressure()
-        : undefined;
-    const noveltyNumerator =
-      (Number.isFinite(parentNovelty) ? parentNovelty : 0) +
-      (Number.isFinite(mateNovelty) ? mateNovelty : 0);
-    const noveltyDenominator =
-      (Number.isFinite(parentNovelty) ? 1 : 0) + (Number.isFinite(mateNovelty) ? 1 : 0);
-    const combinedNovelty =
-      noveltyDenominator > 0 ? noveltyNumerator / noveltyDenominator : undefined;
 
     if (stats?.recordMateChoice) {
       stats.recordMateChoice({
