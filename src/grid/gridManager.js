@@ -6,6 +6,7 @@ import {
   sanitizePositiveInteger,
 } from "../utils/math.js";
 import { createRankedBuffer, isArrayLike } from "../utils/collections.js";
+import { resolveCellColor } from "../utils/cell.js";
 import { warnOnce } from "../utils/error.js";
 import DNA from "../genome.js";
 import Cell from "../cell.js";
@@ -6913,13 +6914,11 @@ export default class GridManager {
                   absorbTileEnergy: true,
                 });
                 const parentColors = [];
+                const parentAColor = resolveCellColor(cell);
+                const parentBColor = resolveCellColor(bestMate.target);
 
-                if (typeof cell?.dna?.toColor === "function") {
-                  parentColors.push(cell.dna.toColor());
-                }
-                if (typeof bestMate.target?.dna?.toColor === "function") {
-                  parentColors.push(bestMate.target.dna.toColor());
-                }
+                if (parentAColor) parentColors.push(parentAColor);
+                if (parentBColor) parentColors.push(parentBColor);
 
                 stats.onBirth(offspring, {
                   row: spawn.r,
@@ -7274,12 +7273,7 @@ export default class GridManager {
         const fitness = computeFitness(cell, cap);
         const fightsWon = Number.isFinite(cell.fightsWon) ? cell.fightsWon : 0;
         const offspring = Number.isFinite(cell.offspring) ? cell.offspring : 0;
-        const colorCandidate =
-          typeof cell.color === "string"
-            ? cell.color
-            : typeof cell.dna?.toColor === "function"
-              ? cell.dna.toColor()
-              : null;
+        const colorCandidate = resolveCellColor(cell);
         const entry = {
           row,
           col,

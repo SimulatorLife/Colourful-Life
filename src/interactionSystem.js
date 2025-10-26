@@ -1,4 +1,5 @@
 import { clamp, clamp01 } from "./utils/math.js";
+import { resolveCellColor } from "./utils/cell.js";
 import GridInteractionAdapter from "./grid/gridAdapter.js";
 import {
   COMBAT_EDGE_SHARPNESS_DEFAULT,
@@ -492,18 +493,8 @@ export default class InteractionSystem {
 
     const attackerCost = applyFightCost(attacker);
     const defenderCost = applyFightCost(defender);
-    const attackerColor =
-      typeof attacker?.dna?.toColor === "function"
-        ? attacker.dna.toColor()
-        : typeof attacker?.color === "string"
-          ? attacker.color
-          : null;
-    const defenderColor =
-      typeof defender?.dna?.toColor === "function"
-        ? defender.dna.toColor()
-        : typeof defender?.color === "string"
-          ? defender.color
-          : null;
+    const attackerColor = resolveCellColor(attacker);
+    const defenderColor = resolveCellColor(defender);
 
     const attackerPower = computeCombatPower(attacker);
     const defenderPower = computeCombatPower(defender);
