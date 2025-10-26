@@ -198,6 +198,7 @@ export default class GridManager {
   #populationCellsScratch = null;
   #energyDeltaDirtyTiles = null;
   #energyDeltaLastSparse = false;
+  #decayActiveScratch = null;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -418,6 +419,28 @@ export default class GridManager {
     }
 
     return this.#populationCellsScratch;
+  }
+
+  #acquireDecayActiveBuffer() {
+    const scratch = this.#decayActiveScratch;
+
+    if (scratch) {
+      this.#decayActiveScratch = null;
+      scratch.clear();
+
+      return scratch;
+    }
+
+    return new Set();
+  }
+
+  #recycleDecayActiveBuffer(buffer) {
+    if (!buffer) {
+      return;
+    }
+
+    buffer.clear();
+    this.#decayActiveScratch = buffer;
   }
 
   #ensureTrackedCell(cell) {
@@ -1424,7 +1447,14 @@ export default class GridManager {
 
     this.decayAmount = Array.from({ length: rowCount }, () => Array(colCount).fill(0));
     this.decayAge = Array.from({ length: rowCount }, () => Array(colCount).fill(0));
-    this.decayActive = new Set();
+    if (this.decayActive) {
+      this.decayActive.clear();
+    } else {
+      this.decayActive = new Set();
+    }
+    if (this.#decayActiveScratch) {
+      this.#decayActiveScratch.clear();
+    }
     this.decayDeltaPending = null;
   }
 
@@ -1545,7 +1575,7 @@ export default class GridManager {
       return;
     }
 
-    const nextActive = new Set();
+    const nextActive = this.#acquireDecayActiveBuffer();
 
     for (const key of this.decayActive) {
       const row = Math.floor(key / this.cols);
@@ -1594,7 +1624,10 @@ export default class GridManager {
       nextActive.add(key);
     }
 
+    const previousActive = this.decayActive;
+
     this.decayActive = nextActive;
+    this.#recycleDecayActiveBuffer(previousActive);
   }
 
   constructor(rows, cols, options = {}) {
