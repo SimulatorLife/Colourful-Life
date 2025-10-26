@@ -68,17 +68,17 @@ const DEFAULT_CROWDING_SUMMARY = Object.freeze({
   scarcity: 0,
   count: 0,
 });
+const CROWDING_PREFERENCE_CONTEXT = Object.freeze({ fallback: 0.5 });
 
-function computeCrowdingFeedback({
+function computeCrowdingFeedback(
   grid,
   row,
   col,
   rows,
   cols,
-  neighborOffsets = NEIGHBOR_OFFSETS,
   maxTileEnergy = 0,
   result = null,
-} = {}) {
+) {
   const out =
     result && typeof result === "object"
       ? result
@@ -87,10 +87,10 @@ function computeCrowdingFeedback({
   let scarcitySum = 0;
   let count = 0;
   const norm = maxTileEnergy > 0 ? 1 / maxTileEnergy : 0;
-  const offsets = Array.isArray(neighborOffsets) ? neighborOffsets : NEIGHBOR_OFFSETS;
   const gridRows = Array.isArray(grid) ? grid : null;
   const maxRows = rows;
   const maxCols = cols;
+  const useEnergy = norm > 0;
 
   // Hoist shared lookups outside the neighbor loop to minimize repeated property access.
 
@@ -102,11 +102,8 @@ function computeCrowdingFeedback({
     return out;
   }
 
-  for (let i = 0, len = offsets.length; i < len; i++) {
-    const offset = offsets[i];
-
-    if (!offset) continue;
-
+  for (let i = 0; i < NEIGHBOR_OFFSETS.length; i++) {
+    const offset = NEIGHBOR_OFFSETS[i];
     const nr = row + offset[0];
     const nc = col + offset[1];
 
@@ -124,12 +121,17 @@ function computeCrowdingFeedback({
     const getPreference = occupant.getCrowdingPreference;
 
     if (typeof getPreference === "function") {
-      tolerance = getPreference.call(occupant, { fallback: 0.5 });
+      tolerance = getPreference.call(occupant, CROWDING_PREFERENCE_CONTEXT);
     } else {
-      const baselineCandidate = occupant.baseCrowdingTolerance;
-      const baseline = Number.isFinite(baselineCandidate) ? baselineCandidate : 0.5;
-      const adaptedCandidate = occupant._crowdingTolerance;
-      const adapted = Number.isFinite(adaptedCandidate) ? adaptedCandidate : baseline;
+      let adapted = occupant._crowdingTolerance;
+
+      if (!Number.isFinite(adapted)) {
+        adapted = occupant.baseCrowdingTolerance;
+
+        if (!Number.isFinite(adapted)) {
+          adapted = 0.5;
+        }
+      }
 
       if (adapted <= 0) {
         tolerance = 0;
@@ -142,9 +144,11 @@ function computeCrowdingFeedback({
 
     toleranceSum += tolerance;
 
-    if (norm > 0) {
-      const energyCandidate = occupant.energy;
-      const energy = Number.isFinite(energyCandidate) ? energyCandidate : 0;
+    if (useEnergy) {
+      let energy = occupant.energy;
+
+      if (!Number.isFinite(energy)) energy = 0;
+
       let normalizedEnergy = energy * norm;
 
       if (normalizedEnergy <= 0) {
@@ -3704,16 +3708,15 @@ export default class GridManager {
             let densityImpact = REGEN_DENSITY_PENALTY * effectiveDensity;
 
             if (densityImpact > 0) {
-              const feedback = computeCrowdingFeedback({
+              const feedback = computeCrowdingFeedback(
                 grid,
-                row: r,
-                col: c,
+                r,
+                c,
                 rows,
                 cols,
-                neighborOffsets: NEIGHBOR_OFFSETS,
-                maxTileEnergy: positiveMaxTileEnergy,
-                result: this.#crowdingFeedbackScratch,
-              });
+                positiveMaxTileEnergy,
+                this.#crowdingFeedbackScratch,
+              );
 
               if (feedback.count > 0) {
                 const comfort = feedback.comfort;
