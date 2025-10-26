@@ -14,6 +14,7 @@ const LIFE_EVENT_MARKER_DEFAULT_COLORS = Object.freeze({
   birth: "#7bed9f",
   death: "#ff6b6b",
 });
+const LIFE_EVENT_LEGEND_MIN_WIDTH = 150;
 const DEFAULT_OBSTACLE_MASK_FILL = "rgba(40,40,55,0.35)";
 const DEFAULT_OBSTACLE_MASK_OUTLINE = "rgba(200,200,255,0.35)";
 const OBSTACLE_MASK_LINE_WIDTH_SCALE = 0.12;
@@ -294,7 +295,46 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
     : LIFE_EVENT_MARKER_FADE_TICKS;
   const markerRadius = Math.max(cellSize * 0.42, cellSize * 0.24);
   const strokeWidth = Math.max(cellSize * 0.18, 1.25);
-  let rendered = 0;
+  const prepared = [];
+
+  const colorOverrides = options.colors;
+
+  for (const event of events) {
+    if (!event) continue;
+
+    const row = Number(event.row);
+    const col = Number(event.col);
+
+    if (!Number.isFinite(row) || !Number.isFinite(col)) {
+      continue;
+    }
+
+    const tick = Number(event.tick);
+    let alpha = LIFE_EVENT_MARKER_MAX_ALPHA;
+
+    if (currentTick != null && Number.isFinite(tick)) {
+      const age = currentTick - tick;
+
+      if (age < 0 || age > fadeWindow) {
+        continue;
+      }
+
+      alpha = clamp(computeLifeEventAlpha(age, { maxAge: fadeWindow }), 0, 1);
+    }
+
+    const color = resolveLifeEventColor(event, colorOverrides);
+    const type =
+      event.type === "death" ? "death" : event.type === "birth" ? "birth" : "other";
+
+    prepared.push({ row, col, color, alpha, type });
+  }
+
+  if (prepared.length === 0) {
+    return;
+  }
+
+  const toRender = prepared.slice(0, maxCount);
+  const renderedCounts = { birth: 0, death: 0, other: 0 };
 
   if (typeof ctx.save === "function") ctx.save();
 
@@ -305,53 +345,32 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
 
   if (ctx.lineWidth !== undefined) ctx.lineWidth = strokeWidth;
 
-  const renderEvent = (event) => {
-    if (!event) return false;
+  for (const entry of toRender) {
+    const { row, col, color: rawColor, alpha, type } = entry;
 
-    const row = Number(event.row);
-    const col = Number(event.col);
-
-    if (!Number.isFinite(row) || !Number.isFinite(col)) {
-      return false;
+    if (ctx.globalAlpha !== undefined) {
+      ctx.globalAlpha = Number.isFinite(alpha) ? alpha : LIFE_EVENT_MARKER_MAX_ALPHA;
     }
 
-    const tick = Number(event.tick);
-
-    if (currentTick != null && Number.isFinite(tick)) {
-      const age = currentTick - tick;
-
-      if (age < 0 || age > fadeWindow) {
-        return false;
-      }
-
-      const alpha = computeLifeEventAlpha(age, { maxAge: fadeWindow });
-
-      if (ctx.globalAlpha !== undefined) {
-        ctx.globalAlpha = clamp(alpha, 0, 1);
-      }
-    } else if (ctx.globalAlpha !== undefined) {
-      ctx.globalAlpha = LIFE_EVENT_MARKER_MAX_ALPHA;
-    }
-
-    const color = resolveLifeEventColor(event, options.colors);
+    const color =
+      typeof rawColor === "string" && rawColor.length > 0
+        ? rawColor
+        : type === "death"
+          ? LIFE_EVENT_MARKER_DEFAULT_COLORS.death
+          : LIFE_EVENT_MARKER_DEFAULT_COLORS.birth;
     const centerX = (col + 0.5) * cellSize;
     const centerY = (row + 0.5) * cellSize;
 
-    if (event.type === "death") {
+    if (type === "death") {
       drawDeathMarker(ctx, centerX, centerY, markerRadius, color);
+      renderedCounts.death++;
+    } else if (type === "birth") {
+      drawBirthMarker(ctx, centerX, centerY, markerRadius, color);
+      renderedCounts.birth++;
     } else {
       drawBirthMarker(ctx, centerX, centerY, markerRadius, color);
+      renderedCounts.other++;
     }
-
-    return true;
-  };
-
-  for (const event of events) {
-    if (rendered >= maxCount) break;
-
-    if (!renderEvent(event)) continue;
-
-    rendered++;
   }
 
   if (ctx.globalAlpha !== undefined) {
@@ -361,6 +380,170 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
     ctx.lineWidth = previousLineWidth;
   }
   if (typeof ctx.restore === "function") ctx.restore();
+
+  const legendColors = {
+    birth: resolveLifeEventColor({ type: "birth" }, colorOverrides),
+    death: resolveLifeEventColor({ type: "death" }, colorOverrides),
+  };
+
+  drawLifeEventLegend(ctx, cellSize, renderedCounts, {
+    colors: legendColors,
+    fadeWindow,
+    drawnCount: toRender.length,
+    visibleCount: prepared.length,
+  });
+}
+
+function normalizeLegendColor(candidate, fallback) {
+  return typeof candidate === "string" && candidate.length > 0 ? candidate : fallback;
+}
+
+function drawLegendBirthBadge(ctx, centerX, centerY, radius, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(1, radius * 0.7);
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, Math.max(radius * 0.45, 1), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawLegendDeathBadge(ctx, centerX, centerY, size, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(1, size * 0.75);
+  const half = size / 2;
+
+  ctx.beginPath();
+  ctx.moveTo(centerX - half, centerY - half);
+  ctx.lineTo(centerX + half, centerY + half);
+  ctx.moveTo(centerX - half, centerY + half);
+  ctx.lineTo(centerX + half, centerY - half);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, Math.max(size * 0.35, 1), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawLifeEventLegend(ctx, cellSize, counts = {}, metadata = {}) {
+  if (!ctx) return;
+
+  const drawnCount = Number.isFinite(metadata.drawnCount) ? metadata.drawnCount : 0;
+
+  if (drawnCount <= 0) {
+    return;
+  }
+
+  const fadeWindow = Number.isFinite(metadata.fadeWindow) ? metadata.fadeWindow : null;
+  const visibleCount = Number.isFinite(metadata.visibleCount)
+    ? metadata.visibleCount
+    : drawnCount;
+  const birthCount = Number.isFinite(counts.birth) ? counts.birth : 0;
+  const deathCount = Number.isFinite(counts.death) ? counts.death : 0;
+  const net = birthCount - deathCount;
+  const birthColor = normalizeLegendColor(
+    metadata.colors?.birth,
+    LIFE_EVENT_MARKER_DEFAULT_COLORS.birth,
+  );
+  const deathColor = normalizeLegendColor(
+    metadata.colors?.death,
+    LIFE_EVENT_MARKER_DEFAULT_COLORS.death,
+  );
+  const netColor =
+    net > 0 ? birthColor : net < 0 ? deathColor : "rgba(255,255,255,0.85)";
+  const padding = 10;
+  const lineHeight = 16;
+  const bulletRadius = clamp(cellSize * 0.32, 3.5, 7);
+  const bulletColumnWidth = bulletRadius * 2 + 6;
+  const titleFont = "bold 12px sans-serif";
+  const bodyFont = "12px sans-serif";
+  const title = "Life events";
+  const fadeLine =
+    fadeWindow && fadeWindow > 0
+      ? `Fade window ≤ ${fadeWindow} tick${fadeWindow === 1 ? "" : "s"}`
+      : null;
+  const coverageLine =
+    visibleCount > 0
+      ? visibleCount > drawnCount
+        ? `Markers: ${drawnCount} of ${visibleCount}`
+        : `Markers: ${drawnCount}`
+      : null;
+  const lines = [
+    fadeLine ? { text: fadeLine, type: "meta" } : null,
+    coverageLine ? { text: coverageLine, type: "meta" } : null,
+    { text: `Births: ${birthCount}`, type: "birth" },
+    { text: `Deaths: ${deathCount}`, type: "death" },
+    { text: `Net: ${net > 0 ? "+" : ""}${net}`, type: "net" },
+  ].filter(Boolean);
+
+  ctx.save();
+  ctx.textBaseline = "top";
+  ctx.font = titleFont;
+  const titleWidth =
+    typeof ctx.measureText === "function" ? ctx.measureText(title).width : 0;
+
+  ctx.font = bodyFont;
+  const bodyWidths = lines.map((line) =>
+    typeof ctx.measureText === "function" ? ctx.measureText(line.text).width : 0,
+  );
+  const maxBodyWidth = bodyWidths.length > 0 ? Math.max(...bodyWidths) : 0;
+  const contentWidth = Math.max(titleWidth, maxBodyWidth);
+  const blockWidth = Math.max(
+    LIFE_EVENT_LEGEND_MIN_WIDTH,
+    padding * 2 + bulletColumnWidth + contentWidth,
+  );
+  const blockHeight = padding * 2 + lineHeight * (1 + lines.length);
+  const originX = padding;
+  const originY = padding;
+
+  ctx.fillStyle = "rgba(10, 14, 22, 0.78)";
+  ctx.fillRect(originX, originY, blockWidth, blockHeight);
+
+  const textX = originX + padding + bulletColumnWidth;
+  let cursorY = originY + padding;
+
+  ctx.font = titleFont;
+  ctx.fillStyle = "#fff";
+  ctx.fillText(title, textX, cursorY);
+  cursorY += lineHeight;
+
+  ctx.font = bodyFont;
+
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    const lineY = cursorY;
+    const bulletCenterX = originX + padding + bulletRadius;
+    const bulletCenterY = lineY + lineHeight / 2;
+
+    if (line.type === "birth") {
+      drawLegendBirthBadge(ctx, bulletCenterX, bulletCenterY, bulletRadius, birthColor);
+      ctx.fillStyle = "#fff";
+    } else if (line.type === "death") {
+      drawLegendDeathBadge(
+        ctx,
+        bulletCenterX,
+        bulletCenterY,
+        bulletRadius * 1.15,
+        deathColor,
+      );
+      ctx.fillStyle = "#fff";
+    } else if (line.type === "net") {
+      ctx.fillStyle = netColor;
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,0.82)";
+    }
+
+    ctx.fillText(line.text, textX, lineY);
+    cursorY += lineHeight;
+  }
+
+  ctx.restore();
 }
 
 function createFitnessPalette(steps, hue) {
