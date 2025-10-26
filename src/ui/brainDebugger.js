@@ -1,5 +1,6 @@
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 import { sanitizeNonNegativeInteger } from "../utils/math.js";
+import { resolveCellColor } from "../utils/cell.js";
 
 const DEBUG_PROPERTY = "__colourfulLifeBrains";
 const state = {
@@ -148,7 +149,7 @@ const BrainDebugger = {
         row: entry.row,
         col: entry.col,
         fitness: entry.fitness,
-        color: cell?.color,
+        color: resolveCellColor(cell),
         neuronCount: Number.isFinite(neuronCount) && neuronCount > 0 ? neuronCount : 0,
         connectionCount:
           Number.isFinite(connectionCount) && connectionCount > 0 ? connectionCount : 0,
