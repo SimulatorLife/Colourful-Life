@@ -14,15 +14,15 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 ## Quick start
 
-Colourful Life targets **Node.js 25.0.0**. After cloning the repository:
+Colourful Life targets the Node.js **25.x** series (the included `.nvmrc` pins to 25.0.0). After cloning the repository:
 
-1. Align your runtime with `nvm use` (or install it first via `nvm install`); the included `.nvmrc` pins the project to Node.js 25.0.0.
-2. Install dependencies with `npm ci` (or `npm install` if you prefer a non-clean install). Re-run `npm run prepare` whenever you first clone or pull changes that touch `.husky/` so the Git hooks stay active.
-3. Launch the Parcel dev server with `npm run start`, then visit `http://localhost:1234`.
-4. Open a second terminal for `npm test` whenever you change shared helpers or simulation logic. Pair it with `npm run lint` / `npm run format:check` to keep style drift from slipping into pull requests.
-5. If Parcel ever behaves strangely, run `npm run clean` to clear `dist/` and `.parcel-cache/` before restarting the dev server.
+1. Run `nvm use` (install with `nvm install` first if necessary) so your shell matches the pinned Node.js version.
+2. Install dependencies with `npm ci` (fall back to `npm install` when you intentionally need a non-clean install), then run `npm run prepare` so Husky hooks stay active after fresh clones or `.husky/` updates.
+3. Start the Parcel dev server with `npm run start` and open `http://localhost:1234`.
+4. Keep a second terminal handy for `npm test`, `npm run lint`, and `npm run format:check` whenever you touch shared helpers, simulation logic, or documentation.
+5. Run `npm run clean` if the dev server misbehaves; it clears `dist/` and `.parcel-cache/` before you restart Parcel.
 
-Parcel provides hot module reloading while you edit. Use `npm run build` when you need an optimized bundle in `dist/`, and see [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, and testing expectations once the quick start is familiar.
+Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, and skim [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, and testing expectations once the quick start is familiar.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
@@ -50,7 +50,7 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 - `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Tunes the normalized cutoff the stats system uses when counting organisms as "active" for a trait.
 - `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` — Scales how much surplus energy parents must bank beyond the strictest genome's demand before gestation begins.
 
-Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/config.js) so overlays remain aligned with the active configuration. The [developer guide](docs/developer-guide.md#configuration-overrides) walks through how these knobs interact when running longer experiments.
+Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/config.js) so overlays remain aligned with the active configuration. The [developer guide](docs/developer-guide.md#configuration-overrides) walks through how these knobs interact when running longer experiments, and the [architecture overview](docs/architecture-overview.md#energysystem) explains how the energy system consumes them during each tick.
 
 ### Life event marker overlay
 

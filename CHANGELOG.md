@@ -52,6 +52,8 @@ where practical.
   overrides across the README, developer guide, and architecture notes so
   deployments know how to tune combat bias, neural energy, and mutation rates
   without spelunking source.
+- Tightened the README and developer guide quick-start steps to highlight the Node.js 25.x baseline, consolidate recurring Husky
+  setup, and cross-link configuration details to the architecture overview so onboarding stays accurate.
 - Refreshed documentation across the README, developer guide, and architecture
   notes to highlight the UI bridge, fitness scoring module, Husky hook setup,
   and new formatting scripts so contributor workflows mirror the current code.
