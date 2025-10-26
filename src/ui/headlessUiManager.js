@@ -83,7 +83,7 @@ export function createHeadlessUiManager(options = {}) {
     resume: resumeControl,
     togglePause: toggleControl,
     ...overrides
-  } = options || {};
+  } = options;
   const defaults = resolveSimulationDefaults(overrides);
   const settings = { ...defaults };
 
@@ -138,7 +138,7 @@ export function createHeadlessUiManager(options = {}) {
 
   let lastSlowUiRender = Number.NEGATIVE_INFINITY;
   const updateIfFinite = (key, value, options = {}) => {
-    const { min, max, round } = options || {};
+    const { min, max, round } = options;
     const sanitized = sanitizeNumber(value, {
       fallback: Number.NaN,
       min,
