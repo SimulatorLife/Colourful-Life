@@ -28,6 +28,9 @@ where practical.
 
 ### Changed
 
+- Relocated the "Life Event Markers" toggle into the Life Event Log panel's map
+  overlay controls so the grid markers live beside the birth/death telemetry
+  they reinforce.
 - Moved the "Dashboard Refresh Interval" slider into the Dashboard Settings
   panel so cadence controls are discoverable without scanning the individual
   metrics or leaderboard panes.

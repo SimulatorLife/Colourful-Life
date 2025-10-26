@@ -53,7 +53,7 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       "Show Fitness Heatmap",
     );
     const lifeEventInput = findCheckboxByLabel(
-      uiManager.controlsPanel,
+      uiManager.lifeEventsPanel,
       "Life Event Markers",
     );
     const auroraInput = findCheckboxByLabel(uiManager.controlsPanel, "Aurora Veil");
@@ -162,7 +162,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
       "Show Fitness Heatmap",
     );
     const lifeEventToggle = findCheckboxByLabel(
-      uiManager.controlsPanel,
+      uiManager.lifeEventsPanel,
       "Life Event Markers",
     );
     const auroraToggle = findCheckboxByLabel(uiManager.controlsPanel, "Aurora Veil");

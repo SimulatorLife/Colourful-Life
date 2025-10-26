@@ -20,6 +20,9 @@ import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 const AUTO_PAUSE_DESCRIPTION =
   "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
 
+const LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION =
+  "Pinpoint recent births and deaths directly on the grid with fading markers.";
+
 const GRID_GEOMETRY_BOUNDS = Object.freeze({
   cellSize: Object.freeze({ min: 2, max: 20, step: 1 }),
   rows: Object.freeze({ min: 40, max: 240, step: 1 }),
@@ -283,6 +286,7 @@ export default class UIManager {
     this.lifeEventsSummaryDeathItem = null;
     this.lifeEventsSummaryBirthCount = null;
     this.lifeEventsSummaryDeathCount = null;
+    this.lifeEventMarkersToggle = null;
     this.lifeEventsSummaryTrend = null;
     this.lifeEventsSummaryNet = null;
     this.lifeEventsSummaryDirection = null;
@@ -3730,13 +3734,6 @@ export default class UIManager {
         initial: this.showFitness,
       },
       {
-        key: "showLifeEventMarkers",
-        label: "Life Event Markers",
-        title:
-          "Pinpoint recent births and deaths directly on the grid with fading markers",
-        initial: this.showLifeEventMarkers,
-      },
-      {
         key: "showAuroraVeil",
         label: "Aurora Veil",
         title:
@@ -4210,6 +4207,31 @@ export default class UIManager {
         }
       },
     });
+
+    const overlayControls = document.createElement("section");
+
+    overlayControls.className = "metrics-controls";
+    overlayControls.setAttribute("aria-label", "Life event overlay visibility");
+
+    createSectionHeading(overlayControls, "Map Overlay");
+
+    const overlayGrid = createControlGrid(overlayControls, "control-grid--compact");
+
+    this.lifeEventMarkersToggle = this.#addCheckbox(
+      overlayGrid,
+      "Life Event Markers",
+      {
+        title: LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION,
+        description: LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION,
+      },
+      this.showLifeEventMarkers,
+      (checked) => {
+        this.#updateSetting("showLifeEventMarkers", checked);
+        this.#scheduleUpdate();
+      },
+    );
+
+    body.appendChild(overlayControls);
 
     const lifeEventsSection = document.createElement("section");
 
