@@ -373,13 +373,25 @@ export function cloneTracePayload(trace) {
 }
 
 /**
- * Maintains a sorted, size-limited buffer using the provided comparator. Used
- * for leaderboard selection and other ranked lists.
+ * Maintains a sorted, size-limited buffer using the provided comparator.
+ * Callers typically use the helper when they only care about the "best"
+ * handful of entries (for example, the leaderboard) and want deterministic
+ * ordering without re-sorting on every insert.
  *
- * @param {number} limit - Maximum number of entries to retain.
- * @param {(a:any,b:any)=>number} compare - Comparison function returning
- *   negative when `a` ranks ahead of `b`.
- * @returns {{add:Function,getItems:Function}} Ranked buffer helpers.
+ * The returned helpers expose two functions:
+ * - `add(entry)` inserts the value in comparator order when it meaningfully
+ *   ranks inside the current top `limit`. Items with `null`/`undefined`
+ *   values or that do not outperform the existing tail are ignored to avoid
+ *   churn.
+ * - `getItems()` returns a shallow copy of the ranked list so consumers cannot
+ *   accidentally mutate the internal buffer.
+ *
+ * @param {number} limit - Maximum number of entries to retain. Non-positive
+ *   values collapse to an empty buffer, which makes `.add()` a no-op.
+ * @param {(a:any,b:any)=>number} compare - Comparison function returning a
+ *   negative value when `a` should precede `b`. Ties preserve insertion order,
+ *   which is important for deterministic UI highlights.
+ * @returns {{add(entry:any):void,getItems():any[]}} Ranked buffer helpers.
  */
 export function createRankedBuffer(limit, compare) {
   // Sanitize the caller-provided limit so we never grow beyond a non-negative integer.
