@@ -95,6 +95,10 @@ where practical.
 
 ### Removed
 
+- Retired the Trait Focus overlay and associated headless controls; trait
+  expression metrics now live exclusively in the dashboard cards and
+  sparklines, eliminating the per-frame gene sampling pass that duplicated
+  Stats work while offering the same insights.
 - The `COLOURFUL_LIFE_DECAY_SPAWN_MIN_ENERGY` override and decay-triggered
   reseeding hook have been retired; decay now only returns energy, leaving
   population recovery to living lineages or explicit reseed requests.

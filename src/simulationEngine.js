@@ -293,12 +293,6 @@ export default class SimulationEngine {
       showDensity: defaults.showDensity,
       showFitness: defaults.showFitness,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
-      showTraitOverlay: defaults.showTraitOverlay,
-      traitOverlayKey:
-        typeof defaults.traitOverlayKey === "string" &&
-        defaults.traitOverlayKey.length > 0
-          ? defaults.traitOverlayKey
-          : null,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       brainSnapshotLimit,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
@@ -783,36 +777,12 @@ export default class SimulationEngine {
         ? this.stats.totals.ticks
         : null;
 
-    const traitOverlayKey =
-      typeof this.state.traitOverlayKey === "string" &&
-      this.state.traitOverlayKey.length > 0
-        ? this.state.traitOverlayKey
-        : null;
-    let traitOverlayDefinition = null;
-
-    if (traitOverlayKey && Array.isArray(this.stats?.traitDefinitions)) {
-      traitOverlayDefinition = this.stats.traitDefinitions.find(
-        (definition) => definition?.key === traitOverlayKey,
-      );
-    }
-
-    const traitOverlayOptions =
-      traitOverlayDefinition && typeof traitOverlayDefinition.compute === "function"
-        ? {
-            key: traitOverlayDefinition.key,
-            compute: traitOverlayDefinition.compute,
-            threshold: clamp01(traitOverlayDefinition.threshold ?? 0.6),
-          }
-        : null;
-
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
       showDensity: this.state.showDensity ?? false,
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
       showLifeEventMarkers: includeLifeEventMarkers,
-      showTraitOverlay:
-        Boolean(this.state.showTraitOverlay) && Boolean(traitOverlayOptions),
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
@@ -823,7 +793,6 @@ export default class SimulationEngine {
       selectionManager: this.selectionManager,
       lifeEvents: recentLifeEvents,
       currentTick: lifeEventTick,
-      traitOverlay: traitOverlayOptions,
     });
 
     if (this.telemetry.hasPending()) {
@@ -1380,7 +1349,6 @@ export default class SimulationEngine {
     showDensity,
     showFitness,
     showLifeEventMarkers,
-    showTraitOverlay,
   }) {
     const entries = Object.entries({
       showObstacles,
@@ -1388,7 +1356,6 @@ export default class SimulationEngine {
       showDensity,
       showFitness,
       showLifeEventMarkers,
-      showTraitOverlay,
     })
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => [key, coerceBoolean(value, Boolean(this.state?.[key]))]);
@@ -1400,17 +1367,6 @@ export default class SimulationEngine {
     if (changed) {
       this.requestFrame();
     }
-  }
-
-  setTraitOverlayKey(value) {
-    const normalized =
-      typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-
-    if (this.state.traitOverlayKey === normalized) return this.state.traitOverlayKey;
-
-    this.#updateState({ traitOverlayKey: normalized });
-
-    return this.state.traitOverlayKey;
   }
 
   setBrainSnapshotCollector(collector) {
@@ -1529,11 +1485,7 @@ export default class SimulationEngine {
       case "showDensity":
       case "showFitness":
       case "showLifeEventMarkers":
-      case "showTraitOverlay":
         this.setOverlayVisibility({ [key]: value });
-        break;
-      case "traitOverlayKey":
-        this.setTraitOverlayKey(value);
         break;
       case "autoPauseOnBlur":
         this.setAutoPauseOnBlur(value);
