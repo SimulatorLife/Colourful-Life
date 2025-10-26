@@ -78,6 +78,17 @@ function resolveInitialTileEnergyFraction(candidate) {
   return clamp(numeric, 0, 1);
 }
 
+function normalizeDimension(candidate) {
+  return sanitizePositiveInteger(candidate, { fallback: 0, min: 0 });
+}
+
+function normalizeDimensions(rowCount, colCount) {
+  return {
+    rows: normalizeDimension(rowCount),
+    cols: normalizeDimension(colCount),
+  };
+}
+
 const TARGET_DESCRIPTOR_BASE_KEYS = new Set([
   "row",
   "col",
@@ -482,8 +493,7 @@ export default class GridManager {
   }
 
   #ensureOccupantRegenBuffers(rowCount, colCount) {
-    const rows = Math.max(0, Math.floor(Number.isFinite(rowCount) ? rowCount : 0));
-    const cols = Math.max(0, Math.floor(Number.isFinite(colCount) ? colCount : 0));
+    const { rows, cols } = normalizeDimensions(rowCount, colCount);
 
     if (
       !Array.isArray(this.pendingOccupantRegen) ||
@@ -548,8 +558,7 @@ export default class GridManager {
   }
 
   #ensureDensityPrefix(rowCount, colCount) {
-    const rows = Math.max(0, Math.floor(Number.isFinite(rowCount) ? rowCount : 0));
-    const cols = Math.max(0, Math.floor(Number.isFinite(colCount) ? colCount : 0));
+    const { rows, cols } = normalizeDimensions(rowCount, colCount);
     const requiredRows = rows + 1;
     const requiredCols = cols + 1;
 
@@ -586,8 +595,7 @@ export default class GridManager {
   }
 
   #ensureDensityBounds(rowCount, colCount, radius = 0) {
-    const rows = Math.max(0, Math.floor(Number.isFinite(rowCount) ? rowCount : 0));
-    const cols = Math.max(0, Math.floor(Number.isFinite(colCount) ? colCount : 0));
+    const { rows, cols } = normalizeDimensions(rowCount, colCount);
     const normalizedRadius = Math.max(
       0,
       Math.floor(Number.isFinite(radius) ? radius : 0),
@@ -1824,7 +1832,7 @@ export default class GridManager {
   }
 
   #initializeOccupancy(rowCount) {
-    const rows = Math.max(0, Math.floor(Number.isFinite(rowCount) ? rowCount : 0));
+    const rows = normalizeDimension(rowCount);
 
     this.#rowOccupancy = Array.from({ length: rows }, () => new Set());
   }
@@ -7170,8 +7178,7 @@ export default class GridManager {
   }
 
   #resolveTargetDescriptorPoolLimit() {
-    const rows = Math.max(0, Math.floor(Number.isFinite(this.rows) ? this.rows : 0));
-    const cols = Math.max(0, Math.floor(Number.isFinite(this.cols) ? this.cols : 0));
+    const { rows, cols } = normalizeDimensions(this.rows, this.cols);
     const area = rows * cols;
     const activeCount = this.activeCells?.size ?? 0;
     const averageUsage = this.#targetDescriptorUsageAverage || 0;
