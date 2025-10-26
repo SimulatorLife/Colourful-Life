@@ -1021,7 +1021,6 @@ export default class Stats {
     const traitSums = this.#traitSums;
     const traitActiveCounts = this.#traitActiveCounts;
     const traitCount = computes.length;
-    const hasOwn = Object.prototype.hasOwnProperty;
 
     let population = 0;
 
@@ -1029,7 +1028,7 @@ export default class Stats {
       const source = pool[i];
       let cell = source;
 
-      if (source && typeof source === "object" && hasOwn.call(source, "cell")) {
+      if (source && typeof source === "object" && Object.hasOwn(source, "cell")) {
         cell = source.cell;
       }
 
@@ -1321,13 +1320,12 @@ export default class Stats {
 
     this.#activeDiversitySeeds = seedScratch;
 
-    const hasOwn = Object.prototype.hasOwnProperty;
     const sourceCount = cellSources.length;
 
     for (let index = 0; index < sourceCount; index += 1) {
       const source = cellSources[index];
       const cell =
-        source && typeof source === "object" && hasOwn.call(source, "cell")
+        source && typeof source === "object" && Object.hasOwn(source, "cell")
           ? source.cell
           : source;
 

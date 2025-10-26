@@ -2097,7 +2097,7 @@ export default class GridManager {
       typeof presetOptionsInput === "object" &&
       !Array.isArray(presetOptionsInput)
     ) {
-      if (Object.prototype.hasOwnProperty.call(presetOptionsInput, presetId)) {
+      if (Object.hasOwn(presetOptionsInput, presetId)) {
         const scoped = presetOptionsInput[presetId];
 
         return scoped && typeof scoped === "object" ? scoped : {};
