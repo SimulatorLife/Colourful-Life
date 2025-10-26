@@ -5997,6 +5997,7 @@ export default class UIManager {
         if (typeof candidate === "number") {
           if (!Number.isFinite(candidate)) {
             acc.allFiniteNumbers = false;
+
             return acc;
           }
 
@@ -6010,6 +6011,7 @@ export default class UIManager {
 
         if (!Number.isFinite(numeric)) {
           acc.allFiniteNumbers = false;
+
           return acc;
         }
 
