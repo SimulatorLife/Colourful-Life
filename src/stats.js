@@ -555,10 +555,8 @@ export default class Stats {
       return numeric != null ? numeric : null;
     };
 
-    for (const metric in summary) {
-      if (!Object.hasOwn(summary, metric) || !metric) continue;
-
-      const descriptor = summary[metric];
+    for (const [metric, descriptor] of Object.entries(summary)) {
+      if (!metric) continue;
 
       let value = null;
       let accumulate = true;
