@@ -8,6 +8,7 @@ import {
 } from "./utils/math.js";
 import { warnOnce } from "./utils/error.js";
 import { accumulateTraitAggregates } from "./utils/traitAggregation.js";
+import { resolveCellColor } from "./utils/cell.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;
@@ -1231,15 +1232,11 @@ export default class Stats {
     const col = toFiniteOrNull(safeContext.col) ?? toFiniteOrNull(resolvedCell?.col);
     const energy =
       toFiniteOrNull(safeContext.energy) ?? toFiniteOrNull(resolvedCell?.energy);
-    const colorCandidate = safeContext.color;
-    const color =
-      typeof colorCandidate === "string" && colorCandidate.length > 0
-        ? colorCandidate
-        : typeof resolvedCell?.dna?.toColor === "function"
-          ? resolvedCell.dna.toColor()
-          : typeof resolvedCell?.color === "string"
-            ? resolvedCell.color
-            : null;
+    const contextColor =
+      typeof safeContext.color === "string" && safeContext.color.length > 0
+        ? safeContext.color
+        : null;
+    const color = contextColor ?? resolveCellColor(resolvedCell);
     const mutationMultiplier = toFiniteOrNull(safeContext.mutationMultiplier);
     const intensity = toFiniteOrNull(safeContext.intensity);
     const winChanceCandidate = toFiniteOrNull(safeContext.winChance);
