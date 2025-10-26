@@ -4922,19 +4922,52 @@ export default class GridManager {
 
   // Precompute density for all tiles (fraction of occupied neighbors)
   #countNeighbors(row, col, radius = GridManager.DENSITY_RADIUS) {
+    const rows = this.rows;
+    const cols = this.cols;
+
+    if (rows <= 0 || cols <= 0 || row < 0 || row >= rows || col < 0 || col >= cols) {
+      return { count: 0, total: 0 };
+    }
+
+    const normalizedRadius = Math.max(
+      0,
+      Math.floor(Number.isFinite(radius) ? radius : GridManager.DENSITY_RADIUS),
+    );
+
+    if (normalizedRadius === 0) {
+      return { count: 0, total: 0 };
+    }
+
+    let minRow = row - normalizedRadius;
+
+    if (minRow < 0) minRow = 0;
+    let maxRow = row + normalizedRadius;
+
+    if (maxRow >= rows) maxRow = rows - 1;
+    let minCol = col - normalizedRadius;
+
+    if (minCol < 0) minCol = 0;
+    let maxCol = col + normalizedRadius;
+
+    if (maxCol >= cols) maxCol = cols - 1;
+
+    const grid = this.grid;
     let count = 0;
     let total = 0;
 
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dy = -radius; dy <= radius; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const rr = row + dy;
-        const cc = col + dx;
+    for (let rr = minRow; rr <= maxRow; rr++) {
+      const gridRow = grid[rr];
 
-        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
+      if (!gridRow) continue;
 
-        total++;
-        if (this.grid[rr][cc]) count++;
+      for (let cc = minCol; cc <= maxCol; cc++) {
+        if (rr === row && cc === col) continue;
+
+        total += 1;
+
+        if (gridRow[cc]) {
+          count += 1;
+        }
       }
     }
 
