@@ -45,6 +45,48 @@ test("activating built-in patterns restricts eligibility and updates description
   );
 });
 
+test("togglePattern coerces boolean-like inputs", () => {
+  const manager = createManager();
+  const [pattern] = manager.getPatterns();
+
+  assert.ok(pattern, "expected predefined pattern metadata");
+
+  assert.is(
+    manager.togglePattern(pattern.id, "false"),
+    false,
+    'string "false" should disable the pattern',
+  );
+  assert.is(manager.hasActiveZones(), false, "pattern remains inactive");
+
+  assert.is(
+    manager.togglePattern(pattern.id, "true"),
+    true,
+    'string "true" should enable the pattern',
+  );
+  assert.ok(manager.hasActiveZones(), "pattern activates after string true");
+
+  assert.is(
+    manager.togglePattern(pattern.id, 0),
+    false,
+    "numeric zero should disable the pattern",
+  );
+  assert.is(manager.hasActiveZones(), false, "numeric zero deactivates zones");
+
+  assert.is(
+    manager.togglePattern(pattern.id, 1),
+    true,
+    "numeric one should enable the pattern",
+  );
+  assert.ok(manager.hasActiveZones(), "numeric one activates the pattern");
+
+  assert.is(
+    manager.togglePattern(pattern.id),
+    false,
+    "omitting explicit state should continue to toggle",
+  );
+  assert.is(manager.hasActiveZones(), false, "toggle without argument deactivates");
+});
+
 test("central sanctuary pattern concentrates eligibility in the core", () => {
   const manager = createManager(12, 12);
 

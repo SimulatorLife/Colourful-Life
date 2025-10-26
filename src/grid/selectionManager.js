@@ -1,4 +1,5 @@
 import { warnOnce } from "../utils/error.js";
+import { coerceBoolean } from "../utils/primitives.js";
 
 const DEFAULT_COLORS = [
   "rgba(80, 160, 255, 0.22)",
@@ -133,7 +134,8 @@ export default class SelectionManager {
     const pattern = this.patterns.get(id);
 
     if (!pattern) return false;
-    const next = typeof active === "boolean" ? active : !pattern.active;
+    const next =
+      active === undefined ? !pattern.active : coerceBoolean(active, pattern.active);
 
     pattern.active = next;
 
