@@ -1,6 +1,6 @@
 import Stats from "../stats.js";
 import TelemetryController from "./telemetryController.js";
-import { computeLeaderboard as defaultComputeLeaderboard } from "./leaderboard.js";
+import { computeLeaderboard as defaultComputeLeaderboard } from "../stats/leaderboard.js";
 
 /**
  * Adds lazily-evaluated telemetry accessors onto the provided target. The
