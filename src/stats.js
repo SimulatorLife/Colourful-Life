@@ -236,21 +236,14 @@ class FixedSizeRingBuffer {
 
     if (length === 0 || capacity === 0) return [];
 
-    const result = new Array(length);
     const buffer = this.buffer;
-    let index = 0;
-    let bufferIndex = this.start;
+    const start = this.start;
 
-    while (index < length) {
-      result[index++] = buffer[bufferIndex];
-      bufferIndex += 1;
+    return Array.from({ length }, (_, offset) => {
+      const index = start + offset;
 
-      if (bufferIndex === capacity) {
-        bufferIndex = 0;
-      }
-    }
-
-    return result;
+      return buffer[index < capacity ? index : index - capacity];
+    });
   }
 
   clear() {
