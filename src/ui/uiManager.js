@@ -5988,34 +5988,46 @@ export default class UIManager {
       return;
     }
 
-    let min = Number.POSITIVE_INFINITY;
-    let max = Number.NEGATIVE_INFINITY;
-    let allFiniteNumbers = true;
+    const {
+      min: computedMin,
+      max: computedMax,
+      allFiniteNumbers,
+    } = series.reduce(
+      (acc, candidate) => {
+        if (typeof candidate === "number") {
+          if (!Number.isFinite(candidate)) {
+            acc.allFiniteNumbers = false;
+            return acc;
+          }
 
-    for (let i = 0; i < length; i++) {
-      const candidate = series[i];
+          if (candidate < acc.min) acc.min = candidate;
+          if (candidate > acc.max) acc.max = candidate;
 
-      if (typeof candidate === "number") {
-        if (!Number.isFinite(candidate)) {
-          allFiniteNumbers = false;
-          continue;
+          return acc;
         }
 
-        if (candidate < min) min = candidate;
-        if (candidate > max) max = candidate;
-      } else {
         const numeric = Number(candidate);
 
         if (!Number.isFinite(numeric)) {
-          allFiniteNumbers = false;
-          continue;
+          acc.allFiniteNumbers = false;
+          return acc;
         }
 
-        allFiniteNumbers = false;
-        if (numeric < min) min = numeric;
-        if (numeric > max) max = numeric;
-      }
-    }
+        acc.allFiniteNumbers = false;
+        if (numeric < acc.min) acc.min = numeric;
+        if (numeric > acc.max) acc.max = numeric;
+
+        return acc;
+      },
+      {
+        min: Number.POSITIVE_INFINITY,
+        max: Number.NEGATIVE_INFINITY,
+        allFiniteNumbers: true,
+      },
+    );
+
+    let min = computedMin;
+    let max = computedMax;
 
     if (!Number.isFinite(min) || !Number.isFinite(max)) {
       min = 0;
