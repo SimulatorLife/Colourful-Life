@@ -82,18 +82,9 @@ function computeCrowdingFeedback({
     result && typeof result === "object"
       ? result
       : { comfort: 0.5, scarcity: 0, count: 0 };
-  let toleranceSum = 0;
-  let scarcitySum = 0;
-  let count = 0;
-  const norm = maxTileEnergy > 0 ? 1 / maxTileEnergy : 0;
-  const offsets = Array.isArray(neighborOffsets) ? neighborOffsets : NEIGHBOR_OFFSETS;
   const gridRows = Array.isArray(grid) ? grid : null;
-  const maxRows = rows;
-  const maxCols = cols;
 
-  // Hoist shared lookups outside the neighbor loop to minimize repeated property access.
-
-  if (!gridRows || maxRows <= 0 || maxCols <= 0) {
+  if (!gridRows || rows <= 0 || cols <= 0) {
     out.comfort = 0.5;
     out.scarcity = 0;
     out.count = 0;
@@ -101,71 +92,47 @@ function computeCrowdingFeedback({
     return out;
   }
 
-  const useScarcity = norm > 0;
+  let toleranceSum = 0;
+  let scarcitySum = 0;
+  let count = 0;
+  const useScarcity = maxTileEnergy > 0;
+  const norm = useScarcity ? 1 / maxTileEnergy : 0;
   const defaultTolerance = 0.5;
 
-  for (let i = 0, len = offsets.length; i < len; i++) {
-    const offset = offsets[i];
+  const applyNeighbor = (occupant) => {
+    if (!occupant) {
+      return;
+    }
 
-    if (!offset) continue;
+    let tolerance = occupant._crowdingTolerance;
 
-    const nr = row + offset[0];
-    const nc = col + offset[1];
-
-    if (nr < 0 || nr >= maxRows || nc < 0 || nc >= maxCols) continue;
-
-    const neighborRow = gridRows[nr];
-
-    if (!neighborRow) continue;
-
-    const occupant = neighborRow[nc];
-
-    if (!occupant) continue;
-
-    let tolerance;
-    const adaptedCandidate = occupant._crowdingTolerance;
-
-    if (Number.isFinite(adaptedCandidate)) {
-      if (adaptedCandidate <= 0) {
-        tolerance = 0;
-      } else if (adaptedCandidate >= 1) {
-        tolerance = 1;
-      } else {
-        tolerance = adaptedCandidate;
-      }
+    if (Number.isFinite(tolerance)) {
+      tolerance = tolerance <= 0 ? 0 : tolerance >= 1 ? 1 : tolerance;
     } else {
       const baselineCandidate = occupant.baseCrowdingTolerance;
       const baseline = Number.isFinite(baselineCandidate)
         ? baselineCandidate
         : defaultTolerance;
+      const clampedBaseline = baseline <= 0 ? 0 : baseline >= 1 ? 1 : baseline;
       const getPreference = occupant.getCrowdingPreference;
 
       if (typeof getPreference === "function") {
         const resolved = getPreference.call(occupant, { fallback: baseline });
 
-        if (resolved <= 0) {
-          tolerance = 0;
-        } else if (resolved >= 1) {
-          tolerance = 1;
-        } else if (Number.isFinite(resolved)) {
-          tolerance = resolved;
+        if (Number.isFinite(resolved)) {
+          tolerance = resolved <= 0 ? 0 : resolved >= 1 ? 1 : resolved;
         } else {
-          tolerance = baseline <= 0 ? 0 : baseline >= 1 ? 1 : baseline;
+          tolerance = clampedBaseline;
         }
-      } else if (baseline <= 0) {
-        tolerance = 0;
-      } else if (baseline >= 1) {
-        tolerance = 1;
       } else {
-        tolerance = baseline;
+        tolerance = clampedBaseline;
       }
     }
 
     toleranceSum += tolerance;
 
     if (useScarcity) {
-      const energyCandidate = occupant.energy;
-      const energy = Number.isFinite(energyCandidate) ? energyCandidate : 0;
+      const energy = Number.isFinite(occupant.energy) ? occupant.energy : 0;
       let normalizedEnergy = energy * norm;
 
       if (normalizedEnergy <= 0) {
@@ -178,6 +145,46 @@ function computeCrowdingFeedback({
     }
 
     count += 1;
+  };
+
+  // Fallback to the configured neighbor offsets when a custom list isn't provided.
+  if (neighborOffsets !== NEIGHBOR_OFFSETS && Array.isArray(neighborOffsets)) {
+    for (let i = 0; i < neighborOffsets.length; i++) {
+      const offset = neighborOffsets[i];
+
+      if (!offset) continue;
+
+      const nr = row + offset[0];
+      const nc = col + offset[1];
+
+      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+
+      const neighborRow = gridRows[nr];
+
+      if (!neighborRow) continue;
+
+      applyNeighbor(neighborRow[nc]);
+    }
+  } else {
+    for (let dr = -1; dr <= 1; dr++) {
+      const nr = row + dr;
+
+      if (nr < 0 || nr >= rows) continue;
+
+      const neighborRow = gridRows[nr];
+
+      if (!neighborRow) continue;
+
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+
+        const nc = col + dc;
+
+        if (nc < 0 || nc >= cols) continue;
+
+        applyNeighbor(neighborRow[nc]);
+      }
+    }
   }
 
   if (count > 0) {
@@ -198,7 +205,7 @@ function computeCrowdingFeedback({
     }
 
     out.comfort = comfort;
-    out.scarcity = scarcity;
+    out.scarcity = useScarcity ? scarcity : 0;
     out.count = count;
   } else {
     out.comfort = 0.5;
