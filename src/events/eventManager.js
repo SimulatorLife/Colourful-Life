@@ -136,7 +136,7 @@ function sampleEventSpan(limit, rng, spanConfig = DEFAULT_RANDOM_EVENT_CONFIG.sp
   const upperExclusive = spanCandidate === minSpan ? minSpan + 1 : spanCandidate + 1;
   const raw = Math.floor(randomRange(minSpan, upperExclusive, rng));
 
-  return Math.max(1, Math.min(maxSpan, raw));
+  return clamp(raw, 1, maxSpan);
 }
 
 function clampEventStart(rawStart, span, limit) {
