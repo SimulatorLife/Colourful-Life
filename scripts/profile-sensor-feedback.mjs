@@ -9,7 +9,7 @@ const performanceApi =
   typeof globalThis.performance === "object" &&
   typeof globalThis.performance?.now === "function"
     ? globalThis.performance
-    : nodePerformance ?? { now: () => Date.now() };
+    : (nodePerformance ?? { now: () => Date.now() });
 
 if (
   typeof globalThis.performance !== "object" ||
@@ -108,6 +108,7 @@ const createSensorVectorPool = (count) => {
         vector[j] = 1;
       } else {
         const raw = rng() * 2 - 1;
+
         vector[j] = Math.max(-1, Math.min(1, raw));
       }
     }
@@ -125,7 +126,8 @@ const applyFeedbackIterations = (brain, vectors, iterations) => {
     const vector = vectors[i % poolSize];
     const fatigue = vector[fatigueIndex] ?? 0;
     const energy = vector[energyIndex] ?? 0;
-    const rewardSignal = i & 1 ? configuration.penaltySignal : configuration.rewardSignal;
+    const rewardSignal =
+      i & 1 ? configuration.penaltySignal : configuration.rewardSignal;
 
     brain.applySensorFeedback({
       sensorVector: vector,
@@ -145,6 +147,7 @@ const measure = () => {
   applyFeedbackIterations(brain, vectors, configuration.warmup);
 
   const start = performanceApi.now();
+
   applyFeedbackIterations(brain, vectors, configuration.iterations);
   const duration = performanceApi.now() - start;
 
