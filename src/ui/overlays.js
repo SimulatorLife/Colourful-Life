@@ -89,10 +89,6 @@ function ensureAuroraGradient(ctx, width, height) {
   return gradient;
 }
 
-export function resetAuroraGradientCache() {
-  auroraGradientCache = null;
-}
-
 export function drawAuroraVeil(ctx, cellSize, rows, cols, { tick = 0 } = {}) {
   if (!ctx || !(cellSize > 0) || !(rows > 0) || !(cols > 0)) return;
 
