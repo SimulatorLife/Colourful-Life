@@ -214,6 +214,39 @@ function resolveLifeEventColor(event, overridesInput) {
   );
 }
 
+function createLifeEventMarkerDescriptor(
+  event,
+  { currentTick, fadeWindow, colorOverrides },
+) {
+  if (!event) return null;
+
+  const row = Number(event.row);
+  const col = Number(event.col);
+
+  if (!Number.isFinite(row) || !Number.isFinite(col)) {
+    return null;
+  }
+
+  const tick = Number(event.tick);
+  let alpha = LIFE_EVENT_MARKER_MAX_ALPHA;
+
+  if (currentTick != null && Number.isFinite(tick)) {
+    const age = currentTick - tick;
+
+    if (age < 0 || age > fadeWindow) {
+      return null;
+    }
+
+    alpha = clamp(computeLifeEventAlpha(age, { maxAge: fadeWindow }), 0, 1);
+  }
+
+  const color = resolveLifeEventColor(event, colorOverrides);
+  const type =
+    event.type === "death" ? "death" : event.type === "birth" ? "birth" : "other";
+
+  return { row, col, color, alpha, type };
+}
+
 function drawDeathMarker(ctx, centerX, centerY, radius, color) {
   if (!ctx) return;
 
@@ -295,39 +328,21 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
     : LIFE_EVENT_MARKER_FADE_TICKS;
   const markerRadius = Math.max(cellSize * 0.42, cellSize * 0.24);
   const strokeWidth = Math.max(cellSize * 0.18, 1.25);
-  const prepared = [];
-
   const colorOverrides = options.colors;
 
-  for (const event of events) {
-    if (!event) continue;
+  const prepared = events.reduce((list, event) => {
+    const descriptor = createLifeEventMarkerDescriptor(event, {
+      currentTick,
+      fadeWindow,
+      colorOverrides,
+    });
 
-    const row = Number(event.row);
-    const col = Number(event.col);
-
-    if (!Number.isFinite(row) || !Number.isFinite(col)) {
-      continue;
+    if (descriptor) {
+      list.push(descriptor);
     }
 
-    const tick = Number(event.tick);
-    let alpha = LIFE_EVENT_MARKER_MAX_ALPHA;
-
-    if (currentTick != null && Number.isFinite(tick)) {
-      const age = currentTick - tick;
-
-      if (age < 0 || age > fadeWindow) {
-        continue;
-      }
-
-      alpha = clamp(computeLifeEventAlpha(age, { maxAge: fadeWindow }), 0, 1);
-    }
-
-    const color = resolveLifeEventColor(event, colorOverrides);
-    const type =
-      event.type === "death" ? "death" : event.type === "birth" ? "birth" : "other";
-
-    prepared.push({ row, col, color, alpha, type });
-  }
+    return list;
+  }, []);
 
   if (prepared.length === 0) {
     return;
