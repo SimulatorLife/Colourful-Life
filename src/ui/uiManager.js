@@ -55,6 +55,20 @@ const LIFE_EVENT_TIMELINE_CANVAS = Object.freeze({
 const LIFE_EVENT_TIMELINE_EMPTY_MESSAGE =
   "Run the simulation to chart birth and death cadence.";
 
+const DEFAULT_BURST_OPTIONS = Object.freeze({
+  primary: Object.freeze({
+    count: 200,
+    radius: 6,
+  }),
+  shift: Object.freeze({
+    count: 400,
+    radius: 9,
+    hint: "Hold Shift for a stronger burst.",
+    shortcutHint:
+      "Hold Shift for a stronger burst, whether clicking or using the shortcut.",
+  }),
+});
+
 const DEFAULT_TRAIT_DISPLAY_CONFIG = Object.freeze({
   cooperation: Object.freeze({
     name: "Cooperation",
@@ -132,6 +146,57 @@ function formatTraitLabel(key) {
   }
 
   return cleaned.replace(/\b(\w)/g, (match) => match.toUpperCase());
+}
+
+function normalizeBurstOptions(candidate) {
+  const options = candidate && typeof candidate === "object" ? candidate : null;
+  const primarySource = options?.primary;
+  const shiftSource = options?.shift;
+  const fallbackPrimary = DEFAULT_BURST_OPTIONS.primary;
+  const fallbackShift = DEFAULT_BURST_OPTIONS.shift;
+
+  const parseCount = (value, fallback) => {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      return fallback;
+    }
+
+    return Math.round(numeric);
+  };
+
+  const parseRadius = (value, fallback) => {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      return fallback;
+    }
+
+    return numeric;
+  };
+
+  const resolveHint = (value, fallback) => {
+    if (typeof value !== "string") {
+      return fallback;
+    }
+
+    const trimmed = value.trim();
+
+    return trimmed.length > 0 ? trimmed : fallback;
+  };
+
+  return {
+    primary: {
+      count: parseCount(primarySource?.count, fallbackPrimary.count),
+      radius: parseRadius(primarySource?.radius, fallbackPrimary.radius),
+    },
+    shift: {
+      count: parseCount(shiftSource?.count, fallbackShift.count),
+      radius: parseRadius(shiftSource?.radius, fallbackShift.radius),
+      hint: resolveHint(shiftSource?.hint, fallbackShift.hint),
+      shortcutHint: resolveHint(shiftSource?.shortcutHint, fallbackShift.shortcutHint),
+    },
+  };
 }
 
 function generateTraitColors(key) {
@@ -325,6 +390,7 @@ export default class UIManager {
     this.deathBreakdownMaxEntries = this.#resolveDeathBreakdownLimit(
       layoutConfig.deathBreakdownMaxEntries,
     );
+    this.burstConfig = normalizeBurstOptions(layoutConfig.burstOptions);
 
     const initialDimensions = this.#readGridDimensions();
 
@@ -546,9 +612,11 @@ export default class UIManager {
 
   #triggerBurst(options = {}) {
     const shiftKey = Boolean(options?.shiftKey);
-    const burstOptions = shiftKey
-      ? { count: 400, radius: 9 }
-      : { count: 200, radius: 6 };
+    const burstPreset = shiftKey ? this.burstConfig.shift : this.burstConfig.primary;
+    const burstOptions = {
+      count: burstPreset.count,
+      radius: burstPreset.radius,
+    };
 
     if (typeof this.actions.burst === "function") {
       try {
@@ -597,6 +665,20 @@ export default class UIManager {
       .filter((value) => value.length > 0);
 
     return new Set(normalized.length > 0 ? normalized : normalizedFallback);
+  }
+
+  #resolveBurstHint({ includeShortcut = false } = {}) {
+    const shiftConfig = this.burstConfig?.shift ?? DEFAULT_BURST_OPTIONS.shift;
+    const fallback = includeShortcut
+      ? DEFAULT_BURST_OPTIONS.shift.shortcutHint
+      : DEFAULT_BURST_OPTIONS.shift.hint;
+    const hint = includeShortcut ? shiftConfig.shortcutHint : shiftConfig.hint;
+
+    if (typeof hint === "string" && hint.length > 0) {
+      return hint;
+    }
+
+    return fallback;
   }
 
   #resolveDeathBreakdownLimit(candidate) {
@@ -3092,12 +3174,13 @@ export default class UIManager {
       burstTitlePieces.push(`Shortcut: ${burstHotkeys}.`);
     }
 
-    const burstShiftHint =
-      burstHotkeys.length > 0
-        ? "Hold Shift for a stronger burst, whether clicking or using the shortcut."
-        : "Hold Shift for a stronger burst.";
+    const burstShiftHint = this.#resolveBurstHint({
+      includeShortcut: burstHotkeys.length > 0,
+    });
 
-    burstTitlePieces.push(burstShiftHint);
+    if (burstShiftHint) {
+      burstTitlePieces.push(burstShiftHint);
+    }
 
     const burstTitle = burstTitlePieces.join(" ");
 

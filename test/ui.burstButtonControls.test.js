@@ -105,4 +105,63 @@ test("burst button announces shortcuts and triggers bursts", async () => {
   }
 });
 
+test("burst button respects configurable presets", async () => {
+  const restore = setupDom();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const burstCalls = [];
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        burst: (options) => {
+          burstCalls.push(options);
+        },
+      },
+      {
+        canvasElement: new MockCanvas(320, 320),
+        burstOptions: {
+          primary: { count: 75, radius: 3.5 },
+          shift: {
+            count: 180,
+            radius: 7.5,
+            hint: "Hold Shift for a wide scatter.",
+            shortcutHint: "Hold Shift for a wide scatter, including shortcuts.",
+          },
+        },
+      },
+    );
+
+    const burstButton = uiManager.burstButton;
+
+    assert.ok(burstButton, "burst button should render");
+    assert.match(
+      burstButton.getAttribute("aria-label"),
+      /wide scatter/,
+      "custom hint should surface in the button label",
+    );
+
+    burstButton.trigger("click");
+    burstButton.trigger("click", { shiftKey: true });
+
+    assert.equal(
+      burstCalls,
+      [
+        { count: 75, radius: 3.5 },
+        { count: 180, radius: 7.5 },
+      ],
+      "configured burst presets should be forwarded to the action handler",
+    );
+  } finally {
+    restore();
+  }
+});
+
 test.run();
