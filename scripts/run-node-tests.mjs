@@ -11,6 +11,7 @@ const WATCH_FLAG_ALIASES = new Map([
   ["--watchAll", "--watch"],
   ["--watch-all", "--watch"],
 ]);
+const RUN_TESTS_BY_PATH_FLAGS = new Set(["--runTestsByPath", "--run-tests-by-path"]);
 const TEST_FILE_PATTERN = /\.test\.(?:[cm]?js)$/i;
 
 export function normalizeTestRunnerArgs(rawArgs = []) {
@@ -25,6 +26,40 @@ export function normalizeTestRunnerArgs(rawArgs = []) {
     if (arg === "--") {
       paths.push(...args.slice(index + 1));
       break;
+    }
+
+    if (typeof arg === "string" && RUN_TESTS_BY_PATH_FLAGS.has(arg)) {
+      const next = args[index + 1];
+
+      if (typeof next === "string" && !next.startsWith("-")) {
+        paths.push(next);
+        index += 1;
+      }
+
+      continue;
+    }
+
+    if (typeof arg === "string") {
+      let handledRunTestsByPath = false;
+
+      for (const flag of RUN_TESTS_BY_PATH_FLAGS) {
+        if (!arg.startsWith(`${flag}=`)) {
+          continue;
+        }
+
+        const candidate = arg.slice(flag.length + 1);
+
+        if (candidate.length > 0) {
+          paths.push(candidate);
+        }
+
+        handledRunTestsByPath = true;
+        break;
+      }
+
+      if (handledRunTestsByPath) {
+        continue;
+      }
     }
 
     if (WATCH_FLAG_ALIASES.has(arg)) {

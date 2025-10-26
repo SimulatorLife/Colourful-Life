@@ -73,6 +73,28 @@ test("normalizeTestRunnerArgs maps watchAll to the Node watch flag", () => {
   assert.deepEqual(paths, []);
 });
 
+test("normalizeTestRunnerArgs treats runTestsByPath as positional paths", () => {
+  const { flags, paths } = normalizeTestRunnerArgs([
+    "--runTestsByPath",
+    "test/utils.test.js",
+    "--run-tests-by-path",
+    "test/cell.test.js",
+  ]);
+
+  assert.deepEqual(flags, []);
+  assert.deepEqual(paths, ["test/utils.test.js", "test/cell.test.js"]);
+});
+
+test("normalizeTestRunnerArgs supports inline runTestsByPath assignments", () => {
+  const { flags, paths } = normalizeTestRunnerArgs([
+    "--runTestsByPath=test/brain.test.js",
+    "--run-tests-by-path=test/gridManager.test.js",
+  ]);
+
+  assert.deepEqual(flags, []);
+  assert.deepEqual(paths, ["test/brain.test.js", "test/gridManager.test.js"]);
+});
+
 test("expandTestTargets defaults to the repository test directory", async () => {
   const targets = await expandTestTargets();
 
