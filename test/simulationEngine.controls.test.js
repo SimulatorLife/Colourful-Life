@@ -688,6 +688,62 @@ test("setBrainSnapshotLimit updates state and forwards to grid", async () => {
   }
 });
 
+test("setLeaderboardSize adjusts telemetry output", async () => {
+  const modules = await loadSimulationModules();
+  const { restore, snapshot } = patchSimulationPrototypes(modules);
+
+  snapshot.entries = Array.from({ length: 4 }, (_, index) => ({
+    row: index,
+    col: index,
+    fitness: 10 - index,
+    cell: { color: `#${index}${index}${index}` },
+  }));
+
+  try {
+    const { SimulationEngine } = modules;
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      config: { leaderboardSize: 1 },
+    });
+
+    const emittedSizes = [];
+    const originalSetter = engine.telemetry.setLeaderboardSize.bind(engine.telemetry);
+
+    engine.telemetry.setLeaderboardSize = (value) => {
+      emittedSizes.push(value);
+
+      return originalSetter(value);
+    };
+
+    const eventSizes = [];
+
+    engine.on("leaderboard", ({ entries }) => {
+      eventSizes.push(entries.length);
+    });
+
+    engine.tick(0);
+    engine.tick(16);
+
+    assert.ok(eventSizes.length > 0, "leaderboard events should be emitted");
+    assert.is(eventSizes.at(-1), 1, "initial leaderboard size should apply");
+
+    engine.setLeaderboardSize(3);
+
+    engine.tick(32);
+    engine.tick(48);
+
+    assert.is(engine.state.leaderboardSize, 3);
+    assert.is(emittedSizes.at(-1), 3, "telemetry setter receives sanitized size");
+    assert.is(eventSizes.at(-1), 3, "updated leaderboard size should affect output");
+  } finally {
+    restore();
+  }
+});
+
 test("autoPauseOnBlur setter keeps engine state aligned", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);

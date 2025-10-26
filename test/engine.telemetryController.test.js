@@ -154,6 +154,14 @@ test("TelemetryController publishNow emits leaderboard with sanitized size", () 
   assert.is(controller.metrics, null);
 });
 
+test("TelemetryController setLeaderboardSize clamps values", () => {
+  const controller = new TelemetryController({ leaderboardSize: 2 });
+
+  assert.is(controller.setLeaderboardSize(7.8), 7);
+  assert.is(controller.setLeaderboardSize(-4), 0);
+  assert.is(controller.setLeaderboardSize("oops"), 0);
+});
+
 test("TelemetryController sanitizes retained snapshots for leaderboard consumers", () => {
   const controller = new TelemetryController();
   const snapshot = {
