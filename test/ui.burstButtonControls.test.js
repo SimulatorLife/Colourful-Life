@@ -164,4 +164,54 @@ test("burst button respects configurable presets", async () => {
   }
 });
 
+test("burst option normalization falls back when overrides are invalid", async () => {
+  const restore = setupDom();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        burst: () => {},
+      },
+      {
+        canvasElement: new MockCanvas(320, 320),
+        burstOptions: {
+          primary: { count: "-5", radius: "0" },
+          shift: {
+            count: "not-a-number",
+            radius: null,
+            hint: "   ",
+            shortcutHint: undefined,
+          },
+        },
+      },
+    );
+
+    assert.equal(
+      uiManager.burstConfig,
+      {
+        primary: { count: 200, radius: 6 },
+        shift: {
+          count: 400,
+          radius: 9,
+          hint: "Hold Shift for a stronger burst.",
+          shortcutHint:
+            "Hold Shift for a stronger burst, whether clicking or using the shortcut.",
+        },
+      },
+      "invalid burst overrides should fall back to defaults",
+    );
+  } finally {
+    restore();
+  }
+});
+
 test.run();
