@@ -51,6 +51,78 @@ function lookupEventEffect(eventType, resolveEffect, effectCache) {
   return resolved;
 }
 
+/**
+ * Computes the regeneration and drain contribution for a single event.
+ *
+ * The helper mirrors the per-event branch inside {@link accumulateEventModifiers}
+ * but avoids array churn and predicate checks when callers have already
+ * established that the event applies to the target tile.
+ *
+ * @param {Object} options
+ * @param {Object} options.event - Event descriptor with `eventType` and `strength`.
+ * @param {number} [options.strengthMultiplier=1] - Global multiplier applied to the event strength.
+ * @param {Function} [options.getEventEffect] - Resolver returning the effect configuration for an event type.
+ * @param {Map} [options.effectCache] - Optional cache reused across invocations.
+ * @returns {{regenMultiplier:number, regenAdd:number, drainAdd:number}}
+ */
+export function resolveEventContribution({
+  event,
+  strengthMultiplier = 1,
+  getEventEffect,
+  effectCache: externalEffectCache,
+} = {}) {
+  if (!event) {
+    return { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
+  }
+
+  const baseStrength = Number(event?.strength ?? 0);
+
+  if (!Number.isFinite(baseStrength) || baseStrength === 0) {
+    return { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
+  }
+
+  const numericMultiplier = Number(strengthMultiplier);
+  const multiplier = Number.isFinite(numericMultiplier) ? numericMultiplier : 1;
+  const strength = baseStrength * multiplier;
+
+  if (!Number.isFinite(strength) || strength === 0) {
+    return { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
+  }
+
+  const resolveEffect = typeof getEventEffect === "function" ? getEventEffect : null;
+  const effectCache = prepareEffectCache(resolveEffect, externalEffectCache);
+  const effect = resolveEffect
+    ? lookupEventEffect(event.eventType, resolveEffect, effectCache)
+    : null;
+
+  if (!effect) {
+    return { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
+  }
+
+  const { regenScale, regenAdd: effectRegenAdd, drainAdd: effectDrainAdd } = effect;
+
+  let regenMultiplier = 1;
+  let regenAdd = 0;
+  let drainAdd = 0;
+
+  if (regenScale) {
+    const { base = 1, change = 0, min = 0 } = regenScale;
+    const scale = Math.max(min, base + change * strength);
+
+    regenMultiplier *= scale;
+  }
+
+  if (typeof effectRegenAdd === "number") {
+    regenAdd += effectRegenAdd * strength;
+  }
+
+  if (typeof effectDrainAdd === "number") {
+    drainAdd += effectDrainAdd * strength;
+  }
+
+  return { regenMultiplier, regenAdd, drainAdd };
+}
+
 function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }) {
   if (
     Number.isFinite(neighborSum) &&
