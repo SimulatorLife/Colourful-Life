@@ -105,7 +105,7 @@ The simulation runs on cooperating modules housed in `src/`:
 - **UI bridge** (`src/ui/simulationUiBridge.js`) — Wires the simulation engine to either the full UI or the headless adapter, keeping metrics streams, pause state, reproduction multipliers, and slider updates in sync across environments.
 - **Selection tooling** (`src/grid/selectionManager.js`, `src/grid/reproductionZonePolicy.js`) — Defines preset mating zones, keeps geometry caches in sync with grid dimensions, and exposes helpers consumed by UI controls and reproduction policies.
 - **Engine environment adapters** (`src/engine/environment.js`) — Normalize canvas lookups, sizing, and timing providers so the simulation can run inside browsers, tests, and offscreen contexts without bespoke wiring.
-- **Utility helpers** (`src/utils.js`) — Shared math, RNG, ranking, error-reporting, and cloning helpers consumed by the engine, UI, and tests.
+- **Utility helpers** (`src/utils/`) — Shared math, RNG, ranking, error-reporting, and cloning helpers consumed by the engine, UI, and tests.
 
 For an architectural deep dive—including subsystem hand-offs, data flow, and extension tips—see [`docs/architecture-overview.md`](docs/architecture-overview.md).
 
