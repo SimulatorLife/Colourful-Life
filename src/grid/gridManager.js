@@ -62,6 +62,88 @@ const NEIGHBOR_OFFSETS = [
   [1, 0],
   [1, 1],
 ];
+const DEFAULT_CROWDING_SUMMARY = Object.freeze({
+  comfort: 0.5,
+  scarcity: 0,
+  count: 0,
+});
+
+function computeCrowdingFeedback({
+  grid,
+  row,
+  col,
+  rows,
+  cols,
+  neighborOffsets = NEIGHBOR_OFFSETS,
+  maxTileEnergy = 0,
+  result = null,
+} = {}) {
+  const out =
+    result && typeof result === "object" ? result : { ...DEFAULT_CROWDING_SUMMARY };
+  let toleranceSum = 0;
+  let scarcitySum = 0;
+  let count = 0;
+  const norm = maxTileEnergy > 0 ? 1 / maxTileEnergy : 0;
+  const offsets = Array.isArray(neighborOffsets) ? neighborOffsets : NEIGHBOR_OFFSETS;
+
+  for (let i = 0; i < offsets.length; i++) {
+    const offset = offsets[i];
+
+    if (!offset) continue;
+
+    const nr = row + offset[0];
+    const nc = col + offset[1];
+
+    if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+
+    const neighborRow = grid?.[nr];
+
+    if (!neighborRow) continue;
+
+    const occupant = neighborRow[nc];
+
+    if (!occupant) continue;
+
+    let tolerance = null;
+
+    if (typeof occupant.getCrowdingPreference === "function") {
+      tolerance = occupant.getCrowdingPreference({ fallback: 0.5 });
+    } else {
+      const baseline = Number.isFinite(occupant?.baseCrowdingTolerance)
+        ? occupant.baseCrowdingTolerance
+        : 0.5;
+      const adapted = Number.isFinite(occupant?._crowdingTolerance)
+        ? occupant._crowdingTolerance
+        : baseline;
+
+      tolerance = clamp(adapted, 0, 1);
+    }
+
+    toleranceSum += tolerance;
+
+    if (norm > 0) {
+      const energy = Number.isFinite(occupant.energy) ? occupant.energy : 0;
+      const normalizedEnergy = clamp(energy * norm, 0, 1);
+
+      scarcitySum += 1 - normalizedEnergy;
+    }
+
+    count += 1;
+  }
+
+  if (count > 0) {
+    out.comfort = clamp(toleranceSum / count, 0, 1);
+    out.scarcity = clamp(scarcitySum / count, 0, 1);
+    out.count = count;
+  } else {
+    out.comfort = 0.5;
+    out.scarcity = 0;
+    out.count = 0;
+  }
+
+  return out;
+}
+
 const DECAY_RELEASE_RATE = 0.18;
 const DECAY_EPSILON = 1e-4;
 const ENERGY_SPARSE_SCAN_RATIO = 0.2;
@@ -199,6 +281,7 @@ export default class GridManager {
   #energyDeltaDirtyTiles = null;
   #energyDeltaLastSparse = false;
   #decayActiveScratch = null;
+  #crowdingFeedbackScratch = { ...DEFAULT_CROWDING_SUMMARY };
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -3603,6 +3686,7 @@ export default class GridManager {
     let trackSparseDelta = false;
     let deltaDirtyTiles = null;
 
+    const grid = this.grid;
     const processTileBase = (
       r,
       c,
@@ -3645,7 +3729,41 @@ export default class GridManager {
           const deficit = positiveMaxTileEnergy - currentEnergy;
 
           if (deficit > 0) {
-            const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
+            let densityImpact = REGEN_DENSITY_PENALTY * effectiveDensity;
+
+            if (densityImpact > 0) {
+              const feedback = computeCrowdingFeedback({
+                grid,
+                row: r,
+                col: c,
+                rows,
+                cols,
+                neighborOffsets: NEIGHBOR_OFFSETS,
+                maxTileEnergy: positiveMaxTileEnergy,
+                result: this.#crowdingFeedbackScratch,
+              });
+
+              if (feedback.count > 0) {
+                const comfort = feedback.comfort;
+                const scarcitySignal = feedback.scarcity;
+                const pressure =
+                  effectiveDensity > comfort ? effectiveDensity - comfort : 0;
+                const relief =
+                  comfort > effectiveDensity ? comfort - effectiveDensity : 0;
+                const scarcityWeight = clamp(scarcitySignal, 0, 1);
+                const sensitivity = clamp(
+                  1 +
+                    pressure * (0.6 + scarcityWeight * 0.55) -
+                    relief * (0.35 + (1 - scarcityWeight) * 0.15),
+                  0.35,
+                  1.8,
+                );
+
+                densityImpact *= sensitivity;
+              }
+            }
+
+            const regenPenalty = 1 - clamp(densityImpact, 0, 1.1);
 
             if (regenPenalty > 0) {
               regen = regenRate * deficit * regenPenalty;

@@ -95,3 +95,64 @@ test("dirty regeneration recovers drained tiles and reports timings", async () =
     GridManager.prototype.init = originalInit;
   }
 });
+
+test("neighbor crowding traits modulate density penalties", async () => {
+  const { default: GridManager } = await gridManagerModulePromise;
+  const originalInit = GridManager.prototype.init;
+
+  const densityGrid = [
+    [0.5, 0.6, 0.5],
+    [0.6, 0.85, 0.6],
+    [0.5, 0.6, 0.5],
+  ];
+  const neighborCoords = [
+    [0, 1],
+    [1, 0],
+    [1, 2],
+    [2, 1],
+  ];
+
+  const createManager = () =>
+    new GridManager(3, 3, {
+      eventManager: { activeEvents: [] },
+      ctx: createStubContext(),
+      cellSize: 1,
+      stats: { onBirth() {}, onDeath() {}, onFight() {}, onCooperate() {} },
+    });
+
+  const applyScenario = ({ tolerance, energyFraction }) => {
+    const gm = createManager();
+    const baseEnergy = gm.maxTileEnergy * 0.25;
+
+    gm.energyGrid[1][1] = baseEnergy;
+
+    const occupied = gm.grid;
+
+    for (const [r, c] of neighborCoords) {
+      occupied[r][c] = {
+        energy: gm.maxTileEnergy * energyFraction,
+        getCrowdingPreference: () => tolerance,
+      };
+    }
+
+    gm.regenerateEnergyGrid([], 1, GridManager.energyRegenRate, 0, densityGrid, 1);
+
+    return gm.energyGrid[1][1];
+  };
+
+  try {
+    GridManager.prototype.init = function initStub() {};
+
+    const suppressed = applyScenario({ tolerance: 0.1, energyFraction: 0.1 });
+    const supportive = applyScenario({ tolerance: 0.9, energyFraction: 0.95 });
+
+    const improvement = supportive - suppressed;
+
+    assert.ok(
+      improvement > 1e-6,
+      `supportive crowding should reduce penalties (${supportive} <= ${suppressed})`,
+    );
+  } finally {
+    GridManager.prototype.init = originalInit;
+  }
+});
