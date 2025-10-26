@@ -10,10 +10,10 @@ walks through the initial clone-and-run steps before you dive into the details b
 ## Environment setup
 
 1. Install Node.js 25.x (the `.nvmrc` pins to 25.0.0) and run `nvm use` after cloning so your shell matches the expected runtime.
-2. Install dependencies with `npm ci` (or `npm install` when you explicitly need a non-clean install), then run `npm run prepare` so Husky hooks stay active after fresh clones or `.husky/` updates.
+2. Install dependencies with `npm ci` (or `npm install` when you explicitly need a non-clean install), then run `npm run prepare` once so Husky hooks stay active after fresh clones or `.husky/` updates.
 3. Launch the Parcel development server via `npm run start` and open `http://localhost:1234`.
-4. Keep a second terminal running `npm test`, `npm run lint`, and `npm run format:check` while you iterate on shared utilities, simulation logic, or documentation changes.
-5. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/` and `.parcel-cache/` before restarting the dev server.
+4. Keep a second terminal handy for `npm run check` before you commit. The meta-command chains `npm run lint`, `npm run format:check`, and `npm test` so you exercise linting, formatting, the energy benchmark, and the Node.js test suites together. During feature work, lean on focused loops—`npm test -- --watch` for continuous execution, `npm test path/to/file.test.js` to run a single suite—and finish with `npm run check` once the changes stabilise.
+5. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/` and `.parcel-cache/` before restarting the dev server. Append `-- --dry-run` when you just want to confirm the cleanup targets without deleting files.
 
 ### Quality-of-life tips
 
@@ -59,14 +59,16 @@ walks through the initial clone-and-run steps before you dive into the details b
 
 - **Format** — Run `npm run format`, `npm run format:check`, or `npm run format:workflows` to apply Prettier across source, documentation, configuration files, and GitHub workflows.
 - **Lint** — Use `npm run lint` / `npm run lint:fix` to enforce the ESLint ruleset and apply safe autofixes.
-- **Tests** — Execute `npm test` to run the Node.js test suites. Focused suites live beside their target modules under `test/`.
+- **Check** — Use `npm run check` before committing to chain linting, formatting verification, and tests.
+- **Tests** — Execute `npm test` to run the energy benchmark in [`scripts/profile-energy.mjs`](../scripts/profile-energy.mjs) before the Node.js test suites. Focused suites live beside their target modules under `test/`, and the runner accepts paths, directories, and flags such as `-- --watch` or `--runTestsByPath`.
 - **Profiling** — Run `npm run benchmark` (alias for `node scripts/profile-energy.mjs`) with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations.
 - **Cache reset** — Use `npm run clean` to clear `dist/` and `.parcel-cache/` when Parcel hot reloads become inconsistent.
 - **Hooks** — Run `npm run prepare` to reinstall Husky hooks after cloning or whenever `.husky/` contents change.
 
 Always run the formatter and linter before committing. Execute `npm test` when
 changing simulation logic, utilities, UI behaviour, or configuration that can
-affect runtime outcomes.
+affect runtime outcomes, and finish with `npm run check` to ensure nothing was
+missed.
 
 ### Performance budgets
 
