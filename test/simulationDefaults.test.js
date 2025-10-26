@@ -147,6 +147,31 @@ test("resolveSimulationDefaults returns expected baseline configuration", async 
   );
 });
 
+test("simulation defaults keep environmental events dormant by default", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+  const { UI_SLIDER_CONFIG } = await sliderConfigModulePromise;
+
+  assert.is(
+    SIMULATION_DEFAULTS.eventFrequencyMultiplier,
+    0,
+    "Law 6 requires external influences to stay disabled until users opt in.",
+  );
+
+  const defaults = resolveSimulationDefaults();
+
+  assert.is(
+    defaults.eventFrequencyMultiplier,
+    0,
+    "resolveSimulationDefaults must preserve the Law 6 baseline multiplier.",
+  );
+
+  assert.is(
+    UI_SLIDER_CONFIG.eventFrequencyMultiplier.default,
+    0,
+    "UI defaults should mirror the Law 6 opt-in requirement for events.",
+  );
+});
+
 test("resolveEnergyRegenRate sanitizes environment overrides", async () => {
   const { resolveEnergyRegenRate, ENERGY_REGEN_RATE_DEFAULT } =
     await configModulePromise;
