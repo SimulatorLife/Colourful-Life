@@ -106,7 +106,17 @@ test("spawnCell reroutes leftover tile energy to open neighbors", async () => {
   gm.energyGrid[1][0] = 0;
   gm.energyGrid[1][2] = 0;
 
-  gm.spawnCell(1, 1, { dna, spawnEnergy });
+  const spawned = gm.spawnCell(1, 1, { dna, spawnEnergy });
+
+  assert.ok(spawned, "spawnCell should materialize a resident when the tile is open");
+
+  const expectedEnergy = Math.min(gm.maxTileEnergy, spawnEnergy, sourceEnergy);
+
+  assert.is(
+    spawned.energy,
+    expectedEnergy,
+    "new residents must not absorb more energy than the cleared tile provided",
+  );
 
   assert.is(gm.energyGrid[1][1], 0, "occupied tile should report zero stored energy");
 
