@@ -39,8 +39,6 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @param {boolean} [options.showDensity] Whether population density overlays are shown.
  * @param {boolean} [options.showFitness] Whether fitness overlays are shown.
  * @param {boolean} [options.showLifeEventMarkers] Whether life event markers are shown.
- * @param {boolean} [options.showTraitOverlay] Whether the trait focus overlay is shown.
- * @param {string|null} [options.traitOverlayKey] Trait key highlighted when the trait overlay is enabled.
  * @param {number} [options.leaderboardIntervalMs] Minimum time between leaderboard updates.
  * @param {Object} [options.selectionManager=null] Shared selection manager instance.
  * @returns {{
@@ -71,8 +69,6 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  *   getShowDensity: () => boolean,
  *   getShowFitness: () => boolean,
  *   getShowLifeEventMarkers: () => boolean,
- *   getShowTraitOverlay: () => boolean,
- *   getTraitOverlayKey: () => string | null,
  *   shouldRenderSlowUi: (timestamp: number) => boolean,
  *   renderMetrics: Function,
  *   renderLeaderboard: Function,
@@ -94,13 +90,6 @@ export function createHeadlessUiManager(options = {}) {
   const settings = { ...defaults };
 
   settings.autoPausePending = false;
-  if (typeof settings.traitOverlayKey === "string") {
-    const trimmed = settings.traitOverlayKey.trim();
-
-    settings.traitOverlayKey = trimmed.length > 0 ? trimmed : null;
-  } else {
-    settings.traitOverlayKey = null;
-  }
   const baseUpdatesCandidate =
     Number.isFinite(settings.speedMultiplier) && settings.speedMultiplier > 0
       ? settings.updatesPerSecond / settings.speedMultiplier
@@ -317,8 +306,6 @@ export function createHeadlessUiManager(options = {}) {
     getShowDensity: () => settings.showDensity,
     getShowFitness: () => settings.showFitness,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
-    getShowTraitOverlay: () => settings.showTraitOverlay,
-    getTraitOverlayKey: () => settings.traitOverlayKey,
     setShowObstacles: (value) => {
       const normalized = coerceBoolean(value, settings.showObstacles);
 
@@ -358,23 +345,6 @@ export function createHeadlessUiManager(options = {}) {
 
       settings.showLifeEventMarkers = normalized;
       notify("showLifeEventMarkers", settings.showLifeEventMarkers);
-    },
-    setShowTraitOverlay: (value) => {
-      const normalized = coerceBoolean(value, settings.showTraitOverlay);
-
-      if (settings.showTraitOverlay === normalized) return;
-
-      settings.showTraitOverlay = normalized;
-      notify("showTraitOverlay", settings.showTraitOverlay);
-    },
-    setTraitOverlayKey: (value) => {
-      const normalized =
-        typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-
-      if (settings.traitOverlayKey === normalized) return;
-
-      settings.traitOverlayKey = normalized;
-      notify("traitOverlayKey", settings.traitOverlayKey);
     },
     getLeaderboardIntervalMs: () => settings.leaderboardIntervalMs,
     setLeaderboardIntervalMs: (value) => {
