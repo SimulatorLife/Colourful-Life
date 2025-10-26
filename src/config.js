@@ -410,6 +410,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showFitness: false,
   showLifeEventMarkers: false,
   showAuroraVeil: false,
+  showReproductiveZones: true,
   leaderboardIntervalMs: 750,
   leaderboardSize: LEADERBOARD_SIZE_DEFAULT,
   brainSnapshotLimit: DEFAULT_BRAIN_SNAPSHOT_LIMIT,
@@ -438,6 +439,7 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showFitness",
   "showLifeEventMarkers",
   "showAuroraVeil",
+  "showReproductiveZones",
   "autoPauseOnBlur",
 ]);
 

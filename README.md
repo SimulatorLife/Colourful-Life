@@ -65,6 +65,10 @@ Flip on **Aurora Veil** in the Overlays panel when you want a celebratory flouri
 Select a **Layout Preset** in the Obstacles panel to immediately swap the grid's obstacle mask. The dropdown now applies changes as soon as you choose a preset, streamlining the workflow when experimenting with layouts. Use **Clear Obstacles** to reset the field if you need a blank slate again.
 Hit **Shuffle Layout** to roll a random preset from the catalog without reaching for the dropdown—perfect for sparking new map ideas mid-run.
 
+### Reproductive zone overlays
+
+Focus reproduction by enabling preset regions—from hemispheres to central sanctuaries—and combining patterns to guide evolution. Toggle **Highlight Reproductive Zones** whenever you want to keep those rules active without shading the canvas, making it easier to watch emergent behaviour in crowded worlds.
+
 ### Empty tile energy slider
 
 Find **Empty Tile Energy** in the Energy Dynamics panel to instantly rebalance how much resource sits on empty terrain. Drag the slider to rehydrate barren ground up to the shown percentage of the tile cap, or dial it down to create harsher survival conditions. Adjustments apply immediately to vacant tiles and set the baseline used for future world regenerations, so you can experiment with lush gardens or austere wastelands without restarting the app.

@@ -438,6 +438,10 @@ export default class UIManager {
     this.showObstacles = defaults.showObstacles;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
     this.showAuroraVeil = defaults.showAuroraVeil;
+    this.showReproductiveZones =
+      defaults.showReproductiveZones !== undefined
+        ? defaults.showReproductiveZones
+        : true;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.autoPausePending = false;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
@@ -3884,6 +3888,13 @@ export default class UIManager {
         initial: this.showFitness,
       },
       {
+        key: "showReproductiveZones",
+        label: "Highlight Reproductive Zones",
+        title:
+          "Shade active reproductive zones so you can see which tiles permit mating",
+        initial: this.showReproductiveZones,
+      },
+      {
         key: "showAuroraVeil",
         label: "Aurora Veil",
         title:
@@ -4929,6 +4940,9 @@ export default class UIManager {
   }
   getShowAuroraVeil() {
     return this.showAuroraVeil;
+  }
+  getShowReproductiveZones() {
+    return this.showReproductiveZones;
   }
 
   setInitialTileEnergyFraction(value, { notify = true } = {}) {
