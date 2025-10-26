@@ -909,6 +909,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showLifeEventMarkers,
     showAuroraVeil,
     showObstacles = true,
+    showReproductiveZones = true,
     maxTileEnergy = MAX_TILE_ENERGY,
     activeEvents,
     getEventColor,
@@ -929,7 +930,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     drawEventOverlays(ctx, cellSize, activeEvents, getEventColor);
   }
 
-  if (selectionManager) {
+  if (selectionManager && showReproductiveZones) {
     drawSelectionZones(selectionManager, ctx, cellSize);
   }
   if (showObstacles) drawObstacleMask(grid, ctx, cellSize);
