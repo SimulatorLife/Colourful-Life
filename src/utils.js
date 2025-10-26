@@ -162,10 +162,24 @@ export function sanitizeNumber(
 ) {
   let numeric;
 
-  try {
-    numeric = Number(value);
-  } catch (error) {
-    return fallback;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+
+    if (trimmed.length === 0) {
+      return fallback;
+    }
+
+    try {
+      numeric = Number(trimmed);
+    } catch (error) {
+      return fallback;
+    }
+  } else {
+    try {
+      numeric = Number(value);
+    } catch (error) {
+      return fallback;
+    }
   }
 
   if (!Number.isFinite(numeric)) return fallback;

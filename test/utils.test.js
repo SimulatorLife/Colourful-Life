@@ -76,6 +76,24 @@ test("coerceBoolean normalizes boolean-like values with sane fallbacks", () => {
   assert.is(coerceBoolean(Symbol("token")), true, "symbols coerce to true");
 });
 
+test("sanitizeNumber treats blank strings as missing overrides", () => {
+  assert.is(
+    sanitizeNumber("   ", { fallback: 42 }),
+    42,
+    "whitespace-only strings use fallback",
+  );
+  assert.is(
+    sanitizeNumber("\n\t", { fallback: 7, min: 0 }),
+    7,
+    "control characters are trimmed before coercion",
+  );
+  assert.is(
+    sanitizePositiveInteger("", { fallback: 9, min: 1 }),
+    9,
+    "positive integer sanitizer inherits blank string handling",
+  );
+});
+
 test("pickFirstFinitePositive selects the earliest positive candidate", () => {
   assert.is(
     pickFirstFinitePositive([null, undefined, "", "5", 3]),
