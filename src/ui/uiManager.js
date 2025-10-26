@@ -270,6 +270,9 @@ export default class UIManager {
     this._checkboxIdSequence = 0;
     this.stepButton = null;
     this.burstButton = null;
+    this.resetWorldButton = null;
+    this.resetWorldBusy = false;
+    this.resetWorldButtonDefaults = null;
     this._documentKeydownListener = null;
     this.metricsPlaceholder = null;
     this._sliderInputs = new Map();
@@ -1183,6 +1186,104 @@ export default class UIManager {
     return true;
   }
 
+  #setResetWorldBusy(isBusy, details = {}) {
+    if (isBusy) {
+      if (this.resetWorldBusy) return false;
+
+      this.resetWorldBusy = true;
+      const button = this.resetWorldButton;
+
+      if (!button) return true;
+
+      if (!this.resetWorldButtonDefaults) {
+        const defaultLabel = button.textContent || "Regenerate World";
+        const defaultTitle = button.title || defaultLabel;
+        const defaultAria = this.#readElementAttribute(button, "aria-label");
+
+        this.resetWorldButtonDefaults = {
+          label: defaultLabel,
+          title: defaultTitle,
+          ariaLabel: defaultAria,
+        };
+      }
+
+      const busyMessage = details?.randomizeObstacles
+        ? "Regenerating the world with a new obstacle layout. This may take a moment."
+        : "Regenerating the world. This may take a moment.";
+
+      button.disabled = true;
+      button.setAttribute("aria-disabled", "true");
+      button.setAttribute("data-busy", "true");
+      button.textContent = "Regenerating…";
+      button.title = busyMessage;
+      button.setAttribute("aria-label", busyMessage);
+      button.setAttribute("aria-live", "polite");
+
+      if (details?.randomizeObstacles) {
+        button.setAttribute("data-busy-mode", "randomize");
+      } else {
+        this.#removeElementAttribute(button, "data-busy-mode");
+      }
+
+      return true;
+    }
+
+    if (!this.resetWorldBusy) return false;
+
+    this.resetWorldBusy = false;
+    const button = this.resetWorldButton;
+
+    if (!button) return true;
+
+    button.disabled = false;
+    button.setAttribute("aria-disabled", "false");
+    this.#removeElementAttribute(button, "data-busy");
+    this.#removeElementAttribute(button, "data-busy-mode");
+
+    const defaults = this.resetWorldButtonDefaults || {};
+    const defaultLabel = defaults.label || "Regenerate World";
+    const defaultTitle = defaults.title || defaultLabel;
+
+    button.textContent = defaultLabel;
+    button.title = defaultTitle;
+
+    if (typeof defaults.ariaLabel === "string" && defaults.ariaLabel.length > 0) {
+      button.setAttribute("aria-label", defaults.ariaLabel);
+    } else {
+      this.#removeElementAttribute(button, "aria-label");
+    }
+
+    return true;
+  }
+
+  #releaseResetWorldBusy(details = {}) {
+    if (!this.resetWorldBusy) return false;
+
+    const release = () => {
+      this.#setResetWorldBusy(false, details);
+    };
+
+    if (typeof window !== "undefined") {
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(() => {
+          release();
+        });
+
+        return true;
+      }
+
+      if (typeof window.setTimeout === "function") {
+        window.setTimeout(release, 0);
+
+        return true;
+      }
+    }
+
+    release();
+
+    return true;
+  }
+
   #formatReadableList(items = []) {
     const list = Array.isArray(items) ? items.filter(Boolean) : [];
 
@@ -1531,6 +1632,24 @@ export default class UIManager {
     }
 
     return null;
+  }
+
+  #removeElementAttribute(element, name) {
+    if (!element || typeof name !== "string" || name.length === 0) return;
+
+    if (typeof element.removeAttribute === "function") {
+      try {
+        element.removeAttribute(name);
+
+        return;
+      } catch {
+        // Ignore environments without DOM attribute helpers.
+      }
+    }
+
+    if (element.attributes && typeof element.attributes === "object") {
+      delete element.attributes[name];
+    }
   }
 
   #scheduleUpdate() {
@@ -2926,26 +3045,52 @@ export default class UIManager {
     this.burstButton.setAttribute("aria-label", burstTitle);
     this.#applyButtonHotkeys(this.burstButton, this.burstHotkeySet);
 
-    addControlButton({
+    this.resetWorldButton = addControlButton({
       id: "resetWorldButton",
       label: "Regenerate World",
       title:
         "Clear the map and spawn a fresh population. Hold Shift to randomize obstacle layouts.",
       onClick: (event) => {
+        const randomizeObstacles = Boolean(event?.shiftKey);
         const options = {
-          randomizeObstacles: Boolean(event?.shiftKey),
+          randomizeObstacles,
         };
+        const busyActivated = this.#setResetWorldBusy(true, { randomizeObstacles });
 
-        if (typeof this.simulationCallbacks?.resetWorld === "function") {
-          this.simulationCallbacks.resetWorld(options);
-        } else if (window.simulationEngine?.resetWorld) {
-          window.simulationEngine.resetWorld(options);
+        if (!busyActivated) return;
+
+        try {
+          if (typeof this.simulationCallbacks?.resetWorld === "function") {
+            this.simulationCallbacks.resetWorld(options);
+          } else if (window.simulationEngine?.resetWorld) {
+            window.simulationEngine.resetWorld(options);
+          }
+        } finally {
+          this.#updateZoneSummary();
+          this.#scheduleUpdate();
+          this.#releaseResetWorldBusy();
         }
-
-        this.#updateZoneSummary();
-        this.#scheduleUpdate();
       },
     });
+
+    if (this.resetWorldButton) {
+      this.resetWorldButton.setAttribute("aria-live", "polite");
+
+      if (!this.resetWorldButtonDefaults) {
+        const defaultLabel = this.resetWorldButton.textContent || "Regenerate World";
+        const defaultTitle = this.resetWorldButton.title || defaultLabel;
+        const defaultAria = this.#readElementAttribute(
+          this.resetWorldButton,
+          "aria-label",
+        );
+
+        this.resetWorldButtonDefaults = {
+          label: defaultLabel,
+          title: defaultTitle,
+          ariaLabel: defaultAria,
+        };
+      }
+    }
 
     const speedBounds = UI_SLIDER_CONFIG?.speedMultiplier || {};
     const speedMin = speedBounds.min ?? 0.5;

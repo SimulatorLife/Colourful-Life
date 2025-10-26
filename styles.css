@@ -308,6 +308,29 @@ canvas {
 .controls-panel button:not(.panel-toggle):disabled:hover {
   background: var(--color-accent);
 }
+.controls-panel button[data-busy="true"] {
+  cursor: wait;
+  opacity: 0.85;
+  pointer-events: none;
+  position: relative;
+}
+.controls-panel button[data-busy="true"]::after {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 8px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: rgba(255, 255, 255, 0.9);
+  animation: control-button-spinner 0.8s linear infinite;
+  vertical-align: middle;
+}
+@media (prefers-reduced-motion: reduce) {
+  .controls-panel button[data-busy="true"]::after {
+    animation: none;
+  }
+}
 .control-button-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
@@ -627,6 +650,12 @@ canvas {
 }
 
 @keyframes geometry-apply-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes control-button-spinner {
   to {
     transform: rotate(360deg);
   }
