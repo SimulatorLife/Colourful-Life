@@ -7392,9 +7392,32 @@ export default class GridManager {
       Math.abs(targetEnemy.row - row),
       Math.abs(targetEnemy.col - col),
     );
+    const reachContext = {
+      action,
+      localDensity,
+      densityEffectMultiplier,
+      tileEnergy,
+      tileEnergyDelta,
+      maxTileEnergy: this.maxTileEnergy,
+      enemies,
+      allies,
+      target: targetEnemy?.target ?? null,
+      distance: dist,
+    };
+    const resolveInteractionReach = (mode) => {
+      if (typeof cell.getInteractionReach !== "function") {
+        return 1;
+      }
+
+      const reach = cell.getInteractionReach(mode, { ...reachContext, action: mode });
+
+      return Number.isFinite(reach) && reach > 0 ? reach : 1;
+    };
 
     if (action === "fight") {
-      if (dist <= 1) {
+      const fightReach = resolveInteractionReach("fight");
+
+      if (dist <= fightReach) {
         const intent = cell.createFightIntent({
           attackerRow: row,
           attackerCol: col,
@@ -7425,7 +7448,9 @@ export default class GridManager {
       return true;
     }
 
-    if (dist <= 1) {
+    const cooperateReach = resolveInteractionReach("cooperate");
+
+    if (dist <= cooperateReach) {
       const intent = cell.createCooperationIntent({
         row,
         col,

@@ -181,6 +181,58 @@ test("fight victory removes defender, relocates attacker, and consumes tile ener
   });
 });
 
+test("ranged fight victory leaves attacker in place", () => {
+  const adapter = new FakeAdapter();
+  const interaction = new InteractionSystem({ adapter });
+  const attacker = {
+    energy: 12,
+    dna: {
+      fightCost: () => 0,
+      combatPower: () => 2,
+    },
+    ageEnergyMultiplier: () => 1,
+  };
+  const defender = {
+    energy: 2,
+    dna: {
+      fightCost: () => 0,
+      combatPower: () => 0.5,
+    },
+    ageEnergyMultiplier: () => 1,
+  };
+
+  adapter.place(attacker, 0, 0);
+  adapter.place(defender, 0, 2);
+
+  const densityGrid = [[0, 0, 0]];
+  const stats = {
+    onFight() {},
+    onDeath() {},
+  };
+  const intent = {
+    type: "fight",
+    initiator: { cell: attacker, row: 0, col: 0 },
+    target: { row: 0, col: 2 },
+  };
+
+  const resolved = withFixedRandom(0, () =>
+    interaction.resolveIntent(intent, {
+      stats,
+      densityGrid,
+      densityEffectMultiplier: 1,
+    }),
+  );
+
+  assert.ok(resolved, "fight intent resolves at range");
+  assert.is(adapter.getCell(0, 0), attacker, "attacker remains on original tile");
+  assert.is(adapter.getCell(0, 2), null, "defender tile is cleared");
+  assert.is(attacker.row, 0);
+  assert.is(attacker.col, 0);
+  assert.is(attacker.fightsWon, 1);
+  assert.is(defender.fightsLost, 1);
+  assert.is(adapter.consumeCalls.length, 0, "no remote tile energy consumption");
+});
+
 test("fight defeat removes attacker but leaves defender intact", () => {
   const adapter = new FakeAdapter();
   const interaction = new InteractionSystem({ adapter });

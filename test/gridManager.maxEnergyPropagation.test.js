@@ -432,3 +432,162 @@ test("handleReproduction threads custom max tile energy through cell decisions",
     Math.random = originalRandom;
   }
 });
+
+test("handleCombat allows ranged fights when interaction reach is high", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class ReachGrid extends GridManager {
+    init() {}
+  }
+
+  const fightIntents = [];
+  let moved = false;
+  const gm = new ReachGrid(1, 4, {
+    ...baseOptions,
+    interactionSystem: {
+      resolveIntent(intent) {
+        fightIntents.push(intent);
+
+        return true;
+      },
+    },
+  });
+
+  gm.boundMoveToTarget = () => {
+    moved = true;
+  };
+  gm.boundMoveAwayFromTarget = () => {
+    moved = true;
+  };
+
+  const fighter = {
+    energy: 8,
+    interactionGenes: { avoid: 0.1, fight: 0.7, cooperate: 0.2 },
+    chooseEnemyTarget(enemies) {
+      return enemies[0];
+    },
+    chooseInteractionAction() {
+      return "fight";
+    },
+    getInteractionReach(action) {
+      return action === "fight" ? 2.5 : 1;
+    },
+    createFightIntent(payload) {
+      fightIntents.push({ payload });
+
+      return {
+        type: "fight",
+        initiator: {
+          cell: fighter,
+          row: payload.attackerRow,
+          col: payload.attackerCol,
+        },
+        target: { row: payload.targetRow, col: payload.targetCol },
+      };
+    },
+  };
+
+  const opponent = { energy: 3 };
+
+  gm.setCell(0, 0, fighter);
+  gm.setCell(0, 2, opponent);
+
+  const acted = gm.handleCombat(
+    0,
+    0,
+    fighter,
+    { enemies: [{ row: 0, col: 2, target: opponent }], society: [] },
+    {
+      stats: {},
+      densityEffectMultiplier: 1,
+      densityGrid: [[0, 0, 0, 0]],
+      combatEdgeSharpness: 1,
+      combatTerritoryEdgeFactor: 0.5,
+    },
+  );
+
+  assert.ok(acted, "fight action should complete");
+  assert.ok(fightIntents.length > 0, "fight intent should be emitted when in range");
+  assert.not.ok(
+    moved,
+    "fighter should not be forced to move when target is within reach",
+  );
+});
+
+test("handleCombat allows ranged cooperation when social reach is high", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class ReachGrid extends GridManager {
+    init() {}
+  }
+
+  const cooperationIntents = [];
+  let moved = false;
+  const gm = new ReachGrid(1, 4, {
+    ...baseOptions,
+    interactionSystem: {
+      resolveIntent(intent) {
+        cooperationIntents.push(intent);
+
+        return true;
+      },
+    },
+  });
+
+  gm.boundMoveToTarget = () => {
+    moved = true;
+  };
+  gm.boundMoveAwayFromTarget = () => {
+    moved = true;
+  };
+
+  const sharer = {
+    energy: 6,
+    interactionGenes: { avoid: 0.2, fight: 0.1, cooperate: 0.7 },
+    chooseEnemyTarget(enemies) {
+      return enemies[0];
+    },
+    chooseInteractionAction() {
+      return "cooperate";
+    },
+    getInteractionReach(action) {
+      return action === "cooperate" ? 3.5 : 1;
+    },
+    createCooperationIntent(payload) {
+      cooperationIntents.push({ payload });
+
+      return {
+        type: "cooperate",
+        initiator: { cell: sharer, row: payload.row, col: payload.col },
+        target: { row: payload.targetRow, col: payload.targetCol },
+      };
+    },
+  };
+
+  const partner = { energy: 2 };
+
+  gm.setCell(0, 0, sharer);
+  gm.setCell(0, 3, partner);
+
+  const acted = gm.handleCombat(
+    0,
+    0,
+    sharer,
+    { enemies: [{ row: 0, col: 3, target: partner }], society: [] },
+    {
+      stats: {},
+      densityEffectMultiplier: 1,
+      densityGrid: [[0, 0, 0, 0]],
+    },
+  );
+
+  assert.ok(acted, "cooperation action should complete");
+  assert.ok(
+    cooperationIntents.length > 0,
+    "cooperation intent should be emitted when partner is within reach",
+  );
+  assert.not.ok(
+    moved,
+    "cooperating cell should not be forced to move when partner is reachable",
+  );
+});
