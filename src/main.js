@@ -270,11 +270,13 @@ export function createSimulation({
       if (uiManager && typeof uiManager.destroy === "function") {
         uiManager.destroy();
       }
-      while (unsubscribers.length) {
-        const unsub = unsubscribers.pop();
+      const unsubscribeFns = unsubscribers.splice(0).reverse();
 
-        if (typeof unsub === "function") unsub();
-      }
+      unsubscribeFns.forEach((unsubscribe) => {
+        if (typeof unsubscribe === "function") {
+          unsubscribe();
+        }
+      });
       if (typeof engine.destroy === "function") {
         engine.destroy();
       } else {
