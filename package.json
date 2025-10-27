@@ -37,6 +37,9 @@
     "url": "https://github.com/henrylkirk/Colourful-Life/issues"
   },
   "homepage": "https://github.com/henrylkirk/Colourful-Life#readme",
+  "overrides": {
+    "@swc/core": "1.13.21"
+  },
   "lint-staged": {
     "*.{cjs,js,mjs}": [
       "eslint --max-warnings=0 --fix",
