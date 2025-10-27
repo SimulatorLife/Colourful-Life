@@ -20,6 +20,7 @@ import {
   sanitizeNumber,
   sanitizePositiveInteger,
   toFiniteOrNull,
+  applyIntervalFloor,
 } from "./utils/math.js";
 import { coerceBoolean } from "./utils/primitives.js";
 import { invokeWithErrorBoundary } from "./utils/error.js";
@@ -1386,8 +1387,7 @@ export default class SimulationEngine {
       return this.state.leaderboardIntervalMs;
     }
 
-    const normalized =
-      sanitized <= 0 ? 0 : Math.max(LEADERBOARD_INTERVAL_MIN_MS, sanitized);
+    const normalized = applyIntervalFloor(sanitized, LEADERBOARD_INTERVAL_MIN_MS);
 
     this.#updateState({ leaderboardIntervalMs: normalized });
 

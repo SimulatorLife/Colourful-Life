@@ -3,7 +3,7 @@ import {
   SIMULATION_DEFAULTS,
   LEADERBOARD_INTERVAL_MIN_MS,
 } from "../config.js";
-import { sanitizeNumber } from "../utils/math.js";
+import { sanitizeNumber, applyIntervalFloor } from "../utils/math.js";
 import { coerceBoolean } from "../utils/primitives.js";
 import { invokeWithErrorBoundary } from "../utils/error.js";
 
@@ -382,8 +382,7 @@ export function createHeadlessUiManager(options = {}) {
 
       if (!Number.isFinite(sanitized)) return;
 
-      const normalized =
-        sanitized <= 0 ? 0 : Math.max(LEADERBOARD_INTERVAL_MIN_MS, sanitized);
+      const normalized = applyIntervalFloor(sanitized, LEADERBOARD_INTERVAL_MIN_MS);
 
       if (Object.is(settings.leaderboardIntervalMs, normalized)) return;
 

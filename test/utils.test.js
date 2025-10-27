@@ -10,6 +10,7 @@ import {
   pickFirstFinitePositive,
   createRNG,
   toFiniteOrNull,
+  applyIntervalFloor,
 } from "../src/utils/math.js";
 import { coerceBoolean, resolveNonEmptyString } from "../src/utils/primitives.js";
 import { resolveCellColor } from "../src/utils/cell.js";
@@ -158,6 +159,19 @@ test("pickFirstFinitePositive selects the earliest positive candidate", () => {
     42,
     "fallback is returned when no candidate qualifies",
   );
+});
+
+test("applyIntervalFloor enforces zero disablement and positive floors", () => {
+  assert.ok(Number.isNaN(applyIntervalFloor("oops", 100)), "invalid input returns NaN");
+  assert.is(applyIntervalFloor(-50, 100), 0, "negative values collapse to zero");
+  assert.is(applyIntervalFloor(0, 100), 0, "explicit zero remains zero");
+  assert.is(
+    applyIntervalFloor(40, 100),
+    100,
+    "values below the floor adopt the minimum",
+  );
+  assert.is(applyIntervalFloor(250, 100), 250, "values above the floor pass through");
+  assert.is(applyIntervalFloor(5, -20), 5, "non-positive floors are ignored");
 });
 
 test("cloneTracePayload performs deep copies of sensors and nodes", () => {
