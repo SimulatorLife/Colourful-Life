@@ -9,6 +9,7 @@ import {
 import { warnOnce } from "./utils/error.js";
 import { accumulateTraitAggregates } from "./stats/traitAggregation.js";
 import { resolveCellColor } from "./utils/cell.js";
+import { resolveNonEmptyString } from "./utils/primitives.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;
@@ -374,13 +375,12 @@ const createEmptyMatingSnapshot = () => ({
 const isCellLike = (candidate) => {
   if (!candidate || typeof candidate !== "object") return false;
 
-  return (
-    typeof candidate.dna === "object" ||
-    typeof candidate.color === "string" ||
-    typeof candidate.interactionGenes === "object" ||
-    typeof candidate.genes === "object" ||
-    Number.isFinite(candidate.energy)
-  );
+  if (typeof candidate.dna === "object") return true;
+  if (resolveNonEmptyString(candidate.color) != null) return true;
+  if (typeof candidate.interactionGenes === "object") return true;
+  if (typeof candidate.genes === "object") return true;
+
+  return Number.isFinite(candidate.energy);
 };
 
 /**
@@ -1320,38 +1320,31 @@ export default class Stats {
     const col = toFiniteOrNull(safeContext.col) ?? toFiniteOrNull(resolvedCell?.col);
     const energy =
       toFiniteOrNull(safeContext.energy) ?? toFiniteOrNull(resolvedCell?.energy);
-    const contextColor =
-      typeof safeContext.color === "string" && safeContext.color.length > 0
-        ? safeContext.color
-        : null;
+    const contextColor = resolveNonEmptyString(safeContext.color);
     const color = contextColor ?? resolveCellColor(resolvedCell);
     const mutationMultiplier = toFiniteOrNull(safeContext.mutationMultiplier);
     const intensity = toFiniteOrNull(safeContext.intensity);
     const winChanceCandidate = toFiniteOrNull(safeContext.winChance);
     const winChance = winChanceCandidate != null ? clamp01(winChanceCandidate) : null;
-    const opponentColor =
-      typeof safeContext.opponentColor === "string" &&
-      safeContext.opponentColor.length > 0
-        ? safeContext.opponentColor
-        : null;
-    const note =
-      typeof safeContext.note === "string" && safeContext.note.length > 0
-        ? safeContext.note
-        : null;
-    const cause =
-      typeof safeContext.cause === "string" && safeContext.cause.length > 0
-        ? safeContext.cause
-        : type;
+    const opponentColor = resolveNonEmptyString(safeContext.opponentColor);
+    const note = resolveNonEmptyString(safeContext.note);
+    const cause = resolveNonEmptyString(safeContext.cause, type) ?? type;
     const interactionGenes =
       safeContext.interactionGenes && typeof safeContext.interactionGenes === "object"
         ? safeContext.interactionGenes
         : resolvedCell?.interactionGenes;
     const highlight = this.#resolveInteractionHighlight(interactionGenes);
-    const parentColors = Array.isArray(safeContext.parents)
-      ? safeContext.parents
-          .map((value) => (typeof value === "string" ? value : null))
-          .filter((value) => value)
-      : null;
+    let parentColors = null;
+
+    if (Array.isArray(safeContext.parents)) {
+      const sanitizedParents = safeContext.parents
+        .map((value) => resolveNonEmptyString(value))
+        .filter((value) => value);
+
+      if (sanitizedParents.length > 0) {
+        parentColors = sanitizedParents;
+      }
+    }
 
     const currentTicks = Number.isFinite(this.totals?.ticks) ? this.totals.ticks : 0;
     const event = {

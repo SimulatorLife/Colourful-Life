@@ -52,6 +52,33 @@ test("life event helpers reuse fallback cell data when context is provided first
   assert.is(event.col, 4);
 });
 
+test("life event payload trims context strings and falls back to cell data", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+  const cell = {
+    color: " ",
+    dna: { toColor: () => "  #def  " },
+    interactionGenes: { cooperate: 0.7 },
+  };
+  const context = {
+    color: "   ",
+    opponentColor: "  #123  ",
+    note: "   ",
+    cause: "  ",
+    parents: ["#456", "  ", "  #789  "],
+  };
+
+  stats.onDeath(context, cell);
+
+  const [event] = stats.getRecentLifeEvents(1);
+
+  assert.equal(event.color, "#def", "falls back to the resolved cell color");
+  assert.equal(event.cause, "death", "uses event type when cause is blank");
+  assert.equal(event.opponentColor, "#123", "trims opponent color inputs");
+  assert.equal(event.parents, ["#456", "#789"], "filters empty parent colors");
+  assert.is("note" in event, false, "drops whitespace-only notes");
+});
+
 test("getLifeEventRateSummary captures windowed birth/death cadence", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats();
