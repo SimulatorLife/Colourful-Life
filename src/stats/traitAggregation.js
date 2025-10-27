@@ -54,12 +54,13 @@ export function accumulateTraitAggregates(
     indexesSource = activeTraitIndexes;
   }
 
-  let indexCount = indexesSource ? indexesSource.length : 0;
-
-  if (!indexCount) {
-    indexCount = traitCount;
-    indexesSource = null;
-  }
+  const traitIndexes =
+    indexesSource && indexesSource.length > 0
+      ? Array.from({ length: indexesSource.length }, (_, i) => indexesSource[i]).filter(
+          (traitIndex) =>
+            traitIndex != null && traitIndex >= 0 && traitIndex < traitCount,
+        )
+      : Array.from({ length: traitCount }, (_, i) => i);
 
   let population = 0;
 
@@ -72,13 +73,7 @@ export function accumulateTraitAggregates(
 
     population += 1;
 
-    for (let i = 0; i < indexCount; i += 1) {
-      const traitIndex = indexesSource ? indexesSource[i] : i;
-
-      if (traitIndex == null || traitIndex < 0 || traitIndex >= traitCount) {
-        continue;
-      }
-
+    for (const traitIndex of traitIndexes) {
       const compute = computeFns[traitIndex];
 
       if (typeof compute !== "function") {
