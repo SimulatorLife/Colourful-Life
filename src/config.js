@@ -611,7 +611,9 @@ export function resolveSimulationDefaults(overrides = {}) {
   sanitizeNumeric("energyDiffusionRate", { min: 0 });
   sanitizeNumeric("combatEdgeSharpness", { min: 0.1 });
   sanitizeNumeric("combatTerritoryEdgeFactor", { min: 0, max: 1 });
-  const intervalCandidate = Number(merged.leaderboardIntervalMs);
+  const intervalCandidate = sanitizeNumber(merged.leaderboardIntervalMs, {
+    fallback: Number.NaN,
+  });
 
   if (Number.isFinite(intervalCandidate)) {
     merged.leaderboardIntervalMs =
