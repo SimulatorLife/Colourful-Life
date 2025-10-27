@@ -2971,21 +2971,23 @@ export default class Cell {
 
   #averageSimilarity(list = []) {
     if (!Array.isArray(list) || list.length === 0) return 0;
-    let total = 0;
-    let count = 0;
+    const { total, count } = list.reduce(
+      (accumulator, entry) => {
+        if (!entry?.target) return accumulator;
+        const similarity = this.#safeSimilarityTo(entry.target, {
+          context: "average similarity aggregation",
+          fallback: Number.NaN,
+        });
 
-    for (const entry of list) {
-      if (!entry?.target) continue;
-      const similarity = this.#safeSimilarityTo(entry.target, {
-        context: "average similarity aggregation",
-        fallback: Number.NaN,
-      });
+        if (!Number.isFinite(similarity)) return accumulator;
 
-      if (!Number.isFinite(similarity)) continue;
+        accumulator.total += similarity;
+        accumulator.count += 1;
 
-      total += similarity;
-      count++;
-    }
+        return accumulator;
+      },
+      { total: 0, count: 0 },
+    );
 
     return count > 0 ? total / count : 0;
   }
