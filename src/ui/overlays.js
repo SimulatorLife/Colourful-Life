@@ -17,8 +17,8 @@ const LIFE_EVENT_MARKER_DEFAULT_COLORS = Object.freeze({
   death: "#ff6b6b",
 });
 const LIFE_EVENT_LEGEND_MIN_WIDTH = 150;
-const DEFAULT_OBSTACLE_MASK_FILL = "rgba(40,40,55,0.35)";
-const DEFAULT_OBSTACLE_MASK_OUTLINE = "rgba(200,200,255,0.35)";
+const DEFAULT_OBSTACLE_MASK_FILL = "rgba(40, 40, 55, 0.35)";
+const DEFAULT_OBSTACLE_MASK_OUTLINE = "rgba(200, 200, 255, 0.35)";
 const OBSTACLE_MASK_LINE_WIDTH_SCALE = 0.12;
 const OBSTACLE_MASK_ALPHA = 0.35;
 const GRID_LINE_COLOR = "rgba(255, 255, 255, 0.1)";
@@ -325,7 +325,7 @@ function drawLifeEventLegend(ctx, cellSize, counts = {}, metadata = {}) {
     LIFE_EVENT_MARKER_DEFAULT_COLORS.death,
   );
   const netColor =
-    net > 0 ? birthColor : net < 0 ? deathColor : "rgba(255,255,255,0.85)";
+    net > 0 ? birthColor : net < 0 ? deathColor : "rgba(255, 255, 255, 0.85)";
   const padding = 10;
   const lineHeight = 16;
   const bulletRadius = clamp(cellSize * 0.32, 3.5, 7);
@@ -405,7 +405,7 @@ function drawLifeEventLegend(ctx, cellSize, counts = {}, metadata = {}) {
     } else if (line.type === "net") {
       ctx.fillStyle = netColor;
     } else {
-      ctx.fillStyle = "rgba(255,255,255,0.82)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
     }
 
     ctx.fillText(line.text, textX, lineY);
@@ -462,7 +462,7 @@ export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
     if (!event || !event.affectedArea) continue;
 
     const { affectedArea } = event;
-    let color = event.color || "rgba(255,255,255,0.15)";
+    let color = event.color || "rgba(255, 255, 255, 0.15)";
 
     if (typeof getColor === "function") {
       try {
@@ -781,7 +781,7 @@ function drawEnergyLegend(ctx, cellSize, cols, rows, stats, maxTileEnergy) {
   const y = rows * cellSize - blockHeight - padding;
 
   ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
   ctx.fillRect(x, y, blockWidth, blockHeight);
 
   const gradientX = x + padding;
@@ -920,7 +920,7 @@ function drawDensityLegend(ctx, cellSize, cols, rows, stats = {}) {
   const y = rows * cellSize - blockHeight - padding;
 
   ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
   ctx.fillRect(x, y, blockWidth, blockHeight);
 
   const gradientX = x + padding;
@@ -1031,7 +1031,7 @@ export function drawSelectionZones(selectionManager, ctx, cellSize) {
 
     if (!zone) continue;
 
-    const color = zone.color || "rgba(255,255,255,0.2)";
+    const color = zone.color || "rgba(255, 255, 255, 0.2)";
 
     if (!color) continue;
 
@@ -1288,7 +1288,7 @@ export function drawFitnessHeatmap(snapshot, ctx, cellSize, options = {}) {
   const palette = createFitnessPalette(FITNESS_GRADIENT_STEPS, FITNESS_BASE_HUE);
   const tierSize = Math.max(1, Math.ceil(topEntries.length / palette.length));
 
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
   ctx.fillRect(0, 0, cols * cellSize, rows * cellSize);
 
   topEntries.forEach(({ row, col }, index) => {
@@ -1392,7 +1392,7 @@ function drawFitnessLegend(
   const y = padding;
 
   ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
   ctx.fillRect(x, y, blockWidth, blockHeight);
 
   const gradientX = x + padding;
