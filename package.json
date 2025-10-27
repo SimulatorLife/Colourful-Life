@@ -5,8 +5,7 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#tests/harness": "./test/testHarness.js",
-    "#tests/assertions": "./test/helpers/assertions.js"
+    "#tests/harness": "./test/testHarness.js"
   },
   "scripts": {
     "start": "parcel ./index.html",
