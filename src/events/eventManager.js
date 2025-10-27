@@ -386,24 +386,23 @@ export default class EventManager {
     }
 
     // Update existing events in place while compacting finished entries without reallocating.
-    const retained = events.reduce((writeIndex, ev) => {
-      if (!ev) {
-        return writeIndex;
-      }
+    let writeIndex = 0;
+
+    for (let readIndex = 0; readIndex < events.length; readIndex += 1) {
+      const ev = events[readIndex];
+
+      if (!ev) continue;
 
       ev.remaining = Math.max(0, ev.remaining - 1);
 
-      if (ev.remaining > 0) {
-        events[writeIndex] = ev;
+      if (ev.remaining <= 0) continue;
 
-        return writeIndex + 1;
-      }
+      events[writeIndex] = ev;
+      writeIndex += 1;
+    }
 
-      return writeIndex;
-    }, 0);
-
-    if (retained < events.length) {
-      events.length = retained;
+    if (writeIndex < events.length) {
+      events.length = writeIndex;
     }
 
     // Spawn new events when cooldown expires
