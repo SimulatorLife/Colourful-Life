@@ -6998,35 +6998,39 @@ export default class Cell {
       }
     }
 
-    let best = null;
-    let bestScore = -Infinity;
-    let chosenSummary = null;
+    const bestCandidate = enemies.reduce(
+      (bestAcc, enemy) => {
+        if (!enemy || !enemy.target) {
+          return bestAcc;
+        }
 
-    for (const enemy of enemies) {
-      if (!enemy || !enemy.target) continue;
+        const row = enemy.row ?? enemy.target.row ?? this.row;
+        const col = enemy.col ?? enemy.target.col ?? this.col;
+        const dist = Math.max(Math.abs(row - this.row), Math.abs(col - this.col));
+        const enemyEnergy = Number.isFinite(enemy.target.energy)
+          ? enemy.target.energy
+          : 0;
+        const diff = clamp(((this.energy ?? 0) - enemyEnergy) / energyCap, -1, 1);
+        const weakSignal = clamp(1 + diff, 0.05, 1.95);
+        const strongSignal = clamp(1 - diff, 0.05, 1.95);
+        const proximitySignal = clamp(
+          1 / (1 + (Number.isFinite(dist) ? dist : 0)),
+          0,
+          1,
+        );
+        const attritionSignal = enemy.target.lifespan
+          ? clamp((enemy.target.age ?? 0) / enemy.target.lifespan, 0, 1)
+          : 0;
+        const score =
+          weights.weak * weakSignal +
+          weights.strong * strongSignal +
+          weights.proximity * proximitySignal +
+          weights.attrition * attritionSignal;
 
-      const row = enemy.row ?? enemy.target.row ?? this.row;
-      const col = enemy.col ?? enemy.target.col ?? this.col;
-      const dist = Math.max(Math.abs(row - this.row), Math.abs(col - this.col));
-      const enemyEnergy = Number.isFinite(enemy.target.energy)
-        ? enemy.target.energy
-        : 0;
-      const diff = clamp(((this.energy ?? 0) - enemyEnergy) / energyCap, -1, 1);
-      const weakSignal = clamp(1 + diff, 0.05, 1.95);
-      const strongSignal = clamp(1 - diff, 0.05, 1.95);
-      const proximitySignal = clamp(1 / (1 + (Number.isFinite(dist) ? dist : 0)), 0, 1);
-      const attritionSignal = enemy.target.lifespan
-        ? clamp((enemy.target.age ?? 0) / enemy.target.lifespan, 0, 1)
-        : 0;
-      const score =
-        weights.weak * weakSignal +
-        weights.strong * strongSignal +
-        weights.proximity * proximitySignal +
-        weights.attrition * attritionSignal;
+        if (score <= bestAcc.score) {
+          return bestAcc;
+        }
 
-      if (score > bestScore) {
-        bestScore = score;
-        best = enemy;
         const similarity = clamp(
           this.#safeSimilarityTo(enemy.target, {
             context: "targeting decision similarity ranking",
@@ -7036,16 +7040,23 @@ export default class Cell {
           1,
         );
 
-        chosenSummary = {
-          row: enemy.row,
-          col: enemy.col,
-          energy: enemyEnergy,
-          distance: Number.isFinite(dist) ? dist : null,
-          similarity,
-          attrition: attritionSignal,
+        return {
+          enemy,
+          score,
+          summary: {
+            row: enemy.row,
+            col: enemy.col,
+            energy: enemyEnergy,
+            distance: Number.isFinite(dist) ? dist : null,
+            similarity,
+            attrition: attritionSignal,
+          },
         };
-      }
-    }
+      },
+      { enemy: null, score: -Infinity, summary: null },
+    );
+
+    let { enemy: best, summary: chosenSummary } = bestCandidate;
 
     if (!best && enemies.length > 0) {
       const fallbackRng = this.resolveRng("targetingFallback");
