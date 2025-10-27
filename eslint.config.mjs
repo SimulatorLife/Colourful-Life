@@ -17,6 +17,9 @@ export default [
   {
     ...js.configs.recommended,
     files: ["**/*.{js,mjs,cjs}"],
+    linterOptions: {
+      reportUnusedDisableDirectives: "error",
+    },
     languageOptions: {
       ...js.configs.recommended.languageOptions,
       ecmaVersion: 2022,
