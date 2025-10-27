@@ -1,4 +1,4 @@
-import { clamp } from "../utils/math.js";
+import { clamp, clampFinite } from "../utils/math.js";
 import { warnOnce } from "../utils/error.js";
 import { computeBehaviorComplementarity } from "./behaviorComplementarity.js";
 
@@ -41,17 +41,13 @@ export function resolvePopulationScarcityMultiplier({
   population,
   minPopulation,
 } = {}) {
-  const scarcitySignal = clamp(Number.isFinite(scarcity) ? scarcity : 0, 0, 1);
+  const scarcitySignal = clampFinite(scarcity, 0, 1, 0);
 
   if (scarcitySignal <= 0) {
     return { multiplier: 1, drives: [1, 1] };
   }
 
-  const baseProb = clamp(
-    Number.isFinite(baseProbability) ? baseProbability : 0.5,
-    0,
-    1,
-  );
+  const baseProb = clampFinite(baseProbability, 0, 1, 0.5);
   const popCount = Math.max(0, Number.isFinite(population) ? population : 0);
   const minPop =
     Number.isFinite(minPopulation) && minPopulation > 0 ? minPopulation : 0;
