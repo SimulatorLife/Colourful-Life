@@ -1748,6 +1748,14 @@ export default class Stats {
     this.#tickInProgress = false;
     this.#lifeEventTickBase = this.totals.ticks;
 
+    if (Array.isArray(snapshot?.populationCells)) {
+      snapshot.populationCells.length = 0;
+
+      if (Object.hasOwn(snapshot, "populationCells")) {
+        delete snapshot.populationCells;
+      }
+    }
+
     return {
       population: pop,
       births: this.births,
