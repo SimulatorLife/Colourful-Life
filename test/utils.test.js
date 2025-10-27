@@ -11,7 +11,7 @@ import {
   createRNG,
   toFiniteOrNull,
 } from "../src/utils/math.js";
-import { coerceBoolean } from "../src/utils/primitives.js";
+import { coerceBoolean, resolveNonEmptyString } from "../src/utils/primitives.js";
 import { cloneTracePayload, toPlainObject } from "../src/utils/object.js";
 import { createRankedBuffer, isArrayLike } from "../src/utils/collections.js";
 import { invokeWithErrorBoundary, warnOnce } from "../src/utils/error.js";
@@ -74,6 +74,13 @@ test("coerceBoolean normalizes boolean-like values with sane fallbacks", () => {
 
   assert.is(coerceBoolean({}), true, "objects coerce via Boolean constructor");
   assert.is(coerceBoolean(Symbol("token")), true, "symbols coerce to true");
+});
+
+test("resolveNonEmptyString filters out blank or non-string values", () => {
+  assert.is(resolveNonEmptyString("hello", "fallback"), "hello");
+  assert.is(resolveNonEmptyString("", "fallback"), "fallback");
+  assert.is(resolveNonEmptyString(null, "fallback"), "fallback");
+  assert.is(resolveNonEmptyString(undefined), null);
 });
 
 test("sanitizeNumber treats blank strings as missing overrides", () => {

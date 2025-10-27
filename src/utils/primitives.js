@@ -37,3 +37,17 @@ export function coerceBoolean(candidate, fallback = false) {
 
   return Boolean(candidate);
 }
+
+/**
+ * Returns the candidate string when it is non-empty, otherwise falls back to
+ * the provided value. Helps normalize optional labels and colour values
+ * without sprinkling repeated `typeof`/`length` guards throughout the codebase.
+ *
+ * @param {unknown} candidate - Value to evaluate.
+ * @param {string|null} [fallback=null] - Replacement when the candidate is not
+ *   a non-empty string.
+ * @returns {string|null} A non-empty string or the fallback value.
+ */
+export function resolveNonEmptyString(candidate, fallback = null) {
+  return typeof candidate === "string" && candidate.length > 0 ? candidate : fallback;
+}
