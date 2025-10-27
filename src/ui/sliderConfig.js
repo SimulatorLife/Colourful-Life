@@ -111,3 +111,39 @@ export const UI_SLIDER_CONFIG = Object.freeze({
     floor: 0,
   },
 });
+
+/**
+ * Merges a slider's canonical bounds with caller-specified fallbacks.
+ * Centralising the lookup keeps UI modules from duplicating nullish-coalescing
+ * logic every time they need to respect the shared configuration defaults.
+ *
+ * @param {keyof typeof UI_SLIDER_CONFIG|string} key - Slider identifier.
+ * @param {{
+ *   min?: number,
+ *   max?: number,
+ *   step?: number,
+ *   floor?: number,
+ *   default?: number,
+ * }} [overrides] - Caller-provided fallback values used when the canonical
+ *   config omits a property.
+ * @returns {{
+ *   min: number|undefined,
+ *   max: number|undefined,
+ *   step: number|undefined,
+ *   floor: number|undefined,
+ *   default: number|undefined,
+ * }} Resolved slider bounds combining the shared config and overrides.
+ */
+export function resolveSliderBounds(key, overrides = {}) {
+  const entry = (UI_SLIDER_CONFIG && UI_SLIDER_CONFIG[key]) || {};
+  const floor = entry.floor ?? overrides.floor;
+  const resolved = {
+    default: entry.default ?? overrides.default,
+    min: entry.min ?? overrides.min,
+    max: entry.max ?? overrides.max,
+    step: entry.step ?? overrides.step,
+    floor,
+  };
+
+  return resolved;
+}
