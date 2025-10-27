@@ -803,8 +803,20 @@ export default class Stats {
         : secondary && typeof secondary === "object"
           ? secondary
           : {};
+    let cell = null;
     const candidate = context?.cell;
-    const cell = isCellLike(candidate) ? candidate : null;
+
+    if (isCellLike(candidate)) {
+      cell = candidate;
+    } else if (isCellLike(secondary)) {
+      cell = secondary;
+    } else if (
+      secondary &&
+      typeof secondary === "object" &&
+      isCellLike(secondary?.cell)
+    ) {
+      cell = secondary.cell;
+    }
 
     return { cell, context };
   }
