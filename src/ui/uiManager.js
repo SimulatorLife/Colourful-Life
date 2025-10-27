@@ -452,6 +452,7 @@ export default class UIManager {
     this.showObstacles = defaults.showObstacles;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
     this.showAuroraVeil = defaults.showAuroraVeil;
+    this.showGridLines = defaults.showGridLines;
     this.showReproductiveZones =
       defaults.showReproductiveZones !== undefined
         ? defaults.showReproductiveZones
@@ -3993,6 +3994,12 @@ export default class UIManager {
           "Wash the canvas with a gentle aurora ribbon that sways with the simulation clock",
         initial: this.showAuroraVeil,
       },
+      {
+        key: "showGridLines",
+        label: "Show Grid Lines",
+        title: "Outline each tile so the underlying grid stays visible",
+        initial: this.showGridLines,
+      },
     ];
 
     overlayConfigs.forEach(({ key, label, title, options, initial }) => {
@@ -5055,6 +5062,9 @@ export default class UIManager {
   }
   getShowAuroraVeil() {
     return this.showAuroraVeil;
+  }
+  getShowGridLines() {
+    return this.showGridLines;
   }
   getShowReproductiveZones() {
     return this.showReproductiveZones;

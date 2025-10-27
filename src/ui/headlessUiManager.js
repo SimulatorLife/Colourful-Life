@@ -45,6 +45,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @param {boolean} [options.showFitness] - Whether fitness overlays are shown.
  * @param {boolean} [options.showLifeEventMarkers] - Whether life event markers are shown.
  * @param {boolean} [options.showAuroraVeil] - Whether the aurora whimsy overlay is shown.
+ * @param {boolean} [options.showGridLines] - Whether grid lines outlining each tile are shown.
  * @param {boolean} [options.showReproductiveZones] - Whether reproductive zone shading is shown.
  * @param {number} [options.leaderboardIntervalMs] - Minimum time between leaderboard updates.
  * @param {Object} [options.selectionManager=null] - Shared selection manager instance.
@@ -77,6 +78,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  *   getShowFitness: () => boolean,
  *   getShowLifeEventMarkers: () => boolean,
  *   getShowAuroraVeil: () => boolean,
+ *   getShowGridLines: () => boolean,
  *   shouldRenderSlowUi: (timestamp: number) => boolean,
  *   renderMetrics: Function,
  *   renderLeaderboard: Function,
@@ -315,6 +317,7 @@ export function createHeadlessUiManager(options = {}) {
     getShowFitness: () => settings.showFitness,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
     getShowAuroraVeil: () => settings.showAuroraVeil,
+    getShowGridLines: () => settings.showGridLines,
     getShowReproductiveZones: () => settings.showReproductiveZones,
     setShowObstacles: (value) => {
       const normalized = coerceBoolean(value, settings.showObstacles);
@@ -363,6 +366,14 @@ export function createHeadlessUiManager(options = {}) {
 
       settings.showAuroraVeil = normalized;
       notify("showAuroraVeil", settings.showAuroraVeil);
+    },
+    setShowGridLines: (value) => {
+      const normalized = coerceBoolean(value, settings.showGridLines);
+
+      if (settings.showGridLines === normalized) return;
+
+      settings.showGridLines = normalized;
+      notify("showGridLines", settings.showGridLines);
     },
     setShowReproductiveZones: (value) => {
       const normalized = coerceBoolean(value, settings.showReproductiveZones);

@@ -302,6 +302,7 @@ export default class SimulationEngine {
       showFitness: defaults.showFitness,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
       showAuroraVeil: defaults.showAuroraVeil,
+      showGridLines: defaults.showGridLines,
       showReproductiveZones: defaults.showReproductiveZones,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       leaderboardSize: defaults.leaderboardSize,
@@ -796,6 +797,7 @@ export default class SimulationEngine {
       showObstacles: this.state.showObstacles ?? true,
       showLifeEventMarkers: includeLifeEventMarkers,
       showAuroraVeil: includeAuroraVeil,
+      showGridLines: this.state.showGridLines ?? false,
       showReproductiveZones:
         this.state.showReproductiveZones !== undefined
           ? this.state.showReproductiveZones
@@ -1137,6 +1139,7 @@ export default class SimulationEngine {
       showObstacles,
       showLifeEventMarkers: includeLifeEventMarkers,
       showAuroraVeil: includeAuroraVeil,
+      showGridLines: this.state.showGridLines ?? false,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
@@ -1404,6 +1407,7 @@ export default class SimulationEngine {
     showFitness,
     showLifeEventMarkers,
     showAuroraVeil,
+    showGridLines,
     showReproductiveZones,
   }) {
     const entries = Object.entries({
@@ -1413,6 +1417,7 @@ export default class SimulationEngine {
       showFitness,
       showLifeEventMarkers,
       showAuroraVeil,
+      showGridLines,
       showReproductiveZones,
     })
       .filter(([, value]) => value !== undefined)
@@ -1547,6 +1552,7 @@ export default class SimulationEngine {
       case "showFitness":
       case "showLifeEventMarkers":
       case "showAuroraVeil":
+      case "showGridLines":
       case "showReproductiveZones":
         this.setOverlayVisibility({ [key]: value });
         break;
