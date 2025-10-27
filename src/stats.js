@@ -337,8 +337,6 @@ export default class Stats {
   #activeDiversitySeeds;
   #diversityGroupScratch;
   #diversityGroupMap;
-  #diversityIdentityScratch;
-  #diversityIdentityCounter;
   /**
    * @param {number} [historySize=10000] Maximum retained history samples per series.
    * @param {{
@@ -422,8 +420,6 @@ export default class Stats {
     this.#activeDiversitySeeds = null;
     this.#diversityGroupScratch = [];
     this.#diversityGroupMap = new Map();
-    this.#diversityIdentityScratch = new WeakMap();
-    this.#diversityIdentityCounter = 0;
 
     HISTORY_SERIES_KEYS.forEach((key) => {
       const ring = createHistoryRing(this.historySize);
@@ -906,32 +902,6 @@ export default class Stats {
     return record;
   }
 
-  #obtainDiversityIdentityKey(dna) {
-    if (!dna) {
-      return "dna:0";
-    }
-
-    let identityMap = this.#diversityIdentityScratch;
-
-    if (!identityMap) {
-      identityMap = new WeakMap();
-      this.#diversityIdentityScratch = identityMap;
-      this.#diversityIdentityCounter = 0;
-    }
-
-    let key = identityMap.get(dna);
-
-    if (!key) {
-      const next = (this.#diversityIdentityCounter ?? 0) + 1;
-
-      this.#diversityIdentityCounter = next;
-      key = `dna:${next}`;
-      identityMap.set(dna, key);
-    }
-
-    return key;
-  }
-
   #collectDiversityGroups(dnaList, seedScratch, { resolveSeeds = false } = {}) {
     let groupScratch = this.#diversityGroupScratch;
 
@@ -942,14 +912,16 @@ export default class Stats {
 
     groupScratch.length = 0;
 
-    let groupMap = this.#diversityGroupMap;
+    let seedGroupMap = this.#diversityGroupMap;
 
-    if (!groupMap) {
-      groupMap = new Map();
-      this.#diversityGroupMap = groupMap;
+    if (!seedGroupMap) {
+      seedGroupMap = new Map();
+      this.#diversityGroupMap = seedGroupMap;
     } else {
-      groupMap.clear();
+      seedGroupMap.clear();
     }
+
+    const identityGroupMap = new WeakMap();
 
     let seedCache = this.#diversitySeedCache;
 
@@ -978,13 +950,24 @@ export default class Stats {
         seedCache.set(dna, seed);
       }
 
-      const key = seed != null ? `seed:${seed}` : this.#obtainDiversityIdentityKey(dna);
-      let record = groupMap.get(key);
+      let record;
 
-      if (!record) {
-        record = { dna, seed: seed ?? null, count: 0 };
-        groupMap.set(key, record);
-        groupScratch.push(record);
+      if (seed != null) {
+        record = seedGroupMap.get(seed);
+
+        if (!record) {
+          record = { dna, seed, count: 0 };
+          seedGroupMap.set(seed, record);
+          groupScratch.push(record);
+        }
+      } else {
+        record = identityGroupMap.get(dna);
+
+        if (!record) {
+          record = { dna, seed: null, count: 0 };
+          identityGroupMap.set(dna, record);
+          groupScratch.push(record);
+        }
       }
 
       record.count += 1;
