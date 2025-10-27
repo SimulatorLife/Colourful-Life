@@ -120,6 +120,9 @@ where practical.
   `scripts/profile-render-loop.mjs`, `scripts/profile-sensor-feedback.mjs`, and
   `scripts/profile-snapshot-memory.mjs`) so the scripts directory focuses on the
   maintained automation entry points.
+- Retired the unused `scripts/brain-memory-profile.mjs` harness now superseded by
+  the energy and density profiling scripts, keeping the automation catalog
+  limited to maintained entry points.
 - Removed the unused `scripts/profile-target-similarity-memory.mjs` probe now
   that the density and target selection instrumentation lives in the stats and
   regression suites, keeping the scripts directory limited to maintained
