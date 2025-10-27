@@ -49,5 +49,11 @@ export function coerceBoolean(candidate, fallback = false) {
  * @returns {string|null} A non-empty string or the fallback value.
  */
 export function resolveNonEmptyString(candidate, fallback = null) {
-  return typeof candidate === "string" && candidate.length > 0 ? candidate : fallback;
+  if (typeof candidate !== "string") {
+    return fallback;
+  }
+
+  const trimmed = candidate.trim();
+
+  return trimmed.length > 0 ? candidate : fallback;
 }
