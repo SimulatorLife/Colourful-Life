@@ -2,6 +2,9 @@ import { isArrayLike } from "../utils/collections.js";
 
 const hasOwn = Object.hasOwn;
 const traitIndexScratch = [];
+const traitMetadataIndexes = [];
+const traitMetadataComputes = [];
+const traitMetadataThresholds = [];
 
 function resolveCellFromSource(source) {
   if (!source || typeof source !== "object") {
@@ -47,6 +50,30 @@ function sanitizeTraitIndexes(indexesSource, traitCount, computeFns) {
   }
 
   return traitIndexScratch;
+}
+
+function prepareTraitMetadata(traitIndexes, computeFns, thresholds) {
+  let length = 0;
+
+  for (let i = 0; i < traitIndexes.length; i += 1) {
+    const index = traitIndexes[i];
+    const compute = computeFns[index];
+
+    if (typeof compute !== "function") {
+      continue;
+    }
+
+    traitMetadataIndexes[length] = index;
+    traitMetadataComputes[length] = compute;
+    traitMetadataThresholds[length] = thresholds[index];
+    length += 1;
+  }
+
+  traitMetadataIndexes.length = length;
+  traitMetadataComputes.length = length;
+  traitMetadataThresholds.length = length;
+
+  return length;
 }
 
 export function accumulateTraitAggregates(
@@ -111,10 +138,24 @@ export function accumulateTraitAggregates(
     traitIndexes = traitIndexScratch;
   }
 
+  const metadataLength = prepareTraitMetadata(traitIndexes, computeFns, thresholds);
+  const hasTraits = metadataLength > 0;
   let population = 0;
 
-  for (const source of sources) {
-    const cell = resolveCellFromSource(source);
+  if (!hasTraits) {
+    for (let i = 0; i < sources.length; i += 1) {
+      const cell = resolveCellFromSource(sources[i]);
+
+      if (cell && typeof cell === "object") {
+        population += 1;
+      }
+    }
+
+    return population;
+  }
+
+  for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
+    const cell = resolveCellFromSource(sources[sourceIndex]);
 
     if (!cell || typeof cell !== "object") {
       continue;
@@ -122,25 +163,20 @@ export function accumulateTraitAggregates(
 
     population += 1;
 
-    if (traitIndexes.length === 0) {
-      continue;
-    }
-
-    for (const traitIndex of traitIndexes) {
-      const compute = computeFns[traitIndex];
-
+    for (let traitIndex = 0; traitIndex < metadataLength; traitIndex += 1) {
+      const compute = traitMetadataComputes[traitIndex];
       let value = compute(cell);
 
       if (!Number.isFinite(value)) {
         value = 0;
       }
 
-      sums[traitIndex] += value;
+      const resolvedIndex = traitMetadataIndexes[traitIndex];
 
-      const threshold = thresholds[traitIndex];
+      sums[resolvedIndex] += value;
 
-      if (value >= threshold) {
-        activeCounts[traitIndex] += 1;
+      if (value >= traitMetadataThresholds[traitIndex]) {
+        activeCounts[resolvedIndex] += 1;
       }
     }
   }
