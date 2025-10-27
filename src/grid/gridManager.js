@@ -19,7 +19,6 @@ import {
   defaultIsEventAffecting,
 } from "../events/eventContext.js";
 import { accumulateEventModifiers, resolveEventContribution } from "../energySystem.js";
-import InteractionSystem from "../interactionSystem.js";
 import GridInteractionAdapter from "./gridAdapter.js";
 import { clearTileEnergyBuffers } from "./energyUtils.js";
 import ReproductionZonePolicy from "./reproductionZonePolicy.js";
@@ -69,6 +68,48 @@ const DEFAULT_CROWDING_SUMMARY = Object.freeze({
   scarcity: 0,
   count: 0,
 });
+
+const NOOP_INTERACTION_SYSTEM = Object.freeze({
+  resolveIntent() {
+    return false;
+  },
+});
+
+function normalizeInteractionSystem(candidate) {
+  if (candidate && typeof candidate.resolveIntent === "function") {
+    return candidate;
+  }
+
+  return NOOP_INTERACTION_SYSTEM;
+}
+
+function resolveInteractionAdapter(options, gridManager) {
+  const factory = options?.interactionAdapterFactory;
+
+  if (typeof factory === "function") {
+    const adapter = factory({ gridManager, options });
+
+    if (adapter) {
+      return adapter;
+    }
+  }
+
+  return new GridInteractionAdapter({ gridManager });
+}
+
+function resolveInteractionSystem(options, { gridManager, adapter }) {
+  if (options?.interactionSystem) {
+    return options.interactionSystem;
+  }
+
+  const factory = options?.interactionSystemFactory;
+
+  if (typeof factory === "function") {
+    return factory({ gridManager, adapter, options }) ?? null;
+  }
+
+  return null;
+}
 
 function computeCrowdingFeedback({
   grid,
@@ -1842,6 +1883,15 @@ export default class GridManager {
       },
     });
     this.selectionManager = selectionManager || null;
+    const interactionAdapter = resolveInteractionAdapter(options, this);
+
+    this.interactionAdapter = interactionAdapter;
+    this.setInteractionSystem(
+      resolveInteractionSystem(options, {
+        gridManager: this,
+        adapter: interactionAdapter,
+      }),
+    );
     const initialThreshold =
       typeof stats?.matingDiversityThreshold === "number"
         ? clamp(stats.matingDiversityThreshold, 0, 1)
@@ -1866,11 +1916,6 @@ export default class GridManager {
     this.cellPositions = new WeakMap();
     this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
-    this.interactionAdapter = new GridInteractionAdapter({ gridManager: this });
-    this.interactionSystem = new InteractionSystem({
-      adapter: this.interactionAdapter,
-      combatTerritoryEdgeFactor: GridManager.combatTerritoryEdgeFactor,
-    });
     this.populationScarcitySignal = 0;
     const resolvedBrainSnapshotLimit = sanitizePositiveInteger(brainSnapshotLimit, {
       fallback: DEFAULT_BRAIN_SNAPSHOT_LIMIT,
@@ -2390,6 +2435,10 @@ export default class GridManager {
     }
 
     return this.initialTileEnergyFraction;
+  }
+
+  setInteractionSystem(interactionSystem) {
+    this.interactionSystem = normalizeInteractionSystem(interactionSystem);
   }
 
   setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {
