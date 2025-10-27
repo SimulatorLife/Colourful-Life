@@ -2,7 +2,7 @@ import { MAX_TILE_ENERGY } from "../config.js";
 import { clamp, clamp01, clampFinite, lerp } from "../utils/math.js";
 import { createRankedBuffer } from "../utils/collections.js";
 import { toPlainObject } from "../utils/object.js";
-import { warnOnce } from "../utils/error.js";
+import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 import { resolveNonEmptyString } from "../utils/primitives.js";
 
 const DEFAULT_FITNESS_TOP_PERCENT = 0.1;
@@ -460,6 +460,12 @@ function createFitnessPalette(steps, hue) {
  * @param {(event: Object) => string} getColor - Resolver that maps events to
  *   fill colours.
  */
+const WARNINGS = Object.freeze({
+  eventColor: "Failed to resolve event overlay color; using fallback.",
+  activeZones: "Selection manager failed during active zone check.",
+  zoneGeometry: "Selection manager failed while resolving zone geometry.",
+});
+
 export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
   if (!ctx || !Array.isArray(activeEvents) || activeEvents.length === 0) return;
 
@@ -471,14 +477,14 @@ export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
     let color = event.color || "rgba(255, 255, 255, 0.15)";
 
     if (typeof getColor === "function") {
-      try {
-        const resolved = getColor(event);
+      const resolved = invokeWithErrorBoundary(getColor, [event], {
+        message: WARNINGS.eventColor,
+        reporter: warnOnce,
+        once: true,
+      });
 
-        if (typeof resolved === "string" && resolved.length > 0) {
-          color = resolved;
-        }
-      } catch (error) {
-        warnOnce("Failed to resolve event overlay color; using fallback.", error);
+      if (typeof resolved === "string" && resolved.length > 0) {
+        color = resolved;
       }
     }
 
@@ -973,13 +979,14 @@ function hasActiveSelectionZones(selectionManager) {
     return false;
   }
 
-  try {
-    return Boolean(selectionManager.hasActiveZones());
-  } catch (error) {
-    warnOnce("Selection manager failed during active zone check.", error);
+  const result = invokeWithErrorBoundary(selectionManager.hasActiveZones, [], {
+    message: WARNINGS.activeZones,
+    reporter: warnOnce,
+    once: true,
+    thisArg: selectionManager,
+  });
 
-    return false;
-  }
+  return Boolean(result);
 }
 
 function getSelectionZoneEntries(selectionManager) {
@@ -990,15 +997,18 @@ function getSelectionZoneEntries(selectionManager) {
     return [];
   }
 
-  try {
-    const entries = selectionManager.getActiveZoneRenderData();
+  const entries = invokeWithErrorBoundary(
+    selectionManager.getActiveZoneRenderData,
+    [],
+    {
+      message: WARNINGS.zoneGeometry,
+      reporter: warnOnce,
+      once: true,
+      thisArg: selectionManager,
+    },
+  );
 
-    return Array.isArray(entries) ? entries : [];
-  } catch (error) {
-    warnOnce("Selection manager failed while resolving zone geometry.", error);
-
-    return [];
-  }
+  return Array.isArray(entries) ? entries : [];
 }
 
 function* iterateRenderableRects(rects) {
