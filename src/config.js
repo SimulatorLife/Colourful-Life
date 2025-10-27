@@ -42,6 +42,7 @@ const DEFAULT_ACTIVITY_BASE_RATE = 0.2822;
 const DEFAULT_MUTATION_CHANCE = 0.15;
 const DEFAULT_ENERGY_REGEN_RATE = 0.012;
 const DEFAULT_INITIAL_TILE_ENERGY_FRACTION = 0.5;
+const DEFAULT_ENERGY_DIFFUSION_RATE = 0.05; // smoothing between tiles (per tick)
 // Relaxed from 1.15 after a 60×60 dense seeding probe
 // (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
 // where the final population recovered from ~218 → ~225 survivors.
@@ -101,7 +102,28 @@ export function resolveEnergyRegenRate(env = RUNTIME_ENV) {
 }
 
 export const ENERGY_REGEN_RATE_DEFAULT = resolveEnergyRegenRate();
-export const ENERGY_DIFFUSION_RATE_DEFAULT = 0.05; // smoothing between tiles (per tick)
+
+/**
+ * Resolves the baseline proportion of energy that diffuses from a tile to its
+ * neighbours each tick. Environment overrides let deployments explore more
+ * insulated or more free-flowing ecosystems without touching the simulation
+ * code, while the sanitizer constrains the rate to a stable 0..1 interval so
+ * headless tests and UI overlays remain deterministic.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Diffusion rate bounded between 0 and 1.
+ */
+export function resolveEnergyDiffusionRate(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_ENERGY_DIFFUSION_RATE", {
+    fallback: DEFAULT_ENERGY_DIFFUSION_RATE,
+    min: 0,
+    max: 1,
+  });
+}
+
+export const ENERGY_DIFFUSION_RATE_DEFAULT = resolveEnergyDiffusionRate();
 export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();

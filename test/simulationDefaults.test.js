@@ -187,6 +187,24 @@ test("resolveEnergyRegenRate sanitizes environment overrides", async () => {
   );
 });
 
+test("resolveEnergyDiffusionRate sanitizes environment overrides", async () => {
+  const { resolveEnergyDiffusionRate, ENERGY_DIFFUSION_RATE_DEFAULT } =
+    await configModulePromise;
+
+  assert.is(
+    resolveEnergyDiffusionRate({ COLOURFUL_LIFE_ENERGY_DIFFUSION_RATE: "0.2" }),
+    0.2,
+  );
+  assert.is(
+    resolveEnergyDiffusionRate({ COLOURFUL_LIFE_ENERGY_DIFFUSION_RATE: "-5" }),
+    ENERGY_DIFFUSION_RATE_DEFAULT,
+  );
+  assert.is(
+    resolveEnergyDiffusionRate({ COLOURFUL_LIFE_ENERGY_DIFFUSION_RATE: "3.5" }),
+    ENERGY_DIFFUSION_RATE_DEFAULT,
+  );
+});
+
 test("resolveSimulationDefaults coerces string boolean overrides", async () => {
   const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
   const defaults = resolveSimulationDefaults({
