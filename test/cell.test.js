@@ -2398,3 +2398,104 @@ test("computeSenescenceHazard blends age, resources, and density", () => {
   );
   assert.ok(depleted > 0.5, "stacked stress should push hazard into failure territory");
 });
+
+test("decideRandomMove favours energy-rich neighbours when roaming", () => {
+  const dna = new DNA(10, 20, 30);
+  const cell = new Cell(1, 1, dna, 6);
+
+  cell.movementGenes = { wandering: 0.6, pursuit: 0.25, cautious: 0.15 };
+  cell._rngCache = new Map([
+    [
+      "movementRandom",
+      (() => {
+        const sequence = [0.99, 0.1];
+        let index = 0;
+
+        return () => {
+          const value = sequence[index] ?? sequence[sequence.length - 1];
+
+          index += 1;
+
+          return value;
+        };
+      })(),
+    ],
+  ]);
+
+  const decision = cell.decideRandomMove({
+    localDensity: 0.25,
+    densityEffectMultiplier: 1,
+    tileEnergy: 0.2,
+    tileEnergyDelta: -0.1,
+    neighbors: [
+      { dr: -1, dc: 0, blocked: false, occupied: false, energy: 0.9, energyDelta: 0.2 },
+      { dr: 1, dc: 0, blocked: false, occupied: false, energy: 0.3, energyDelta: -0.1 },
+      { dr: 0, dc: -1, blocked: false, occupied: false, energy: 0.25, energyDelta: 0 },
+      { dr: 0, dc: 1, blocked: false, occupied: false, energy: 0.2, energyDelta: 0 },
+    ],
+  });
+
+  assert.equal(decision.dr, -1, "cells should move toward richer energy patches");
+  assert.equal(
+    decision.dc,
+    0,
+    "movement should align with the highest weighted neighbour",
+  );
+});
+
+test("decideRandomMove downranks crowded hostile directions", () => {
+  const dna = new DNA(5, 15, 25);
+  const cell = new Cell(2, 2, dna, 5);
+
+  cell.movementGenes = { wandering: 0.05, pursuit: 0.05, cautious: 0.9 };
+  cell.baseCrowdingTolerance = 0.2;
+  cell._crowdingTolerance = 0.2;
+  cell.baseRiskTolerance = 0.1;
+  cell._rngCache = new Map([
+    [
+      "movementRandom",
+      (() => {
+        const sequence = [0.98, 0.6];
+        let index = 0;
+
+        return () => {
+          const value = sequence[index] ?? sequence[sequence.length - 1];
+
+          index += 1;
+
+          return value;
+        };
+      })(),
+    ],
+  ]);
+
+  const decision = cell.decideRandomMove({
+    localDensity: 1,
+    densityEffectMultiplier: 1,
+    tileEnergy: 0.6,
+    tileEnergyDelta: 0,
+    neighbors: [
+      {
+        dr: -1,
+        dc: 0,
+        blocked: false,
+        occupied: true,
+        kinship: 0,
+        energy: 0.1,
+        energyDelta: -0.4,
+      },
+      { dr: 0, dc: 1, blocked: false, occupied: false, energy: 0.6, energyDelta: 0.1 },
+    ],
+  });
+
+  assert.equal(
+    decision.dr,
+    0,
+    "hostile, crowded neighbours should be deprioritised in fallback movement",
+  );
+  assert.equal(
+    decision.dc,
+    1,
+    "the open avenue should be selected when alternatives collapse",
+  );
+});
