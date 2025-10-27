@@ -4,8 +4,9 @@ This guide captures the everyday practices for maintaining Colourful Life. It
 complements the [architecture overview](architecture-overview.md) by focusing on
 workflow, tooling, and documentation expectations. Treat it as the handbook for
 day-to-day contributions—whether you are building new simulation features,
-extending tests, or polishing docs. The [README quick start](../README.md#quick-start)
-walks through the initial clone-and-run steps before you dive into the details below.
+extending tests, or polishing docs. Start with the
+[README quick start](../README.md#quick-start) to clone the project and launch
+the dev server, then return here for the deeper workflow.
 
 ## Environment setup
 
@@ -29,7 +30,8 @@ walks through the initial clone-and-run steps before you dive into the details b
   for easy pacing comparisons.
 - Parcel performs hot module replacement during development. Use
   `npm run build` when you need a fresh production bundle in `dist/` for manual
-  verification or publishing, and refer back to the [README quick start](../README.md#quick-start) whenever you onboard a new environment.
+  verification or publishing. Refer back to the
+  [README quick start](../README.md#quick-start) whenever you onboard a new environment.
 
 ## Coding standards
 
@@ -75,7 +77,7 @@ missed.
 - `npm test` exercises `test/performance.profile-energy.test.js`, which parses
   `scripts/profile-energy.mjs` output. The suite fails if energy preparation
   exceeds roughly **5 ms per tick** or if the seeded `SimulationEngine`
-  surpasses **120 ms per tick** under the standard CI configuration
+  surpasses **140 ms per tick** under the standard CI configuration
   (24×24 grid, 70 % density). When a regression trips the threshold, re-run the
   script locally with the same environment variables to compare `msPerTick`
   values, dig into the `simulationBenchmark` payload, and capture before/after
@@ -128,23 +130,14 @@ change behaviour without touching source:
 **Neural activity and evolution**
 
 - `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` globally adjusts the baseline neural
-  activity genomes inherit before DNA modifiers apply. The default `0.2822`
-  emerged from a compact 20×20 headless probe
-  (`COLOURFUL_LIFE_ACTIVITY_BASE_RATE=0.2822 PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=20`
-  `PERF_SIM_COLS=20 PERF_SIM_ITERATIONS=30 node scripts/profile-energy.mjs`)
-  where survivors climbed from 83 → 87 over 30 ticks while per-tick runtime held
-  near 69ms, keeping jammed clusters foraging without breaking the 125ms ceiling
-  in the 14×14 performance harness.
+  activity genomes inherit before DNA modifiers apply.
 - `COLOURFUL_LIFE_MUTATION_CHANCE` raises or lowers the default mutation
   probability applied when genomes reproduce without an explicit DNA override.
 - `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` shifts the normalized cutoff the
   stats system uses when counting organisms as "active" for a trait.
 - `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` scales how much surplus energy
   parents must stockpile beyond the strictest genome's demand before gestation
-  begins. The default `1.12` came from a dense 60×60 headless probe
-  (`scripts/profile-energy.mjs` with `PERF_INCLUDE_SIM=1`) where easing the
-  buffer lifted survivors from roughly 218 → 225 after 120 ticks without
-  collapsing scarcity pressure.
+  begins.
 
 Non-finite or out-of-range values are ignored and fall back to the defaults
 resolved in [`src/config.js`](../src/config.js). Overlays pull the sanitised

@@ -1,6 +1,6 @@
 # Colourful Life
 
-Colourful Life is a browser-based ecosystem sandbox where emergent behaviour arises from simple rules, neural controllers, and environmental feedback loops. The project pairs a canvas renderer with a modular simulation core so new experiments can run in browsers, tests, or custom Node entry points.
+Colourful Life is a browser-based ecosystem sandbox where emergent behaviour arises from simple rules, neural controllers, and environmental feedback loops. The project pairs a canvas renderer with a modular simulation core so new experiments can run in browsers, tests, or custom Node entry points. The [architecture overview](docs/architecture-overview.md) walks through the major subsystems when you need a deeper tour.
 
 ## Contents
 
@@ -14,15 +14,15 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 ## Quick start
 
-Colourful Life targets the Node.js **25.x** series (the included `.nvmrc` pins to 25.0.0). After cloning the repository:
+Colourful Life targets the Node.js **25.x** series (the included `.nvmrc` pins to 25.0.0). After cloning:
 
-1. Run `nvm use` (install with `nvm install` first if necessary) so your shell matches the pinned Node.js version. `node --version` should report a 25.x build before you continue.
-2. Install dependencies with `npm ci` (fall back to `npm install` only when you intentionally need a non-clean install), then run `npm run prepare` once so Husky hooks stay active after fresh clones or `.husky/` updates.
-3. Start the Parcel dev server with `npm run start` and open `http://localhost:1234`.
-4. Keep a second terminal handy for `npm run check` before committing. The aggregate command runs `npm run lint`, `npm run format:check`, and `npm test` sequentially so you do not miss regressions. When you prefer faster feedback loops, run the individual commands (`npm test -- --watch` to rerun on file changes, `npm test path/to/file.test.js` to target a single suite) and finish with `npm run check` once you are satisfied.
-5. Run `npm run clean` if the dev server misbehaves; it clears `dist/` and `.parcel-cache/` before you restart Parcel. Append `-- --dry-run` to preview the deletions when you just want to confirm the script resolves the right paths.
+1. Run `nvm use` (install with `nvm install` if necessary) so `node --version` reports 25.x.
+2. Install dependencies with `npm ci` and run `npm run prepare` once so Husky hooks stay active.
+3. Launch the dev server with `npm run start` and open `http://localhost:1234`.
+4. Use `npm run check` before committing. It chains linting, formatting verification, and the Node test runner (including the energy benchmark). When iterating quickly, run individual commands (`npm run lint`, `npm run format:check`, `npm test -- --watch`) and finish with `npm run check` once you are satisfied.
+5. Clear Parcel caches with `npm run clean` if hot reloading stalls. Append `-- --dry-run` to review the paths before deleting them.
 
-Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, and skim [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, and testing expectations once the quick start is familiar.
+Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, then browse [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, and testing expectations once the quick start is familiar.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
@@ -32,32 +32,25 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 
 **Energy and density**
 
-- `COLOURFUL_LIFE_MAX_TILE_ENERGY` — Raises or lowers the per-tile energy cap used by the energy system and heatmap legends.
-- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` — Controls how strongly crowding suppresses regeneration (0 disables the penalty, 1 matches the default coefficient).
-- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` — Adjusts the harvesting tax organisms pay when gathering from packed tiles so you can model cooperative or cut-throat ecosystems.
+- `COLOURFUL_LIFE_MAX_TILE_ENERGY` — Raises or lowers the per-tile energy cap shown in the energy overlay and consumed during regeneration.
+- `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` — Controls how strongly crowding suppresses regeneration (`0` disables the penalty, `1` mirrors the default coefficient).
+- `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` — Adjusts the harvesting tax organisms pay on packed tiles so you can model cooperative or cut-throat ecosystems.
 
 **Lifecycle and territory**
 
 - `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` — Determines what fraction of a corpse's remaining energy returns to the grid as it decomposes.
 - `COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE` — Sets how much of that recycled energy splashes into neighbouring tiles immediately instead of lingering in the decay reservoir.
 - `COLOURFUL_LIFE_DECAY_MAX_AGE` — Limits how long post-mortem energy lingers before dissipating.
-- `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` — Scales territorial advantage in combat. Values outside 0–1 are clamped back to the default.
+- `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` — Scales territorial advantage in combat (values outside 0–1 are clamped to the default).
 
 **Neural activity and evolution**
 
-- `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` — Adjusts the baseline neural activity
-  genomes inherit before DNA modifiers apply. The tuned `0.2822` default came
-  from a compact 20×20 headless probe
-  (`COLOURFUL_LIFE_ACTIVITY_BASE_RATE=0.2822 PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=20`
-  `PERF_SIM_COLS=20 PERF_SIM_ITERATIONS=30 node scripts/profile-energy.mjs`)
-  where survivors climbed from 83 → 87 over 30 ticks while per-tick runtime held
-  near 69ms, giving crowded hubs a bit more bandwidth to forage between combat
-  cycles without tripping the 14×14 benchmark ceiling.
+- `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` — Adjusts the baseline neural activity genomes inherit before DNA modifiers apply.
 - `COLOURFUL_LIFE_MUTATION_CHANCE` — Sets the default mutation probability applied when genomes reproduce without their own override.
 - `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Tunes the normalized cutoff the stats system uses when counting organisms as "active" for a trait.
 - `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` — Scales how much surplus energy parents must bank beyond the strictest genome's demand before gestation begins.
 
-Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/config.js) so overlays remain aligned with the active configuration. The [developer guide](docs/developer-guide.md#configuration-overrides) walks through how these knobs interact when running longer experiments, and the [architecture overview](docs/architecture-overview.md#energysystem) explains how the energy system consumes them during each tick.
+Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/config.js) so overlays remain aligned with the active configuration. The [developer guide](docs/developer-guide.md#configuration-overrides) walks through how these knobs interact during longer experiments, and the [architecture overview](docs/architecture-overview.md#energysystem) explains how the energy system consumes them during each tick.
 
 ### Life event marker overlay
 
@@ -99,15 +92,14 @@ Speed through experiments without reaching for the mouse:
 The simulation runs on cooperating modules housed in `src/`:
 
 - **Simulation engine** (`src/simulationEngine.js`) — Coordinates the render loop, tick cadence, and lifecycle events consumed by UI panels and automation hooks.
-- **Grid manager** (`src/grid/gridManager.js`) — Maintains the cellular grid, applies movement, reproduction, energy transfer, and obstacle interactions, and surfaces leaderboard snapshots.
+- **Grid manager** (`src/grid/gridManager.js`) — Maintains the cellular grid, applies movement, reproduction, energy transfer, and obstacle interactions, and surfaces snapshots for telemetry and overlays.
 - **Energy system** (`src/energySystem.js`) — Computes tile-level regeneration, diffusion, and drain while blending in environmental events and density penalties.
 - **Cell model** (`src/cell.js`) — Maintains per-organism state, applies DNA-driven preferences, and records telemetry consumed by fitness calculations and overlays.
 - **Genetics and brains** (`src/genome.js`, `src/brain.js`) — DNA factories encode traits ranging from combat appetite to neural wiring. Brains interpret sensor inputs, adapt gains over time, and emit movement/interaction intents.
 - **Interaction system** (`src/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
 - **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and color overlays.
-- **Stats & leaderboard** (`src/stats.js`, `src/stats/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface active environmental event summaries (intensity, coverage, and remaining duration), and select the top-performing organisms. The population snapshot now also reports grid occupancy so you can gauge how packed the world is at a glance. Organism age readings surfaced here and in the UI are measured in simulation ticks so observers can translate them into seconds using the active tick rate.
-  The Evolution Insights panel also exposes a simulation clock that reports both elapsed simulated time and the total tick count so observers no longer need to estimate pacing manually.
-- **Fitness scoring** (`src/engine/fitness.mjs`) — Computes composite organism fitness used by the leaderboard, overlays, and telemetry, blending survival, reproduction, and energy trends.
+- **Stats & leaderboard** (`src/stats.js`, `src/stats/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface environmental summaries, and select the top-performing organisms.
+- **Fitness scoring** (`src/engine/fitness.mjs`) — Computes composite organism fitness used by the leaderboard, overlays, and telemetry.
 - **UI manager** (`src/ui/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/ui/headlessUiManager.js` mirrors the interface for tests and Node scripts.
 - **UI bridge** (`src/ui/simulationUiBridge.js`) — Wires the simulation engine to either the full UI or the headless adapter, keeping metrics streams, pause state, reproduction multipliers, and slider updates in sync across environments.
 - **Selection tooling** (`src/grid/selectionManager.js`, `src/grid/reproductionZonePolicy.js`) — Defines preset mating zones, keeps geometry caches in sync with grid dimensions, and exposes helpers consumed by UI controls and reproduction policies.
@@ -147,7 +139,7 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 - **Linting** — `npm run lint` enforces the ESLint + Prettier ruleset across JavaScript and inline HTML. Use `npm run lint:fix` to auto-resolve minor issues.
 - **Testing** — `npm test` runs the energy benchmark in [`scripts/profile-energy.mjs`](scripts/profile-energy.mjs) before executing the Node.js test suites. Pass file paths or directories to narrow the run, or append `-- --watch` for continuous execution while you iterate. Add cases when behaviours change.
 - **Profiling** — `node scripts/profile-energy.mjs` benchmarks the energy preparation loop. Adjust rows/cols via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and the stub `cellSize` with `PERF_CELL_SIZE` environment variables. Enable the heavier SimulationEngine benchmark with `PERF_INCLUDE_SIM=1` when you specifically need tick timings.
-- **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap. Use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures, `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` to retune telemetry cutoffs, `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` to calm or emphasise territorial combat bias, `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` and `COLOURFUL_LIFE_DECAY_MAX_AGE` to shape post-mortem energy recycling, `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` to globally energise or relax genomes, `COLOURFUL_LIFE_MUTATION_CHANCE` to adjust baseline evolutionary churn, and `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` to demand more or less surplus energy before births without modifying source defaults (the relaxed `1.12` baseline lifted a dense 60×60 headless probe from ~218 → 225 survivors after 120 ticks while keeping scarcity pressure intact).
+- **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap. Use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures, `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` to retune telemetry cutoffs, `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` to calm or emphasise territorial combat bias, `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` and `COLOURFUL_LIFE_DECAY_MAX_AGE` to shape post-mortem energy recycling, `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` to globally energise or relax genomes, `COLOURFUL_LIFE_MUTATION_CHANCE` to adjust baseline evolutionary churn, and `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` to demand more or less surplus energy before births without modifying source defaults.
 - **Headless usage** — `createSimulation` accepts `{ headless: true }` to return a controller without mounting DOM controls. Inject `requestAnimationFrame`, `performanceNow`, or RNG hooks for deterministic automation.
 - **Documentation** — Follow the conventions in [`docs/developer-guide.md`](docs/developer-guide.md) when updating code comments, tests, or user-facing docs.
 

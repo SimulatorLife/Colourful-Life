@@ -29,6 +29,9 @@ where practical.
 
 ### Changed
 
+- Refreshed the README, developer guide, and architecture overview to streamline
+  the quick-start flow, trim stale metrics, and clarify where configuration
+  overrides live so primary docs mirror the current architecture.
 - Clarified quick-start guidance and contributor workflow docs to call out `npm run check`, the built-in energy benchmark that precedes `npm test`, and focused watch/file-path options for faster feedback while developing.
 - Amplified the low-diversity reproduction penalty when parents accumulate mate novelty pressure so lineages stuck in repetitive pairings feel stronger pressure to diversify.
 - Relocated the "Life Event Markers" toggle into the Simulation Controls overlay
