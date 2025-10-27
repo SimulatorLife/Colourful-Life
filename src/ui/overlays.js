@@ -1,5 +1,5 @@
 import { MAX_TILE_ENERGY } from "../config.js";
-import { clamp, clamp01, lerp } from "../utils/math.js";
+import { clamp, clamp01, clampFinite, lerp } from "../utils/math.js";
 import { createRankedBuffer } from "../utils/collections.js";
 import { toPlainObject } from "../utils/object.js";
 import { warnOnce } from "../utils/error.js";
@@ -701,7 +701,7 @@ function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = "0,0,0") {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const rawAlpha = alphaAt(r, c);
-      const alpha = clamp01(Number.isFinite(rawAlpha) ? rawAlpha : 0);
+      const alpha = clampFinite(rawAlpha, 0, 1, 0);
 
       if (alpha <= 0) continue;
       ctx.fillStyle = `rgba(${color},${formatAlpha(alpha)})`;
@@ -742,7 +742,7 @@ function computeEnergyStats(grid, maxTileEnergy = MAX_TILE_ENERGY) {
 
     for (let c = 0; c < cols; c++) {
       const rawEnergy = energyRow[c];
-      const value = clamp(Number.isFinite(rawEnergy) ? rawEnergy : 0, 0, maxTileEnergy);
+      const value = clampFinite(rawEnergy, 0, maxTileEnergy, 0);
 
       if (value < min) min = value;
       if (value > max) max = value;

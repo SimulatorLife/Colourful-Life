@@ -1,4 +1,4 @@
-import { clamp } from "../utils/math.js";
+import { clamp, clampFinite } from "../utils/math.js";
 
 const SAMPLE_LIMIT = 5;
 
@@ -17,9 +17,8 @@ function rememberTopValue(values, candidate) {
 
 function normalizeCandidateValue(candidate) {
   const raw = candidate?.diversity;
-  const value = Number.isFinite(raw) ? raw : 0;
 
-  return clamp(value, 0, 1);
+  return clampFinite(raw, 0, 1, 0);
 }
 
 export function summarizeMateDiversityOpportunity({
@@ -29,12 +28,8 @@ export function summarizeMateDiversityOpportunity({
 } = {}) {
   const list = Array.isArray(candidates) ? candidates : [];
   const count = list.length;
-  const threshold = clamp(
-    Number.isFinite(diversityThreshold) ? diversityThreshold : 0,
-    0,
-    1,
-  );
-  const chosen = clamp(Number.isFinite(chosenDiversity) ? chosenDiversity : 0, 0, 1);
+  const threshold = clampFinite(diversityThreshold, 0, 1, 0);
+  const chosen = clampFinite(chosenDiversity, 0, 1, 0);
 
   if (count <= 1) {
     return {
