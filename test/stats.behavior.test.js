@@ -327,6 +327,9 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
     diversityOpportunity: 0.4,
     diversityOpportunityWeight: 1,
     diversityOpportunityAvailability: 0.5,
+    diversityOpportunityGap: 0.3,
+    diversityOpportunityAlignment: 0.55,
+    diversityOpportunityMultiplier: 1.1,
   });
 
   assert.is(stats.mating.choices, 1);
@@ -345,6 +348,9 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   approxEqual(stats.mating.diversityOpportunitySum, 0.4, 1e-9);
   approxEqual(stats.mating.diversityOpportunityWeight, 1, 1e-9);
   approxEqual(stats.mating.diversityOpportunityAvailabilitySum, 0.5, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityGapSum, 0.3, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityAlignmentSum, 0.55, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityMultiplierSum, 1.1, 1e-9);
   assert.equal(stats.lastMatingDebug.blockedReason, "Too similar");
   assert.is(stats.lastMatingDebug.threshold, 0.6);
   approxEqual(stats.lastMatingDebug.behaviorComplementarity, 0.8, 1e-9);
@@ -354,6 +360,9 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   approxEqual(stats.lastMatingDebug.diversityOpportunity, 0.4, 1e-9);
   approxEqual(stats.lastMatingDebug.diversityOpportunityWeight, 1, 1e-9);
   approxEqual(stats.lastMatingDebug.diversityOpportunityAvailability, 0.5, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityGap, 0.3, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityAlignment, 0.55, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityMultiplier, 1.1, 1e-9);
   assert.is(stats.mating.lastBlockReason, null);
 
   stats.recordMateChoice({
@@ -378,6 +387,9 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   approxEqual(stats.mating.noveltyPressureSum, 0.4, 1e-9);
   approxEqual(stats.mating.diversityOpportunitySum, 0.4, 1e-9);
   approxEqual(stats.mating.diversityOpportunityWeight, 1, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityGapSum, 0.3, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityAlignmentSum, 0.55, 1e-9);
+  approxEqual(stats.mating.diversityOpportunityMultiplierSum, 2.1, 1e-9);
   approxEqual(stats.mating.diversityOpportunityAvailabilitySum, 0.5, 1e-9);
   assert.equal(stats.lastMatingDebug.success, false);
   assert.is(stats.lastMatingDebug.threshold, 0.6);
@@ -388,6 +400,9 @@ test("mating records track diversity-aware outcomes and block reasons", async ()
   approxEqual(stats.lastMatingDebug.diversityOpportunity, 0, 1e-9);
   approxEqual(stats.lastMatingDebug.diversityOpportunityWeight, 0, 1e-9);
   approxEqual(stats.lastMatingDebug.diversityOpportunityAvailability, 0, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityGap, 0, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityAlignment, 0, 1e-9);
+  approxEqual(stats.lastMatingDebug.diversityOpportunityMultiplier, 1, 1e-9);
 
   stats.recordReproductionBlocked({ reason: "Blocked by reproductive zone" });
 
@@ -450,6 +465,9 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
     diversityOpportunitySum: 0.6,
     diversityOpportunityWeight: 2,
     diversityOpportunityAvailabilitySum: 1.2,
+    diversityOpportunityGapSum: 0.7,
+    diversityOpportunityAlignmentSum: 0.9,
+    diversityOpportunityMultiplierSum: 2.2,
     blocks: 1,
     lastBlockReason: "Still recent",
   };
@@ -492,7 +510,7 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(result.meanEnergy, 3);
   assert.is(result.meanAge, 4.5);
   assert.is(result.diversity, 0.42);
-  approxEqual(result.diversityPressure, 0.00162, 1e-9);
+  approxEqual(result.diversityPressure, 0, 1e-9);
   approxEqual(result.diversityOpportunity, 0.3, 1e-9);
   approxEqual(result.diversityOpportunityAvailability, 0.6, 1e-9);
   assert.is(result.diversityTarget, stats.getDiversityTarget());
@@ -516,6 +534,9 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.equal(result.lastBlockedReproduction.reason, "Still recent");
 
   approxEqual(stats.getBehavioralEvenness(), 1, 1e-9);
+  approxEqual(stats.diversityOpportunityGap, 0.35, 1e-9);
+  approxEqual(stats.diversityOpportunityAlignment, 0.45, 1e-9);
+  approxEqual(stats.diversityOpportunityMultiplier, 1.1, 1e-9);
 
   assert.is(stats.history.population.length, 1);
   assert.is(stats.history.diversity.length, 1);

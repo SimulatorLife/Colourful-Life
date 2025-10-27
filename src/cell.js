@@ -969,6 +969,9 @@ export default class Cell {
     diversityOpportunity = 0,
     diversityOpportunityWeight = 0,
     diversityOpportunityAvailability = 0,
+    diversityOpportunityGap = 0,
+    diversityOpportunityAlignment = 0,
+    diversityOpportunityMultiplier = 1,
   } = {}) {
     const observed = clampFinite(diversity, 0, 1);
     const previousMean = this.#resolveMateDiversityMemory();
@@ -1001,9 +1004,31 @@ export default class Cell {
       0,
       1,
     );
+    const opportunityGap = clamp(
+      Number.isFinite(diversityOpportunityGap) ? diversityOpportunityGap : 0,
+      0,
+      1,
+    );
+    const opportunityAlignmentValue = clamp(
+      Number.isFinite(diversityOpportunityAlignment)
+        ? diversityOpportunityAlignment
+        : opportunityAvailability > 0
+          ? clamp(1 - opportunityGap, 0, 1)
+          : 0,
+      0,
+      1,
+    );
+    const opportunityMultiplier = clamp(
+      Number.isFinite(diversityOpportunityMultiplier)
+        ? diversityOpportunityMultiplier
+        : 1,
+      0,
+      2,
+    );
     const opportunityStrength =
       opportunitySignal *
-      (0.55 + opportunityWeight * 0.3 + opportunityAvailability * 0.25);
+      (0.55 + opportunityWeight * 0.3 + opportunityAvailability * 0.25) *
+      (1 - opportunityAlignmentValue * 0.4);
     const previousPressure = this.#resolveMateNoveltyPressure();
     const decay = success ? 0.78 : penalized ? 0.82 : 0.88;
     let nextPressure = previousPressure * decay;
@@ -1037,6 +1062,26 @@ export default class Cell {
       const reliefScale = 0.5 + observed * 0.3 + opportunityAvailability * 0.2;
 
       nextPressure *= 1 - noveltyRelief * reliefScale;
+    }
+
+    if (opportunityAlignmentValue > 0) {
+      const alignmentRelief =
+        opportunityAlignmentValue * (0.22 + opportunityAvailability * 0.35);
+
+      nextPressure *= 1 - clamp(alignmentRelief, 0, 0.75);
+    }
+
+    if (opportunityMultiplier > 1) {
+      const multiplierRelief =
+        Math.min(opportunityMultiplier - 1, 1) *
+        (0.18 + opportunityAlignmentValue * 0.3 + opportunityAvailability * 0.2);
+
+      nextPressure *= 1 - clamp(multiplierRelief, 0, 0.6);
+    } else if (opportunityMultiplier < 1) {
+      const multiplierDemand =
+        (1 - opportunityMultiplier) * (0.12 + opportunityGap * 0.25);
+
+      nextPressure += multiplierDemand;
     }
 
     this._mateNoveltyPressure = clamp(nextPressure, 0, 1);
@@ -1469,6 +1514,9 @@ export default class Cell {
     diversityOpportunity = 0,
     diversityOpportunityWeight = 0,
     diversityOpportunityAvailability = 0,
+    diversityOpportunityGap = 0,
+    diversityOpportunityAlignment = 0,
+    diversityOpportunityMultiplier = 1,
   } = {}) {
     this.matingAttempts = (this.matingAttempts || 0) + 1;
 
@@ -1501,6 +1549,9 @@ export default class Cell {
       diversityOpportunity,
       diversityOpportunityWeight,
       diversityOpportunityAvailability,
+      diversityOpportunityGap,
+      diversityOpportunityAlignment,
+      diversityOpportunityMultiplier,
     });
 
     const reproductionContext = this._decisionContextIndex?.get("reproduction");

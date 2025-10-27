@@ -6822,6 +6822,26 @@ export default class GridManager {
     const diversityOpportunityScore = diversityOpportunitySummary.score;
     const diversityOpportunityWeight = diversityOpportunitySummary.weight;
     const diversityOpportunityAvailability = diversityOpportunitySummary.availability;
+    const rawOpportunityGap = diversityOpportunitySummary.gap;
+    const diversityOpportunityGap = Number.isFinite(rawOpportunityGap)
+      ? clamp(rawOpportunityGap, 0, 1)
+      : 0;
+    const opportunityAvailability = clamp(
+      Number.isFinite(diversityOpportunityAvailability)
+        ? diversityOpportunityAvailability
+        : 0,
+      0,
+      1,
+    );
+    const opportunityWeight = clamp(
+      Number.isFinite(diversityOpportunityWeight) ? diversityOpportunityWeight : 0,
+      0,
+      1,
+    );
+    const opportunityAlignment = clamp(1 - diversityOpportunityGap, 0, 1);
+    const opportunityAlignmentWeighted = opportunityAlignment * opportunityAvailability;
+    let opportunityAlignmentMultiplier = 1;
+    let opportunityPenaltyMultiplier = 1;
     const parentNovelty =
       typeof cell.getMateNoveltyPressure === "function"
         ? cell.getMateNoveltyPressure()
@@ -6886,6 +6906,53 @@ export default class GridManager {
       }
     }
 
+    if (diversity >= pairDiversityThreshold && effectiveReproProb > 0) {
+      if (opportunityWeight > 0) {
+        const weightedAlignment = opportunityAlignmentWeighted * opportunityWeight;
+
+        if (weightedAlignment > 0) {
+          const alignmentBonusScale =
+            0.12 + diversityPressure * 0.22 + behaviorComplementarity * 0.18;
+          const alignmentBonus = clamp(
+            1 + weightedAlignment * alignmentBonusScale,
+            1,
+            1.5,
+          );
+
+          opportunityAlignmentMultiplier *= alignmentBonus;
+        }
+
+        const weightedGap =
+          diversityOpportunityGap * opportunityAvailability * opportunityWeight;
+
+        if (weightedGap > 0.001) {
+          const penaltyScale = 0.08 + diversityPressure * 0.18 + strategyPressure * 0.2;
+          const penaltyMultiplierCandidate = clamp(
+            1 - weightedGap * penaltyScale,
+            penaltyFloor > 0 ? penaltyFloor : 0.6,
+            1,
+          );
+
+          if (penaltyMultiplierCandidate < 1) {
+            opportunityPenaltyMultiplier = Math.min(
+              opportunityPenaltyMultiplier,
+              penaltyMultiplierCandidate,
+            );
+            opportunityAlignmentMultiplier *= penaltyMultiplierCandidate;
+            penalizedForSimilarity = true;
+          }
+        }
+      }
+    }
+
+    if (opportunityAlignmentMultiplier !== 1) {
+      effectiveReproProb = clamp(
+        effectiveReproProb * opportunityAlignmentMultiplier,
+        0,
+        1,
+      );
+    }
+
     if (strategyPressure > 0 && effectiveReproProb > 0) {
       const evennessGap = clamp(1 - behaviorEvenness, 0, 1);
       const complementarityClamped = clamp(behaviorComplementarity, 0, 1);
@@ -6927,7 +6994,9 @@ export default class GridManager {
     }
 
     penaltyMultiplier = clamp(
-      diversityPenaltyMultiplier * strategyPenaltyMultiplier,
+      diversityPenaltyMultiplier *
+        strategyPenaltyMultiplier *
+        opportunityPenaltyMultiplier,
       0,
       1,
     );
@@ -7220,6 +7289,9 @@ export default class GridManager {
         diversityOpportunity: diversityOpportunityScore,
         diversityOpportunityWeight,
         diversityOpportunityAvailability,
+        diversityOpportunityGap,
+        diversityOpportunityAlignment: opportunityAlignmentWeighted,
+        diversityOpportunityMultiplier: opportunityAlignmentMultiplier,
       });
     }
 
@@ -7236,6 +7308,9 @@ export default class GridManager {
           diversityOpportunity: diversityOpportunityScore,
           diversityOpportunityWeight,
           diversityOpportunityAvailability,
+          diversityOpportunityGap,
+          diversityOpportunityAlignment: opportunityAlignmentWeighted,
+          diversityOpportunityMultiplier: opportunityAlignmentMultiplier,
         });
       }
     };
