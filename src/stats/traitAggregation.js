@@ -22,9 +22,7 @@ function sanitizeTraitIndexes(indexesSource, traitCount, computeFns) {
     return traitIndexScratch;
   }
 
-  for (let i = 0; i < indexesSource.length; i += 1) {
-    const candidate = indexesSource[i];
-
+  for (const candidate of indexesSource) {
     if (candidate == null) {
       continue;
     }
@@ -105,8 +103,8 @@ export function accumulateTraitAggregates(
 
   let population = 0;
 
-  for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
-    const cell = resolveCellFromSource(sources[sourceIndex]);
+  for (const source of sources) {
+    const cell = resolveCellFromSource(source);
 
     if (!cell || typeof cell !== "object") {
       continue;
@@ -115,8 +113,7 @@ export function accumulateTraitAggregates(
     population += 1;
 
     if (useFilteredIndexes) {
-      for (let i = 0; i < traitIndexes.length; i += 1) {
-        const traitIndex = traitIndexes[i];
+      for (const traitIndex of traitIndexes) {
         const compute = computeFns[traitIndex];
 
         let value = compute(cell);
