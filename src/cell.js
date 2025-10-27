@@ -4597,10 +4597,56 @@ export default class Cell {
 
     pStay = clamp(lerp(baseline, pStay, 0.65), 0.05, 0.95);
     const rng = this.resolveRng("movementRandom");
+    const stayRoll = rng();
 
-    if (rng() < pStay) return { dr: 0, dc: 0 };
+    if (stayRoll < pStay) return { dr: 0, dc: 0 };
+
+    const directionRoll = rng();
+    const scoredDirections = this.#scoreFallbackMovementDirections({
+      neighbors: Array.isArray(context?.neighbors) ? context.neighbors : null,
+      crowdPressure,
+      crowdRelief,
+      resourceSignal,
+      scarcity,
+      trend,
+      tileLevel,
+      energyFrac,
+      riskTolerance,
+      resourceAdaptation,
+      cautiousFrac,
+      roamingFrac,
+      pursuitFrac,
+    });
+
+    if (Array.isArray(scoredDirections) && scoredDirections.length > 0) {
+      let total = 0;
+
+      for (let i = 0; i < scoredDirections.length; i += 1) {
+        total += scoredDirections[i].weight;
+      }
+
+      if (total > 0) {
+        const target = directionRoll * total;
+        let acc = 0;
+
+        for (let i = 0; i < scoredDirections.length; i += 1) {
+          acc += scoredDirections[i].weight;
+
+          if (target <= acc) {
+            const { dr, dc } = scoredDirections[i];
+
+            return { dr, dc };
+          }
+        }
+
+        const fallback = scoredDirections[scoredDirections.length - 1];
+
+        return { dr: fallback.dr, dc: fallback.dc };
+      }
+    }
+
     // Otherwise pick one of 4 directions uniformly
-    switch ((rng() * 4) | 0) {
+    switch ((directionRoll * 4) | 0) {
       case 0:
         return { dr: -1, dc: 0 };
       case 1:
@@ -4610,6 +4656,175 @@ export default class Cell {
       default:
         return { dr: 0, dc: 1 };
     }
+  }
+
+  #scoreFallbackMovementDirections({
+    neighbors,
+    crowdPressure = 0,
+    crowdRelief = 0,
+    resourceSignal = 0,
+    scarcity = 0,
+    trend = 0,
+    tileLevel = 0,
+    energyFrac = 0,
+    riskTolerance = 0.5,
+    resourceAdaptation = 0,
+    cautiousFrac = 0.33,
+    roamingFrac = 0.67,
+    pursuitFrac = 0.33,
+  } = {}) {
+    if (!Array.isArray(neighbors) || neighbors.length === 0) {
+      return null;
+    }
+
+    const hunger = 1 - clamp(energyFrac, 0, 1);
+    const normalizedTile = clamp(tileLevel ?? 0, 0, 1);
+    const resourceDrive = clamp(this.resourceTrendAdaptation ?? 0.35, 0, 1);
+    const diversity = clamp(this.diversityAppetite ?? 0, 0, 1);
+    const results = [];
+
+    for (let i = 0; i < neighbors.length; i += 1) {
+      const neighbor = neighbors[i];
+
+      if (!neighbor) continue;
+
+      const dr = Number.isFinite(neighbor.dr) ? neighbor.dr : 0;
+      const dc = Number.isFinite(neighbor.dc) ? neighbor.dc : 0;
+
+      if (neighbor.blocked) {
+        results.push({ dr, dc, weight: 0 });
+
+        continue;
+      }
+
+      let weight =
+        0.2 +
+        roamingFrac * 0.3 +
+        riskTolerance * 0.25 +
+        hunger * 0.1 +
+        Math.max(0, -scarcity) * 0.05;
+
+      if (neighbor.occupied) {
+        const kinship = clamp(
+          Number.isFinite(neighbor.kinship) ? neighbor.kinship : 0,
+          0,
+          1,
+        );
+        const socialLift = kinship * (0.25 + diversity * 0.3 + crowdRelief * 0.2);
+        const cautionPenalty =
+          (1 - kinship) * (0.45 + cautiousFrac * 0.5 + crowdPressure * 0.35);
+        const pursuitLift = pursuitFrac * (1 - kinship) * 0.2;
+
+        weight += socialLift - cautionPenalty + pursuitLift;
+      } else {
+        weight += 0.2 + crowdRelief * (0.35 + roamingFrac * 0.25);
+      }
+
+      if (Number.isFinite(neighbor.energy)) {
+        const neighborEnergy = clamp(neighbor.energy, 0, 1);
+        const delta = neighborEnergy - normalizedTile;
+
+        if (delta > 0) {
+          weight += delta * (0.5 + resourceDrive * 0.5 + roamingFrac * 0.25);
+        } else if (delta < 0) {
+          weight += delta * (0.35 + cautiousFrac * 0.4);
+        }
+      }
+
+      if (Number.isFinite(neighbor.energyDelta) && neighbor.energyDelta !== 0) {
+        const deltaTrend = clamp(neighbor.energyDelta, -1, 1);
+
+        weight += deltaTrend * (0.3 + resourceAdaptation * 0.35);
+      }
+
+      if (resourceSignal !== 0) {
+        weight += resourceSignal * (0.08 + roamingFrac * 0.12);
+      }
+
+      if (trend !== 0) {
+        weight += trend * 0.05;
+      }
+
+      weight = Math.max(weight, 0);
+
+      if (weight > 0) {
+        results.push({ dr, dc, weight });
+      }
+    }
+
+    return results.length > 0 ? results : null;
+  }
+
+  #buildMovementContext({
+    gridArr,
+    row,
+    col,
+    rows,
+    cols,
+    localDensity = 0,
+    densityEffectMultiplier = 1,
+    tileEnergy = null,
+    tileEnergyDelta = 0,
+    maxTileEnergy = MAX_TILE_ENERGY,
+    getEnergyAt,
+    getEnergyDeltaAt,
+    isTileBlocked,
+  } = {}) {
+    const context = {
+      localDensity,
+      densityEffectMultiplier,
+      tileEnergy,
+      tileEnergyDelta,
+      maxTileEnergy,
+    };
+
+    if (!Array.isArray(gridArr) || rows == null || cols == null) {
+      return context;
+    }
+
+    const directions = [
+      { dr: -1, dc: 0 },
+      { dr: 1, dc: 0 },
+      { dr: 0, dc: -1 },
+      { dr: 0, dc: 1 },
+    ];
+    const neighbors = [];
+
+    for (let i = 0; i < directions.length; i += 1) {
+      const { dr, dc } = directions[i];
+      const rr = Number.isFinite(row) ? row + dr : null;
+      const cc = Number.isFinite(col) ? col + dc : null;
+      const outOfBounds =
+        rr == null || cc == null || rr < 0 || cc < 0 || rr >= rows || cc >= cols;
+      const blocked =
+        outOfBounds || (typeof isTileBlocked === "function" && isTileBlocked(rr, cc));
+      const occupant =
+        !outOfBounds && Array.isArray(gridArr?.[rr]) ? (gridArr[rr][cc] ?? null) : null;
+      const kinship =
+        occupant && typeof this.similarityTo === "function"
+          ? clamp(this.similarityTo(occupant), 0, 1)
+          : null;
+      const energy =
+        !outOfBounds && typeof getEnergyAt === "function" ? getEnergyAt(rr, cc) : null;
+      const energyDelta =
+        !outOfBounds && typeof getEnergyDeltaAt === "function"
+          ? getEnergyDeltaAt(rr, cc)
+          : null;
+
+      neighbors.push({
+        dr,
+        dc,
+        blocked,
+        occupied: Boolean(occupant),
+        kinship,
+        energy: Number.isFinite(energy) ? energy : null,
+        energyDelta: Number.isFinite(energyDelta) ? energyDelta : null,
+      });
+    }
+
+    context.neighbors = neighbors;
+
+    return context;
   }
 
   #resolveScarcityRelief(energyFraction) {
@@ -5071,6 +5286,7 @@ export default class Cell {
       moveAwayFromTarget,
       moveRandomly,
       getEnergyAt,
+      getEnergyDeltaAt,
       tryMove,
       isTileBlocked,
       tileEnergy = null,
@@ -5082,13 +5298,21 @@ export default class Cell {
       localDensity,
       densityEffectMultiplier,
     );
-    const movementContext = {
+    const movementContext = this.#buildMovementContext({
+      gridArr,
+      row,
+      col,
+      rows,
+      cols,
       localDensity,
       densityEffectMultiplier,
       tileEnergy,
       tileEnergyDelta,
       maxTileEnergy,
-    };
+      getEnergyAt,
+      getEnergyDeltaAt,
+      isTileBlocked,
+    });
 
     if (strategy === "pursuit") {
       const target =
@@ -5736,6 +5960,7 @@ export default class Cell {
       moveAwayFromTarget,
       moveRandomly,
       getEnergyAt,
+      getEnergyDeltaAt,
       tryMove,
       isTileBlocked,
       maxTileEnergy = MAX_TILE_ENERGY,
@@ -5752,13 +5977,21 @@ export default class Cell {
       tileEnergy,
       tileEnergyDelta,
     };
-    const movementContext = {
+    const movementContext = this.#buildMovementContext({
+      gridArr,
+      row,
+      col,
+      rows,
+      cols,
       localDensity,
       densityEffectMultiplier,
       maxTileEnergy,
       tileEnergy,
       tileEnergyDelta,
-    };
+      getEnergyAt,
+      getEnergyDeltaAt,
+      isTileBlocked,
+    });
     const decision = this.#decideMovementAction(strategyContext);
 
     if (!decision.usedBrain || !decision.action) {
