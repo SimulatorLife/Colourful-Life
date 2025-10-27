@@ -3,7 +3,7 @@ import { approxEqual } from "./helpers/assertions.js";
 
 test("GridManager.regenerateEnergyGrid matches accumulated modifiers for segmented events", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
-  const { accumulateEventModifiers } = await import("../src/energySystem.js");
+  const { accumulateEventModifiers } = await import("../src/events/eventModifiers.js");
 
   class TestGridManager extends GridManager {
     init() {}

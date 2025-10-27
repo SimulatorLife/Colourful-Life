@@ -6,7 +6,7 @@ const baseArea = { x: 0, y: 0, width: 5, height: 5 };
 test("accumulateEventModifiers combines overlapping event effects", async () => {
   const [{ accumulateEventModifiers }, { getEventEffect }, { isEventAffecting }] =
     await Promise.all([
-      import("../src/energySystem.js"),
+      import("../src/events/eventModifiers.js"),
       import("../src/events/eventEffects.js"),
       import("../src/events/eventManager.js"),
     ]);
@@ -42,7 +42,7 @@ test("accumulateEventModifiers combines overlapping event effects", async () => 
 
 test("accumulateEventModifiers respects zero strength multiplier", async () => {
   const [{ accumulateEventModifiers }] = await Promise.all([
-    import("../src/energySystem.js"),
+    import("../src/events/eventModifiers.js"),
   ]);
 
   const result = accumulateEventModifiers({
@@ -74,7 +74,7 @@ test("accumulateEventModifiers respects zero strength multiplier", async () => {
 
 test("accumulateEventModifiers reuses provided effect cache", async () => {
   const [{ accumulateEventModifiers }] = await Promise.all([
-    import("../src/energySystem.js"),
+    import("../src/events/eventModifiers.js"),
   ]);
 
   const effectCache = new Map();
@@ -109,7 +109,7 @@ test("accumulateEventModifiers reuses provided effect cache", async () => {
 
 test("accumulateEventModifiers reuses result buffers when skipping applied events", async () => {
   const [{ accumulateEventModifiers }] = await Promise.all([
-    import("../src/energySystem.js"),
+    import("../src/events/eventModifiers.js"),
   ]);
 
   const resultBuffer = {
@@ -157,7 +157,7 @@ test("accumulateEventModifiers reuses result buffers when skipping applied event
 
 test("accumulateEventModifiers restores applied event array after disabling collection", async () => {
   const [{ accumulateEventModifiers }] = await Promise.all([
-    import("../src/energySystem.js"),
+    import("../src/events/eventModifiers.js"),
   ]);
 
   const resultBuffer = {

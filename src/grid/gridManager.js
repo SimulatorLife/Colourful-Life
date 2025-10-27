@@ -18,7 +18,10 @@ import {
   defaultEventContext,
   defaultIsEventAffecting,
 } from "../events/eventContext.js";
-import { accumulateEventModifiers, resolveEventContribution } from "../energySystem.js";
+import {
+  accumulateEventModifiers,
+  resolveEventContribution,
+} from "../events/eventModifiers.js";
 import GridInteractionAdapter from "./gridAdapter.js";
 import { clearTileEnergyBuffers } from "./energyUtils.js";
 import ReproductionZonePolicy from "./reproductionZonePolicy.js";
