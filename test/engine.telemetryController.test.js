@@ -1,5 +1,6 @@
 import { assert, test } from "#tests/harness";
 import TelemetryController from "../src/engine/telemetryController.js";
+import { LEADERBOARD_SIZE_DEFAULT } from "../src/config.js";
 
 function createNowSequence(values) {
   const queue = [...values];
@@ -160,6 +161,34 @@ test("TelemetryController setLeaderboardSize clamps values", () => {
   assert.is(controller.setLeaderboardSize(7.8), 7);
   assert.is(controller.setLeaderboardSize(-4), 0);
   assert.is(controller.setLeaderboardSize("oops"), 0);
+});
+
+test("TelemetryController preserves leaderboard size for nullish and blank inputs", () => {
+  const controller = new TelemetryController({ leaderboardSize: 4 });
+
+  assert.is(controller.setLeaderboardSize(""), 4);
+  assert.is(controller.setLeaderboardSize(null), 4);
+  assert.is(controller.setLeaderboardSize(false), 4);
+});
+
+test("TelemetryController falls back to default leaderboard size when unset", () => {
+  const sizes = [];
+  const controller = new TelemetryController({
+    leaderboardSize: null,
+    computeLeaderboard(snapshot, size) {
+      sizes.push(size);
+
+      return snapshot.entries.slice(0, size);
+    },
+  });
+
+  controller.setInitialSnapshot({ entries: [{ id: "alpha" }] });
+
+  controller.publishNow({
+    emitLeaderboard: () => {},
+  });
+
+  assert.equal(sizes, [LEADERBOARD_SIZE_DEFAULT]);
 });
 
 test("TelemetryController sanitizes retained snapshots for leaderboard consumers", () => {

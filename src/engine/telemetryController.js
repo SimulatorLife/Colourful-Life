@@ -15,6 +15,31 @@ const WARNINGS = Object.freeze({
 
 function normalizeLeaderboardSize(value, fallback = LEADERBOARD_SIZE_DEFAULT) {
   const sanitizedFallback = sanitizeNonNegativeInteger(fallback, { fallback: 0 });
+
+  if (value == null) {
+    return sanitizedFallback;
+  }
+
+  if (typeof value === "boolean") {
+    return sanitizedFallback;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+
+    if (trimmed.length === 0) {
+      return sanitizedFallback;
+    }
+
+    const numeric = Number(trimmed);
+
+    if (!Number.isFinite(numeric)) {
+      return 0;
+    }
+
+    return sanitizeNonNegativeInteger(numeric, { fallback: 0 });
+  }
+
   const numeric = Number(value);
 
   if (!Number.isFinite(numeric)) {
