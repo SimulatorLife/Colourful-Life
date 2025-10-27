@@ -6708,15 +6708,11 @@ export default class Cell {
         const influence = 0.75;
         const combinedNormalized = {};
 
-        for (const key of Object.keys(fallbackNormalized)) {
-          const neuralValue = neuralNormalized[key] ?? fallbackNormalized[key];
+        Object.entries(fallbackNormalized).forEach(([key, fallbackValue]) => {
+          const neuralValue = neuralNormalized[key] ?? fallbackValue;
 
-          combinedNormalized[key] = lerp(
-            fallbackNormalized[key],
-            neuralValue,
-            influence,
-          );
-        }
+          combinedNormalized[key] = lerp(fallbackValue, neuralValue, influence);
+        });
 
         const combinedTotal = Object.values(combinedNormalized).reduce(
           (sum, value) => sum + value,
@@ -6725,13 +6721,12 @@ export default class Cell {
         const scaling =
           combinedTotal > 0 ? fallbackTotal / combinedTotal : fallbackTotal;
 
-        for (const key of Object.keys(combinedNormalized)) {
-          const normalized =
-            combinedTotal > 0 ? combinedNormalized[key] / combinedTotal : 0.25;
+        Object.entries(combinedNormalized).forEach(([key, value]) => {
+          const normalized = combinedTotal > 0 ? value / combinedTotal : 0.25;
 
           combinedNormalized[key] = normalized;
           weights[key] = Math.max(0.0001, normalized * (scaling || 1));
-        }
+        });
 
         decisionDetails = {
           usedNetwork: true,
