@@ -147,6 +147,37 @@ test("resolveSimulationDefaults returns expected baseline configuration", async 
   );
 });
 
+test("resolveSliderBounds merges canonical slider configuration", async () => {
+  const { UI_SLIDER_CONFIG, resolveSliderBounds } = await sliderConfigModulePromise;
+  const merged = resolveSliderBounds("speedMultiplier", {
+    min: 1,
+    max: 500,
+    step: 5,
+    floor: 0.2,
+    default: 2,
+  });
+
+  assert.is(merged.min, UI_SLIDER_CONFIG.speedMultiplier.min);
+  assert.is(merged.max, UI_SLIDER_CONFIG.speedMultiplier.max);
+  assert.is(merged.step, UI_SLIDER_CONFIG.speedMultiplier.step);
+  assert.is(merged.floor, UI_SLIDER_CONFIG.speedMultiplier.floor);
+  assert.is(merged.default, UI_SLIDER_CONFIG.speedMultiplier.default);
+
+  const fallback = resolveSliderBounds("nonexistent", {
+    min: 0,
+    max: 10,
+    step: 0.5,
+    floor: 0.25,
+    default: 1,
+  });
+
+  assert.is(fallback.min, 0);
+  assert.is(fallback.max, 10);
+  assert.is(fallback.step, 0.5);
+  assert.is(fallback.floor, 0.25);
+  assert.is(fallback.default, 1);
+});
+
 test("simulation defaults keep environmental events dormant by default", async () => {
   const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
   const { UI_SLIDER_CONFIG } = await sliderConfigModulePromise;

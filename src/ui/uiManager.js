@@ -1,5 +1,5 @@
 import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
-import { UI_SLIDER_CONFIG } from "./sliderConfig.js";
+import { resolveSliderBounds } from "./sliderConfig.js";
 import {
   createControlButtonRow,
   createControlGrid,
@@ -1927,7 +1927,11 @@ export default class UIManager {
   }
 
   #sanitizeSpeedMultiplier(value) {
-    const bounds = UI_SLIDER_CONFIG?.speedMultiplier || {};
+    const bounds = resolveSliderBounds("speedMultiplier", {
+      floor: 0.1,
+      min: 0.5,
+      max: 100,
+    });
     const floor = Number.isFinite(bounds.floor) ? bounds.floor : undefined;
     const min = Number.isFinite(bounds.min) ? bounds.min : undefined;
     const max = Number.isFinite(bounds.max) ? bounds.max : undefined;
@@ -3388,7 +3392,11 @@ export default class UIManager {
       }
     }
 
-    const speedBounds = UI_SLIDER_CONFIG?.speedMultiplier || {};
+    const speedBounds = resolveSliderBounds("speedMultiplier", {
+      min: 0.5,
+      max: 100,
+      step: 0.5,
+    });
     const speedMin = speedBounds.min ?? 0.5;
     const speedMax = speedBounds.max ?? 100;
     const speedStep = speedBounds.step ?? 0.5;
@@ -3718,8 +3726,6 @@ export default class UIManager {
   }
 
   #buildSliderGroups(body) {
-    const sliderConfig = UI_SLIDER_CONFIG || {};
-
     const getSliderValue = (cfg) =>
       typeof cfg.getValue === "function" ? cfg.getValue() : this[cfg.prop];
 
@@ -3734,11 +3740,15 @@ export default class UIManager {
     };
 
     const withSliderConfig = (key, overrides) => {
-      const bounds = sliderConfig[key] || {};
+      const bounds = resolveSliderBounds(key, overrides);
       const min = bounds.min ?? overrides.min ?? 0;
       const max = bounds.max ?? overrides.max ?? 1;
       const step = bounds.step ?? overrides.step ?? 0.01;
-      const floor = bounds.floor;
+      const floor = Number.isFinite(bounds.floor) ? bounds.floor : undefined;
+      const setValue =
+        typeof overrides.setValue === "function" ? overrides.setValue : () => {};
+      const format =
+        typeof overrides.format === "function" ? overrides.format : (v) => String(v);
 
       return {
         key,
@@ -3747,12 +3757,12 @@ export default class UIManager {
         max,
         step,
         title: overrides.title,
-        format: overrides.format ?? ((v) => String(v)),
+        format,
         getValue: overrides.getValue,
         setValue: (value) => {
           const next = floor === undefined ? value : Math.max(floor, value);
 
-          overrides.setValue(next);
+          setValue(next);
         },
         position: overrides.position,
       };
