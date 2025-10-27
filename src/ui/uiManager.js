@@ -1792,6 +1792,19 @@ export default class UIManager {
     }
   }
 
+  #resolveGridCapacity() {
+    const rows = Number.isFinite(this.gridRows) ? this.gridRows : null;
+    const cols = Number.isFinite(this.gridCols) ? this.gridCols : null;
+
+    if (!(rows > 0) || !(cols > 0)) {
+      return null;
+    }
+
+    const capacity = rows * cols;
+
+    return Number.isFinite(capacity) && capacity > 0 ? capacity : null;
+  }
+
   #canStep() {
     return typeof this.simulationCallbacks?.step === "function";
   }
@@ -5532,6 +5545,23 @@ export default class UIManager {
       label: "Growth",
       value: countOrDash(s.growth),
       title: "Births - Deaths",
+    });
+    const totalTiles = this.#resolveGridCapacity();
+    const occupancyRatio =
+      totalTiles && Number.isFinite(s.population) && totalTiles > 0
+        ? clamp01(s.population / totalTiles)
+        : null;
+    const occupancyTitleBase =
+      "Share of grid tiles currently occupied by living organisms.";
+    const occupancyTitle =
+      occupancyRatio != null && totalTiles
+        ? `${occupancyTitleBase} ${countOrDash(s.population)} of ${totalTiles.toLocaleString()} tiles in use.`
+        : occupancyTitleBase;
+
+    appendMetricRow(populationSection, {
+      label: "Occupancy",
+      value: percentOrDash(occupancyRatio),
+      title: occupancyTitle,
     });
     if (typeof s.mutationMultiplier === "number") {
       const formatted = s.mutationMultiplier.toFixed(2);
