@@ -419,6 +419,76 @@ test("setWorldGeometry applies obstacle changes without resizing", async () => {
   }
 });
 
+test("setWorldGeometry respects string boolean flags for obstacle randomization", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(120, 120),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      rng: () => 0,
+    });
+
+    engine.grid.clearObstacles();
+    engine.grid.currentObstaclePreset = "none";
+
+    engine.setWorldGeometry({ randomizeObstacles: "false" });
+
+    assert.is(
+      engine.grid.currentObstaclePreset,
+      "none",
+      "string 'false' should not trigger random obstacle selection",
+    );
+    assert.is(
+      engine.grid.obstacles.some((row) => row.some(Boolean)),
+      false,
+      "grid remains obstacle free when randomization disabled",
+    );
+  } finally {
+    restore();
+  }
+});
+
+test("resetWorld respects string boolean flags for obstacle randomization", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(120, 120),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      rng: () => 0,
+    });
+
+    engine.grid.clearObstacles();
+    engine.grid.currentObstaclePreset = "none";
+
+    engine.resetWorld({ randomizeObstacles: "false" });
+
+    assert.is(
+      engine.grid.currentObstaclePreset,
+      "none",
+      "string 'false' should not randomize obstacles during reset",
+    );
+    assert.is(
+      engine.grid.obstacles.some((row) => row.some(Boolean)),
+      false,
+      "reset preserves obstacle-free state when randomization disabled",
+    );
+  } finally {
+    restore();
+  }
+});
+
 test("pausing stops the animation loop until work is requested", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;

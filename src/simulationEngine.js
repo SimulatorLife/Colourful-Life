@@ -893,7 +893,7 @@ export default class SimulationEngine {
 
   setWorldGeometry(options = {}) {
     const opts = options && typeof options === "object" ? options : {};
-    const randomizeObstacles = Boolean(opts.randomizeObstacles);
+    const randomizeObstacles = coerceBoolean(opts.randomizeObstacles, false);
     const obstaclePreset = opts.obstaclePreset;
     const presetOptions = opts.presetOptions;
     const reseed = opts.reseed === true;
@@ -1040,6 +1040,7 @@ export default class SimulationEngine {
     const opts = options && typeof options === "object" ? options : {};
     const wasRunning = this.running;
     const wasPaused = this.isPaused();
+    const randomizeObstacles = coerceBoolean(opts.randomizeObstacles, false);
 
     this.stop();
     this.#setAutoPausePending(false);
@@ -1064,7 +1065,7 @@ export default class SimulationEngine {
 
     if (typeof this.grid?.resetWorld === "function") {
       this.grid.resetWorld({
-        randomizeObstacles: Boolean(opts.randomizeObstacles),
+        randomizeObstacles,
         obstaclePreset: opts.obstaclePreset,
         presetOptions: opts.presetOptions,
         reseed: opts.reseed === true,
