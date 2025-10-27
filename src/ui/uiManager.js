@@ -30,7 +30,10 @@ const GRID_GEOMETRY_BOUNDS = Object.freeze({
   cols: Object.freeze({ min: 40, max: 240, step: 1 }),
 });
 
-const DEATH_CAUSE_COLOR_MAP = Object.freeze({
+// Default palette used by the life event dashboard. Layout consumers can
+// override colors via `ui.layout.deathCauseColors` without touching core UI
+// logic, keeping the default accessible while allowing tailored themes.
+const DEFAULT_DEATH_CAUSE_COLOR_MAP = Object.freeze({
   starvation: "#f6c344",
   combat: "#ff6b6b",
   senescence: "#a0aec0",
@@ -209,6 +212,53 @@ function normalizeBurstOptions(candidate) {
       shortcutHint: resolveHint(shiftSource.shortcutHint, fallbackShift.shortcutHint),
     },
   };
+}
+
+function normalizeDeathCauseColorMap(overrides) {
+  const entries = Object.entries(toPlainObject(overrides)).reduce(
+    (list, [rawKey, rawColor]) => {
+      if (typeof rawKey !== "string") {
+        return list;
+      }
+
+      const key = rawKey.trim().toLowerCase();
+
+      if (!key) {
+        return list;
+      }
+
+      if (typeof rawColor !== "string") {
+        return list;
+      }
+
+      const color = rawColor.trim();
+
+      if (!color) {
+        return list;
+      }
+
+      list.push([key, color]);
+
+      return list;
+    },
+    [],
+  );
+
+  if (entries.length === 0) {
+    return DEFAULT_DEATH_CAUSE_COLOR_MAP;
+  }
+
+  const map = { ...DEFAULT_DEATH_CAUSE_COLOR_MAP };
+
+  for (const [key, color] of entries) {
+    map[key] = color;
+  }
+
+  if (!map.unknown) {
+    map.unknown = DEFAULT_DEATH_CAUSE_COLOR_MAP.unknown;
+  }
+
+  return Object.freeze(map);
 }
 
 function generateTraitColors(key) {
@@ -403,6 +453,9 @@ export default class UIManager {
     this.geometryControls = null;
     this.deathBreakdownMaxEntries = this.#resolveDeathBreakdownLimit(
       layoutConfig.deathBreakdownMaxEntries,
+    );
+    this.deathCauseColorMap = normalizeDeathCauseColorMap(
+      layoutConfig.deathCauseColors,
     );
     this.burstConfig = normalizeBurstOptions(layoutConfig.burstOptions);
 
@@ -2306,7 +2359,8 @@ export default class UIManager {
   }
 
   #resolveDeathCauseColor(causeKey) {
-    const fallback = DEATH_CAUSE_COLOR_MAP.unknown;
+    const map = this.deathCauseColorMap ?? DEFAULT_DEATH_CAUSE_COLOR_MAP;
+    const fallback = map.unknown ?? DEFAULT_DEATH_CAUSE_COLOR_MAP.unknown;
 
     if (typeof causeKey !== "string") {
       return fallback;
@@ -2314,7 +2368,7 @@ export default class UIManager {
 
     const normalized = causeKey.trim().toLowerCase();
 
-    return DEATH_CAUSE_COLOR_MAP[normalized] || fallback;
+    return map[normalized] || fallback;
   }
 
   #updateDeathBreakdown(breakdown, fallbackTotal = 0) {
