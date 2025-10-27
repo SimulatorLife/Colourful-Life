@@ -523,6 +523,101 @@ test("life event death breakdown falls back to metrics payload", async () => {
   }
 });
 
+test("life event death breakdown honours custom death cause colors", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        getCellSize: () => 5,
+      },
+      {
+        canvasElement: new MockCanvas(400, 400),
+        deathCauseColors: {
+          Starvation: "rgb(10, 20, 30)",
+          pandemic: "rgb(0, 255, 153)",
+        },
+      },
+    );
+
+    openPanel(uiManager.insightsPanel);
+    openPanel(uiManager.lifeEventsPanel);
+
+    const stats = createMetricsStatsFixture();
+
+    stats.deathBreakdown = {
+      starvation: 5,
+      pandemic: 3,
+      unclassified: 1,
+    };
+    stats.getRecentLifeEvents = () => [
+      { type: "death", tick: 10, cause: "starvation" },
+      { type: "death", tick: 11, cause: "pandemic" },
+      { type: "death", tick: 12, cause: "unclassified" },
+    ];
+    stats.getLifeEventRateSummary = () => ({
+      births: 4,
+      deaths: 9,
+      net: -5,
+      total: 13,
+      window: 120,
+      eventsPer100Ticks: 10,
+      birthsPer100Ticks: 3.3,
+      deathsPer100Ticks: 7.5,
+    });
+
+    const snapshot = createSnapshotFixture();
+
+    uiManager.renderMetrics(stats, snapshot, {
+      eventStrengthMultiplier: 1,
+      activeEvents: [],
+    });
+
+    const items = Array.from(
+      uiManager.deathBreakdownList?.querySelectorAll(".death-breakdown-item") ?? [],
+    );
+
+    const colorByLabel = (label) => {
+      const entry = items.find(
+        (item) => item.querySelector(".death-breakdown-label")?.textContent === label,
+      );
+
+      return entry?.querySelector(".death-breakdown-fill")?.style.background ?? "";
+    };
+
+    assert.is(
+      colorByLabel("Starvation"),
+      "rgb(10, 20, 30)",
+      "overrides should update existing cause colors",
+    );
+    assert.is(
+      colorByLabel("Pandemic"),
+      "rgb(0, 255, 153)",
+      "new death causes should use the provided palette entry",
+    );
+
+    const fallbackColor = colorByLabel("Unclassified").toLowerCase();
+
+    assert.ok(
+      fallbackColor === "#e74c3c" || fallbackColor === "rgb(231, 76, 60)",
+      "unknown causes should fall back to the default color",
+    );
+  } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
 test("insights panel defers metrics work while collapsed", async () => {
   const restore = setupDom();
   const restoreCanvas = stubCanvasElements();

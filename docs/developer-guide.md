@@ -151,6 +151,9 @@ variables for quick reference during onboarding.
 - `ui.layout.deathBreakdownMaxEntries` controls how many individual death causes
   the life event dashboard lists before folding the remainder into an "Other"
   bucket. Non-positive or non-numeric values fall back to the default of 4.
+- `ui.layout.deathCauseColors` overrides the life event dashboard palette. Keys
+  map to death cause identifiers (case-insensitive) and values accept any CSS
+  color string. Unrecognized or empty values fall back to the default theme.
 
 ## Documentation conventions
 
