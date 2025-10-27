@@ -7,7 +7,7 @@ import {
   toFiniteOrNull,
 } from "./utils/math.js";
 import { warnOnce } from "./utils/error.js";
-import { accumulateTraitAggregates } from "./utils/traitAggregation.js";
+import { accumulateTraitAggregates } from "./stats/traitAggregation.js";
 import { resolveCellColor } from "./utils/cell.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
