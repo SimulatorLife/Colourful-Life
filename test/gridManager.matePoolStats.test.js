@@ -104,6 +104,15 @@ test("handleReproduction records the full mate pool size when prioritizing candi
   assert.is(recorded.length, 1, "expected mate choice to be recorded");
   assert.is(recorded[0].poolSize, mateCount);
   assert.ok(Object.prototype.hasOwnProperty.call(recorded[0], "diversityOpportunity"));
+  assert.ok(
+    Object.prototype.hasOwnProperty.call(recorded[0], "diversityOpportunityGap"),
+  );
+  assert.ok(
+    Object.prototype.hasOwnProperty.call(recorded[0], "diversityOpportunityAlignment"),
+  );
+  assert.ok(
+    Object.prototype.hasOwnProperty.call(recorded[0], "diversityOpportunityMultiplier"),
+  );
 });
 
 test("handleReproduction weights diversity opportunity by available variety", async () => {
@@ -231,6 +240,13 @@ test("handleReproduction weights diversity opportunity by available variety", as
   approxEqual(choice.diversityOpportunity, expectedScore, 1e-9);
   approxEqual(choice.diversityOpportunityWeight, expectedWeight, 1e-9);
   approxEqual(choice.diversityOpportunityAvailability, availability, 1e-9);
+  approxEqual(choice.diversityOpportunityGap, gap, 1e-9);
+  approxEqual(
+    choice.diversityOpportunityAlignment,
+    clamp(1 - gap, 0, 1) * availability,
+    1e-9,
+  );
+  assert.ok(choice.diversityOpportunityMultiplier > 0);
 });
 
 test("novelty pressure intensifies penalties for repetitive low-diversity pairings", async () => {
