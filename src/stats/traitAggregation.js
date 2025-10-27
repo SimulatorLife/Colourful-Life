@@ -90,15 +90,25 @@ export function accumulateTraitAggregates(
   }
 
   let traitIndexes = traitIndexScratch;
-  let useFilteredIndexes = false;
 
   if (indexesSource && indexesSource.length > 0) {
     traitIndexes = sanitizeTraitIndexes(indexesSource, traitCount, computeFns);
-    useFilteredIndexes = traitIndexes.length > 0;
 
-    if (!useFilteredIndexes) {
+    if (traitIndexes.length === 0) {
       return 0;
     }
+  } else {
+    traitIndexScratch.length = 0;
+
+    for (let traitIndex = 0; traitIndex < traitCount; traitIndex += 1) {
+      if (typeof computeFns[traitIndex] !== "function") {
+        continue;
+      }
+
+      traitIndexScratch.push(traitIndex);
+    }
+
+    traitIndexes = traitIndexScratch;
   }
 
   let population = 0;
@@ -112,34 +122,12 @@ export function accumulateTraitAggregates(
 
     population += 1;
 
-    if (useFilteredIndexes) {
-      for (const traitIndex of traitIndexes) {
-        const compute = computeFns[traitIndex];
-
-        let value = compute(cell);
-
-        if (!Number.isFinite(value)) {
-          value = 0;
-        }
-
-        sums[traitIndex] += value;
-
-        const threshold = thresholds[traitIndex];
-
-        if (value >= threshold) {
-          activeCounts[traitIndex] += 1;
-        }
-      }
-
+    if (traitIndexes.length === 0) {
       continue;
     }
 
-    for (let traitIndex = 0; traitIndex < traitCount; traitIndex += 1) {
+    for (const traitIndex of traitIndexes) {
       const compute = computeFns[traitIndex];
-
-      if (typeof compute !== "function") {
-        continue;
-      }
 
       let value = compute(cell);
 
