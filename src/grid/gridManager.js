@@ -3941,11 +3941,9 @@ export default class GridManager {
       drain = 0,
     ) => {
       if (!obstacleRow && !upObstacleRow && !downObstacleRow) {
-        let densityValue = densityRow ? densityRow[c] : undefined;
-
-        if (densityValue == null) {
-          densityValue = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
-        }
+        const densityValue = this.#resolveCachedDensityValue(r, c, densityRow, {
+          densityGrid,
+        });
 
         let effectiveDensity = (densityValue ?? 0) * normalizedDensityMultiplier;
 
@@ -4112,11 +4110,9 @@ export default class GridManager {
         return;
       }
 
-      let densityValue = densityRow ? densityRow[c] : undefined;
-
-      if (densityValue == null) {
-        densityValue = this.localDensity(r, c, GridManager.DENSITY_RADIUS);
-      }
+      const densityValue = this.#resolveCachedDensityValue(r, c, densityRow, {
+        densityGrid,
+      });
 
       let effectiveDensity = (densityValue ?? 0) * normalizedDensityMultiplier;
 
@@ -5022,6 +5018,58 @@ export default class GridManager {
     this.densityDirtyTiles.clear();
   }
 
+  #resolveCachedDensityValue(
+    row,
+    col,
+    densityRow = null,
+    { radius = null, densityGrid = null } = {},
+  ) {
+    if (densityRow) {
+      const direct = densityRow[col];
+
+      if (direct != null) {
+        return direct;
+      }
+    }
+
+    const gridSource = densityGrid ?? this.densityGrid;
+
+    if (gridSource) {
+      const gridRow = gridSource[row];
+
+      if (gridRow) {
+        const value = gridRow[col];
+
+        if (value != null) {
+          return value;
+        }
+      }
+    }
+
+    const liveGrid = this.densityLiveGrid;
+
+    if (liveGrid) {
+      const liveRow = liveGrid[row];
+
+      if (liveRow) {
+        const liveValue = liveRow[col];
+
+        if (liveValue != null) {
+          return liveValue;
+        }
+      }
+    }
+
+    const effectiveRadius =
+      Number.isFinite(radius) && radius >= 0
+        ? radius
+        : Number.isFinite(this.densityRadius)
+          ? this.densityRadius
+          : GridManager.DENSITY_RADIUS;
+
+    return this.localDensity(row, col, effectiveRadius);
+  }
+
   recalculateDensityCounts(radius = this.densityRadius) {
     const normalizedRadius = Math.max(0, Math.floor(radius));
     const targetRadius = normalizedRadius > 0 ? normalizedRadius : this.densityRadius;
@@ -5176,11 +5224,9 @@ export default class GridManager {
   }
 
   getDensityAt(row, col) {
-    if (this.densityGrid?.[row]?.[col] != null) {
-      return this.densityGrid[row][col];
-    }
-
-    return this.localDensity(row, col, this.densityRadius);
+    return this.#resolveCachedDensityValue(row, col, null, {
+      radius: this.densityRadius,
+    });
   }
 
   // Precompute density for all tiles (fraction of occupied neighbors)
