@@ -112,6 +112,10 @@ where practical.
   `scripts/profile-render-loop.mjs`, `scripts/profile-sensor-feedback.mjs`, and
   `scripts/profile-snapshot-memory.mjs`) so the scripts directory focuses on the
   maintained automation entry points.
+- Removed the unused `scripts/profile-target-similarity-memory.mjs` probe now
+  that the density and target selection instrumentation lives in the stats and
+  regression suites, keeping the scripts directory limited to maintained
+  profiling entry points.
 - Retired the Trait Focus overlay and associated headless controls; trait
   expression metrics now live exclusively in the dashboard cards and
   sparklines, eliminating the per-frame gene sampling pass that duplicated
