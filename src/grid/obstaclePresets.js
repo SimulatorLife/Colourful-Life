@@ -130,7 +130,9 @@ export function resolveObstaclePresetCatalog(candidate) {
   }
 
   if (catalog.length === 0) {
-    return OBSTACLE_PRESETS;
+    return OBSTACLE_PRESETS.map((preset) => normalizeObstaclePreset(preset)).filter(
+      Boolean,
+    );
   }
 
   return catalog;

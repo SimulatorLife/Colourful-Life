@@ -97,7 +97,7 @@ test("resolveObstaclePresetCatalog respects includeDefaults flag and trims ident
   assert.is(custom.description, "island pockets");
 });
 
-test("resolveObstaclePresetCatalog falls back to defaults when catalog would be empty", async () => {
+test("resolveObstaclePresetCatalog falls back to cloned defaults when catalog would be empty", async () => {
   const { resolveObstaclePresetCatalog, OBSTACLE_PRESETS } =
     await obstaclePresetsModulePromise;
 
@@ -106,9 +106,22 @@ test("resolveObstaclePresetCatalog falls back to defaults when catalog would be 
     presets: [null],
   });
 
-  assert.is(
+  assert.ok(Array.isArray(catalog));
+  assert.is.not(
     catalog,
     OBSTACLE_PRESETS,
-    "empty custom catalogs should reuse the default preset list",
+    "fallback should return a new array so callers can't mutate shared state",
+  );
+  assert.equal(
+    catalog,
+    OBSTACLE_PRESETS,
+    "fallback catalog should mirror the default preset entries",
+  );
+
+  catalog.push({ id: "mutation-check", label: "Mutation Check" });
+
+  assert.not.ok(
+    OBSTACLE_PRESETS.some((preset) => preset.id === "mutation-check"),
+    "mutating the fallback catalog should not change the exported defaults",
   );
 });
