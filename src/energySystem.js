@@ -4,6 +4,25 @@ import {
   DEFAULT_EVENT_MODIFIERS,
 } from "./events/eventModifiers.js";
 
+/**
+ * Resolves the average energy of neighboring tiles using whichever aggregate
+ * data the caller already computed. When `neighborSum`/`neighborCount` are
+ * available they take precedence to avoid re-iterating the array. If that
+ * aggregate data is missing or invalid, the helper falls back to iterating the
+ * provided `neighborEnergies` list. Returning `null` signals the caller that no
+ * neighbors contributed usable energy data, which is distinct from a numeric
+ * average of zero.
+ *
+ * @param {Object} options
+ * @param {number} [options.neighborSum] - Precomputed sum of neighbor
+ *   energies.
+ * @param {number} [options.neighborCount] - Precomputed count of contributing
+ *   neighbors used with `neighborSum`.
+ * @param {Array<number>} [options.neighborEnergies] - Individual neighbor
+ *   energy samples when aggregate values are unavailable.
+ * @returns {number|null} Arithmetic mean of neighbor energies when available;
+ *   otherwise `null`.
+ */
 function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }) {
   if (
     Number.isFinite(neighborSum) &&
