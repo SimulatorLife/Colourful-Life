@@ -8,6 +8,9 @@ function drawDensityHeatmapBaseline(grid) {
   const colors = Array.from({ length: rows }, () => Array(cols));
   let minDensity = Infinity;
   let maxDensity = -Infinity;
+  let minLocation = { row: 0, col: 0 };
+  let maxLocation = { row: 0, col: 0 };
+  let sum = 0;
   let index = 0;
 
   for (let r = 0; r < rows; r++) {
@@ -16,16 +19,24 @@ function drawDensityHeatmapBaseline(grid) {
       const density = Number.isFinite(rawDensity) ? rawDensity : 0;
 
       densities[index++] = density;
-      if (density < minDensity) minDensity = density;
-      if (density > maxDensity) maxDensity = density;
+      if (density < minDensity) {
+        minDensity = density;
+        minLocation = { row: r, col: c };
+      }
+      if (density > maxDensity) {
+        maxDensity = density;
+        maxLocation = { row: r, col: c };
+      }
+      sum += density;
     }
   }
 
   const originalMin = minDensity;
   const originalMax = maxDensity;
+  const average = total > 0 ? sum / total : Number.NaN;
 
   if (!Number.isFinite(minDensity) || !Number.isFinite(maxDensity)) {
-    return { colors, originalMin, originalMax };
+    return { colors, originalMin, originalMax, minLocation, maxLocation, average };
   }
 
   let range = maxDensity - minDensity;
@@ -48,7 +59,7 @@ function drawDensityHeatmapBaseline(grid) {
     }
   }
 
-  return { colors, originalMin, originalMax };
+  return { colors, originalMin, originalMax, minLocation, maxLocation, average };
 }
 
 function createRecordingContext(rows, cols, cellSize) {
@@ -113,13 +124,27 @@ function assertHeatmapMatches(grid, cellSize) {
   }
 
   const minText = ctx.texts.find((text) => text.startsWith("Min:"));
+  const meanText = ctx.texts.find((text) => text.startsWith("Mean:"));
   const maxText = ctx.texts.find((text) => text.startsWith("Max:"));
 
   if (Number.isFinite(baseline.originalMin)) {
-    assert.is(minText, `Min: ${baseline.originalMin.toFixed(2)}`);
+    assert.ok(minText, "Min legend line should be rendered");
+    assert.match(minText, `Min: ${baseline.originalMin.toFixed(2)}`);
+    assert.match(minText, "% occupancy");
+    assert.match(minText, `(${baseline.minLocation.row}, ${baseline.minLocation.col})`);
   }
+
+  if (Number.isFinite(baseline.average)) {
+    assert.ok(meanText, "Mean legend line should be rendered");
+    assert.match(meanText, `Mean: ${baseline.average.toFixed(2)}`);
+    assert.match(meanText, "% occupancy");
+  }
+
   if (Number.isFinite(baseline.originalMax)) {
-    assert.is(maxText, `Max: ${baseline.originalMax.toFixed(2)}`);
+    assert.ok(maxText, "Max legend line should be rendered");
+    assert.match(maxText, `Max: ${baseline.originalMax.toFixed(2)}`);
+    assert.match(maxText, "% occupancy");
+    assert.match(maxText, `(${baseline.maxLocation.row}, ${baseline.maxLocation.col})`);
   }
 }
 
