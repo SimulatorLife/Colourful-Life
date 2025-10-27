@@ -301,7 +301,6 @@ export default class SimulationEngine {
       showDensity: defaults.showDensity,
       showFitness: defaults.showFitness,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
-      showAuroraVeil: defaults.showAuroraVeil,
       showGridLines: defaults.showGridLines,
       showReproductiveZones: defaults.showReproductiveZones,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
@@ -780,7 +779,6 @@ export default class SimulationEngine {
     }
 
     const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
-    const includeAuroraVeil = Boolean(this.state.showAuroraVeil);
     const totalTicks = Number.isFinite(this.stats?.totals?.ticks)
       ? this.stats.totals.ticks
       : null;
@@ -788,7 +786,6 @@ export default class SimulationEngine {
       includeLifeEventMarkers && typeof this.stats?.getRecentLifeEvents === "function"
         ? this.stats.getRecentLifeEvents()
         : null;
-    const lifeEventTick = includeLifeEventMarkers ? totalTicks : null;
 
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
@@ -796,7 +793,6 @@ export default class SimulationEngine {
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
       showLifeEventMarkers: includeLifeEventMarkers,
-      showAuroraVeil: includeAuroraVeil,
       showGridLines: this.state.showGridLines ?? false,
       showReproductiveZones:
         this.state.showReproductiveZones !== undefined
@@ -1122,7 +1118,6 @@ export default class SimulationEngine {
 
     this.grid?.draw?.({ showObstacles });
     const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
-    const includeAuroraVeil = Boolean(this.state.showAuroraVeil);
     const totalTicks = Number.isFinite(this.stats?.totals?.ticks)
       ? this.stats.totals.ticks
       : null;
@@ -1130,7 +1125,6 @@ export default class SimulationEngine {
       includeLifeEventMarkers && typeof this.stats?.getRecentLifeEvents === "function"
         ? this.stats.getRecentLifeEvents()
         : null;
-    const lifeEventTick = includeLifeEventMarkers ? totalTicks : null;
 
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
@@ -1138,7 +1132,6 @@ export default class SimulationEngine {
       showFitness: this.state.showFitness ?? false,
       showObstacles,
       showLifeEventMarkers: includeLifeEventMarkers,
-      showAuroraVeil: includeAuroraVeil,
       showGridLines: this.state.showGridLines ?? false,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
@@ -1406,7 +1399,6 @@ export default class SimulationEngine {
     showDensity,
     showFitness,
     showLifeEventMarkers,
-    showAuroraVeil,
     showGridLines,
     showReproductiveZones,
   }) {
@@ -1416,7 +1408,6 @@ export default class SimulationEngine {
       showDensity,
       showFitness,
       showLifeEventMarkers,
-      showAuroraVeil,
       showGridLines,
       showReproductiveZones,
     })
@@ -1551,7 +1542,6 @@ export default class SimulationEngine {
       case "showDensity":
       case "showFitness":
       case "showLifeEventMarkers":
-      case "showAuroraVeil":
       case "showGridLines":
       case "showReproductiveZones":
         this.setOverlayVisibility({ [key]: value });

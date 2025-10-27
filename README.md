@@ -60,10 +60,6 @@ Open the **Simulation Controls** panel and head to the **Overlays** section to t
 
 Need precise spatial context while you tune density or energy flows? Flip on **Show Grid Lines** inside the Overlays panel to outline every tile with a low-contrast lattice. Minor separators stay subtle while a slightly brighter line highlights each fifth row and column so you can judge distances at a glance without obscuring the heatmaps beneath.
 
-### Aurora veil overlay
-
-Flip on **Aurora Veil** in the Overlays panel when you want a celebratory flourish without sacrificing clarity. The effect washes the canvas with soft, high-contrast-safe ribbons that sway with the simulation clock and add a few gentle starbursts. It is fully optional, keeps alpha values low so heatmaps and life event markers stay readable, and respects the existing animation cadence so performance remains unchanged.
-
 ### Obstacle layout presets
 
 Select a **Layout Preset** in the Obstacles panel to immediately swap the grid's obstacle mask. The dropdown now applies changes as soon as you choose a preset, streamlining the workflow when experimenting with layouts. Use **Clear Obstacles** to reset the field if you need a blank slate again.

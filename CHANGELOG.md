@@ -103,6 +103,9 @@ where practical.
 
 ### Removed
 
+- Removed the Aurora Veil overlay toggle and renderer to reduce UI clutter and
+  maintenance overhead for a purely celebratory effect that duplicated the
+  existing overlay plumbing without surfacing simulation data.
 - Retired unused profiling and memory benchmarking harnesses
   (`scripts/bench-segmented-events.mjs`, `scripts/benchmark-trait-aggregates.mjs`,
   `scripts/eventManagerMemoryBenchmark.mjs`, `scripts/measure-decay-active-memory.mjs`,

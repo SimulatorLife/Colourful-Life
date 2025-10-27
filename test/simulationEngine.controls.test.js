@@ -492,13 +492,11 @@ test("overlay visibility toggles mutate only requested flags", async () => {
       showDensity: undefined,
       showFitness: true,
       showLifeEventMarkers: true,
-      showAuroraVeil: true,
     });
 
     assert.is(engine.state.showObstacles, false);
     assert.is(engine.state.showFitness, true);
     assert.is(engine.state.showLifeEventMarkers, true);
-    assert.is(engine.state.showAuroraVeil, true);
     assert.is(engine.state.showGridLines, false);
     assert.is(
       engine.state.showDensity,
@@ -528,7 +526,6 @@ test("overlay visibility coercion handles string inputs", async () => {
       showDensity: "TRUE",
       showFitness: "0",
       showLifeEventMarkers: "on",
-      showAuroraVeil: "yes",
       showGridLines: "true",
     });
 
@@ -541,7 +538,6 @@ test("overlay visibility coercion handles string inputs", async () => {
     assert.is(engine.state.showDensity, true);
     assert.is(engine.state.showFitness, false);
     assert.is(engine.state.showLifeEventMarkers, true);
-    assert.is(engine.state.showAuroraVeil, true);
     assert.is(engine.state.showGridLines, true);
   } finally {
     restore();
@@ -658,7 +654,6 @@ test("tick forwards overlay visibility flags to the renderer", async () => {
       showDensity: true,
       showFitness: true,
       showLifeEventMarkers: true,
-      showAuroraVeil: true,
     });
 
     engine.tick(0);
@@ -674,7 +669,6 @@ test("tick forwards overlay visibility flags to the renderer", async () => {
     assert.is(options.showFitness, true);
     assert.is(options.showObstacles, true, "obstacles stay enabled by default");
     assert.is(options.showLifeEventMarkers, true);
-    assert.is(options.showAuroraVeil, true);
   } finally {
     restore();
   }
