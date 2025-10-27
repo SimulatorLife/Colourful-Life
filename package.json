@@ -37,7 +37,13 @@
   },
   "homepage": "https://github.com/henrylkirk/Colourful-Life#readme",
   "overrides": {
-    "@swc/core": "1.13.21"
+    "@swc/core": "1.13.21",
+    "@eslint/eslintrc": {
+      "globals": "16.4.0"
+    },
+    "@eslint/config-array": {
+      "globals": "16.4.0"
+    }
   },
   "lint-staged": {
     "*.{cjs,js,mjs}": [
