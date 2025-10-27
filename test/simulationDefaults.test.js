@@ -310,6 +310,17 @@ test("resolveSimulationDefaults allows disabling the leaderboard throttle", asyn
   assert.is(sanitized.leaderboardIntervalMs, 0);
 });
 
+test("resolveSimulationDefaults ignores blank leaderboard interval overrides", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+  const sanitized = resolveSimulationDefaults({ leaderboardIntervalMs: "   " });
+
+  assert.is(
+    sanitized.leaderboardIntervalMs,
+    SIMULATION_DEFAULTS.leaderboardIntervalMs,
+    "blank overrides should fall back to the default cadence",
+  );
+});
+
 test("resolveSimulationDefaults floors leaderboard size overrides", async () => {
   const { resolveSimulationDefaults } = await configModulePromise;
   const sanitized = resolveSimulationDefaults({ leaderboardSize: "11.8" });
