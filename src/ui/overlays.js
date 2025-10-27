@@ -204,6 +204,12 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
   }
 
   const toRender = prepared.slice(0, maxCount);
+
+  // Render older markers first so the newest events remain visible on top of
+  // any overlapping strokes. Stats#getRecentLifeEvents returns entries in
+  // newest-first order, so reversing keeps draw order aligned with visual
+  // priority.
+  toRender.reverse();
   const renderedCounts = { birth: 0, death: 0, other: 0 };
 
   if (typeof ctx.save === "function") ctx.save();
