@@ -1744,10 +1744,16 @@ export default class UIManager {
   #readElementAttribute(element, name) {
     if (!element || typeof name !== "string" || name.length === 0) return null;
     if (typeof element.getAttribute === "function") {
-      try {
-        return element.getAttribute(name);
-      } catch {
-        // Ignore environments without standard DOM attribute helpers.
+      const attribute = invokeWithErrorBoundary(element.getAttribute, [name], {
+        thisArg: element,
+        reporter: warnOnce,
+        once: true,
+        message: () =>
+          `Failed to read attribute "${name}" from element; falling back to secondary lookup.`,
+      });
+
+      if (attribute !== undefined) {
+        return attribute;
       }
     }
 
@@ -1764,13 +1770,15 @@ export default class UIManager {
     if (!element || typeof name !== "string" || name.length === 0) return;
 
     if (typeof element.removeAttribute === "function") {
-      try {
-        element.removeAttribute(name);
+      invokeWithErrorBoundary(element.removeAttribute, [name], {
+        thisArg: element,
+        reporter: warnOnce,
+        once: true,
+        message: () =>
+          `Failed to remove attribute "${name}" from element; continuing without mutation.`,
+      });
 
-        return;
-      } catch {
-        // Ignore environments without DOM attribute helpers.
-      }
+      return;
     }
 
     if (element.attributes && typeof element.attributes === "object") {
