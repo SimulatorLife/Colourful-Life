@@ -12,6 +12,7 @@ import {
   toFiniteOrNull,
 } from "../src/utils/math.js";
 import { coerceBoolean, resolveNonEmptyString } from "../src/utils/primitives.js";
+import { resolveCellColor } from "../src/utils/cell.js";
 import { cloneTracePayload, toPlainObject } from "../src/utils/object.js";
 import { createRankedBuffer, isArrayLike } from "../src/utils/collections.js";
 import { invokeWithErrorBoundary, warnOnce } from "../src/utils/error.js";
@@ -79,8 +80,24 @@ test("coerceBoolean normalizes boolean-like values with sane fallbacks", () => {
 test("resolveNonEmptyString filters out blank or non-string values", () => {
   assert.is(resolveNonEmptyString("hello", "fallback"), "hello");
   assert.is(resolveNonEmptyString("", "fallback"), "fallback");
+  assert.is(
+    resolveNonEmptyString("   ", "fallback"),
+    "fallback",
+    "whitespace-only strings use fallback",
+  );
   assert.is(resolveNonEmptyString(null, "fallback"), "fallback");
   assert.is(resolveNonEmptyString(undefined), null);
+});
+
+test("resolveCellColor falls back to DNA color when runtime color is blank", () => {
+  const dna = { toColor: () => "#abcdef" };
+  const cell = { color: "   ", dna };
+
+  assert.is(
+    resolveCellColor(cell),
+    "#abcdef",
+    "whitespace color strings should not block DNA fallback",
+  );
 });
 
 test("sanitizeNumber treats blank strings as missing overrides", () => {
