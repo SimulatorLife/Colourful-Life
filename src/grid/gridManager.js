@@ -419,6 +419,10 @@ export default class GridManager {
   #decayActiveScratch = null;
   #crowdingFeedbackScratch = { ...DEFAULT_CROWDING_SUMMARY };
   #segmentedEventContributionCache = null;
+  #densityIntegral = null;
+  #densityIntegralRows = 0;
+  #densityIntegralCols = 0;
+  #densityIntegralDirty = true;
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -838,6 +842,86 @@ export default class GridManager {
     }
 
     return { rowTop, rowBottom, colLeft, colRight };
+  }
+
+  #resetDensityIntegral() {
+    this.#densityIntegral = null;
+    this.#densityIntegralRows = 0;
+    this.#densityIntegralCols = 0;
+    this.#densityIntegralDirty = true;
+  }
+
+  #markDensityIntegralDirty() {
+    this.#densityIntegralDirty = true;
+  }
+
+  #resolveDensityIntegral() {
+    const rows = Math.max(0, Math.floor(this.rows));
+    const cols = Math.max(0, Math.floor(this.cols));
+
+    if (rows === 0 || cols === 0) {
+      this.#resetDensityIntegral();
+
+      return null;
+    }
+
+    const requiredRows = rows + 1;
+    const requiredCols = cols + 1;
+    let integral = this.#densityIntegral;
+
+    if (!integral || integral.length !== requiredRows) {
+      integral = Array.from(
+        { length: requiredRows },
+        () => new Uint32Array(requiredCols),
+      );
+      this.#densityIntegral = integral;
+      this.#densityIntegralDirty = true;
+    }
+
+    const firstRow = integral[0];
+
+    if (!firstRow || firstRow.length !== requiredCols) {
+      integral[0] = new Uint32Array(requiredCols);
+      this.#densityIntegralDirty = true;
+    } else {
+      firstRow.fill(0);
+    }
+
+    if (this.#densityIntegralRows !== rows || this.#densityIntegralCols !== cols) {
+      this.#densityIntegralDirty = true;
+    }
+
+    if (!this.#densityIntegralDirty) {
+      return integral;
+    }
+
+    for (let r = 1; r <= rows; r++) {
+      let rowArray = integral[r];
+
+      if (!rowArray || rowArray.length !== requiredCols) {
+        rowArray = new Uint32Array(requiredCols);
+        integral[r] = rowArray;
+      } else {
+        rowArray[0] = 0;
+      }
+
+      const prevRow = integral[r - 1];
+      const gridRow = this.grid[r - 1];
+      let rowSum = 0;
+
+      for (let c = 1; c <= cols; c++) {
+        const occupied = gridRow?.[c - 1] ? 1 : 0;
+
+        rowSum += occupied;
+        rowArray[c] = prevRow[c] + rowSum;
+      }
+    }
+
+    this.#densityIntegralRows = rows;
+    this.#densityIntegralCols = cols;
+    this.#densityIntegralDirty = false;
+
+    return integral;
   }
 
   static #computePairDiversityThreshold({
@@ -1808,6 +1892,7 @@ export default class GridManager {
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
     this.#initializeOccupancy(this.rows, this.cols);
+    this.#resetDensityIntegral();
     this.maxTileEnergy =
       typeof maxTileEnergy === "number" ? maxTileEnergy : GridManager.maxTileEnergy;
     // Consumers can tune how energetic the world starts without touching the
@@ -3147,6 +3232,7 @@ export default class GridManager {
     this.cellSize = cellSizeValue;
     this.grid = Array.from({ length: rowsInt }, () => Array(colsInt).fill(null));
     this.#initializeOccupancy(this.rows, this.cols);
+    this.#resetDensityIntegral();
     this.energyGrid = Array.from({ length: rowsInt }, () => {
       const row = new Float64Array(colsInt);
 
@@ -3227,6 +3313,7 @@ export default class GridManager {
         if (this.grid[row][col]) continue;
 
         this.grid[row][col] = cell;
+        this.#markDensityIntegralDirty();
         this.#recordOccupancy(row, col);
         this.#trackCellPosition(cell, row, col);
         this.#markTileDirty(row, col);
@@ -3267,6 +3354,7 @@ export default class GridManager {
 
     this.#markAllTilesDirty();
     this.#resetOccupancyTracking();
+    this.#resetDensityIntegral();
 
     for (let row = 0; row < this.rows; row++) {
       const gridRow = this.grid[row];
@@ -4740,6 +4828,7 @@ export default class GridManager {
   #applyDensityDelta(row, col, delta, radius = this.densityRadius) {
     if (!this.densityCounts) return;
 
+    this.#markDensityIntegralDirty();
     const totals = this.densityTotals;
     const liveGrid = this.densityLiveGrid;
 
@@ -4934,6 +5023,7 @@ export default class GridManager {
     const normalizedRadius = Math.max(0, Math.floor(radius));
     const targetRadius = normalizedRadius > 0 ? normalizedRadius : this.densityRadius;
 
+    this.#markDensityIntegralDirty();
     if (!this.densityCounts) {
       this.densityCounts = Array.from({ length: this.rows }, () =>
         Array(this.cols).fill(0),
@@ -5122,6 +5212,27 @@ export default class GridManager {
     if (maxCol >= cols) maxCol = cols - 1;
 
     const grid = this.grid;
+    const integral = this.#resolveDensityIntegral();
+
+    if (integral) {
+      const leftIndex = minCol;
+      const rightIndex = maxCol + 1;
+      const topIndex = minRow;
+      const bottomIndex = maxRow + 1;
+      const regionSum =
+        integral[bottomIndex][rightIndex] -
+        integral[topIndex][rightIndex] -
+        integral[bottomIndex][leftIndex] +
+        integral[topIndex][leftIndex];
+      const occupied = grid[row]?.[col] ? 1 : 0;
+      const spanRows = maxRow - minRow + 1;
+      const spanCols = maxCol - minCol + 1;
+      const total = spanRows * spanCols - 1;
+      const count = regionSum - occupied;
+
+      return { count, total: total > 0 ? total : 0 };
+    }
+
     let count = 0;
     let total = 0;
 
