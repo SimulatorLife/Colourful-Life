@@ -144,3 +144,36 @@ test("accumulateTraitAggregates tolerates empty and invalid inputs", () => {
 
   assert.is(zeroPopulation, 0);
 });
+
+test("accumulateTraitAggregates uses provided active trait index views", () => {
+  const pool = [{ traits: [0.2, 0.9, 0.7] }, { cell: { traits: [0.8, 0.1, 0.6] } }];
+  const traitComputes = createTraitComputes(3);
+  const thresholds = [0.5, 0.5, 0.5];
+  const sums = new Array(3).fill(0);
+  const activeCounts = new Array(3).fill(0);
+  const activeIndexes = Uint16Array.from([0, 2]);
+
+  const population = accumulateTraitAggregates(
+    pool,
+    traitComputes,
+    thresholds,
+    sums,
+    activeCounts,
+    activeIndexes,
+  );
+
+  assert.is(population, pool.length);
+  assert.is(sums[1], 0);
+  assert.is(activeCounts[1], 0);
+
+  const expected = pool.map((entry) => (entry.cell ? entry.cell : entry).traits);
+  const expectedSum0 = expected.reduce((total, traits) => total + traits[0], 0);
+  const expectedSum2 = expected.reduce((total, traits) => total + traits[2], 0);
+  const expectedCount0 = expected.filter((traits) => traits[0] >= thresholds[0]).length;
+  const expectedCount2 = expected.filter((traits) => traits[2] >= thresholds[2]).length;
+
+  assert.is(sums[0], expectedSum0);
+  assert.is(sums[2], expectedSum2);
+  assert.is(activeCounts[0], expectedCount0);
+  assert.is(activeCounts[2], expectedCount2);
+});

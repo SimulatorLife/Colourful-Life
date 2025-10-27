@@ -20,6 +20,7 @@ export function accumulateTraitAggregates(
   traitThresholds,
   traitSums,
   traitActiveCounts,
+  activeTraitIndexes = null,
 ) {
   const sources = Array.isArray(pool) ? pool : [];
   const computeFns = Array.isArray(traitComputes) ? traitComputes : [];
@@ -47,23 +48,43 @@ export function accumulateTraitAggregates(
     return 0;
   }
 
-  const activeTraitIndexes = [];
+  let indexesSource = null;
 
-  for (let traitIndex = 0; traitIndex < traitCount; traitIndex += 1) {
-    if (typeof computeFns[traitIndex] === "function") {
-      activeTraitIndexes.push(traitIndex);
-    }
+  if (Array.isArray(activeTraitIndexes) || ArrayBuffer.isView(activeTraitIndexes)) {
+    indexesSource = activeTraitIndexes;
   }
 
-  return sources.reduce((population, candidate) => {
-    const cell = resolveCellFromSource(candidate);
+  let indexCount = indexesSource ? indexesSource.length : 0;
+
+  if (!indexCount) {
+    indexCount = traitCount;
+    indexesSource = null;
+  }
+
+  let population = 0;
+
+  for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
+    const cell = resolveCellFromSource(sources[sourceIndex]);
 
     if (!cell || typeof cell !== "object") {
-      return population;
+      continue;
     }
 
-    for (const traitIndex of activeTraitIndexes) {
+    population += 1;
+
+    for (let i = 0; i < indexCount; i += 1) {
+      const traitIndex = indexesSource ? indexesSource[i] : i;
+
+      if (traitIndex == null || traitIndex < 0 || traitIndex >= traitCount) {
+        continue;
+      }
+
       const compute = computeFns[traitIndex];
+
+      if (typeof compute !== "function") {
+        continue;
+      }
+
       let value = compute(cell);
 
       if (!value) {
@@ -76,7 +97,7 @@ export function accumulateTraitAggregates(
         activeCounts[traitIndex] += 1;
       }
     }
+  }
 
-    return population + 1;
-  }, 0);
+  return population;
 }
