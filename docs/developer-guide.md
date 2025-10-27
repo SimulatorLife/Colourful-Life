@@ -22,9 +22,10 @@ the dev server, then return here for the deeper workflow.
   simulations continue evolving even when the browser tab loses focus. Re-enable
   it from the Simulation Controls panel directly beneath the playback controls
   if you prefer focus-dependent behaviour.
-- Adjust the "Dashboard Refresh Interval" slider in the Dashboard Settings
-  panel to tune how often the leaderboard and analytics dashboard request fresh
-  data without digging through individual metric panels.
+- Adjust the "Dashboard Refresh Interval" slider within the Evolution Insights
+  panel's **Refresh Cadence** section to tune how often the leaderboard and
+  analytics dashboard request fresh data without digging through individual
+  metric panes.
 - The Evolution Insights dashboard surfaces a Simulation Clock at the top of
   the metrics feed, reporting both simulated time and the aggregate tick count
   for easy pacing comparisons.

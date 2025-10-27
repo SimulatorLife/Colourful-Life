@@ -37,6 +37,10 @@ where practical.
 - Relocated the "Life Event Markers" toggle into the Simulation Controls overlay
   stack so the grid markers live beside the other canvas layers they
   complement.
+- Retired the standalone Dashboard Settings panel and relocated the shared
+  "Dashboard Refresh Interval" slider into Evolution Insights so cadence tuning
+  sits beside the metrics it drives while still flagging the leaderboard's
+  matching update schedule.
 - Moved the "Dashboard Refresh Interval" slider into the Dashboard Settings
   panel so cadence controls are discoverable without scanning the individual
   metrics or leaderboard panes.
