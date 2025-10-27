@@ -56,6 +56,10 @@ Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/
 
 Open the **Simulation Controls** panel and head to the **Overlays** section to toggle **Life Event Markers** alongside the other map overlays. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps. A compact legend now anchors to the canvas corner, tallying visible births, deaths, and the net population swing so you can interpret the markers at a glance. Architecture details live in [`docs/architecture-overview.md`](docs/architecture-overview.md#ui-and-overlays) for readers interested in extending the renderer.
 
+### Grid line overlay
+
+Need precise spatial context while you tune density or energy flows? Flip on **Show Grid Lines** inside the Overlays panel to outline every tile with a low-contrast lattice. Minor separators stay subtle while a slightly brighter line highlights each fifth row and column so you can judge distances at a glance without obscuring the heatmaps beneath.
+
 ### Aurora veil overlay
 
 Flip on **Aurora Veil** in the Overlays panel when you want a celebratory flourish without sacrificing clarity. The effect washes the canvas with soft, high-contrast-safe ribbons that sway with the simulation clock and add a few gentle starbursts. It is fully optional, keeps alpha values low so heatmaps and life event markers stay readable, and respects the existing animation cadence so performance remains unchanged.

@@ -432,6 +432,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showFitness: false,
   showLifeEventMarkers: false,
   showAuroraVeil: false,
+  showGridLines: false,
   showReproductiveZones: true,
   leaderboardIntervalMs: 750,
   leaderboardSize: LEADERBOARD_SIZE_DEFAULT,
@@ -461,6 +462,7 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showFitness",
   "showLifeEventMarkers",
   "showAuroraVeil",
+  "showGridLines",
   "showReproductiveZones",
   "autoPauseOnBlur",
 ]);

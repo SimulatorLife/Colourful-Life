@@ -20,6 +20,9 @@ const DEFAULT_OBSTACLE_MASK_FILL = "rgba(40,40,55,0.35)";
 const DEFAULT_OBSTACLE_MASK_OUTLINE = "rgba(200,200,255,0.35)";
 const OBSTACLE_MASK_LINE_WIDTH_SCALE = 0.12;
 const OBSTACLE_MASK_ALPHA = 0.35;
+const GRID_LINE_COLOR = "rgba(255, 255, 255, 0.1)";
+const GRID_LINE_EMPHASIS_COLOR = "rgba(255, 255, 255, 0.2)";
+const GRID_LINE_EMPHASIS_STEP = 5;
 const AURORA_LINE_COLOR_ONE = Object.freeze({
   rgb: "115, 220, 255",
   baseline: 0.24,
@@ -759,6 +762,82 @@ function drawObstacleMask(
   ctx.restore();
 }
 
+export function drawGridLines(ctx, cellSize, rows, cols, options = {}) {
+  if (!ctx || !(cellSize > 0) || !(rows > 0) || !(cols > 0)) return;
+
+  const { color, emphasisColor, emphasisStep, lineWidth } = toPlainObject(options);
+  const width = cols * cellSize;
+  const height = rows * cellSize;
+  const baseColor =
+    typeof color === "string" && color.length > 0 ? color : GRID_LINE_COLOR;
+  const highlightColor =
+    typeof emphasisColor === "string" && emphasisColor.length > 0
+      ? emphasisColor
+      : GRID_LINE_EMPHASIS_COLOR;
+  const emphasisInterval =
+    Number.isFinite(emphasisStep) && emphasisStep > 1
+      ? Math.floor(emphasisStep)
+      : GRID_LINE_EMPHASIS_STEP;
+  const resolvedLineWidth =
+    Number.isFinite(lineWidth) && lineWidth > 0 ? lineWidth : cellSize >= 18 ? 2 : 1;
+
+  const minorVertical = [];
+  const majorVertical = [];
+  const minorHorizontal = [];
+  const majorHorizontal = [];
+
+  for (let c = 1; c < cols; c += 1) {
+    const target = c * cellSize;
+
+    if (emphasisInterval > 1 && c % emphasisInterval === 0) majorVertical.push(target);
+    else minorVertical.push(target);
+  }
+
+  for (let r = 1; r < rows; r += 1) {
+    const target = r * cellSize;
+
+    if (emphasisInterval > 1 && r % emphasisInterval === 0)
+      majorHorizontal.push(target);
+    else minorHorizontal.push(target);
+  }
+
+  const drawLines = (positions, orientation, strokeStyle, widthSetting) => {
+    if (!positions.length) return;
+    if (typeof ctx.beginPath !== "function") return;
+    if (typeof ctx.moveTo !== "function" || typeof ctx.lineTo !== "function") return;
+    if (typeof ctx.stroke !== "function") return;
+
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = widthSetting;
+    const offset = widthSetting % 2 === 0 ? 0 : 0.5;
+
+    ctx.beginPath();
+
+    for (const position of positions) {
+      if (orientation === "vertical") {
+        const x = position + offset;
+
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+      } else {
+        const y = position + offset;
+
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+      }
+    }
+
+    ctx.stroke();
+  };
+
+  ctx.save();
+  drawLines(minorVertical, "vertical", baseColor, resolvedLineWidth);
+  drawLines(minorHorizontal, "horizontal", baseColor, resolvedLineWidth);
+  drawLines(majorVertical, "vertical", highlightColor, resolvedLineWidth);
+  drawLines(majorHorizontal, "horizontal", highlightColor, resolvedLineWidth);
+  ctx.restore();
+}
+
 function formatAlpha(alpha) {
   if (!(alpha > 0)) return "0";
   if (alpha >= 1) return "1";
@@ -1149,6 +1228,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showFitness,
     showLifeEventMarkers,
     showAuroraVeil,
+    showGridLines,
     showObstacles = true,
     showReproductiveZones = true,
     maxTileEnergy = MAX_TILE_ENERGY,
@@ -1157,6 +1237,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     snapshot: providedSnapshot,
     selectionManager: explicitSelection,
     fitnessOverlayOptions,
+    gridLineOptions,
     lifeEvents,
     currentTick: lifeEventCurrentTick,
     lifeEventFadeTicks,
@@ -1188,6 +1269,9 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   }
   if (showAuroraVeil) {
     drawAuroraVeil(ctx, cellSize, rows, cols, { tick: lifeEventCurrentTick });
+  }
+  if (showGridLines) {
+    drawGridLines(ctx, cellSize, rows, cols, gridLineOptions);
   }
   if (showLifeEventMarkers && Array.isArray(lifeEvents) && lifeEvents.length > 0) {
     drawLifeEventMarkers(ctx, cellSize, lifeEvents, {

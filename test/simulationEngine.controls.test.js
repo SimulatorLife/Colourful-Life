@@ -499,6 +499,7 @@ test("overlay visibility toggles mutate only requested flags", async () => {
     assert.is(engine.state.showFitness, true);
     assert.is(engine.state.showLifeEventMarkers, true);
     assert.is(engine.state.showAuroraVeil, true);
+    assert.is(engine.state.showGridLines, false);
     assert.is(
       engine.state.showDensity,
       false,
@@ -528,6 +529,7 @@ test("overlay visibility coercion handles string inputs", async () => {
       showFitness: "0",
       showLifeEventMarkers: "on",
       showAuroraVeil: "yes",
+      showGridLines: "true",
     });
 
     assert.is(engine.state.showObstacles, false);
@@ -540,6 +542,7 @@ test("overlay visibility coercion handles string inputs", async () => {
     assert.is(engine.state.showFitness, false);
     assert.is(engine.state.showLifeEventMarkers, true);
     assert.is(engine.state.showAuroraVeil, true);
+    assert.is(engine.state.showGridLines, true);
   } finally {
     restore();
   }
