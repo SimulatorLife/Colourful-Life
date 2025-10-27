@@ -228,6 +228,39 @@ export function sanitizeNonNegativeInteger(
 }
 
 /**
+ * Applies a lower bound to interval-like values while preserving the ability to
+ * disable the interval entirely. Non-positive candidates collapse to zero so
+ * callers can treat `0` as "no throttling", while positive candidates respect
+ * the provided minimum floor when it is finite and greater than zero.
+ *
+ * @param {number} value - Candidate interval value.
+ * @param {number} minimumPositive - Minimum positive interval enforced when the
+ *   candidate is greater than zero.
+ * @returns {number} Normalized interval respecting the requested floor, or
+ *   `Number.NaN` when the candidate cannot be coerced to a finite number.
+ */
+export function applyIntervalFloor(value, minimumPositive) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) {
+    return Number.NaN;
+  }
+
+  if (numeric <= 0) {
+    return 0;
+  }
+
+  const positiveFloor =
+    Number.isFinite(minimumPositive) && minimumPositive > 0 ? minimumPositive : 0;
+
+  if (positiveFloor <= 0) {
+    return numeric;
+  }
+
+  return Math.max(positiveFloor, numeric);
+}
+
+/**
  * Returns the first finite, positive number from the provided candidates. When
  * no candidate qualifies, the supplied fallback is returned instead.
  *

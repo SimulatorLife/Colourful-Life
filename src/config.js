@@ -1,4 +1,9 @@
-import { clamp, sanitizeNumber, sanitizePositiveInteger } from "./utils/math.js";
+import {
+  clamp,
+  sanitizeNumber,
+  sanitizePositiveInteger,
+  applyIntervalFloor,
+} from "./utils/math.js";
 import { coerceBoolean } from "./utils/primitives.js";
 
 // Centralized simulation config defaults
@@ -616,10 +621,10 @@ export function resolveSimulationDefaults(overrides = {}) {
   });
 
   if (Number.isFinite(intervalCandidate)) {
-    merged.leaderboardIntervalMs =
-      intervalCandidate <= 0
-        ? 0
-        : Math.max(LEADERBOARD_INTERVAL_MIN_MS, intervalCandidate);
+    merged.leaderboardIntervalMs = applyIntervalFloor(
+      intervalCandidate,
+      LEADERBOARD_INTERVAL_MIN_MS,
+    );
   } else {
     merged.leaderboardIntervalMs = defaults.leaderboardIntervalMs;
   }
