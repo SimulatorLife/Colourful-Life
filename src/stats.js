@@ -410,6 +410,8 @@ export default class Stats {
   #pairSampleScratch;
   #pairSampleHash;
   #pairSampleHashMask;
+  #pairSampleHashTags;
+  #pairSampleHashGeneration;
   #pairIndexScratch;
   #diversityDnaScratch;
   #dnaSimilarityCache;
@@ -502,6 +504,8 @@ export default class Stats {
     this.#pairSampleScratch = new Uint32Array(0);
     this.#pairSampleHash = null;
     this.#pairSampleHashMask = 0;
+    this.#pairSampleHashTags = null;
+    this.#pairSampleHashGeneration = 0;
     this.#pairIndexScratch = { first: 0, second: 0 };
     this.#diversityDnaScratch = [];
     this.#dnaSimilarityCache = new WeakMap();
@@ -1591,6 +1595,7 @@ export default class Stats {
 
       const sampledView = samples.subarray(0, sampleLimit);
       let hash = this.#pairSampleHash;
+      let tags = this.#pairSampleHashTags;
       let mask = this.#pairSampleHashMask;
       const requiredCapacity = Math.max(4, sampleLimit * 2);
 
@@ -1601,15 +1606,31 @@ export default class Stats {
           size <<= 1;
         }
 
-        hash = new Int32Array(size);
-        hash.fill(-1);
+        hash = new Uint32Array(size);
+        tags = new Uint32Array(size);
         this.#pairSampleHash = hash;
+        this.#pairSampleHashTags = tags;
         mask = size - 1;
         this.#pairSampleHashMask = mask;
+        this.#pairSampleHashGeneration = 0;
       } else {
-        hash.fill(-1);
         mask = this.#pairSampleHashMask ?? hash.length - 1;
+
+        if (!tags || tags.length !== hash.length) {
+          tags = new Uint32Array(hash.length);
+          this.#pairSampleHashTags = tags;
+          this.#pairSampleHashGeneration = 0;
+        }
       }
+
+      let generation = (this.#pairSampleHashGeneration ?? 0) + 1;
+
+      if (generation === 0) {
+        tags.fill(0);
+        generation = 1;
+      }
+
+      this.#pairSampleHashGeneration = generation;
 
       let filled = 0;
 
@@ -1617,18 +1638,17 @@ export default class Stats {
         let slot = value & mask;
 
         while (true) {
-          const existing = hash[slot];
-
-          if (existing === value) {
-            return false;
-          }
-
-          if (existing === -1) {
+          if (tags[slot] !== generation) {
+            tags[slot] = generation;
             hash[slot] = value;
             sampledView[filled] = value;
             filled += 1;
 
             return true;
+          }
+
+          if (hash[slot] === value) {
+            return false;
           }
 
           slot = (slot + 1) & mask;
