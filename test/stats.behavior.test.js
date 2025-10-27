@@ -1,7 +1,7 @@
 import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
-const statsModulePromise = import("../src/stats.js");
+const statsModulePromise = import("../src/stats/index.js");
 
 const createCell = (overrides = {}) => ({
   interactionGenes: { cooperate: 0, fight: 0, ...overrides.interactionGenes },

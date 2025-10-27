@@ -4,7 +4,7 @@ export async function loadSimulationModules() {
   const [simulationModule, gridModule, statsModule, eventModule] = await Promise.all([
     import("../../src/simulationEngine.js"),
     import("../../src/grid/gridManager.js"),
-    import("../../src/stats.js"),
+    import("../../src/stats/index.js"),
     import("../../src/events/eventManager.js"),
   ]);
 

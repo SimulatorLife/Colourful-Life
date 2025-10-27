@@ -1,4 +1,4 @@
-import Stats from "../stats.js";
+import Stats from "../stats/index.js";
 import TelemetryController from "./telemetryController.js";
 import { computeLeaderboard as defaultComputeLeaderboard } from "../stats/leaderboard.js";
 

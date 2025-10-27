@@ -86,7 +86,7 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
  *   grid: import('./grid/gridManager.js').default,
  *   uiManager: ReturnType<typeof UIManager> | ReturnType<typeof createHeadlessUiManager>,
  *   eventManager: import('./events/eventManager.js').default,
- *   stats: import('./stats.js').default,
+ *   stats: import('./stats/index.js').default,
  *   selectionManager: import('./grid/selectionManager.js').default,
  *   start: () => void,
  *   stop: () => void,
