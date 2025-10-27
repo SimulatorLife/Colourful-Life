@@ -92,6 +92,34 @@ function subscribeEngineToUi(engine, uiManager) {
     return [];
   }
 
+  const syncUpdatesPerSecond = (changes) => {
+    if (typeof uiManager.setUpdatesPerSecond !== "function") {
+      return;
+    }
+
+    const nextValue = changes?.updatesPerSecond;
+
+    if (nextValue !== undefined) {
+      uiManager.setUpdatesPerSecond(nextValue, { notify: false });
+
+      return;
+    }
+
+    if (changes?.speedMultiplier === undefined) {
+      return;
+    }
+
+    const currentValue = Number.isFinite(engine?.state?.updatesPerSecond)
+      ? engine.state.updatesPerSecond
+      : undefined;
+
+    if (currentValue === undefined) {
+      return;
+    }
+
+    uiManager.setUpdatesPerSecond(currentValue, { notify: false });
+  };
+
   return [
     engine.on?.("metrics", ({ stats, metrics, environment }) => {
       if (typeof uiManager.renderMetrics === "function") {
@@ -125,19 +153,7 @@ function subscribeEngineToUi(engine, uiManager) {
         uiManager.setAutoPausePending(changes.autoPausePending);
       }
 
-      if (typeof uiManager.setUpdatesPerSecond === "function") {
-        if (changes?.updatesPerSecond !== undefined) {
-          uiManager.setUpdatesPerSecond(changes.updatesPerSecond, { notify: false });
-        } else if (changes?.speedMultiplier !== undefined) {
-          const currentUpdates = Number.isFinite(engine?.state?.updatesPerSecond)
-            ? engine.state.updatesPerSecond
-            : undefined;
-
-          if (currentUpdates !== undefined) {
-            uiManager.setUpdatesPerSecond(currentUpdates, { notify: false });
-          }
-        }
-      }
+      syncUpdatesPerSecond(changes);
 
       if (
         changes?.lowDiversityReproMultiplier !== undefined &&
