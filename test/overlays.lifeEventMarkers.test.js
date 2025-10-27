@@ -6,6 +6,8 @@ const test = suite("ui overlays: life event markers");
 function createRecordingContext() {
   const ops = [];
   let lineWidth = 1;
+  let strokeStyle = null;
+  let fillStyle = null;
 
   return {
     ops,
@@ -28,10 +30,10 @@ function createRecordingContext() {
       ops.push({ type: "lineTo", x, y });
     },
     stroke() {
-      ops.push({ type: "stroke" });
+      ops.push({ type: "stroke", color: strokeStyle });
     },
     fill() {
-      ops.push({ type: "fill" });
+      ops.push({ type: "fill", color: fillStyle });
     },
     set lineWidth(value) {
       lineWidth = value;
@@ -47,9 +49,11 @@ function createRecordingContext() {
       ops.push({ type: "lineCap", value });
     },
     set strokeStyle(value) {
+      strokeStyle = value;
       ops.push({ type: "strokeStyle", value });
     },
     set fillStyle(value) {
+      fillStyle = value;
       ops.push({ type: "fillStyle", value });
     },
     set globalAlpha(value) {
@@ -132,5 +136,28 @@ test("drawLifeEventMarkers respects custom color overrides", () => {
   assert.ok(
     strokeStyles.includes("#112233") || fillStyles.includes("#112233"),
     "birth marker applies custom color override",
+  );
+});
+
+test("drawLifeEventMarkers draws newest markers last to preserve visibility", () => {
+  const ctx = createRecordingContext();
+  const events = [
+    { type: "birth", row: 0, col: 0, tick: 110, color: "#00ff00" },
+    { type: "birth", row: 0, col: 0, tick: 90, color: "#ff00ff" },
+  ];
+
+  // Stats#getRecentLifeEvents emits newest entries first. Ensure layering keeps
+  // the freshest marker on top of older strokes.
+  drawLifeEventMarkers(ctx, 8, events, { currentTick: 120, fadeTicks: 200 });
+
+  const strokeOrder = ctx.ops
+    .filter((op) => op.type === "stroke")
+    .slice(0, events.length)
+    .map((op) => op.color);
+
+  assert.equal(
+    strokeOrder,
+    ["#ff00ff", "#00ff00"],
+    "older markers render first so newer ones remain visible",
   );
 });
