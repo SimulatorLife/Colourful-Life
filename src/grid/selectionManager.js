@@ -217,26 +217,28 @@ export default class SelectionManager {
   }
 
   #validatePointList(zones, points) {
-    for (const point of points) {
-      if (!point) continue;
+    const invalidPoint = points.find(
+      (point) =>
+        point &&
+        !zones.some((zone) => this.#safeZoneContains(zone, point.row, point.col)),
+    );
 
-      const { row, col, role } = point;
-
-      if (!zones.some((zone) => this.#safeZoneContains(zone, row, col))) {
-        return {
-          allowed: false,
-          role,
-          reason:
-            role === "spawn"
-              ? "Spawn tile is outside the reproductive zone"
-              : role === "parentB"
-                ? "Mate is outside the reproductive zone"
-                : "Parent is outside the reproductive zone",
-        };
-      }
+    if (!invalidPoint) {
+      return { allowed: true };
     }
 
-    return { allowed: true };
+    const { role } = invalidPoint;
+
+    return {
+      allowed: false,
+      role,
+      reason:
+        role === "spawn"
+          ? "Spawn tile is outside the reproductive zone"
+          : role === "parentB"
+            ? "Mate is outside the reproductive zone"
+            : "Parent is outside the reproductive zone",
+    };
   }
 
   describeActiveZones() {
