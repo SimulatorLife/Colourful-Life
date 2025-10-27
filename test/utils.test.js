@@ -13,7 +13,7 @@ import {
 } from "../src/utils/math.js";
 import { coerceBoolean } from "../src/utils/primitives.js";
 import { cloneTracePayload, toPlainObject } from "../src/utils/object.js";
-import { createRankedBuffer } from "../src/utils/collections.js";
+import { createRankedBuffer, isArrayLike } from "../src/utils/collections.js";
 import { invokeWithErrorBoundary, warnOnce } from "../src/utils/error.js";
 
 function* cycle(values) {
@@ -311,26 +311,79 @@ test("sanitizePositiveInteger coerces dimension-like input safely", () => {
   );
 });
 
-test("createRankedBuffer maintains sorted order and honors capacity limits", () => {
+test("isArrayLike recognizes indexed sequences and filters non-arrays", () => {
+  assert.ok(isArrayLike([1, 2, 3]));
+  assert.ok(isArrayLike(new Uint8Array([4, 5, 6])));
+
+  assert.not.ok(isArrayLike({ length: 3 }), "plain objects are not array-like");
+  assert.not.ok(isArrayLike(new Map([["a", 1]])));
+  assert.not.ok(isArrayLike(null));
+});
+
+test("createRankedBuffer sorts entries, trims capacity, and preserves tie order", () => {
   const buffer = createRankedBuffer(3, (a, b) => b.score - a.score);
 
-  buffer.add({ score: 5, id: "a" });
-  buffer.add({ score: 1, id: "b" });
-  buffer.add({ score: 3, id: "c" });
-  buffer.add({ score: 4, id: "d" });
-  buffer.add({ score: 2, id: "e" });
-  buffer.add(null);
+  buffer.add({ score: 1, id: "low" });
+  buffer.add({ score: 5, id: "top" });
+  buffer.add({ score: 3, id: "mid" });
+  buffer.add({ score: 4, id: "upper" });
+  buffer.add({ score: 2, id: "ignored" });
 
-  assert.equal(buffer.getItems(), [
-    { score: 5, id: "a" },
-    { score: 4, id: "d" },
-    { score: 3, id: "c" },
-  ]);
+  assert.equal(
+    buffer.getItems().map((entry) => entry.id),
+    ["top", "upper", "mid"],
+  );
 
-  const zeroBuffer = createRankedBuffer(0, (a, b) => b - a);
+  buffer.add({ score: 5, id: "tie" });
+
+  assert.equal(
+    buffer.getItems().map((entry) => entry.id),
+    ["top", "tie", "upper"],
+    "ties insert after existing peers while removing the lowest-ranked entry",
+  );
+
+  buffer.add({ score: 2, id: "late" });
+
+  assert.equal(
+    buffer.getItems().map((entry) => entry.id),
+    ["top", "tie", "upper"],
+    "entries worse than the tail are ignored once capacity is full",
+  );
+});
+
+test("createRankedBuffer sanitizes capacity and returns defensive copies", () => {
+  const zeroBuffer = createRankedBuffer(-2, (a, b) => a - b);
 
   zeroBuffer.add(1);
   assert.equal(zeroBuffer.getItems(), []);
+
+  const fractionalBuffer = createRankedBuffer(2.9, (a, b) => a - b);
+
+  fractionalBuffer.add(3);
+  fractionalBuffer.add(1);
+  fractionalBuffer.add(2);
+
+  const snapshot = fractionalBuffer.getItems();
+
+  assert.equal(snapshot, [1, 2]);
+
+  snapshot.push(0);
+
+  assert.equal(
+    fractionalBuffer.getItems(),
+    [1, 2],
+    "mutating a snapshot does not leak back into the buffer",
+  );
+});
+
+test("createRankedBuffer falls back to insertion order without a comparator", () => {
+  const buffer = createRankedBuffer(2);
+
+  buffer.add("alpha");
+  buffer.add("beta");
+  buffer.add("gamma");
+
+  assert.equal(buffer.getItems(), ["alpha", "beta"]);
 });
 
 test("createRNG yields deterministic pseudo-random sequences", () => {
