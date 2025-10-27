@@ -141,8 +141,10 @@ function computeCrowdingFeedback({
   const useScarcity = maxTileEnergy > 0;
   const norm = useScarcity ? 1 / maxTileEnergy : 0;
   const defaultTolerance = 0.5;
+  const useCustomOffsets =
+    Array.isArray(neighborOffsets) && neighborOffsets !== NEIGHBOR_OFFSETS;
 
-  const applyNeighbor = (occupant) => {
+  const processOccupant = (occupant) => {
     if (!occupant) {
       return;
     }
@@ -190,15 +192,19 @@ function computeCrowdingFeedback({
     count += 1;
   };
 
-  // Fallback to the configured neighbor offsets when a custom list isn't provided.
-  if (neighborOffsets !== NEIGHBOR_OFFSETS && Array.isArray(neighborOffsets)) {
+  if (useCustomOffsets) {
     for (let i = 0; i < neighborOffsets.length; i++) {
       const offset = neighborOffsets[i];
 
       if (!offset) continue;
 
-      const nr = row + offset[0];
-      const nc = col + offset[1];
+      const offsetRow = offset[0];
+      const offsetCol = offset[1];
+
+      if (!Number.isFinite(offsetRow) || !Number.isFinite(offsetCol)) continue;
+
+      const nr = row + offsetRow;
+      const nc = col + offsetCol;
 
       if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
 
@@ -206,26 +212,27 @@ function computeCrowdingFeedback({
 
       if (!neighborRow) continue;
 
-      applyNeighbor(neighborRow[nc]);
+      processOccupant(neighborRow[nc]);
     }
   } else {
-    for (let dr = -1; dr <= 1; dr++) {
-      const nr = row + dr;
+    const lastRowIndex = rows - 1;
+    const lastColIndex = cols - 1;
+    const startRow = row > 0 ? row - 1 : row < 0 ? 0 : row;
+    const endRow = row < lastRowIndex ? row + 1 : lastRowIndex;
+    const startCol = col > 0 ? col - 1 : col < 0 ? 0 : col;
+    const endCol = col < lastColIndex ? col + 1 : lastColIndex;
 
-      if (nr < 0 || nr >= rows) continue;
-
+    for (let nr = startRow; nr <= endRow; nr++) {
       const neighborRow = gridRows[nr];
 
       if (!neighborRow) continue;
 
-      for (let dc = -1; dc <= 1; dc++) {
-        if (dr === 0 && dc === 0) continue;
+      const sameRow = nr === row;
 
-        const nc = col + dc;
+      for (let nc = startCol; nc <= endCol; nc++) {
+        if (sameRow && nc === col) continue;
 
-        if (nc < 0 || nc >= cols) continue;
-
-        applyNeighbor(neighborRow[nc]);
+        processOccupant(neighborRow[nc]);
       }
     }
   }
