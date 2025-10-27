@@ -1,6 +1,7 @@
 import { isArrayLike } from "../utils/collections.js";
 
 const hasOwn = Object.hasOwn;
+const traitIndexScratch = [];
 
 function resolveCellFromSource(source) {
   if (!source || typeof source !== "object") {
@@ -12,6 +13,42 @@ function resolveCellFromSource(source) {
   }
 
   return source;
+}
+
+function sanitizeTraitIndexes(indexesSource, traitCount, computeFns) {
+  traitIndexScratch.length = 0;
+
+  if (!indexesSource || indexesSource.length === 0) {
+    return traitIndexScratch;
+  }
+
+  for (let i = 0; i < indexesSource.length; i += 1) {
+    const candidate = indexesSource[i];
+
+    if (candidate == null) {
+      continue;
+    }
+
+    const numeric = Number(candidate);
+
+    if (!Number.isFinite(numeric) || !Number.isInteger(numeric)) {
+      continue;
+    }
+
+    const index = numeric;
+
+    if (index < 0 || index >= traitCount) {
+      continue;
+    }
+
+    if (typeof computeFns[index] !== "function") {
+      continue;
+    }
+
+    traitIndexScratch.push(index);
+  }
+
+  return traitIndexScratch;
 }
 
 export function accumulateTraitAggregates(
@@ -54,13 +91,17 @@ export function accumulateTraitAggregates(
     indexesSource = activeTraitIndexes;
   }
 
-  const traitIndexes =
-    indexesSource && indexesSource.length > 0
-      ? Array.from({ length: indexesSource.length }, (_, i) => indexesSource[i]).filter(
-          (traitIndex) =>
-            traitIndex != null && traitIndex >= 0 && traitIndex < traitCount,
-        )
-      : Array.from({ length: traitCount }, (_, i) => i);
+  let traitIndexes = traitIndexScratch;
+  let useFilteredIndexes = false;
+
+  if (indexesSource && indexesSource.length > 0) {
+    traitIndexes = sanitizeTraitIndexes(indexesSource, traitCount, computeFns);
+    useFilteredIndexes = traitIndexes.length > 0;
+
+    if (!useFilteredIndexes) {
+      return 0;
+    }
+  }
 
   let population = 0;
 
@@ -73,7 +114,30 @@ export function accumulateTraitAggregates(
 
     population += 1;
 
-    for (const traitIndex of traitIndexes) {
+    if (useFilteredIndexes) {
+      for (let i = 0; i < traitIndexes.length; i += 1) {
+        const traitIndex = traitIndexes[i];
+        const compute = computeFns[traitIndex];
+
+        let value = compute(cell);
+
+        if (!Number.isFinite(value)) {
+          value = 0;
+        }
+
+        sums[traitIndex] += value;
+
+        const threshold = thresholds[traitIndex];
+
+        if (value >= threshold) {
+          activeCounts[traitIndex] += 1;
+        }
+      }
+
+      continue;
+    }
+
+    for (let traitIndex = 0; traitIndex < traitCount; traitIndex += 1) {
       const compute = computeFns[traitIndex];
 
       if (typeof compute !== "function") {
@@ -82,13 +146,15 @@ export function accumulateTraitAggregates(
 
       let value = compute(cell);
 
-      if (!value) {
+      if (!Number.isFinite(value)) {
         value = 0;
       }
 
       sums[traitIndex] += value;
 
-      if (value >= thresholds[traitIndex]) {
+      const threshold = thresholds[traitIndex];
+
+      if (value >= threshold) {
         activeCounts[traitIndex] += 1;
       }
     }
