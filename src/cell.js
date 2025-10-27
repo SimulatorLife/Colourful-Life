@@ -6504,8 +6504,130 @@ export default class Cell {
       (cooperativePull * 0.6 + fertilityDrive * 0.25 + explorationPush * 0.15);
     const caution = clamp(0.35 + (1 - risk) * 0.55, 0.2, 0.9);
     const eagerness = clamp(urgency * (1 - caution), -0.35, 1.25);
+    const heuristicDrive = clamp(1 + eagerness, 0.5, 1.9);
 
-    return clamp(1 + eagerness, 0.5, 1.9);
+    if (!this.#canUseNeuralPolicies()) {
+      return heuristicDrive;
+    }
+
+    const reproductionOutcome = this.#getDecisionOutcome("reproduction");
+    const reproductionContext = this._decisionContextIndex?.get("reproduction") ?? null;
+
+    if (!reproductionOutcome) {
+      return heuristicDrive;
+    }
+
+    const safeNumber = (value, fallback = 0) =>
+      Number.isFinite(value) ? value : fallback;
+
+    const sensors =
+      reproductionContext && reproductionContext.sensors
+        ? reproductionContext.sensors
+        : {};
+    const readSensor = (key, fallback = 0) =>
+      clamp(safeNumber(sensors?.[key], fallback), -1, 1);
+    const baseSensorProbability = clamp(
+      safeNumber(sensors?.baseReproductionProbability, baseProb),
+      0,
+      1,
+    );
+    const neuralProbability = clamp(
+      safeNumber(
+        reproductionOutcome.neuralProbability,
+        reproductionOutcome.probability ?? baseSensorProbability,
+      ),
+      0,
+      1,
+    );
+    const finalProbability = clamp(
+      safeNumber(reproductionOutcome.probability, neuralProbability),
+      0,
+      1,
+    );
+    const neuralBlendWeight = clamp(
+      safeNumber(reproductionOutcome.neuralBlendWeight, 0),
+      0,
+      1,
+    );
+    const neuralDelta = clamp(
+      safeNumber(
+        reproductionOutcome.neuralDelta,
+        neuralProbability - baseSensorProbability,
+      ),
+      -1,
+      1,
+    );
+    const probabilityLift = clamp(finalProbability - baseSensorProbability, -1, 1);
+    const scarcityMemory = readSensor("scarcityMemory", 0);
+    const confidenceMemory = readSensor("confidenceMemory", 0);
+    const opportunitySignal = readSensor("opportunitySignal", 0);
+    const neuralActivationTilt = (() => {
+      const logits = reproductionOutcome.logits;
+
+      if (!logits || typeof logits !== "object") {
+        return 0;
+      }
+
+      const acceptLogit = safeNumber(logits.accept, 0);
+      const declineLogit = safeNumber(logits.decline, 0);
+      const delta = clamp(acceptLogit - declineLogit, -16, 16);
+
+      return clamp(delta / 6, -1, 1);
+    })();
+    const scarcityTilt = clamp(
+      scarcityClamped + Math.max(0, scarcityMemory) * 0.55,
+      0,
+      1.8,
+    );
+    const confidenceLift = clamp(0.5 + Math.max(0, confidenceMemory) * 0.4, 0.3, 1.4);
+    const opportunityLift = clamp(1 + opportunitySignal * 0.25, 0.6, 1.4);
+    const neuralImpulse = clamp(
+      neuralDelta * (0.6 + neuralBlendWeight * 0.4) +
+        probabilityLift * 0.35 +
+        neuralActivationTilt * 0.25,
+      -1,
+      1,
+    );
+    const neuralDrive = clamp(
+      1 + neuralImpulse * scarcityTilt * confidenceLift * opportunityLift,
+      0.35,
+      2.4,
+    );
+    const neuralMix = clamp(
+      neuralBlendWeight * 0.6 + Math.abs(neuralImpulse) * 0.3,
+      0,
+      0.9,
+    );
+    const resolvedMix = reproductionOutcome.usedNetwork ? neuralMix : 0;
+    const result = clamp(
+      heuristicDrive * (1 - resolvedMix) + neuralDrive * resolvedMix,
+      0.45,
+      2.2,
+    );
+
+    this.#assignDecisionOutcome("reproduction", {
+      scarcityDrive: {
+        scarcity: scarcityClamped,
+        heuristic: heuristicDrive,
+        neuralDrive,
+        result,
+        neuralImpulse,
+        neuralDelta,
+        probabilityLift,
+        neuralMix: resolvedMix,
+        neuralWeight: neuralBlendWeight,
+        baseProbability: baseProb,
+        baseSensorProbability,
+        finalProbability,
+        neuralProbability,
+        usedNetwork: Boolean(reproductionOutcome.usedNetwork),
+        scarcityMemory,
+        confidenceMemory,
+        opportunitySignal,
+      },
+    });
+
+    return result;
   }
 
   computeReproductionProbability(
@@ -6672,6 +6794,164 @@ export default class Cell {
     });
 
     return { probability, usedNetwork: true };
+  }
+
+  resolveReproductionEnergyThreshold(
+    partner,
+    {
+      localDensity = 0,
+      densityEffectMultiplier = 1,
+      maxTileEnergy = MAX_TILE_ENERGY,
+      baseProbability = null,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
+    } = {},
+  ) {
+    const energyCap = Math.max(
+      1e-4,
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
+    );
+    const baseFraction = clamp(
+      typeof this.dna?.reproductionThresholdFrac === "function"
+        ? this.dna.reproductionThresholdFrac()
+        : 0.4,
+      0,
+      1,
+    );
+    const baseEnergy = baseFraction * energyCap;
+
+    if (!this.#canUseNeuralPolicies()) {
+      return baseEnergy;
+    }
+
+    const clampProb = (value) => (Number.isFinite(value) ? clamp(value, 0, 1) : null);
+    const clampSigned = (value) =>
+      Number.isFinite(value) ? clamp(value, -1, 1) : null;
+    const outcome = this.#getDecisionOutcome("reproduction");
+
+    let baseProb = clampProb(baseProbability ?? outcome?.baseProbability ?? null);
+    let neuralProb = clampProb(outcome?.neuralProbability ?? null);
+    let finalProb = clampProb(outcome?.probability ?? null);
+    let neuralDelta = clampSigned(outcome?.neuralDelta ?? null);
+    let blendWeight = clampProb(outcome?.neuralBlendWeight ?? null);
+    let evaluationSource = outcome?.usedNetwork ? "decision" : null;
+
+    let previewSensors = null;
+
+    if (!outcome || !outcome.usedNetwork) {
+      const fallbackBase =
+        baseProb != null
+          ? baseProb
+          : this.computeReproductionProbability(partner, {
+              localDensity,
+              densityEffectMultiplier,
+              maxTileEnergy,
+              tileEnergy,
+              tileEnergyDelta,
+            });
+
+      previewSensors = this.#reproductionSensors(partner, {
+        localDensity,
+        densityEffectMultiplier,
+        maxTileEnergy,
+        baseProbability: fallbackBase,
+        tileEnergy,
+        tileEnergyDelta,
+      });
+
+      const preview = this.#previewBrainGroup("reproduction", previewSensors);
+
+      if (preview?.values) {
+        evaluationSource = "preview";
+        const entries = OUTPUT_GROUPS.reproduction;
+        const logits = entries.map(({ key }) => preview.values[key] ?? 0);
+        const probabilities = softmax(logits);
+        const acceptIndex = entries.findIndex((entry) => entry.key === "accept");
+
+        if (acceptIndex >= 0) {
+          neuralProb = clamp(probabilities[acceptIndex] ?? neuralProb ?? 0, 0, 1);
+        }
+
+        if (baseProb == null) {
+          baseProb = clampProb(previewSensors.baseReproductionProbability ?? null);
+        }
+      }
+    }
+
+    if (baseProb == null) {
+      baseProb = clampProb(
+        this.computeReproductionProbability(partner, {
+          localDensity,
+          densityEffectMultiplier,
+          maxTileEnergy,
+          tileEnergy,
+          tileEnergyDelta,
+        }),
+      );
+    }
+
+    const deltaCandidates = [];
+    const finalDelta =
+      finalProb != null && baseProb != null ? finalProb - baseProb : null;
+    const neuralProbDelta =
+      neuralProb != null && baseProb != null ? neuralProb - baseProb : null;
+
+    if (neuralDelta != null) deltaCandidates.push(clampSigned(neuralDelta));
+    if (finalDelta != null) deltaCandidates.push(clampSigned(finalDelta));
+    if (neuralProbDelta != null) deltaCandidates.push(clampSigned(neuralProbDelta));
+
+    let effectiveDelta = 0;
+
+    if (deltaCandidates.length > 0) {
+      effectiveDelta = deltaCandidates.reduce(
+        (best, candidate) => (Math.abs(candidate) > Math.abs(best) ? candidate : best),
+        deltaCandidates[0],
+      );
+    }
+
+    const neuralConfidence = deltaCandidates.reduce(
+      (max, value) => Math.max(max, Math.abs(value)),
+      0,
+    );
+    const neuralWeight = Number.isFinite(blendWeight)
+      ? clamp(blendWeight, 0, 1)
+      : outcome?.usedNetwork
+        ? 0.5
+        : 0;
+    const modulation = clamp(
+      0.3 + neuralConfidence * 0.4 + neuralWeight * 0.3,
+      0.2,
+      0.9,
+    );
+    const adjustment = clamp(effectiveDelta * modulation, -0.6, 0.6);
+    const rawFraction = baseFraction * (1 - adjustment);
+    const adjustedFraction = (() => {
+      if (rawFraction > baseFraction) {
+        const maxIncrease = baseFraction + Math.min(0.15, baseFraction * 0.35);
+
+        return clamp(Math.min(rawFraction, maxIncrease), 0, 0.95);
+      }
+
+      return clamp(rawFraction, 0, 0.95);
+    })();
+    const adjustedEnergy = adjustedFraction * energyCap;
+
+    this.#assignDecisionOutcome("reproduction", {
+      energyThreshold: {
+        baseFraction,
+        baseEnergy,
+        adjustedFraction,
+        adjustedEnergy,
+        neuralBias: effectiveDelta,
+        neuralConfidence,
+        neuralWeight,
+        source: evaluationSource ?? "baseline",
+      },
+    });
+
+    return adjustedEnergy;
   }
 
   #fallbackInteractionDecision({
