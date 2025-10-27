@@ -8038,8 +8038,14 @@ export default class GridManager {
         return;
       }
 
+      const gridRow = grid[targetRow];
+
+      if (!gridRow) {
+        return;
+      }
+
       for (let newCol = startCol; newCol <= endCol; newCol++) {
-        if (!bucket?.has?.(newCol)) continue;
+        if (!gridRow[newCol]) continue;
 
         processCandidate(targetRow, newCol, bucket);
       }
@@ -8075,11 +8081,13 @@ export default class GridManager {
       }
 
       for (let newRow = startRow; newRow <= endRow; newRow++) {
-        const bucket = occupancyRows?.[newRow];
+        const gridRow = grid[newRow];
 
-        if (!bucket || !bucket.has(targetCol)) continue;
+        if (!gridRow) continue;
 
-        processCandidate(newRow, targetCol, bucket);
+        if (!gridRow[targetCol]) continue;
+
+        processCandidate(newRow, targetCol, occupancyRows?.[newRow]);
       }
     };
 

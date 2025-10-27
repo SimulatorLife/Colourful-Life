@@ -2459,13 +2459,55 @@ export class DNA {
 
     if (directGenes) {
       const otherLen = directGenes.length;
+      const sharedLength = selfLength < otherLen ? selfLength : otherLen;
+      const selfData = selfGenes;
+      const otherData = directGenes;
+      let i = 0;
+      const blockLength = sharedLength & ~7;
 
-      for (let i = 0; i < geneCount; i++) {
-        const a = i < selfLength ? selfGenes[i] : 0;
-        const b = i < otherLen ? directGenes[i] : 0;
-        const delta = a - b;
+      for (; i < blockLength; i += 8) {
+        const delta0 = selfData[i] - otherData[i];
+
+        distSq += delta0 * delta0;
+        const delta1 = selfData[i + 1] - otherData[i + 1];
+
+        distSq += delta1 * delta1;
+        const delta2 = selfData[i + 2] - otherData[i + 2];
+
+        distSq += delta2 * delta2;
+        const delta3 = selfData[i + 3] - otherData[i + 3];
+
+        distSq += delta3 * delta3;
+        const delta4 = selfData[i + 4] - otherData[i + 4];
+
+        distSq += delta4 * delta4;
+        const delta5 = selfData[i + 5] - otherData[i + 5];
+
+        distSq += delta5 * delta5;
+        const delta6 = selfData[i + 6] - otherData[i + 6];
+
+        distSq += delta6 * delta6;
+        const delta7 = selfData[i + 7] - otherData[i + 7];
+
+        distSq += delta7 * delta7;
+      }
+
+      for (; i < sharedLength; i++) {
+        const delta = selfData[i] - otherData[i];
 
         distSq += delta * delta;
+      }
+
+      for (let index = sharedLength; index < selfLength; index++) {
+        const value = selfData[index];
+
+        distSq += value * value;
+      }
+
+      for (let index = sharedLength; index < otherLen; index++) {
+        const value = otherData[index];
+
+        distSq += value * value;
       }
     } else {
       const fallbackLen =

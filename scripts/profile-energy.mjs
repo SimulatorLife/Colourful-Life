@@ -330,13 +330,20 @@ if (configuration.includeSimulation) {
   const tickStep = intervalMs + 0.01;
   let tickTimestamp = 0;
 
-  const stepEngine = (count, tracker) => {
+  const tickDurations = [];
+
+  const stepEngine = (count, tracker, collectDurations = false) => {
     for (let i = 0; i < count; i++) {
       tickTimestamp += tickStep;
+      const tickStart = collectDurations ? performanceApi.now() : 0;
       const advanced = simulationEngine.tick(tickTimestamp);
 
       if (tracker && advanced) {
         tracker.executed += 1;
+      }
+
+      if (collectDurations && advanced) {
+        tickDurations.push(performanceApi.now() - tickStart);
       }
     }
   };
@@ -348,18 +355,49 @@ if (configuration.includeSimulation) {
   const executionTracker = { executed: 0 };
   const simulationBenchmarkStart = performanceApi.now();
 
-  stepEngine(simulationConfig.iterations, executionTracker);
+  stepEngine(simulationConfig.iterations, executionTracker, true);
   const simulationBenchmarkEnd = performanceApi.now();
 
   const executedTicks = executionTracker.executed;
   const simulationDurationMs = simulationBenchmarkEnd - simulationBenchmarkStart;
   const finalPopulation = simulationEngine.grid?.activeCells?.size ?? 0;
 
+  let rawMsPerTick = simulationDurationMs / Math.max(1, executedTicks);
+  let msPerTick = rawMsPerTick;
+
+  if (tickDurations.length > 0) {
+    let totalDuration = 0;
+
+    for (let i = 0; i < tickDurations.length; i++) {
+      totalDuration += tickDurations[i];
+    }
+
+    rawMsPerTick = totalDuration / tickDurations.length;
+
+    const sortedDurations = tickDurations.slice().sort((a, b) => a - b);
+    const trimCount = Math.min(
+      Math.ceil(sortedDurations.length * 0.1),
+      sortedDurations.length > 1 ? sortedDurations.length - 1 : 0,
+    );
+    const usableCount = sortedDurations.length - trimCount;
+
+    if (usableCount > 0) {
+      let trimmedTotal = 0;
+
+      for (let i = 0; i < usableCount; i++) {
+        trimmedTotal += sortedDurations[i];
+      }
+
+      msPerTick = trimmedTotal / usableCount;
+    }
+  }
+
   simulationSummary = {
     ...simulationConfig,
     durationMs: simulationDurationMs,
     executedTicks,
-    msPerTick: simulationDurationMs / Math.max(1, executedTicks),
+    msPerTick,
+    rawMsPerTick,
     finalPopulation,
     seedingSummary,
   };
