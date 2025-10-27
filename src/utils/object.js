@@ -31,52 +31,14 @@ const STRUCTURED_CLONE_IMPL =
     ? globalThis.structuredClone.bind(globalThis)
     : null;
 
-function isPlainObject(value) {
-  if (value == null || typeof value !== "object") {
-    return false;
-  }
-
-  const proto = Object.getPrototypeOf(value);
-
-  return proto === Object.prototype || proto === null;
-}
-
-function clonePlainBranch(value) {
-  if (value == null || typeof value !== "object") {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(clonePlainBranch);
-  }
-
-  if (!isPlainObject(value)) {
-    if (!STRUCTURED_CLONE_IMPL) {
-      throw new Error(
-        "cloneTracePayload encountered an unsupported value without structuredClone support.",
-      );
-    }
-
-    return STRUCTURED_CLONE_IMPL(value);
-  }
-
-  return Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [key, clonePlainBranch(child)]),
-  );
-}
-
 export function cloneTracePayload(trace) {
   if (trace == null) return null;
 
-  if (!isPlainObject(trace)) {
-    if (!STRUCTURED_CLONE_IMPL) {
-      throw new Error(
-        "cloneTracePayload requires structuredClone support; the current environment does not provide it.",
-      );
-    }
-
-    return STRUCTURED_CLONE_IMPL(trace);
+  if (!STRUCTURED_CLONE_IMPL) {
+    throw new Error(
+      "cloneTracePayload requires structuredClone support; the current environment does not provide it.",
+    );
   }
 
-  return clonePlainBranch(trace);
+  return STRUCTURED_CLONE_IMPL(trace);
 }
