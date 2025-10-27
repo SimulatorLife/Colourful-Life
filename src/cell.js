@@ -967,6 +967,8 @@ export default class Cell {
     penaltyMultiplier = 1,
     strategyPenaltyMultiplier = 1,
     diversityOpportunity = 0,
+    diversityOpportunityWeight = 0,
+    diversityOpportunityAvailability = 0,
   } = {}) {
     const observed = clampFinite(diversity, 0, 1);
     const previousMean = this.#resolveMateDiversityMemory();
@@ -987,6 +989,21 @@ export default class Cell {
       0,
       1,
     );
+    const opportunityWeight = clamp(
+      Number.isFinite(diversityOpportunityWeight) ? diversityOpportunityWeight : 0,
+      0,
+      1,
+    );
+    const opportunityAvailability = clamp(
+      Number.isFinite(diversityOpportunityAvailability)
+        ? diversityOpportunityAvailability
+        : 0,
+      0,
+      1,
+    );
+    const opportunityStrength =
+      opportunitySignal *
+      (0.55 + opportunityWeight * 0.3 + opportunityAvailability * 0.25);
     const previousPressure = this.#resolveMateNoveltyPressure();
     const decay = success ? 0.78 : penalized ? 0.82 : 0.88;
     let nextPressure = previousPressure * decay;
@@ -1007,14 +1024,19 @@ export default class Cell {
       nextPressure += strategyDrag * (0.25 + monotonyGap * 0.25);
     }
 
-    if (opportunitySignal > 0) {
-      nextPressure += opportunitySignal * (0.18 + monotonyGap * 0.28);
+    if (opportunityStrength > 0) {
+      const opportunityRamp =
+        0.18 + monotonyGap * (0.28 + opportunityAvailability * 0.1);
+
+      nextPressure += opportunityStrength * opportunityRamp;
     }
 
     const noveltyRelief = clamp(Math.max(0, observed - previousMean), 0, 1);
 
     if (noveltyRelief > 0) {
-      nextPressure *= 1 - noveltyRelief * (0.5 + observed * 0.3);
+      const reliefScale = 0.5 + observed * 0.3 + opportunityAvailability * 0.2;
+
+      nextPressure *= 1 - noveltyRelief * reliefScale;
     }
 
     this._mateNoveltyPressure = clamp(nextPressure, 0, 1);
@@ -1445,6 +1467,8 @@ export default class Cell {
     strategyPenaltyMultiplier = 1,
     behaviorComplementarity = 0,
     diversityOpportunity = 0,
+    diversityOpportunityWeight = 0,
+    diversityOpportunityAvailability = 0,
   } = {}) {
     this.matingAttempts = (this.matingAttempts || 0) + 1;
 
@@ -1475,6 +1499,8 @@ export default class Cell {
       penaltyMultiplier,
       strategyPenaltyMultiplier,
       diversityOpportunity,
+      diversityOpportunityWeight,
+      diversityOpportunityAvailability,
     });
 
     const reproductionContext = this._decisionContextIndex?.get("reproduction");

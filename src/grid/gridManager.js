@@ -7033,6 +7033,8 @@ export default class GridManager {
           strategyPenaltyMultiplier,
           populationScarcityMultiplier: scarcityMultiplier,
           diversityOpportunity: diversityOpportunityScore,
+          diversityOpportunityWeight,
+          diversityOpportunityAvailability,
         });
       }
     };
