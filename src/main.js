@@ -114,7 +114,8 @@ export function createSimulation({
 
   config = toPlainObject(config);
   const layoutInitialSettings = toPlainObject(config?.ui?.layout?.initialSettings);
-  let configWithLayoutDefaults = { ...layoutInitialSettings, ...config };
+  // Apply layout-provided defaults last so UI initial settings and engine state stay aligned.
+  let configWithLayoutDefaults = { ...config, ...layoutInitialSettings };
 
   if (win) {
     win.BrainDebugger = BrainDebugger;
