@@ -74,6 +74,48 @@ test("resolveConsumptionDensityPenalty falls back when override is invalid", asy
   );
 });
 
+test("INITIAL_TILE_ENERGY_FRACTION_DEFAULT exposes the environment-aware default", async () => {
+  const { INITIAL_TILE_ENERGY_FRACTION_DEFAULT } = await configModulePromise;
+
+  assert.is(INITIAL_TILE_ENERGY_FRACTION_DEFAULT, 0.5);
+});
+
+test("resolveInitialTileEnergyFraction respects overrides", async () => {
+  const { resolveInitialTileEnergyFraction } = await configModulePromise;
+
+  assert.is(
+    resolveInitialTileEnergyFraction({
+      COLOURFUL_LIFE_INITIAL_TILE_ENERGY_FRACTION: "0.72",
+    }),
+    0.72,
+  );
+});
+
+test("resolveInitialTileEnergyFraction clamps invalid overrides", async () => {
+  const { resolveInitialTileEnergyFraction } = await configModulePromise;
+
+  assert.is(
+    resolveInitialTileEnergyFraction({
+      COLOURFUL_LIFE_INITIAL_TILE_ENERGY_FRACTION: "-0.2",
+    }),
+    0,
+  );
+
+  assert.is(
+    resolveInitialTileEnergyFraction({
+      COLOURFUL_LIFE_INITIAL_TILE_ENERGY_FRACTION: "2.5",
+    }),
+    1,
+  );
+
+  assert.is(
+    resolveInitialTileEnergyFraction({
+      COLOURFUL_LIFE_INITIAL_TILE_ENERGY_FRACTION: "NaN",
+    }),
+    0.5,
+  );
+});
+
 test("TRAIT_ACTIVATION_THRESHOLD exposes the environment-aware default", async () => {
   const { TRAIT_ACTIVATION_THRESHOLD } = await configModulePromise;
 

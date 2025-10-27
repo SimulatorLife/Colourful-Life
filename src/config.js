@@ -135,6 +135,28 @@ export function resolveEnergyDiffusionRate(env = RUNTIME_ENV) {
 }
 
 export const ENERGY_DIFFUSION_RATE_DEFAULT = resolveEnergyDiffusionRate();
+
+/**
+ * Resolves the fraction of the tile's maximum energy used to seed newly created
+ * grids. Allowing overrides keeps headless probes and UI presets flexible when
+ * exploring harsher or more generous starting conditions while clamping the
+ * value to the stable 0..1 interval so tests remain deterministic.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Initial energy fraction clamped to the 0..1 interval.
+ */
+export function resolveInitialTileEnergyFraction(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_INITIAL_TILE_ENERGY_FRACTION", {
+    fallback: DEFAULT_INITIAL_TILE_ENERGY_FRACTION,
+    min: 0,
+    max: 1,
+    clampResult: true,
+  });
+}
+
+export const INITIAL_TILE_ENERGY_FRACTION_DEFAULT = resolveInitialTileEnergyFraction();
 export const DENSITY_RADIUS_DEFAULT = 1;
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();
@@ -443,8 +465,6 @@ export function resolveOffspringViabilityBuffer(env = RUNTIME_ENV) {
 }
 
 export const OFFSPRING_VIABILITY_BUFFER = resolveOffspringViabilityBuffer();
-export const INITIAL_TILE_ENERGY_FRACTION_DEFAULT =
-  DEFAULT_INITIAL_TILE_ENERGY_FRACTION;
 export const BRAIN_SNAPSHOT_LIMIT_DEFAULT = DEFAULT_BRAIN_SNAPSHOT_LIMIT;
 
 export const SIMULATION_DEFAULTS = Object.freeze({
@@ -464,7 +484,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   energyDiffusionRate: ENERGY_DIFFUSION_RATE_DEFAULT,
   combatEdgeSharpness: COMBAT_EDGE_SHARPNESS_DEFAULT,
   combatTerritoryEdgeFactor: COMBAT_TERRITORY_EDGE_FACTOR,
-  initialTileEnergyFraction: DEFAULT_INITIAL_TILE_ENERGY_FRACTION,
+  initialTileEnergyFraction: INITIAL_TILE_ENERGY_FRACTION_DEFAULT,
   showObstacles: true,
   showEnergy: false,
   showDensity: false,
