@@ -330,6 +330,23 @@ function normalizeDimensions(rowCount, colCount) {
   };
 }
 
+function lowerBound(sortedArray, target) {
+  let low = 0;
+  let high = Array.isArray(sortedArray) ? sortedArray.length : 0;
+
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+
+    if (sortedArray[mid] < target) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+
+  return low;
+}
+
 const TARGET_DESCRIPTOR_BASE_KEYS = Object.freeze([
   "row",
   "col",
@@ -447,6 +464,10 @@ export default class GridManager {
   #targetUsageAccumulator = 0;
   #rowOccupancy = [];
   #columnOccupancy = [];
+  #rowOccupancySorted = [];
+  #rowOccupancyDirty = [];
+  #columnOccupancySorted = [];
+  #columnOccupancyDirty = [];
   #tickSimilarityCache = new WeakMap();
   #tickSimilarityRowsInUse = [];
   #tickSimilarityRowPool = [];
@@ -2168,6 +2189,10 @@ export default class GridManager {
 
     this.#rowOccupancy = Array.from({ length: rows }, () => new Set());
     this.#columnOccupancy = Array.from({ length: cols }, () => new Set());
+    this.#rowOccupancySorted = Array.from({ length: rows }, () => []);
+    this.#rowOccupancyDirty = new Array(rows).fill(false);
+    this.#columnOccupancySorted = Array.from({ length: cols }, () => []);
+    this.#columnOccupancyDirty = new Array(cols).fill(false);
   }
 
   #resetOccupancyTracking() {
@@ -2194,6 +2219,30 @@ export default class GridManager {
 
       if (bucket) bucket.clear();
     }
+
+    if (Array.isArray(this.#rowOccupancySorted)) {
+      for (let i = 0; i < this.#rowOccupancySorted.length; i++) {
+        const list = this.#rowOccupancySorted[i];
+
+        if (list) list.length = 0;
+      }
+    }
+
+    if (Array.isArray(this.#columnOccupancySorted)) {
+      for (let i = 0; i < this.#columnOccupancySorted.length; i++) {
+        const list = this.#columnOccupancySorted[i];
+
+        if (list) list.length = 0;
+      }
+    }
+
+    if (Array.isArray(this.#rowOccupancyDirty)) {
+      this.#rowOccupancyDirty.fill(false);
+    }
+
+    if (Array.isArray(this.#columnOccupancyDirty)) {
+      this.#columnOccupancyDirty.fill(false);
+    }
   }
 
   #recordOccupancy(row, col) {
@@ -2218,6 +2267,7 @@ export default class GridManager {
     }
 
     bucket.add(col);
+    this.#markRowOccupancyDirty(row);
 
     let columnBucket = this.#columnOccupancy[col];
 
@@ -2227,18 +2277,231 @@ export default class GridManager {
     }
 
     columnBucket.add(row);
+    this.#markColumnOccupancyDirty(col);
   }
 
   #releaseOccupancy(row, col) {
     if (!Number.isInteger(row) || !Number.isInteger(col)) return;
 
-    this.#rowOccupancy?.[row]?.delete?.(col);
-    this.#columnOccupancy?.[col]?.delete?.(row);
+    const rowBucket = this.#rowOccupancy?.[row];
+    const columnBucket = this.#columnOccupancy?.[col];
+
+    if (rowBucket?.delete?.(col)) {
+      this.#markRowOccupancyDirty(row);
+    }
+
+    if (columnBucket?.delete?.(row)) {
+      this.#markColumnOccupancyDirty(col);
+    }
   }
 
   #shiftOccupancy(fromRow, fromCol, toRow, toCol) {
     this.#releaseOccupancy(fromRow, fromCol);
     this.#recordOccupancy(toRow, toCol);
+  }
+
+  #markRowOccupancyDirty(row) {
+    this.#ensureRowOccupancyCache(row);
+
+    if (
+      Array.isArray(this.#rowOccupancyDirty) &&
+      row >= 0 &&
+      row < this.#rowOccupancyDirty.length
+    ) {
+      this.#rowOccupancyDirty[row] = true;
+    }
+  }
+
+  #markColumnOccupancyDirty(col) {
+    this.#ensureColumnOccupancyCache(col);
+
+    if (
+      Array.isArray(this.#columnOccupancyDirty) &&
+      col >= 0 &&
+      col < this.#columnOccupancyDirty.length
+    ) {
+      this.#columnOccupancyDirty[col] = true;
+    }
+  }
+
+  #ensureRowOccupancyCache(row) {
+    const buckets = this.#rowOccupancy;
+    const targetLength = Array.isArray(buckets)
+      ? buckets.length
+      : Math.max(this.rows, row + 1);
+
+    if (
+      !Array.isArray(this.#rowOccupancySorted) ||
+      this.#rowOccupancySorted.length !== targetLength
+    ) {
+      this.#rowOccupancySorted = Array.from({ length: targetLength }, () => []);
+    }
+
+    if (
+      !Array.isArray(this.#rowOccupancyDirty) ||
+      this.#rowOccupancyDirty.length !== targetLength
+    ) {
+      this.#rowOccupancyDirty = new Array(targetLength).fill(true);
+    }
+
+    if (!this.#rowOccupancySorted[row]) {
+      this.#rowOccupancySorted[row] = [];
+      this.#rowOccupancyDirty[row] = true;
+    }
+  }
+
+  #ensureColumnOccupancyCache(col) {
+    const buckets = this.#columnOccupancy;
+    const targetLength = Array.isArray(buckets)
+      ? buckets.length
+      : Math.max(this.cols, col + 1);
+
+    if (
+      !Array.isArray(this.#columnOccupancySorted) ||
+      this.#columnOccupancySorted.length !== targetLength
+    ) {
+      this.#columnOccupancySorted = Array.from({ length: targetLength }, () => []);
+    }
+
+    if (
+      !Array.isArray(this.#columnOccupancyDirty) ||
+      this.#columnOccupancyDirty.length !== targetLength
+    ) {
+      this.#columnOccupancyDirty = new Array(targetLength).fill(true);
+    }
+
+    if (!this.#columnOccupancySorted[col]) {
+      this.#columnOccupancySorted[col] = [];
+      this.#columnOccupancyDirty[col] = true;
+    }
+  }
+
+  #getRowOccupantColumns(row, bucket) {
+    this.#ensureRowOccupancyCache(row);
+    const list = this.#rowOccupancySorted[row];
+
+    if (
+      !Array.isArray(this.#rowOccupancyDirty) ||
+      row < 0 ||
+      row >= this.#rowOccupancyDirty.length
+    ) {
+      return list ?? [];
+    }
+
+    if (this.#rowOccupancyDirty[row]) {
+      if (Array.isArray(list)) {
+        list.length = 0;
+        if (bucket && bucket.size > 0) {
+          for (const value of bucket) {
+            if (Number.isInteger(value)) {
+              list.push(value);
+            }
+          }
+          list.sort((a, b) => a - b);
+        }
+      }
+      this.#rowOccupancyDirty[row] = false;
+    }
+
+    return Array.isArray(list) ? list : [];
+  }
+
+  #getColumnOccupantRows(col, bucket) {
+    this.#ensureColumnOccupancyCache(col);
+    const list = this.#columnOccupancySorted[col];
+
+    if (
+      !Array.isArray(this.#columnOccupancyDirty) ||
+      col < 0 ||
+      col >= this.#columnOccupancyDirty.length
+    ) {
+      return list ?? [];
+    }
+
+    if (this.#columnOccupancyDirty[col]) {
+      if (Array.isArray(list)) {
+        list.length = 0;
+        if (bucket && bucket.size > 0) {
+          for (const value of bucket) {
+            if (Number.isInteger(value)) {
+              list.push(value);
+            }
+          }
+          list.sort((a, b) => a - b);
+        }
+      }
+      this.#columnOccupancyDirty[col] = false;
+    }
+
+    return Array.isArray(list) ? list : [];
+  }
+
+  #forEachRowOccupant(row, startCol, endCol, callback) {
+    if (!Number.isInteger(row) || startCol > endCol) {
+      return 0;
+    }
+
+    const bucket = this.#rowOccupancy?.[row];
+
+    if (!bucket || bucket.size === 0) {
+      return 0;
+    }
+
+    const columns = this.#getRowOccupantColumns(row, bucket);
+
+    if (!Array.isArray(columns) || columns.length === 0) {
+      return 0;
+    }
+
+    const startIndex = lowerBound(columns, startCol);
+    let processed = 0;
+
+    for (let i = startIndex; i < columns.length; i++) {
+      const colIndex = columns[i];
+
+      if (colIndex > endCol) {
+        break;
+      }
+
+      callback(colIndex);
+      processed += 1;
+    }
+
+    return processed;
+  }
+
+  #forEachColumnOccupant(col, startRow, endRow, callback) {
+    if (!Number.isInteger(col) || startRow > endRow) {
+      return 0;
+    }
+
+    const bucket = this.#columnOccupancy?.[col];
+
+    if (!bucket || bucket.size === 0) {
+      return 0;
+    }
+
+    const rows = this.#getColumnOccupantRows(col, bucket);
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return 0;
+    }
+
+    const startIndex = lowerBound(rows, startRow);
+    let processed = 0;
+
+    for (let i = startIndex; i < rows.length; i++) {
+      const rowIndex = rows[i];
+
+      if (rowIndex > endRow) {
+        break;
+      }
+
+      callback(rowIndex);
+      processed += 1;
+    }
+
+    return processed;
   }
 
   #trackCellPosition(cell, row, col) {
@@ -8205,20 +8468,16 @@ export default class GridManager {
     const iterateRowColumns = (targetRow, bucket, startCol, endCol) => {
       if (!bucket || startCol > endCol) return;
 
-      const rangeLength = endCol - startCol + 1;
-
-      if (
-        bucket instanceof Set &&
-        bucket.size > 0 &&
-        typeof bucket.values === "function" &&
-        bucket.size < rangeLength
-      ) {
-        for (const value of bucket.values()) {
-          if (value < startCol || value > endCol) continue;
-
+      const processed = this.#forEachRowOccupant(
+        targetRow,
+        startCol,
+        endCol,
+        (value) => {
           processCandidate(targetRow, value, bucket);
-        }
+        },
+      );
 
+      if (processed > 0) {
         return;
       }
 
@@ -8238,29 +8497,24 @@ export default class GridManager {
     const iterateColumnRows = (targetCol, startRow, endRow) => {
       if (startRow > endRow) return;
 
-      const columnBucket = occupancyColumns?.[targetCol];
+      const processed = this.#forEachColumnOccupant(
+        targetCol,
+        startRow,
+        endRow,
+        (value) => {
+          const bucket = occupancyRows?.[value];
 
-      if (!columnBucket || columnBucket.size === 0) {
+          processCandidate(value, targetCol, bucket);
+        },
+      );
+
+      if (processed > 0) {
         return;
       }
 
-      const rangeLength = endRow - startRow + 1;
+      const columnBucket = occupancyColumns?.[targetCol];
 
-      if (
-        columnBucket instanceof Set &&
-        typeof columnBucket.values === "function" &&
-        columnBucket.size < rangeLength
-      ) {
-        for (const value of columnBucket.values()) {
-          if (value < startRow || value > endRow) continue;
-
-          const bucket = occupancyRows?.[value];
-
-          if (!bucket || !bucket.has(targetCol)) continue;
-
-          processCandidate(value, targetCol, bucket);
-        }
-
+      if (!columnBucket || columnBucket.size === 0) {
         return;
       }
 
