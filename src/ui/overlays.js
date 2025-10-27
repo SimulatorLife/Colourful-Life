@@ -944,13 +944,53 @@ export function densityToRgba(normalizedValue, { opaque = false } = {}) {
   return `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
 }
 
-function drawDensityLegend(ctx, cellSize, cols, rows, minDensity, maxDensity) {
+function formatDensityLegendValue(value) {
+  if (!Number.isFinite(value)) return "N/A";
+
+  const percent = clamp01(value) * 100;
+  const percentText =
+    percent >= 10 ? `${percent.toFixed(0)}%` : `${percent.toFixed(1)}%`;
+
+  return `${value.toFixed(2)} (${percentText} occupancy)`;
+}
+
+function formatDensityLocation(location) {
+  if (!location || typeof location !== "object") {
+    return "";
+  }
+
+  const row = Number.isFinite(location.row) ? Math.round(location.row) : null;
+  const col = Number.isFinite(location.col) ? Math.round(location.col) : null;
+
+  if (row == null || col == null) {
+    return "";
+  }
+
+  return `@ (${row}, ${col})`;
+}
+
+function drawDensityLegend(ctx, cellSize, cols, rows, stats = {}) {
+  const minDensity = stats?.min;
+  const maxDensity = stats?.max;
+
+  if (!Number.isFinite(minDensity) || !Number.isFinite(maxDensity)) {
+    return;
+  }
+
   const gradientWidth = clamp(cols * cellSize * 0.25, 120, 160);
   const gradientHeight = 14;
   const padding = 10;
   const textLineHeight = 14;
+  const lines = [
+    { label: "Min", value: minDensity, location: stats?.minLocation },
+    Number.isFinite(stats?.average)
+      ? { label: "Mean", value: stats.average, location: null }
+      : null,
+    { label: "Max", value: maxDensity, location: stats?.maxLocation },
+  ].filter(Boolean);
   const blockWidth = gradientWidth + padding * 2;
-  const blockHeight = gradientHeight + textLineHeight * 2 + padding * 3;
+  const blockHeight =
+    gradientHeight + textLineHeight * Math.max(1, lines.length) + padding * 3;
   const x = padding;
   const y = rows * cellSize - blockHeight - padding;
 
@@ -979,18 +1019,20 @@ function drawDensityLegend(ctx, cellSize, cols, rows, minDensity, maxDensity) {
   ctx.fillStyle = "#fff";
   ctx.font = "12px sans-serif";
   ctx.textBaseline = "top";
-
   ctx.textAlign = "left";
-  ctx.fillText(
-    `Min: ${minDensity.toFixed(2)}`,
-    gradientX,
-    gradientY + gradientHeight + padding,
-  );
-  ctx.fillText(
-    `Max: ${maxDensity.toFixed(2)}`,
-    gradientX,
-    gradientY + gradientHeight + padding + textLineHeight,
-  );
+
+  let textY = gradientY + gradientHeight + padding;
+
+  for (const line of lines) {
+    const valueText = formatDensityLegendValue(line.value);
+    const locationText = formatDensityLocation(line.location);
+    const text = [`${line.label}: ${valueText}`, locationText]
+      .filter(Boolean)
+      .join(" ");
+
+    ctx.fillText(text, gradientX, textY);
+    textY += textLineHeight;
+  }
 
   ctx.restore();
 }
@@ -1218,6 +1260,11 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
   let scratchIndex = 0;
   let minDensity = Infinity;
   let maxDensity = -Infinity;
+  let sumDensity = 0;
+  let minRow = 0;
+  let minCol = 0;
+  let maxRow = 0;
+  let maxCol = 0;
   const densityGrid = Array.isArray(grid.densityGrid) ? grid.densityGrid : null;
 
   for (let r = 0; r < rows; r++) {
@@ -1231,9 +1278,18 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
       const density = Number.isFinite(rawDensity) ? rawDensity : 0;
 
       scratch[scratchIndex++] = density;
+      sumDensity += density;
 
-      if (density < minDensity) minDensity = density;
-      if (density > maxDensity) maxDensity = density;
+      if (density < minDensity) {
+        minDensity = density;
+        minRow = r;
+        minCol = c;
+      }
+      if (density > maxDensity) {
+        maxDensity = density;
+        maxRow = r;
+        maxCol = c;
+      }
     }
   }
 
@@ -1241,6 +1297,10 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
 
   const originalMin = minDensity;
   const originalMax = maxDensity;
+  const minLocation = Number.isFinite(minDensity) ? { row: minRow, col: minCol } : null;
+  const maxLocation = Number.isFinite(maxDensity) ? { row: maxRow, col: maxCol } : null;
+  const averageDensity =
+    totalCells > 0 && Number.isFinite(sumDensity) ? sumDensity / totalCells : null;
   let range = maxDensity - minDensity;
 
   if (range <= 1e-8) {
@@ -1263,7 +1323,13 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
     }
   }
 
-  drawDensityLegend(ctx, cellSize, cols, rows, originalMin, originalMax);
+  drawDensityLegend(ctx, cellSize, cols, rows, {
+    min: originalMin,
+    max: originalMax,
+    average: averageDensity,
+    minLocation,
+    maxLocation,
+  });
 }
 
 /**
