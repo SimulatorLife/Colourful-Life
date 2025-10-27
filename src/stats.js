@@ -240,14 +240,72 @@ class FixedSizeRingBuffer {
 
     if (length === 0 || capacity === 0) return [];
 
+    const result = new Array(length);
+
+    this.#copyInto(result, 0, length);
+
+    return result;
+  }
+
+  takeLast(limit = this.length) {
+    const capacity = this.capacity;
+    const length = this.length;
+
+    if (capacity === 0 || length === 0) {
+      return [];
+    }
+
+    const numericLimit = Math.floor(Number(limit));
+    const normalizedLimit = Number.isFinite(numericLimit)
+      ? Math.max(0, Math.min(length, numericLimit))
+      : length;
+
+    if (normalizedLimit === 0) {
+      return [];
+    }
+
+    const result = new Array(normalizedLimit);
+    let index = this.start + length - 1;
+
+    if (index >= capacity) {
+      index -= capacity;
+    }
+
+    for (let i = 0; i < normalizedLimit; i++) {
+      result[i] = this.buffer[index];
+      index -= 1;
+
+      if (index < 0) {
+        index += capacity;
+      }
+    }
+
+    return result;
+  }
+
+  forEach(callback, thisArg) {
+    if (typeof callback !== "function") {
+      return;
+    }
+
+    const capacity = this.capacity;
+    const length = this.length;
+
+    if (capacity === 0 || length === 0) {
+      return;
+    }
+
     const buffer = this.buffer;
-    const start = this.start;
+    let index = this.start;
 
-    return Array.from({ length }, (_, offset) => {
-      const index = start + offset;
+    for (let i = 0; i < length; i++) {
+      if (index >= capacity) {
+        index = 0;
+      }
 
-      return buffer[index < capacity ? index : index - capacity];
-    });
+      callback.call(thisArg, buffer[index], i);
+      index += 1;
+    }
   }
 
   clear() {
@@ -256,6 +314,28 @@ class FixedSizeRingBuffer {
 
     if (Array.isArray(this.buffer)) {
       this.buffer.fill(undefined);
+    }
+  }
+
+  #copyInto(target, offset, count) {
+    if (!Array.isArray(target)) return;
+
+    const capacity = this.capacity;
+    const length = this.length;
+
+    if (capacity === 0 || length === 0 || count <= 0) {
+      return;
+    }
+
+    let index = this.start;
+
+    for (let i = 0; i < count; i++) {
+      if (index >= capacity) {
+        index = 0;
+      }
+
+      target[offset + i] = this.buffer[index];
+      index += 1;
     }
   }
 }
@@ -2000,7 +2080,9 @@ export default class Stats {
   }
 
   getRecentLifeEvents(limit = 12) {
-    if (!this.lifeEventLog) return [];
+    const ring = this.lifeEventLog;
+
+    if (!ring) return [];
 
     const numericLimit = Math.floor(Number(limit));
 
@@ -2008,19 +2090,19 @@ export default class Stats {
       return [];
     }
 
-    const values = this.lifeEventLog.values();
-
-    if (!Array.isArray(values) || values.length === 0) {
+    if (!Number.isFinite(ring.length) || ring.length <= 0) {
       return [];
     }
 
-    const boundedLimit = Math.min(values.length, numericLimit);
+    const boundedLimit = Math.min(ring.length, numericLimit);
 
-    return values.slice(values.length - boundedLimit).reverse();
+    return ring.takeLast(boundedLimit);
   }
 
   getLifeEventRateSummary(windowSize = LIFE_EVENT_RATE_DEFAULT_WINDOW) {
-    if (!this.lifeEventLog) {
+    const ring = this.lifeEventLog;
+
+    if (!ring) {
       return {
         births: 0,
         deaths: 0,
@@ -2050,9 +2132,8 @@ export default class Stats {
 
     const latestTick = Number.isFinite(this.totals?.ticks) ? this.totals.ticks : 0;
     const windowStart = Math.max(0, latestTick - numericWindow);
-    const values = this.lifeEventLog.values();
 
-    if (!Array.isArray(values) || values.length === 0) {
+    if (!Number.isFinite(ring.length) || ring.length === 0) {
       return {
         births: 0,
         deaths: 0,
@@ -2070,13 +2151,13 @@ export default class Stats {
     // Track event counts within the requested window so quiet stretches are
     // reflected in the per-100 tick rates.
 
-    for (const event of values) {
-      if (!event) continue;
+    ring.forEach((event) => {
+      if (!event) return;
 
       const tick = Number.isFinite(event.tick) ? event.tick : null;
 
       if (tick == null || tick < windowStart) {
-        continue;
+        return;
       }
 
       if (event.type === "birth") {
@@ -2084,7 +2165,7 @@ export default class Stats {
       } else if (event.type === "death") {
         deaths += 1;
       }
-    }
+    });
 
     const total = births + deaths;
 
