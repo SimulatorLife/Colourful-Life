@@ -1,95 +1,107 @@
 import { performance } from "node:perf_hooks";
+import { accumulateTraitAggregates } from "../src/stats/traitAggregation.js";
 
-const [{ accumulateTraitAggregates }, { createRNG }] = await Promise.all([
-  import("../src/stats/traitAggregation.js"),
-  import("../src/utils/math.js"),
-]);
+function createMockCell(index, traitCount) {
+  const base = Math.sin(index * 0.13) * 0.5 + 0.5;
 
-const rng = createRNG(1337);
-const random = () => rng();
+  return {
+    id: index,
+    genes: Array.from({ length: traitCount }, (_, traitIndex) => {
+      const noise = Math.sin((index + 1) * (traitIndex + 3) * 0.017) * 0.5 + 0.5;
 
-const TRAIT_COUNT = 32;
-const POOL_SIZE = 2500;
-const ACTIVE_INDEX_FRACTION = 0.6;
-const WARMUP = 50;
-const ITERATIONS = 300;
+      return Math.min(1, Math.max(0, base * 0.6 + noise * 0.4));
+    }),
+  };
+}
 
-const pool = Array.from({ length: POOL_SIZE }, (_, i) => ({
-  cell: {
-    id: i,
-    energy: random() * 100,
-    age: Math.trunc(random() * 500),
-    offspring: Math.trunc(random() * 10),
-    fightsWon: Math.trunc(random() * 6),
-    genomeDiversity: random(),
-    brainComplexity: random(),
-  },
-}));
+function createTraitComputes(traitCount) {
+  const fns = new Array(traitCount);
 
-const traitComputes = Array.from({ length: TRAIT_COUNT }, (_, index) => {
-  switch (index % 4) {
-    case 0:
-      return (cell) => cell.energy;
-    case 1:
-      return (cell) => cell.age;
-    case 2:
-      return (cell) => cell.offspring + cell.fightsWon;
-    default:
-      return (cell) =>
-        cell.genomeDiversity * 0.5 + cell.brainComplexity * 0.5 + index * 0.01;
+  for (let traitIndex = 0; traitIndex < traitCount; traitIndex += 1) {
+    fns[traitIndex] = (cell) => cell.genes[traitIndex] ?? 0;
   }
-});
 
-const traitThresholds = Float64Array.from({ length: TRAIT_COUNT }, (_, i) =>
-  i % 3 === 0 ? 40 : i % 3 === 1 ? 200 : 3,
-);
+  return fns;
+}
 
-const sums = new Float64Array(TRAIT_COUNT);
-const activeCounts = new Uint32Array(TRAIT_COUNT);
+function runBenchmark({
+  populationSize = 2000,
+  traitCount = 16,
+  iterations = 300,
+  activeTraitIndexes = null,
+} = {}) {
+  const cells = new Array(populationSize);
 
-const activeTraitIndexes = Int16Array.from(
-  { length: Math.trunc(TRAIT_COUNT * ACTIVE_INDEX_FRACTION) },
-  (_, i) => (i % 5 === 0 ? -1 : i),
-);
+  for (let i = 0; i < populationSize; i += 1) {
+    cells[i] = createMockCell(i, traitCount);
+  }
 
-function runIteration() {
-  sums.fill(0);
-  activeCounts.fill(0);
+  const traitComputes = createTraitComputes(traitCount);
+  const traitThresholds = new Float64Array(traitCount).fill(0.55);
+  const traitSums = new Float64Array(traitCount);
+  const traitActiveCounts = new Uint32Array(traitCount);
 
-  return accumulateTraitAggregates(
-    pool,
-    traitComputes,
-    traitThresholds,
-    sums,
-    activeCounts,
-    activeTraitIndexes,
+  const activeIndexes = activeTraitIndexes
+    ? Array.from(activeTraitIndexes)
+    : Array.from({ length: traitCount }, (_, index) => index);
+
+  // Warm up JIT so results are less noisy.
+  for (let i = 0; i < 20; i += 1) {
+    traitSums.fill(0);
+    traitActiveCounts.fill(0);
+    accumulateTraitAggregates(
+      cells,
+      traitComputes,
+      traitThresholds,
+      traitSums,
+      traitActiveCounts,
+      activeIndexes,
+    );
+  }
+
+  const start = performance.now();
+
+  for (let i = 0; i < iterations; i += 1) {
+    traitSums.fill(0);
+    traitActiveCounts.fill(0);
+    accumulateTraitAggregates(
+      cells,
+      traitComputes,
+      traitThresholds,
+      traitSums,
+      traitActiveCounts,
+      activeIndexes,
+    );
+  }
+
+  const duration = performance.now() - start;
+  const avg = duration / iterations;
+
+  return {
+    duration,
+    average: avg,
+    iterations,
+    populationSize,
+    traitCount,
+  };
+}
+
+function formatResult(result) {
+  return (
+    `population=${result.populationSize}, traits=${result.traitCount}, iterations=${result.iterations}\n` +
+    `  total=${result.duration.toFixed(2)}ms, avg=${result.average.toFixed(3)}ms`
   );
 }
 
-for (let i = 0; i < WARMUP; i += 1) {
-  runIteration();
+function main() {
+  const baseline = runBenchmark();
+  const focused = runBenchmark({
+    traitCount: 32,
+    activeTraitIndexes: Uint16Array.from([0, 3, 7, 11, 15, 23, 31]),
+  });
+
+  console.log("Trait aggregation benchmark:\n" + formatResult(baseline));
+  console.log("\nSparse trait selection benchmark:\n" + formatResult(focused));
 }
 
-const start = performance.now();
-let totalPopulation = 0;
-
-for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
-  totalPopulation += runIteration();
-}
-const duration = performance.now() - start;
-
-console.log(
-  JSON.stringify(
-    {
-      iterations: ITERATIONS,
-      poolSize: POOL_SIZE,
-      traitCount: TRAIT_COUNT,
-      activeIndexes: activeTraitIndexes.length,
-      totalPopulation,
-      durationMs: Number(duration.toFixed(3)),
-      avgPerIteration: Number((duration / ITERATIONS).toFixed(3)),
-    },
-    null,
-    2,
-  ),
-);
+main();
