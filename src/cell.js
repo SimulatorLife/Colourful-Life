@@ -6427,6 +6427,119 @@ export default class Cell {
     return clamp(reach, minReach, maxReach);
   }
 
+  /**
+   * Estimates how far this organism can meaningfully interact with others for
+   * the given action. The range blends encoded interaction genes with
+   * risk-taking tendencies, cooperative drives, and environmental feedback so
+   * that heightened aggression or social investment naturally extends a cell's
+   * reach while crowding pressure reins it in.
+   *
+   * @param {string} action - Interaction type being attempted (e.g. "fight" or
+   *   "cooperate").
+   * @param {Object} [context]
+   * @param {number} [context.localDensity=0] - Local crowding signal.
+   * @param {number} [context.densityEffectMultiplier=1] - Additional density
+   *   scaling.
+   * @param {number|null} [context.tileEnergy=null] - Normalized tile energy at
+   *   the organism's location when available.
+   * @param {number} [context.tileEnergyDelta=0] - Recent energy delta for the
+   *   tile used as a scarcity/abundance cue.
+   * @param {number} [context.maxTileEnergy=MAX_TILE_ENERGY] - Global tile
+   *   energy cap for normalizing fallback measurements.
+   * @returns {number} Effective interaction reach in tile units.
+   */
+  getInteractionReach(
+    action,
+    {
+      localDensity = 0,
+      densityEffectMultiplier = 1,
+      tileEnergy = null,
+      tileEnergyDelta = 0,
+      maxTileEnergy = MAX_TILE_ENERGY,
+    } = {},
+  ) {
+    const normalizedAction = typeof action === "string" ? action.toLowerCase() : "";
+
+    if (!normalizedAction) {
+      return 1;
+    }
+
+    const multiplier =
+      Number.isFinite(densityEffectMultiplier) && densityEffectMultiplier > 0
+        ? densityEffectMultiplier
+        : 1;
+    const effectiveDensity = clamp(
+      Number.isFinite(localDensity) ? localDensity * multiplier : 0,
+      0,
+      1,
+    );
+    const energyCap =
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1;
+    const normalizedEnergy =
+      tileEnergy != null && Number.isFinite(tileEnergy)
+        ? clamp(tileEnergy, 0, 1)
+        : clamp((this.energy ?? 0) / energyCap, 0, 1);
+    const trend = clamp(Number.isFinite(tileEnergyDelta) ? tileEnergyDelta : 0, -1, 1);
+    const genes = this.interactionGenes || {
+      avoid: 0.33,
+      fight: 0.33,
+      cooperate: 0.34,
+    };
+
+    if (normalizedAction === "fight") {
+      const aggression = clamp(genes.fight ?? 0.33, 0, 1);
+      const risk = clamp(this.#resolveRiskTolerance(), 0, 1);
+      const focus =
+        typeof this.dna?.conflictFocus === "function" ? this.dna.conflictFocus() : null;
+      const proximityBias = clamp(focus?.proximity ?? 0.35, 0.1, 1.6);
+      let reach =
+        1 +
+        aggression * 0.85 +
+        risk * 0.55 +
+        Math.max(0, normalizedEnergy - 0.5) * 0.45 +
+        Math.max(0, trend) * 0.25;
+
+      reach += 0.7 - proximityBias * 0.3;
+      reach -= effectiveDensity * 0.35;
+
+      return clamp(reach, 0.75, 3.2);
+    }
+
+    if (normalizedAction === "cooperate") {
+      const cooperative = clamp(genes.cooperate ?? 0.34, 0, 1);
+      const comfort = clamp(
+        Number.isFinite(this._crowdingTolerance)
+          ? this._crowdingTolerance
+          : Number.isFinite(this.baseCrowdingTolerance)
+            ? this.baseCrowdingTolerance
+            : 0.5,
+        0,
+        1,
+      );
+      const crowdPressure = effectiveDensity > comfort ? effectiveDensity - comfort : 0;
+      const crowdRelief = effectiveDensity < comfort ? comfort - effectiveDensity : 0;
+      const shareDriveRaw =
+        typeof this.dna?.cooperateShareFrac === "function"
+          ? this.dna.cooperateShareFrac({ energyDelta: trend, kinship: 0.5 })
+          : cooperative;
+      const shareDrive = clamp(shareDriveRaw ?? cooperative, 0, 1);
+      let reach =
+        1 +
+        cooperative * 0.9 +
+        shareDrive * 0.6 +
+        crowdRelief * 0.45 +
+        Math.max(0, normalizedEnergy - 0.4) * 0.35;
+
+      reach -= crowdPressure * 0.5;
+
+      return clamp(reach, 0.8, 3.2);
+    }
+
+    return 1;
+  }
+
   populationScarcityDrive({
     scarcity = 0,
     baseProbability = 0.5,

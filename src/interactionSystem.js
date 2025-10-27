@@ -329,6 +329,15 @@ function moveVictoriousAttacker({
   densityGrid,
   densityEffectMultiplier,
 }) {
+  const distance = Math.max(
+    Math.abs(targetRow - attackerRow),
+    Math.abs(targetCol - attackerCol),
+  );
+
+  if (distance > 1) {
+    return;
+  }
+
   let relocated = false;
 
   if (typeof adapter?.relocateCell === "function") {
