@@ -4,8 +4,6 @@ import {
   DEFAULT_EVENT_MODIFIERS,
 } from "./events/eventModifiers.js";
 
-export { resolveEventContribution } from "./events/eventModifiers.js";
-
 function resolveNeighborAverage({ neighborSum, neighborCount, neighborEnergies }) {
   if (
     Number.isFinite(neighborSum) &&
