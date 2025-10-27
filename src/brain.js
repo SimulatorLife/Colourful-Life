@@ -157,6 +157,9 @@ const clampSensorValue = (value) => {
 export default class Brain {
   static SENSOR_COUNT = SENSOR_COUNT;
 
+  #sensorScratch = null;
+  #lastEvaluationSensorsScratch = null;
+
   static sensorIndex(key) {
     if (typeof key !== "string") return undefined;
 
@@ -326,10 +329,12 @@ export default class Brain {
     const group = OUTPUT_GROUPS[groupName];
 
     if (!group || group.length === 0) {
+      const scratch = this.#acquireSensorScratch();
+      const emptySensors = this.#cloneSensors(scratch);
       const emptyEvaluation = {
         values: null,
         activationCount: 0,
-        sensors: new Array(SENSOR_COUNT).fill(0),
+        sensors: emptySensors,
       };
 
       if (traceEnabled) {
@@ -338,17 +343,21 @@ export default class Brain {
 
       this.lastEvaluation = {
         group: groupName,
-        sensors: emptyEvaluation.sensors,
+        sensors: this.#copySensorsInto(
+          this.#lastEvaluationSensorsScratch,
+          emptySensors,
+        ),
         activationCount: 0,
         outputs: null,
         trace: traceEnabled ? emptyEvaluation.trace : null,
       };
+      this.#lastEvaluationSensorsScratch = this.lastEvaluation.sensors;
       this.lastActivationCount = 0;
 
       return emptyEvaluation;
     }
 
-    const sensors = new Array(SENSOR_COUNT).fill(0);
+    const sensors = this.#acquireSensorScratch();
 
     sensors[0] = 1; // bias constant
 
@@ -363,7 +372,7 @@ export default class Brain {
 
     this.#applySensorModulation(sensors);
 
-    const sensorVector = sensors.slice();
+    const sensorVector = this.#cloneSensors(sensors);
 
     this.lastSensors = sensorVector;
     const cache = new Map();
@@ -494,9 +503,16 @@ export default class Brain {
     }
 
     this.lastActivationCount = activationCount;
+    const lastEvaluationSensors = this.#copySensorsInto(
+      this.#lastEvaluationSensorsScratch,
+      sensorVector,
+    );
+
+    this.#lastEvaluationSensorsScratch = lastEvaluationSensors;
+
     this.lastEvaluation = {
       group: groupName,
-      sensors: sensorVector.slice(),
+      sensors: lastEvaluationSensors,
       activationCount,
       outputs: activationCount > 0 ? { ...values } : null,
       trace: traceEnabled && tracePayload ? cloneTracePayload(tracePayload) : null,
@@ -556,6 +572,52 @@ export default class Brain {
 
   #isSensor(nodeId) {
     return Number.isFinite(nodeId) && nodeId >= 0 && nodeId < SENSOR_COUNT;
+  }
+
+  #acquireSensorScratch() {
+    let scratch = this.#sensorScratch;
+
+    if (!Array.isArray(scratch) || scratch.length !== SENSOR_COUNT) {
+      scratch = new Array(SENSOR_COUNT).fill(0);
+      this.#sensorScratch = scratch;
+    } else {
+      scratch.fill(0);
+    }
+
+    return scratch;
+  }
+
+  #cloneSensors(source) {
+    if (!Array.isArray(source)) {
+      return new Array(SENSOR_COUNT).fill(0);
+    }
+
+    if (source.length === SENSOR_COUNT) {
+      return source.slice();
+    }
+
+    const clone = new Array(SENSOR_COUNT);
+
+    for (let i = 0; i < SENSOR_COUNT; i += 1) {
+      clone[i] = source[i] ?? 0;
+    }
+
+    return clone;
+  }
+
+  #copySensorsInto(target, source) {
+    const length = Math.min(source?.length ?? 0, SENSOR_COUNT);
+    let destination = target;
+
+    if (!Array.isArray(destination) || destination.length !== SENSOR_COUNT) {
+      destination = new Array(SENSOR_COUNT);
+    }
+
+    for (let i = 0; i < SENSOR_COUNT; i += 1) {
+      destination[i] = i < length ? (source[i] ?? 0) : 0;
+    }
+
+    return destination;
   }
 
   #initializeSensorModulation({
