@@ -295,6 +295,25 @@ test("resolveSimulationDefaults sanitizes numeric multipliers", async () => {
   assert.is(sanitized.leaderboardSize, 0);
 });
 
+test("resolveSimulationDefaults clamps energy rates to the unit interval", async () => {
+  const { resolveSimulationDefaults } = await configModulePromise;
+  const sanitized = resolveSimulationDefaults({
+    energyRegenRate: 2.75,
+    energyDiffusionRate: 1.6,
+  });
+
+  assert.is(sanitized.energyRegenRate, 1);
+  assert.is(sanitized.energyDiffusionRate, 1);
+
+  const zeroed = resolveSimulationDefaults({
+    energyRegenRate: -0.5,
+    energyDiffusionRate: -3,
+  });
+
+  assert.is(zeroed.energyRegenRate, 0);
+  assert.is(zeroed.energyDiffusionRate, 0);
+});
+
 test("resolveSimulationDefaults clamps leaderboard interval below the UI floor", async () => {
   const { resolveSimulationDefaults, LEADERBOARD_INTERVAL_MIN_MS } =
     await configModulePromise;
