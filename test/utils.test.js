@@ -264,7 +264,7 @@ test("cloneTracePayload delegates to structuredClone when available", async () =
   }
 });
 
-test("cloneTracePayload throws when structuredClone is unavailable", async () => {
+test("cloneTracePayload falls back when structuredClone is unavailable", async () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "structuredClone");
   const moduleUrl = new URL("../src/utils/object.js", import.meta.url);
 
@@ -278,11 +278,42 @@ test("cloneTracePayload throws when structuredClone is unavailable", async () =>
     });
 
     const { cloneTracePayload: localCloneTracePayload } = await import(moduleUrl.href);
+    const trace = {
+      sensors: [
+        {
+          id: "input-1",
+          values: [0.1, 0.2, 0.3],
+        },
+      ],
+      nodes: [
+        {
+          id: "hidden-1",
+          bias: 0.1,
+          inputs: [
+            { id: "input-1", weight: 0.2 },
+            { id: "input-2", weight: 0.3 },
+          ],
+        },
+      ],
+    };
 
-    assert.throws(
-      () => localCloneTracePayload({ sensors: [], nodes: [] }),
-      /structuredClone support/,
-      "missing structuredClone should surface a descriptive error",
+    const clone = localCloneTracePayload(trace);
+
+    assert.ok(clone !== trace, "fallback should clone top-level object");
+    assert.ok(clone?.nodes?.[0] !== trace.nodes[0], "node objects should be cloned");
+    assert.ok(
+      clone?.nodes?.[0]?.inputs?.[0] !== trace.nodes[0].inputs[0],
+      "nested arrays should be cloned",
+    );
+    assert.equal(
+      clone?.sensors?.[0]?.values,
+      trace.sensors[0].values,
+      "arrays should match",
+    );
+    assert.is.not(
+      clone?.sensors?.[0]?.values,
+      trace.sensors[0].values,
+      "arrays should be cloned",
     );
   } finally {
     if (descriptor) {
