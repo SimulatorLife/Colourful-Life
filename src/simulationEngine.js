@@ -1,5 +1,6 @@
 import EventManager from "./events/eventManager.js";
 import GridManager from "./grid/gridManager.js";
+import InteractionSystem from "./interactionSystem.js";
 import createSelectionManagerStub from "./grid/selectionManagerStub.js";
 import createSimulationRuntimeServices from "./engine/simulationRuntimeServices.js";
 import {
@@ -248,6 +249,12 @@ export default class SimulationEngine {
       stats: this.stats,
       initialTileEnergyFraction: defaults.initialTileEnergyFraction,
       selectionManager: this.selectionManager,
+      interactionSystemFactory: ({ adapter, gridManager }) =>
+        new InteractionSystem({
+          adapter,
+          gridManager,
+          combatTerritoryEdgeFactor: GridManager.combatTerritoryEdgeFactor,
+        }),
       initialObstaclePreset,
       initialObstaclePresetOptions: config.initialObstaclePresetOptions,
       randomizeInitialObstacles,
