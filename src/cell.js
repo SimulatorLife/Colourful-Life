@@ -6909,7 +6909,7 @@ export default class Cell {
 
     let totalDrain = 0;
 
-    for (const { effect, strength } of appliedEvents) {
+    for (const { event, effect, strength } of appliedEvents) {
       if (!effect?.cell) continue;
 
       const effectiveStrength = clamp(strength * vigilance, 0, 1.5);
@@ -6923,7 +6923,24 @@ export default class Cell {
         0,
         1,
       );
-      const mitigatedImpact = energyLoss * cellStrength * (1 - resistance);
+      let susceptibility = 1;
+
+      if (typeof this.dna?.eventEnergyLossMultiplier === "function") {
+        const eventType =
+          typeof event?.eventType === "string" ? event.eventType : undefined;
+        const multiplier = this.dna.eventEnergyLossMultiplier(eventType, {
+          effect,
+          strength: cellStrength,
+          baseLoss: energyLoss,
+        });
+
+        if (Number.isFinite(multiplier) && multiplier > 0) {
+          susceptibility = clamp(multiplier, 0.25, 2);
+        }
+      }
+
+      const mitigatedImpact =
+        energyLoss * cellStrength * susceptibility * (1 - resistance);
 
       const netDrain = mitigatedImpact * (1 - mitigation);
 
