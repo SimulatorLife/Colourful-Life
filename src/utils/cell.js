@@ -9,8 +9,8 @@
  * field and falling back to the DNA-provided palette when necessary.
  * Returning `null` keeps upstream callers from storing empty strings.
  *
- * @param {object|null|undefined} cell - Candidate cell-like object.
- * @returns {string|null} Hex or rgba colour string, or `null` when unavailable.
+ * @param {object | null | undefined} cell - Candidate cell-like object.
+ * @returns {string | null} Hex or rgba colour string, or `null` when unavailable.
  */
 export function resolveCellColor(cell) {
   if (!cell || typeof cell !== "object") {

@@ -53,7 +53,7 @@ export function warnOnce(message, error) {
  * @param {(...args: any[]) => TResult} callback - Function executed inside the boundary.
  * @param {any[]} [args=[]] - Arguments forwarded to the callback.
  * @param {Object} [options]
- * @param {string|((...args: any[]) => string)} [options.message] - Optional
+ * @param {string | ((...args: any[]) => string)} [options.message] - Optional
  *   message or generator invoked when an error surfaces.
  * @param {boolean} [options.once=false] - Whether identical failures are
  *   reported at most once.
@@ -62,7 +62,7 @@ export function warnOnce(message, error) {
  *   [options.reporter=defaultErrorReporter] - Custom error reporter.
  * @param {(error: unknown) => void} [options.onError] - Handler executed when a
  *   failure occurs.
- * @returns {TResult|undefined} Callback result when successful; `undefined`
+ * @returns {TResult | undefined} Callback result when successful; `undefined`
  *   after handling an error.
  */
 export function invokeWithErrorBoundary(callback, args = [], options = {}) {
