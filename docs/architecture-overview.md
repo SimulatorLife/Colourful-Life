@@ -64,10 +64,14 @@ This document captures how the Colourful Life simulation composes its core syste
   flows.
 
 - Environment overrides such as `COLOURFUL_LIFE_MAX_TILE_ENERGY`,
+  `COLOURFUL_LIFE_ENERGY_REGEN_RATE`,
+  `COLOURFUL_LIFE_ENERGY_DIFFUSION_RATE`,
   `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`,
   `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY`,
   `COLOURFUL_LIFE_DECAY_RETURN_FRACTION`,
   `COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE`,
+  `COLOURFUL_LIFE_DECAY_RELEASE_BASE`,
+  `COLOURFUL_LIFE_DECAY_RELEASE_RATE`,
   `COLOURFUL_LIFE_DECAY_MAX_AGE`,
   `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER`, and
   `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` flow through
@@ -135,6 +139,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - `ReproductionZonePolicy` (`src/grid/reproductionZonePolicy.js`) keeps `GridManager`'s reproduction flow decoupled from the selection implementation by translating zone checks into simple allow/deny results.
 - `config.js` consolidates slider bounds, simulation defaults, and runtime-tunable constants such as diffusion and regeneration rates so UI and headless contexts remain in sync.
 - The `src/utils/` directory houses deterministic helpers (`createRNG`, `createRankedBuffer`, `cloneTracePayload`, etc.) reused across the simulation, UI, and tests.
+- The **Evolution Insights** panel hosts cadence controls shared with the leaderboard, including the "Dashboard Refresh Interval" slider exposed via `leaderboardIntervalMs` so observers can slow or accelerate telemetry updates without hunting through multiple panels.
 
 - The overlay pipeline is orchestrated by `drawOverlays`, which delegates to granular helpers (`drawEventOverlays`,
   `drawEnergyHeatmap`, `drawDensityHeatmap`, `drawFitnessHeatmap`) and reuses color ramps such as `densityToRgba`. Each helper
