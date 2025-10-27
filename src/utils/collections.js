@@ -47,13 +47,10 @@ export function createRankedBuffer(limit, compare) {
       if (entry == null || capacity === 0) return;
 
       const size = entries.length;
+      const bufferIsFull = size >= capacity;
 
-      if (size >= capacity) {
-        const comparison = comparator(entry, entries[size - 1]);
-
-        if (!(comparison < 0)) {
-          return;
-        }
+      if (bufferIsFull && comparator(entry, entries[size - 1]) >= 0) {
+        return;
       }
 
       let low = 0;
@@ -66,14 +63,15 @@ export function createRankedBuffer(limit, compare) {
 
         if (comparison < 0) {
           high = mid;
-        } else {
-          low = mid + 1;
+          continue;
         }
+
+        low = mid + 1;
       }
 
       const insertionIndex = low;
 
-      if (insertionIndex >= capacity && size >= capacity) return;
+      if (insertionIndex >= capacity) return;
 
       entries.splice(insertionIndex, 0, entry);
 
