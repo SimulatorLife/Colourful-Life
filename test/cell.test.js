@@ -63,6 +63,34 @@ function withMockedRandom(sequence, fn) {
   }
 }
 
+function createReproductionBrainStub({
+  accept = 4,
+  decline = -2,
+  activationCount = 6,
+} = {}) {
+  return {
+    connectionCount: 1,
+    evaluateGroup(group) {
+      if (group !== "reproduction") {
+        return null;
+      }
+
+      const values = { decline, accept };
+      const sensors = new Float32Array(Brain.SENSOR_COUNT);
+      const result = {
+        values,
+        activationCount,
+        sensors,
+        trace: { nodes: [] },
+      };
+
+      this.lastEvaluation = { ...result, group, values };
+
+      return result;
+    },
+  };
+}
+
 test.before(async () => {
   ({ default: Cell } = await import("../src/cell.js"));
   ({ DNA, GENE_LOCI } = await import("../src/genome.js"));
@@ -1502,6 +1530,280 @@ test("breed applies deterministic crossover and honors forced mutation", () => {
     expectedStrategy,
     1e-12,
     "strategy inheritance should match DNA guidance",
+  );
+});
+
+test("resolveReproductionEnergyThreshold lowers energy requirement when neural support is strong", () => {
+  const dnaSelf = new DNA(180, 140, 120);
+  const dnaPartner = new DNA(150, 160, 130);
+
+  dnaSelf.reproductionThresholdFrac = () => 0.45;
+  dnaPartner.reproductionThresholdFrac = () => 0.45;
+
+  const cell = new Cell(3, 3, dnaSelf, 7);
+  const partner = new Cell(3, 4, dnaPartner, 7);
+
+  cell.brain = createReproductionBrainStub({
+    accept: 6,
+    decline: -3,
+    activationCount: 9,
+  });
+
+  const maxTileEnergy = 12;
+  const baseProb = 0.35;
+  const context = {
+    localDensity: 0.18,
+    densityEffectMultiplier: 0.7,
+    maxTileEnergy,
+    baseProbability: baseProb,
+    tileEnergy: 0.62,
+    tileEnergyDelta: 0.04,
+  };
+
+  cell.decideReproduction(partner, context);
+
+  const baseEnergy = dnaSelf.reproductionThresholdFrac() * maxTileEnergy;
+  const thresholdEnergy = cell.resolveReproductionEnergyThreshold(partner, context);
+
+  assert.ok(
+    thresholdEnergy < baseEnergy,
+    "neural encouragement should reduce the reproduction energy floor",
+  );
+
+  const reproductionContext = cell._decisionContextIndex.get("reproduction");
+  const telemetry = reproductionContext?.outcome?.energyThreshold;
+
+  assert.ok(telemetry, "energy threshold telemetry should be recorded");
+  assert.ok(
+    telemetry.adjustedEnergy < telemetry.baseEnergy,
+    "telemetry should reflect the lowered threshold",
+  );
+  assert.is(telemetry.source, "decision", "neural decision should be marked as source");
+});
+
+test("resolveReproductionEnergyThreshold raises energy requirement when neural signals caution", () => {
+  const dnaSelf = new DNA(160, 100, 140);
+  const dnaPartner = new DNA(150, 120, 150);
+
+  dnaSelf.reproductionThresholdFrac = () => 0.4;
+  dnaPartner.reproductionThresholdFrac = () => 0.4;
+
+  const cell = new Cell(2, 2, dnaSelf, 6);
+  const partner = new Cell(2, 3, dnaPartner, 6);
+
+  cell.brain = createReproductionBrainStub({
+    accept: -2.5,
+    decline: 4.5,
+    activationCount: 7,
+  });
+
+  const maxTileEnergy = 10;
+  const baseProb = 0.42;
+  const context = {
+    localDensity: 0.32,
+    densityEffectMultiplier: 0.9,
+    maxTileEnergy,
+    baseProbability: baseProb,
+    tileEnergy: 0.48,
+    tileEnergyDelta: -0.12,
+  };
+
+  cell.decideReproduction(partner, context);
+
+  const baseEnergy = dnaSelf.reproductionThresholdFrac() * maxTileEnergy;
+  const thresholdEnergy = cell.resolveReproductionEnergyThreshold(partner, context);
+
+  assert.ok(
+    thresholdEnergy > baseEnergy,
+    "neural caution should increase the reproduction energy requirement",
+  );
+
+  const reproductionContext = cell._decisionContextIndex.get("reproduction");
+  const telemetry = reproductionContext?.outcome?.energyThreshold;
+
+  assert.ok(
+    telemetry,
+    "energy threshold telemetry should be recorded when neural discourages",
+  );
+  assert.ok(
+    telemetry.adjustedEnergy > telemetry.baseEnergy,
+    "telemetry should show an increased threshold",
+  );
+  assert.is(telemetry.source, "decision");
+});
+
+test("resolveReproductionEnergyThreshold uses preview when no decision context exists", () => {
+  const dnaSelf = new DNA(170, 130, 150);
+  const dnaPartner = new DNA(150, 120, 150);
+
+  dnaSelf.reproductionThresholdFrac = () => 0.5;
+  dnaPartner.reproductionThresholdFrac = () => 0.5;
+
+  const cell = new Cell(1, 1, dnaSelf, 5.5);
+  const partner = new Cell(1, 2, dnaPartner, 5.5);
+
+  cell.brain = createReproductionBrainStub({
+    accept: 5,
+    decline: -2,
+    activationCount: 5,
+  });
+
+  const maxTileEnergy = 14;
+  const context = {
+    localDensity: 0.25,
+    densityEffectMultiplier: 0.85,
+    maxTileEnergy,
+    baseProbability: 0.38,
+    tileEnergy: 0.55,
+    tileEnergyDelta: 0.06,
+  };
+
+  const baseEnergy = dnaSelf.reproductionThresholdFrac() * maxTileEnergy;
+  const thresholdEnergy = cell.resolveReproductionEnergyThreshold(partner, context);
+
+  assert.ok(
+    thresholdEnergy < baseEnergy,
+    "previewed neural encouragement should still reduce the threshold",
+  );
+
+  const reproductionContext = cell._decisionContextIndex.get("reproduction");
+
+  assert.ok(
+    !reproductionContext?.outcome?.energyThreshold,
+    "no telemetry should be recorded without a registered decision context",
+  );
+});
+
+test("populationScarcityDrive amplifies scarcity response when neural support is strong", () => {
+  const dnaSelf = new DNA(200, 140, 180);
+  const dnaPartner = new DNA(180, 150, 160);
+  const baseProbability = 0.32;
+  const scarcity = 0.75;
+  const population = 30;
+  const minPopulation = 120;
+
+  const baselineCell = new Cell(4, 4, dnaSelf, 6);
+  const baselinePartner = new Cell(4, 5, dnaPartner, 6);
+
+  baselineCell.brain = null;
+
+  const baselineDrive = baselineCell.populationScarcityDrive({
+    scarcity,
+    baseProbability,
+    partner: baselinePartner,
+    population,
+    minPopulation,
+  });
+
+  const cell = new Cell(4, 4, dnaSelf, 6);
+  const partner = new Cell(4, 5, dnaPartner, 6);
+
+  cell.brain = createReproductionBrainStub({
+    accept: 8,
+    decline: -4,
+    activationCount: 10,
+  });
+
+  const context = {
+    localDensity: 0.24,
+    densityEffectMultiplier: 0.8,
+    maxTileEnergy: 12,
+    baseProbability,
+    tileEnergy: 0.42,
+    tileEnergyDelta: -0.06,
+  };
+
+  cell.decideReproduction(partner, context);
+
+  const neuralDrive = cell.populationScarcityDrive({
+    scarcity,
+    baseProbability,
+    partner,
+    population,
+    minPopulation,
+  });
+
+  assert.ok(
+    neuralDrive > baselineDrive,
+    "neural encouragement should boost scarcity-driven reproduction",
+  );
+
+  const reproductionContext = cell._decisionContextIndex.get("reproduction");
+  const telemetry = reproductionContext?.outcome?.scarcityDrive;
+
+  assert.ok(telemetry, "scarcity telemetry should be recorded when neural fires");
+  assert.ok(telemetry.neuralMix > 0, "neural mix should reflect blend usage");
+  assert.ok(
+    telemetry.result > telemetry.heuristic,
+    "final scarcity drive should exceed heuristic baseline",
+  );
+});
+
+test("populationScarcityDrive eases scarcity pressure when neural discourages reproduction", () => {
+  const dnaSelf = new DNA(210, 160, 170);
+  const dnaPartner = new DNA(175, 140, 165);
+  const baseProbability = 0.37;
+  const scarcity = 0.68;
+  const population = 26;
+  const minPopulation = 110;
+
+  const baselineCell = new Cell(5, 5, dnaSelf, 6.5);
+  const baselinePartner = new Cell(5, 6, dnaPartner, 6.5);
+
+  baselineCell.brain = null;
+
+  const baselineDrive = baselineCell.populationScarcityDrive({
+    scarcity,
+    baseProbability,
+    partner: baselinePartner,
+    population,
+    minPopulation,
+  });
+
+  const cell = new Cell(5, 5, dnaSelf, 6.5);
+  const partner = new Cell(5, 6, dnaPartner, 6.5);
+
+  cell.brain = createReproductionBrainStub({
+    accept: -3,
+    decline: 5.5,
+    activationCount: 9,
+  });
+
+  const context = {
+    localDensity: 0.3,
+    densityEffectMultiplier: 0.9,
+    maxTileEnergy: 12,
+    baseProbability,
+    tileEnergy: 0.51,
+    tileEnergyDelta: -0.02,
+  };
+
+  cell.decideReproduction(partner, context);
+
+  const neuralDrive = cell.populationScarcityDrive({
+    scarcity,
+    baseProbability,
+    partner,
+    population,
+    minPopulation,
+  });
+
+  assert.ok(
+    neuralDrive < baselineDrive,
+    "neural caution should soften scarcity multipliers",
+  );
+
+  const reproductionContext = cell._decisionContextIndex.get("reproduction");
+  const telemetry = reproductionContext?.outcome?.scarcityDrive;
+
+  assert.ok(telemetry, "scarcity telemetry should capture neural discouragement");
+  assert.ok(
+    telemetry.result < telemetry.heuristic,
+    "final scarcity drive should fall below heuristic when neural resists",
+  );
+  assert.ok(
+    telemetry.neuralImpulse < 0,
+    "neural impulse should reflect the discouraging signal",
   );
 });
 
