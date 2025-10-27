@@ -6330,6 +6330,84 @@ export default class UIManager {
     this._traitSparkKeys = keys;
   }
 
+  #measureSparklineDisplaySize(canvas) {
+    const devicePixelRatio =
+      typeof window !== "undefined" && Number.isFinite(window.devicePixelRatio)
+        ? window.devicePixelRatio
+        : 1;
+    const safeDevicePixelRatio = devicePixelRatio > 0 ? devicePixelRatio : 1;
+
+    if (!canvas) {
+      return { width: 0, height: 0, dpr: safeDevicePixelRatio };
+    }
+
+    const rect =
+      typeof canvas.getBoundingClientRect === "function"
+        ? canvas.getBoundingClientRect()
+        : null;
+
+    const candidates = (value) => {
+      const numeric = Number(value);
+
+      return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+    };
+
+    const rectWidth = rect ? candidates(rect.width) : 0;
+    const rectHeight = rect ? candidates(rect.height) : 0;
+    const clientWidth = candidates(canvas.clientWidth);
+    const clientHeight = candidates(canvas.clientHeight);
+
+    let width = Math.max(clientWidth, rectWidth);
+    let height = Math.max(clientHeight, rectHeight);
+
+    if (width <= 0 && Number.isFinite(canvas.width)) {
+      width = canvas.width / safeDevicePixelRatio;
+    }
+
+    if (height <= 0 && Number.isFinite(canvas.height)) {
+      height = canvas.height / safeDevicePixelRatio;
+    }
+
+    return {
+      width: Math.max(1, Math.floor(width || 1)),
+      height: Math.max(1, Math.floor(height || 1)),
+      dpr: safeDevicePixelRatio,
+    };
+  }
+
+  #prepareSparklineCanvas(canvas, ctx) {
+    const {
+      width: cssWidth,
+      height: cssHeight,
+      dpr,
+    } = this.#measureSparklineDisplaySize(canvas);
+    const pixelWidth = Math.max(1, Math.round(cssWidth * dpr));
+    const pixelHeight = Math.max(1, Math.round(cssHeight * dpr));
+
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
+
+    let lineWidthScale = 1;
+
+    if (ctx) {
+      if (typeof ctx.setTransform === "function") {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      } else {
+        if (typeof ctx.resetTransform === "function") {
+          ctx.resetTransform();
+        }
+        if (typeof ctx.scale === "function" && dpr !== 1) {
+          ctx.scale(dpr, dpr);
+          lineWidthScale = 1 / dpr;
+        }
+      }
+    }
+
+    return { width: cssWidth, height: cssHeight, lineWidthScale };
+  }
+
   renderLifeEvents(stats, metrics) {
     if (!this.lifeEventsPanel) {
       this._pendingLifeEventsStats =
@@ -6355,8 +6433,11 @@ export default class UIManager {
     const ctx = canvas.getContext("2d");
     const series = Array.isArray(data) ? data : [];
     const length = series.length;
-    const w = Number(canvas.width) || 0;
-    const h = Number(canvas.height) || 0;
+    const {
+      width: w,
+      height: h,
+      lineWidthScale,
+    } = this.#prepareSparklineCanvas(canvas, ctx);
 
     if (!ctx || w <= 0 || h <= 0) {
       return;
@@ -6428,7 +6509,7 @@ export default class UIManager {
     const invSpan = 1 / span;
 
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.5 * lineWidthScale;
     ctx.beginPath();
 
     if (allFiniteNumbers) {
