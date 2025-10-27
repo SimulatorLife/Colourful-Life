@@ -53,7 +53,11 @@ function rememberColor(normalized, record) {
 
   const cached = COLOR_CACHE.get(normalized);
 
-  if (cached !== undefined || COLOR_CACHE.has(normalized)) {
+  // The cache only stores concrete color records, so an `undefined` read
+  // reliably indicates a miss. By avoiding the extra `.has()` probe we shave
+  // a hash lookup from the hottest path where repeated color lookups hit the
+  // cache every frame.
+  if (cached !== undefined) {
     return cached;
   }
 
@@ -158,7 +162,7 @@ export function resolveColorRecord(color) {
 
   const cached = COLOR_CACHE.get(normalized);
 
-  if (cached !== undefined || COLOR_CACHE.has(normalized)) {
+  if (cached !== undefined) {
     return cached;
   }
 
