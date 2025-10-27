@@ -1604,6 +1604,8 @@ export default class SimulationEngine {
 
   applyObstaclePreset(id, options) {
     this.grid.applyObstaclePreset(id, options);
+    this.grid?.draw?.({ showObstacles: this.state.showObstacles ?? true });
+    this.requestFrame();
   }
 }
 

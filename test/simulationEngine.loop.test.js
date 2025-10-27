@@ -11,6 +11,40 @@ import {
   SIMULATION_DEFAULTS,
 } from "../src/config.js";
 
+function createRafController() {
+  let callback = null;
+  let handle = 0;
+  let currentTime = 0;
+
+  return {
+    raf(cb) {
+      callback = cb;
+      handle += 1;
+
+      return handle;
+    },
+    caf() {
+      callback = null;
+    },
+    flush(timestamp) {
+      currentTime = timestamp;
+
+      const pending = callback;
+
+      callback = null;
+      if (typeof pending === "function") {
+        pending(timestamp);
+      }
+    },
+    hasFrame() {
+      return typeof callback === "function";
+    },
+    now() {
+      return currentTime;
+    },
+  };
+}
+
 test("start schedules a frame and ticking through RAF uses sanitized defaults", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
@@ -401,6 +435,67 @@ test("speed multiplier supports slow motion down to the configured floor", async
     assert.is(engine.state.updatesPerSecond, 6);
     approxEqual(engine.state.speedMultiplier, 0.1, 1e-9);
   } finally {
+    restore();
+  }
+});
+
+test("applyObstaclePreset requests a redraw even while paused", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore, calls } = patchSimulationPrototypes(modules);
+
+  let engine;
+
+  try {
+    const raf = createRafController();
+    const overlayInvocations = [];
+
+    engine = new SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => raf.now(),
+      requestAnimationFrame: (cb) => raf.raf(cb),
+      cancelAnimationFrame: () => raf.caf(),
+      drawOverlays(...args) {
+        overlayInvocations.push(args);
+      },
+    });
+
+    let presetCalls = 0;
+
+    engine.grid.applyObstaclePreset = () => {
+      presetCalls += 1;
+    };
+
+    engine.start();
+    assert.ok(raf.hasFrame(), "engine schedules initial frame after start");
+    raf.flush(0);
+    assert.ok(raf.hasFrame(), "running engine keeps scheduling frames");
+
+    engine.pause();
+    assert.ok(engine.isPaused(), "engine reports paused state");
+    raf.flush(16);
+    assert.not.ok(raf.hasFrame(), "paused engine stops scheduling frames");
+
+    overlayInvocations.length = 0;
+    calls.grid.draw.length = 0;
+
+    engine.applyObstaclePreset("test");
+
+    assert.is(presetCalls, 1, "grid.applyObstaclePreset invoked");
+    assert.ok(
+      calls.grid.draw.length > 0,
+      "grid.draw invoked to refresh canvas immediately",
+    );
+    assert.ok(raf.hasFrame(), "redraw scheduled even though engine is paused");
+
+    raf.flush(32);
+    assert.ok(
+      overlayInvocations.length > 0,
+      "overlay renderer invoked after scheduling frame",
+    );
+  } finally {
+    engine?.destroy();
     restore();
   }
 });
