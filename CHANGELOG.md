@@ -31,9 +31,9 @@ where practical.
 
 - Clarified quick-start guidance and contributor workflow docs to call out `npm run check`, the built-in energy benchmark that precedes `npm test`, and focused watch/file-path options for faster feedback while developing.
 - Amplified the low-diversity reproduction penalty when parents accumulate mate novelty pressure so lineages stuck in repetitive pairings feel stronger pressure to diversify.
-- Relocated the "Life Event Markers" toggle into the Life Event Log panel's map
-  overlay controls so the grid markers live beside the birth/death telemetry
-  they reinforce.
+- Relocated the "Life Event Markers" toggle into the Simulation Controls overlay
+  stack so the grid markers live beside the other canvas layers they
+  complement.
 - Moved the "Dashboard Refresh Interval" slider into the Dashboard Settings
   panel so cadence controls are discoverable without scanning the individual
   metrics or leaderboard panes.
