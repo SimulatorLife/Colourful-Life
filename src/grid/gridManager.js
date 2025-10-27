@@ -56,6 +56,11 @@ const EMPTY_EVENT_LIST = Object.freeze([]);
 const EMPTY_TARGET_LIST = Object.freeze([]);
 
 const similarityCache = new WeakMap();
+// Cache crowding metrics directly on occupants to avoid repeated preference and
+// energy normalization work when tiles share neighbors across regeneration
+// passes. A `Symbol` key prevents collisions with consumer-defined fields while
+// allowing inexpensive lookups compared to WeakMap indirection.
+const CROWDING_SAMPLE_CACHE_KEY = Symbol("crowdingSampleCache");
 const NEIGHBOR_OFFSETS = [
   [-1, -1],
   [-1, 0],
@@ -146,41 +151,61 @@ function computeCrowdingFeedback({
   const defaultTolerance = 0.5;
   const useCustomOffsets =
     Array.isArray(neighborOffsets) && neighborOffsets !== NEIGHBOR_OFFSETS;
+  const maxEnergyForCache = useScarcity ? maxTileEnergy : 0;
 
-  const processOccupant = (occupant) => {
+  const accumulateOccupant = (occupant) => {
     if (!occupant) {
       return;
     }
 
-    let tolerance = occupant._crowdingTolerance;
+    const baselineCandidate = occupant.baseCrowdingTolerance;
+    const baseline = Number.isFinite(baselineCandidate)
+      ? baselineCandidate
+      : defaultTolerance;
+    let toleranceSource = occupant._crowdingTolerance;
 
-    if (Number.isFinite(tolerance)) {
-      tolerance = tolerance <= 0 ? 0 : tolerance >= 1 ? 1 : tolerance;
-    } else {
-      const baselineCandidate = occupant.baseCrowdingTolerance;
-      const baseline = Number.isFinite(baselineCandidate)
-        ? baselineCandidate
-        : defaultTolerance;
-      const clampedBaseline = baseline <= 0 ? 0 : baseline >= 1 ? 1 : baseline;
+    if (!Number.isFinite(toleranceSource)) {
       const getPreference = occupant.getCrowdingPreference;
 
       if (typeof getPreference === "function") {
         const resolved = getPreference.call(occupant, { fallback: baseline });
 
-        if (Number.isFinite(resolved)) {
-          tolerance = resolved <= 0 ? 0 : resolved >= 1 ? 1 : resolved;
-        } else {
-          tolerance = clampedBaseline;
-        }
+        toleranceSource = Number.isFinite(resolved) ? resolved : baseline;
       } else {
-        tolerance = clampedBaseline;
+        toleranceSource = baseline;
       }
     }
+    const energy = Number.isFinite(occupant.energy) ? occupant.energy : 0;
+    const cached = occupant[CROWDING_SAMPLE_CACHE_KEY];
 
-    toleranceSum += tolerance;
+    if (
+      cached &&
+      cached.toleranceSource === toleranceSource &&
+      cached.energy === energy &&
+      cached.maxTileEnergy === maxEnergyForCache
+    ) {
+      toleranceSum += cached.tolerance;
+
+      if (useScarcity) {
+        scarcitySum += cached.scarcityContribution;
+      }
+
+      count += 1;
+
+      return;
+    }
+
+    let tolerance = toleranceSource;
+
+    if (tolerance <= 0) {
+      tolerance = 0;
+    } else if (tolerance >= 1) {
+      tolerance = 1;
+    }
+
+    let scarcityContribution = 0;
 
     if (useScarcity) {
-      const energy = Number.isFinite(occupant.energy) ? occupant.energy : 0;
       let normalizedEnergy = energy * norm;
 
       if (normalizedEnergy <= 0) {
@@ -189,10 +214,20 @@ function computeCrowdingFeedback({
         normalizedEnergy = 1;
       }
 
-      scarcitySum += 1 - normalizedEnergy;
+      scarcityContribution = 1 - normalizedEnergy;
+      scarcitySum += scarcityContribution;
     }
 
+    toleranceSum += tolerance;
     count += 1;
+
+    occupant[CROWDING_SAMPLE_CACHE_KEY] = {
+      tolerance,
+      toleranceSource,
+      energy,
+      scarcityContribution,
+      maxTileEnergy: maxEnergyForCache,
+    };
   };
 
   if (useCustomOffsets) {
@@ -215,7 +250,7 @@ function computeCrowdingFeedback({
 
       if (!neighborRow) continue;
 
-      processOccupant(neighborRow[nc]);
+      accumulateOccupant(neighborRow[nc]);
     }
   } else {
     const lastRowIndex = rows - 1;
@@ -235,7 +270,7 @@ function computeCrowdingFeedback({
       for (let nc = startCol; nc <= endCol; nc++) {
         if (sameRow && nc === col) continue;
 
-        processOccupant(neighborRow[nc]);
+        accumulateOccupant(neighborRow[nc]);
       }
     }
   }
