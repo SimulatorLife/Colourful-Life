@@ -206,6 +206,37 @@ test("createSimulation honours layout initial settings overrides", async () => {
   }
 });
 
+test("layout initial settings override conflicting base config", async () => {
+  const restore = setupDom();
+
+  try {
+    const { createSimulation } = await import("../src/main.js");
+    const simulation = createSimulation({
+      canvas: new MockCanvas(160, 160),
+      autoStart: false,
+      config: {
+        showEnergy: false,
+        ui: {
+          layout: {
+            initialSettings: {
+              showEnergy: true,
+            },
+          },
+        },
+      },
+    });
+
+    const { engine, uiManager } = simulation;
+
+    assert.is(engine.state.showEnergy, true);
+    assert.is(uiManager.showEnergy, true);
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});
+
 test("createSimulation keeps engine cadence in sync with speed defaults", async () => {
   const restore = setupDom();
 
