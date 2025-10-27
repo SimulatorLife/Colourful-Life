@@ -64,6 +64,8 @@ function sanitizeMaxConcurrentEvents(value, fallback = MAX_CONCURRENT_EVENTS_FAL
  * @param {Object} [options]
  * @param {HTMLCanvasElement} [options.canvas] - Canvas to render into; resolved via
  *   `document.getElementById('gameCanvas')` when omitted.
+ * @param {string} [options.defaultCanvasId="gameCanvas"] - Identifier used when
+ *   resolving a fallback canvas from the provided document.
  * @param {Object} [options.config] - Initial configuration (cell size, UI slider defaults, etc.).
  * @param {() => number} [options.rng=Math.random] - PRNG used by the grid and events.
  * @param {(cb: FrameRequestCallback) => number} [options.requestAnimationFrame] - Injected
@@ -87,6 +89,7 @@ export default class SimulationEngine {
   constructor({
     canvas,
     config = {},
+    defaultCanvasId,
     rng = Math.random,
     requestAnimationFrame: injectedRaf,
     cancelAnimationFrame: injectedCaf,
@@ -102,7 +105,9 @@ export default class SimulationEngine {
     const win = injectedWindow ?? (typeof window !== "undefined" ? window : undefined);
     const doc =
       injectedDocument ?? (typeof document !== "undefined" ? document : undefined);
-    const resolvedCanvas = resolveCanvas(canvas, doc);
+    const resolvedCanvas = resolveCanvas(canvas, doc, {
+      fallbackId: defaultCanvasId,
+    });
 
     if (!resolvedCanvas) {
       throw new Error("SimulationEngine requires a canvas element.");
