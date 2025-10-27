@@ -2484,7 +2484,7 @@ export default class UIManager {
   #updateLifeEventsSummary(birthCount = 0, deathCount = 0, totalCount, trend) {
     if (!this.lifeEventsSummary) return;
 
-    const updateItem = (item, countEl, count) => {
+    const updateItem = (item, countEl, periodEl, defaults, count, overrides = null) => {
       if (!item || !countEl) return;
 
       const label =
@@ -2499,6 +2499,26 @@ export default class UIManager {
       const safeCount = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
       const displayCount = safeCount.toLocaleString();
 
+      const defaultPeriodLabel = defaults?.periodLabel || "Latest tick";
+      const defaultPeriodDescription =
+        defaults?.periodDescription || "during the latest tick";
+      const overrideLabel = overrides?.periodLabel;
+      const overrideDescription = overrides?.periodDescription;
+      const periodLabel =
+        typeof overrideLabel === "string" && overrideLabel.length > 0
+          ? overrideLabel
+          : defaultPeriodLabel;
+      const periodDescription =
+        typeof overrideDescription === "string" && overrideDescription.length > 0
+          ? overrideDescription
+          : defaultPeriodDescription;
+
+      if (periodEl) {
+        periodEl.textContent = periodLabel;
+        periodEl.title =
+          periodDescription.charAt(0).toUpperCase() + periodDescription.slice(1);
+      }
+
       countEl.textContent = displayCount;
       item.classList.toggle("life-events-summary__item--muted", safeCount === 0);
 
@@ -2510,7 +2530,7 @@ export default class UIManager {
             ? singular.toLowerCase()
             : labelLower;
         const word = safeCount === 1 ? singularLower : plural;
-        const accessibleText = `${displayCount} ${word} recorded during the latest tick`;
+        const accessibleText = `${displayCount} ${word} recorded ${periodDescription}`;
         const titleText =
           accessibleText.charAt(0).toUpperCase() + accessibleText.slice(1);
 
@@ -2521,15 +2541,49 @@ export default class UIManager {
       }
     };
 
+    const windowTicks = Number.isFinite(trend?.window)
+      ? Math.max(1, Math.round(trend.window))
+      : null;
+    const hasWindowSpan = Number.isFinite(windowTicks) && windowTicks > 1;
+    const windowLabel = hasWindowSpan
+      ? `Last ${windowTicks.toLocaleString()} ${windowTicks === 1 ? "tick" : "ticks"}`
+      : null;
+    const windowDescription = hasWindowSpan
+      ? `over the last ${windowTicks.toLocaleString()} ${windowTicks === 1 ? "tick" : "ticks"}`
+      : null;
+
+    const birthOverrides = hasWindowSpan
+      ? {
+          periodLabel: windowLabel,
+          periodDescription: windowDescription,
+        }
+      : null;
+    const deathOverrides = birthOverrides;
+
+    const totalOverrides = hasWindowSpan
+      ? {
+          periodLabel: this.lifeEventsSummaryTotalDefaults?.periodLabel
+            ? `${this.lifeEventsSummaryTotalDefaults.periodLabel} • ${windowLabel}`
+            : windowLabel,
+          periodDescription: windowDescription,
+        }
+      : null;
+
     updateItem(
       this.lifeEventsSummaryBirthItem,
       this.lifeEventsSummaryBirthCount,
+      this.lifeEventsSummaryBirthPeriod,
+      this.lifeEventsSummaryBirthDefaults,
       birthCount,
+      birthOverrides,
     );
     updateItem(
       this.lifeEventsSummaryDeathItem,
       this.lifeEventsSummaryDeathCount,
+      this.lifeEventsSummaryDeathPeriod,
+      this.lifeEventsSummaryDeathDefaults,
       deathCount,
+      deathOverrides,
     );
 
     const total =
@@ -2540,7 +2594,10 @@ export default class UIManager {
     updateItem(
       this.lifeEventsSummaryTotalItem,
       this.lifeEventsSummaryTotalCount,
+      this.lifeEventsSummaryTotalPeriod,
+      this.lifeEventsSummaryTotalDefaults,
       total,
+      totalOverrides,
     );
 
     this.lifeEventsSummary.classList.toggle("life-events-summary--empty", total === 0);
@@ -4547,6 +4604,7 @@ export default class UIManager {
         description,
         periodLabel = "Latest tick",
         singularLabel,
+        periodDescription,
       } = normalizedOptions || {};
       const item = document.createElement("div");
       const normalizedClass = ["life-events-summary__item", modifierClass]
@@ -4598,7 +4656,20 @@ export default class UIManager {
       item.appendChild(textGroup);
       item.appendChild(countEl);
 
-      return { item, countEl };
+      const trimmedDescription =
+        typeof periodDescription === "string" && periodDescription.trim().length > 0
+          ? periodDescription.trim()
+          : "during the latest tick";
+
+      return {
+        item,
+        countEl,
+        periodEl,
+        defaults: {
+          periodLabel,
+          periodDescription: trimmedDescription,
+        },
+      };
     };
 
     this.lifeEventsSummary = document.createElement("div");
@@ -4607,7 +4678,7 @@ export default class UIManager {
     this.lifeEventsSummary.setAttribute("aria-live", "polite");
     this.lifeEventsSummary.setAttribute(
       "aria-label",
-      "Latest tick birth, death, and total event counts",
+      "Birth, death, and total life event counts for the observation window",
     );
 
     const birthsSummary = createSummaryItem(
@@ -4626,15 +4697,22 @@ export default class UIManager {
       {
         description: "Combined births and deaths recorded during the latest tick.",
         periodLabel: "Births + deaths",
+        periodDescription: "across the latest tick",
       },
     );
 
     this.lifeEventsSummaryBirthItem = birthsSummary.item;
     this.lifeEventsSummaryBirthCount = birthsSummary.countEl;
+    this.lifeEventsSummaryBirthPeriod = birthsSummary.periodEl;
+    this.lifeEventsSummaryBirthDefaults = birthsSummary.defaults;
     this.lifeEventsSummaryDeathItem = deathsSummary.item;
     this.lifeEventsSummaryDeathCount = deathsSummary.countEl;
+    this.lifeEventsSummaryDeathPeriod = deathsSummary.periodEl;
+    this.lifeEventsSummaryDeathDefaults = deathsSummary.defaults;
     this.lifeEventsSummaryTotalItem = totalSummary.item;
     this.lifeEventsSummaryTotalCount = totalSummary.countEl;
+    this.lifeEventsSummaryTotalPeriod = totalSummary.periodEl;
+    this.lifeEventsSummaryTotalDefaults = totalSummary.defaults;
 
     this.lifeEventsSummary.appendChild(birthsSummary.item);
     this.lifeEventsSummary.appendChild(deathsSummary.item);
@@ -4693,7 +4771,7 @@ export default class UIManager {
 
     summaryEmptyMessage.className = "life-events-summary__empty-message control-hint";
     summaryEmptyMessage.textContent =
-      "No births or deaths recorded during the latest tick.";
+      "No births or deaths recorded in the observation window yet.";
     summaryEmptyMessage.hidden = true;
     const summaryEmptyId = `${body.id || "life-events"}-summary-empty`;
 
