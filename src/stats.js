@@ -325,6 +325,7 @@ export default class Stats {
   #traitKeys;
   #traitComputes;
   #traitThresholds;
+  #traitActiveIndexes;
   #rng;
   #pairSampleScratch;
   #pairSampleHash;
@@ -366,6 +367,15 @@ export default class Stats {
       this.traitDefinitions,
       ({ threshold }) => threshold ?? TRAIT_THRESHOLD,
     );
+    const activeTraitIndexes = [];
+
+    for (let index = 0; index < this.#traitComputes.length; index += 1) {
+      if (typeof this.#traitComputes[index] === "function") {
+        activeTraitIndexes.push(index);
+      }
+    }
+
+    this.#traitActiveIndexes = activeTraitIndexes;
     this.#traitSums = new Float64Array(this.traitDefinitions.length);
     this.#traitActiveCounts = new Float64Array(this.traitDefinitions.length);
     this.#rng = typeof rng === "function" ? rng : DEFAULT_RANDOM;
@@ -1124,6 +1134,7 @@ export default class Stats {
       this.#traitThresholds,
       this.#traitSums,
       this.#traitActiveCounts,
+      this.#traitActiveIndexes,
     );
 
     this.#traitPopulation = population;
