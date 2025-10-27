@@ -36,6 +36,22 @@ test("resolveCanvas locates default canvas on provided document", () => {
   assert.is(documentRef.calls, 1);
 });
 
+test("resolveCanvas supports configurable fallback identifiers", () => {
+  const fallbackCanvas = { id: "custom" };
+  const documentRef = {
+    getElementById(id) {
+      this.calls = (this.calls ?? 0) + 1;
+
+      return id === "custom" ? fallbackCanvas : null;
+    },
+  };
+
+  const result = resolveCanvas(null, documentRef, { fallbackId: "custom" });
+
+  assert.is(result, fallbackCanvas);
+  assert.is(documentRef.calls, 1);
+});
+
 test("resolveCanvas returns null when no lookup strategy succeeds", () => {
   const result = resolveCanvas(null, {});
 

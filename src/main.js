@@ -30,6 +30,8 @@ const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
  *   the tile energy cap applied to empty tiles during world resets and
  *   constructor seeding. The value is clamped to the 0..1 range and defaults to
  *   0.5.
+ * - `defaultCanvasId` (`string`, default `"gameCanvas"`): identifier used when
+ *   resolving a fallback canvas from the document.
  * - `headless` (`boolean`, default `false`): create a headless UI adapter via
  *   {@link createHeadlessUiManager} instead of mounting the {@link UIManager}.
  * - `autoStart` (`boolean`, default `true`): whether to call `engine.start()`
@@ -109,6 +111,7 @@ export function createSimulation({
   window: injectedWindow,
   document: injectedDocument,
   brainSnapshotCollector: injectedBrainSnapshotCollector,
+  defaultCanvasId,
 } = {}) {
   const win = injectedWindow ?? (typeof window !== "undefined" ? window : undefined);
 
@@ -198,6 +201,7 @@ export function createSimulation({
     drawOverlays: overlayRenderer,
     selectionManager: providedSelectionManager,
     selectionManagerFactory,
+    defaultCanvasId,
   });
 
   const uiOptions = config.ui ?? {};

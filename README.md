@@ -116,7 +116,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 
 `createSimulation` exported from [`src/main.js`](src/main.js) stitches together the engine, UI, overlays, and lifecycle helpers. Pass `{ headless: true }` to obtain a headless controller for automation or tests and inject `{ requestAnimationFrame, cancelAnimationFrame, performanceNow }` to supply deterministic timing in non-browser environments. The helper will (see the developer guide's [tooling section](docs/developer-guide.md#tooling) for supporting scripts and environment tips):
 
-- Resolve or create a canvas using [`resolveCanvas`](src/engine/environment.js) and [`ensureCanvasDimensions`](src/engine/environment.js).
+- Resolve or create a canvas using [`resolveCanvas`](src/engine/environment.js) and [`ensureCanvasDimensions`](src/engine/environment.js), overriding the default `gameCanvas` lookup by passing `defaultCanvasId` when needed.
 - Construct the grid, stats, selection manager, and event manager, exposing them on the returned controller (`{ grid, stats, selectionManager, eventManager }`).
 - Mount the full UI via [`UIManager`](src/ui/uiManager.js) or build a headless adapter with [`createHeadlessUiManager`](src/ui/headlessUiManager.js).
 - Link the engine and UI through [`bindSimulationToUi`](src/ui/simulationUiBridge.js) so pause state, reproduction multipliers, metrics streams, and leaderboard updates stay synchronised across browser and headless contexts.

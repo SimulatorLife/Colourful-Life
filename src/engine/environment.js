@@ -170,22 +170,30 @@ export function buildHeadlessCanvasOverrides(config, size) {
  * Resolves the canvas element the simulation should render into.
  *
  * Consumers can supply an explicit `HTMLCanvasElement` (or compatible
- * offscreen canvas). When omitted, the helper attempts to locate the
- * `#gameCanvas` element on the provided document reference. Returning `null`
- * allows callers to detect the missing canvas and surface a descriptive error.
+ * offscreen canvas). When omitted, the helper attempts to locate a fallback
+ * canvas on the provided document reference. Returning `null` allows callers to
+ * detect the missing canvas and surface a descriptive error.
  *
  * @param {HTMLCanvasElement|OffscreenCanvas|null} canvas - Preferred canvas
  *   instance supplied by the embedding context.
  * @param {Document|undefined} documentRef - Document used to look up the
- *   default canvas when one is not provided explicitly.
+ *   fallback canvas when one is not provided explicitly.
+ * @param {{fallbackId?: string}|undefined} [options] - Optional lookup
+ *   configuration. Provide `fallbackId` to override the default `gameCanvas`
+ *   element identifier used when searching the document.
  * @returns {HTMLCanvasElement|OffscreenCanvas|null} Canvas element or `null`
  *   when unavailable.
  */
-export function resolveCanvas(canvas, documentRef) {
+export function resolveCanvas(canvas, documentRef, options = {}) {
   if (canvas) return canvas;
 
+  const fallbackId =
+    typeof options?.fallbackId === "string" && options.fallbackId.trim().length > 0
+      ? options.fallbackId.trim()
+      : "gameCanvas";
+
   if (documentRef && typeof documentRef.getElementById === "function") {
-    return documentRef.getElementById("gameCanvas");
+    return documentRef.getElementById(fallbackId);
   }
 
   return null;
