@@ -207,11 +207,20 @@ export function resolveCellColorRecord(cell) {
     return EMPTY_COLOR_RECORD;
   }
 
-  const cached = CELL_COLOR_RECORD_CACHE.get(cell);
   const color = typeof cell.color === "string" ? cell.color : "";
+  const cached = CELL_COLOR_RECORD_CACHE.get(cell);
 
-  if (cached && cached.color === color) {
-    return cached.record;
+  if (cached) {
+    if (cached.color === color) {
+      return cached.record;
+    }
+
+    const record = color ? resolveColorRecord(color) : EMPTY_COLOR_RECORD;
+
+    cached.color = color;
+    cached.record = record;
+
+    return record;
   }
 
   const record = color ? resolveColorRecord(color) : EMPTY_COLOR_RECORD;
