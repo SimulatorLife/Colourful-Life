@@ -57,14 +57,11 @@ This document captures how the Colourful Life simulation composes its core syste
 - `computeTileEnergyUpdate` is called for each tile while the grid is preparing a tick.
 - Blends base regeneration with density penalties, diffusion from neighbouring tiles, and modifiers contributed by active environmental events.
 - Returns both the next energy value and any event metadata so overlays can highlight affected regions.
-- The default regeneration coefficient (`0.012`) now pairs with a diffusion
-  rate of `0.05` and a softened density penalty of `0.39`, keeping crowded hubs
-  from rebounding instantly while sparse frontier tiles still recover enough to
-  support scouting. A `computeTileEnergyUpdate` probe (density 0.85, tile energy
-  1.2, no events) nudged the per-tick gain from ~0.00309 to ~0.00321 energy
-  after the tweak, giving busy regions breathing room without eliminating
-  scarcity pressure; adjust via `resolveSimulationDefaults` when experimenting
-  with alternative baselines.
+- The default regeneration coefficient (`0.012`) pairs with a diffusion rate of
+  `0.05` and a density penalty of `0.39`. Adjust these baselines via
+  `resolveSimulationDefaults` or the environment overrides surfaced in
+  [`src/config.js`](../src/config.js) when experimenting with alternative energy
+  flows.
 
 - Environment overrides such as `COLOURFUL_LIFE_MAX_TILE_ENERGY`,
   `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`,
