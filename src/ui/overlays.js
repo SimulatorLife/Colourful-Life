@@ -3,6 +3,7 @@ import { clamp, clamp01, lerp } from "../utils/math.js";
 import { createRankedBuffer } from "../utils/collections.js";
 import { toPlainObject } from "../utils/object.js";
 import { warnOnce } from "../utils/error.js";
+import { resolveNonEmptyString } from "../utils/primitives.js";
 
 const DEFAULT_FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
@@ -371,12 +372,11 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
       ctx.globalAlpha = Number.isFinite(alpha) ? alpha : LIFE_EVENT_MARKER_MAX_ALPHA;
     }
 
-    const color =
-      typeof rawColor === "string" && rawColor.length > 0
-        ? rawColor
-        : type === "death"
-          ? LIFE_EVENT_MARKER_DEFAULT_COLORS.death
-          : LIFE_EVENT_MARKER_DEFAULT_COLORS.birth;
+    const fallbackColor =
+      type === "death"
+        ? LIFE_EVENT_MARKER_DEFAULT_COLORS.death
+        : LIFE_EVENT_MARKER_DEFAULT_COLORS.birth;
+    const color = resolveNonEmptyString(rawColor, fallbackColor);
     const centerX = (col + 0.5) * cellSize;
     const centerY = (row + 0.5) * cellSize;
 
@@ -414,7 +414,7 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
 }
 
 function normalizeLegendColor(candidate, fallback) {
-  return typeof candidate === "string" && candidate.length > 0 ? candidate : fallback;
+  return resolveNonEmptyString(candidate, fallback);
 }
 
 function drawLegendBirthBadge(ctx, centerX, centerY, radius, color) {
@@ -768,12 +768,8 @@ export function drawGridLines(ctx, cellSize, rows, cols, options = {}) {
   const { color, emphasisColor, emphasisStep, lineWidth } = toPlainObject(options);
   const width = cols * cellSize;
   const height = rows * cellSize;
-  const baseColor =
-    typeof color === "string" && color.length > 0 ? color : GRID_LINE_COLOR;
-  const highlightColor =
-    typeof emphasisColor === "string" && emphasisColor.length > 0
-      ? emphasisColor
-      : GRID_LINE_EMPHASIS_COLOR;
+  const baseColor = resolveNonEmptyString(color, GRID_LINE_COLOR);
+  const highlightColor = resolveNonEmptyString(emphasisColor, GRID_LINE_EMPHASIS_COLOR);
   const emphasisInterval =
     Number.isFinite(emphasisStep) && emphasisStep > 1
       ? Math.floor(emphasisStep)

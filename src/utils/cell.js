@@ -1,3 +1,5 @@
+import { resolveNonEmptyString } from "./primitives.js";
+
 /**
  * Shared helpers for working with cell entities without creating dependencies
  * on the heavier simulation modules. Utility consumers can safely extract
@@ -17,14 +19,15 @@ export function resolveCellColor(cell) {
     return null;
   }
 
-  const explicitColor =
-    typeof cell.color === "string" && cell.color.length > 0 ? cell.color : null;
+  const explicitColor = resolveNonEmptyString(cell.color);
 
-  if (explicitColor) {
+  if (explicitColor != null) {
     return explicitColor;
   }
 
-  const dnaColor = typeof cell?.dna?.toColor === "function" ? cell.dna.toColor() : null;
+  if (typeof cell?.dna?.toColor === "function") {
+    return resolveNonEmptyString(cell.dna.toColor());
+  }
 
-  return typeof dnaColor === "string" && dnaColor.length > 0 ? dnaColor : null;
+  return null;
 }
