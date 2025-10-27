@@ -302,3 +302,69 @@ test("update clones snapshots using shared helper", async () => {
 
   BrainDebugger.update([]);
 });
+
+test(
+  "update falls back to manual cloning when structuredClone unavailable",
+  { concurrency: false },
+  async () => {
+    const hadStructuredClone = Object.prototype.hasOwnProperty.call(
+      globalThis,
+      "structuredClone",
+    );
+    const originalStructuredClone = globalThis.structuredClone;
+
+    try {
+      // Simulate environments (older browsers, legacy Node) without structuredClone support.
+      delete globalThis.structuredClone;
+      const moduleUrl = new URL(
+        `../src/ui/brainDebugger.js?no-structured-clone=${Date.now()}`,
+        import.meta.url,
+      );
+      const { default: BrainDebugger } = await import(moduleUrl);
+      const source = [
+        {
+          row: 9,
+          col: 9,
+          fitness: 12,
+          color: "#abcdef",
+          neuronCount: 3,
+          connectionCount: 2,
+          brain: { connections: [1, 2], metadata: { label: "test" } },
+          decisions: [{ id: "delta" }],
+        },
+      ];
+
+      const updated = BrainDebugger.update(source);
+
+      assert.is(updated.length, 1);
+      assert.is.not(updated, source, "array instance should be cloned");
+      assert.is.not(updated[0], source[0], "snapshot object should be cloned");
+      assert.is.not(
+        updated[0].brain,
+        source[0].brain,
+        "brain payload should be cloned",
+      );
+      assert.is.not(
+        updated[0].decisions,
+        source[0].decisions,
+        "decision history should be cloned",
+      );
+
+      source[0].brain.connections.push(3);
+      source[0].brain.metadata.label = "mutated";
+      source[0].decisions[0].id = "epsilon";
+
+      assert.equal(updated[0].brain.connections, [1, 2]);
+      assert.equal(updated[0].brain.metadata, { label: "test" });
+      assert.equal(updated[0].decisions, [{ id: "delta" }]);
+
+      BrainDebugger.update([]);
+    } finally {
+      if (hadStructuredClone) {
+        globalThis.structuredClone = originalStructuredClone;
+      } else {
+        delete globalThis.structuredClone;
+      }
+    }
+  },
+);
