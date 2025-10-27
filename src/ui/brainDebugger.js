@@ -1,6 +1,7 @@
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 import { sanitizeNonNegativeInteger } from "../utils/math.js";
 import { resolveCellColor } from "../utils/cell.js";
+import { cloneTracePayload } from "../utils/object.js";
 
 const DEBUG_PROPERTY = "__colourfulLifeBrains";
 const state = {
@@ -44,7 +45,11 @@ function getGlobalScope() {
 }
 
 function cloneSnapshotList(list) {
-  return Array.isArray(list) ? list.map((item) => ({ ...item })) : [];
+  if (!Array.isArray(list)) {
+    return [];
+  }
+
+  return cloneTracePayload(list) ?? [];
 }
 
 function publishSnapshots(list) {
