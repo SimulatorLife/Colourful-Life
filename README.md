@@ -102,7 +102,7 @@ The simulation runs on cooperating modules housed in `src/`:
 - **Genetics and brains** (`src/genome.js`, `src/brain.js`) — DNA factories encode traits ranging from combat appetite to neural wiring. Brains interpret sensor inputs, adapt gains over time, and emit movement/interaction intents.
 - **Interaction system** (`src/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
 - **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and color overlays.
-- **Stats & leaderboard** (`src/stats.js`, `src/stats/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface environmental summaries, and select the top-performing organisms.
+- **Stats & leaderboard** (`src/stats/index.js`, `src/stats/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface environmental summaries, and select the top-performing organisms.
 - **Fitness scoring** (`src/engine/fitness.mjs`) — Computes composite organism fitness used by the leaderboard, overlays, and telemetry.
 - **UI manager** (`src/ui/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/ui/headlessUiManager.js` mirrors the interface for tests and Node scripts.
 - **UI bridge** (`src/ui/simulationUiBridge.js`) — Wires the simulation engine to either the full UI or the headless adapter, keeping metrics streams, pause state, reproduction multipliers, and slider updates in sync across environments.

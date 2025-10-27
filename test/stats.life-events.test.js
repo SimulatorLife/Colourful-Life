@@ -1,7 +1,7 @@
 import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 
-const statsModulePromise = import("../src/stats.js");
+const statsModulePromise = import("../src/stats/index.js");
 
 test("getRecentLifeEvents returns empty array for non-positive limits", async () => {
   const { default: Stats } = await statsModulePromise;

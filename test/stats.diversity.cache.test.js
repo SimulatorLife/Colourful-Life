@@ -1,6 +1,6 @@
 import { assert, test } from "#tests/harness";
 
-const statsModulePromise = import("../src/stats.js");
+const statsModulePromise = import("../src/stats/index.js");
 
 const createCellFactory = (seedCounters) => (id) => {
   const dna = {

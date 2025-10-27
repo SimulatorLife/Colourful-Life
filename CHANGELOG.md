@@ -210,6 +210,6 @@ where practical.
   - Neural genome, brain, and interaction systems powering emergent behaviour
     (`src/genome.js`, `src/brain.js`, `src/interactionSystem.js`).
   - Environmental events, overlays, and statistics modules to visualise the
-    world (`src/events/eventManager.js`, `src/ui/overlays.js`, `src/stats.js`).
+    world (`src/events/eventManager.js`, `src/ui/overlays.js`, `src/stats/index.js`).
   - Browser UI controls and a headless adapter exposed via `createSimulation`
     (`src/ui/uiManager.js`, `src/main.js`).

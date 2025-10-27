@@ -1,6 +1,6 @@
 import { assert, test } from "#tests/harness";
 
-const statsModulePromise = import("../src/stats.js");
+const statsModulePromise = import("../src/stats/index.js");
 
 test("Stats falls back to default history size when invalid value provided", async () => {
   const { default: Stats } = await statsModulePromise;

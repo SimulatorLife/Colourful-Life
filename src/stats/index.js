@@ -1,15 +1,15 @@
-import { TRAIT_ACTIVATION_THRESHOLD } from "./config.js";
+import { TRAIT_ACTIVATION_THRESHOLD } from "../config.js";
 import {
   clamp,
   clamp01,
   sanitizeNumber,
   sanitizePositiveInteger,
   toFiniteOrNull,
-} from "./utils/math.js";
-import { warnOnce } from "./utils/error.js";
-import { accumulateTraitAggregates } from "./stats/traitAggregation.js";
-import { resolveCellColor } from "./utils/cell.js";
-import { resolveNonEmptyString } from "./utils/primitives.js";
+} from "../utils/math.js";
+import { warnOnce } from "../utils/error.js";
+import { accumulateTraitAggregates } from "./traitAggregation.js";
+import { resolveCellColor } from "../utils/cell.js";
+import { resolveNonEmptyString } from "../utils/primitives.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;
