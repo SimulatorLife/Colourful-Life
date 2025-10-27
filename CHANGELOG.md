@@ -92,7 +92,7 @@ where practical.
 - Moved the "Low Diversity Penalty ×" slider into the Similarity Thresholds
   section so reproduction tuning lives alongside the diversity cutoff and
   ally/enemy similarity sliders.
-- Lowered the default energy regeneration rate to `0.012`, trimmed diffusion to
+- Lowered the default energy regeneration rate to `0.0117`, trimmed diffusion to
   `0.05`, and set the density penalty to `0.39` so crowded hubs return less
   energy each tick while sparse tiles still recover reliably.
 - Increased the reproduction viability buffer by 15 % so offspring only spawn
