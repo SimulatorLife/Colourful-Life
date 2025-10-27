@@ -45,6 +45,40 @@ function computeLifeEventAlpha(
   return LIFE_EVENT_MARKER_MIN_ALPHA + span * (1 - normalized * normalized);
 }
 
+function resolveLifeEventLimit(limit) {
+  if (limit == null) {
+    return LIFE_EVENT_MARKER_MAX_COUNT;
+  }
+
+  if (typeof limit === "string") {
+    const trimmed = limit.trim();
+
+    if (trimmed.length === 0) {
+      return LIFE_EVENT_MARKER_MAX_COUNT;
+    }
+
+    const parsed = Number(trimmed);
+
+    if (!Number.isFinite(parsed)) {
+      return LIFE_EVENT_MARKER_MAX_COUNT;
+    }
+
+    const floored = Math.floor(parsed);
+
+    return floored <= 0 ? 0 : floored;
+  }
+
+  const numeric = Number(limit);
+
+  if (!Number.isFinite(numeric)) {
+    return LIFE_EVENT_MARKER_MAX_COUNT;
+  }
+
+  const floored = Math.floor(numeric);
+
+  return floored <= 0 ? 0 : floored;
+}
+
 function resolveLifeEventColor(event, overridesInput) {
   const overrides = toPlainObject(overridesInput);
 
@@ -170,10 +204,7 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
   if (!ctx || !(cellSize > 0)) return;
   if (!Array.isArray(events) || events.length === 0) return;
 
-  const maxCount = Math.max(
-    0,
-    Math.floor(options.limit ?? LIFE_EVENT_MARKER_MAX_COUNT),
-  );
+  const maxCount = resolveLifeEventLimit(options.limit);
 
   if (maxCount === 0) return;
 
