@@ -33,6 +33,25 @@ test("getRecentLifeEvents returns the most recent events up to the requested lim
   );
 });
 
+test("life event helpers reuse fallback cell data when context is provided first", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+  const cell = {
+    dna: { toColor: () => "#abc" },
+    energy: 5,
+    interactionGenes: {},
+  };
+
+  stats.onDeath({ row: 3, col: 4 }, cell);
+
+  const [event] = stats.getRecentLifeEvents(1);
+
+  assert.equal(event.color, "#abc", "uses the secondary cell to resolve color");
+  assert.is(event.energy, 5, "uses the secondary cell to resolve energy");
+  assert.is(event.row, 3);
+  assert.is(event.col, 4);
+});
+
 test("getLifeEventRateSummary captures windowed birth/death cadence", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats();
