@@ -1,5 +1,5 @@
 import { test, assert } from "#tests/harness";
-import { accumulateTraitAggregates } from "../src/utils/traitAggregation.js";
+import { accumulateTraitAggregates } from "../src/stats/traitAggregation.js";
 
 const hasOwn = Object.hasOwn;
 

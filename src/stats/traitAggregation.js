@@ -1,4 +1,4 @@
-import { isArrayLike } from "./collections.js";
+import { isArrayLike } from "../utils/collections.js";
 
 const hasOwn = Object.hasOwn;
 
