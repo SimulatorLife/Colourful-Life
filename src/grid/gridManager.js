@@ -362,6 +362,8 @@ export default class GridManager {
   #rowOccupancy = [];
   #columnOccupancy = [];
   #tickSimilarityCache = new WeakMap();
+  #tickSimilarityRowsInUse = [];
+  #tickSimilarityRowPool = [];
   #tickSimilarityVersion = -1;
   #populationCellsScratch = null;
   #energyDeltaDirtyTiles = null;
@@ -7562,61 +7564,120 @@ export default class GridManager {
   }
 
   #resetTickSimilarityCache() {
-    this.#tickSimilarityCache = new WeakMap();
+    if (!this.#tickSimilarityCache) {
+      this.#tickSimilarityCache = new WeakMap();
+    }
+
+    const rowsInUse = this.#tickSimilarityRowsInUse;
+
+    if (Array.isArray(rowsInUse) && rowsInUse.length > 0) {
+      for (let i = 0; i < rowsInUse.length; i += 1) {
+        const record = rowsInUse[i];
+
+        if (!record) continue;
+
+        const { map, keys, cell } = record;
+
+        if (map && Array.isArray(keys)) {
+          for (let j = 0; j < keys.length; j += 1) {
+            map.delete(keys[j]);
+          }
+
+          keys.length = 0;
+        }
+
+        if (cell) {
+          this.#tickSimilarityCache.delete(cell);
+        }
+
+        record.cell = null;
+        this.#tickSimilarityRowPool.push(record);
+      }
+
+      rowsInUse.length = 0;
+    }
+
     this.#tickSimilarityVersion = this.tickCount;
   }
 
   #ensureTickSimilarityCache() {
-    if (!this.#tickSimilarityCache || this.#tickSimilarityVersion !== this.tickCount) {
+    if (!this.#tickSimilarityCache) {
+      this.#tickSimilarityCache = new WeakMap();
+      this.#tickSimilarityVersion = this.tickCount;
+    } else if (this.#tickSimilarityVersion !== this.tickCount) {
       this.#resetTickSimilarityCache();
     }
 
     return this.#tickSimilarityCache;
   }
 
+  #acquireTickSimilarityRow(cell) {
+    let record = this.#tickSimilarityCache.get(cell);
+
+    if (record) {
+      return record;
+    }
+
+    record = this.#tickSimilarityRowPool.pop();
+
+    if (!record) {
+      record = { map: new WeakMap(), keys: [], cell: null };
+    } else {
+      if (!record.map) {
+        record.map = new WeakMap();
+      }
+
+      record.keys.length = 0;
+    }
+
+    record.cell = cell;
+    this.#tickSimilarityCache.set(cell, record);
+    this.#tickSimilarityRowsInUse.push(record);
+
+    return record;
+  }
+
   #resolveTargetSimilarity(cellA, cellB) {
     if (!cellA || !cellB) return 0;
 
     const cache = this.#ensureTickSimilarityCache();
-    let mapForA = cache.get(cellA);
+    let recordA = cache.get(cellA);
+    let mapForA = recordA?.map;
 
-    if (mapForA && mapForA.has(cellB)) {
+    if (!recordA) {
+      recordA = this.#acquireTickSimilarityRow(cellA);
+      mapForA = recordA.map;
+    }
+
+    if (mapForA.has(cellB)) {
       return mapForA.get(cellB);
     }
 
-    const mapForB = cache.get(cellB);
+    let recordB = cache.get(cellB);
+    let mapForB = recordB?.map;
 
     if (mapForB && mapForB.has(cellA)) {
       const value = mapForB.get(cellA);
 
-      if (!mapForA) {
-        mapForA = new WeakMap();
-        cache.set(cellA, mapForA);
-      }
-
       mapForA.set(cellB, value);
+      recordA.keys.push(cellB);
 
       return value;
     }
 
-    const value = getPairSimilarity(cellA, cellB);
-
-    if (!mapForA) {
-      mapForA = new WeakMap();
-      cache.set(cellA, mapForA);
+    if (!recordB) {
+      recordB = this.#acquireTickSimilarityRow(cellB);
+      mapForB = recordB.map;
     }
 
+    const value = getPairSimilarity(cellA, cellB);
+
     mapForA.set(cellB, value);
+    recordA.keys.push(cellB);
 
     if (cellA !== cellB) {
-      let reverseMap = mapForB;
-
-      if (!reverseMap) {
-        reverseMap = new WeakMap();
-        cache.set(cellB, reverseMap);
-      }
-
-      reverseMap.set(cellA, value);
+      mapForB.set(cellA, value);
+      recordB.keys.push(cellA);
     }
 
     return value;
