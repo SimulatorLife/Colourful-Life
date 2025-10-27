@@ -47,23 +47,23 @@ export function accumulateTraitAggregates(
     return 0;
   }
 
-  let population = 0;
+  const activeTraitIndexes = [];
 
-  for (let index = 0; index < sources.length; index += 1) {
-    const candidate = sources[index];
+  for (let traitIndex = 0; traitIndex < traitCount; traitIndex += 1) {
+    if (typeof computeFns[traitIndex] === "function") {
+      activeTraitIndexes.push(traitIndex);
+    }
+  }
+
+  return sources.reduce((population, candidate) => {
     const cell = resolveCellFromSource(candidate);
 
     if (!cell || typeof cell !== "object") {
-      continue;
+      return population;
     }
 
-    for (let traitIndex = 0; traitIndex < traitCount; traitIndex += 1) {
+    for (const traitIndex of activeTraitIndexes) {
       const compute = computeFns[traitIndex];
-
-      if (typeof compute !== "function") {
-        continue;
-      }
-
       let value = compute(cell);
 
       if (!value) {
@@ -77,8 +77,6 @@ export function accumulateTraitAggregates(
       }
     }
 
-    population += 1;
-  }
-
-  return population;
+    return population + 1;
+  }, 0);
 }
