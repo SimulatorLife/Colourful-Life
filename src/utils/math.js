@@ -79,9 +79,19 @@ export function clampFinite(value, min, max, fallback = min) {
 export function clamp01(value) {
   const numeric = Number(value);
 
-  if (!Number.isFinite(numeric)) return 0;
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
 
-  return clamp(numeric, 0, 1);
+  if (numeric <= 0) {
+    return 0;
+  }
+
+  if (numeric >= 1) {
+    return 1;
+  }
+
+  return numeric;
 }
 
 /**
