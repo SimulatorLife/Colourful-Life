@@ -1,15 +1,22 @@
+import { pickFirstFinitePositive } from "../utils/math.js";
+
 const GLOBAL_SCOPE = typeof globalThis !== "undefined" ? globalThis : {};
 
 function pickDefined(...candidates) {
   return candidates.find((candidate) => candidate !== undefined);
 }
 
-function resolveEventManager(options, fallback) {
-  const environment =
-    options.environment && typeof options.environment === "object"
-      ? options.environment
-      : null;
+function extractEnvironment(options) {
+  if (!options || typeof options !== "object") {
+    return null;
+  }
 
+  const { environment } = options;
+
+  return environment && typeof environment === "object" ? environment : null;
+}
+
+function resolveEventManager(options, environment, fallback) {
   return pickDefined(
     options.eventManager,
     environment?.eventManager,
@@ -17,70 +24,23 @@ function resolveEventManager(options, fallback) {
   );
 }
 
-function resolveCtx(options, fallback) {
-  const environment =
-    options.environment && typeof options.environment === "object"
-      ? options.environment
-      : null;
-
+function resolveCtx(options, environment, fallback) {
   const candidate = pickDefined(options.ctx, environment?.ctx, fallback?.ctx);
 
   return candidate ?? null;
 }
 
-function resolveStats(options, fallback) {
-  const environment =
-    options.environment && typeof options.environment === "object"
-      ? options.environment
-      : null;
-
+function resolveStats(options, environment, fallback) {
   return pickDefined(options.stats, environment?.stats, fallback?.stats);
 }
 
-function resolveCellSize(options, fallback) {
-  const environment =
-    options.environment && typeof options.environment === "object"
-      ? options.environment
-      : null;
+function resolveCellSize(options, environment, fallback) {
+  const fallbackCellSize = fallback?.cellSize;
 
-  // Avoid the temporary array + map + find churn in the previous implementation.
-  // This helper sits on the grid initialisation hot path, so a tiny reduction in
-  // allocations and predicate calls keeps repeated environment resolution cheap.
-  const optionCandidate = options.cellSize;
-
-  if (optionCandidate != null) {
-    const numeric = Number(optionCandidate);
-
-    if (Number.isFinite(numeric) && numeric > 0) {
-      return numeric;
-    }
-  }
-
-  if (environment) {
-    const environmentCandidate = environment.cellSize;
-
-    if (environmentCandidate != null) {
-      const numeric = Number(environmentCandidate);
-
-      if (Number.isFinite(numeric) && numeric > 0) {
-        return numeric;
-      }
-    }
-  }
-
-  if (fallback) {
-    const fallbackCandidate = fallback.cellSize;
-
-    if (fallbackCandidate != null) {
-      const numeric = Number(fallbackCandidate);
-
-      if (Number.isFinite(numeric) && numeric > 0) {
-        return numeric;
-      }
-    }
-  }
-
-  return 8;
+  return pickFirstFinitePositive(
+    [options.cellSize, environment?.cellSize, fallbackCellSize],
+    8,
+  );
 }
 
 /**
@@ -99,10 +59,14 @@ function resolveCellSize(options, fallback) {
  * @returns {{eventManager: any, ctx: any, cellSize: number, stats: any}}
  */
 export function resolveGridEnvironment(options = {}, fallbackScope = GLOBAL_SCOPE) {
-  const eventManager = resolveEventManager(options, fallbackScope);
-  const ctx = resolveCtx(options, fallbackScope);
-  const stats = resolveStats(options, fallbackScope);
-  const cellSize = resolveCellSize(options, fallbackScope);
+  const environment = extractEnvironment(options);
+  const fallback =
+    fallbackScope && typeof fallbackScope === "object" ? fallbackScope : GLOBAL_SCOPE;
+
+  const eventManager = resolveEventManager(options, environment, fallback);
+  const ctx = resolveCtx(options, environment, fallback);
+  const stats = resolveStats(options, environment, fallback);
+  const cellSize = resolveCellSize(options, environment, fallback);
 
   return { eventManager, ctx, stats, cellSize };
 }
