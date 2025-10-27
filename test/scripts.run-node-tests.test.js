@@ -99,9 +99,42 @@ test("expandTestTargets defaults to the repository test directory", async () => 
   const targets = await expandTestTargets();
 
   assert.ok(
-    targets.some((entry) => entry.endsWith(path.join("test", "utils.test.js"))),
-    "should include repo test files",
+    Array.isArray(targets) && targets.length > 0,
+    "should return discovered test files",
   );
+
+  const uniqueTargets = new Set(targets);
+
+  assert.strictEqual(
+    uniqueTargets.size,
+    targets.length,
+    "should not include duplicate entries",
+  );
+
+  const knownTargets = [
+    path.join("test", "utils.test.js"),
+    path.join("test", "ui.overlayRedraws.test.js"),
+  ];
+
+  for (const expected of knownTargets) {
+    assert.ok(
+      targets.some((entry) => entry.endsWith(expected)),
+      `expected discovery to include ${expected}`,
+    );
+  }
+
+  for (const entry of targets) {
+    assert.strictEqual(
+      path.isAbsolute(entry),
+      false,
+      `expected ${entry} to be relative to the repo root`,
+    );
+    assert.match(
+      path.basename(entry),
+      /\.test\.(?:[cm]?js)$/i,
+      `expected ${entry} to resolve to a test file`,
+    );
+  }
 });
 
 test("expandTestTargets resolves directory arguments to contained test files", async () => {
