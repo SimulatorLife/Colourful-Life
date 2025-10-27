@@ -248,11 +248,8 @@ function normalizeDeathCauseColorMap(overrides) {
     return DEFAULT_DEATH_CAUSE_COLOR_MAP;
   }
 
-  const map = { ...DEFAULT_DEATH_CAUSE_COLOR_MAP };
-
-  for (const [key, color] of entries) {
-    map[key] = color;
-  }
+  const overridesMap = Object.fromEntries(entries);
+  const map = { ...DEFAULT_DEATH_CAUSE_COLOR_MAP, ...overridesMap };
 
   if (!map.unknown) {
     map.unknown = DEFAULT_DEATH_CAUSE_COLOR_MAP.unknown;
