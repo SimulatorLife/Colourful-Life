@@ -3364,6 +3364,45 @@ export default class GridManager {
     const empties = [];
     const viable = [];
 
+    const removeFromEmpties = (entry) => {
+      const index = entry?.emptyIndex;
+
+      if (index == null || index < 0 || index >= empties.length) {
+        entry.emptyIndex = -1;
+
+        return;
+      }
+
+      const lastIndex = empties.length - 1;
+
+      if (index !== lastIndex) {
+        const lastEntry = empties[lastIndex];
+
+        empties[index] = lastEntry;
+        lastEntry.emptyIndex = index;
+      }
+
+      empties.pop();
+      entry.emptyIndex = -1;
+    };
+
+    const removeFromViable = (entry) => {
+      const index = entry?.viableIndex;
+
+      if (index == null || index < 0 || index >= viable.length) {
+        entry.viableIndex = -1;
+
+        return;
+      }
+
+      viable.splice(index, 1);
+      entry.viableIndex = -1;
+
+      for (let i = index; i < viable.length; i += 1) {
+        viable[i].viableIndex = i;
+      }
+    };
+
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         if (this.getCell(r, c) || this.isObstacle(r, c)) continue;
@@ -3379,11 +3418,14 @@ export default class GridManager {
           col: c,
           availableEnergy,
           score: normalizedEnergy * 0.7 + (1 - density) * 0.3,
+          emptyIndex: empties.length,
+          viableIndex: -1,
         };
 
         empties.push(entry);
 
         if (normalizedEnergy >= energyFloorFrac) {
+          entry.viableIndex = viable.length;
           viable.push(entry);
         }
       }
@@ -3392,6 +3434,10 @@ export default class GridManager {
     if (empties.length === 0) return;
 
     viable.sort((a, b) => b.score - a.score);
+
+    for (let i = 0; i < viable.length; i += 1) {
+      viable[i].viableIndex = i;
+    }
 
     const requiredSeeds = Math.min(target - currentPopulation, empties.length);
 
@@ -3409,21 +3455,16 @@ export default class GridManager {
         pool.length - 1,
         Math.floor(this.#random() * bandSize),
       );
-      const candidate = pool.splice(pickIndex, 1)[0];
+      const candidate = pool[pickIndex];
 
-      if (pool !== empties) {
-        const emptyIndex = empties.indexOf(candidate);
+      if (pool === viable) {
+        removeFromViable(candidate);
+        removeFromEmpties(candidate);
+      } else {
+        removeFromEmpties(candidate);
 
-        if (emptyIndex !== -1) {
-          empties.splice(emptyIndex, 1);
-        }
-      }
-
-      if (pool !== viable) {
-        const viableIndex = viable.indexOf(candidate);
-
-        if (viableIndex !== -1) {
-          viable.splice(viableIndex, 1);
+        if (candidate.viableIndex >= 0) {
+          removeFromViable(candidate);
         }
       }
 
