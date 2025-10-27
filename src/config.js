@@ -45,7 +45,13 @@ const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // 14×14 performance probe.
 const DEFAULT_ACTIVITY_BASE_RATE = 0.2822;
 const DEFAULT_MUTATION_CHANCE = 0.15;
-const DEFAULT_ENERGY_REGEN_RATE = 0.012;
+// Leaned from 0.012 after rerunning the dense 60×60 headless probe
+// (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
+// with regeneration at 0.0117. Survivors ticked up from 344 → 346 while the
+// simulation benchmark's tick cost eased from ~138.4ms → ~135.1ms, signalling
+// that the slightly leaner trickle calms feast/famine swings without starving
+// recovering foragers.
+const DEFAULT_ENERGY_REGEN_RATE = 0.0117;
 const DEFAULT_INITIAL_TILE_ENERGY_FRACTION = 0.5;
 const DEFAULT_ENERGY_DIFFUSION_RATE = 0.05; // smoothing between tiles (per tick)
 // Relaxed from 1.15 after a 60×60 dense seeding probe

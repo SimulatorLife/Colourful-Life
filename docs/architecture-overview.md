@@ -57,7 +57,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - `computeTileEnergyUpdate` is called for each tile while the grid is preparing a tick.
 - Blends base regeneration with density penalties, diffusion from neighbouring tiles, and modifiers contributed by active environmental events.
 - Returns both the next energy value and any event metadata so overlays can highlight affected regions.
-- The default regeneration coefficient (`0.012`) pairs with a diffusion rate of
+- The default regeneration coefficient (`0.0117`) pairs with a diffusion rate of
   `0.05` and a density penalty of `0.39`. Adjust these baselines via
   `resolveSimulationDefaults` or the environment overrides surfaced in
   [`src/config.js`](../src/config.js) when experimenting with alternative energy
