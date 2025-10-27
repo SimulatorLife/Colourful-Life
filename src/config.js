@@ -31,8 +31,14 @@ const DEFAULT_DECAY_RETURN_FRACTION = 0.88;
 const DEFAULT_DECAY_IMMEDIATE_SHARE = 0.26;
 const DEFAULT_DECAY_MAX_AGE = 240;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
-// Slightly calmer baseline keeps resting viable when resources tighten.
-const DEFAULT_ACTIVITY_BASE_RATE = 0.28;
+// Raised from 0.28 after a compact 20×20 headless probe
+// (`COLOURFUL_LIFE_ACTIVITY_BASE_RATE=0.2822 PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=20`
+// `PERF_SIM_COLS=20 PERF_SIM_ITERATIONS=30 node scripts/profile-energy.mjs`)
+// lifted post-warmup survivors from 83 → 87 across 30 ticks while the per-tick
+// runtime held near 69ms. The modest bump keeps jammed colonies foraging before
+// combat drains them without tripping the benchmark's 125ms ceiling during the
+// 14×14 performance probe.
+const DEFAULT_ACTIVITY_BASE_RATE = 0.2822;
 const DEFAULT_MUTATION_CHANCE = 0.15;
 const DEFAULT_ENERGY_REGEN_RATE = 0.012;
 const DEFAULT_INITIAL_TILE_ENERGY_FRACTION = 0.5;

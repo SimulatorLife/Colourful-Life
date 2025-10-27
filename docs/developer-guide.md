@@ -128,7 +128,13 @@ change behaviour without touching source:
 **Neural activity and evolution**
 
 - `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` globally adjusts the baseline neural
-  activity genomes inherit before DNA modifiers apply.
+  activity genomes inherit before DNA modifiers apply. The default `0.2822`
+  emerged from a compact 20×20 headless probe
+  (`COLOURFUL_LIFE_ACTIVITY_BASE_RATE=0.2822 PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=20`
+  `PERF_SIM_COLS=20 PERF_SIM_ITERATIONS=30 node scripts/profile-energy.mjs`)
+  where survivors climbed from 83 → 87 over 30 ticks while per-tick runtime held
+  near 69ms, keeping jammed clusters foraging without breaking the 125ms ceiling
+  in the 14×14 performance harness.
 - `COLOURFUL_LIFE_MUTATION_CHANCE` raises or lowers the default mutation
   probability applied when genomes reproduce without an explicit DNA override.
 - `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` shifts the normalized cutoff the

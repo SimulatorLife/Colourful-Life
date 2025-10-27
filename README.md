@@ -45,7 +45,14 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 
 **Neural activity and evolution**
 
-- `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` — Adjusts the baseline neural activity genomes inherit before DNA modifiers apply.
+- `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` — Adjusts the baseline neural activity
+  genomes inherit before DNA modifiers apply. The tuned `0.2822` default came
+  from a compact 20×20 headless probe
+  (`COLOURFUL_LIFE_ACTIVITY_BASE_RATE=0.2822 PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=20`
+  `PERF_SIM_COLS=20 PERF_SIM_ITERATIONS=30 node scripts/profile-energy.mjs`)
+  where survivors climbed from 83 → 87 over 30 ticks while per-tick runtime held
+  near 69ms, giving crowded hubs a bit more bandwidth to forage between combat
+  cycles without tripping the 14×14 benchmark ceiling.
 - `COLOURFUL_LIFE_MUTATION_CHANCE` — Sets the default mutation probability applied when genomes reproduce without their own override.
 - `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Tunes the normalized cutoff the stats system uses when counting organisms as "active" for a trait.
 - `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` — Scales how much surplus energy parents must bank beyond the strictest genome's demand before gestation begins.
