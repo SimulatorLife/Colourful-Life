@@ -159,6 +159,8 @@ export default class Brain {
 
   #sensorScratch = null;
   #lastEvaluationSensorsScratch = null;
+  #evaluationCache = null;
+  #evaluationVisiting = null;
 
   static sensorIndex(key) {
     if (typeof key !== "string") return undefined;
@@ -375,8 +377,8 @@ export default class Brain {
     const sensorVector = this.#cloneSensors(sensors);
 
     this.lastSensors = sensorVector;
-    const cache = new Map();
-    const visiting = new Set();
+    const cache = this.#acquireEvaluationCache();
+    const visiting = this.#acquireEvaluationVisiting();
     let activationCount = 0;
     const traceEntries = traceEnabled ? [] : null;
     const traceCache = traceEnabled ? new Map() : null;
@@ -424,27 +426,27 @@ export default class Brain {
         return 0;
       }
 
-      const { sum, nodeInputs } = incoming.reduce(
-        (accumulator, { source, weight }) => {
-          const sourceValue = computeNode(source);
+      let sum = 0;
+      let nodeInputs = null;
 
-          accumulator.sum += weight * sourceValue;
+      if (traceEnabled) {
+        nodeInputs = [];
+      }
 
-          if (traceEnabled) {
-            accumulator.nodeInputs.push({
-              source,
-              weight,
-              value: sourceValue,
-            });
-          }
+      for (let i = 0; i < incoming.length; i += 1) {
+        const { source, weight } = incoming[i];
+        const sourceValue = computeNode(source);
 
-          return accumulator;
-        },
-        {
-          sum: 0,
-          nodeInputs: traceEnabled ? [] : null,
-        },
-      );
+        sum += weight * sourceValue;
+
+        if (nodeInputs) {
+          nodeInputs.push({
+            source,
+            weight,
+            value: sourceValue,
+          });
+        }
+      }
 
       visiting.delete(nodeId);
       activationCount++;
@@ -472,15 +474,18 @@ export default class Brain {
       return output;
     };
 
-    const pendingOutputs = group.map(({ id, key }) => {
-      const value = computeNode(id);
+    const values = {};
 
-      return [key, value];
-    });
-    const values = Object.fromEntries(pendingOutputs);
+    for (let i = 0; i < group.length; i += 1) {
+      const { id, key } = group[i];
+
+      values[key] = computeNode(id);
+    }
+
+    const hasActivations = activationCount > 0;
 
     const result = {
-      values: activationCount > 0 ? values : null,
+      values: hasActivations ? values : null,
       activationCount,
       sensors: sensorVector,
     };
@@ -496,9 +501,11 @@ export default class Brain {
       result.trace = tracePayload;
     }
 
-    if (activationCount > 0) {
-      for (const [key, value] of pendingOutputs) {
-        this.lastOutputs.set(key, value);
+    if (hasActivations) {
+      for (let i = 0; i < group.length; i += 1) {
+        const { key } = group[i];
+
+        this.lastOutputs.set(key, values[key]);
       }
     }
 
@@ -514,9 +521,12 @@ export default class Brain {
       group: groupName,
       sensors: lastEvaluationSensors,
       activationCount,
-      outputs: activationCount > 0 ? { ...values } : null,
+      outputs: hasActivations ? { ...values } : null,
       trace: traceEnabled && tracePayload ? cloneTracePayload(tracePayload) : null,
     };
+
+    cache.clear();
+    visiting.clear();
 
     return result;
   }
@@ -585,6 +595,26 @@ export default class Brain {
     }
 
     return scratch;
+  }
+
+  #acquireEvaluationCache() {
+    if (!this.#evaluationCache) {
+      this.#evaluationCache = new Map();
+    } else if (this.#evaluationCache.size > 0) {
+      this.#evaluationCache.clear();
+    }
+
+    return this.#evaluationCache;
+  }
+
+  #acquireEvaluationVisiting() {
+    if (!this.#evaluationVisiting) {
+      this.#evaluationVisiting = new Set();
+    } else if (this.#evaluationVisiting.size > 0) {
+      this.#evaluationVisiting.clear();
+    }
+
+    return this.#evaluationVisiting;
   }
 
   #cloneSensors(source) {
