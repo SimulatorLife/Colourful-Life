@@ -5329,6 +5329,118 @@ export default class UIManager {
     return `${minutes}:${secs.toString().padStart(2, "0")}`;
   }
 
+  #describeDiversityStatus(value, target, pressure, opportunity) {
+    if (!Number.isFinite(value)) {
+      return {
+        label: "No sample",
+        detail:
+          "Run the simulation to measure genetic diversity and reproduction pressure.",
+        level: "unknown",
+      };
+    }
+
+    const toPercent = (input, { decimals = 0, absolute = false } = {}) => {
+      if (!Number.isFinite(input)) return null;
+
+      const clamped = clamp(input, -1, 1);
+      const candidate = absolute ? Math.abs(clamped) : clamped;
+      const resolvedDecimals = decimals ?? 0;
+
+      return `${(candidate * 100).toFixed(resolvedDecimals)}%`;
+    };
+
+    const normalizedValue = clamp(value, 0, 1);
+    const normalizedTarget = Number.isFinite(target) ? clamp(target, 0, 1) : null;
+    const normalizedPressure = Number.isFinite(pressure) ? clamp(pressure, 0, 1) : null;
+    const normalizedOpportunity = Number.isFinite(opportunity)
+      ? clamp(opportunity, 0, 1)
+      : null;
+    const shortfall =
+      normalizedTarget != null
+        ? clamp(normalizedTarget - normalizedValue, -1, 1)
+        : null;
+
+    let label = "Tracking";
+    let level = "comfortable";
+    const notes = [];
+
+    if (normalizedTarget == null) {
+      notes.push("No diversity target configured; showing observed trend only.");
+    } else {
+      const magnitude = Math.abs(shortfall);
+
+      if (shortfall <= -0.05) {
+        label = "Above target";
+        notes.push(
+          `Diversity exceeds the goal by ${toPercent(magnitude, { decimals: 1, absolute: true })}.`,
+        );
+      } else if (shortfall < -0.02) {
+        label = "Above target";
+        notes.push(
+          `Diversity is comfortably ahead of the goal by ${toPercent(magnitude, { decimals: 1, absolute: true })}.`,
+        );
+      } else if (shortfall <= 0.02) {
+        label = "Near target";
+        if (magnitude < 0.005) {
+          notes.push("Diversity is tracking the target almost exactly.");
+        } else {
+          notes.push(
+            `Within ${toPercent(magnitude, { decimals: 1, absolute: true })} of the goal.`,
+          );
+        }
+      } else if (shortfall < 0.08) {
+        label = "Below target";
+        level = "concern";
+        notes.push(
+          `Running ${toPercent(shortfall, { decimals: 1, absolute: true })} below the goal can suppress births until new genes spread.`,
+        );
+      } else {
+        label = "Critical shortfall";
+        level = "critical";
+        notes.push(
+          `Lagging the goal by ${toPercent(shortfall, { decimals: 1, absolute: true })}—expect strong penalties until diversity recovers.`,
+        );
+      }
+    }
+
+    if (normalizedPressure != null) {
+      const pressurePercent = toPercent(normalizedPressure, { decimals: 0 });
+
+      if (normalizedPressure >= 0.75) {
+        level = "critical";
+        notes.push(`Reproductive pressure is intense (${pressurePercent}).`);
+      } else if (normalizedPressure >= 0.45) {
+        level = level === "critical" ? level : "concern";
+        notes.push(`Pressure is building (${pressurePercent}).`);
+      } else if (normalizedPressure <= 0.2 && shortfall != null && shortfall <= 0) {
+        notes.push(`Pressure is relaxed (${pressurePercent}).`);
+      } else {
+        notes.push(`Pressure steady at ${pressurePercent}.`);
+      }
+    }
+
+    if (normalizedOpportunity != null) {
+      const opportunityPercent = toPercent(normalizedOpportunity, { decimals: 0 });
+
+      if (normalizedOpportunity >= 0.65) {
+        notes.push(
+          `Plenty of diverse mates (${opportunityPercent} opportunity signal).`,
+        );
+      } else if (normalizedOpportunity <= 0.25) {
+        level = level === "critical" ? level : "concern";
+        notes.push(`Few diverse mates (${opportunityPercent} opportunity signal).`);
+      } else {
+        notes.push(`Opportunity steady (${opportunityPercent}).`);
+      }
+    }
+
+    return {
+      label,
+      level,
+      detail: notes.join(" "),
+    };
+  }
+
   renderMetrics(stats, snapshot, environment = {}) {
     this.renderLifeEvents(stats, snapshot);
 
@@ -5756,6 +5868,86 @@ export default class UIManager {
     reproductionMetrics.forEach(({ label, value, title }) =>
       appendMetricRow(reproductionSection, { label, value, title }),
     );
+
+    const diversityValue = Number.isFinite(s.diversity)
+      ? s.diversity
+      : stats?.diversity;
+    const diversityTarget = Number.isFinite(s.diversityTarget)
+      ? s.diversityTarget
+      : stats?.diversityTarget;
+    const diversityPressure = Number.isFinite(s.diversityPressure)
+      ? s.diversityPressure
+      : stats?.diversityPressure;
+    const diversityOpportunity = Number.isFinite(s.diversityOpportunity)
+      ? s.diversityOpportunity
+      : stats?.diversityOpportunity;
+    const diversityOpportunityAvailability = Number.isFinite(
+      s.diversityOpportunityAvailability,
+    )
+      ? s.diversityOpportunityAvailability
+      : stats?.diversityOpportunityAvailability;
+    const diversityDescriptor = this.#describeDiversityStatus(
+      diversityValue,
+      diversityTarget,
+      diversityPressure,
+      diversityOpportunity,
+    );
+
+    const diversitySection = createSection("Genetic Diversity Pulse", {
+      accent: "var(--color-metric-diversity)",
+    });
+    const statusBadge = document.createElement("span");
+
+    statusBadge.className = "diversity-status";
+    statusBadge.textContent = diversityDescriptor.label;
+    statusBadge.setAttribute("data-level", diversityDescriptor.level ?? "comfortable");
+    appendMetricRow(diversitySection, {
+      label: "Status",
+      value: statusBadge,
+      title: diversityDescriptor.detail,
+      valueClass: "control-value--left",
+    });
+
+    appendMetricRow(diversitySection, {
+      label: "Observed Diversity",
+      value: fixedOrDash(diversityValue, 3),
+      title: "Estimated mean pairwise genetic distance across the population.",
+    });
+    appendMetricRow(diversitySection, {
+      label: "Target",
+      value: fixedOrDash(diversityTarget, 3),
+      title: "Goal diversity threshold used when scaling reproduction penalties.",
+    });
+    appendMetricRow(diversitySection, {
+      label: "Pressure Signal",
+      value: percentOrDash(diversityPressure),
+      title:
+        "Strength of reproductive pressure nudging the population toward the target.",
+    });
+    appendMetricRow(diversitySection, {
+      label: "Opportunity Strength",
+      value: percentOrDash(diversityOpportunity),
+      title:
+        "Weighted availability of genetically distinct mates observed in recent choices.",
+    });
+    appendMetricRow(diversitySection, {
+      label: "Opportunity Coverage",
+      value: percentOrDash(diversityOpportunityAvailability),
+      title: "Share of mate evaluations where diverse partners were present.",
+    });
+
+    if (diversityDescriptor.detail) {
+      const insight = document.createElement("span");
+
+      insight.className = "diversity-status-note control-hint";
+      insight.textContent = diversityDescriptor.detail;
+      appendMetricRow(diversitySection, {
+        label: "Insight",
+        value: insight,
+        title: diversityDescriptor.detail,
+        valueClass: "control-value--left",
+      });
+    }
 
     const traitPresence = stats?.traitPresence;
     const behaviorEvenness = Number.isFinite(s.behaviorEvenness)
