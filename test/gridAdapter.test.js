@@ -59,6 +59,49 @@ test("relocateCell moves occupants only when destination empty", () => {
   assert.is(adapter.getCell(0, 0), null);
 });
 
+test("relocateCell fallback clears destination energy to uphold Law 10", () => {
+  const rows = 2;
+  const cols = 2;
+  const grid = createGrid(rows, cols);
+  const energyGrid = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => 0),
+  );
+  const energyNext = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => 0),
+  );
+  const energyDeltaGrid = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => 0),
+  );
+  const dirtyMarks = [];
+  const manager = {
+    grid,
+    energyGrid,
+    energyNext,
+    energyDeltaGrid,
+    markEnergyDirty(row, col) {
+      dirtyMarks.push({ row, col });
+    },
+  };
+  const adapter = new GridInteractionAdapter({ gridManager: manager });
+  const mover = createCell(0, 0, 5);
+
+  adapter.setCell(0, 0, mover);
+  manager.energyGrid[0][1] = 3;
+
+  const relocated = adapter.relocateCell(0, 0, 0, 1);
+
+  assert.is(relocated, true, "fallback relocation should succeed when tile is open");
+  assert.is(
+    manager.energyGrid[0][1],
+    0,
+    "occupied tiles must not retain stored energy per Simulation Law 10",
+  );
+  assert.ok(
+    dirtyMarks.some(({ row, col }) => row === 0 && col === 1),
+    "energy buffers should be marked dirty when exclusivity is enforced",
+  );
+});
+
 test("relocateCell rejects teleportation when manager lacks hook", () => {
   const grid = createGrid(4, 4);
   const adapter = new GridInteractionAdapter({ gridManager: { grid } });
