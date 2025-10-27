@@ -1,5 +1,5 @@
 /**
- * Object-centric helpers for normalising configuration payloads and cloning
+ * Object-centric helpers for normalizing configuration payloads and cloning
  * simulation traces. Separating these utilities keeps UI and engine code from
  * depending on the broader numeric helper set.
  */

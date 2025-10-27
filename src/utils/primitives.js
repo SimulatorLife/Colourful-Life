@@ -1,5 +1,5 @@
 /**
- * Primitive normalisation helpers for coercing user-provided values into
+ * Primitive normalization helpers for coercing user-provided values into
  * predictable booleans.
  */
 export function coerceBoolean(candidate, fallback = false) {
