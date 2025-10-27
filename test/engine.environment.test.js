@@ -6,7 +6,7 @@ import {
   resolveHeadlessCanvasSize,
   resolveTimingProviders,
 } from "../src/engine/environment.js";
-import { drawAuroraVeil, drawLifeEventMarkers } from "../src/ui/overlays.js";
+import { drawLifeEventMarkers } from "../src/ui/overlays.js";
 
 test("resolveCanvas returns explicit canvas when supplied", () => {
   const explicitCanvas = { id: "preferred" };
@@ -260,10 +260,6 @@ test("createHeadlessCanvas returns stub context", () => {
 test("createHeadlessCanvas stub tolerates overlay rendering helpers", () => {
   const canvas = createHeadlessCanvas({ width: 200, height: 120 });
   const ctx = canvas.getContext("2d");
-
-  assert.not.throws(() => {
-    drawAuroraVeil(ctx, 6, 10, 10, { tick: 12 });
-  });
 
   assert.not.throws(() => {
     drawLifeEventMarkers(

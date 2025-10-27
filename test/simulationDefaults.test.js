@@ -196,7 +196,6 @@ test("resolveSimulationDefaults coerces string boolean overrides", async () => {
     showDensity: "0",
     showFitness: "1",
     showLifeEventMarkers: "on",
-    showAuroraVeil: "yes",
     autoPauseOnBlur: "off",
   });
 
@@ -206,7 +205,6 @@ test("resolveSimulationDefaults coerces string boolean overrides", async () => {
   assert.is(defaults.showDensity, false);
   assert.is(defaults.showFitness, true);
   assert.is(defaults.showLifeEventMarkers, true);
-  assert.is(defaults.showAuroraVeil, true);
   assert.is(defaults.autoPauseOnBlur, false);
 
   // Non-boolean defaults remain untouched when not overridden.
@@ -379,7 +377,6 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.showDensity, defaults.showDensity);
   assert.is(uiManager.showFitness, defaults.showFitness);
   assert.is(uiManager.showLifeEventMarkers, defaults.showLifeEventMarkers);
-  assert.is(uiManager.showAuroraVeil, defaults.showAuroraVeil);
   assert.is(uiManager.showGridLines, defaults.showGridLines);
   assert.is(uiManager.showReproductiveZones, defaults.showReproductiveZones);
   assert.is(uiManager.autoPauseOnBlur, defaults.autoPauseOnBlur);
@@ -422,7 +419,6 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     showDensity: defaults.showDensity,
     showFitness: defaults.showFitness,
     showLifeEventMarkers: defaults.showLifeEventMarkers,
-    showAuroraVeil: defaults.showAuroraVeil,
     showGridLines: defaults.showGridLines,
     showReproductiveZones: defaults.showReproductiveZones,
     leaderboardIntervalMs: defaults.leaderboardIntervalMs,
@@ -475,7 +471,6 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.is(ui.getShowDensity(), defaults.showDensity);
   assert.is(ui.getShowFitness(), defaults.showFitness);
   assert.is(ui.getShowLifeEventMarkers(), defaults.showLifeEventMarkers);
-  assert.is(ui.getShowAuroraVeil(), defaults.showAuroraVeil);
   assert.is(ui.getShowGridLines(), defaults.showGridLines);
   assert.is(ui.getShowReproductiveZones(), defaults.showReproductiveZones);
   assert.is(ui.getAutoPauseOnBlur(), defaults.autoPauseOnBlur);

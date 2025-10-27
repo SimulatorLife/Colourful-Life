@@ -451,7 +451,6 @@ export default class UIManager {
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
-    this.showAuroraVeil = defaults.showAuroraVeil;
     this.showGridLines = defaults.showGridLines;
     this.showReproductiveZones =
       defaults.showReproductiveZones !== undefined
@@ -3988,13 +3987,6 @@ export default class UIManager {
         initial: this.showReproductiveZones,
       },
       {
-        key: "showAuroraVeil",
-        label: "Aurora Veil",
-        title:
-          "Wash the canvas with a gentle aurora ribbon that sways with the simulation clock",
-        initial: this.showAuroraVeil,
-      },
-      {
         key: "showGridLines",
         label: "Show Grid Lines",
         title: "Outline each tile so the underlying grid stays visible",
@@ -5059,9 +5051,6 @@ export default class UIManager {
   }
   getShowLifeEventMarkers() {
     return this.showLifeEventMarkers;
-  }
-  getShowAuroraVeil() {
-    return this.showAuroraVeil;
   }
   getShowGridLines() {
     return this.showGridLines;
