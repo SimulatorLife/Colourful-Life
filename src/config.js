@@ -607,8 +607,8 @@ export function resolveSimulationDefaults(overrides = {}) {
   sanitizeNumeric("societySimilarity", { min: 0, max: 1 });
   sanitizeNumeric("enemySimilarity", { min: 0, max: 1 });
   sanitizeNumeric("eventStrengthMultiplier", { min: 0 });
-  sanitizeNumeric("energyRegenRate", { min: 0 });
-  sanitizeNumeric("energyDiffusionRate", { min: 0 });
+  sanitizeNumeric("energyRegenRate", { min: 0, max: 1 });
+  sanitizeNumeric("energyDiffusionRate", { min: 0, max: 1 });
   sanitizeNumeric("combatEdgeSharpness", { min: 0.1 });
   sanitizeNumeric("combatTerritoryEdgeFactor", { min: 0, max: 1 });
   const intervalCandidate = sanitizeNumber(merged.leaderboardIntervalMs, {
