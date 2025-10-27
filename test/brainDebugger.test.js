@@ -219,3 +219,86 @@ test("captureFromEntries requests telemetry depth matching limit", async () => {
 
   BrainDebugger.update([]);
 });
+
+test("update clones snapshots using shared helper", async () => {
+  const { default: BrainDebugger } = await import("../src/ui/brainDebugger.js");
+  const source = [
+    {
+      row: 7,
+      col: 8,
+      fitness: 11,
+      color: "#123456",
+      neuronCount: 4,
+      connectionCount: 2,
+      brain: { connections: [1], metadata: { type: "foo" } },
+      decisions: [{ id: "alpha" }],
+    },
+  ];
+
+  const updated = BrainDebugger.update(source);
+
+  assert.is.not(updated, source, "update should clone the array instance");
+  assert.is.not(updated[0], source[0], "update should clone each snapshot");
+  assert.is.not(updated[0].brain, source[0].brain, "brain payload should be cloned");
+  assert.is.not(
+    updated[0].brain.metadata,
+    source[0].brain.metadata,
+    "nested brain data should be cloned",
+  );
+  assert.is.not(
+    updated[0].decisions,
+    source[0].decisions,
+    "decision history should be cloned",
+  );
+
+  source[0].brain.connections.push(2);
+  source[0].brain.metadata.type = "mutated";
+  source[0].decisions.push({ id: "beta" });
+
+  assert.equal(
+    updated[0].brain.connections,
+    [1],
+    "updates to original brain should not leak",
+  );
+  assert.equal(
+    updated[0].brain.metadata,
+    { type: "foo" },
+    "nested metadata should remain isolated",
+  );
+  assert.equal(
+    updated[0].decisions,
+    [{ id: "alpha" }],
+    "decision history should remain isolated",
+  );
+
+  const retrieved = BrainDebugger.get();
+
+  assert.is.not(retrieved, updated, "get should return a cloned array");
+  assert.is.not(retrieved[0], updated[0], "get should clone stored snapshots");
+  assert.is.not(
+    retrieved[0].brain,
+    updated[0].brain,
+    "brain payload from get should be cloned",
+  );
+  assert.is.not(
+    retrieved[0].decisions,
+    updated[0].decisions,
+    "decision history from get should be cloned",
+  );
+
+  updated[0].brain.connections.push(3);
+  updated[0].decisions[0].id = "gamma";
+
+  assert.equal(
+    retrieved[0].brain.connections,
+    [1],
+    "get should protect stored brain payload",
+  );
+  assert.equal(
+    retrieved[0].decisions,
+    [{ id: "alpha" }],
+    "get should protect stored decisions",
+  );
+
+  BrainDebugger.update([]);
+});
