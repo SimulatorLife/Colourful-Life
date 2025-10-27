@@ -4682,7 +4682,7 @@ export default class UIManager {
     timelineSummary.appendChild(timelineSummaryMessage);
     timelineCard.setAttribute("aria-describedby", timelineSummaryMessageId);
 
-    const timelineStats = document.createElement("dl");
+    const timelineStats = document.createElement("ul");
 
     timelineStats.className = "life-events-timeline__stats";
     timelineStats.setAttribute("aria-label", "Birth and death cadence summary");
@@ -4690,16 +4690,16 @@ export default class UIManager {
     timelineStats.hidden = true;
 
     const createTimelineStat = (label, noteText) => {
-      const wrapper = document.createElement("div");
+      const item = document.createElement("li");
 
-      wrapper.className = "life-events-timeline__stat";
+      item.className = "life-events-timeline__stat";
 
-      const term = document.createElement("dt");
+      const term = document.createElement("span");
 
       term.className = "life-events-timeline__stat-label";
       term.textContent = label;
 
-      const metric = document.createElement("dd");
+      const metric = document.createElement("div");
 
       metric.className = "life-events-timeline__stat-metric";
       const valueEl = document.createElement("span");
@@ -4713,9 +4713,9 @@ export default class UIManager {
 
       metric.appendChild(valueEl);
       metric.appendChild(noteEl);
-      wrapper.appendChild(term);
-      wrapper.appendChild(metric);
-      timelineStats.appendChild(wrapper);
+      item.appendChild(term);
+      item.appendChild(metric);
+      timelineStats.appendChild(item);
 
       return { valueEl, noteEl, defaultNote: noteText };
     };
@@ -4749,23 +4749,22 @@ export default class UIManager {
     timelineEmpty.textContent = "No events recorded in the recent window yet.";
     timelineCard.appendChild(timelineEmpty);
 
-    const timelineLegend = document.createElement("div");
+    const timelineLegend = document.createElement("ul");
 
     timelineLegend.className = "life-events-timeline__legend";
-    timelineLegend.setAttribute("role", "list");
     timelineLegend.setAttribute("aria-label", "Timeline legend");
 
     const createLegendItem = (label, modifierClass, colorVar, fallbackColor) => {
-      const item = document.createElement("span");
+      const item = document.createElement("li");
 
       item.className = ["life-events-timeline__legend-item", modifierClass]
         .filter(Boolean)
         .join(" ");
-      item.setAttribute("role", "listitem");
 
       const swatch = document.createElement("span");
 
       swatch.className = "life-events-timeline__legend-swatch";
+      swatch.setAttribute("aria-hidden", "true");
       if (colorVar) {
         swatch.style.background = `var(${colorVar}, ${fallbackColor})`;
       } else if (fallbackColor) {
