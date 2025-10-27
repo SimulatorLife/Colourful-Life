@@ -55,5 +55,5 @@ export function resolveNonEmptyString(candidate, fallback = null) {
 
   const trimmed = candidate.trim();
 
-  return trimmed.length > 0 ? candidate : fallback;
+  return trimmed.length > 0 ? trimmed : fallback;
 }

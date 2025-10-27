@@ -80,6 +80,11 @@ test("coerceBoolean normalizes boolean-like values with sane fallbacks", () => {
 
 test("resolveNonEmptyString filters out blank or non-string values", () => {
   assert.is(resolveNonEmptyString("hello", "fallback"), "hello");
+  assert.is(
+    resolveNonEmptyString("  padded  ", "fallback"),
+    "padded",
+    "leading and trailing whitespace should be trimmed",
+  );
   assert.is(resolveNonEmptyString("", "fallback"), "fallback");
   assert.is(
     resolveNonEmptyString("   ", "fallback"),
