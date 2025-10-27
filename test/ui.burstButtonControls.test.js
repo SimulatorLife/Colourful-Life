@@ -214,4 +214,64 @@ test("burst option normalization falls back when overrides are invalid", async (
   }
 });
 
+test("fractional burst counts clamp to at least one", async () => {
+  const restore = setupDom();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const burstCalls = [];
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        burst: (options) => {
+          burstCalls.push(options);
+        },
+      },
+      {
+        canvasElement: new MockCanvas(320, 320),
+        burstOptions: {
+          primary: { count: 0.3, radius: 2 },
+          shift: { count: 0.45, radius: 3 },
+        },
+      },
+    );
+
+    assert.equal(
+      uiManager.burstConfig,
+      {
+        primary: { count: 1, radius: 2 },
+        shift: {
+          count: 1,
+          radius: 3,
+          hint: "Hold Shift for a stronger burst.",
+          shortcutHint:
+            "Hold Shift for a stronger burst, whether clicking or using the shortcut.",
+        },
+      },
+      "fractional counts should clamp to the minimum burst",
+    );
+
+    uiManager.burstButton.trigger("click");
+    uiManager.burstButton.trigger("click", { shiftKey: true });
+
+    assert.equal(
+      burstCalls,
+      [
+        { count: 1, radius: 2 },
+        { count: 1, radius: 3 },
+      ],
+      "triggered bursts should forward the clamped counts",
+    );
+  } finally {
+    restore();
+  }
+});
+
 test.run();

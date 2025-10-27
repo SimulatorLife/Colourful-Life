@@ -174,7 +174,13 @@ function normalizeBurstOptions(candidate) {
       return fallback;
     }
 
-    return Math.round(candidate);
+    const rounded = Math.round(candidate);
+
+    if (rounded >= 1) {
+      return rounded;
+    }
+
+    return 1;
   };
 
   const parseRadius = (value, fallback) => {
