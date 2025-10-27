@@ -585,6 +585,50 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.5, 0.5, 0.5]);
 });
 
+test("updateFromSnapshot releases population cell references", async () => {
+  const { default: Stats } = await statsModulePromise;
+
+  class SanitizingStats extends Stats {
+    constructor(options = {}) {
+      super(4, {
+        traitDefinitions: [
+          { key: "cooperation", compute: () => 0.5, threshold: 0.2 },
+          { key: "fighting", compute: () => 0.2, threshold: 0.2 },
+          { key: "breeding", compute: () => 0.3, threshold: 0.2 },
+          { key: "sight", compute: () => 0.4, threshold: 0.2 },
+        ],
+        diversitySampleInterval: 1000,
+        traitResampleInterval: 1,
+        ...options,
+      });
+    }
+
+    estimateDiversity() {
+      return 0.25;
+    }
+  }
+
+  const stats = new SanitizingStats();
+  const populationCells = [
+    createCell({ interactionGenes: { cooperate: 0.7, fight: 0.1 }, sight: 2 }),
+    createCell({ interactionGenes: { cooperate: 0.6, fight: 0.2 }, sight: 3 }),
+  ];
+  const snapshot = {
+    population: populationCells.length,
+    totalEnergy: 10,
+    totalAge: 20,
+    populationCells,
+  };
+
+  stats.updateFromSnapshot(snapshot);
+
+  assert.is(populationCells.length, 0, "population cell scratch array cleared");
+  assert.not.ok(
+    Object.hasOwn(snapshot, "populationCells"),
+    "populationCells property removed from snapshot",
+  );
+});
+
 test("diversity pressure escalates when diverse mating success stalls", async () => {
   const { default: Stats } = await statsModulePromise;
 
