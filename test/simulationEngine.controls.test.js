@@ -685,6 +685,31 @@ test("setAutoPauseOnBlur coerces string inputs", async () => {
   }
 });
 
+test("setPaused coerces string inputs", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.pause();
+    assert.is(engine.isPaused(), true, "pause() should set paused state to true");
+
+    engine.setPaused("false");
+    assert.is(engine.isPaused(), false, "string 'false' should resume the engine");
+
+    engine.setPaused("true");
+    assert.is(engine.isPaused(), true, "string 'true' should pause the engine");
+
+    engine.setPaused(0);
+    assert.is(engine.isPaused(), false, "numeric zero should resume the engine");
+
+    engine.destroy?.();
+  } finally {
+    restore();
+  }
+});
+
 test("SimulationEngine exposes a callable overlay renderer by default", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);

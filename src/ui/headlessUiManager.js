@@ -174,7 +174,7 @@ export function createHeadlessUiManager(options = {}) {
   return {
     isPaused: () => settings.paused,
     setPaused: (value) => {
-      const next = Boolean(value);
+      const next = coerceBoolean(value, settings.paused);
 
       if (settings.paused === next) return;
 
@@ -184,7 +184,7 @@ export function createHeadlessUiManager(options = {}) {
       applyPauseState(resolved);
     },
     setPauseState: (value) => {
-      const next = Boolean(value);
+      const next = coerceBoolean(value, settings.paused);
 
       if (settings.paused === next) return;
 

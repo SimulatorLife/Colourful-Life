@@ -140,6 +140,22 @@ test("createHeadlessUiManager pause controls delegate to simulation callbacks", 
   assert.is(manager.isPaused(), false);
 });
 
+test("createHeadlessUiManager pause controls coerce string inputs", () => {
+  const manager = createHeadlessUiManager();
+
+  manager.setPaused("true");
+  assert.is(manager.isPaused(), true, "string 'true' should pause the manager");
+
+  manager.setPaused("false");
+  assert.is(manager.isPaused(), false, "string 'false' should resume the manager");
+
+  manager.setPauseState("1");
+  assert.is(manager.isPaused(), true, "numeric string '1' should pause the manager");
+
+  manager.setPauseState("0");
+  assert.is(manager.isPaused(), false, "numeric string '0' should resume the manager");
+});
+
 test("createHeadlessUiManager falls back to togglePause when dedicated controls missing", () => {
   const toggled = [];
   let paused = false;

@@ -855,7 +855,7 @@ export default class SimulationEngine {
   }
 
   setPaused(value) {
-    const paused = Boolean(value);
+    const paused = coerceBoolean(value, this.state.paused);
     const changed = this.#updateState({ paused });
 
     if (!paused) {
