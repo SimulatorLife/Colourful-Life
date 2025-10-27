@@ -1100,6 +1100,92 @@ export class DNA {
     return { drainMitigation, vigilance, pressureRetention, rebound };
   }
 
+  eventEnergyLossMultiplier(eventType, context = {}) {
+    const normalizedType =
+      typeof eventType === "string" && eventType.length > 0
+        ? eventType.toLowerCase()
+        : "";
+    const rng = this.prngFor(`eventEnergyLoss:${normalizedType}`);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const cohesion = this.geneFraction(GENE_LOCI.COHESION);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const floodResist = this.geneFraction(GENE_LOCI.RESIST_FLOOD);
+    const droughtResist = this.geneFraction(GENE_LOCI.RESIST_DROUGHT);
+    const heatResist = this.geneFraction(GENE_LOCI.RESIST_HEAT);
+    const coldResist = this.geneFraction(GENE_LOCI.RESIST_COLD);
+    const severity = clamp(Number(context?.strength) || 0, 0, 2);
+
+    let base = 1;
+
+    switch (normalizedType) {
+      case "flood": {
+        base +=
+          (1 - density) * 0.35 +
+          movement * 0.18 +
+          risk * 0.12 -
+          recovery * 0.22 -
+          efficiency * 0.18 -
+          floodResist * 0.15 +
+          severity * 0.05;
+
+        break;
+      }
+      case "drought": {
+        base +=
+          (1 - efficiency) * 0.4 +
+          (1 - recovery) * 0.25 +
+          (1 - capacity) * 0.18 +
+          risk * 0.1 -
+          droughtResist * 0.3 -
+          cooperation * 0.12 +
+          severity * 0.04;
+
+        break;
+      }
+      case "heatwave": {
+        base +=
+          risk * 0.25 +
+          movement * 0.15 +
+          neural * 0.12 -
+          recovery * 0.2 -
+          efficiency * 0.1 -
+          heatResist * 0.35 +
+          severity * 0.06;
+
+        break;
+      }
+      case "coldwave": {
+        base +=
+          (1 - density) * 0.2 +
+          (1 - recovery) * 0.3 +
+          (1 - cohesion) * 0.15 -
+          coldResist * 0.35 -
+          parental * 0.12 -
+          efficiency * 0.08 +
+          severity * 0.05;
+
+        break;
+      }
+      default: {
+        base += (1 - recovery) * 0.2 - efficiency * 0.12 + severity * 0.04;
+
+        break;
+      }
+    }
+
+    const jitter = (rng() - 0.5) * 0.12;
+    const adjusted = base + jitter;
+
+    return clamp(adjusted, 0.55, 1.5);
+  }
+
   eventAnticipationProfile() {
     const sense = this.geneFraction(GENE_LOCI.SENSE);
     const strategy = this.geneFraction(GENE_LOCI.STRATEGY);

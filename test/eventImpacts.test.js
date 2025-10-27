@@ -86,6 +86,86 @@ test("Cell.applyEventEffects uses event mapping and DNA resistance", async () =>
   assert.is(unaffected.energy, 2);
 });
 
+test("Cell.applyEventEffects scales drain using DNA susceptibility", async () => {
+  const [{ default: Cell }, { default: DNA, GENE_LOCI }, { EVENT_EFFECTS }] =
+    await Promise.all([
+      import("../src/cell.js"),
+      import("../src/genome.js"),
+      import("../src/events/eventEffects.js"),
+    ]);
+
+  if (typeof window.GridManager !== "object") {
+    window.GridManager = {};
+  }
+  if (typeof window.GridManager.maxTileEnergy !== "number") {
+    window.GridManager.maxTileEnergy = 5;
+  }
+
+  const createFloodGenome = (overrides = {}) => {
+    const dna = new DNA(120, 120, 120);
+    const defaults = {
+      DENSITY: 128,
+      RECOVERY: 128,
+      ENERGY_EFFICIENCY: 128,
+      MOVEMENT: 128,
+      RISK: 128,
+      COOPERATION: 128,
+      RESIST_FLOOD: 160,
+    };
+
+    for (const [key, value] of Object.entries({ ...defaults, ...overrides })) {
+      const locus = GENE_LOCI[key];
+
+      if (typeof locus !== "number") continue;
+
+      dna.genes[locus] = value;
+    }
+
+    return dna;
+  };
+
+  const resilientDNA = createFloodGenome({
+    DENSITY: 220,
+    RECOVERY: 220,
+    ENERGY_EFFICIENCY: 210,
+    MOVEMENT: 40,
+    RISK: 60,
+  });
+  const fragileDNA = createFloodGenome({
+    DENSITY: 40,
+    RECOVERY: 40,
+    ENERGY_EFFICIENCY: 60,
+    MOVEMENT: 220,
+    RISK: 210,
+  });
+
+  const baselineEnergy = 3;
+  const resilient = new Cell(0, 0, resilientDNA, baselineEnergy);
+  const fragile = new Cell(0, 0, fragileDNA, baselineEnergy);
+
+  const floodEvent = {
+    eventType: "flood",
+    strength: 0.9,
+    affectedArea: { x: 0, y: 0, width: 1, height: 1 },
+  };
+  const eventContext = {
+    isEventAffecting: () => true,
+    getEventEffect: (type) => EVENT_EFFECTS[type],
+  };
+
+  resilient.applyEventEffects(0, 0, floodEvent, 1, 5, { eventContext });
+  fragile.applyEventEffects(0, 0, floodEvent, 1, 5, { eventContext });
+
+  const resilientLoss = baselineEnergy - resilient.energy;
+  const fragileLoss = baselineEnergy - fragile.energy;
+
+  assert.ok(resilientLoss > 0, "events should drain some energy");
+  assert.ok(
+    fragileLoss > resilientLoss,
+    `Fragile genomes should lose more (${fragileLoss}) than resilient ones (${resilientLoss})`,
+  );
+});
+
 test("Cell.applyEventEffects imprints neural anticipation when brain plasticity is active", async () => {
   const { default: Cell } = await import("../src/cell.js");
 
