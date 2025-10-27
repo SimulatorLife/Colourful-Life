@@ -63,7 +63,7 @@ the dev server, then return here for the deeper workflow.
 - **Format** — Run `npm run format`, `npm run format:check`, or `npm run format:workflows` to apply Prettier across source, documentation, configuration files, and GitHub workflows.
 - **Lint** — Use `npm run lint` / `npm run lint:fix` to enforce the ESLint ruleset and apply safe autofixes.
 - **Check** — Use `npm run check` before committing to chain linting, formatting verification, and tests.
-- **Tests** — Execute `npm test` to run the energy benchmark in [`scripts/profile-energy.mjs`](../scripts/profile-energy.mjs) before the Node.js test suites. Focused suites live beside their target modules under `test/`, and the runner accepts paths, directories, and flags such as `-- --watch` or `--runTestsByPath`.
+- **Tests** — Execute `npm test` to run the energy benchmark in [`scripts/profile-energy.mjs`](../scripts/profile-energy.mjs) before the Node.js test suites. Focused suites live beside their target modules under `test/`, and the runner accepts paths, directories, and flags such as `-- --watch`, `--watch`, `--watchAll`, or `--runTestsByPath` (append them after `--` when calling through npm scripts).
 - **Profiling** — Run `npm run benchmark` (alias for `node scripts/profile-energy.mjs`) with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations.
 - **Cache reset** — Use `npm run clean` to clear `dist/` and `.parcel-cache/` when Parcel hot reloads become inconsistent.
 - **Hooks** — Run `npm run prepare` to reinstall Husky hooks after cloning or whenever `.husky/` contents change.
@@ -101,6 +101,10 @@ change behaviour without touching source:
 - `COLOURFUL_LIFE_MAX_TILE_ENERGY` adjusts the per-tile energy ceiling. Use it to
   explore more generous or harsher energy caps in both browser and headless
   runs.
+- `COLOURFUL_LIFE_ENERGY_REGEN_RATE` overrides the baseline regeneration rate
+  applied to each tile before density penalties and events apply.
+- `COLOURFUL_LIFE_ENERGY_DIFFUSION_RATE` controls how much energy diffuses to
+  neighbouring tiles every tick (values are clamped to the 0–1 range).
 - `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` tunes how strongly crowding suppresses
   regeneration (0 disables the penalty, 1 preserves the default `0.39`
   coefficient).
@@ -115,6 +119,10 @@ change behaviour without touching source:
 - `COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE` sets the fraction of that recycled
   energy that splashes into neighbouring tiles on the same tick instead of
   smouldering in the decay reservoir.
+- `COLOURFUL_LIFE_DECAY_RELEASE_BASE` establishes the minimum amount of energy a
+  decay reservoir releases whenever it yields resources back to the grid.
+- `COLOURFUL_LIFE_DECAY_RELEASE_RATE` scales how aggressively decay reservoirs
+  release stored energy each tick.
 - `COLOURFUL_LIFE_DECAY_MAX_AGE` caps how long the decay reservoir persists
   before fully dissipating.
 - `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` tempers or emphasises territorial

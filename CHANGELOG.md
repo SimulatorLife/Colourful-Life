@@ -41,13 +41,13 @@ where practical.
   "Dashboard Refresh Interval" slider into Evolution Insights so cadence tuning
   sits beside the metrics it drives while still flagging the leaderboard's
   matching update schedule.
-- Moved the "Dashboard Refresh Interval" slider into the Dashboard Settings
-  panel so cadence controls are discoverable without scanning the individual
-  metrics or leaderboard panes.
 - Clarified the Node.js 25.0.0 requirement in the developer guide and added the
   `COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE` override to the README so onboarding
   steps and configuration references match the current runtime and
   environment hooks.
+- Expanded configuration coverage across the README, developer guide, and
+  architecture overview to include the energy regeneration, diffusion, and decay
+  release overrides alongside updated quick-start and tooling guidance.
 - Collapsed dashboard panels now defer metrics, life events, and leaderboard
   rendering work, cutting 50 closed-panel metrics refreshes from ~73.9 ms to
   ~0.84 ms by queueing the latest payload until the panel is reopened.
@@ -58,8 +58,6 @@ where practical.
 - Automatic reseeding has been removed from decay pools, grid resets, and
   geometry changes; the world now stays empty unless `reseed: true` is
   explicitly requested, keeping lineage growth compliant with Simulation Law 7.
-- Dashboard refresh interval slider now lives inside the Evolution Insights
-  panel so cadence controls sit beside the metrics they influence.
 - Documentation now calls out the `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR`,
   `COLOURFUL_LIFE_ACTIVITY_BASE_RATE`, and `COLOURFUL_LIFE_MUTATION_CHANCE`
   overrides across the README, developer guide, and architecture notes so
@@ -86,9 +84,6 @@ where practical.
 - Expanded JSDoc coverage for overlay helpers (celebration glow, life events,
   density/energy/fitness heatmaps, selection zones) so exported drawing
   utilities remain self-documenting.
-- Relocated the "Dashboard Refresh Interval" slider into the Leaderboard panel
-  so cadence controls sit beside the scoreboard they pace while clarifying that
-  Evolution Insights shares the same refresh schedule.
 - Moved the "Low Diversity Penalty ×" slider into the Similarity Thresholds
   section so reproduction tuning lives alongside the diversity cutoff and
   ally/enemy similarity sliders.

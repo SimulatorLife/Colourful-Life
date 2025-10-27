@@ -17,10 +17,10 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 Colourful Life targets the Node.js **25.x** series (the included `.nvmrc` pins to 25.0.0). After cloning:
 
 1. Run `nvm use` (install with `nvm install` if necessary) so `node --version` reports 25.x.
-2. Install dependencies with `npm ci` and run `npm run prepare` once so Husky hooks stay active.
+2. Install dependencies with `npm ci` (or `npm install` when you are intentionally updating the lockfile), then run `npm run prepare` once so Husky hooks stay active after fresh clones or `.husky/` edits.
 3. Launch the dev server with `npm run start` and open `http://localhost:1234`.
-4. Use `npm run check` before committing. It chains linting, formatting verification, and the Node test runner (including the energy benchmark). When iterating quickly, run individual commands (`npm run lint`, `npm run format:check`, `npm test -- --watch`) and finish with `npm run check` once you are satisfied.
-5. Clear Parcel caches with `npm run clean` if hot reloading stalls. Append `-- --dry-run` to review the paths before deleting them.
+4. Use `npm run check` before committing. It chains linting, formatting verification, and the Node test runner (including the energy benchmark). While iterating, run focused loops—`npm run lint`, `npm run format:check`, `npm test -- --watch`, or `npm test -- path/to/file.test.js`—and finish with `npm run check` once you are satisfied.
+5. Clear Parcel caches with `npm run clean -- --dry-run` to review the targets before deleting them, then re-run without `--dry-run` when Parcel hot reloading stalls.
 
 Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, then browse [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, and testing expectations once the quick start is familiar.
 
@@ -33,6 +33,8 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 **Energy and density**
 
 - `COLOURFUL_LIFE_MAX_TILE_ENERGY` — Raises or lowers the per-tile energy cap shown in the energy overlay and consumed during regeneration.
+- `COLOURFUL_LIFE_ENERGY_REGEN_RATE` — Overrides the baseline tile regeneration rate before density penalties and events apply.
+- `COLOURFUL_LIFE_ENERGY_DIFFUSION_RATE` — Controls how much energy diffuses to neighbouring tiles each tick.
 - `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` — Controls how strongly crowding suppresses regeneration (`0` disables the penalty, `1` mirrors the default coefficient).
 - `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` — Adjusts the harvesting tax organisms pay on packed tiles so you can model cooperative or cut-throat ecosystems.
 
@@ -40,6 +42,8 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 
 - `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` — Determines what fraction of a corpse's remaining energy returns to the grid as it decomposes.
 - `COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE` — Sets how much of that recycled energy splashes into neighbouring tiles immediately instead of lingering in the decay reservoir.
+- `COLOURFUL_LIFE_DECAY_RELEASE_BASE` — Tunes the baseline amount of energy returned whenever decay releases stored reserves.
+- `COLOURFUL_LIFE_DECAY_RELEASE_RATE` — Scales how aggressively decay reservoirs release energy each tick.
 - `COLOURFUL_LIFE_DECAY_MAX_AGE` — Limits how long post-mortem energy lingers before dissipating.
 - `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` — Scales territorial advantage in combat (values outside 0–1 are clamped to the default).
 
@@ -110,7 +114,7 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 
 ## Headless and embedded usage
 
-`createSimulation` exported from [`src/main.js`](src/main.js) stitches together the engine, UI, overlays, and lifecycle helpers. Pass `{ headless: true }` to obtain a headless controller for automation or tests and inject `{ requestAnimationFrame, cancelAnimationFrame, performanceNow }` to supply deterministic timing in non-browser environments. The helper will (see the [developer guide's headless checklist](docs/developer-guide.md#tooling) for supporting scripts and environment tips):
+`createSimulation` exported from [`src/main.js`](src/main.js) stitches together the engine, UI, overlays, and lifecycle helpers. Pass `{ headless: true }` to obtain a headless controller for automation or tests and inject `{ requestAnimationFrame, cancelAnimationFrame, performanceNow }` to supply deterministic timing in non-browser environments. The helper will (see the developer guide's [tooling section](docs/developer-guide.md#tooling) for supporting scripts and environment tips):
 
 - Resolve or create a canvas using [`resolveCanvas`](src/engine/environment.js) and [`ensureCanvasDimensions`](src/engine/environment.js).
 - Construct the grid, stats, selection manager, and event manager, exposing them on the returned controller (`{ grid, stats, selectionManager, eventManager }`).
