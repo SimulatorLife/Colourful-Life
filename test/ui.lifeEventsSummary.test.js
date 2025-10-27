@@ -634,6 +634,59 @@ test("trait metrics render custom definitions", async () => {
   }
 });
 
+test("population snapshot reports occupancy share", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        getCellSize: () => 5,
+      },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    uiManager.gridRows = 4;
+    uiManager.gridCols = 5;
+
+    openPanel(uiManager.insightsPanel);
+
+    const stats = createMetricsStatsFixture();
+    const snapshot = { ...createSnapshotFixture(), population: 10 };
+    const environment = { eventStrengthMultiplier: 1, activeEvents: [] };
+
+    uiManager.renderMetrics(stats, snapshot, environment);
+
+    const occupancyCard = uiManager.metricsBox.querySelector(
+      "[data-metric-label='Occupancy']",
+    );
+
+    assert.ok(occupancyCard, "occupancy metric should be rendered");
+    assert.is(
+      occupancyCard?.querySelector?.(".metrics-stat-value")?.textContent?.trim(),
+      "50%",
+      "occupancy metric should display the occupied share as a percentage",
+    );
+    assert.match(
+      occupancyCard?.getAttribute?.("title") ?? "",
+      /10 of 20 tiles in use/,
+      "occupancy tooltip should describe tiles in use",
+    );
+  } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
 test("life events only render after the panel expands", async () => {
   const restore = setupDom();
   const restoreCanvas = stubCanvasElements();
