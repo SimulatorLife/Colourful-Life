@@ -113,6 +113,9 @@ where practical.
 - Removed the Aurora Veil overlay toggle and renderer to reduce UI clutter and
   maintenance overhead for a purely celebratory effect that duplicated the
   existing overlay plumbing without surfacing simulation data.
+- Retired the unused `scripts/measure-brain-evaluate.mjs` and
+  `scripts/profile-population-cells.mjs` profiling harnesses so the scripts
+  directory only contains actively maintained automation entry points.
 - Retired unused profiling and memory benchmarking harnesses
   (`scripts/bench-segmented-events.mjs`, `scripts/benchmark-trait-aggregates.mjs`,
   `scripts/eventManagerMemoryBenchmark.mjs`, `scripts/measure-decay-active-memory.mjs`,
