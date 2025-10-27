@@ -161,3 +161,21 @@ test("drawLifeEventMarkers draws newest markers last to preserve visibility", ()
     "older markers render first so newer ones remain visible",
   );
 });
+
+test("drawLifeEventMarkers falls back to default limit when provided invalid input", () => {
+  const ctx = createRecordingContext();
+  const events = [
+    { type: "birth", row: 0, col: 0, tick: 1, color: "#111111" },
+    { type: "birth", row: 1, col: 1, tick: 2, color: "#222222" },
+  ];
+
+  drawLifeEventMarkers(ctx, 10, events, {
+    currentTick: 3,
+    fadeTicks: 50,
+    limit: "not-a-number",
+  });
+
+  const strokeCount = ctx.ops.filter((op) => op.type === "stroke").length;
+
+  assert.ok(strokeCount > 0, "invalid limit still renders the available markers");
+});
