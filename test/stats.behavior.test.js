@@ -1268,6 +1268,9 @@ test("setters sanitize non-finite mutation and diversity threshold inputs", asyn
   stats.setMutationMultiplier(3.2);
   assert.is(stats.mutationMultiplier, 3.2);
 
+  stats.setMutationMultiplier("2.6");
+  assert.is(stats.mutationMultiplier, 2.6);
+
   stats.setMutationMultiplier(-1);
   assert.is(stats.mutationMultiplier, 0);
 

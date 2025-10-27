@@ -2213,9 +2213,9 @@ export default class Stats {
   }
 
   setMutationMultiplier(multiplier = 1) {
-    const value = Number.isFinite(multiplier) ? Math.max(0, multiplier) : 1;
+    const value = sanitizeNumber(multiplier, { fallback: null, min: 0 });
 
-    this.mutationMultiplier = value;
+    this.mutationMultiplier = value ?? 1;
   }
 
   /**
