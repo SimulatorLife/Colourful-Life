@@ -119,7 +119,7 @@ test("resolveTraitActivationThreshold clamps invalid overrides", async () => {
 test("ACTIVITY_BASE_RATE exposes the environment-aware default", async () => {
   const { ACTIVITY_BASE_RATE } = await configModulePromise;
 
-  assert.is(ACTIVITY_BASE_RATE, 0.28);
+  assert.is(ACTIVITY_BASE_RATE, 0.2822);
 });
 
 test("resolveActivityBaseRate respects overrides", async () => {
@@ -140,7 +140,7 @@ test("resolveActivityBaseRate clamps invalid overrides", async () => {
 
   assert.is(
     resolveActivityBaseRate({ COLOURFUL_LIFE_ACTIVITY_BASE_RATE: "NaN" }),
-    0.28,
+    0.2822,
   );
 });
 
