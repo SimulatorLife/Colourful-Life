@@ -82,6 +82,8 @@ This document captures how the Colourful Life simulation composes its core syste
 
 - **EventManager** (`src/events/eventManager.js`) spawns periodic floods, droughts, heatwaves, and coldwaves. Events carry strength, duration, and a rectangular affected area. The manager exposes a color resolver consumed by overlays and can be configured with custom event pools.
 - **eventEffects** (`src/events/eventEffects.js`) maps event types to regeneration/drain modifiers and per-cell effects (energy loss, resistance genes).
+- **eventModifiers** (`src/events/eventModifiers.js`) aggregates event-driven regeneration and drain multipliers,
+  caching lookups so the energy grid and cell logic share a single calculation surface without importing each other.
 - **eventContext** (`src/events/eventContext.js`) exposes helpers used by the grid and energy systems to determine whether an event affects a tile. Headless consumers can reuse it to keep behaviour consistent without depending on DOM state.
 - Overlay rendering uses `EventManager.getColor` to shade the canvas and exposes `activeEvents` for analytics.
 
