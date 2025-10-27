@@ -985,6 +985,56 @@ canvas {
   text-align: left;
 }
 
+.metrics-stat-value .diversity-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  white-space: nowrap;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.metrics-stat-value .diversity-status[data-level="comfortable"] {
+  background: rgba(76, 175, 80, 0.22);
+  border-color: rgba(76, 175, 80, 0.45);
+  color: #e7ffe9;
+}
+
+.metrics-stat-value .diversity-status[data-level="concern"] {
+  background: rgba(246, 195, 68, 0.24);
+  border-color: rgba(246, 195, 68, 0.48);
+  color: #fff4d0;
+}
+
+.metrics-stat-value .diversity-status[data-level="critical"] {
+  background: rgba(231, 76, 60, 0.26);
+  border-color: rgba(231, 76, 60, 0.52);
+  color: #ffe0da;
+}
+
+.metrics-stat-value .diversity-status[data-level="unknown"] {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--color-text);
+}
+
+.metrics-stat-value .diversity-status-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-text-subtle);
+  white-space: normal;
+}
+
 .life-events-body {
   display: flex;
   flex-direction: column;
