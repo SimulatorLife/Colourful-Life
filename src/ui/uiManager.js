@@ -3958,6 +3958,15 @@ export default class UIManager {
         initial: this.showFitness,
       },
       {
+        key: "showLifeEventMarkers",
+        label: "Life Event Markers",
+        options: {
+          title: LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION,
+          description: LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION,
+        },
+        initial: this.showLifeEventMarkers,
+      },
+      {
         key: "showReproductiveZones",
         label: "Highlight Reproductive Zones",
         title:
@@ -3973,11 +3982,21 @@ export default class UIManager {
       },
     ];
 
-    overlayConfigs.forEach(({ key, label, title, initial }) => {
-      this.#addCheckbox(overlayGrid, label, title, initial, (checked) => {
-        this.#updateSetting(key, checked);
-        this.#scheduleUpdate();
-      });
+    overlayConfigs.forEach(({ key, label, title, options, initial }) => {
+      const checkbox = this.#addCheckbox(
+        overlayGrid,
+        label,
+        options ?? title,
+        initial,
+        (checked) => {
+          this.#updateSetting(key, checked);
+          this.#scheduleUpdate();
+        },
+      );
+
+      if (key === "showLifeEventMarkers") {
+        this.lifeEventMarkersToggle = checkbox;
+      }
     });
   }
 
@@ -4438,31 +4457,6 @@ export default class UIManager {
         }
       },
     });
-
-    const overlayControls = document.createElement("section");
-
-    overlayControls.className = "metrics-controls";
-    overlayControls.setAttribute("aria-label", "Life event overlay visibility");
-
-    createSectionHeading(overlayControls, "Map Overlay");
-
-    const overlayGrid = createControlGrid(overlayControls, "control-grid--compact");
-
-    this.lifeEventMarkersToggle = this.#addCheckbox(
-      overlayGrid,
-      "Life Event Markers",
-      {
-        title: LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION,
-        description: LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION,
-      },
-      this.showLifeEventMarkers,
-      (checked) => {
-        this.#updateSetting("showLifeEventMarkers", checked);
-        this.#scheduleUpdate();
-      },
-    );
-
-    body.appendChild(overlayControls);
 
     const lifeEventsSection = document.createElement("section");
 
