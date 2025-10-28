@@ -4976,12 +4976,19 @@ export default class GridManager {
           const segments = useSegmentedForRow ? rowEvents : null;
           const activeSegments =
             useSegmentedForRow && segments ? this.#getSegmentWindowScratch() : null;
+          const canUseSegmentContribs =
+            segmentedEventContributions &&
+            useSegmentedForRow &&
+            segments &&
+            activeSegments;
           const columnEventsScratch =
-            useSegmentedForRow && segments ? this.#getColumnEventScratch() : null;
+            useSegmentedForRow && !canUseSegmentContribs && segments
+              ? this.#getColumnEventScratch()
+              : null;
           let nextSegmentIndex = 0;
           const collectEventsForColumn =
-            useSegmentedForRow && segments && columnEventsScratch && activeSegments
-              ? (column) => {
+            columnEventsScratch && activeSegments
+              ? (column, isObstacle) => {
                   while (
                     nextSegmentIndex < segments.length &&
                     segments[nextSegmentIndex].startCol <= column
@@ -5000,7 +5007,10 @@ export default class GridManager {
                     if (segment.endCol > column) {
                       activeSegments[nextActiveCount] = segment;
                       nextActiveCount += 1;
-                      columnEventsScratch.push(segment.event);
+
+                      if (!isObstacle) {
+                        columnEventsScratch.push(segment.event);
+                      }
                     }
                   }
 
@@ -5044,10 +5054,96 @@ export default class GridManager {
 
             if (c < 0 || c >= cols) continue;
 
+            const isObstacle = Boolean(obstacleRow?.[c]);
+
+            if (canUseSegmentContribs && activeSegments) {
+              while (
+                nextSegmentIndex < segments.length &&
+                segments[nextSegmentIndex].startCol <= c
+              ) {
+                activeSegments.push(segments[nextSegmentIndex]);
+                nextSegmentIndex += 1;
+              }
+
+              let nextActiveCount = 0;
+              let regenMultiplier = 1;
+              let regenAdd = 0;
+              let drain = 0;
+              let hasEffect = false;
+
+              for (let k = 0; k < activeSegments.length; k++) {
+                const segment = activeSegments[k];
+
+                if (segment.endCol > c) {
+                  activeSegments[nextActiveCount] = segment;
+                  nextActiveCount += 1;
+
+                  if (!isObstacle) {
+                    const contribution =
+                      segment.event?.[SEGMENTED_EVENT_CONTRIBUTION_KEY] ?? null;
+
+                    if (contribution) {
+                      hasEffect = true;
+                      regenMultiplier *= contribution.regenMultiplier;
+                      regenAdd += contribution.regenAdd;
+                      drain += contribution.drain;
+                    }
+                  }
+                }
+              }
+
+              activeSegments.length = nextActiveCount;
+
+              if (!hasEffect) {
+                processTileBase(
+                  r,
+                  c,
+                  energyRow,
+                  nextRow,
+                  deltaRow,
+                  hasDeltaRow,
+                  densityRow,
+                  obstacleRow,
+                  gridRow,
+                  upEnergyRow,
+                  upObstacleRow,
+                  downEnergyRow,
+                  downObstacleRow,
+                  occupantRegenRow,
+                  occupantRegenVersionRow,
+                );
+              } else {
+                processTileBase(
+                  r,
+                  c,
+                  energyRow,
+                  nextRow,
+                  deltaRow,
+                  hasDeltaRow,
+                  densityRow,
+                  obstacleRow,
+                  gridRow,
+                  upEnergyRow,
+                  upObstacleRow,
+                  downEnergyRow,
+                  downObstacleRow,
+                  occupantRegenRow,
+                  occupantRegenVersionRow,
+                  regenMultiplier,
+                  regenAdd,
+                  drain,
+                );
+              }
+
+              processedTileCount += 1;
+
+              continue;
+            }
+
             let eventsForTile = null;
 
             if (collectEventsForColumn) {
-              eventsForTile = collectEventsForColumn(c);
+              eventsForTile = collectEventsForColumn(c, isObstacle);
             } else if (!useSegmentedForRow) {
               eventsForTile = rowEvents;
             }
@@ -5096,6 +5192,10 @@ export default class GridManager {
             }
             processedTileCount += 1;
           }
+
+          if (activeSegments) {
+            activeSegments.length = 0;
+          }
         }
       }
     }
@@ -5138,7 +5238,10 @@ export default class GridManager {
           const segments = rowEvents;
 
           const activeSegments = this.#getSegmentWindowScratch();
-          const columnEvents = this.#getColumnEventScratch();
+          const useSegmentContribs = segmentedEventContributions;
+          const columnEvents = useSegmentContribs
+            ? null
+            : this.#getColumnEventScratch();
           let nextSegmentIndex = 0;
 
           for (let c = 0; c < cols; c++) {
@@ -5154,67 +5257,139 @@ export default class GridManager {
 
             let nextActiveCount = 0;
 
-            columnEvents.length = 0;
+            if (useSegmentContribs) {
+              let regenMultiplier = 1;
+              let regenAdd = 0;
+              let drain = 0;
+              let hasEffect = false;
 
-            for (let i = 0; i < activeSegments.length; i++) {
-              const segment = activeSegments[i];
+              for (let i = 0; i < activeSegments.length; i++) {
+                const segment = activeSegments[i];
 
-              if (segment.endCol > c) {
-                activeSegments[nextActiveCount] = segment;
-                nextActiveCount += 1;
+                if (segment.endCol > c) {
+                  activeSegments[nextActiveCount] = segment;
+                  nextActiveCount += 1;
 
-                if (!isObstacle) {
-                  columnEvents.push(segment.event);
+                  if (!isObstacle) {
+                    const contribution =
+                      segment.event?.[SEGMENTED_EVENT_CONTRIBUTION_KEY] ?? null;
+
+                    if (contribution) {
+                      hasEffect = true;
+                      regenMultiplier *= contribution.regenMultiplier;
+                      regenAdd += contribution.regenAdd;
+                      drain += contribution.drain;
+                    }
+                  }
                 }
+              }
+
+              activeSegments.length = nextActiveCount;
+
+              if (!hasEffect) {
+                processTileBase(
+                  r,
+                  c,
+                  energyRow,
+                  nextRow,
+                  deltaRow,
+                  hasDeltaRow,
+                  densityRow,
+                  obstacleRow,
+                  gridRow,
+                  upEnergyRow,
+                  upObstacleRow,
+                  downEnergyRow,
+                  downObstacleRow,
+                  occupantRegenRow,
+                  occupantRegenVersionRow,
+                );
+              } else {
+                processTileBase(
+                  r,
+                  c,
+                  energyRow,
+                  nextRow,
+                  deltaRow,
+                  hasDeltaRow,
+                  densityRow,
+                  obstacleRow,
+                  gridRow,
+                  upEnergyRow,
+                  upObstacleRow,
+                  downEnergyRow,
+                  downObstacleRow,
+                  occupantRegenRow,
+                  occupantRegenVersionRow,
+                  regenMultiplier,
+                  regenAdd,
+                  drain,
+                );
+              }
+            } else {
+              columnEvents.length = 0;
+
+              for (let i = 0; i < activeSegments.length; i++) {
+                const segment = activeSegments[i];
+
+                if (segment.endCol > c) {
+                  activeSegments[nextActiveCount] = segment;
+                  nextActiveCount += 1;
+
+                  if (!isObstacle) {
+                    columnEvents.push(segment.event);
+                  }
+                }
+              }
+
+              activeSegments.length = nextActiveCount;
+
+              const eventsForTile = columnEvents.length > 0 ? columnEvents : null;
+
+              if (!eventsForTile) {
+                processTileBase(
+                  r,
+                  c,
+                  energyRow,
+                  nextRow,
+                  deltaRow,
+                  hasDeltaRow,
+                  densityRow,
+                  obstacleRow,
+                  gridRow,
+                  upEnergyRow,
+                  upObstacleRow,
+                  downEnergyRow,
+                  downObstacleRow,
+                  occupantRegenRow,
+                  occupantRegenVersionRow,
+                );
+              } else {
+                const modifiers = resolveModifiersForTile(eventsForTile, r, c);
+
+                processTileBase(
+                  r,
+                  c,
+                  energyRow,
+                  nextRow,
+                  deltaRow,
+                  hasDeltaRow,
+                  densityRow,
+                  obstacleRow,
+                  gridRow,
+                  upEnergyRow,
+                  upObstacleRow,
+                  downEnergyRow,
+                  downObstacleRow,
+                  occupantRegenRow,
+                  occupantRegenVersionRow,
+                  modifiers.regenMultiplier,
+                  modifiers.regenAdd,
+                  modifiers.drain,
+                );
               }
             }
 
-            activeSegments.length = nextActiveCount;
-
-            const eventsForTile = columnEvents.length > 0 ? columnEvents : null;
-
-            if (!eventsForTile) {
-              processTileBase(
-                r,
-                c,
-                energyRow,
-                nextRow,
-                deltaRow,
-                hasDeltaRow,
-                densityRow,
-                obstacleRow,
-                gridRow,
-                upEnergyRow,
-                upObstacleRow,
-                downEnergyRow,
-                downObstacleRow,
-                occupantRegenRow,
-                occupantRegenVersionRow,
-              );
-            } else {
-              const modifiers = resolveModifiersForTile(eventsForTile, r, c);
-
-              processTileBase(
-                r,
-                c,
-                energyRow,
-                nextRow,
-                deltaRow,
-                hasDeltaRow,
-                densityRow,
-                obstacleRow,
-                gridRow,
-                upEnergyRow,
-                upObstacleRow,
-                downEnergyRow,
-                downObstacleRow,
-                occupantRegenRow,
-                occupantRegenVersionRow,
-                modifiers.regenMultiplier,
-                modifiers.regenAdd,
-                modifiers.drain,
-              );
-            }
             processedTileCount += 1;
           }
 
