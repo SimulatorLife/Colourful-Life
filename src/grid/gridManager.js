@@ -177,7 +177,7 @@ function computeCrowdingFeedback({
       }
     }
     const energy = Number.isFinite(occupant.energy) ? occupant.energy : 0;
-    const cached = occupant[CROWDING_SAMPLE_CACHE_KEY];
+    let cached = occupant[CROWDING_SAMPLE_CACHE_KEY];
 
     if (
       cached &&
@@ -222,13 +222,23 @@ function computeCrowdingFeedback({
     toleranceSum += tolerance;
     count += 1;
 
-    occupant[CROWDING_SAMPLE_CACHE_KEY] = {
-      tolerance,
-      toleranceSource,
-      energy,
-      scarcityContribution,
-      maxTileEnergy: maxEnergyForCache,
-    };
+    if (!cached || typeof cached !== "object") {
+      cached = occupant[CROWDING_SAMPLE_CACHE_KEY] = {
+        tolerance,
+        toleranceSource,
+        energy,
+        scarcityContribution,
+        maxTileEnergy: maxEnergyForCache,
+      };
+
+      return;
+    }
+
+    cached.tolerance = tolerance;
+    cached.toleranceSource = toleranceSource;
+    cached.energy = energy;
+    cached.scarcityContribution = scarcityContribution;
+    cached.maxTileEnergy = maxEnergyForCache;
   };
 
   if (useCustomOffsets) {
@@ -252,6 +262,31 @@ function computeCrowdingFeedback({
       if (!neighborRow) continue;
 
       accumulateOccupant(neighborRow[nc]);
+    }
+  } else if (row >= 0 && row < rows && col >= 0 && col < cols) {
+    const lastRowIndex = rows - 1;
+    const lastColIndex = cols - 1;
+    const leftIndex = col > 0 ? col - 1 : -1;
+    const rightIndex = col < lastColIndex ? col + 1 : -1;
+    const currentRow = gridRows[row];
+    const rowAbove = row > 0 ? gridRows[row - 1] : null;
+    const rowBelow = row < lastRowIndex ? gridRows[row + 1] : null;
+
+    if (rowAbove) {
+      if (leftIndex !== -1) accumulateOccupant(rowAbove[leftIndex]);
+      accumulateOccupant(rowAbove[col]);
+      if (rightIndex !== -1) accumulateOccupant(rowAbove[rightIndex]);
+    }
+
+    if (currentRow) {
+      if (leftIndex !== -1) accumulateOccupant(currentRow[leftIndex]);
+      if (rightIndex !== -1) accumulateOccupant(currentRow[rightIndex]);
+    }
+
+    if (rowBelow) {
+      if (leftIndex !== -1) accumulateOccupant(rowBelow[leftIndex]);
+      accumulateOccupant(rowBelow[col]);
+      if (rightIndex !== -1) accumulateOccupant(rowBelow[rightIndex]);
     }
   } else {
     const lastRowIndex = rows - 1;
