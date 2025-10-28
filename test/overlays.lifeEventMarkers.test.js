@@ -179,3 +179,71 @@ test("drawLifeEventMarkers falls back to default limit when provided invalid inp
 
   assert.ok(strokeCount > 0, "invalid limit still renders the available markers");
 });
+
+test("drawLifeEventMarkers tolerates contexts without save/restore helpers", () => {
+  const ctx = {
+    ops: [],
+    beginPath() {
+      this.ops.push({ type: "beginPath" });
+    },
+    arc(x, y, radius) {
+      this.ops.push({ type: "arc", x, y, radius });
+    },
+    moveTo(x, y) {
+      this.ops.push({ type: "moveTo", x, y });
+    },
+    lineTo(x, y) {
+      this.ops.push({ type: "lineTo", x, y });
+    },
+    stroke() {
+      this.ops.push({ type: "stroke" });
+    },
+    fill() {
+      this.ops.push({ type: "fill" });
+    },
+    fillRect(x, y, width, height) {
+      this.ops.push({ type: "fillRect", x, y, width, height });
+    },
+    fillText(text, x, y) {
+      this.ops.push({ type: "fillText", text, x, y });
+    },
+    measureText() {
+      return { width: 0 };
+    },
+    set lineWidth(value) {
+      this.ops.push({ type: "lineWidth", value });
+    },
+    get lineWidth() {
+      return 1;
+    },
+    set lineJoin(value) {
+      this.ops.push({ type: "lineJoin", value });
+    },
+    set lineCap(value) {
+      this.ops.push({ type: "lineCap", value });
+    },
+    set strokeStyle(value) {
+      this.ops.push({ type: "strokeStyle", value });
+    },
+    set fillStyle(value) {
+      this.ops.push({ type: "fillStyle", value });
+    },
+    set globalAlpha(value) {
+      this.ops.push({ type: "alpha", value });
+    },
+    get globalAlpha() {
+      return 1;
+    },
+  };
+
+  const events = [{ type: "birth", row: 0, col: 0, tick: 5, color: "#abcdef" }];
+
+  assert.not.throws(() => {
+    drawLifeEventMarkers(ctx, 12, events, { currentTick: 5, fadeTicks: 10 });
+  });
+
+  assert.ok(
+    ctx.ops.some((op) => op.type === "fillRect"),
+    "legend background renders without relying on save/restore",
+  );
+});
