@@ -974,6 +974,40 @@ test("autoPauseOnBlur setter keeps engine state aligned", async () => {
   }
 });
 
+test("disabling autopause resumes the simulation when an auto pause is pending", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.start();
+    engine.setAutoPauseOnBlur(true);
+
+    engine.pause();
+    engine._autoPauseResumePending = true;
+    engine.state.autoPausePending = true;
+
+    assert.is(
+      engine.isPaused(),
+      true,
+      "engine should be paused before disabling autopause",
+    );
+
+    engine.setAutoPauseOnBlur(false);
+
+    assert.is(
+      engine.isPaused(),
+      false,
+      "disabling autopause should resume the simulation",
+    );
+    assert.is(engine._autoPauseResumePending, false);
+    assert.is(engine.state.autoPausePending, false);
+  } finally {
+    restore();
+  }
+});
+
 test("pause clears pending auto-resume flags", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
