@@ -9,6 +9,9 @@ where practical.
 
 ### Added
 
+- Diversity-drive sensor linking DNA appetite, novelty pressure, and lived
+  diversity into neural controls so movement, interaction, and reproduction
+  policies adapt to neighbourhood variety instead of fixed appetites.
 - Optional Aurora Celebration Veil overlay that tints the canvas with a low-contrast,
   energy- and birth-responsive aurora while keeping other telemetry readable and
   disabled by default.

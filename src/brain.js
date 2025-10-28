@@ -32,6 +32,7 @@ export const SENSOR_KEYS = Object.freeze([
   "scarcityMemory",
   "confidenceMemory",
   "opportunitySignal",
+  "diversityDrive",
 ]);
 
 const SENSOR_LOOKUP = new Map(SENSOR_KEYS.map((key, index) => [key, index]));
