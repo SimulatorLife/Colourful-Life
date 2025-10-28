@@ -57,6 +57,19 @@ const DIVERSITY_SIMILARITY_WARNING =
 
 const UNRESOLVED_SEED = Symbol("stats.unresolvedSeed");
 
+function clampWindowToSpan(requestedWindow, observedSpan) {
+  const normalizedWindow = Math.max(
+    1,
+    Math.floor(Number.isFinite(requestedWindow) ? requestedWindow : 1),
+  );
+  const normalizedSpan = Math.max(
+    1,
+    Math.floor(Number.isFinite(observedSpan) ? observedSpan : 1),
+  );
+
+  return Math.min(normalizedWindow, normalizedSpan);
+}
+
 function wrapTraitCompute(fn) {
   if (typeof fn !== "function") {
     return () => 0;
@@ -2249,7 +2262,7 @@ export default class Stats {
     }
 
     const ticksObserved = Math.max(0, latestTick - windowStart);
-    const normalizedSpan = Math.max(1, Math.min(numericWindow, ticksObserved || 1));
+    const normalizedSpan = clampWindowToSpan(numericWindow, ticksObserved);
 
     const birthsPer100Ticks = (births / normalizedSpan) * 100;
     const deathsPer100Ticks = (deaths / normalizedSpan) * 100;
@@ -2302,7 +2315,7 @@ export default class Stats {
 
     const windowStart = Math.max(0, endExclusive - numericWindow);
     const span = endExclusive - windowStart;
-    const inclusiveWindow = Math.max(1, Math.min(numericWindow, span));
+    const inclusiveWindow = clampWindowToSpan(numericWindow, span);
     const bucketCount = Math.max(1, Math.ceil(span / bucketSpan));
     const buckets = Array.from({ length: bucketCount }, (_, index) => {
       const startTick = windowStart + index * bucketSpan;
