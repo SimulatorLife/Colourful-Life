@@ -16,10 +16,10 @@ import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
 import {
   clamp,
   clamp01,
+  pickFirstFinitePositive,
   sanitizeNumber,
   sanitizePositiveInteger,
   sanitizeUnitInterval,
-  toFiniteOrNull,
   applyIntervalFloor,
 } from "./utils/math.js";
 import { coerceBoolean } from "./utils/primitives.js";
@@ -126,20 +126,11 @@ export default class SimulationEngine {
     }
 
     const { width, height } = ensureCanvasDimensions(resolvedCanvas, config);
-    const toFinite = toFiniteOrNull;
-    const resolvePositiveInt = (value, fallback) => {
-      const candidate = [value, fallback]
-        .map(toFinite)
-        .find((numeric) => numeric != null && numeric > 0);
-
-      return candidate != null ? Math.floor(candidate) : 1;
-    };
-    const resolvedCellSize = toFinite(config.cellSize);
-    const cellSize = resolvedCellSize && resolvedCellSize > 0 ? resolvedCellSize : 5;
+    const cellSize = pickFirstFinitePositive([config.cellSize], 5);
     const baseRows = height / cellSize;
     const baseCols = width / cellSize;
-    const rows = resolvePositiveInt(config.rows, baseRows);
-    const cols = resolvePositiveInt(config.cols, baseCols);
+    const rows = Math.floor(pickFirstFinitePositive([config.rows, baseRows], 1));
+    const cols = Math.floor(pickFirstFinitePositive([config.cols, baseCols], 1));
 
     this.window = win;
     this.document = doc;
