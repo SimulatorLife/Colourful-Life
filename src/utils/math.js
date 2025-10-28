@@ -132,13 +132,13 @@ export function sanitizeNumber(
 
     try {
       numeric = Number(trimmed);
-    } catch (error) {
+    } catch {
       return fallback;
     }
   } else {
     try {
       numeric = Number(value);
-    } catch (error) {
+    } catch {
       return fallback;
     }
   }
@@ -352,7 +352,7 @@ export function toFiniteOrNull(value) {
     const numeric = Number(value);
 
     return Number.isFinite(numeric) ? numeric : null;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
