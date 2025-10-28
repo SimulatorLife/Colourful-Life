@@ -774,38 +774,38 @@ function computeAuroraCelebrationRatio(
     Number.isFinite(fadeTicks) && fadeTicks > 0
       ? fadeTicks
       : AURORA_VEIL_FADE_WINDOW_FALLBACK;
-  let birthWeight = 0;
-  let deathWeight = 0;
+  const { birthWeight, deathWeight } = lifeEvents.reduce(
+    (totals, event) => {
+      if (!event) return totals;
 
-  for (let i = 0; i < lifeEvents.length; i += 1) {
-    const event = lifeEvents[i];
+      const { type } = event;
 
-    if (!event) continue;
+      if (type !== "birth" && type !== "death") return totals;
 
-    const type = event.type;
+      let weight = 1;
+      const eventTick = Number(event.tick);
 
-    if (type !== "birth" && type !== "death") continue;
+      if (Number.isFinite(currentTick) && Number.isFinite(eventTick)) {
+        const age = currentTick - eventTick;
 
-    let weight = 1;
-    const eventTick = Number(event.tick);
+        if (age < 0) return totals;
 
-    if (Number.isFinite(currentTick) && Number.isFinite(eventTick)) {
-      const age = currentTick - eventTick;
+        const normalized = clamp01(age / resolvedFade);
+        const eased = 1 - normalized * normalized;
 
-      if (age < 0) continue;
+        weight = eased > 0 ? eased : 0;
+      }
 
-      const normalized = clamp01(age / resolvedFade);
-      const eased = 1 - normalized * normalized;
+      if (type === "birth") {
+        totals.birthWeight += weight;
+      } else {
+        totals.deathWeight += weight * 0.55;
+      }
 
-      weight = eased > 0 ? eased : 0;
-    }
-
-    if (type === "birth") {
-      birthWeight += weight;
-    } else {
-      deathWeight += weight * 0.55;
-    }
-  }
+      return totals;
+    },
+    { birthWeight: 0, deathWeight: 0 },
+  );
 
   const total = birthWeight + deathWeight;
 
