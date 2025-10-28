@@ -459,6 +459,11 @@ export default class GridManager {
   #segmentWindowScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
+  #crowdingComfortGrid = null;
+  #crowdingScarcityGrid = null;
+  #crowdingCountGrid = null;
+  #crowdingPrepared = false;
+  #crowdingPreparedUseScarcity = false;
   #activeCellSnapshotScratch = null;
   #eventModifierScratch = null;
   #sparseDirtyColumnsScratch = null;
@@ -767,6 +772,183 @@ export default class GridManager {
     }
 
     return this.#eventRowsScratch;
+  }
+
+  #prepareCrowdingFeedback(rows, cols, maxTileEnergy) {
+    this.#crowdingPrepared = false;
+
+    if (rows <= 0 || cols <= 0) {
+      return false;
+    }
+
+    const comfortGrid = this.#crowdingComfortGrid;
+    const scarcityGrid = this.#crowdingScarcityGrid;
+    const countGrid = this.#crowdingCountGrid;
+    const ensureRow = (grid, factory) => {
+      if (!Array.isArray(grid) || grid.length !== rows) {
+        return Array.from({ length: rows }, factory);
+      }
+
+      for (let r = 0; r < rows; r++) {
+        const existing = grid[r];
+
+        if (!existing || existing.length !== cols) {
+          grid[r] = factory();
+        } else {
+          existing.fill(0);
+        }
+      }
+
+      return grid;
+    };
+
+    this.#crowdingComfortGrid = ensureRow(comfortGrid, () => new Float32Array(cols));
+    this.#crowdingCountGrid = ensureRow(countGrid, () => new Uint8Array(cols));
+
+    if (scarcityGrid && scarcityGrid.length === rows) {
+      for (let r = 0; r < rows; r++) {
+        const existing = scarcityGrid[r];
+
+        if (!existing || existing.length !== cols) {
+          this.#crowdingScarcityGrid[r] = new Float32Array(cols);
+        } else {
+          existing.fill(0);
+        }
+      }
+    } else {
+      this.#crowdingScarcityGrid = Array.from(
+        { length: rows },
+        () => new Float32Array(cols),
+      );
+    }
+
+    const comfort = this.#crowdingComfortGrid;
+    const scarcity = this.#crowdingScarcityGrid;
+    const counts = this.#crowdingCountGrid;
+    const grid = this.grid;
+    const useScarcity = maxTileEnergy > 0;
+    const invMaxTileEnergy = useScarcity ? 1 / maxTileEnergy : 0;
+
+    if (!useScarcity) {
+      for (let r = 0; r < rows; r++) {
+        scarcity[r].fill(0);
+      }
+    }
+
+    for (let r = 0; r < rows; r++) {
+      const gridRow = grid[r];
+
+      if (!gridRow) continue;
+
+      for (let c = 0; c < cols; c++) {
+        const occupant = gridRow[c];
+
+        if (!occupant) continue;
+
+        let tolerance = Number.isFinite(occupant._crowdingTolerance)
+          ? occupant._crowdingTolerance
+          : Number.isFinite(occupant.baseCrowdingTolerance)
+            ? occupant.baseCrowdingTolerance
+            : 0.5;
+
+        if (tolerance <= 0) {
+          tolerance = 0;
+        } else if (tolerance >= 1) {
+          tolerance = 1;
+        }
+
+        let scarcityContribution = 0;
+
+        if (useScarcity) {
+          let normalizedEnergy = Number.isFinite(occupant.energy)
+            ? occupant.energy * invMaxTileEnergy
+            : 0;
+
+          if (normalizedEnergy <= 0) {
+            normalizedEnergy = 0;
+          } else if (normalizedEnergy >= 1) {
+            normalizedEnergy = 1;
+          }
+
+          scarcityContribution = 1 - normalizedEnergy;
+        }
+
+        for (let i = 0; i < NEIGHBOR_OFFSETS.length; i++) {
+          const offset = NEIGHBOR_OFFSETS[i];
+
+          if (!offset) continue;
+
+          const nr = r + offset[0];
+          const nc = c + offset[1];
+
+          if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+
+          comfort[nr][nc] += tolerance;
+          counts[nr][nc] += 1;
+
+          if (useScarcity) {
+            scarcity[nr][nc] += scarcityContribution;
+          }
+        }
+      }
+    }
+
+    this.#crowdingPrepared = true;
+    this.#crowdingPreparedUseScarcity = useScarcity;
+
+    return true;
+  }
+
+  #resolvePreparedCrowdingFeedback(row, col) {
+    const out = this.#crowdingFeedbackScratch;
+    const comfortRow = this.#crowdingComfortGrid?.[row];
+    const countRow = this.#crowdingCountGrid?.[row];
+
+    if (!comfortRow || !countRow) {
+      out.comfort = 0.5;
+      out.scarcity = 0;
+      out.count = 0;
+
+      return out;
+    }
+
+    const count = countRow[col] ?? 0;
+
+    if (!(count > 0)) {
+      out.comfort = 0.5;
+      out.scarcity = 0;
+      out.count = 0;
+
+      return out;
+    }
+
+    let comfort = comfortRow[col] / count;
+
+    if (comfort <= 0) {
+      comfort = 0;
+    } else if (comfort >= 1) {
+      comfort = 1;
+    }
+
+    out.comfort = comfort;
+    out.count = count;
+
+    if (this.#crowdingPreparedUseScarcity) {
+      const scarcityRow = this.#crowdingScarcityGrid?.[row];
+      let scarcity = scarcityRow ? scarcityRow[col] / count : 0;
+
+      if (scarcity <= 0) {
+        scarcity = 0;
+      } else if (scarcity >= 1) {
+        scarcity = 1;
+      }
+
+      out.scarcity = scarcity;
+    } else {
+      out.scarcity = 0;
+    }
+
+    return out;
   }
 
   #ensureOccupantRegenBuffers(rowCount, colCount) {
@@ -4113,6 +4295,8 @@ export default class GridManager {
         }
       }
     }
+    this.#prepareCrowdingFeedback(rows, cols, positiveMaxTileEnergy);
+
     let computeGeneralEventModifiers = null;
 
     if (hasEvents && !segmentedEventContributions && eventOptions) {
@@ -4315,16 +4499,18 @@ export default class GridManager {
             let densityImpact = REGEN_DENSITY_PENALTY * effectiveDensity;
 
             if (densityImpact > 0) {
-              const feedback = computeCrowdingFeedback({
-                grid,
-                row: r,
-                col: c,
-                rows,
-                cols,
-                neighborOffsets: NEIGHBOR_OFFSETS,
-                maxTileEnergy: positiveMaxTileEnergy,
-                result: this.#crowdingFeedbackScratch,
-              });
+              const feedback = this.#crowdingPrepared
+                ? this.#resolvePreparedCrowdingFeedback(r, c)
+                : computeCrowdingFeedback({
+                    grid,
+                    row: r,
+                    col: c,
+                    rows,
+                    cols,
+                    neighborOffsets: NEIGHBOR_OFFSETS,
+                    maxTileEnergy: positiveMaxTileEnergy,
+                    result: this.#crowdingFeedbackScratch,
+                  });
 
               if (feedback.count > 0) {
                 const comfort = feedback.comfort;
