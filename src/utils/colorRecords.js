@@ -149,6 +149,18 @@ function createColorRecord(r, g, b, a) {
   return Object.freeze({ rgba, packed });
 }
 
+/**
+ * Parses a CSS-style color value into a frozen `{rgba, packed}` record.
+ * Hex (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`) and `rgb[a]()` strings are
+ * supported; everything else falls back to the empty record so renderers can
+ * treat "invalid" and "transparent" the same way. Results are memoized to
+ * avoid repeating expensive regex work when drawing many cells with identical
+ * colors.
+ *
+ * @param {string} color - Raw color string from cell genomes or theme config.
+ * @returns {{rgba:readonly number[],packed:number}} Normalized color
+ *   descriptor, or the shared `EMPTY_COLOR_RECORD` sentinel when parsing fails.
+ */
 export function resolveColorRecord(color) {
   if (typeof color !== "string") {
     return EMPTY_COLOR_RECORD;
