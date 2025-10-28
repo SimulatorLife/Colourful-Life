@@ -1,6 +1,16 @@
 import { resolveNonEmptyString } from "./primitives.js";
 
 /**
+ * Determines whether a value is a usable cell-like object.
+ *
+ * @param {unknown} cell
+ * @returns {cell is object}
+ */
+export function isCellLike(cell) {
+  return cell != null && typeof cell === "object";
+}
+
+/**
  * Shared helpers for working with cell entities without creating dependencies
  * on the heavier simulation modules. Utility consumers can safely extract
  * presentation-friendly properties while keeping feature modules decoupled.
@@ -15,7 +25,7 @@ import { resolveNonEmptyString } from "./primitives.js";
  * @returns {string | null} Hex or rgba colour string, or `null` when unavailable.
  */
 export function resolveCellColor(cell) {
-  if (!cell || typeof cell !== "object") {
+  if (!isCellLike(cell)) {
     return null;
   }
 
