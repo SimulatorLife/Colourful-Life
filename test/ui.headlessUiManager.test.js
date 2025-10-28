@@ -308,6 +308,7 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
     showObstacles: false,
     showEnergy: true,
     showDensity: false,
+    showAge: true,
     showFitness: false,
     showLifeEventMarkers: true,
     showGridLines: true,
@@ -317,6 +318,7 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
   assert.is(manager.getShowObstacles(), false);
   assert.is(manager.getShowEnergy(), true);
   assert.is(manager.getShowDensity(), false);
+  assert.is(manager.getShowAge(), true);
   assert.is(manager.getShowFitness(), false);
   assert.is(manager.getShowLifeEventMarkers(), true);
   assert.is(manager.getShowGridLines(), true);
@@ -328,6 +330,9 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
   manager.setShowEnergy(0); // no change
 
   manager.setShowDensity("1");
+
+  manager.setShowAge("no");
+  manager.setShowAge(false); // no change
 
   manager.setShowFitness("yes");
 
@@ -341,6 +346,7 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
     ["showObstacles", true],
     ["showEnergy", false],
     ["showDensity", true],
+    ["showAge", false],
     ["showFitness", true],
     ["showLifeEventMarkers", false],
     ["showGridLines", false],
@@ -350,6 +356,7 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
   assert.is(manager.getShowObstacles(), true);
   assert.is(manager.getShowEnergy(), false);
   assert.is(manager.getShowDensity(), true);
+  assert.is(manager.getShowAge(), false);
   assert.is(manager.getShowFitness(), true);
   assert.is(manager.getShowLifeEventMarkers(), false);
   assert.is(manager.getShowGridLines(), true);

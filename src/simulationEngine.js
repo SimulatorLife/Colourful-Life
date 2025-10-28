@@ -306,6 +306,7 @@ export default class SimulationEngine {
       showObstacles: defaults.showObstacles,
       showEnergy: defaults.showEnergy,
       showDensity: defaults.showDensity,
+      showAge: defaults.showAge,
       showFitness: defaults.showFitness,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
       showGridLines: defaults.showGridLines,
@@ -786,6 +787,7 @@ export default class SimulationEngine {
     }
 
     const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
+    const includeAgeOverlay = Boolean(this.state.showAge);
     const totalTicks = Number.isFinite(this.stats?.totals?.ticks)
       ? this.stats.totals.ticks
       : null;
@@ -797,6 +799,7 @@ export default class SimulationEngine {
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
       showDensity: this.state.showDensity ?? false,
+      showAge: includeAgeOverlay,
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
       showLifeEventMarkers: includeLifeEventMarkers,
@@ -1128,6 +1131,7 @@ export default class SimulationEngine {
 
     this.grid?.draw?.({ showObstacles });
     const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
+    const includeAgeOverlay = Boolean(this.state.showAge);
     const totalTicks = Number.isFinite(this.stats?.totals?.ticks)
       ? this.stats.totals.ticks
       : null;
@@ -1139,6 +1143,7 @@ export default class SimulationEngine {
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
       showDensity: this.state.showDensity ?? false,
+      showAge: includeAgeOverlay,
       showFitness: this.state.showFitness ?? false,
       showObstacles,
       showLifeEventMarkers: includeLifeEventMarkers,
@@ -1406,6 +1411,7 @@ export default class SimulationEngine {
     showObstacles,
     showEnergy,
     showDensity,
+    showAge,
     showFitness,
     showLifeEventMarkers,
     showGridLines,
@@ -1415,6 +1421,7 @@ export default class SimulationEngine {
       showObstacles,
       showEnergy,
       showDensity,
+      showAge,
       showFitness,
       showLifeEventMarkers,
       showGridLines,
@@ -1549,6 +1556,7 @@ export default class SimulationEngine {
       case "showObstacles":
       case "showEnergy":
       case "showDensity":
+      case "showAge":
       case "showFitness":
       case "showLifeEventMarkers":
       case "showGridLines":

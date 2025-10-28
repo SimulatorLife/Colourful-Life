@@ -42,6 +42,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @param {boolean} [options.showObstacles] - Whether obstacle overlays are shown.
  * @param {boolean} [options.showEnergy] - Whether energy overlays are shown.
  * @param {boolean} [options.showDensity] - Whether population density overlays are shown.
+ * @param {boolean} [options.showAge] - Whether organism age overlays are shown.
  * @param {boolean} [options.showFitness] - Whether fitness overlays are shown.
  * @param {boolean} [options.showLifeEventMarkers] - Whether life event markers are shown.
  * @param {boolean} [options.showGridLines] - Whether grid lines outlining each tile are shown.
@@ -74,6 +75,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  *   getShowObstacles: () => boolean,
  *   getShowEnergy: () => boolean,
  *   getShowDensity: () => boolean,
+ *   getShowAge: () => boolean,
  *   getShowFitness: () => boolean,
  *   getShowLifeEventMarkers: () => boolean,
  *   getShowGridLines: () => boolean,
@@ -312,6 +314,7 @@ export function createHeadlessUiManager(options = {}) {
     getShowObstacles: () => settings.showObstacles,
     getShowEnergy: () => settings.showEnergy,
     getShowDensity: () => settings.showDensity,
+    getShowAge: () => settings.showAge,
     getShowFitness: () => settings.showFitness,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
     getShowGridLines: () => settings.showGridLines,
@@ -339,6 +342,14 @@ export function createHeadlessUiManager(options = {}) {
 
       settings.showDensity = normalized;
       notify("showDensity", settings.showDensity);
+    },
+    setShowAge: (value) => {
+      const normalized = coerceBoolean(value, settings.showAge);
+
+      if (settings.showAge === normalized) return;
+
+      settings.showAge = normalized;
+      notify("showAge", settings.showAge);
     },
     setShowFitness: (value) => {
       const normalized = coerceBoolean(value, settings.showFitness);

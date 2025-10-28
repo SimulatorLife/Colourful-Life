@@ -15,6 +15,7 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       showObstacles: false,
       showDensity: true,
       showEnergy: true,
+      showAge: true,
       showFitness: true,
       showLifeEventMarkers: true,
       showGridLines: true,
@@ -31,6 +32,7 @@ test("createSimulation aligns UI controls with config defaults", async () => {
     assert.is(uiManager.showObstacles, false);
     assert.is(uiManager.showDensity, true);
     assert.is(uiManager.showEnergy, true);
+    assert.is(uiManager.showAge, true);
     assert.is(uiManager.showFitness, true);
     assert.is(uiManager.showLifeEventMarkers, true);
     assert.is(uiManager.showGridLines, true);
@@ -52,6 +54,7 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       uiManager.controlsPanel,
       "Show Fitness Heatmap",
     );
+    const ageInput = findCheckboxByLabel(uiManager.controlsPanel, "Show Age Heatmap");
     const lifeEventInput = findCheckboxByLabel(
       uiManager.controlsPanel,
       "Life Event Markers",
@@ -61,6 +64,7 @@ test("createSimulation aligns UI controls with config defaults", async () => {
     assert.ok(obstaclesInput, "obstacle toggle should exist");
     assert.ok(densityInput, "density toggle should exist");
     assert.ok(energyInput, "energy toggle should exist");
+    assert.ok(ageInput, "age toggle should exist");
     assert.ok(fitnessInput, "fitness toggle should exist");
     assert.ok(lifeEventInput, "life event marker toggle should exist");
     assert.ok(gridInput, "grid line toggle should exist");
@@ -68,11 +72,13 @@ test("createSimulation aligns UI controls with config defaults", async () => {
     assert.is(obstaclesInput.checked, false);
     assert.is(densityInput.checked, true);
     assert.is(energyInput.checked, true);
+    assert.is(ageInput.checked, true);
     assert.is(fitnessInput.checked, true);
     assert.is(lifeEventInput.checked, true);
     assert.is(gridInput.checked, true);
 
     assert.is(simulation.engine.state.showGridLines, true);
+    assert.is(simulation.engine.state.showAge, true);
 
     const playbackSlider = findSliderByLabel(
       uiManager.controlsPanel,
@@ -130,6 +136,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
             initialSettings: {
               showEnergy: true,
               showDensity: true,
+              showAge: true,
               showFitness: true,
               showLifeEventMarkers: true,
               showGridLines: true,
@@ -146,6 +153,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
 
     assert.is(uiManager.showEnergy, true);
     assert.is(uiManager.showDensity, true);
+    assert.is(uiManager.showAge, true);
     assert.is(uiManager.showFitness, true);
     assert.is(uiManager.showLifeEventMarkers, true);
     assert.is(uiManager.showGridLines, true);
@@ -163,6 +171,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
       uiManager.controlsPanel,
       "Show Fitness Heatmap",
     );
+    const ageToggle = findCheckboxByLabel(uiManager.controlsPanel, "Show Age Heatmap");
     const lifeEventToggle = findCheckboxByLabel(
       uiManager.controlsPanel,
       "Life Event Markers",
@@ -175,6 +184,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
 
     assert.ok(energyToggle, "energy toggle should render");
     assert.ok(densityToggle, "density toggle should render");
+    assert.ok(ageToggle, "age toggle should render");
     assert.ok(fitnessToggle, "fitness toggle should render");
     assert.ok(lifeEventToggle, "life event toggle should render");
     assert.ok(gridToggle, "grid toggle should render");
@@ -182,6 +192,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
 
     assert.is(energyToggle.checked, true);
     assert.is(densityToggle.checked, true);
+    assert.is(ageToggle.checked, true);
     assert.is(fitnessToggle.checked, true);
     assert.is(lifeEventToggle.checked, true);
     assert.is(gridToggle.checked, true);
@@ -194,6 +205,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.is(state.updatesPerSecond, 48);
     assert.is(state.showEnergy, true);
     assert.is(state.showDensity, true);
+    assert.is(state.showAge, true);
     assert.is(state.showFitness, true);
     assert.is(state.showLifeEventMarkers, true);
     assert.is(state.showGridLines, true);

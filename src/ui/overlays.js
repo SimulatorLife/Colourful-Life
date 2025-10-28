@@ -17,6 +17,8 @@ const LIFE_EVENT_MARKER_DEFAULT_COLORS = Object.freeze({
   death: "#ff6b6b",
 });
 const LIFE_EVENT_LEGEND_MIN_WIDTH = 150;
+const AGE_HEATMAP_COLOR = "255, 138, 0";
+const AGE_HEATMAP_BASE_ALPHA = 0.18;
 const DEFAULT_OBSTACLE_MASK_FILL = "rgba(40, 40, 55, 0.35)";
 const DEFAULT_OBSTACLE_MASK_OUTLINE = "rgba(200, 200, 255, 0.35)";
 const OBSTACLE_MASK_LINE_WIDTH_SCALE = 0.12;
@@ -1118,6 +1120,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   const {
     showEnergy,
     showDensity,
+    showAge,
     showFitness,
     showLifeEventMarkers,
     showGridLines,
@@ -1151,6 +1154,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
 
   if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);
   if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
+  if (showAge) drawAgeHeatmap(grid, ctx, cellSize);
   if (showFitness) {
     if (!snapshot && typeof grid?.getLastSnapshot === "function") {
       snapshot = grid.getLastSnapshot();
@@ -1303,6 +1307,247 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
     minLocation,
     maxLocation,
   });
+}
+
+let ageFractionScratch = null;
+let ageFractionScratchSize = 0;
+
+function ensureAgeScratchSize(size) {
+  if (!ageFractionScratch || ageFractionScratchSize < size) {
+    ageFractionScratch = new Float32Array(size);
+    ageFractionScratchSize = size;
+  }
+
+  return ageFractionScratch;
+}
+
+function summarizeAgeOverlay(grid, scratch, rows, cols) {
+  const gridRows = Array.isArray(grid?.grid) ? grid.grid : null;
+  let minFraction = Infinity;
+  let maxFraction = -Infinity;
+  let sumFraction = 0;
+  let sumAge = 0;
+  let tracked = 0;
+  let minEntry = null;
+  let maxEntry = null;
+
+  for (let r = 0; r < rows; r++) {
+    const rowCells = Array.isArray(gridRows?.[r]) ? gridRows[r] : null;
+
+    for (let c = 0; c < cols; c++) {
+      const index = r * cols + c;
+      let cell = rowCells ? rowCells[c] : null;
+
+      if (!cell && typeof grid?.getCell === "function") {
+        cell = grid.getCell(r, c);
+      }
+
+      if (!cell || typeof cell !== "object") {
+        scratch[index] = 0;
+
+        continue;
+      }
+
+      const age = Number.isFinite(cell.age) && cell.age > 0 ? cell.age : 0;
+      const lifespan =
+        Number.isFinite(cell.lifespan) && cell.lifespan > 0 ? cell.lifespan : null;
+      let normalized = 0;
+
+      if (lifespan) {
+        normalized = clamp01(age / lifespan);
+      } else if (age > 0) {
+        normalized = 1;
+      }
+
+      scratch[index] = normalized;
+
+      sumFraction += normalized;
+      sumAge += age;
+      tracked += 1;
+
+      if (normalized < minFraction) {
+        minFraction = normalized;
+        minEntry = { row: r, col: c, age, lifespan, fraction: normalized };
+      }
+
+      if (normalized > maxFraction) {
+        maxFraction = normalized;
+        maxEntry = { row: r, col: c, age, lifespan, fraction: normalized };
+      }
+    }
+  }
+
+  if (tracked === 0) {
+    return null;
+  }
+
+  return {
+    min: minEntry ? { ...minEntry } : null,
+    max: maxEntry ? { ...maxEntry } : null,
+    averageFraction: clamp01(sumFraction / tracked),
+    averageAge: sumAge / tracked,
+    count: tracked,
+  };
+}
+
+function formatAgePercent(fraction, { approximate = false } = {}) {
+  if (!Number.isFinite(fraction)) {
+    return null;
+  }
+
+  const percent = clamp01(fraction) * 100;
+  const precision = percent >= 10 ? 0 : 1;
+  const prefix = approximate ? "~" : "";
+
+  return `${prefix}${percent.toFixed(precision)}% lifespan`;
+}
+
+function formatAgeLegendEntry(label, entry) {
+  if (!entry) {
+    return null;
+  }
+
+  const ageTicks = Number.isFinite(entry.age) ? Math.round(entry.age) : 0;
+  const percentText = formatAgePercent(entry.fraction);
+  const locationText =
+    Number.isFinite(entry.row) && Number.isFinite(entry.col)
+      ? `@ (${Math.round(entry.row)}, ${Math.round(entry.col)})`
+      : "";
+  const percentSegment = percentText ? ` (${percentText})` : "";
+  const locationSegment = locationText ? ` ${locationText}` : "";
+
+  return `${label}: ${ageTicks} ticks${percentSegment}${locationSegment}`;
+}
+
+function formatAgeAverageLine(age, fraction) {
+  const ageTicks = Number.isFinite(age) ? Math.round(age) : null;
+  const percentText = formatAgePercent(fraction, { approximate: true });
+  const ageSegment = ageTicks != null ? `${ageTicks} ticks` : null;
+  const percentSegment = percentText ? `(${percentText})` : null;
+  const parts = [ageSegment, percentSegment].filter(Boolean);
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return `Mean: ${parts.join(" ")}`;
+}
+
+function formatAgeCountLine(count) {
+  if (!Number.isFinite(count) || count <= 0) {
+    return null;
+  }
+
+  const rounded = Math.round(count);
+  const label = rounded === 1 ? "Tracked: 1 organism" : `Tracked: ${rounded} organisms`;
+
+  return label;
+}
+
+function drawAgeLegend(ctx, cellSize, cols, rows, stats) {
+  if (!ctx || !stats || stats.count <= 0) {
+    return;
+  }
+
+  const padding = 10;
+  const gradientHeight = 12;
+  const gradientWidth = clamp(cols * cellSize * 0.22, 120, 160);
+  const textLineHeight = 14;
+  const lines = [
+    formatAgeLegendEntry("Oldest", stats.max),
+    formatAgeAverageLine(stats.averageAge, stats.averageFraction),
+    formatAgeLegendEntry("Youngest", stats.min),
+    formatAgeCountLine(stats.count),
+  ].filter(Boolean);
+  const blockHeight =
+    gradientHeight + padding * 3 + textLineHeight * Math.max(1, lines.length);
+  const blockWidth = gradientWidth + padding * 2;
+  const x = padding;
+  const y = padding;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+  ctx.fillRect(x, y, blockWidth, blockHeight);
+
+  const gradientX = x + padding;
+  const gradientY = y + padding;
+  let gradient = null;
+
+  if (typeof ctx.createLinearGradient === "function") {
+    gradient = ctx.createLinearGradient(
+      gradientX,
+      gradientY,
+      gradientX + gradientWidth,
+      gradientY,
+    );
+    gradient.addColorStop(
+      0,
+      `rgba(${AGE_HEATMAP_COLOR},${formatAlpha(AGE_HEATMAP_BASE_ALPHA)})`,
+    );
+    gradient.addColorStop(1, `rgba(${AGE_HEATMAP_COLOR},1)`);
+  }
+
+  ctx.fillStyle =
+    gradient ?? `rgba(${AGE_HEATMAP_COLOR},${formatAlpha(AGE_HEATMAP_BASE_ALPHA)})`;
+  ctx.fillRect(gradientX, gradientY, gradientWidth, gradientHeight);
+
+  if (!gradient) {
+    ctx.fillStyle = `rgba(${AGE_HEATMAP_COLOR},1)`;
+    ctx.fillRect(
+      gradientX + gradientWidth - Math.min(gradientWidth, 12),
+      gradientY,
+      Math.min(gradientWidth, 12),
+      gradientHeight,
+    );
+  }
+
+  ctx.fillStyle = "#fff";
+  ctx.font = "12px sans-serif";
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left";
+
+  let textY = gradientY + gradientHeight + padding;
+
+  for (const line of lines) {
+    ctx.fillText(line, gradientX, textY);
+    textY += textLineHeight;
+  }
+
+  ctx.restore();
+}
+
+export function drawAgeHeatmap(grid, ctx, cellSize) {
+  if (!grid || !ctx) return;
+
+  const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
+  const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
+
+  if (!(rows > 0) || !(cols > 0) || !(cellSize > 0)) {
+    return;
+  }
+
+  const totalTiles = rows * cols;
+  const scratch = ensureAgeScratchSize(totalTiles);
+  const stats = summarizeAgeOverlay(grid, scratch, rows, cols);
+
+  const alphaAt = (r, c) => {
+    const fraction = scratch[r * cols + c];
+
+    if (!(fraction > 0)) {
+      return 0;
+    }
+
+    const normalized = clamp01(fraction);
+    const blended = AGE_HEATMAP_BASE_ALPHA + (1 - AGE_HEATMAP_BASE_ALPHA) * normalized;
+
+    return clamp01(blended);
+  };
+
+  drawScalarHeatmap(grid, ctx, cellSize, alphaAt, AGE_HEATMAP_COLOR);
+
+  if (stats) {
+    drawAgeLegend(ctx, cellSize, cols, rows, stats);
+  }
 }
 
 /**
