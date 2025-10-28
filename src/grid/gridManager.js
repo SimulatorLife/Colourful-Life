@@ -75,6 +75,7 @@ const DEFAULT_CROWDING_SUMMARY = Object.freeze({
   count: 0,
 });
 const CROWDING_REVISION_LIMIT = 0xffffffff;
+const SEGMENTED_EVENT_CONTRIBUTION_KEY = Symbol("grid.segmentedContribution");
 
 const NOOP_INTERACTION_SYSTEM = Object.freeze({
   resolveIntent() {
@@ -505,6 +506,7 @@ export default class GridManager {
   #decayActiveScratch = null;
   #crowdingFeedbackScratch = { ...DEFAULT_CROWDING_SUMMARY };
   #segmentedEventContributionCache = null;
+  #segmentedEventContributionCleanup = null;
   #densityIntegral = null;
   #densityIntegralRows = 0;
   #densityIntegralCols = 0;
@@ -4307,7 +4309,8 @@ export default class GridManager {
         }
       : null;
     const baseEventModifiers = { regenMultiplier: 1, regenAdd: 0, drain: 0 };
-    let segmentedEventContributions = null;
+    let segmentedEventContributions = false;
+    let segmentedEventCleanup = null;
     const segmentedModifiersScratch = { regenMultiplier: 1, regenAdd: 0, drain: 0 };
 
     if (hasEvents && usingSegmentedEvents && eventOptions) {
@@ -4315,7 +4318,8 @@ export default class GridManager {
       // individual event once. Later tile evaluations simply multiply these
       // cached values instead of rebuilding the modifier set for every tile,
       // eliminating a major O(n_events * n_tiles) hotspot in dense areas.
-      segmentedEventContributions = new Map();
+      segmentedEventCleanup = this.#getSegmentedEventContributionCleanup();
+      let cachingSucceeded = true;
 
       for (let i = 0; i < evs.length; i++) {
         const ev = evs[i];
@@ -4328,9 +4332,35 @@ export default class GridManager {
           effectCache,
         });
 
-        if (contribution) {
-          segmentedEventContributions.set(ev, contribution);
+        if (!contribution) {
+          continue;
         }
+
+        if (!Object.isExtensible(ev)) {
+          cachingSucceeded = false;
+
+          break;
+        }
+
+        ev[SEGMENTED_EVENT_CONTRIBUTION_KEY] = contribution;
+        segmentedEventCleanup.push(ev);
+      }
+
+      if (cachingSucceeded) {
+        segmentedEventContributions = true;
+      } else {
+        for (let i = 0; i < segmentedEventCleanup.length; i++) {
+          const event = segmentedEventCleanup[i];
+
+          if (event && Object.hasOwn(event, SEGMENTED_EVENT_CONTRIBUTION_KEY)) {
+            delete event[SEGMENTED_EVENT_CONTRIBUTION_KEY];
+          }
+
+          segmentedEventCleanup[i] = null;
+        }
+
+        segmentedEventCleanup.length = 0;
+        segmentedEventCleanup = null;
       }
     }
     this.#prepareCrowdingFeedback(rows, cols, positiveMaxTileEnergy);
@@ -4402,7 +4432,11 @@ export default class GridManager {
         let drain = 0;
 
         for (let i = 0; i < eventsForTile.length; i++) {
-          const contribution = segmentedEventContributions.get(eventsForTile[i]);
+          const event = eventsForTile[i];
+          const contribution =
+            event && event[SEGMENTED_EVENT_CONTRIBUTION_KEY] != null
+              ? event[SEGMENTED_EVENT_CONTRIBUTION_KEY]
+              : null;
 
           if (!contribution) continue;
 
@@ -5153,6 +5187,26 @@ export default class GridManager {
           processedTileCount += 1;
         }
       }
+    }
+
+    if (segmentedEventCleanup) {
+      for (let i = 0; i < segmentedEventCleanup.length; i++) {
+        const event = segmentedEventCleanup[i];
+
+        if (!event) continue;
+
+        if (Object.hasOwn(event, SEGMENTED_EVENT_CONTRIBUTION_KEY)) {
+          try {
+            delete event[SEGMENTED_EVENT_CONTRIBUTION_KEY];
+          } catch (error) {
+            event[SEGMENTED_EVENT_CONTRIBUTION_KEY] = undefined;
+          }
+        }
+
+        segmentedEventCleanup[i] = null;
+      }
+
+      segmentedEventCleanup.length = 0;
     }
 
     if (profileEnabled) {
@@ -8397,6 +8451,16 @@ export default class GridManager {
     }
 
     return cache;
+  }
+
+  #getSegmentedEventContributionCleanup() {
+    if (!this.#segmentedEventContributionCleanup) {
+      this.#segmentedEventContributionCleanup = [];
+    } else {
+      this.#segmentedEventContributionCleanup.length = 0;
+    }
+
+    return this.#segmentedEventContributionCleanup;
   }
 
   #resolveSegmentedEventContribution(
