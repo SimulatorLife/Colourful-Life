@@ -54,6 +54,7 @@ where practical.
   `COLOURFUL_LIFE_DECAY_IMMEDIATE_SHARE` override to the README so onboarding
   steps and configuration references match the current runtime and
   environment hooks.
+- Tightened the README quick start and cross-referenced the developer guide while documenting the reproduction zone filter benchmark so contributors can discover the new profiling script.
 - Expanded configuration coverage across the README, developer guide, and
   architecture overview to include the energy regeneration, diffusion, and decay
   release overrides alongside updated quick-start and tooling guidance.
@@ -120,9 +121,6 @@ scripts/profile-energy.mjs`) lifted survivors from 135 → 137 and trimmed the
 
 ### Removed
 
-- Removed the Aurora Veil overlay toggle and renderer to reduce UI clutter and
-  maintenance overhead for a purely celebratory effect that duplicated the
-  existing overlay plumbing without surfacing simulation data.
 - Retired the unused `scripts/measure-brain-evaluate.mjs` and
   `scripts/profile-population-cells.mjs` profiling harnesses so the scripts
   directory only contains actively maintained automation entry points.

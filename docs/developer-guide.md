@@ -13,7 +13,7 @@ the dev server, then return here for the deeper workflow.
 1. Install Node.js 25.x (the `.nvmrc` pins to 25.0.0) and run `nvm use` after cloning so your shell matches the expected runtime.
 2. Install dependencies with `npm ci` (or `npm install` when you explicitly need a non-clean install), then run `npm run prepare` once so Husky hooks stay active after fresh clones or `.husky/` updates.
 3. Launch the Parcel development server via `npm run start` and open `http://localhost:1234`.
-4. Keep a second terminal handy for `npm run check` before you commit. The meta-command chains `npm run lint`, `npm run format:check`, and `npm test` so you exercise linting, formatting, the energy benchmark, and the Node.js test suites together. During feature work, lean on focused loops—`npm test -- --watch` for continuous execution, `npm test path/to/file.test.js` to run a single suite—and finish with `npm run check` once the changes stabilise.
+4. Keep a second terminal handy for `npm run check` before you commit. The meta-command chains `npm run lint`, `npm run format:check`, and `npm test` so you exercise linting, formatting, the energy benchmark, and the Node.js test suites together. During feature work, lean on focused loops—`npm test -- --watch` for continuous execution, `npm test path/to/file.test.js` to run a single suite, or `npm run lint` / `npm run format:check` for fast feedback—and finish with `npm run check` once the changes stabilise. The [README quick start](../README.md#quick-start) lists the most common loops at a glance.
 5. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/` and `.parcel-cache/` before restarting the dev server. Append `-- --dry-run` when you just want to confirm the cleanup targets without deleting files.
 
 ### Quality-of-life tips
@@ -220,6 +220,7 @@ variables for quick reference during onboarding.
   tens of thousands of grid queries to validate the density grid optimisation.
 - `node scripts/profile-trait-aggregation.mjs` — Benchmark the Stats trait
   aggregation helpers so dashboard updates remain lightweight after changes.
+- `node scripts/profile-zone-filter.mjs` — Measure the optimised reproduction zone candidate filter used by `ReproductionZonePolicy.filterSpawnCandidates`.
 - `npm run deploy:public` — Publish the latest production build to a public
   repository. See [`docs/public-hosting.md`](public-hosting.md) for setup
   details.

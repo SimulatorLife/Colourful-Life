@@ -40,6 +40,7 @@ This document captures how the Colourful Life simulation composes its core syste
   `config.obstaclePresets` to extend or replace the catalog without touching core code.
 - Integrates with `SelectionManager` and `ReproductionZonePolicy` to respect curated reproduction
   areas, and with wall-contact penalties configured per DNA profile.
+- Reproduction candidate filtering flows through `ReproductionZonePolicy.filterSpawnCandidates`; `node scripts/profile-zone-filter.mjs` benchmarks the optimised path so large-zone layouts stay responsive.
 
 ### Cell
 
