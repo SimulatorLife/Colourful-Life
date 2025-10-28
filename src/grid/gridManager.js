@@ -2829,10 +2829,10 @@ export default class GridManager {
 
       if (!gridRow) continue;
 
-      for (let c = 0; c < cols; c++) {
-        if (gridRow[c] === cell) {
-          return { row: r, col: c };
-        }
+      const colIndex = gridRow.indexOf(cell);
+
+      if (colIndex !== -1) {
+        return { row: r, col: colIndex };
       }
     }
 
