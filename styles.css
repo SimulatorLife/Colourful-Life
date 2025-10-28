@@ -352,7 +352,7 @@ canvas {
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.35);
   border-top-color: rgba(255, 255, 255, 0.9);
-  animation: control-button-spinner 0.8s linear infinite;
+  animation: spinner-rotate 0.8s linear infinite;
   vertical-align: middle;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -732,16 +732,10 @@ canvas {
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.24);
   border-top-color: var(--color-text);
-  animation: geometry-apply-spinner 0.8s linear infinite;
+  animation: spinner-rotate 0.8s linear infinite;
 }
 
-@keyframes geometry-apply-spinner {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes control-button-spinner {
+@keyframes spinner-rotate {
   to {
     transform: rotate(360deg);
   }
