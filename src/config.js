@@ -73,6 +73,7 @@ const DEFAULT_ENERGY_DIFFUSION_RATE = 0.05; // smoothing between tiles (per tick
 // their pickier demand fraction but keeps collapse loops from starving
 // recovering lineages before births can land.
 const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.12;
+const DEFAULT_MATE_DIVERSITY_SAMPLE_LIMIT = 5;
 // Telemetry defaults to highlighting the top five lineages. Expose the size so
 // headless consumers and UI presets can extend the leaderboard without touching
 // the engine internals.
@@ -174,6 +175,7 @@ export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();
 export const DECAY_RETURN_FRACTION = resolveDecayReturnFraction();
 export const DECAY_IMMEDIATE_SHARE = resolveDecayImmediateShare();
 export const DECAY_MAX_AGE = resolveDecayMaxAge();
+export const MATE_DIVERSITY_SAMPLE_LIMIT_DEFAULT = resolveMateDiversitySampleLimit();
 
 /**
  * Resolves the baseline energy returned to the environment whenever a decay
@@ -387,6 +389,29 @@ export function resolveDecayMaxAge(env = RUNTIME_ENV) {
   return sanitizePositiveInteger(raw, {
     fallback: DEFAULT_DECAY_MAX_AGE,
     min: 1,
+  });
+}
+
+/**
+ * Resolves how many high-diversity mates each organism samples when estimating
+ * the opportunity landscape around them. Allowing deployments to tune the
+ * window keeps the mating heuristic adaptable for denser or sparser colonies
+ * without requiring code changes. The helper constrains overrides to a sensible
+ * range so tests remain deterministic while still giving headless probes room
+ * to explore broader sampling strategies.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Positive integer sample limit used by diversity summaries.
+ */
+export function resolveMateDiversitySampleLimit(env = RUNTIME_ENV) {
+  const raw = env?.COLOURFUL_LIFE_MATE_DIVERSITY_SAMPLE_LIMIT;
+
+  return sanitizePositiveInteger(raw, {
+    fallback: DEFAULT_MATE_DIVERSITY_SAMPLE_LIMIT,
+    min: 1,
+    max: 32,
   });
 }
 

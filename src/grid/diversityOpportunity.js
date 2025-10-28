@@ -1,6 +1,7 @@
 import { clamp, clampFinite } from "../utils/math.js";
+import { MATE_DIVERSITY_SAMPLE_LIMIT_DEFAULT } from "../config.js";
 
-const SAMPLE_LIMIT = 5;
+const SAMPLE_LIMIT = MATE_DIVERSITY_SAMPLE_LIMIT_DEFAULT;
 
 function rememberTopValue(values, candidate) {
   // Maintain `values` in descending order while returning the contribution that
