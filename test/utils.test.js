@@ -4,6 +4,7 @@ import {
   lerp,
   clamp,
   clamp01,
+  clampFinite,
   sanitizeNumber,
   sanitizePositiveInteger,
   sanitizeNonNegativeInteger,
@@ -43,6 +44,35 @@ test("numeric helpers clamp and interpolate values deterministically", () => {
   assert.is(clamp(-1, 0, 4), 0);
   assert.is(clamp01("0.7"), 0.7);
   assert.is(clamp01(Number.POSITIVE_INFINITY), 0);
+});
+
+test("clampFinite coerces invalid inputs and sanitizes fallbacks", () => {
+  assert.is(clampFinite("7.2", 0, 10, 3), 7.2, "string candidates are coerced");
+  assert.is(
+    clampFinite(-5, -2, 2, 0),
+    -2,
+    "values below the range clamp to the lower bound",
+  );
+  assert.is(
+    clampFinite(9, -2, 2, 0),
+    2,
+    "values above the range clamp to the upper bound",
+  );
+  assert.is(
+    clampFinite("oops", 0, 5, 3),
+    3,
+    "fallback is returned when candidate is non-finite",
+  );
+  assert.is(
+    clampFinite("oops", 0, 5, 8),
+    5,
+    "fallback values are also clamped into range",
+  );
+  assert.is(
+    clampFinite("oops", -4, 4, Number.POSITIVE_INFINITY),
+    -4,
+    "non-finite fallbacks collapse to the lower bound",
+  );
 });
 
 test("coerceBoolean normalizes boolean-like values with sane fallbacks", () => {
