@@ -158,6 +158,7 @@ test("TelemetryController publishNow emits leaderboard with sanitized size", () 
 test("TelemetryController setLeaderboardSize clamps values", () => {
   const controller = new TelemetryController({ leaderboardSize: 2 });
 
+  assert.is(controller.setLeaderboardSize("oops"), 2);
   assert.is(controller.setLeaderboardSize(7.8), 7);
   assert.is(controller.setLeaderboardSize(-4), 0);
   assert.is(controller.setLeaderboardSize("oops"), 0);
