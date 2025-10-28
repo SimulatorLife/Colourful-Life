@@ -1,3 +1,5 @@
+import { isArrayLike } from "../utils/collections.js";
+
 /**
  * Zeros out the staged energy buffers for a specific tile so downstream
  * diffusion/regen math can treat the location as freshly vacated.
@@ -17,11 +19,10 @@
  * }} source - Grid-like owner containing the buffers to clear.
  * @param {number} row - Tile row index (integer or float; will be floored).
  * @param {number} col - Tile column index (integer or float; will be floored).
- * @param {{ preserveCurrent?: boolean }} [options] - Flags controlling whether the
- *   current-frame `energyGrid` value is reset.
+ * @param {{ preserveCurrent?: boolean }} [options] - Flags controlling whether
+ *   the current-frame `energyGrid` value is reset.
  * @returns {void}
  */
-import { isArrayLike } from "../utils/collections.js";
 
 export function clearTileEnergyBuffers(source, row, col, options = {}) {
   if (!source || row == null || col == null) return;
