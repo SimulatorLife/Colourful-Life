@@ -243,6 +243,7 @@ test("resolveSimulationDefaults coerces string boolean overrides", async () => {
     showObstacles: "false",
     showEnergy: "true",
     showDensity: "0",
+    showAge: "1",
     showFitness: "1",
     showLifeEventMarkers: "on",
     autoPauseOnBlur: "off",
@@ -252,6 +253,7 @@ test("resolveSimulationDefaults coerces string boolean overrides", async () => {
   assert.is(defaults.showObstacles, false);
   assert.is(defaults.showEnergy, true);
   assert.is(defaults.showDensity, false);
+  assert.is(defaults.showAge, true);
   assert.is(defaults.showFitness, true);
   assert.is(defaults.showLifeEventMarkers, true);
   assert.is(defaults.autoPauseOnBlur, false);
@@ -454,6 +456,7 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.showObstacles, defaults.showObstacles);
   assert.is(uiManager.showEnergy, defaults.showEnergy);
   assert.is(uiManager.showDensity, defaults.showDensity);
+  assert.is(uiManager.showAge, defaults.showAge);
   assert.is(uiManager.showFitness, defaults.showFitness);
   assert.is(uiManager.showLifeEventMarkers, defaults.showLifeEventMarkers);
   assert.is(uiManager.showGridLines, defaults.showGridLines);
@@ -496,6 +499,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     showObstacles: defaults.showObstacles,
     showEnergy: defaults.showEnergy,
     showDensity: defaults.showDensity,
+    showAge: defaults.showAge,
     showFitness: defaults.showFitness,
     showLifeEventMarkers: defaults.showLifeEventMarkers,
     showGridLines: defaults.showGridLines,
@@ -548,6 +552,7 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.is(ui.getShowObstacles(), defaults.showObstacles);
   assert.is(ui.getShowEnergy(), defaults.showEnergy);
   assert.is(ui.getShowDensity(), defaults.showDensity);
+  assert.is(ui.getShowAge(), defaults.showAge);
   assert.is(ui.getShowFitness(), defaults.showFitness);
   assert.is(ui.getShowLifeEventMarkers(), defaults.showLifeEventMarkers);
   assert.is(ui.getShowGridLines(), defaults.showGridLines);
