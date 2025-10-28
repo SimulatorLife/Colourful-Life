@@ -165,6 +165,24 @@ function subscribeEngineToUi(engine, uiManager) {
       }
 
       if (
+        changes?.combatEdgeSharpness !== undefined &&
+        typeof uiManager.setCombatEdgeSharpness === "function"
+      ) {
+        uiManager.setCombatEdgeSharpness(changes.combatEdgeSharpness, {
+          notify: false,
+        });
+      }
+
+      if (
+        changes?.combatTerritoryEdgeFactor !== undefined &&
+        typeof uiManager.setCombatTerritoryEdgeFactor === "function"
+      ) {
+        uiManager.setCombatTerritoryEdgeFactor(changes.combatTerritoryEdgeFactor, {
+          notify: false,
+        });
+      }
+
+      if (
         changes?.initialTileEnergyFraction !== undefined &&
         typeof uiManager.setInitialTileEnergyFraction === "function"
       ) {
@@ -280,6 +298,22 @@ export function bindSimulationToUi({
 
     if (typeof lowDiversity === "number") {
       uiManager.setLowDiversityReproMultiplier(lowDiversity, { notify: false });
+    }
+  }
+
+  if (uiManager && typeof uiManager.setCombatEdgeSharpness === "function") {
+    const sharpness = engine?.state?.combatEdgeSharpness;
+
+    if (typeof sharpness === "number") {
+      uiManager.setCombatEdgeSharpness(sharpness, { notify: false });
+    }
+  }
+
+  if (uiManager && typeof uiManager.setCombatTerritoryEdgeFactor === "function") {
+    const factor = engine?.state?.combatTerritoryEdgeFactor;
+
+    if (typeof factor === "number") {
+      uiManager.setCombatTerritoryEdgeFactor(factor, { notify: false });
     }
   }
 

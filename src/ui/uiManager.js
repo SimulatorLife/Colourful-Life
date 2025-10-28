@@ -5209,6 +5209,59 @@ export default class UIManager {
     }
   }
 
+  setCombatEdgeSharpness(value, { notify = true } = {}) {
+    const bounds = resolveSliderBounds("combatEdgeSharpness", {
+      min: 0.5,
+      max: 6,
+      floor: 0.1,
+    });
+    const lowerBound = Number.isFinite(bounds.floor)
+      ? bounds.floor
+      : Number.isFinite(bounds.min)
+        ? bounds.min
+        : 0.1;
+    const upperBound = Number.isFinite(bounds.max) ? bounds.max : undefined;
+    const sanitized = sanitizeNumber(value, {
+      fallback: this.combatEdgeSharpness,
+      min: lowerBound,
+      max: upperBound,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const changed = this.combatEdgeSharpness !== sanitized;
+
+    this.combatEdgeSharpness = sanitized;
+    this.#syncSliderInput("combatEdgeSharpness", sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("combatEdgeSharpness", sanitized);
+    }
+  }
+
+  setCombatTerritoryEdgeFactor(value, { notify = true } = {}) {
+    const sanitized = sanitizeNumber(value, {
+      fallback: this.combatTerritoryEdgeFactor,
+      min: 0,
+      max: 1,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const changed = this.combatTerritoryEdgeFactor !== sanitized;
+
+    this.combatTerritoryEdgeFactor = sanitized;
+    this.#syncSliderInput("combatTerritoryEdgeFactor", sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("combatTerritoryEdgeFactor", sanitized);
+    }
+  }
+
   setLowDiversityReproMultiplier(value, { notify = true } = {}) {
     const clamped = sanitizeUnitInterval(value);
 
