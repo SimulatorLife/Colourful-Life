@@ -225,11 +225,21 @@ function drawBirthMarker(ctx, centerX, centerY, radius, color) {
       ctx.stroke();
     }
 
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, Math.max(radius * 0.45, 1), 0, Math.PI * 2);
-    if (typeof ctx.fill === "function") {
-      ctx.fillStyle = color;
-      ctx.fill();
+    const innerRadiusCandidate = Math.max(radius * 0.45, 1);
+    const innerRadiusLimit = Math.max(
+      radius - Math.max(radius * 0.15, 0.2),
+      radius * 0.6,
+      0,
+    );
+    const innerRadius = Math.max(0, Math.min(innerRadiusCandidate, innerRadiusLimit));
+
+    if (innerRadius > 0) {
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
+      if (typeof ctx.fill === "function") {
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
     }
   }
 }

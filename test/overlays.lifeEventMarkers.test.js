@@ -139,6 +139,25 @@ test("drawLifeEventMarkers respects custom color overrides", () => {
   );
 });
 
+test("drawLifeEventMarkers keeps birth fills within the outer ring for tiny cells", () => {
+  const ctx = createRecordingContext();
+  const events = [{ type: "birth", row: 1, col: 1, tick: 5 }];
+
+  drawLifeEventMarkers(ctx, 2, events, { currentTick: 5, fadeTicks: 20 });
+
+  const arcs = ctx.ops.filter((op) => op.type === "arc");
+
+  assert.ok(arcs.length >= 2, "birth marker should render outer and inner arcs");
+
+  const [outer, inner] = arcs;
+
+  assert.ok(
+    inner.radius <= outer.radius,
+    "inner birth marker circle should not exceed outer ring radius",
+  );
+  assert.ok(inner.radius > 0, "inner birth marker radius should stay positive");
+});
+
 test("drawLifeEventMarkers draws newest markers last to preserve visibility", () => {
   const ctx = createRecordingContext();
   const events = [
