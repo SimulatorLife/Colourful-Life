@@ -250,7 +250,7 @@ test("handleReproduction returns false when offspring cannot be placed", async (
   assert.is(recorded.success, false);
 });
 
-test("handleReproduction requires parents to be adjacent before spawning", async () => {
+test("handleReproduction blocks partners beyond their reproduction reach", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
@@ -345,7 +345,7 @@ test("handleReproduction requires parents to be adjacent before spawning", async
 
   assert.is(reproduced, false);
   assert.is(births, 0);
-  assert.is(blockReason, "Parents must be adjacent");
+  assert.is(blockReason, "Parents out of reach");
   assert.is(parent.row, 0);
   assert.is(parent.col, 2);
   assert.is(gm.getCell(0, 2), parent);
@@ -465,7 +465,7 @@ test("handleReproduction enforces reproduction energy thresholds", async () => {
   );
 });
 
-test("handleReproduction requires adjacency even when DNA extends reach", async () => {
+test("handleReproduction allows reproduction when reach extends beyond adjacency", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
   const { default: DNA } = await import("../src/genome.js");
@@ -477,12 +477,15 @@ test("handleReproduction requires adjacency even when DNA extends reach", async 
 
   let births = 0;
   let blockReason = null;
+  let recordedMateChoice = null;
   const stats = {
     onBirth() {
       births += 1;
     },
     onDeath() {},
-    recordMateChoice() {},
+    recordMateChoice(info) {
+      recordedMateChoice = info;
+    },
     recordReproductionBlocked(info) {
       blockReason = info?.reason ?? null;
     },
@@ -499,25 +502,29 @@ test("handleReproduction requires adjacency even when DNA extends reach", async 
     Array.from({ length: 6 }, () => 0),
   );
 
+  gm.energyGrid = Array.from({ length: 1 }, () =>
+    Array.from({ length: 6 }, () => MAX_TILE_ENERGY),
+  );
+
   const parentDNA = new DNA(0, 0, 0);
 
-  parentDNA.reproductionThresholdFrac = () => 0;
+  parentDNA.reproductionThresholdFrac = () => 0.1;
   parentDNA.parentalInvestmentFrac = () => 0.5;
-  parentDNA.starvationThresholdFrac = () => 0;
+  parentDNA.starvationThresholdFrac = () => 0.05;
   parentDNA.reproductionReachProfile = () => ({
     base: 3,
     min: 1.5,
     max: 3.2,
     densityPenalty: 0.05,
-    energyBonus: 0.2,
+    energyBonus: 0.25,
     scarcityBoost: 0.3,
-    affinityWeight: 0.25,
+    affinityWeight: 0.15,
   });
   const mateDNA = new DNA(0, 0, 0);
 
-  mateDNA.reproductionThresholdFrac = () => 0;
+  mateDNA.reproductionThresholdFrac = () => 0.1;
   mateDNA.parentalInvestmentFrac = () => 0.5;
-  mateDNA.starvationThresholdFrac = () => 0;
+  mateDNA.starvationThresholdFrac = () => 0.05;
   mateDNA.reproductionReachProfile = () => ({
     base: 2.6,
     min: 1.2,
@@ -528,8 +535,11 @@ test("handleReproduction requires adjacency even when DNA extends reach", async 
     affinityWeight: 0.2,
   });
 
-  const parent = new Cell(0, 1, parentDNA, MAX_TILE_ENERGY);
-  const mate = new Cell(0, 4, mateDNA, MAX_TILE_ENERGY);
+  const parent = new Cell(0, 1, parentDNA, MAX_TILE_ENERGY * 1.4);
+  const mate = new Cell(0, 3, mateDNA, MAX_TILE_ENERGY * 1.4);
+
+  parent.energy = MAX_TILE_ENERGY * 1.4;
+  mate.energy = MAX_TILE_ENERGY * 1.4;
 
   parent.computeReproductionProbability = () => 1;
   parent.decideReproduction = () => ({ probability: 1 });
@@ -556,7 +566,7 @@ test("handleReproduction requires adjacency even when DNA extends reach", async 
   parent.findBestMate = () => mateEntry;
 
   gm.setCell(0, 1, parent);
-  gm.setCell(0, 4, mate);
+  gm.setCell(0, 3, mate);
 
   const originalRandom = Math.random;
 
@@ -581,9 +591,15 @@ test("handleReproduction requires adjacency even when DNA extends reach", async 
     Math.random = originalRandom;
   }
 
-  assert.is(reproduced, false);
-  assert.is(births, 0);
-  assert.is(blockReason, "Parents must be adjacent");
+  assert.is(reproduced, true);
+  assert.is(births, 1);
+  assert.is(blockReason, null);
+  assert.ok(recordedMateChoice);
+  assert.ok(
+    recordedMateChoice.distanceProbabilityMultiplier > 0 &&
+      recordedMateChoice.distanceProbabilityMultiplier <= 1,
+  );
+  assert.ok(recordedMateChoice.distanceEnergyMultiplier >= 1);
 });
 
 test("handleReproduction does not wrap offspring placement across map edges", async () => {
