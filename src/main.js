@@ -216,7 +216,11 @@ export function createSimulation({
     getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
     selectionManager: engine.selectionManager,
     getCellSize: () => engine.cellSize,
-    getGridDimensions: () => ({ rows: engine.rows, cols: engine.cols }),
+    getGridDimensions: () => ({
+      rows: engine.rows,
+      cols: engine.cols,
+      cellSize: engine.cellSize,
+    }),
     setWorldGeometry: (geometry) => engine.setWorldGeometry(geometry),
     ...(uiOptions.actions || {}),
   };

@@ -131,7 +131,6 @@ const DEFAULT_TRAIT_DISPLAY_CONFIG = Object.freeze({
 
 const WARNINGS = Object.freeze({
   burstAction: "Burst action handler threw.",
-  globalBurst: "Global burst handler threw.",
   resolveCssColor: "Failed to resolve CSS variable color",
   readObstaclePreset: "Failed to read current obstacle preset from actions.",
   readGridDimensions: "Failed to read grid dimensions from actions.",
@@ -457,11 +456,21 @@ export default class UIManager {
     );
     this.burstConfig = normalizeBurstOptions(layoutConfig.burstOptions);
 
-    const initialDimensions = this.#readGridDimensions();
+    const initialDimensions = this.#readGridDimensions(
+      this.#resolveGeometryFallback(initialSettings),
+    );
 
     this.gridRows = initialDimensions.rows;
     this.gridCols = initialDimensions.cols;
-    this.currentCellSize = Math.max(1, this.getCellSize());
+
+    const initialCellSize = Number(initialDimensions.cellSize);
+
+    this.currentCellSize = Math.max(
+      1,
+      Number.isFinite(initialCellSize)
+        ? initialCellSize
+        : Number(this.getCellSize?.()) || 1,
+    );
 
     // Settings with sensible defaults
     this.societySimilarity = defaults.societySimilarity;
@@ -693,20 +702,6 @@ export default class UIManager {
 
       return;
     }
-
-    if (typeof window === "undefined") return;
-
-    const grid = window.grid;
-    const burstHandler = grid?.burstRandomCells;
-
-    if (typeof burstHandler === "function") {
-      invokeWithErrorBoundary(burstHandler, [burstOptions], {
-        thisArg: grid,
-        message: WARNINGS.globalBurst,
-        reporter: warnOnce,
-        once: true,
-      });
-    }
   }
 
   #resolveHotkeySet(candidate, fallbackKeys = ["p"]) {
@@ -832,17 +827,6 @@ export default class UIManager {
       }
     }
 
-    if (
-      (!candidate || typeof candidate !== "string" || candidate.length === 0) &&
-      typeof window !== "undefined"
-    ) {
-      const fromWindow = window.grid?.currentObstaclePreset;
-
-      if (typeof fromWindow === "string" && fromWindow.length > 0) {
-        candidate = fromWindow;
-      }
-    }
-
     if (typeof candidate !== "string" || candidate.length === 0) {
       return null;
     }
@@ -871,8 +855,8 @@ export default class UIManager {
     return pool[index]?.id ?? null;
   }
 
-  #readGridDimensions() {
-    const fallback = { rows: 120, cols: 120, cellSize: this.getCellSize?.() ?? 5 };
+  #readGridDimensions(fallbackCandidate = {}) {
+    const fallback = this.#resolveGeometryFallback(fallbackCandidate);
     let dimensions = null;
 
     if (typeof this.getGridDimensions === "function") {
@@ -900,18 +884,15 @@ export default class UIManager {
       !Number.isFinite(dimensions.rows) ||
       !Number.isFinite(dimensions.cols)
     ) {
-      const globalRef = typeof window !== "undefined" ? window : globalThis;
-      const grid = globalRef?.grid;
-      const engine = globalRef?.simulationEngine;
-      const rows = Number.isFinite(grid?.rows)
-        ? grid.rows
-        : Number.isFinite(engine?.rows)
-          ? engine.rows
+      const rows = Number.isFinite(dimensions?.rows)
+        ? dimensions.rows
+        : Number.isFinite(this.gridRows)
+          ? this.gridRows
           : fallback.rows;
-      const cols = Number.isFinite(grid?.cols)
-        ? grid.cols
-        : Number.isFinite(engine?.cols)
-          ? engine.cols
+      const cols = Number.isFinite(dimensions?.cols)
+        ? dimensions.cols
+        : Number.isFinite(this.gridCols)
+          ? this.gridCols
           : fallback.cols;
 
       dimensions = { rows, cols, cellSize: fallback.cellSize };
@@ -920,6 +901,33 @@ export default class UIManager {
     return this.#normalizeGeometryValues(dimensions, fallback, {
       clampToBounds: false,
     });
+  }
+
+  #resolveGeometryFallback(candidate = {}) {
+    const resolvePositive = (values, fallback) => {
+      for (const value of values) {
+        const numeric = Number(value);
+
+        if (Number.isFinite(numeric) && numeric > 0) {
+          return numeric;
+        }
+      }
+
+      return fallback;
+    };
+
+    const rows = resolvePositive([candidate.rows, this.gridRows], 120);
+    const cols = resolvePositive([candidate.cols, this.gridCols], 120);
+    const cellSize = resolvePositive(
+      [candidate.cellSize, this.currentCellSize, this.getCellSize?.()],
+      5,
+    );
+
+    return {
+      rows: Math.max(1, Math.round(rows)),
+      cols: Math.max(1, Math.round(cols)),
+      cellSize: Math.max(1, cellSize),
+    };
   }
 
   #normalizeGeometryValues(candidate = {}, fallback = {}, options = {}) {
@@ -3405,13 +3413,6 @@ export default class UIManager {
               return this.simulationCallbacks.resetWorld(options);
             }
 
-            if (
-              typeof window !== "undefined" &&
-              typeof window.simulationEngine?.resetWorld === "function"
-            ) {
-              return window.simulationEngine.resetWorld(options);
-            }
-
             return undefined;
           };
 
@@ -4160,19 +4161,6 @@ export default class UIManager {
           });
 
           return;
-        }
-
-        if (typeof window === "undefined") return;
-
-        const globalApply = window.grid?.applyObstaclePreset;
-
-        if (typeof globalApply === "function") {
-          invokeWithErrorBoundary(globalApply, args, {
-            thisArg: window.grid,
-            message: resolveMessage,
-            reporter: warnOnce,
-            once: true,
-          });
         }
       };
 
