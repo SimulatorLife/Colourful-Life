@@ -181,15 +181,7 @@ export default class SelectionManager {
 
     const register = (candidate) => {
       if (Array.isArray(candidate)) {
-        let added = false;
-
-        for (const entry of candidate) {
-          if (register(entry)) {
-            added = true;
-          }
-        }
-
-        return added;
+        return candidate.reduce((added, entry) => register(entry) || added, false);
       }
 
       return this.#registerCustomPattern(candidate);
