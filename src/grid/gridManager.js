@@ -4215,9 +4215,12 @@ export default class GridManager {
       drain = 0,
     ) => {
       if (!obstacleRow && !upObstacleRow && !downObstacleRow) {
-        const densityValue = this.#resolveCachedDensityValue(r, c, densityRow, {
+        const densityValue = this.#resolveCachedDensityValue(
+          r,
+          c,
+          densityRow,
           densityGrid,
-        });
+        );
 
         let effectiveDensity = (densityValue ?? 0) * normalizedDensityMultiplier;
 
@@ -4384,9 +4387,12 @@ export default class GridManager {
         return;
       }
 
-      const densityValue = this.#resolveCachedDensityValue(r, c, densityRow, {
+      const densityValue = this.#resolveCachedDensityValue(
+        r,
+        c,
+        densityRow,
         densityGrid,
-      });
+      );
 
       let effectiveDensity = (densityValue ?? 0) * normalizedDensityMultiplier;
 
@@ -5296,7 +5302,8 @@ export default class GridManager {
     row,
     col,
     densityRow = null,
-    { radius = null, densityGrid = null } = {},
+    densityGrid = null,
+    radius = null,
   ) {
     if (densityRow) {
       const direct = densityRow[col];
@@ -5498,9 +5505,7 @@ export default class GridManager {
   }
 
   getDensityAt(row, col) {
-    return this.#resolveCachedDensityValue(row, col, null, {
-      radius: this.densityRadius,
-    });
+    return this.#resolveCachedDensityValue(row, col, null, null, this.densityRadius);
   }
 
   // Precompute density for all tiles (fraction of occupied neighbors)
