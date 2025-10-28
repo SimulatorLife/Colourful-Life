@@ -68,6 +68,7 @@ function defineTelemetryAccessors(target, telemetry) {
  *   rng?: () => number,
  *   computeLeaderboard?: typeof defaultComputeLeaderboard,
  *   leaderboardSize?: number,
+ *   lifeEventLogCapacity?: number,
  *   now?: () => number,
  * }} [options] - Optional overrides injected by tests or host environments.
  *   When omitted, defaults mirror production behaviour so telemetry continues
@@ -82,9 +83,10 @@ export function createSimulationRuntimeServices({
   rng,
   computeLeaderboard = defaultComputeLeaderboard,
   leaderboardSize,
+  lifeEventLogCapacity,
   now,
 } = {}) {
-  const stats = new Stats(undefined, { rng });
+  const stats = new Stats(undefined, { rng, lifeEventLogCapacity });
   const telemetry = new TelemetryController({
     stats,
     computeLeaderboard,

@@ -194,6 +194,7 @@ export default class SimulationEngine {
     const runtimeServices = createSimulationRuntimeServices({
       rng,
       leaderboardSize: defaults.leaderboardSize,
+      lifeEventLogCapacity: defaults.lifeEventLogCapacity,
       now: this.now,
     });
 

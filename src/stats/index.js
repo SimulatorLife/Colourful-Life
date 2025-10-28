@@ -39,11 +39,18 @@ const DIVERSITY_TARGET_DEFAULT = 0.35;
 const DIVERSITY_PRESSURE_SMOOTHING = 0.85;
 const STRATEGY_PRESSURE_SMOOTHING = 0.82;
 
-const LIFE_EVENT_LOG_CAPACITY = 240;
+const LIFE_EVENT_LOG_CAPACITY_DEFAULT = 240;
 const LIFE_EVENT_RATE_DEFAULT_WINDOW = 200;
 const LIFE_EVENT_FADE_DEFAULT = 36;
 
 const DEFAULT_RANDOM = () => Math.random();
+
+function resolveLifeEventLogCapacity(value) {
+  return sanitizePositiveInteger(value, {
+    fallback: LIFE_EVENT_LOG_CAPACITY_DEFAULT,
+    min: 0,
+  });
+}
 
 const INTERACTION_TRAIT_LABELS = Object.freeze({
   cooperate: "Cooperative",
@@ -437,9 +444,11 @@ export default class Stats {
    *   traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>,
    *   traitResampleInterval?: number,
    *   diversitySampleInterval?: number,
+   *   lifeEventLogCapacity?: number,
    *   rng?: () => number,
    * }} [options]
-   *   Optional configuration allowing callers to extend or override tracked trait metrics and randomness.
+   *   Optional configuration allowing callers to extend or override tracked trait metrics, life event logging,
+   *   and randomness.
    */
   constructor(historySize = 10000, options = {}) {
     const normalizedHistorySize = sanitizePositiveInteger(historySize, {
@@ -448,8 +457,13 @@ export default class Stats {
     });
 
     this.historySize = normalizedHistorySize;
-    const { traitDefinitions, traitResampleInterval, diversitySampleInterval, rng } =
-      options ?? {};
+    const {
+      traitDefinitions,
+      traitResampleInterval,
+      diversitySampleInterval,
+      lifeEventLogCapacity,
+      rng,
+    } = options ?? {};
 
     this.traitDefinitions = resolveTraitDefinitions(traitDefinitions);
     this.traitPresence = createEmptyTraitPresence(this.traitDefinitions);
@@ -472,6 +486,7 @@ export default class Stats {
     this.#traitSums = new Float64Array(this.traitDefinitions.length);
     this.#traitActiveCounts = new Float64Array(this.traitDefinitions.length);
     this.#rng = typeof rng === "function" ? rng : DEFAULT_RANDOM;
+    this.lifeEventLogCapacity = resolveLifeEventLogCapacity(lifeEventLogCapacity);
     this.traitResampleInterval = sanitizePositiveInteger(traitResampleInterval, {
       fallback: 120,
       min: 1,
@@ -506,7 +521,7 @@ export default class Stats {
     this.diversityOpportunityGap = 0;
     this.diversityOpportunityAlignment = 0;
     this.diversityOpportunityMultiplier = 1;
-    this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
+    this.lifeEventLog = createHistoryRing(this.lifeEventLogCapacity);
     this.lifeEventSequence = 0;
     this.lifeEventFadeTicks = LIFE_EVENT_FADE_DEFAULT;
     this.deathCauseTotals = Object.create(null);
@@ -600,7 +615,7 @@ export default class Stats {
     this.strategyPressure = 0;
     this.meanBehaviorComplementarity = 0;
     this.successfulBehaviorComplementarity = 0;
-    this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
+    this.lifeEventLog = createHistoryRing(this.lifeEventLogCapacity);
     this.lifeEventSequence = 0;
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;

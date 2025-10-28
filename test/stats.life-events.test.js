@@ -33,6 +33,43 @@ test("getRecentLifeEvents returns the most recent events up to the requested lim
   );
 });
 
+test("life event log capacity is configurable via Stats options", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(undefined, { lifeEventLogCapacity: 3 });
+
+  assert.is(stats.lifeEventLogCapacity, 3);
+  assert.is(stats.lifeEventLog?.capacity, 3);
+
+  stats.onBirth({ color: "#a" });
+  stats.onBirth({ color: "#b" });
+  stats.onBirth({ color: "#c" });
+  stats.onBirth({ color: "#d" });
+
+  const initial = stats.getRecentLifeEvents(10);
+
+  assert.is(initial.length, 3);
+  assert.equal(
+    initial.map((event) => event.color),
+    ["#d", "#c", "#b"],
+    "retains the most recent entries within the configured capacity",
+  );
+
+  stats.resetAll();
+  stats.onDeath({ color: "#1" });
+  stats.onDeath({ color: "#2" });
+  stats.onDeath({ color: "#3" });
+  stats.onDeath({ color: "#4" });
+
+  const afterReset = stats.getRecentLifeEvents(10);
+
+  assert.is(afterReset.length, 3);
+  assert.equal(
+    afterReset.map((event) => event.color),
+    ["#4", "#3", "#2"],
+    "resets preserve the configured capacity",
+  );
+});
+
 test("life event helpers reuse fallback cell data when context is provided first", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats();

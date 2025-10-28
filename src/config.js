@@ -550,6 +550,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showGridLines: false,
   showReproductiveZones: true,
   lifeEventFadeTicks: 36,
+  lifeEventLogCapacity: 240,
   leaderboardIntervalMs: 750,
   leaderboardSize: LEADERBOARD_SIZE_DEFAULT,
   // Lowered from 0.45 after a 300-tick headless sample (60x60 grid, RNG seed
@@ -705,6 +706,7 @@ export function resolveSimulationDefaults(overrides = {}) {
     min: 1,
     round: Math.round,
   });
+  sanitizeNumeric("lifeEventLogCapacity", { min: 0, round: Math.floor });
   const intervalCandidate = sanitizeNumber(merged.leaderboardIntervalMs, {
     fallback: Number.NaN,
   });
