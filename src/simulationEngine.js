@@ -903,7 +903,7 @@ export default class SimulationEngine {
     const randomizeObstacles = coerceBoolean(opts.randomizeObstacles, false);
     const obstaclePreset = opts.obstaclePreset;
     const presetOptions = opts.presetOptions;
-    const reseed = opts.reseed === true;
+    const reseed = coerceBoolean(opts.reseed, false);
 
     const targetCellSize = sanitizePositiveInteger(opts.cellSize, {
       fallback: this.cellSize,
@@ -1048,6 +1048,8 @@ export default class SimulationEngine {
     const wasRunning = this.running;
     const wasPaused = this.isPaused();
     const randomizeObstacles = coerceBoolean(opts.randomizeObstacles, false);
+    const reseed = coerceBoolean(opts.reseed, false);
+    const clearCustomZones = coerceBoolean(opts.clearCustomZones, false);
 
     this.stop();
     this.#setAutoPausePending(false);
@@ -1075,8 +1077,8 @@ export default class SimulationEngine {
         randomizeObstacles,
         obstaclePreset: opts.obstaclePreset,
         presetOptions: opts.presetOptions,
-        reseed: opts.reseed === true,
-        clearCustomZones: opts.clearCustomZones === true,
+        reseed,
+        clearCustomZones,
       });
     }
 

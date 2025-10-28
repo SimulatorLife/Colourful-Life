@@ -356,6 +356,37 @@ test("setWorldGeometry only repopulates when reseed is requested", async () => {
   engine.destroy?.();
 });
 
+test("setWorldGeometry treats string reseed flags as truthy", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+
+  const engine = new SimulationEngine({
+    canvas: new MockCanvas(200, 200),
+    autoStart: false,
+    performanceNow: () => 0,
+    requestAnimationFrame: () => {},
+    cancelAnimationFrame: () => {},
+  });
+
+  engine.resetWorld();
+
+  assert.is(engine.grid.activeCells.size, 0, "baseline reset clears the grid");
+
+  engine.setWorldGeometry({
+    rows: engine.rows,
+    cols: engine.cols,
+    cellSize: engine.cellSize,
+    reseed: "true",
+  });
+
+  assert.ok(
+    engine.grid.activeCells.size > 0,
+    "string reseed flag should trigger a fresh seeding",
+  );
+
+  engine.destroy?.();
+});
+
 test("setWorldGeometry applies obstacle changes without resizing", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;
@@ -487,6 +518,32 @@ test("resetWorld respects string boolean flags for obstacle randomization", asyn
   } finally {
     restore();
   }
+});
+
+test("resetWorld treats string reseed flags as truthy", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+
+  const engine = new SimulationEngine({
+    canvas: new MockCanvas(160, 160),
+    autoStart: false,
+    performanceNow: () => 0,
+    requestAnimationFrame: () => {},
+    cancelAnimationFrame: () => {},
+  });
+
+  engine.resetWorld();
+
+  assert.is(engine.grid.activeCells.size, 0, "reset without reseed clears the grid");
+
+  engine.resetWorld({ reseed: "true" });
+
+  assert.ok(
+    engine.grid.activeCells.size > 0,
+    "string reseed flag should spawn a fresh population",
+  );
+
+  engine.destroy?.();
 });
 
 test("pausing stops the animation loop until work is requested", async () => {
