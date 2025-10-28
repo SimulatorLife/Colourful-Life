@@ -53,21 +53,19 @@ function sanitizeTraitIndexes(indexesSource, traitCount, computeFns) {
 }
 
 function prepareTraitMetadata(traitIndexes, computeFns, thresholds) {
-  let length = 0;
-
-  for (let i = 0; i < traitIndexes.length; i += 1) {
-    const index = traitIndexes[i];
+  const length = traitIndexes.reduce((count, index) => {
     const compute = computeFns[index];
 
     if (typeof compute !== "function") {
-      continue;
+      return count;
     }
 
-    traitMetadataIndexes[length] = index;
-    traitMetadataComputes[length] = compute;
-    traitMetadataThresholds[length] = thresholds[index];
-    length += 1;
-  }
+    traitMetadataIndexes[count] = index;
+    traitMetadataComputes[count] = compute;
+    traitMetadataThresholds[count] = thresholds[index];
+
+    return count + 1;
+  }, 0);
 
   traitMetadataIndexes.length = length;
   traitMetadataComputes.length = length;
