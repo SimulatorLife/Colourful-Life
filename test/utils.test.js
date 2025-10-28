@@ -155,6 +155,18 @@ test("resolveColorRecord parses fractional alpha values", () => {
   assert.equal(record.rgba, [10, 20, 30, 64]);
 });
 
+test("resolveColorRecord parses space-separated rgb values", () => {
+  const record = resolveColorRecord("rgb(255 128 64)");
+
+  assert.equal(record.rgba, [255, 128, 64, 255]);
+});
+
+test("resolveColorRecord parses slash-delimited alpha syntax", () => {
+  const record = resolveColorRecord("rgb(255 128 64 / 50%)");
+
+  assert.equal(record.rgba, [255, 128, 64, 128]);
+});
+
 test("sanitizeNumber treats blank strings as missing overrides", () => {
   assert.is(
     sanitizeNumber("   ", { fallback: 42 }),
