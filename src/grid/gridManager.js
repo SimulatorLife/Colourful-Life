@@ -4062,9 +4062,13 @@ export default class GridManager {
       targetPreset = this.currentObstaclePreset || "none";
     }
 
+    const resolvedPresetOptions = this.#resolvePresetOptions(
+      targetPreset,
+      presetOptions,
+    );
     const presetArgs = {
       clearExisting: true,
-      presetOptions: presetOptions ?? {},
+      presetOptions: resolvedPresetOptions,
       evict: true,
     };
 
