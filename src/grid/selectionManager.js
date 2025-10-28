@@ -22,6 +22,9 @@ const ZONE_PREDICATE_WARNING =
  * curated areas of the map.
  */
 export default class SelectionManager {
+  #activeZonesDirty = true;
+  #activeZonesCache = Object.freeze([]);
+
   constructor(rows, cols) {
     this.rows = rows;
     this.cols = cols;
@@ -29,6 +32,12 @@ export default class SelectionManager {
     this.zoneGeometryCache = new Map();
     this.geometryRevision = 0;
     this.#definePredefinedPatterns();
+    this.#invalidateActiveZoneCache();
+  }
+
+  #invalidateActiveZoneCache() {
+    this.#activeZonesDirty = true;
+    this.#activeZonesCache = Object.freeze([]);
   }
 
   setDimensions(rows, cols) {
@@ -46,6 +55,7 @@ export default class SelectionManager {
     this.patterns.clear();
     this.#invalidateAllZoneGeometry();
     this.#definePredefinedPatterns();
+    this.#invalidateActiveZoneCache();
 
     if (previouslyActive.size > 0) {
       previouslyActive.forEach((id) => {
@@ -124,6 +134,7 @@ export default class SelectionManager {
       color,
       active: false,
     });
+    this.#invalidateActiveZoneCache();
   }
 
   getPatterns() {
@@ -138,6 +149,7 @@ export default class SelectionManager {
       active === undefined ? !pattern.active : coerceBoolean(active, pattern.active);
 
     pattern.active = next;
+    this.#invalidateActiveZoneCache();
 
     this.#invalidateZoneGeometry(pattern);
 
@@ -157,11 +169,20 @@ export default class SelectionManager {
   }
 
   getActiveZones() {
-    const patterns = Array.from(this.patterns.values()).filter(
-      (pattern) => pattern.active,
-    );
+    if (this.#activeZonesDirty) {
+      const active = [];
 
-    return patterns;
+      for (const pattern of this.patterns.values()) {
+        if (pattern?.active) {
+          active.push(pattern);
+        }
+      }
+
+      this.#activeZonesCache = Object.freeze(active);
+      this.#activeZonesDirty = false;
+    }
+
+    return this.#activeZonesCache;
   }
 
   hasActiveZones() {
