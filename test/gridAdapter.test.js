@@ -1,6 +1,5 @@
 import { assert, test } from "#tests/harness";
 import GridInteractionAdapter from "../src/grid/gridAdapter.js";
-import { MAX_TILE_ENERGY } from "../src/config.js";
 
 const createGrid = (rows, cols) =>
   Array.from({ length: rows }, () => Array.from({ length: cols }, () => null));
@@ -178,20 +177,30 @@ test("maxTileEnergy falls back to global GridManager constant when available", (
   delete globalThis.GridManager;
 });
 
-test("maxTileEnergy falls back to config default when manager provides no cap", () => {
-  const adapter = new GridInteractionAdapter({ gridManager: {} });
+test("maxTileEnergy honours explicit override when manager provides no cap", () => {
+  const adapter = new GridInteractionAdapter({ gridManager: {}, maxTileEnergy: 17 });
 
-  assert.is(adapter.maxTileEnergy(), MAX_TILE_ENERGY);
+  assert.is(adapter.maxTileEnergy(), 17);
 });
 
-test("transferEnergy uses config fallback when no maxTileEnergy provided", () => {
+test("maxTileEnergy returns zero when no manager or override is available", () => {
   const adapter = new GridInteractionAdapter({ gridManager: {} });
+
+  assert.is(adapter.maxTileEnergy(), 0);
+});
+
+test("transferEnergy uses override fallback when no maxTileEnergy provided", () => {
+  const fallback = 9;
+  const adapter = new GridInteractionAdapter({
+    gridManager: {},
+    maxTileEnergy: fallback,
+  });
   const donor = createCell(0, 0, 5);
   const recipient = createCell(0, 1, 1);
   const initialDonorEnergy = donor.energy;
   const initialRecipientEnergy = recipient.energy;
   const requested = 3;
-  const capacity = Math.max(0, MAX_TILE_ENERGY - initialRecipientEnergy);
+  const capacity = Math.max(0, fallback - initialRecipientEnergy);
   const expectedTransfer = Math.min(requested, capacity);
 
   const transferred = adapter.transferEnergy({
