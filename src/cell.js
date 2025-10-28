@@ -5173,15 +5173,15 @@ export default class Cell {
     const probs = softmax(logits);
     const decisionRng = this.resolveRng("movementDecision");
     const action = sampleFromDistribution(probs, labels, decisionRng);
-    const probabilitiesByKey = {};
-    const logitsByKey = {};
+    const { probabilities: probabilitiesByKey, logits: logitsByKey } = labels.reduce(
+      (acc, key, index) => {
+        acc.probabilities[key] = probs[index] ?? 0;
+        acc.logits[key] = logits[index] ?? 0;
 
-    for (let i = 0; i < labels.length; i++) {
-      const key = labels[i];
-
-      probabilitiesByKey[key] = probs[i] ?? 0;
-      logitsByKey[key] = logits[i] ?? 0;
-    }
+        return acc;
+      },
+      { probabilities: {}, logits: {} },
+    );
 
     if (!action) {
       this._usedNeuralMovement = false;
