@@ -466,13 +466,13 @@ export default class Stats {
       this.traitDefinitions,
       ({ threshold }) => threshold ?? TRAIT_THRESHOLD,
     );
-    const activeTraitIndexes = [];
-
-    for (let index = 0; index < this.#traitComputes.length; index += 1) {
-      if (typeof this.#traitComputes[index] === "function") {
-        activeTraitIndexes.push(index);
+    const activeTraitIndexes = this.#traitComputes.reduce((indexes, compute, index) => {
+      if (typeof compute === "function") {
+        indexes.push(index);
       }
-    }
+
+      return indexes;
+    }, []);
 
     this.#traitActiveIndexes = activeTraitIndexes;
     this.#traitSums = new Float64Array(this.traitDefinitions.length);
