@@ -170,15 +170,9 @@ export default class SelectionManager {
 
   getActiveZones() {
     if (this.#activeZonesDirty) {
-      const active = [];
-
-      for (const pattern of this.patterns.values()) {
-        if (pattern?.active) {
-          active.push(pattern);
-        }
-      }
-
-      this.#activeZonesCache = Object.freeze(active);
+      this.#activeZonesCache = Object.freeze(
+        Array.from(this.patterns.values()).filter((pattern) => pattern?.active),
+      );
       this.#activeZonesDirty = false;
     }
 
