@@ -1,4 +1,5 @@
 import { MAX_TILE_ENERGY } from "../config.js";
+import { clamp } from "../utils/math.js";
 
 function resolveMaxTileEnergy(candidate) {
   if (Number.isFinite(candidate) && candidate > 0) {
@@ -70,6 +71,8 @@ export function computeFitness(cell, maxTileEnergy) {
     opportunitySamples > 0
       ? Math.min(1, opportunityNeglectSum / opportunitySamples)
       : 0;
+  const opportunityPressure =
+    attempts > 0 ? clamp(Math.min(1, opportunitySamples / attempts), 0, 1) : 0;
 
   const diversityBonus = diversityRate * 1.2;
   const adaptabilityBonus = successRate * 0.4;
@@ -77,8 +80,11 @@ export function computeFitness(cell, maxTileEnergy) {
   const similarityDrag = penaltyRate * 0.6;
   const monotonyDrag = monotonyRate * 0.4;
   const complementDrag = (1 - complementRate) * penaltyRate * 0.2;
-  const opportunityBonus = opportunityAlignmentRate * (0.6 + diversityRate * 0.2);
-  const opportunityDrag = opportunityNeglectRate * 0.5;
+  const opportunityBonus =
+    opportunityAlignmentRate * (0.6 + diversityRate * 0.2 + opportunityPressure * 0.3);
+  const opportunityDrag = opportunityNeglectRate * (0.5 + opportunityPressure * 0.3);
+  const explorationBonus =
+    opportunityPressure * (0.2 + diversityRate * 0.25 + complementRate * 0.15);
 
   return (
     fights +
@@ -92,6 +98,7 @@ export function computeFitness(cell, maxTileEnergy) {
     monotonyDrag -
     complementDrag +
     opportunityBonus -
-    opportunityDrag
+    opportunityDrag +
+    explorationBonus
   );
 }
