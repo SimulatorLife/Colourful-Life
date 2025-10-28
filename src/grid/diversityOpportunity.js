@@ -3,16 +3,55 @@ import { clamp, clampFinite } from "../utils/math.js";
 const SAMPLE_LIMIT = 5;
 
 function rememberTopValue(values, candidate) {
-  if (values.length < SAMPLE_LIMIT || candidate > values[values.length - 1]) {
-    values.push(candidate);
-    values.sort((a, b) => b - a);
+  // Maintain `values` in descending order while returning the contribution that
+  // should be applied to the running sum of the tracked samples. Avoiding
+  // `Array.prototype.sort()` keeps the helper O(k) for the tiny `SAMPLE_LIMIT`
+  // window instead of repeatedly performing O(k log k) work.
+  const limit = SAMPLE_LIMIT;
+  const length = values.length;
 
-    if (values.length > SAMPLE_LIMIT) {
-      values.length = SAMPLE_LIMIT;
-    }
+  if (length === 0) {
+    values.push(candidate);
+
+    return candidate;
   }
 
-  return values;
+  const effectiveLength = Math.min(length, limit);
+  const tailIndex = effectiveLength - 1;
+
+  if (length >= limit && candidate <= values[tailIndex]) {
+    return 0;
+  }
+
+  let insertIndex = tailIndex;
+
+  while (insertIndex >= 0 && values[insertIndex] < candidate) {
+    insertIndex -= 1;
+  }
+
+  const targetIndex = insertIndex + 1;
+
+  if (length < limit) {
+    values.push(candidate);
+
+    for (let i = values.length - 1; i > targetIndex; i -= 1) {
+      values[i] = values[i - 1];
+    }
+
+    values[targetIndex] = candidate;
+
+    return candidate;
+  }
+
+  const displaced = values[tailIndex];
+
+  for (let i = tailIndex; i > targetIndex; i -= 1) {
+    values[i] = values[i - 1];
+  }
+
+  values[targetIndex] = candidate;
+
+  return candidate - displaced;
 }
 
 function normalizeCandidateValue(candidate) {
@@ -40,31 +79,27 @@ export function summarizeMateDiversityOpportunity({
     };
   }
 
-  const { best, aboveThresholdCount, topValues } = list.reduce(
-    (acc, candidate) => {
-      const value = normalizeCandidateValue(candidate);
+  let best = 0;
+  let aboveThresholdCount = 0;
+  const topValues = [];
+  let topSum = 0;
 
-      if (value > acc.best) {
-        acc.best = value;
-      }
+  for (let index = 0; index < count; index += 1) {
+    const value = normalizeCandidateValue(list[index]);
 
-      if (value >= threshold) {
-        acc.aboveThresholdCount += 1;
-      }
+    if (value > best) {
+      best = value;
+    }
 
-      rememberTopValue(acc.topValues, value);
+    if (value >= threshold) {
+      aboveThresholdCount += 1;
+    }
 
-      return acc;
-    },
-    { best: 0, aboveThresholdCount: 0, topValues: [] },
-  );
-
-  const sampleCount = Math.min(topValues.length, SAMPLE_LIMIT, count);
-  let topAverage = 0;
-
-  if (sampleCount > 0) {
-    topAverage = topValues.reduce((total, value) => total + value, 0) / sampleCount;
+    topSum += rememberTopValue(topValues, value);
   }
+
+  const sampleCount = topValues.length;
+  const topAverage = sampleCount > 0 ? topSum / sampleCount : 0;
 
   const availableAbove = Math.max(
     0,
