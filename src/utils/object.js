@@ -31,28 +31,66 @@ let structuredCloneImpl =
     ? globalThis.structuredClone.bind(globalThis)
     : null;
 
-if (!structuredCloneImpl && typeof process !== "undefined" && process?.versions?.node) {
-  try {
-    const { structuredClone: nodeStructuredClone } = await import("node:util");
+const shouldAttemptNodeFallback =
+  !structuredCloneImpl &&
+  typeof process !== "undefined" &&
+  process?.versions?.node &&
+  (typeof window === "undefined" || typeof window?.document === "undefined");
 
-    if (typeof nodeStructuredClone === "function") {
-      structuredCloneImpl = nodeStructuredClone;
+if (shouldAttemptNodeFallback) {
+  let delegate = null;
+
+  const upgradeDelegate = (candidate) => {
+    if (typeof candidate !== "function") {
+      return false;
     }
-  } catch (error) {
-    // Continue attempting other fallbacks when util.structuredClone is unavailable.
-  }
 
-  if (!structuredCloneImpl) {
+    delegate = candidate;
+    structuredCloneImpl = candidate;
+
+    return true;
+  };
+
+  const fallbackClone = (value) => JSON.parse(JSON.stringify(value));
+
+  structuredCloneImpl = (value) => {
+    if (delegate) {
+      return delegate(value);
+    }
+
+    return fallbackClone(value);
+  };
+
+  const dynamicImport = (specifier) => {
     try {
-      const { serialize, deserialize } = await import("node:v8");
-
-      if (typeof serialize === "function" && typeof deserialize === "function") {
-        structuredCloneImpl = (value) => deserialize(serialize(value));
-      }
+      // Using the Function constructor avoids Parcel attempting to statically
+      // analyse the specifier and turning it into a direct `require` call in
+      // browser bundles. The helper simply proxies to dynamic `import()` at
+      // runtime when the environment actually supports the target module.
+      return Function("specifier", "return import(specifier);")(specifier);
     } catch (error) {
-      // Ignore failures when the V8 helpers are unavailable.
+      return Promise.reject(error);
     }
-  }
+  };
+
+  const loadV8Fallback = () =>
+    dynamicImport("node:v8")
+      .then(({ serialize, deserialize }) => {
+        if (typeof serialize === "function" && typeof deserialize === "function") {
+          upgradeDelegate((value) => deserialize(serialize(value)));
+        }
+      })
+      .catch(() => {});
+
+  dynamicImport("node:util")
+    .then(({ structuredClone: nodeStructuredClone }) => {
+      if (!upgradeDelegate(nodeStructuredClone)) {
+        return loadV8Fallback();
+      }
+
+      return undefined;
+    })
+    .catch(() => loadV8Fallback());
 }
 
 export function cloneTracePayload(trace) {
