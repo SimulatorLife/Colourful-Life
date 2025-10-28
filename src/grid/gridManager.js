@@ -501,9 +501,7 @@ export default class GridManager {
   #rowOccupancy = [];
   #columnOccupancy = [];
   #rowOccupancySorted = [];
-  #rowOccupancyDirty = [];
   #columnOccupancySorted = [];
-  #columnOccupancyDirty = [];
   #tickSimilarityCache = new WeakMap();
   #tickSimilarityRowsInUse = [];
   #tickSimilarityRowPool = [];
@@ -2226,9 +2224,7 @@ export default class GridManager {
     this.#rowOccupancy = Array.from({ length: rows }, () => new Set());
     this.#columnOccupancy = Array.from({ length: cols }, () => new Set());
     this.#rowOccupancySorted = Array.from({ length: rows }, () => []);
-    this.#rowOccupancyDirty = new Array(rows).fill(false);
     this.#columnOccupancySorted = Array.from({ length: cols }, () => []);
-    this.#columnOccupancyDirty = new Array(cols).fill(false);
   }
 
   #resetOccupancyTracking() {
@@ -2271,14 +2267,6 @@ export default class GridManager {
         if (list) list.length = 0;
       }
     }
-
-    if (Array.isArray(this.#rowOccupancyDirty)) {
-      this.#rowOccupancyDirty.fill(false);
-    }
-
-    if (Array.isArray(this.#columnOccupancyDirty)) {
-      this.#columnOccupancyDirty.fill(false);
-    }
   }
 
   #recordOccupancy(row, col) {
@@ -2302,8 +2290,15 @@ export default class GridManager {
       this.#rowOccupancy[row] = bucket;
     }
 
-    bucket.add(col);
-    this.#markRowOccupancyDirty(row);
+    if (!bucket.has(col)) {
+      bucket.add(col);
+      this.#ensureRowOccupancyCache(row);
+      const list = this.#rowOccupancySorted?.[row];
+
+      if (Array.isArray(list)) {
+        this.#insertIntoSortedList(list, col);
+      }
+    }
 
     let columnBucket = this.#columnOccupancy[col];
 
@@ -2312,8 +2307,15 @@ export default class GridManager {
       this.#columnOccupancy[col] = columnBucket;
     }
 
-    columnBucket.add(row);
-    this.#markColumnOccupancyDirty(col);
+    if (!columnBucket.has(row)) {
+      columnBucket.add(row);
+      this.#ensureColumnOccupancyCache(col);
+      const list = this.#columnOccupancySorted?.[col];
+
+      if (Array.isArray(list)) {
+        this.#insertIntoSortedList(list, row);
+      }
+    }
   }
 
   #releaseOccupancy(row, col) {
@@ -2323,41 +2325,25 @@ export default class GridManager {
     const columnBucket = this.#columnOccupancy?.[col];
 
     if (rowBucket?.delete?.(col)) {
-      this.#markRowOccupancyDirty(row);
+      const list = this.#rowOccupancySorted?.[row];
+
+      if (Array.isArray(list)) {
+        this.#removeFromSortedList(list, col);
+      }
     }
 
     if (columnBucket?.delete?.(row)) {
-      this.#markColumnOccupancyDirty(col);
+      const list = this.#columnOccupancySorted?.[col];
+
+      if (Array.isArray(list)) {
+        this.#removeFromSortedList(list, row);
+      }
     }
   }
 
   #shiftOccupancy(fromRow, fromCol, toRow, toCol) {
     this.#releaseOccupancy(fromRow, fromCol);
     this.#recordOccupancy(toRow, toCol);
-  }
-
-  #markRowOccupancyDirty(row) {
-    this.#ensureRowOccupancyCache(row);
-
-    if (
-      Array.isArray(this.#rowOccupancyDirty) &&
-      row >= 0 &&
-      row < this.#rowOccupancyDirty.length
-    ) {
-      this.#rowOccupancyDirty[row] = true;
-    }
-  }
-
-  #markColumnOccupancyDirty(col) {
-    this.#ensureColumnOccupancyCache(col);
-
-    if (
-      Array.isArray(this.#columnOccupancyDirty) &&
-      col >= 0 &&
-      col < this.#columnOccupancyDirty.length
-    ) {
-      this.#columnOccupancyDirty[col] = true;
-    }
   }
 
   #ensureRowOccupancyCache(row) {
@@ -2373,16 +2359,8 @@ export default class GridManager {
       this.#rowOccupancySorted = Array.from({ length: targetLength }, () => []);
     }
 
-    if (
-      !Array.isArray(this.#rowOccupancyDirty) ||
-      this.#rowOccupancyDirty.length !== targetLength
-    ) {
-      this.#rowOccupancyDirty = new Array(targetLength).fill(true);
-    }
-
     if (!this.#rowOccupancySorted[row]) {
       this.#rowOccupancySorted[row] = [];
-      this.#rowOccupancyDirty[row] = true;
     }
   }
 
@@ -2399,16 +2377,34 @@ export default class GridManager {
       this.#columnOccupancySorted = Array.from({ length: targetLength }, () => []);
     }
 
-    if (
-      !Array.isArray(this.#columnOccupancyDirty) ||
-      this.#columnOccupancyDirty.length !== targetLength
-    ) {
-      this.#columnOccupancyDirty = new Array(targetLength).fill(true);
-    }
-
     if (!this.#columnOccupancySorted[col]) {
       this.#columnOccupancySorted[col] = [];
-      this.#columnOccupancyDirty[col] = true;
+    }
+  }
+
+  #insertIntoSortedList(list, value) {
+    if (!Array.isArray(list)) {
+      return;
+    }
+
+    const index = lowerBound(list, value);
+
+    if (index < list.length && list[index] === value) {
+      return;
+    }
+
+    list.splice(index, 0, value);
+  }
+
+  #removeFromSortedList(list, value) {
+    if (!Array.isArray(list) || list.length === 0) {
+      return;
+    }
+
+    const index = lowerBound(list, value);
+
+    if (index < list.length && list[index] === value) {
+      list.splice(index, 1);
     }
   }
 
@@ -2416,27 +2412,12 @@ export default class GridManager {
     this.#ensureRowOccupancyCache(row);
     const list = this.#rowOccupancySorted[row];
 
-    if (
-      !Array.isArray(this.#rowOccupancyDirty) ||
-      row < 0 ||
-      row >= this.#rowOccupancyDirty.length
-    ) {
-      return list ?? [];
-    }
-
-    if (this.#rowOccupancyDirty[row]) {
-      if (Array.isArray(list)) {
-        list.length = 0;
-        if (bucket && bucket.size > 0) {
-          for (const value of bucket) {
-            if (Number.isInteger(value)) {
-              list.push(value);
-            }
-          }
-          list.sort((a, b) => a - b);
+    if (Array.isArray(list) && list.length === 0 && bucket && bucket.size > 0) {
+      for (const value of bucket) {
+        if (Number.isInteger(value)) {
+          this.#insertIntoSortedList(list, value);
         }
       }
-      this.#rowOccupancyDirty[row] = false;
     }
 
     return Array.isArray(list) ? list : [];
@@ -2446,27 +2427,12 @@ export default class GridManager {
     this.#ensureColumnOccupancyCache(col);
     const list = this.#columnOccupancySorted[col];
 
-    if (
-      !Array.isArray(this.#columnOccupancyDirty) ||
-      col < 0 ||
-      col >= this.#columnOccupancyDirty.length
-    ) {
-      return list ?? [];
-    }
-
-    if (this.#columnOccupancyDirty[col]) {
-      if (Array.isArray(list)) {
-        list.length = 0;
-        if (bucket && bucket.size > 0) {
-          for (const value of bucket) {
-            if (Number.isInteger(value)) {
-              list.push(value);
-            }
-          }
-          list.sort((a, b) => a - b);
+    if (Array.isArray(list) && list.length === 0 && bucket && bucket.size > 0) {
+      for (const value of bucket) {
+        if (Number.isInteger(value)) {
+          this.#insertIntoSortedList(list, value);
         }
       }
-      this.#columnOccupancyDirty[col] = false;
     }
 
     return Array.isArray(list) ? list : [];
