@@ -402,7 +402,8 @@ export default class Cell {
       2,
     );
     const viabilityBuffer = Math.max(viabilityBufferA, viabilityBufferB);
-    const viabilityThreshold = resolvedMaxTileEnergy * viabilityFloor * viabilityBuffer; // require additional reserves beyond the pickier parent's floor
+    // Require additional reserves beyond the pickier parent's floor.
+    const viabilityThreshold = resolvedMaxTileEnergy * viabilityFloor * viabilityBuffer;
     const minimumTransfer = Math.max(transferEfficiency, 1e-6);
     const requiredTotalInvestment = viabilityThreshold / minimumTransfer;
     const fracFnA = parentA.dna?.parentalInvestmentFrac;
