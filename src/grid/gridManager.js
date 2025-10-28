@@ -5183,29 +5183,63 @@ export default class GridManager {
     if (!this.densityCounts) return;
 
     this.#markDensityIntegralDirty();
-    const totals = this.densityTotals;
+
+    const baseRadius = Number.isFinite(radius)
+      ? radius
+      : Number.isFinite(this.densityRadius)
+        ? this.densityRadius
+        : 0;
+    const normalizedRadius = baseRadius > 0 ? Math.floor(baseRadius) : 0;
+
+    if (normalizedRadius < 1) {
+      return;
+    }
+
+    const { rows, cols } = this;
+    const counts = this.densityCounts;
     const liveGrid = this.densityLiveGrid;
+    const totals = this.densityTotals;
+    const canUpdateDensity = Array.isArray(liveGrid) && Array.isArray(totals);
+    const minRow = Math.max(0, row - normalizedRadius);
+    const maxRow = Math.min(rows - 1, row + normalizedRadius);
+    const minCol = Math.max(0, col - normalizedRadius);
+    const maxCol = Math.min(cols - 1, col + normalizedRadius);
 
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dy = -radius; dy <= radius; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const rr = row + dy;
-        const cc = col + dx;
+    for (let rr = minRow; rr <= maxRow; rr++) {
+      const countsRow = counts[rr];
 
-        if (rr < 0 || rr >= this.rows || cc < 0 || cc >= this.cols) continue;
+      if (!countsRow) continue;
 
-        const countsRow = this.densityCounts[rr];
-        const nextCount = (countsRow[cc] || 0) + delta;
+      const liveRow = canUpdateDensity ? liveGrid[rr] : null;
+      const totalsRow = canUpdateDensity ? totals[rr] : null;
+      const updateRow = liveRow && totalsRow;
+
+      for (let cc = minCol; cc <= maxCol; cc++) {
+        if (rr === row && cc === col) continue;
+
+        const baseCount = countsRow[cc];
+        const nextCount = (baseCount ?? 0) + delta;
 
         countsRow[cc] = nextCount;
 
-        if (!liveGrid || !totals) continue;
+        if (!updateRow) continue;
 
-        const total = totals[rr]?.[cc] ?? 0;
-        const nextDensity = total > 0 ? clamp(nextCount / total, 0, 1) : 0;
+        const total = totalsRow[cc] ?? 0;
 
-        if (liveGrid[rr][cc] !== nextDensity) {
-          liveGrid[rr][cc] = nextDensity;
+        if (!(total > 0)) {
+          if (liveRow[cc] !== 0) {
+            liveRow[cc] = 0;
+            this.#markDensityDirty(rr, cc);
+          }
+
+          continue;
+        }
+
+        const ratio = nextCount / total;
+        const nextDensity = ratio <= 0 ? 0 : ratio >= 1 ? 1 : ratio;
+
+        if (liveRow[cc] !== nextDensity) {
+          liveRow[cc] = nextDensity;
           this.#markDensityDirty(rr, cc);
         }
       }
