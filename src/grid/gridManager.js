@@ -119,6 +119,97 @@ function resolveInteractionSystem(options, { gridManager, adapter }) {
   return null;
 }
 
+function computeReproductionDistanceScaling({
+  separation,
+  effectiveReach,
+  parentReach,
+  mateReach,
+  parentTileEnergy,
+  mateTileEnergy,
+  parentTileEnergyDelta,
+  mateTileEnergyDelta,
+  parentLocalDensity,
+  mateLocalDensity,
+}) {
+  if (!Number.isFinite(separation) || separation <= 1) {
+    return { probability: 1, energy: 1 };
+  }
+
+  const reachAllowance = Math.max(0, effectiveReach - 1);
+
+  if (reachAllowance <= 0) {
+    return { probability: 0, energy: Infinity };
+  }
+
+  const normalizedDistance = clamp((separation - 1) / reachAllowance, 0, 1);
+  const parentEnergy = clamp(
+    Number.isFinite(parentTileEnergy) ? parentTileEnergy : 0,
+    0,
+    1,
+  );
+  const mateEnergy = clamp(
+    Number.isFinite(mateTileEnergy) ? mateTileEnergy : parentEnergy,
+    0,
+    1,
+  );
+  const avgEnergy = clamp((parentEnergy + mateEnergy) / 2, 0, 1);
+  const parentDensity = clamp(
+    Number.isFinite(parentLocalDensity) ? parentLocalDensity : 0,
+    0,
+    1,
+  );
+  const mateDensity = clamp(
+    Number.isFinite(mateLocalDensity) ? mateLocalDensity : parentDensity,
+    0,
+    1,
+  );
+  const avgDensity = clamp((parentDensity + mateDensity) / 2, 0, 1);
+  const parentTrend = clamp(
+    Number.isFinite(parentTileEnergyDelta) ? parentTileEnergyDelta : 0,
+    -1,
+    1,
+  );
+  const mateTrend = clamp(
+    Number.isFinite(mateTileEnergyDelta) ? mateTileEnergyDelta : parentTrend,
+    -1,
+    1,
+  );
+  const avgTrend = clamp((parentTrend + mateTrend) / 2, -1, 1);
+  const reachConfidence = clamp(
+    (Number.isFinite(parentReach) ? parentReach : 1) +
+      (Number.isFinite(mateReach) ? mateReach : 1),
+    0,
+    Number.POSITIVE_INFINITY,
+  );
+  const normalizedReachConfidence = clamp(
+    reachConfidence / (2 * Math.max(effectiveReach, 1e-6)),
+    0,
+    1,
+  );
+
+  let environmentalSupport = 0.45 + avgEnergy * 0.4 - avgDensity * 0.3;
+
+  if (avgTrend < 0) {
+    environmentalSupport += -avgTrend * 0.25;
+  }
+
+  environmentalSupport = clamp(environmentalSupport, 0.15, 1.2);
+
+  const penaltyStrength = clamp(
+    0.3 + (1 - environmentalSupport) * 0.35 + (1 - normalizedReachConfidence) * 0.25,
+    0.1,
+    0.9,
+  );
+  const probability = clamp(1 - normalizedDistance * penaltyStrength, 0.1, 1);
+  const energy = clamp(
+    1 + normalizedDistance * (0.3 + (1 - environmentalSupport) * 0.4),
+    1,
+    1.75,
+  );
+
+  return { probability, energy };
+}
+
 function computeCrowdingFeedback({
   grid,
   row,
@@ -7644,8 +7735,8 @@ export default class GridManager {
       typeof bestMate.target.dna.reproductionThresholdFrac === "function"
         ? bestMate.target.dna.reproductionThresholdFrac()
         : 0.4;
-    const thrA = thrFracA * this.maxTileEnergy;
-    const thrB = thrFracB * this.maxTileEnergy;
+    let thrA = thrFracA * this.maxTileEnergy;
+    let thrB = thrFracB * this.maxTileEnergy;
     const appetite = cell.diversityAppetite ?? 0;
     const bias = cell.matePreferenceBias ?? 0;
     const evaluatedPoolSize = evaluated.length > 0 ? evaluated.length : matePool.length;
@@ -7703,20 +7794,15 @@ export default class GridManager {
     const averageReach = clamp((parentReach + mateReach) / 2, 0, 4);
     const effectiveReach = Math.max(1, averageReach);
 
+    let distanceScaling = { probability: 1, energy: 1 };
+
     if (!blockedInfo) {
-      if (separation === 0) {
+      if (!Number.isFinite(separation) || separation <= 0) {
         blockedInfo = {
           reason: "Parents out of reach",
           parentA: { row: parentRow, col: parentCol, reach: parentReach },
           parentB: { row: mateRow, col: mateCol, reach: mateReach },
           separation: { distance: separation, effectiveReach },
-        };
-      } else if (separation > 1) {
-        blockedInfo = {
-          reason: "Parents must be adjacent",
-          parentA: { row: parentRow, col: parentCol, reach: parentReach },
-          parentB: { row: mateRow, col: mateCol, reach: mateReach },
-          separation: { distance: separation, effectiveReach, required: 1 },
         };
       } else if (separation > effectiveReach) {
         blockedInfo = {
@@ -7725,6 +7811,57 @@ export default class GridManager {
           parentB: { row: mateRow, col: mateCol, reach: mateReach },
           separation: { distance: separation, effectiveReach },
         };
+      } else {
+        distanceScaling = computeReproductionDistanceScaling({
+          separation,
+          effectiveReach,
+          parentReach,
+          mateReach,
+          parentTileEnergy: tileEnergy,
+          mateTileEnergy,
+          parentTileEnergyDelta: tileEnergyDelta,
+          mateTileEnergyDelta,
+          parentLocalDensity: localDensity,
+          mateLocalDensity,
+        });
+
+        if (
+          !Number.isFinite(distanceScaling?.probability) ||
+          distanceScaling.probability <= 0
+        ) {
+          blockedInfo = {
+            reason: "Parents out of reach",
+            parentA: { row: parentRow, col: parentCol, reach: parentReach },
+            parentB: { row: mateRow, col: mateCol, reach: mateReach },
+            separation: { distance: separation, effectiveReach },
+          };
+        }
+      }
+    }
+
+    if (!blockedInfo && effectiveReproProb > 0) {
+      const probabilityScale = clamp(distanceScaling?.probability ?? 1, 0, 1);
+
+      if (probabilityScale <= 0) {
+        blockedInfo = {
+          reason: "Parents out of reach",
+          parentA: { row: parentRow, col: parentCol, reach: parentReach },
+          parentB: { row: mateRow, col: mateCol, reach: mateReach },
+          separation: { distance: separation, effectiveReach },
+        };
+      } else if (probabilityScale < 1) {
+        effectiveReproProb = clamp(effectiveReproProb * probabilityScale, 0, 1);
+      }
+    }
+
+    if (!blockedInfo) {
+      const energyScale = Number.isFinite(distanceScaling?.energy)
+        ? distanceScaling.energy
+        : 1;
+
+      if (energyScale > 1) {
+        thrA *= energyScale;
+        thrB *= energyScale;
       }
     }
 
@@ -7893,6 +8030,10 @@ export default class GridManager {
         diversityOpportunityGap,
         diversityOpportunityAlignment: opportunityAlignmentWeighted,
         diversityOpportunityMultiplier: opportunityAlignmentMultiplier,
+        distanceProbabilityMultiplier: clamp(distanceScaling?.probability ?? 1, 0, 1),
+        distanceEnergyMultiplier: Number.isFinite(distanceScaling?.energy)
+          ? Math.max(1, distanceScaling.energy)
+          : 1,
       });
     }
 
