@@ -139,6 +139,64 @@ test("resetWorld randomize selects a non-empty obstacle preset", async () => {
   }
 });
 
+test("resetWorld resolves presetOptions callbacks before applying obstacles", async () => {
+  const originalWindow = global.window;
+
+  if (typeof global.window === "undefined") {
+    global.window = {};
+  }
+
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  try {
+    const gm = new TestGridManager(10, 10, {
+      eventManager: { activeEvents: [] },
+      stats: {},
+      ctx: {},
+      cellSize: 1,
+    });
+
+    const calls = [];
+
+    gm.resetWorld({
+      obstaclePreset: "midline",
+      presetOptions: (id) => {
+        calls.push(id);
+
+        return { gapEvery: 2, gapOffset: 0, thickness: 1 };
+      },
+      reseed: false,
+    });
+
+    assert.equal(
+      calls,
+      ["midline"],
+      "presetOptions resolver should receive the target preset id",
+    );
+
+    const midColumn = Math.floor(gm.cols / 2);
+    const columnPattern = gm.obstacles
+      .map((row) => (row[midColumn] ? "1" : "0"))
+      .join("");
+
+    assert.equal(
+      columnPattern,
+      "0101010101",
+      "gap frequency should reflect the resolved preset options",
+    );
+  } finally {
+    if (originalWindow === undefined) {
+      delete global.window;
+    } else {
+      global.window = originalWindow;
+    }
+  }
+});
+
 test("applyObstaclePreset normalizes the stored preset identifier", async () => {
   const originalWindow = global.window;
 
