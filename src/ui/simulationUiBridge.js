@@ -153,6 +153,79 @@ function subscribeEngineToUi(engine, uiManager) {
         uiManager.setAutoPausePending(changes.autoPausePending);
       }
 
+      if (
+        changes?.societySimilarity !== undefined &&
+        typeof uiManager.setSocietySimilarity === "function"
+      ) {
+        uiManager.setSocietySimilarity(changes.societySimilarity, { notify: false });
+      }
+
+      if (
+        changes?.enemySimilarity !== undefined &&
+        typeof uiManager.setEnemySimilarity === "function"
+      ) {
+        uiManager.setEnemySimilarity(changes.enemySimilarity, { notify: false });
+      }
+
+      if (
+        changes?.eventStrengthMultiplier !== undefined &&
+        typeof uiManager.setEventStrengthMultiplier === "function"
+      ) {
+        uiManager.setEventStrengthMultiplier(changes.eventStrengthMultiplier, {
+          notify: false,
+        });
+      }
+
+      if (
+        changes?.eventFrequencyMultiplier !== undefined &&
+        typeof uiManager.setEventFrequencyMultiplier === "function"
+      ) {
+        uiManager.setEventFrequencyMultiplier(changes.eventFrequencyMultiplier, {
+          notify: false,
+        });
+      }
+
+      if (
+        changes?.densityEffectMultiplier !== undefined &&
+        typeof uiManager.setDensityEffectMultiplier === "function"
+      ) {
+        uiManager.setDensityEffectMultiplier(changes.densityEffectMultiplier, {
+          notify: false,
+        });
+      }
+
+      if (
+        changes?.energyRegenRate !== undefined &&
+        typeof uiManager.setEnergyRegenRate === "function"
+      ) {
+        uiManager.setEnergyRegenRate(changes.energyRegenRate, { notify: false });
+      }
+
+      if (
+        changes?.energyDiffusionRate !== undefined &&
+        typeof uiManager.setEnergyDiffusionRate === "function"
+      ) {
+        uiManager.setEnergyDiffusionRate(changes.energyDiffusionRate, {
+          notify: false,
+        });
+      }
+
+      if (
+        changes?.mutationMultiplier !== undefined &&
+        typeof uiManager.setMutationMultiplier === "function"
+      ) {
+        uiManager.setMutationMultiplier(changes.mutationMultiplier, { notify: false });
+      }
+
+      if (
+        changes?.leaderboardIntervalMs !== undefined &&
+        typeof uiManager.setLeaderboardIntervalMs === "function"
+      ) {
+        uiManager.setLeaderboardIntervalMs(changes.leaderboardIntervalMs, {
+          notify: false,
+        });
+      }
+
       syncUpdatesPerSecond(changes);
 
       if (
@@ -333,6 +406,78 @@ export function bindSimulationToUi({
 
     if (pending !== undefined) {
       uiManager.setAutoPausePending(Boolean(pending));
+    }
+  }
+
+  if (uiManager && typeof uiManager.setSocietySimilarity === "function") {
+    const similarity = engine?.state?.societySimilarity;
+
+    if (typeof similarity === "number") {
+      uiManager.setSocietySimilarity(similarity, { notify: false });
+    }
+  }
+
+  if (uiManager && typeof uiManager.setEnemySimilarity === "function") {
+    const similarity = engine?.state?.enemySimilarity;
+
+    if (typeof similarity === "number") {
+      uiManager.setEnemySimilarity(similarity, { notify: false });
+    }
+  }
+
+  if (uiManager && typeof uiManager.setEventStrengthMultiplier === "function") {
+    const strength = engine?.state?.eventStrengthMultiplier;
+
+    if (typeof strength === "number") {
+      uiManager.setEventStrengthMultiplier(strength, { notify: false });
+    }
+  }
+
+  if (uiManager && typeof uiManager.setEventFrequencyMultiplier === "function") {
+    const frequency = engine?.state?.eventFrequencyMultiplier;
+
+    if (typeof frequency === "number") {
+      uiManager.setEventFrequencyMultiplier(frequency, { notify: false });
+    }
+  }
+
+  if (uiManager && typeof uiManager.setDensityEffectMultiplier === "function") {
+    const density = engine?.state?.densityEffectMultiplier;
+
+    if (typeof density === "number") {
+      uiManager.setDensityEffectMultiplier(density, { notify: false });
+    }
+  }
+
+  if (uiManager && typeof uiManager.setEnergyRegenRate === "function") {
+    const regen = engine?.state?.energyRegenRate;
+
+    if (typeof regen === "number") {
+      uiManager.setEnergyRegenRate(regen, { notify: false });
+    }
+  }
+
+  if (uiManager && typeof uiManager.setEnergyDiffusionRate === "function") {
+    const diffusion = engine?.state?.energyDiffusionRate;
+
+    if (typeof diffusion === "number") {
+      uiManager.setEnergyDiffusionRate(diffusion, { notify: false });
+    }
+  }
+
+  if (uiManager && typeof uiManager.setMutationMultiplier === "function") {
+    const mutation = engine?.state?.mutationMultiplier;
+
+    if (typeof mutation === "number") {
+      uiManager.setMutationMultiplier(mutation, { notify: false });
+    }
+  }
+
+  if (uiManager && typeof uiManager.setLeaderboardIntervalMs === "function") {
+    const interval = engine?.state?.leaderboardIntervalMs;
+
+    if (typeof interval === "number") {
+      uiManager.setLeaderboardIntervalMs(interval, { notify: false });
     }
   }
 

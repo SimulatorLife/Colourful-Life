@@ -378,6 +378,35 @@ test("layout initial settings clamp leaderboard cadence to minimum", async () =>
   }
 });
 
+test("energy regeneration slider stays aligned with engine state", async () => {
+  const restore = setupDom();
+
+  try {
+    const { createSimulation } = await import("../src/main.js");
+    const simulation = createSimulation({
+      canvas: new MockCanvas(160, 160),
+      autoStart: false,
+      config: { paused: true },
+    });
+
+    const { engine, uiManager } = simulation;
+
+    engine.setEnergyRates({ regen: 0.09 });
+
+    assert.is(engine.state.energyRegenRate, 0.09);
+    assert.is(uiManager.energyRegenRate, 0.09);
+
+    const slider = findSliderByLabel(uiManager.controlsPanel, "Energy Regen Rate");
+
+    assert.ok(slider, "energy regeneration slider should render");
+    assert.equal(Number(slider.value), 0.09);
+
+    simulation.destroy();
+  } finally {
+    restore();
+  }
+});
+
 test("engine cadence sync handles values below the slider minimum", async () => {
   const restore = setupDom();
 
