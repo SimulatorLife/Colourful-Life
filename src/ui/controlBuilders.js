@@ -1,6 +1,26 @@
+import { sanitizeNumber } from "../utils/math.js";
 import { toPlainObject } from "../utils/object.js";
 
 let controlRowSequence = 0;
+
+/**
+ * Coerces loosely typed input into a finite number or `null` when conversion
+ * fails. The optional flag preserves legacy behaviour where empty strings were
+ * treated as zero when `Number(value)` was used at older call sites.
+ *
+ * @param {any} value - Candidate value supplied by callers.
+ * @param {{allowEmptyStringZero?: boolean}} [options] - Optional normalisation tweaks.
+ * @returns {number|null} Finite numeric value or `null` when coercion fails.
+ */
+function readFiniteNumber(value, { allowEmptyStringZero = false } = {}) {
+  if (allowEmptyStringZero && typeof value === "string" && value.trim().length === 0) {
+    return 0;
+  }
+
+  const numeric = sanitizeNumber(value, { fallback: Number.NaN });
+
+  return Number.isFinite(numeric) ? numeric : null;
+}
 
 /**
  * Creates the two-column grid wrapper used across control panels.
@@ -115,7 +135,13 @@ export function createSliderRow(parent, opts = {}) {
   const valSpan = document.createElement("span");
 
   valSpan.className = "control-value";
-  valSpan.textContent = format(value);
+  const initialNumericValue = readFiniteNumber(value, {
+    allowEmptyStringZero: true,
+  });
+
+  valSpan.textContent = format(
+    initialNumericValue != null ? initialNumericValue : value,
+  );
   const input = document.createElement("input");
 
   input.type = "range";
@@ -125,16 +151,24 @@ export function createSliderRow(parent, opts = {}) {
   input.value = String(value);
 
   const updateDisplay = (nextValue) => {
-    const numericValue = Number(nextValue);
+    const numericValue = readFiniteNumber(nextValue, {
+      allowEmptyStringZero: true,
+    });
 
-    if (Number.isFinite(numericValue)) {
-      input.value = String(numericValue);
-      valSpan.textContent = format(numericValue);
+    if (numericValue == null) {
+      return;
     }
+
+    input.value = String(numericValue);
+    valSpan.textContent = format(numericValue);
   };
 
   input.addEventListener("input", () => {
-    const numericValue = Number.parseFloat(input.value);
+    const numericValue = readFiniteNumber(input.value);
+
+    if (numericValue == null) {
+      return;
+    }
 
     valSpan.textContent = format(numericValue);
     if (typeof onInput === "function") onInput(numericValue);
@@ -199,21 +233,27 @@ export function createNumberInputRow(parent, opts = {}) {
   const handleChange = () => {
     if (typeof onChange !== "function") return;
 
-    const numericValue = Number.parseFloat(input.value);
+    const numericValue = readFiniteNumber(input.value);
 
-    if (Number.isFinite(numericValue)) {
-      onChange(numericValue);
+    if (numericValue == null) {
+      return;
     }
+
+    onChange(numericValue);
   };
 
   input.addEventListener("change", handleChange);
 
   input.updateDisplay = (nextValue) => {
-    const numericValue = Number(nextValue);
+    const numericValue = readFiniteNumber(nextValue, {
+      allowEmptyStringZero: true,
+    });
 
-    if (Number.isFinite(numericValue)) {
-      input.value = String(numericValue);
+    if (numericValue == null) {
+      return;
     }
+
+    input.value = String(numericValue);
   };
 
   line.appendChild(input);
