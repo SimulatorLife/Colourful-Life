@@ -52,6 +52,24 @@ export function computeFitness(cell, maxTileEnergy) {
   const complementRate = successes > 0 ? complementSum / successes : 0;
   const penaltyRate = attempts > 0 ? Math.min(1, penaltySum / attempts) : 0;
   const monotonyRate = attempts > 0 ? Math.min(1, monotonySum / attempts) : 0;
+  const opportunitySamples = Number.isFinite(cell.diversityOpportunitySamples)
+    ? Math.max(0, cell.diversityOpportunitySamples)
+    : 0;
+  const opportunityAlignmentSum = Number.isFinite(
+    cell.diversityOpportunityAlignmentScore,
+  )
+    ? Math.max(0, cell.diversityOpportunityAlignmentScore)
+    : 0;
+  const opportunityNeglectSum = Number.isFinite(cell.diversityOpportunityNeglectScore)
+    ? Math.max(0, cell.diversityOpportunityNeglectScore)
+    : 0;
+
+  const opportunityAlignmentRate =
+    opportunitySamples > 0 ? opportunityAlignmentSum / opportunitySamples : 0;
+  const opportunityNeglectRate =
+    opportunitySamples > 0
+      ? Math.min(1, opportunityNeglectSum / opportunitySamples)
+      : 0;
 
   const diversityBonus = diversityRate * 1.2;
   const adaptabilityBonus = successRate * 0.4;
@@ -59,6 +77,8 @@ export function computeFitness(cell, maxTileEnergy) {
   const similarityDrag = penaltyRate * 0.6;
   const monotonyDrag = monotonyRate * 0.4;
   const complementDrag = (1 - complementRate) * penaltyRate * 0.2;
+  const opportunityBonus = opportunityAlignmentRate * (0.6 + diversityRate * 0.2);
+  const opportunityDrag = opportunityNeglectRate * 0.5;
 
   return (
     fights +
@@ -70,6 +90,8 @@ export function computeFitness(cell, maxTileEnergy) {
     complementBonus -
     similarityDrag -
     monotonyDrag -
-    complementDrag
+    complementDrag +
+    opportunityBonus -
+    opportunityDrag
   );
 }
