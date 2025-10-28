@@ -40,6 +40,27 @@ function findNumberInputByLabel(root, label) {
   return null;
 }
 
+function findCheckboxByLabel(root, label) {
+  const queue = [root];
+
+  while (queue.length > 0) {
+    const node = queue.shift();
+
+    if (!node) continue;
+    if (node.tagName === "INPUT" && node.type === "checkbox") {
+      const labelText = node.parentElement?.textContent ?? "";
+
+      if (typeof labelText === "string" && labelText.includes(label)) {
+        return node;
+      }
+    }
+
+    if (Array.isArray(node.children)) queue.push(...node.children);
+  }
+
+  return null;
+}
+
 class GeometrySyncEngine {
   constructor() {
     this.canvas = new MockCanvas(300, 300);
@@ -170,6 +191,90 @@ test("Apply Geometry preserves population by default", async () => {
     assert.equal(geometryCalls.length, 2, "second apply should invoke action again");
     assert.is(geometryCalls[1].reseed, true, "shift-click requests reseed");
   } finally {
+    restore();
+  }
+});
+
+test("geometry reseed clears active reproductive zones in the UI", async () => {
+  const restore = setupDom();
+  const originalRaf = window.requestAnimationFrame;
+
+  try {
+    window.requestAnimationFrame = (callback) => {
+      if (typeof callback === "function") {
+        callback(16);
+      }
+
+      return 1;
+    };
+
+    const [{ default: UIManager }, { default: SelectionManager }] = await Promise.all([
+      import("../src/ui/uiManager.js"),
+      import("../src/grid/selectionManager.js"),
+    ]);
+
+    const selectionManager = new SelectionManager(60, 60);
+    const geometryCalls = [];
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        selectionManager,
+        setWorldGeometry: (options) => {
+          geometryCalls.push(options);
+
+          if (options?.reseed) {
+            selectionManager.clearActiveZones();
+          }
+
+          return {
+            cellSize: options.cellSize ?? 5,
+            rows: options.rows ?? 60,
+            cols: options.cols ?? 60,
+          };
+        },
+        getCellSize: () => 5,
+        getGridDimensions: () => ({ rows: 60, cols: 60, cellSize: 5 }),
+      },
+      { canvasElement: new MockCanvas(300, 300) },
+    );
+
+    const [pattern] = selectionManager.getPatterns();
+    const checkbox = findCheckboxByLabel(uiManager.controlsPanel, pattern.name);
+
+    assert.ok(checkbox, "reproductive zone checkbox should exist");
+
+    checkbox.checked = true;
+    checkbox.dispatchEvent({ type: "input" });
+
+    assert.equal(
+      selectionManager.getActiveZones().length,
+      1,
+      "activating the checkbox should enable the zone",
+    );
+
+    const applyButton = findButtonByText(uiManager.controlsPanel, "Apply Geometry");
+
+    assert.ok(applyButton, "apply button should exist");
+
+    applyButton.dispatchEvent({ type: "click", shiftKey: true });
+
+    assert.equal(geometryCalls.length, 1, "geometry apply should run once");
+    assert.is(geometryCalls[0].reseed, true, "shift-click should request reseed");
+    assert.equal(
+      selectionManager.getActiveZones().length,
+      0,
+      "reseed should clear active zones on the manager",
+    );
+    assert.is(checkbox.checked, false, "checkbox should sync to cleared state");
+  } finally {
+    window.requestAnimationFrame = originalRaf;
     restore();
   }
 });
