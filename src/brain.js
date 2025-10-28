@@ -426,18 +426,10 @@ export default class Brain {
         return 0;
       }
 
-      let sum = 0;
-      let nodeInputs = null;
-
-      if (traceEnabled) {
-        nodeInputs = [];
-      }
-
-      for (let i = 0; i < incoming.length; i += 1) {
-        const { source, weight } = incoming[i];
+      const nodeInputs = traceEnabled ? [] : null;
+      const sum = incoming.reduce((total, connection) => {
+        const { source, weight } = connection;
         const sourceValue = computeNode(source);
-
-        sum += weight * sourceValue;
 
         if (nodeInputs) {
           nodeInputs.push({
@@ -446,7 +438,9 @@ export default class Brain {
             value: sourceValue,
           });
         }
-      }
+
+        return total + weight * sourceValue;
+      }, 0);
 
       visiting.delete(nodeId);
       activationCount++;
@@ -476,9 +470,7 @@ export default class Brain {
 
     const values = {};
 
-    for (let i = 0; i < group.length; i += 1) {
-      const { id, key } = group[i];
-
+    for (const { id, key } of group) {
       values[key] = computeNode(id);
     }
 
@@ -502,9 +494,7 @@ export default class Brain {
     }
 
     if (hasActivations) {
-      for (let i = 0; i < group.length; i += 1) {
-        const { key } = group[i];
-
+      for (const { key } of group) {
         this.lastOutputs.set(key, values[key]);
       }
     }
