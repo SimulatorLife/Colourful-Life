@@ -5577,6 +5577,181 @@ export default class UIManager {
     }
   }
 
+  setSocietySimilarity(value, { notify = true } = {}) {
+    const { value: sanitized } = clampSliderValue("societySimilarity", value, {
+      fallback: this.societySimilarity,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const changed = this.societySimilarity !== sanitized;
+
+    this.societySimilarity = sanitized;
+    this.#syncSliderInput("societySimilarity", sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("societySimilarity", sanitized);
+    }
+  }
+
+  setEnemySimilarity(value, { notify = true } = {}) {
+    const { value: sanitized } = clampSliderValue("enemySimilarity", value, {
+      fallback: this.enemySimilarity,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const changed = this.enemySimilarity !== sanitized;
+
+    this.enemySimilarity = sanitized;
+    this.#syncSliderInput("enemySimilarity", sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("enemySimilarity", sanitized);
+    }
+  }
+
+  setEventStrengthMultiplier(value, { notify = true } = {}) {
+    const { value: sanitized } = clampSliderValue("eventStrengthMultiplier", value, {
+      fallback: this.eventStrengthMultiplier,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const changed = this.eventStrengthMultiplier !== sanitized;
+
+    this.eventStrengthMultiplier = sanitized;
+    this.#syncSliderInput("eventStrengthMultiplier", sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("eventStrengthMultiplier", sanitized);
+    }
+  }
+
+  setEventFrequencyMultiplier(value, { notify = true } = {}) {
+    const { value: sanitized } = clampSliderValue("eventFrequencyMultiplier", value, {
+      fallback: this.eventFrequencyMultiplier,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const changed = this.eventFrequencyMultiplier !== sanitized;
+
+    this.eventFrequencyMultiplier = sanitized;
+    this.#syncSliderInput("eventFrequencyMultiplier", sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("eventFrequencyMultiplier", sanitized);
+    }
+  }
+
+  setDensityEffectMultiplier(value, { notify = true } = {}) {
+    const { value: sanitized } = clampSliderValue("densityEffectMultiplier", value, {
+      fallback: this.densityEffectMultiplier,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const changed = this.densityEffectMultiplier !== sanitized;
+
+    this.densityEffectMultiplier = sanitized;
+    this.#syncSliderInput("densityEffectMultiplier", sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("densityEffectMultiplier", sanitized);
+    }
+  }
+
+  setEnergyRegenRate(value, { notify = true } = {}) {
+    const { value: sanitized } = clampSliderValue("energyRegenRate", value, {
+      fallback: this.energyRegenRate,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const changed = this.energyRegenRate !== sanitized;
+
+    this.energyRegenRate = sanitized;
+    this.#syncSliderInput("energyRegenRate", sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("energyRegenRate", sanitized);
+    }
+  }
+
+  setEnergyDiffusionRate(value, { notify = true } = {}) {
+    const { value: sanitized } = clampSliderValue("energyDiffusionRate", value, {
+      fallback: this.energyDiffusionRate,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const changed = this.energyDiffusionRate !== sanitized;
+
+    this.energyDiffusionRate = sanitized;
+    this.#syncSliderInput("energyDiffusionRate", sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("energyDiffusionRate", sanitized);
+    }
+  }
+
+  setMutationMultiplier(value, { notify = true } = {}) {
+    const { value: sanitized } = clampSliderValue("mutationMultiplier", value, {
+      fallback: this.mutationMultiplier,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const changed = this.mutationMultiplier !== sanitized;
+
+    this.mutationMultiplier = sanitized;
+    this.#syncSliderInput("mutationMultiplier", sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("mutationMultiplier", sanitized);
+    }
+  }
+
+  setLeaderboardIntervalMs(value, { notify = true } = {}) {
+    const { value: sanitized } = clampSliderValue("leaderboardIntervalMs", value, {
+      fallback: this.leaderboardIntervalMs,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const changed = this.leaderboardIntervalMs !== sanitized;
+
+    this.leaderboardIntervalMs = sanitized;
+    this.#syncSliderInput("leaderboardIntervalMs", sanitized);
+
+    if (this.dashboardCadenceSlider?.updateDisplay) {
+      this.dashboardCadenceSlider.updateDisplay(sanitized);
+    }
+
+    if (changed && notify) {
+      this.#notifySettingChange("leaderboardIntervalMs", sanitized);
+    }
+  }
+
   setCombatEdgeSharpness(value, { notify = true } = {}) {
     const { value: sanitized } = clampSliderValue("combatEdgeSharpness", value, {
       fallback: this.combatEdgeSharpness,
