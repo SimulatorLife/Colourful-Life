@@ -5468,7 +5468,7 @@ export default class GridManager {
         if (Object.hasOwn(event, SEGMENTED_EVENT_CONTRIBUTION_KEY)) {
           try {
             delete event[SEGMENTED_EVENT_CONTRIBUTION_KEY];
-          } catch (error) {
+          } catch {
             event[SEGMENTED_EVENT_CONTRIBUTION_KEY] = undefined;
           }
         }
