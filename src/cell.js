@@ -7138,6 +7138,9 @@ export default class Cell {
       fight: 0.33,
       cooperate: 0.34,
     };
+    let baseReach = 1;
+    let minReach = 1;
+    let maxReach = 1;
 
     if (normalizedAction === "fight") {
       const aggression = clamp(genes.fight ?? 0.33, 0, 1);
@@ -7155,10 +7158,10 @@ export default class Cell {
       reach += 0.7 - proximityBias * 0.3;
       reach -= effectiveDensity * 0.35;
 
-      return clamp(reach, 0.75, 3.2);
-    }
-
-    if (normalizedAction === "cooperate") {
+      minReach = 0.75;
+      maxReach = 3.2;
+      baseReach = clamp(reach, minReach, maxReach);
+    } else if (normalizedAction === "cooperate") {
       const cooperative = clamp(genes.cooperate ?? 0.34, 0, 1);
       const comfort = clamp(
         Number.isFinite(this._crowdingTolerance)
@@ -7185,10 +7188,145 @@ export default class Cell {
 
       reach -= crowdPressure * 0.5;
 
-      return clamp(reach, 0.8, 3.2);
+      minReach = 0.8;
+      maxReach = 3.2;
+      baseReach = clamp(reach, minReach, maxReach);
+    } else {
+      return 1;
     }
 
-    return 1;
+    const decisionOutcome = this.#getDecisionOutcome("interaction");
+    const { reach: adjustedReach, neural } = this.#blendInteractionReachWithNeural({
+      action: normalizedAction,
+      baseReach,
+      minReach,
+      maxReach,
+      decisionOutcome,
+    });
+
+    this.#recordInteractionReachSummary(
+      normalizedAction,
+      {
+        base: baseReach,
+        result: adjustedReach,
+        min: minReach,
+        max: maxReach,
+        neuralProbability: neural ? neural.probability : null,
+        neuralCompetitor: neural ? neural.competitorMax : null,
+        neuralAdvantage: neural ? neural.advantage : null,
+        neuralTarget: neural ? neural.target : null,
+        neuralMix: neural ? neural.mix : 0,
+        neuralUsed: Boolean(decisionOutcome?.usedNetwork),
+      },
+      decisionOutcome,
+    );
+
+    return adjustedReach;
+  }
+
+  #blendInteractionReachWithNeural({
+    action,
+    baseReach,
+    minReach,
+    maxReach,
+    decisionOutcome = null,
+  } = {}) {
+    if (!action || !Number.isFinite(baseReach)) {
+      return { reach: Number.isFinite(baseReach) ? baseReach : 1, neural: null };
+    }
+
+    const outcome = decisionOutcome ?? this.#getDecisionOutcome("interaction");
+
+    if (!outcome || outcome.usedNetwork !== true) {
+      return { reach: baseReach, neural: null };
+    }
+
+    const probabilities = this.#resolveInteractionProbabilities(outcome);
+
+    if (!probabilities) {
+      return { reach: baseReach, neural: null };
+    }
+
+    const entries = OUTPUT_GROUPS.interaction;
+    const probability = clamp(Number(probabilities[action]) || 0, 0, 1);
+    let competitorMax = 0;
+
+    for (let i = 0; i < entries.length; i += 1) {
+      const { key } = entries[i];
+
+      if (key === action) continue;
+
+      const value = clamp(Number(probabilities[key]) || 0, 0, 1);
+
+      if (value > competitorMax) {
+        competitorMax = value;
+      }
+    }
+
+    const advantage = probability - competitorMax;
+    const mix = clamp(0.35 + probability * 0.4 + Math.max(0, advantage) * 0.35, 0, 1);
+    const range = Math.max(0, maxReach - minReach);
+    const target = clamp(minReach + range * probability, minReach, maxReach);
+    const reach = clamp(lerp(baseReach, target, mix), minReach, maxReach);
+
+    return {
+      reach,
+      neural: {
+        probability,
+        competitorMax,
+        advantage,
+        mix,
+        target,
+      },
+    };
+  }
+
+  #recordInteractionReachSummary(action, summary, decisionOutcome = null) {
+    if (!action || !summary) return;
+    if (!this._decisionContextIndex?.has("interaction")) return;
+
+    const outcome = decisionOutcome ?? this.#getDecisionOutcome("interaction");
+
+    if (!outcome) return;
+
+    const existingReach =
+      outcome.reach &&
+      typeof outcome.reach === "object" &&
+      !Array.isArray(outcome.reach)
+        ? outcome.reach
+        : null;
+    const nextReach = existingReach ? { ...existingReach } : {};
+
+    nextReach[action] = summary;
+
+    this.#assignDecisionOutcome("interaction", { reach: nextReach });
+  }
+
+  #resolveInteractionProbabilities(decisionOutcome = null) {
+    const outcome = decisionOutcome ?? this.#getDecisionOutcome("interaction");
+
+    if (!outcome) return null;
+
+    if (outcome.probabilities && typeof outcome.probabilities === "object") {
+      return outcome.probabilities;
+    }
+
+    if (outcome.logits && typeof outcome.logits === "object") {
+      const entries = OUTPUT_GROUPS.interaction;
+      const logits = entries.map(({ key }) => Number(outcome.logits[key]) || 0);
+      const normalized = softmax(logits);
+      const probabilities = {};
+
+      for (let i = 0; i < entries.length; i += 1) {
+        const { key } = entries[i];
+
+        probabilities[key] = normalized[i] ?? 0;
+      }
+
+      return probabilities;
+    }
+
+    return null;
   }
 
   populationScarcityDrive({

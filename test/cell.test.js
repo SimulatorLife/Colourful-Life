@@ -92,6 +92,47 @@ function createReproductionBrainStub({
   };
 }
 
+function createInteractionBrainStub({ sequence = [] } = {}) {
+  const entries = Array.isArray(sequence) && sequence.length > 0 ? sequence : [{}];
+  let index = 0;
+
+  return {
+    connectionCount: 1,
+    evaluateGroup(group, _sensors, options = {}) {
+      if (group !== "interaction") {
+        return null;
+      }
+
+      const config = entries[Math.min(index, entries.length - 1)] ?? {};
+
+      index += 1;
+
+      const probabilities = config.probabilities || {
+        avoid: 1 / 3,
+        fight: 1 / 3,
+        cooperate: 1 / 3,
+      };
+      const safeProb = (value) => Math.max(1e-6, Number(value) || 0);
+      const values = {
+        avoid: Math.log(safeProb(probabilities.avoid)),
+        fight: Math.log(safeProb(probabilities.fight)),
+        cooperate: Math.log(safeProb(probabilities.cooperate)),
+      };
+      const sensors = new Float32Array(Brain.SENSOR_COUNT);
+      const result = {
+        values,
+        activationCount: config.activationCount ?? 4,
+        sensors,
+        trace: options.trace === false ? null : { nodes: [] },
+      };
+
+      this.lastEvaluation = { ...result, group, values };
+
+      return result;
+    },
+  };
+}
+
 test.before(async () => {
   ({ default: Cell } = await import("../src/cell.js"));
   ({ DNA, GENE_LOCI } = await import("../src/genome.js"));
@@ -1249,6 +1290,137 @@ test("interaction fallback shifts with environmental pressures", () => {
     cooperateAction,
     "cooperate",
     "resource-rich ally support encourages cooperation",
+  );
+});
+
+test("getInteractionReach expands fight reach when neural policy favors aggression", () => {
+  const dna = new DNA(140, 60, 90);
+  const cell = new Cell(3, 3, dna, 6);
+  const enemyTarget = { dna: new DNA(80, 200, 40), energy: 5, row: 3, col: 4 };
+  const probabilities = { avoid: 0.02, fight: 0.9, cooperate: 0.08 };
+
+  cell.brain = createInteractionBrainStub({ sequence: [{ probabilities }] });
+
+  const rngSequence = [0.6];
+
+  cell.resolveRng = () => () => (rngSequence.length ? rngSequence.shift() : 0.5);
+
+  const interactionContext = {
+    localDensity: 0.3,
+    densityEffectMultiplier: 1,
+    enemies: [{ row: enemyTarget.row, col: enemyTarget.col, target: enemyTarget }],
+    allies: [],
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+    tileEnergy: 0.55,
+    tileEnergyDelta: 0.15,
+  };
+
+  const action = cell.chooseInteractionAction(interactionContext);
+
+  assert.is(action, "fight", "neural policy should select a fight action");
+
+  const reach = cell.getInteractionReach("fight", {
+    localDensity: interactionContext.localDensity,
+    densityEffectMultiplier: interactionContext.densityEffectMultiplier,
+    tileEnergy: interactionContext.tileEnergy,
+    tileEnergyDelta: interactionContext.tileEnergyDelta,
+    maxTileEnergy: interactionContext.maxTileEnergy,
+  });
+
+  const decisionContext = cell._decisionContextIndex.get("interaction");
+
+  assert.ok(decisionContext, "interaction decision context should be registered");
+
+  const summary = decisionContext.outcome?.reach?.fight;
+
+  assert.ok(summary, "fight reach summary should exist when neural policies run");
+  approxEqual(
+    reach,
+    summary.result,
+    1e-12,
+    "returned reach should match recorded summary",
+  );
+  assert.ok(
+    summary.result > summary.base,
+    `expected neural preference to extend reach (base=${summary.base}, result=${summary.result})`,
+  );
+  approxEqual(
+    summary.neuralProbability ?? 0,
+    probabilities.fight,
+    0.05,
+    "fight probability should reflect neural activation",
+  );
+  assert.ok(
+    summary.neuralUsed,
+    "summary should record that neural policies were applied",
+  );
+});
+
+test("getInteractionReach contracts fight reach when neural policy hesitates", () => {
+  const dna = new DNA(100, 120, 80);
+  const cell = new Cell(2, 5, dna, 6);
+  const cautiousProbabilities = { avoid: 0.55, fight: 0.25, cooperate: 0.2 };
+  const enemyTarget = { dna: new DNA(160, 40, 180), energy: 7, row: 2, col: 6 };
+
+  cell.brain = createInteractionBrainStub({
+    sequence: [{ probabilities: cautiousProbabilities }],
+  });
+
+  const rngSequence = [0.6];
+
+  cell.resolveRng = () => () => (rngSequence.length ? rngSequence.shift() : 0.6);
+
+  const interactionContext = {
+    localDensity: 0.45,
+    densityEffectMultiplier: 1,
+    enemies: [{ row: enemyTarget.row, col: enemyTarget.col, target: enemyTarget }],
+    allies: [],
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+    tileEnergy: 0.4,
+    tileEnergyDelta: -0.05,
+  };
+
+  const action = cell.chooseInteractionAction(interactionContext);
+
+  assert.is(action, "fight", "stochastic selection should still yield a fight action");
+
+  const reach = cell.getInteractionReach("fight", {
+    localDensity: interactionContext.localDensity,
+    densityEffectMultiplier: interactionContext.densityEffectMultiplier,
+    tileEnergy: interactionContext.tileEnergy,
+    tileEnergyDelta: interactionContext.tileEnergyDelta,
+    maxTileEnergy: interactionContext.maxTileEnergy,
+  });
+
+  const decisionContext = cell._decisionContextIndex.get("interaction");
+
+  assert.ok(
+    decisionContext,
+    "interaction outcome should be tracked for neural blending",
+  );
+
+  const summary = decisionContext.outcome?.reach?.fight;
+
+  assert.ok(summary, "fight summary should be present after neural evaluation");
+  approxEqual(
+    reach,
+    summary.result,
+    1e-12,
+    "returned reach should match blended value",
+  );
+  assert.ok(
+    summary.result < summary.base,
+    `neural caution should contract reach (base=${summary.base}, result=${summary.result})`,
+  );
+  approxEqual(
+    summary.neuralProbability ?? 0,
+    cautiousProbabilities.fight,
+    0.05,
+    "fight probability should reflect hesitant neural weighting",
+  );
+  assert.ok(
+    (summary.neuralAdvantage ?? 0) < 0,
+    "advantage should indicate stronger competitors",
   );
 });
 
