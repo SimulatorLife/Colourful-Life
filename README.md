@@ -111,7 +111,7 @@ The simulation runs on cooperating modules housed in `src/`:
 - **Interaction system** (`src/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
 - **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and color overlays.
 - **Stats & leaderboard** (`src/stats/index.js`, `src/stats/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface environmental summaries, select the top-performing organisms, and share trait aggregation helpers with [`src/stats/traitAggregation.js`](src/stats/traitAggregation.js) for telemetry.
-- **Fitness scoring** (`src/engine/fitness.mjs`) — Computes composite organism fitness used by the leaderboard, overlays, and telemetry.
+- **Fitness scoring** (`src/stats/fitness.js`) — Computes composite organism fitness used by the leaderboard, overlays, and telemetry.
 - **UI manager** (`src/ui/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/ui/headlessUiManager.js` mirrors the interface for tests and Node scripts.
 - **UI bridge** (`src/ui/simulationUiBridge.js`) — Wires the simulation engine to either the full UI or the headless adapter, keeping metrics streams, pause state, reproduction multipliers, and slider updates in sync across environments.
 - **Selection tooling** (`src/grid/selectionManager.js`, `src/grid/reproductionZonePolicy.js`) — Defines preset mating zones, keeps geometry caches in sync with grid dimensions, and exposes helpers consumed by UI controls and reproduction policies.

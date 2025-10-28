@@ -10,7 +10,7 @@ import { resolveCellColor } from "../utils/cell.js";
 import { warnOnce } from "../utils/error.js";
 import DNA from "../genome.js";
 import Cell from "../cell.js";
-import { computeFitness } from "../engine/fitness.mjs";
+import { computeFitness } from "../stats/fitness.js";
 import { computeBehaviorComplementarity } from "./behaviorComplementarity.js";
 import { summarizeMateDiversityOpportunity } from "./diversityOpportunity.js";
 import {

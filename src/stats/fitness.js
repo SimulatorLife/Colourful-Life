@@ -16,7 +16,7 @@ function resolveMaxTileEnergy(candidate) {
  * age-based survival so the leaderboard highlights organisms that thrive across
  * multiple dimensions instead of a single metric.
  *
- * @param {import('../cell.js').default} cell - Cell being evaluated.
+ * @param {import("../cell.js").default} cell - Cell being evaluated.
  * @param {number} [maxTileEnergy] - Optional override for the maximum tile
  *   energy. Falls back to {@link MAX_TILE_ENERGY} when omitted.
  * @returns {number} Fitness score used by the leaderboard.
