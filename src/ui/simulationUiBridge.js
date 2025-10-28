@@ -1,4 +1,4 @@
-import UIManager from "./uiManager.js";
+import UIManager, { OVERLAY_TOGGLE_SETTERS } from "./uiManager.js";
 import { createHeadlessUiManager } from "./headlessUiManager.js";
 import { toPlainObject } from "../utils/object.js";
 import { invokeWithErrorBoundary } from "../utils/error.js";
@@ -191,6 +191,17 @@ function subscribeEngineToUi(engine, uiManager) {
         });
       }
 
+      if (changes) {
+        for (const [overlayKey, setterName] of Object.entries(OVERLAY_TOGGLE_SETTERS)) {
+          if (
+            changes[overlayKey] !== undefined &&
+            typeof uiManager[setterName] === "function"
+          ) {
+            uiManager[setterName](changes[overlayKey], { notify: false });
+          }
+        }
+      }
+
       const geometryChanged =
         typeof uiManager.setGridGeometry === "function" &&
         changes &&
@@ -322,6 +333,17 @@ export function bindSimulationToUi({
 
     if (pending !== undefined) {
       uiManager.setAutoPausePending(Boolean(pending));
+    }
+  }
+
+  if (uiManager) {
+    for (const [overlayKey, setterName] of Object.entries(OVERLAY_TOGGLE_SETTERS)) {
+      if (
+        typeof uiManager[setterName] === "function" &&
+        engine?.state?.[overlayKey] !== undefined
+      ) {
+        uiManager[setterName](engine.state[overlayKey], { notify: false });
+      }
     }
   }
 

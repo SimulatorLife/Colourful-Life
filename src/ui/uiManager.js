@@ -142,6 +142,17 @@ const WARNINGS = Object.freeze({
   panelToggle: (title) => `Panel toggle handler for "${title}" threw.`,
 });
 
+export const OVERLAY_TOGGLE_SETTERS = Object.freeze({
+  showObstacles: "setShowObstacles",
+  showDensity: "setShowDensity",
+  showEnergy: "setShowEnergy",
+  showAge: "setShowAge",
+  showFitness: "setShowFitness",
+  showLifeEventMarkers: "setShowLifeEventMarkers",
+  showGridLines: "setShowGridLines",
+  showReproductiveZones: "setShowReproductiveZones",
+});
+
 function toPascalCase(value) {
   if (typeof value !== "string" || value.length === 0) return "";
 
@@ -418,6 +429,7 @@ export default class UIManager {
     this.lifeEventsSummaryTotalCount = null;
     this.lifeEventsSummaryEmptyMessage = null;
     this.lifeEventMarkersToggle = null;
+    this._overlayToggleInputs = new Map();
     this.lifeEventsSummaryTrend = null;
     this.lifeEventsSummaryNet = null;
     this.lifeEventsSummaryDirection = null;
@@ -1953,6 +1965,20 @@ export default class UIManager {
     this[key] = value;
     if (notify) {
       this.#notifySettingChange(key, value);
+    }
+  }
+
+  #syncOverlayToggleInput(key, value) {
+    if (!this._overlayToggleInputs) return;
+
+    const checkbox = this._overlayToggleInputs.get(key);
+
+    if (checkbox) {
+      checkbox.checked = Boolean(value);
+    }
+
+    if (key === "showLifeEventMarkers" && this.lifeEventMarkersToggle) {
+      this.lifeEventMarkersToggle.checked = Boolean(value);
     }
   }
 
@@ -4280,16 +4306,26 @@ export default class UIManager {
     ];
 
     overlayConfigs.forEach(({ key, label, title, options, initial }) => {
+      const setterName = OVERLAY_TOGGLE_SETTERS[key];
       const checkbox = this.#addCheckbox(
         overlayGrid,
         label,
         options ?? title,
         initial,
         (checked) => {
-          this.#updateSetting(key, checked);
+          if (setterName && typeof this[setterName] === "function") {
+            this[setterName](checked);
+          } else {
+            this.#updateSetting(key, checked);
+          }
+
           this.#scheduleUpdate();
         },
       );
+
+      if (this._overlayToggleInputs) {
+        this._overlayToggleInputs.set(key, checkbox);
+      }
 
       if (key === "showLifeEventMarkers") {
         this.lifeEventMarkersToggle = checkbox;
@@ -5338,6 +5374,102 @@ export default class UIManager {
   }
   getShowReproductiveZones() {
     return this.showReproductiveZones;
+  }
+
+  setShowDensity(value, { notify = true } = {}) {
+    const normalized = coerceBoolean(value, this.showDensity);
+    const changed = this.showDensity !== normalized;
+
+    this.showDensity = normalized;
+    this.#syncOverlayToggleInput("showDensity", normalized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("showDensity", normalized);
+    }
+  }
+
+  setShowEnergy(value, { notify = true } = {}) {
+    const normalized = coerceBoolean(value, this.showEnergy);
+    const changed = this.showEnergy !== normalized;
+
+    this.showEnergy = normalized;
+    this.#syncOverlayToggleInput("showEnergy", normalized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("showEnergy", normalized);
+    }
+  }
+
+  setShowAge(value, { notify = true } = {}) {
+    const normalized = coerceBoolean(value, this.showAge);
+    const changed = this.showAge !== normalized;
+
+    this.showAge = normalized;
+    this.#syncOverlayToggleInput("showAge", normalized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("showAge", normalized);
+    }
+  }
+
+  setShowFitness(value, { notify = true } = {}) {
+    const normalized = coerceBoolean(value, this.showFitness);
+    const changed = this.showFitness !== normalized;
+
+    this.showFitness = normalized;
+    this.#syncOverlayToggleInput("showFitness", normalized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("showFitness", normalized);
+    }
+  }
+
+  setShowObstacles(value, { notify = true } = {}) {
+    const normalized = coerceBoolean(value, this.showObstacles);
+    const changed = this.showObstacles !== normalized;
+
+    this.showObstacles = normalized;
+    this.#syncOverlayToggleInput("showObstacles", normalized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("showObstacles", normalized);
+    }
+  }
+
+  setShowLifeEventMarkers(value, { notify = true } = {}) {
+    const normalized = coerceBoolean(value, this.showLifeEventMarkers);
+    const changed = this.showLifeEventMarkers !== normalized;
+
+    this.showLifeEventMarkers = normalized;
+    this.#syncOverlayToggleInput("showLifeEventMarkers", normalized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("showLifeEventMarkers", normalized);
+    }
+  }
+
+  setShowGridLines(value, { notify = true } = {}) {
+    const normalized = coerceBoolean(value, this.showGridLines);
+    const changed = this.showGridLines !== normalized;
+
+    this.showGridLines = normalized;
+    this.#syncOverlayToggleInput("showGridLines", normalized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("showGridLines", normalized);
+    }
+  }
+
+  setShowReproductiveZones(value, { notify = true } = {}) {
+    const normalized = coerceBoolean(value, this.showReproductiveZones);
+    const changed = this.showReproductiveZones !== normalized;
+
+    this.showReproductiveZones = normalized;
+    this.#syncOverlayToggleInput("showReproductiveZones", normalized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("showReproductiveZones", normalized);
+    }
   }
 
   setInitialTileEnergyFraction(value, { notify = true } = {}) {
