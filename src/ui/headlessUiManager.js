@@ -48,6 +48,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @param {boolean} [options.showAuroraVeil] - Whether the aurora celebration veil overlay is shown.
  * @param {boolean} [options.showGridLines] - Whether grid lines outlining each tile are shown.
  * @param {boolean} [options.showReproductiveZones] - Whether reproductive zone shading is shown.
+ * @param {number} [options.lifeEventFadeTicks] - Number of ticks life event markers remain visible.
  * @param {number} [options.leaderboardIntervalMs] - Minimum time between leaderboard updates.
  * @param {Object} [options.selectionManager=null] - Shared selection manager instance.
  * @returns {{
@@ -322,6 +323,7 @@ export function createHeadlessUiManager(options = {}) {
     getShowAuroraVeil: () => settings.showAuroraVeil,
     getShowGridLines: () => settings.showGridLines,
     getShowReproductiveZones: () => settings.showReproductiveZones,
+    getLifeEventFadeTicks: () => settings.lifeEventFadeTicks,
     setShowObstacles: (value) => {
       const normalized = coerceBoolean(value, settings.showObstacles);
 
@@ -393,6 +395,14 @@ export function createHeadlessUiManager(options = {}) {
 
       settings.showReproductiveZones = normalized;
       notify("showReproductiveZones", settings.showReproductiveZones);
+    },
+    setLifeEventFadeTicks: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("lifeEventFadeTicks", value, { min: 1, round: Math.round }) &&
+        shouldNotify
+      ) {
+        notify("lifeEventFadeTicks", settings.lifeEventFadeTicks);
+      }
     },
     getLeaderboardIntervalMs: () => settings.leaderboardIntervalMs,
     setLeaderboardIntervalMs: (value) => {

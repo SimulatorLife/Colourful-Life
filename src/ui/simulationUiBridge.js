@@ -226,6 +226,13 @@ function subscribeEngineToUi(engine, uiManager) {
         });
       }
 
+      if (
+        changes?.lifeEventFadeTicks !== undefined &&
+        typeof uiManager.setLifeEventFadeTicks === "function"
+      ) {
+        uiManager.setLifeEventFadeTicks(changes.lifeEventFadeTicks, { notify: false });
+      }
+
       syncUpdatesPerSecond(changes);
 
       if (

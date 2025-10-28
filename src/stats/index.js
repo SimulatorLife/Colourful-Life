@@ -41,6 +41,7 @@ const STRATEGY_PRESSURE_SMOOTHING = 0.82;
 
 const LIFE_EVENT_LOG_CAPACITY = 240;
 const LIFE_EVENT_RATE_DEFAULT_WINDOW = 200;
+const LIFE_EVENT_FADE_DEFAULT = 36;
 
 const DEFAULT_RANDOM = () => Math.random();
 
@@ -508,6 +509,7 @@ export default class Stats {
     this.diversityOpportunityMultiplier = 1;
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
     this.lifeEventSequence = 0;
+    this.lifeEventFadeTicks = LIFE_EVENT_FADE_DEFAULT;
     this.deathCauseTotals = Object.create(null);
     this.performance = Object.create(null);
     this.performance.energy = {
@@ -1954,6 +1956,18 @@ export default class Stats {
     if (clamped === null) return;
 
     this.matingDiversityThreshold = clamped;
+  }
+
+  setLifeEventFadeTicks(value) {
+    const sanitized = sanitizePositiveInteger(value, {
+      fallback: this.lifeEventFadeTicks ?? LIFE_EVENT_FADE_DEFAULT,
+      min: 1,
+      max: Number.POSITIVE_INFINITY,
+    });
+
+    this.lifeEventFadeTicks = sanitized;
+
+    return this.lifeEventFadeTicks;
   }
 
   /**

@@ -93,12 +93,22 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       uiManager.controlsPanel,
       "Playback Speed ×",
     );
+    const fadeSlider = findSliderByLabel(
+      uiManager.controlsPanel,
+      "Life Event Fade Window",
+    );
 
     assert.ok(playbackSlider, "playback speed slider should exist");
     assert.is(
       playbackSlider.value,
       String(uiManager.speedMultiplier),
       "slider should reflect the initial playback speed",
+    );
+    assert.ok(fadeSlider, "life event fade slider should exist");
+    assert.is(
+      fadeSlider.value,
+      String(uiManager.getLifeEventFadeTicks()),
+      "fade slider should match the default fade window",
     );
 
     const sliderRow = playbackSlider?.parentElement?.parentElement ?? null;
@@ -205,6 +215,12 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.ok(auroraToggle, "aurora toggle should render");
     assert.ok(gridToggle, "grid toggle should render");
     assert.ok(autoPauseToggle, "auto-pause toggle should render");
+    const fadeSlider = findSliderByLabel(
+      uiManager.controlsPanel,
+      "Life Event Fade Window",
+    );
+
+    assert.ok(fadeSlider, "life event fade slider should render");
 
     assert.is(energyToggle.checked, true);
     assert.is(densityToggle.checked, true);
@@ -214,6 +230,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.is(auroraToggle.checked, true);
     assert.is(gridToggle.checked, true);
     assert.is(autoPauseToggle.checked, true);
+    assert.is(fadeSlider.value, String(uiManager.getLifeEventFadeTicks()));
     assert.is(uiManager.getUpdatesPerSecond(), 48);
     assert.is(uiManager.isPaused(), true);
 

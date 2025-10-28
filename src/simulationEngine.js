@@ -261,6 +261,14 @@ export default class SimulationEngine {
     this._autoPauseResumePending = false;
     this._autoPauseCleanup = null;
 
+    const initialLifeEventFadeTicks = sanitizePositiveInteger(
+      defaults.lifeEventFadeTicks,
+      {
+        fallback: SIMULATION_DEFAULTS.lifeEventFadeTicks ?? 36,
+        min: 1,
+      },
+    );
+
     this.state = {
       paused: Boolean(defaults.paused),
       updatesPerSecond: Math.max(1, Math.round(defaults.updatesPerSecond)),
@@ -285,6 +293,7 @@ export default class SimulationEngine {
       showAuroraVeil: defaults.showAuroraVeil,
       showGridLines: defaults.showGridLines,
       showReproductiveZones: defaults.showReproductiveZones,
+      lifeEventFadeTicks: initialLifeEventFadeTicks,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       leaderboardSize: defaults.leaderboardSize,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
@@ -303,6 +312,11 @@ export default class SimulationEngine {
       this.stats.setMatingDiversityThreshold(initialThreshold);
     } else if (this.stats) {
       this.stats.matingDiversityThreshold = initialThreshold;
+    }
+    if (typeof this.stats?.setLifeEventFadeTicks === "function") {
+      this.stats.setLifeEventFadeTicks(initialLifeEventFadeTicks);
+    } else if (this.stats) {
+      this.stats.lifeEventFadeTicks = initialLifeEventFadeTicks;
     }
     this.grid.setMatingDiversityOptions?.({
       threshold: this.stats?.matingDiversityThreshold,
@@ -1409,6 +1423,31 @@ export default class SimulationEngine {
     return normalized;
   }
 
+  setLifeEventFadeTicks(value) {
+    const fallback = sanitizeNumber(this.state.lifeEventFadeTicks, {
+      fallback: SIMULATION_DEFAULTS.lifeEventFadeTicks ?? 36,
+      min: 1,
+      max: 1000,
+      round: Math.round,
+    });
+    const sanitized = sanitizeNumber(value, {
+      fallback,
+      min: 1,
+      max: 1000,
+      round: Math.round,
+    });
+
+    if (typeof this.stats?.setLifeEventFadeTicks === "function") {
+      this.stats.setLifeEventFadeTicks(sanitized);
+    } else if (this.stats) {
+      this.stats.lifeEventFadeTicks = sanitized;
+    }
+
+    this.#updateState({ lifeEventFadeTicks: sanitized });
+
+    return sanitized;
+  }
+
   setOverlayVisibility({
     showObstacles,
     showEnergy,
@@ -1535,6 +1574,9 @@ export default class SimulationEngine {
       }
       case "leaderboardIntervalMs":
         this.setLeaderboardInterval(value);
+        break;
+      case "lifeEventFadeTicks":
+        this.setLifeEventFadeTicks(value);
         break;
       case "showObstacles":
       case "showEnergy":

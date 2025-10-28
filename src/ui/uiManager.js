@@ -25,6 +25,9 @@ const AUTO_PAUSE_DESCRIPTION =
 const LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION =
   "Pinpoint recent births and deaths directly on the grid with fading markers.";
 
+const LIFE_EVENT_FADE_WINDOW_DESCRIPTION =
+  "Control how many ticks birth and death markers linger before fading from view.";
+
 const AGE_HEATMAP_OVERLAY_DESCRIPTION =
   "Shade older organisms more intensely so elders nearing their lifespan stand out.";
 
@@ -538,12 +541,18 @@ export default class UIManager {
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
+    this.lifeEventFadeTicks = Number.isFinite(defaults.lifeEventFadeTicks)
+      ? defaults.lifeEventFadeTicks
+      : SIMULATION_DEFAULTS.lifeEventFadeTicks;
     this.showAuroraVeil = defaults.showAuroraVeil;
     this.showGridLines = defaults.showGridLines;
     this.showReproductiveZones =
       defaults.showReproductiveZones !== undefined
         ? defaults.showReproductiveZones
         : true;
+    this.lifeEventFadeSlider = null;
+    this.lifeEventFadeSliderRow = null;
+    this.lifeEventFadeSliderTitle = LIFE_EVENT_FADE_WINDOW_DESCRIPTION;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.autoPausePending = false;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
@@ -2009,6 +2018,31 @@ export default class UIManager {
 
     if (key === "showLifeEventMarkers" && this.lifeEventMarkersToggle) {
       this.lifeEventMarkersToggle.checked = Boolean(value);
+    }
+  }
+
+  #updateLifeEventFadeControlState() {
+    if (!this.lifeEventFadeSlider) return;
+
+    const disabled = !this.showLifeEventMarkers;
+
+    this.lifeEventFadeSlider.disabled = disabled;
+
+    if (this.lifeEventFadeSliderRow) {
+      if (disabled) {
+        this.lifeEventFadeSliderRow.setAttribute("aria-disabled", "true");
+      } else {
+        this.lifeEventFadeSliderRow.removeAttribute("aria-disabled");
+      }
+    }
+
+    if (typeof this.lifeEventFadeSliderTitle === "string") {
+      const suffix = disabled
+        ? " Enable Life Event Markers to adjust this fade window."
+        : "";
+
+      this.lifeEventFadeSlider.title =
+        `${this.lifeEventFadeSliderTitle}${suffix}`.trim();
     }
   }
 
@@ -4390,6 +4424,45 @@ export default class UIManager {
         this.lifeEventMarkersToggle = checkbox;
       }
     });
+
+    const fadeBounds = resolveSliderBounds("lifeEventFadeTicks");
+    const fadeMin = Number.isFinite(fadeBounds.min) ? fadeBounds.min : 1;
+    const fadeMax = Number.isFinite(fadeBounds.max) ? fadeBounds.max : 180;
+    const fadeStep =
+      Number.isFinite(fadeBounds.step) && fadeBounds.step > 0 ? fadeBounds.step : 1;
+    const fadeTitle = LIFE_EVENT_FADE_WINDOW_DESCRIPTION;
+    const fadeLabel = "Life Event Fade Window";
+    const fadeSlider = createSliderRow(overlayGrid, {
+      label: fadeLabel,
+      min: fadeMin,
+      max: fadeMax,
+      step: fadeStep,
+      value: this.lifeEventFadeTicks,
+      title: fadeTitle,
+      format: (value) => {
+        const rounded = Math.round(value);
+
+        return `${rounded} tick${rounded === 1 ? "" : "s"}`;
+      },
+      onInput: (value) => {
+        this.setLifeEventFadeTicks(value);
+      },
+    });
+
+    this.lifeEventFadeSlider = fadeSlider;
+    this.lifeEventFadeSliderTitle = fadeTitle;
+
+    const fadeRow =
+      typeof fadeSlider?.closest === "function"
+        ? fadeSlider.closest("label")
+        : (fadeSlider?.parentElement?.parentElement ?? null);
+
+    if (fadeRow instanceof HTMLElement) {
+      this.lifeEventFadeSliderRow = fadeRow;
+    }
+
+    this.#registerSliderElement("lifeEventFadeTicks", fadeSlider);
+    this.#updateLifeEventFadeControlState();
   }
 
   #buildObstacleControls(body) {
@@ -5453,6 +5526,10 @@ export default class UIManager {
     return this.showReproductiveZones;
   }
 
+  getLifeEventFadeTicks() {
+    return this.lifeEventFadeTicks;
+  }
+
   setShowDensity(value, { notify = true } = {}) {
     const normalized = coerceBoolean(value, this.showDensity);
     const changed = this.showDensity !== normalized;
@@ -5519,6 +5596,7 @@ export default class UIManager {
 
     this.showLifeEventMarkers = normalized;
     this.#syncOverlayToggleInput("showLifeEventMarkers", normalized);
+    this.#updateLifeEventFadeControlState();
 
     if (changed && notify) {
       this.#notifySettingChange("showLifeEventMarkers", normalized);
@@ -5558,6 +5636,40 @@ export default class UIManager {
 
     if (changed && notify) {
       this.#notifySettingChange("showReproductiveZones", normalized);
+    }
+  }
+
+  setLifeEventFadeTicks(value, { notify = true } = {}) {
+    const { value: sanitized, bounds } = clampSliderValue("lifeEventFadeTicks", value, {
+      fallback: this.lifeEventFadeTicks,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const step = Number.isFinite(bounds?.step) && bounds.step > 0 ? bounds.step : 1;
+    const min = Number.isFinite(bounds?.min) ? bounds.min : 1;
+    const max = Number.isFinite(bounds?.max) ? bounds.max : sanitized;
+    const rounded = Math.round(sanitized / step) * step;
+    const normalized = clamp(rounded, min, max);
+    const changed = this.lifeEventFadeTicks !== normalized;
+
+    this.lifeEventFadeTicks = normalized;
+    this.#syncSliderInput("lifeEventFadeTicks", normalized);
+
+    if (this.lifeEventFadeSlider) {
+      this.lifeEventFadeSlider.value = String(normalized);
+    }
+
+    this.#updateLifeEventFadeControlState();
+
+    if (changed) {
+      if (notify) {
+        this.#notifySettingChange("lifeEventFadeTicks", normalized);
+      }
+
+      this.#scheduleUpdate();
     }
   }
 
@@ -5836,6 +5948,9 @@ export default class UIManager {
     applySetting("combatEdgeSharpness", defaults.combatEdgeSharpness);
     applySetting("combatTerritoryEdgeFactor", defaults.combatTerritoryEdgeFactor);
     applySetting("leaderboardIntervalMs", defaults.leaderboardIntervalMs);
+    if (defaults.lifeEventFadeTicks !== undefined) {
+      this.setLifeEventFadeTicks(defaults.lifeEventFadeTicks, { notify });
+    }
 
     if (defaults.lowDiversityReproMultiplier !== undefined) {
       this.setLowDiversityReproMultiplier(defaults.lowDiversityReproMultiplier, {

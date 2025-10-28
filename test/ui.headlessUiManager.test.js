@@ -53,6 +53,8 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   manager.setInitialTileEnergyFraction("oops");
 
   manager.setAutoPauseOnBlur(true);
+  manager.setLifeEventFadeTicks(48.4);
+  manager.setLifeEventFadeTicks("oops");
 
   assert.equal(notifications, [
     ["updatesPerSecond", 89],
@@ -75,6 +77,7 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
     ["energyDiffusionRate", 0.45],
     ["initialTileEnergyFraction", 0.8],
     ["autoPauseOnBlur", true],
+    ["lifeEventFadeTicks", 48],
   ]);
 
   assert.is(manager.getUpdatesPerSecond(), 89);
@@ -91,6 +94,7 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   assert.is(manager.getEnergyDiffusionRate(), 0.45);
   assert.is(manager.getInitialTileEnergyFraction(), 0.8);
   assert.is(manager.getAutoPauseOnBlur(), true);
+  assert.is(manager.getLifeEventFadeTicks(), 48);
 });
 
 test("createHeadlessUiManager clamps energy rates to the unit interval", () => {

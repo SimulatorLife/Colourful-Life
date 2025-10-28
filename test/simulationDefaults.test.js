@@ -145,6 +145,10 @@ test("resolveSimulationDefaults returns expected baseline configuration", async 
     UI_SLIDER_CONFIG.combatTerritoryEdgeFactor.default,
     SIMULATION_DEFAULTS.combatTerritoryEdgeFactor,
   );
+  assert.is(
+    UI_SLIDER_CONFIG.lifeEventFadeTicks.default,
+    SIMULATION_DEFAULTS.lifeEventFadeTicks,
+  );
 });
 
 test("resolveSliderBounds merges canonical slider configuration", async () => {
@@ -334,6 +338,7 @@ test("resolveSimulationDefaults sanitizes numeric multipliers", async () => {
     lowDiversityReproMultiplier: "2",
     leaderboardIntervalMs: -250,
     leaderboardSize: -2,
+    lifeEventFadeTicks: 0,
   });
 
   assert.is(sanitized.mutationMultiplier, SIMULATION_DEFAULTS.mutationMultiplier);
@@ -352,6 +357,7 @@ test("resolveSimulationDefaults sanitizes numeric multipliers", async () => {
   assert.is(sanitized.lowDiversityReproMultiplier, 1);
   assert.is(sanitized.leaderboardIntervalMs, 0);
   assert.is(sanitized.leaderboardSize, 0);
+  assert.is(sanitized.lifeEventFadeTicks, 1);
 });
 
 test("resolveSimulationDefaults clamps energy rates to the unit interval", async () => {
@@ -532,6 +538,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     showAuroraVeil: defaults.showAuroraVeil,
     showGridLines: defaults.showGridLines,
     showReproductiveZones: defaults.showReproductiveZones,
+    lifeEventFadeTicks: defaults.lifeEventFadeTicks,
     leaderboardIntervalMs: defaults.leaderboardIntervalMs,
     leaderboardSize: defaults.leaderboardSize,
     matingDiversityThreshold: defaults.matingDiversityThreshold,
