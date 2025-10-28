@@ -2417,18 +2417,16 @@ export default class Stats {
     const sums = createTraitValueMap(this.traitDefinitions, 0);
     const activeCounts = createTraitValueMap(this.traitDefinitions, 0);
 
-    for (let i = 0; i < population; i++) {
-      const cell = cells[i];
+    const traitDefinitions = this.traitDefinitions;
 
+    for (const cell of cells) {
       if (!cell) continue;
 
-      for (let t = 0; t < this.traitDefinitions.length; t++) {
-        const definition = this.traitDefinitions[t];
-        const key = definition.key;
-        const value = definition.compute(cell);
+      for (const { key, compute, threshold } of traitDefinitions) {
+        const value = compute(cell);
 
         sums[key] += value;
-        if (value >= definition.threshold) {
+        if (value >= threshold) {
           activeCounts[key] += 1;
         }
       }
