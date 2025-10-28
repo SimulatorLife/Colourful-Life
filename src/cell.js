@@ -217,6 +217,17 @@ export default class Cell {
       typeof this.dna.resourceTrendAdaptation === "function"
         ? this.dna.resourceTrendAdaptation()
         : 0.35;
+    this.foragingAdaptationProfile =
+      typeof this.dna.foragingAdaptationProfile === "function"
+        ? this.dna.foragingAdaptationProfile()
+        : null;
+    this._forageMemory = {
+      scarcity: 0,
+      crowd: 0,
+      reserve: 0,
+      reward: 0,
+      efficiency: 0,
+    };
     this._opportunitySignal = clamp(
       Number.isFinite(this.opportunityProfile?.baseline)
         ? this.opportunityProfile.baseline
@@ -1270,6 +1281,312 @@ export default class Cell {
           maxTileEnergy: MAX_TILE_ENERGY,
         });
       }
+    }
+  }
+
+  recordForageOutcome({
+    energyBefore = this.energy,
+    energyAfter = this.energy,
+    intake = 0,
+    expectedDemand = 0,
+    availableEnergyBefore = 0,
+    crowdPenalty = 1,
+    density = 0,
+    tileEnergyBefore = 0,
+    tileEnergyAfter = 0,
+    tileEnergyDelta = null,
+    maxTileEnergy = MAX_TILE_ENERGY,
+  } = {}) {
+    const profile = this.foragingAdaptationProfile || {};
+    const assimilation = clamp(
+      Number.isFinite(profile.assimilation) ? profile.assimilation : 0.32,
+      0.05,
+      0.9,
+    );
+    const gainInfluence = clamp(
+      Number.isFinite(profile.gainInfluence) ? profile.gainInfluence : 0.45,
+      0,
+      1,
+    );
+    const scarcityWeight = clamp(
+      Number.isFinite(profile.scarcityWeight) ? profile.scarcityWeight : 0.6,
+      0,
+      1.6,
+    );
+    const crowdWeight = clamp(
+      Number.isFinite(profile.crowdWeight) ? profile.crowdWeight : 0.5,
+      0,
+      1.5,
+    );
+    const reserveWeight = clamp(
+      Number.isFinite(profile.reserveWeight) ? profile.reserveWeight : 0.4,
+      0,
+      1.4,
+    );
+    const fatigueWeight = clamp(
+      Number.isFinite(profile.fatigueWeight) ? profile.fatigueWeight : 0.35,
+      0,
+      1.4,
+    );
+    const rewardWeight = clamp(
+      Number.isFinite(profile.rewardWeight) ? profile.rewardWeight : 0.55,
+      0,
+      1.5,
+    );
+    const volatility = clamp(
+      Number.isFinite(profile.volatility) ? profile.volatility : 0.35,
+      0,
+      1.2,
+    );
+    const retention = clamp(
+      Number.isFinite(profile.retention) ? profile.retention : 0.85,
+      0.2,
+      0.99,
+    );
+    const capacity = Math.max(
+      1e-4,
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
+    );
+    const normalizedIntake = clamp(
+      Number.isFinite(intake) ? intake / capacity : 0,
+      0,
+      1,
+    );
+    const normalizedDemand = clamp(
+      Number.isFinite(expectedDemand) ? expectedDemand / capacity : 0,
+      0,
+      1,
+    );
+    const normalizedAvailable = clamp(
+      Number.isFinite(availableEnergyBefore) ? availableEnergyBefore / capacity : 0,
+      0,
+      1,
+    );
+    const normalizedEnergyBefore = clamp(
+      Number.isFinite(energyBefore) ? energyBefore / capacity : 0,
+      0,
+      1,
+    );
+    const normalizedEnergyAfter = clamp(
+      Number.isFinite(energyAfter) ? energyAfter / capacity : 0,
+      0,
+      1,
+    );
+    const normalizedDensity = clamp(Number.isFinite(density) ? density : 0, 0, 1);
+    const tileBefore = clamp(
+      Number.isFinite(tileEnergyBefore) ? tileEnergyBefore : normalizedAvailable,
+      0,
+      1,
+    );
+    const tileAfter = clamp(
+      Number.isFinite(tileEnergyAfter)
+        ? tileEnergyAfter
+        : Math.max(0, tileBefore - normalizedIntake),
+      0,
+      1,
+    );
+    const resolvedTileDelta = clamp(
+      tileEnergyDelta == null || Number.isNaN(tileEnergyDelta)
+        ? tileAfter - tileBefore
+        : tileEnergyDelta,
+      -1,
+      1,
+    );
+    const scarcitySignal = clamp(1 - tileAfter, 0, 1);
+    const crowdPenaltyNorm = clamp(
+      Number.isFinite(crowdPenalty) ? crowdPenalty : 1,
+      0,
+      1,
+    );
+    const crowdPressure = clamp(1 - crowdPenaltyNorm, 0, 1);
+    const reserveSignal = clamp(1 - normalizedEnergyAfter, 0, 1);
+    const expectationGap =
+      normalizedDemand > 0
+        ? clamp(
+            (normalizedDemand - normalizedIntake) / Math.max(0.0001, normalizedDemand),
+            -1,
+            1,
+          )
+        : normalizedIntake > 0
+          ? -1
+          : 0;
+    const rewardSignal = clamp(-expectationGap, -1, 1);
+    const efficiencySignal = clamp(
+      normalizedDemand > 0
+        ? normalizedIntake / Math.max(0.0001, normalizedDemand)
+        : normalizedIntake > 0
+          ? 1
+          : 0,
+      0,
+      2,
+    );
+    const fatigueSignal = clamp(
+      crowdPressure * 0.6 +
+        Math.max(0, normalizedDemand - normalizedIntake) * 0.4 +
+        reserveSignal * 0.3,
+      0,
+      1,
+    );
+    const memory =
+      this._forageMemory ||
+      (this._forageMemory = {
+        scarcity: 0,
+        crowd: 0,
+        reserve: 0,
+        reward: 0,
+        efficiency: 0,
+      });
+    const degrade = (value) => lerp(value, 0, 1 - retention);
+
+    memory.scarcity = degrade(memory.scarcity);
+    memory.crowd = degrade(memory.crowd);
+    memory.reserve = degrade(memory.reserve);
+    memory.reward = degrade(memory.reward);
+    memory.efficiency = degrade(
+      Number.isFinite(memory.efficiency) ? memory.efficiency : 0,
+    );
+
+    const blend = (current, target, weight, min = -1, max = 1) =>
+      clamp(lerp(current, target, clamp(weight, 0, 1)), min, max);
+
+    memory.scarcity = blend(
+      memory.scarcity,
+      scarcitySignal,
+      assimilation * (0.5 + scarcityWeight * 0.4),
+      0,
+      1,
+    );
+    memory.crowd = blend(
+      memory.crowd,
+      crowdPressure,
+      assimilation * (0.5 + crowdWeight * 0.4),
+      0,
+      1,
+    );
+    memory.reserve = blend(
+      memory.reserve,
+      reserveSignal,
+      assimilation * (0.45 + reserveWeight * 0.35),
+      0,
+      1,
+    );
+    memory.reward = blend(
+      memory.reward,
+      rewardSignal,
+      assimilation * (0.4 + rewardWeight * 0.35),
+    );
+    memory.efficiency = blend(
+      Number.isFinite(memory.efficiency) ? memory.efficiency : efficiencySignal,
+      clamp(efficiencySignal, 0, 1.5),
+      assimilation * (0.35 + rewardWeight * 0.3),
+      0,
+      1.5,
+    );
+
+    const resourceTrend = this.#updateResourceSignal({
+      tileEnergy: tileAfter,
+      tileEnergyDelta: resolvedTileDelta,
+    });
+
+    if (this._riskMemory) {
+      const resourceAlpha = clamp(assimilation * (0.35 + scarcityWeight * 0.3), 0, 1);
+      const confidenceAlpha = clamp(assimilation * (0.28 + rewardWeight * 0.25), 0, 1);
+      const fatigueAlpha = clamp(assimilation * (0.3 + fatigueWeight * 0.3), 0, 1);
+      const resourceImpact = clamp(
+        -scarcitySignal * 0.55 - expectationGap * 0.45,
+        -1,
+        1,
+      );
+      const confidenceImpact = clamp(
+        rewardSignal * 0.6 + clamp(efficiencySignal, 0, 1) * 0.3 - crowdPressure * 0.35,
+        -1,
+        1,
+      );
+      const fatigueImpact = clamp(fatigueSignal * 2 - 1, -1, 1);
+
+      this._riskMemory.resource = lerp(
+        this._riskMemory.resource,
+        resourceImpact,
+        resourceAlpha,
+      );
+      this._riskMemory.confidence = lerp(
+        this._riskMemory.confidence,
+        confidenceImpact,
+        confidenceAlpha,
+      );
+      this._riskMemory.fatigue = lerp(
+        this._riskMemory.fatigue,
+        fatigueImpact,
+        fatigueAlpha,
+      );
+    }
+
+    const brain = this.brain;
+
+    if (
+      brain &&
+      brain.sensorPlasticity?.enabled &&
+      typeof brain.applyExperienceImprint === "function"
+    ) {
+      const adjustments = [];
+      const baseAssimilation = clamp(
+        assimilation * (0.4 + volatility * 0.3),
+        0.02,
+        0.9,
+      );
+      const gainBase = clamp(gainInfluence * (0.55 + volatility * 0.25), 0, 1);
+      const energyTarget = clamp(normalizedEnergyAfter * 2 - 1, -1, 1);
+      const densityTarget = clamp(normalizedDensity * 2 - 1, -1, 1);
+      const fatigueTarget = clamp(
+        this.#currentNeuralFatigue() +
+          (fatigueSignal - 0.5) * (0.35 + fatigueWeight * 0.25),
+        0,
+        1,
+      );
+
+      adjustments.push({
+        sensor: "resourceTrend",
+        target: clamp(resourceTrend + rewardSignal * 0.5 - scarcitySignal * 0.4, -1, 1),
+        assimilation: baseAssimilation,
+        gainInfluence: clamp(gainBase * (0.6 + scarcityWeight * 0.25), 0, 1),
+        gainShift: clamp(
+          rewardSignal * (0.3 + volatility * 0.2) - scarcitySignal * 0.2,
+          -0.6,
+          0.6,
+        ),
+      });
+
+      adjustments.push({
+        sensor: "effectiveDensity",
+        target: densityTarget,
+        assimilation: clamp(assimilation * (0.35 + crowdWeight * 0.4), 0.02, 0.8),
+        gainInfluence: clamp(gainBase * (0.5 + crowdWeight * 0.3), 0, 1),
+        gainShift: clamp(crowdPressure * (0.4 + volatility * 0.3), 0, 0.9),
+      });
+
+      adjustments.push({
+        sensor: "energy",
+        target: energyTarget,
+        assimilation: clamp(assimilation * (0.3 + reserveWeight * 0.3), 0.01, 0.6),
+        gainInfluence: clamp(gainBase * (0.4 + reserveWeight * 0.3), 0, 1),
+      });
+
+      if (fatigueWeight > 0.01) {
+        adjustments.push({
+          sensor: "neuralFatigue",
+          target: clamp(fatigueTarget * 2 - 1, -1, 1),
+          assimilation: clamp(assimilation * (0.25 + fatigueWeight * 0.3), 0.01, 0.55),
+          gainInfluence: clamp(gainBase * (0.4 + fatigueWeight * 0.2), 0, 1),
+        });
+      }
+
+      brain.applyExperienceImprint({
+        adjustments,
+        assimilation: baseAssimilation,
+        gainInfluence: gainBase,
+      });
     }
   }
 

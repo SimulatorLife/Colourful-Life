@@ -1067,6 +1067,56 @@ export class DNA {
     return clamp(base, 0.1, 0.85);
   }
 
+  foragingAdaptationProfile() {
+    const foraging = this.geneFraction(GENE_LOCI.FORAGING);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
+    const neural = this.geneFraction(GENE_LOCI.NEURAL);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+
+    const assimilation = clamp(
+      0.18 + 0.32 * foraging + 0.18 * exploration + 0.08 * neural,
+      0.08,
+      0.85,
+    );
+    const gainInfluence = clamp(
+      0.35 + 0.4 * foraging + 0.2 * neural - 0.15 * recovery,
+      0.05,
+      0.9,
+    );
+    const scarcityWeight = clamp(0.4 + 0.45 * foraging + 0.25 * exploration, 0.1, 1.6);
+    const crowdWeight = clamp(
+      0.35 + 0.4 * (1 - density) + 0.25 * cooperation,
+      0.1,
+      1.5,
+    );
+    const reserveWeight = clamp(0.3 + 0.35 * recovery + 0.25 * efficiency, 0.05, 1.4);
+    const fatigueWeight = clamp(0.25 + 0.4 * risk + 0.3 * movement, 0.05, 1.4);
+    const rewardWeight = clamp(0.35 + 0.35 * efficiency + 0.25 * foraging, 0.1, 1.5);
+    const volatility = clamp(0.2 + 0.35 * exploration + 0.25 * movement, 0.05, 1.2);
+    const retention = clamp(
+      0.78 + 0.12 * efficiency + 0.1 * recovery - 0.15 * exploration,
+      0.3,
+      0.96,
+    );
+
+    return {
+      assimilation,
+      gainInfluence,
+      scarcityWeight,
+      crowdWeight,
+      reserveWeight,
+      fatigueWeight,
+      rewardWeight,
+      volatility,
+      retention,
+    };
+  }
+
   eventResponseProfile() {
     const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
     const risk = this.geneFraction(GENE_LOCI.RISK);

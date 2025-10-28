@@ -3991,9 +3991,29 @@ export default class GridManager {
         : base * crowdPenalty;
     const cap = clamp(demand, minCap, maxCap);
     const take = Math.min(cap, available);
+    const energyBefore = cell.energy;
+    const energyAfter = Math.min(this.maxTileEnergy, energyBefore + take);
+    const normalizedTileEnergyAfter =
+      this.maxTileEnergy > 0 ? clamp((available - take) / this.maxTileEnergy, 0, 1) : 0;
+
+    if (typeof cell.recordForageOutcome === "function") {
+      cell.recordForageOutcome({
+        energyBefore,
+        energyAfter,
+        intake: take,
+        expectedDemand: demand,
+        availableEnergyBefore: available,
+        crowdPenalty,
+        density: effDensity,
+        tileEnergyBefore: normalizedTileEnergy,
+        tileEnergyAfter: normalizedTileEnergyAfter,
+        tileEnergyDelta: normalizedTileEnergyAfter - normalizedTileEnergy,
+        maxTileEnergy: this.maxTileEnergy,
+      });
+    }
 
     this.energyGrid[row][col] -= take;
-    cell.energy = Math.min(this.maxTileEnergy, cell.energy + take);
+    cell.energy = energyAfter;
     this.markEnergyDirty(row, col, { radius: 1 });
   }
 
