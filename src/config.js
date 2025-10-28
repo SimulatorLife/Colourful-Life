@@ -50,7 +50,12 @@ const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // combat drains them without tripping the benchmark's 125ms ceiling during the
 // 14×14 performance probe.
 const DEFAULT_ACTIVITY_BASE_RATE = 0.2822;
-const DEFAULT_MUTATION_CHANCE = 0.15;
+// Calmed from 0.15 after the dense 60×60 headless probe
+// (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
+// trimmed tick cost from ~100.2ms → ~98.3ms while holding survivors steady at
+// 282. The softer baseline tempers runaway genome churn without choking off the
+// diversity trickle that keeps bottlenecked colonies adapting.
+const DEFAULT_MUTATION_CHANCE = 0.142;
 const DEFAULT_REPRODUCTION_COOLDOWN_BASE = 2;
 // Leaned from 0.012 after rerunning the dense 60×60 headless probe
 // (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
