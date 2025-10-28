@@ -3,22 +3,24 @@
  * predictable booleans.
  */
 export function coerceBoolean(candidate, fallback = false) {
+  const normalizedFallback = Boolean(fallback);
+
   if (typeof candidate === "boolean") {
     return candidate;
   }
 
   if (candidate == null) {
-    return fallback;
+    return normalizedFallback;
   }
 
   if (typeof candidate === "number") {
-    return Number.isFinite(candidate) ? candidate !== 0 : fallback;
+    return Number.isFinite(candidate) ? candidate !== 0 : normalizedFallback;
   }
 
   if (typeof candidate === "string") {
     const normalized = candidate.trim().toLowerCase();
 
-    if (normalized.length === 0) return fallback;
+    if (normalized.length === 0) return normalizedFallback;
     if (normalized === "true" || normalized === "yes" || normalized === "on") {
       return true;
     }
@@ -32,10 +34,10 @@ export function coerceBoolean(candidate, fallback = false) {
       return numeric !== 0;
     }
 
-    return fallback;
+    return normalizedFallback;
   }
 
-  return Boolean(candidate);
+  return normalizedFallback;
 }
 
 /**
