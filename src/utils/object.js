@@ -1,8 +1,17 @@
+import { warnOnce, invokeWithErrorBoundary } from "./error.js";
+
 /**
  * Object-centric helpers for normalizing configuration payloads and cloning
  * simulation traces. Separating these utilities keeps UI and engine code from
  * depending on the broader numeric helper set.
  */
+
+const TRACE_CLONE_WARNING =
+  "Structured clone failed for trace payload; returning null fallback.";
+const NODE_UTIL_IMPORT_WARNING =
+  "Failed to load Node structuredClone helper from node:util; using JSON cloning fallback.";
+const NODE_V8_IMPORT_WARNING =
+  "Failed to load Node structuredClone helper from node:v8; continuing with JSON cloning fallback.";
 
 /**
  * Normalizes an arbitrary candidate to a plain object. Non-object values are
@@ -80,7 +89,9 @@ if (shouldAttemptNodeFallback) {
           upgradeDelegate((value) => deserialize(serialize(value)));
         }
       })
-      .catch(() => {});
+      .catch((error) => {
+        warnOnce(NODE_V8_IMPORT_WARNING, error);
+      });
 
   dynamicImport("node:util")
     .then(({ structuredClone: nodeStructuredClone }) => {
@@ -90,7 +101,11 @@ if (shouldAttemptNodeFallback) {
 
       return undefined;
     })
-    .catch(() => loadV8Fallback());
+    .catch((error) => {
+      warnOnce(NODE_UTIL_IMPORT_WARNING, error);
+
+      return loadV8Fallback();
+    });
 }
 
 export function cloneTracePayload(trace) {
@@ -100,9 +115,11 @@ export function cloneTracePayload(trace) {
     return null;
   }
 
-  try {
-    return structuredCloneImpl(trace);
-  } catch (error) {
-    return null;
-  }
+  const cloned = invokeWithErrorBoundary(structuredCloneImpl, [trace], {
+    reporter: warnOnce,
+    once: true,
+    message: TRACE_CLONE_WARNING,
+  });
+
+  return cloned ?? null;
 }
