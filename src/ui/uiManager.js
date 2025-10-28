@@ -3534,6 +3534,100 @@ export default class UIManager {
         this.setAutoPauseOnBlur(checked);
       },
     );
+
+    this.#buildHotkeyReference(body);
+  }
+
+  #buildHotkeyReference(body) {
+    const entries = [
+      {
+        action: "Pause / Resume",
+        keys: this.#formatPauseHotkeys(),
+        description: "Toggle playback without leaving the keyboard.",
+      },
+      {
+        action: "Advance One Tick",
+        keys: this.#formatStepHotkeys(),
+        description: "Inspect changes frame-by-frame while paused.",
+      },
+      {
+        action: "Spawn Cell Burst",
+        keys: this.#formatHotkeyList(this.burstHotkeySet),
+        description: "Drop a quick cluster of organisms anywhere on the map.",
+      },
+      {
+        action: "Speed Up Playback",
+        keys: this.#formatSpeedIncreaseHotkeys(),
+        description: "Hasten evolution when the world feels sluggish.",
+      },
+      {
+        action: "Slow Down Playback",
+        keys: this.#formatSpeedDecreaseHotkeys(),
+        description: "Study delicate interactions at a calmer pace.",
+      },
+      {
+        action: "Reset Playback Speed",
+        keys: this.#formatSpeedResetHotkeys(),
+        description: "Jump back to the baseline cadence instantly.",
+      },
+    ].filter((entry) => typeof entry.keys === "string" && entry.keys.length > 0);
+
+    if (entries.length === 0) {
+      return;
+    }
+
+    const container = document.createElement("details");
+
+    container.className = "hotkey-reference";
+    const summary = document.createElement("summary");
+
+    summary.className = "hotkey-reference__summary";
+    summary.textContent = "Keyboard Shortcuts";
+    container.appendChild(summary);
+
+    const hint = document.createElement("p");
+
+    hint.className = "hotkey-reference__hint control-hint";
+    hint.textContent =
+      "Keep experiments moving—open this list to learn the fastest ways to steer the simulation.";
+    container.appendChild(hint);
+
+    const list = document.createElement("ul");
+
+    list.className = "hotkey-reference__list";
+
+    entries.forEach(({ action, keys, description }) => {
+      const item = document.createElement("li");
+
+      item.className = "hotkey-reference__item";
+      const keySpan = document.createElement("span");
+
+      keySpan.className = "hotkey-reference__keys";
+      keySpan.textContent = keys;
+      const content = document.createElement("span");
+
+      content.className = "hotkey-reference__content";
+      const actionSpan = document.createElement("span");
+
+      actionSpan.className = "hotkey-reference__action";
+      actionSpan.textContent = action;
+      content.appendChild(actionSpan);
+
+      if (description) {
+        const descriptionSpan = document.createElement("span");
+
+        descriptionSpan.className = "hotkey-reference__description";
+        descriptionSpan.textContent = description;
+        content.appendChild(descriptionSpan);
+      }
+
+      item.appendChild(keySpan);
+      item.appendChild(content);
+      list.appendChild(item);
+    });
+
+    container.appendChild(list);
+    body.appendChild(container);
   }
 
   #buildGeometryControls(body) {

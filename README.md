@@ -85,15 +85,9 @@ Find **Empty Tile Energy** in the Energy Dynamics panel to instantly rebalance h
 
 Nudged a dozen sliders into a corner and want to get back to the canonical baseline? Hit **Restore Default Tuning** in the Simulation Controls panel. The button snaps similarity thresholds, environmental multipliers, energy flow rates, mutation and combat modifiers, playback speed, and the dashboard refresh cadence back to their default values so you can restart experiments without manually retracing every tweak.
 
-### Keyboard shortcuts
+### Keyboard shortcut reference
 
-Speed through experiments without reaching for the mouse:
-
-- **P** — Pause or resume the simulation.
-- **S** — Step forward a single tick while paused.
-- **[** or **-** — Slow down playback speed by the configured increment. Hold **Shift** to apply a larger change.
-- **]** or **=** — Increase playback speed with the same step logic.
-- **0** — Snap playback speed back to the 1× default.
+A collapsible **Keyboard Shortcuts** card now lives at the top of Simulation Controls. Expand it whenever you need a refresher on the current hotkeys—pause/resume, single-step, spawn bursts, and the speed controls all surface with the exact keys configured for your layout. Custom keymaps appear automatically, so you can lean on the cheat sheet without worrying about stale documentation.
 
 ## Core systems
 

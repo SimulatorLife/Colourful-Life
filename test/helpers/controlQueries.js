@@ -1,3 +1,11 @@
+function hasClass(element, className) {
+  if (!element || typeof element.className !== "string") {
+    return false;
+  }
+
+  return element.className.split(/\s+/).includes(className);
+}
+
 function extractTextContent(element) {
   if (!element) return "";
   if (typeof element.textContent === "string" && element.textContent.trim()) {
@@ -96,7 +104,7 @@ export function findSelectByLabel(root, label) {
     }
 
     const name = node.children.find((child) => child?.className === "control-name");
-    const line = node.children.find((child) => child?.className === "control-line");
+    const line = node.children.find((child) => hasClass(child, "control-line"));
 
     if (!line || !Array.isArray(line.children)) continue;
 
