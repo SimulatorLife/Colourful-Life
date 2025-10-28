@@ -1,4 +1,54 @@
+const WARN_ONCE_LIMIT_DEFAULT = 512;
 const warnedMessages = new Set();
+
+let warnOnceLimit = WARN_ONCE_LIMIT_DEFAULT;
+let warnOnceBuffer = [];
+let warnOnceHead = 0;
+let warnOnceSize = 0;
+
+function sanitizeWarnOnceLimit(limit) {
+  const numeric = Number(limit);
+
+  if (!Number.isFinite(numeric)) {
+    return WARN_ONCE_LIMIT_DEFAULT;
+  }
+
+  return Math.max(0, Math.floor(numeric));
+}
+
+function resetWarnOnceState(limit = warnOnceLimit) {
+  warnOnceLimit = sanitizeWarnOnceLimit(limit);
+  warnedMessages.clear();
+  warnOnceBuffer = warnOnceLimit > 0 ? new Array(warnOnceLimit) : [];
+  warnOnceHead = 0;
+  warnOnceSize = 0;
+}
+
+resetWarnOnceState(WARN_ONCE_LIMIT_DEFAULT);
+
+function rememberWarnOnceKey(key) {
+  if (warnOnceLimit <= 0) {
+    return;
+  }
+
+  if (warnOnceSize < warnOnceLimit) {
+    const index = (warnOnceHead + warnOnceSize) % warnOnceLimit;
+
+    warnOnceBuffer[index] = key;
+    warnOnceSize += 1;
+  } else {
+    const evictedKey = warnOnceBuffer[warnOnceHead];
+
+    if (evictedKey !== undefined) {
+      warnedMessages.delete(evictedKey);
+    }
+
+    warnOnceBuffer[warnOnceHead] = key;
+    warnOnceHead = (warnOnceHead + 1) % warnOnceLimit;
+  }
+
+  warnedMessages.add(key);
+}
 
 const defaultErrorReporter = (message, error) => {
   if (typeof message !== "string" || message.length === 0) return;
@@ -39,9 +89,24 @@ export function warnOnce(message, error) {
   const warningKey = `${message}::$${error?.name ?? ""}::$${error?.message ?? ""}`;
 
   if (warnedMessages.has(warningKey)) return;
-  warnedMessages.add(warningKey);
+
+  rememberWarnOnceKey(warningKey);
 
   logWithOptionalError("warn", message, error);
+}
+
+export function __dangerousResetWarnOnce({ limit } = {}) {
+  if (limit == null) {
+    resetWarnOnceState(WARN_ONCE_LIMIT_DEFAULT);
+
+    return;
+  }
+
+  resetWarnOnceState(limit);
+}
+
+export function __dangerousGetWarnOnceSize() {
+  return warnedMessages.size;
 }
 
 /**
