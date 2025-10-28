@@ -18,7 +18,12 @@ import { coerceBoolean, resolveNonEmptyString } from "../src/utils/primitives.js
 import { resolveCellColor } from "../src/utils/cell.js";
 import { cloneTracePayload, toPlainObject } from "../src/utils/object.js";
 import { createRankedBuffer, isArrayLike } from "../src/utils/collections.js";
-import { invokeWithErrorBoundary, warnOnce } from "../src/utils/error.js";
+import {
+  __dangerousGetWarnOnceSize,
+  __dangerousResetWarnOnce,
+  invokeWithErrorBoundary,
+  warnOnce,
+} from "../src/utils/error.js";
 
 function* cycle(values) {
   let index = 0;
@@ -529,6 +534,7 @@ test("createRNG yields deterministic pseudo-random sequences", () => {
 });
 
 test("warnOnce logs each unique message/error combination only once", () => {
+  __dangerousResetWarnOnce();
   const originalWarn = console.warn;
   const calls = [];
   let detailedError;
@@ -552,6 +558,7 @@ test("warnOnce logs each unique message/error combination only once", () => {
     warnOnce("beta-message", fallbackError);
   } finally {
     console.warn = originalWarn;
+    __dangerousResetWarnOnce();
   }
 
   assert.is(calls.length, 3);
@@ -564,6 +571,7 @@ test("warnOnce logs each unique message/error combination only once", () => {
 });
 
 test("warnOnce ignores non-string or empty messages", () => {
+  __dangerousResetWarnOnce();
   const originalWarn = console.warn;
   const calls = [];
 
@@ -581,10 +589,45 @@ test("warnOnce ignores non-string or empty messages", () => {
     warnOnce("gamma-message");
   } finally {
     console.warn = originalWarn;
+    __dangerousResetWarnOnce();
   }
 
   assert.is(calls.length, 1);
   assert.equal(calls[0], ["gamma-message"]);
+});
+
+test("warnOnce bounds retained warning history to configured limit", () => {
+  __dangerousResetWarnOnce({ limit: 4 });
+  const originalWarn = console.warn;
+  const calls = [];
+
+  console.warn = (...args) => {
+    calls.push(args[0]);
+  };
+
+  try {
+    for (let i = 0; i < 6; i++) {
+      warnOnce(`bounded-message-${i}`);
+    }
+
+    assert.is(__dangerousGetWarnOnceSize(), 4);
+
+    warnOnce("bounded-message-0");
+  } finally {
+    console.warn = originalWarn;
+    __dangerousResetWarnOnce();
+  }
+
+  assert.is(calls.length, 7);
+  assert.equal(calls.slice(0, 6), [
+    "bounded-message-0",
+    "bounded-message-1",
+    "bounded-message-2",
+    "bounded-message-3",
+    "bounded-message-4",
+    "bounded-message-5",
+  ]);
+  assert.is(calls[6], "bounded-message-0");
 });
 
 test("invokeWithErrorBoundary reports errors through console.error by default", () => {
