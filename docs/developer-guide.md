@@ -64,7 +64,7 @@ the dev server, then return here for the deeper workflow.
 - **Lint** — Use `npm run lint` / `npm run lint:fix` to enforce the ESLint ruleset and apply safe autofixes.
 - **Check** — Use `npm run check` before committing to chain linting, formatting verification, and tests.
 - **Tests** — Execute `npm test` to run the energy benchmark in [`scripts/profile-energy.mjs`](../scripts/profile-energy.mjs) before the Node.js test suites. Focused suites live beside their target modules under `test/`, and the runner accepts paths, directories, and flags such as `-- --watch`, `--watch`, `--watchAll`, or `--runTestsByPath` (append them after `--` when calling through npm scripts).
-- **Profiling** — Run `npm run benchmark` (alias for `node scripts/profile-energy.mjs`) with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations.
+- **Profiling** — Run `npm run benchmark` (alias for `node scripts/profile-energy.mjs`) with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations. For subsystem-specific profiling, `node scripts/profile-density-cache.mjs` measures the cached density grid lookups in `GridManager`, and `node scripts/profile-trait-aggregation.mjs` reports average timings for the stats trait aggregation pipeline so telemetry changes stay lightweight.
 - **Cache reset** — Use `npm run clean` to clear `dist/` and `.parcel-cache/` when Parcel hot reloads become inconsistent.
 - **Hooks** — Run `npm run prepare` to reinstall Husky hooks after cloning or whenever `.husky/` contents change.
 
@@ -212,6 +212,10 @@ variables for quick reference during onboarding.
 - `npm run benchmark` — Profile the energy preparation loop with configurable
   grid sizes and SimulationEngine samples; combine with `PERF_*` variables to
   reproduce CI runs.
+- `node scripts/profile-density-cache.mjs` — Sample cached density lookups across
+  tens of thousands of grid queries to validate the density grid optimisation.
+- `node scripts/profile-trait-aggregation.mjs` — Benchmark the Stats trait
+  aggregation helpers so dashboard updates remain lightweight after changes.
 - `npm run deploy:public` — Publish the latest production build to a public
   repository. See [`docs/public-hosting.md`](public-hosting.md) for setup
   details.
