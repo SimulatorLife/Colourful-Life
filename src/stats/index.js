@@ -294,23 +294,11 @@ class FixedSizeRingBuffer {
       return;
     }
 
-    const capacity = this.capacity;
-    const length = this.length;
+    let offset = 0;
 
-    if (capacity === 0 || length === 0) {
-      return;
-    }
-
-    const buffer = this.buffer;
-    let index = this.start;
-
-    for (let i = 0; i < length; i++) {
-      if (index >= capacity) {
-        index = 0;
-      }
-
-      callback.call(thisArg, buffer[index], i);
-      index += 1;
+    for (const value of this.#iterateValues()) {
+      callback.call(thisArg, value, offset);
+      offset += 1;
     }
   }
 
@@ -341,6 +329,27 @@ class FixedSizeRingBuffer {
       }
 
       target[offset + i] = this.buffer[index];
+      index += 1;
+    }
+  }
+
+  *#iterateValues() {
+    const capacity = this.capacity;
+    const length = this.length;
+
+    if (capacity === 0 || length === 0) {
+      return;
+    }
+
+    const buffer = this.buffer;
+    let index = this.start;
+
+    for (let remaining = length; remaining > 0; remaining -= 1) {
+      if (index >= capacity) {
+        index = 0;
+      }
+
+      yield buffer[index];
       index += 1;
     }
   }
