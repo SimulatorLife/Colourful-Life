@@ -26,119 +26,48 @@ export function toPlainObject(candidate) {
  * @param {Object} trace - Snapshot returned by `brain.snapshot()`.
  * @returns {Object|null} Cloned trace.
  */
-const STRUCTURED_CLONE_IMPL =
+let STRUCTURED_CLONE_IMPL =
   typeof globalThis !== "undefined" && typeof globalThis.structuredClone === "function"
     ? globalThis.structuredClone.bind(globalThis)
     : null;
 
-function cloneWithFallback(value, seen = new WeakMap()) {
-  if (value == null || typeof value !== "object") {
-    return value;
-  }
+if (
+  !STRUCTURED_CLONE_IMPL &&
+  typeof process !== "undefined" &&
+  process?.versions?.node
+) {
+  try {
+    const { structuredClone: nodeStructuredClone } = await import("node:util");
 
-  if (seen.has(value)) {
-    return seen.get(value);
-  }
-
-  if (Array.isArray(value)) {
-    const clone = new Array(value.length);
-
-    seen.set(value, clone);
-
-    for (let index = 0; index < value.length; index += 1) {
-      clone[index] = cloneWithFallback(value[index], seen);
+    if (typeof nodeStructuredClone === "function") {
+      STRUCTURED_CLONE_IMPL = nodeStructuredClone;
     }
-
-    return clone;
+  } catch (error) {
+    // Continue attempting other fallbacks when util.structuredClone is unavailable.
   }
 
-  if (value instanceof Date) {
-    return new Date(value.getTime());
-  }
+  if (!STRUCTURED_CLONE_IMPL) {
+    try {
+      const { serialize, deserialize } = await import("node:v8");
 
-  if (value instanceof Map) {
-    const clone = new Map();
-
-    seen.set(value, clone);
-
-    value.forEach((mapValue, key) => {
-      clone.set(key, cloneWithFallback(mapValue, seen));
-    });
-
-    return clone;
-  }
-
-  if (value instanceof Set) {
-    const clone = new Set();
-
-    seen.set(value, clone);
-
-    value.forEach((setValue) => {
-      clone.add(cloneWithFallback(setValue, seen));
-    });
-
-    return clone;
-  }
-
-  if (ArrayBuffer.isView(value)) {
-    if (typeof value.slice === "function") {
-      const clone = value.slice();
-
-      seen.set(value, clone);
-
-      return clone;
+      if (typeof serialize === "function" && typeof deserialize === "function") {
+        STRUCTURED_CLONE_IMPL = (value) => deserialize(serialize(value));
+      }
+    } catch (error) {
+      // Ignore failures when the V8 helpers are unavailable.
     }
-
-    if (value instanceof DataView) {
-      const bufferClone = value.buffer.slice(0);
-      const clone = new DataView(bufferClone, value.byteOffset, value.byteLength);
-
-      seen.set(value, clone);
-
-      return clone;
-    }
-
-    return value;
   }
-
-  if (value instanceof ArrayBuffer) {
-    const clone = value.slice(0);
-
-    seen.set(value, clone);
-
-    return clone;
-  }
-
-  const prototype = Object.getPrototypeOf(value);
-
-  if (prototype !== Object.prototype && prototype !== null) {
-    return value;
-  }
-
-  const clone = {};
-
-  seen.set(value, clone);
-
-  for (const key of Object.keys(value)) {
-    clone[key] = cloneWithFallback(value[key], seen);
-  }
-
-  return clone;
 }
 
 export function cloneTracePayload(trace) {
   if (trace == null) return null;
 
-  if (STRUCTURED_CLONE_IMPL) {
-    try {
-      return STRUCTURED_CLONE_IMPL(trace);
-    } catch (error) {
-      // Fall through to the manual clone below when structuredClone rejects unsupported payloads.
-    }
+  if (!STRUCTURED_CLONE_IMPL) {
+    return null;
   }
 
   try {
-    return cloneWithFallback(trace);
+    return STRUCTURED_CLONE_IMPL(trace);
   } catch (error) {
     return null;
   }

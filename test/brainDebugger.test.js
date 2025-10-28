@@ -304,7 +304,7 @@ test("update clones snapshots using shared helper", async () => {
 });
 
 test(
-  "update falls back to manual cloning when structuredClone unavailable",
+  "update uses Node structuredClone when the global helper is unavailable",
   { concurrency: false },
   async () => {
     const hadStructuredClone = Object.prototype.hasOwnProperty.call(
@@ -337,7 +337,11 @@ test(
       const updated = BrainDebugger.update(source);
 
       assert.is(updated.length, 1);
-      assert.is.not(updated, source, "array instance should be cloned");
+      assert.is.not(
+        updated,
+        source,
+        "array instance should be cloned via Node fallback",
+      );
       assert.is.not(updated[0], source[0], "snapshot object should be cloned");
       assert.is.not(
         updated[0].brain,

@@ -311,7 +311,7 @@ test("cloneTracePayload delegates to structuredClone when available", async () =
   }
 });
 
-test("cloneTracePayload falls back when structuredClone is unavailable", async () => {
+test("cloneTracePayload uses Node structuredClone when the global helper is unavailable", async () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "structuredClone");
   const moduleUrl = new URL("../src/utils/object.js", import.meta.url);
 
@@ -346,7 +346,7 @@ test("cloneTracePayload falls back when structuredClone is unavailable", async (
 
     const clone = localCloneTracePayload(trace);
 
-    assert.ok(clone !== trace, "fallback should clone top-level object");
+    assert.ok(clone !== trace, "Node fallback should clone top-level object");
     assert.ok(clone?.nodes?.[0] !== trace.nodes[0], "node objects should be cloned");
     assert.ok(
       clone?.nodes?.[0]?.inputs?.[0] !== trace.nodes[0].inputs[0],
