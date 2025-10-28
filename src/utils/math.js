@@ -287,6 +287,25 @@ export function pickFirstFinitePositive(candidates, fallback = null) {
   if (!candidates) return fallback;
 
   for (const candidate of candidates) {
+    if (candidate == null) {
+      continue;
+    }
+
+    if (typeof candidate === "number") {
+      // Hot path: raw numbers dominate the call sites, so handle them without
+      // invoking `toFiniteOrNull` to avoid the additional type checks and
+      // string trimming work it performs for other primitives.
+      if (!Number.isFinite(candidate)) {
+        continue;
+      }
+
+      if (candidate > 0) {
+        return candidate;
+      }
+
+      continue;
+    }
+
     const numeric = toFiniteOrNull(candidate);
 
     if (numeric != null && numeric > 0) {
