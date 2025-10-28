@@ -1,12 +1,12 @@
 import { warnOnce } from "../utils/error.js";
 import { coerceBoolean } from "../utils/primitives.js";
 
-const DEFAULT_COLORS = [
+const DEFAULT_COLORS = Object.freeze([
   "rgba(80, 160, 255, 0.22)",
   "rgba(120, 220, 120, 0.22)",
   "rgba(255, 180, 70, 0.24)",
   "rgba(220, 120, 220, 0.24)",
-];
+]);
 
 const EMPTY_GEOMETRY = Object.freeze({
   rects: Object.freeze([]),
@@ -19,19 +19,45 @@ const ZONE_PREDICATE_WARNING =
 /**
  * Tracks reproductive zone definitions. SelectionManager provides built-in
  * geometric patterns so the simulation can restrict mating and spawning to
- * curated areas of the map.
+ * curated areas of the map. Callers can extend the predefined catalog via the
+ * optional `patterns` array or `definePatterns` hook passed to the constructor,
+ * keeping scenario-specific zoning logic outside the core module while
+ * retaining the default presets.
  */
 export default class SelectionManager {
   #activeZonesDirty = true;
   #activeZonesCache = Object.freeze([]);
+  #customPatternOptions = { patterns: null, definePatterns: null };
 
-  constructor(rows, cols) {
+  /**
+   * @param {number} rows
+   * @param {number} cols
+   * @param {{
+   *   patterns?: Array<{
+   *     id: string,
+   *     name?: string,
+   *     description?: string,
+   *     color?: string,
+   *     contains: (row:number, col:number) => boolean,
+   *     active?: boolean,
+   *   }>,
+   *   definePatterns?: (context: {
+   *     rows: number,
+   *     cols: number,
+   *     defaultColors: string[],
+   *     addPattern: (descriptor: unknown) => boolean,
+   *   }) => unknown,
+   * }} [options]
+   */
+  constructor(rows, cols, options = {}) {
     this.rows = rows;
     this.cols = cols;
     this.patterns = new Map();
     this.zoneGeometryCache = new Map();
     this.geometryRevision = 0;
+    this.#customPatternOptions = this.#normalizeCustomPatternOptions(options);
     this.#definePredefinedPatterns();
+    this.#applyCustomPatternOptions(this.#customPatternOptions);
     this.#invalidateActiveZoneCache();
   }
 
@@ -55,6 +81,7 @@ export default class SelectionManager {
     this.patterns.clear();
     this.#invalidateAllZoneGeometry();
     this.#definePredefinedPatterns();
+    this.#applyCustomPatternOptions(this.#customPatternOptions);
     this.#invalidateActiveZoneCache();
 
     if (previouslyActive.size > 0) {
@@ -135,6 +162,126 @@ export default class SelectionManager {
       active: false,
     });
     this.#invalidateActiveZoneCache();
+  }
+
+  #normalizeCustomPatternOptions(options) {
+    if (!options || typeof options !== "object") {
+      return { patterns: null, definePatterns: null };
+    }
+
+    const patterns = Array.isArray(options.patterns) ? options.patterns.slice() : null;
+    const definePatterns =
+      typeof options.definePatterns === "function" ? options.definePatterns : null;
+
+    return { patterns, definePatterns };
+  }
+
+  #applyCustomPatternOptions(config) {
+    if (!config) return;
+
+    const register = (candidate) => {
+      if (Array.isArray(candidate)) {
+        let added = false;
+
+        for (const entry of candidate) {
+          if (register(entry)) {
+            added = true;
+          }
+        }
+
+        return added;
+      }
+
+      return this.#registerCustomPattern(candidate);
+    };
+
+    if (Array.isArray(config.patterns)) {
+      for (const pattern of config.patterns) {
+        register(pattern);
+      }
+    }
+
+    if (typeof config.definePatterns === "function") {
+      const context = {
+        rows: this.rows,
+        cols: this.cols,
+        defaultColors: [...DEFAULT_COLORS],
+        addPattern: (descriptor) => register(descriptor),
+      };
+      const result = config.definePatterns(context);
+
+      register(result);
+    }
+  }
+
+  #normalizeCustomPatternDescriptor(candidate) {
+    if (!candidate || typeof candidate !== "object") {
+      return null;
+    }
+
+    const idCandidate =
+      typeof candidate.id === "string" && candidate.id.trim().length > 0
+        ? candidate.id.trim()
+        : null;
+
+    if (!idCandidate) {
+      return null;
+    }
+
+    const contains =
+      typeof candidate.contains === "function" ? candidate.contains : null;
+
+    if (!contains) {
+      return null;
+    }
+
+    const nameCandidate =
+      typeof candidate.name === "string" && candidate.name.trim().length > 0
+        ? candidate.name.trim()
+        : idCandidate;
+    const descriptionCandidate =
+      typeof candidate.description === "string" ? candidate.description : "";
+    const colorCandidate =
+      typeof candidate.color === "string" && candidate.color.trim().length > 0
+        ? candidate.color.trim()
+        : undefined;
+
+    return {
+      id: idCandidate,
+      name: nameCandidate,
+      description: descriptionCandidate,
+      color: colorCandidate,
+      contains,
+      active: candidate.active,
+    };
+  }
+
+  #registerCustomPattern(candidate) {
+    const normalized = this.#normalizeCustomPatternDescriptor(candidate);
+
+    if (!normalized) {
+      return false;
+    }
+
+    const palette = DEFAULT_COLORS;
+    const fallbackColor =
+      Array.isArray(palette) && palette.length > 0
+        ? palette[this.patterns.size % palette.length]
+        : undefined;
+    const color = normalized.color ?? fallbackColor;
+
+    this.#addPattern(normalized.id, {
+      name: normalized.name,
+      description: normalized.description,
+      contains: normalized.contains,
+      color,
+    });
+
+    if (normalized.active !== undefined) {
+      this.togglePattern(normalized.id, normalized.active);
+    }
+
+    return true;
   }
 
   getPatterns() {

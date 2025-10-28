@@ -1,8 +1,8 @@
 import { assert, test } from "#tests/harness";
 import SelectionManager from "../src/grid/selectionManager.js";
 
-function createManager(rows = 6, cols = 6) {
-  return new SelectionManager(rows, cols);
+function createManager(rows = 6, cols = 6, options) {
+  return new SelectionManager(rows, cols, options);
 }
 
 test("activating built-in patterns restricts eligibility and updates descriptions", () => {
@@ -395,4 +395,88 @@ test("zone contains predicates throwing are handled gracefully", () => {
   } finally {
     console.warn = originalWarn;
   }
+});
+
+test("constructor options allow registering custom patterns", () => {
+  const manager = createManager(6, 6, {
+    patterns: [
+      {
+        id: "diagonalOnly",
+        name: "Diagonal Bloom",
+        description: "Limit reproduction to the main diagonal.",
+        contains: (row, col) => row === col,
+        color: "rgba(255, 255, 255, 0.2)",
+        active: true,
+      },
+    ],
+  });
+
+  const patterns = manager.getPatterns();
+  const diagonal = patterns.find((pattern) => pattern.id === "diagonalOnly");
+
+  assert.ok(diagonal, "custom pattern should be registered");
+  assert.is(diagonal.active, true, "custom pattern honours initial active flag");
+  assert.is(manager.describeActiveZones(), "Diagonal Bloom");
+  assert.is(manager.isInActiveZone(2, 2), true, "diagonal tiles remain eligible");
+  assert.is(
+    manager.isInActiveZone(2, 3),
+    false,
+    "off-diagonal tiles are excluded by the custom predicate",
+  );
+
+  manager.setDimensions(8, 8);
+
+  const resizedPatterns = manager.getPatterns();
+  const afterResize = resizedPatterns.find((pattern) => pattern.id === "diagonalOnly");
+
+  assert.ok(afterResize, "custom pattern persists after resizing");
+  assert.is(afterResize.active, true, "active state survives dimension changes");
+  assert.is(
+    manager.isInActiveZone(3, 3),
+    true,
+    "predicate recalculates with new bounds",
+  );
+  assert.is(
+    manager.isInActiveZone(3, 4),
+    false,
+    "tiles outside the diagonal remain ineligible after resizing",
+  );
+});
+
+test("definePatterns hook re-runs when the grid dimensions change", () => {
+  const invocations = [];
+  const manager = createManager(5, 7, {
+    definePatterns({ rows, cols, addPattern }) {
+      invocations.push({ rows, cols });
+      addPattern({
+        id: "outerRing",
+        name: "Outer Ring",
+        contains: (row, col) =>
+          row === 0 || col === 0 || row === rows - 1 || col === cols - 1,
+      });
+    },
+  });
+
+  assert.is(invocations.length, 1, "hook invoked during construction");
+  assert.equal(invocations[0], { rows: 5, cols: 7 });
+
+  manager.togglePattern("outerRing", true);
+
+  assert.is(manager.isInActiveZone(0, 3), true, "edge tiles remain eligible");
+  assert.is(manager.isInActiveZone(2, 3), false, "interior tiles are excluded");
+
+  manager.setDimensions(4, 6);
+
+  assert.is(invocations.length, 2, "hook re-invoked after resizing");
+  assert.equal(invocations[1], { rows: 4, cols: 6 });
+  assert.is(
+    manager.isInActiveZone(0, 2),
+    true,
+    "edge predicate recalculates after resize",
+  );
+  assert.is(
+    manager.isInActiveZone(2, 2),
+    false,
+    "interior remains excluded after resize",
+  );
 });
