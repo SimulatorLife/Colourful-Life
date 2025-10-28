@@ -3465,27 +3465,101 @@ export default class Cell {
     return null;
   }
 
+  #summarizeTargetSimilarity(list = []) {
+    if (!Array.isArray(list) || list.length === 0) {
+      return { similarity: 0, count: 0 };
+    }
+
+    let total = 0;
+    let count = 0;
+
+    for (let i = 0; i < list.length; i += 1) {
+      const entry = list[i];
+      const target = entry?.target;
+
+      if (!target) continue;
+
+      const similarity = this.#safeSimilarityTo(target, {
+        context: "similarity summary aggregation",
+        fallback: Number.NaN,
+      });
+
+      if (!Number.isFinite(similarity)) continue;
+
+      total += similarity;
+      count += 1;
+    }
+
+    return {
+      similarity: count > 0 ? total / count : 0,
+      count,
+    };
+  }
+
+  #resolveDiversitySignalFromSummaries(...summaries) {
+    let similarityTotal = 0;
+    let sampleTotal = 0;
+
+    for (let i = 0; i < summaries.length; i += 1) {
+      const summary = summaries[i];
+
+      if (!summary) continue;
+
+      const count = Number.isFinite(summary.count) ? summary.count : 0;
+
+      if (count <= 0) continue;
+
+      const similarity = Number.isFinite(summary.similarity)
+        ? clamp(summary.similarity, 0, 1)
+        : 0;
+
+      similarityTotal += similarity * count;
+      sampleTotal += count;
+    }
+
+    if (sampleTotal <= 0) {
+      return 0;
+    }
+
+    const averageSimilarity = similarityTotal / sampleTotal;
+
+    return clamp(1 - averageSimilarity, 0, 1);
+  }
+
+  #estimateNeighborDiversity(neighbors = []) {
+    if (!Array.isArray(neighbors) || neighbors.length === 0) {
+      return 0;
+    }
+
+    let diversityTotal = 0;
+    let sampleTotal = 0;
+
+    for (let i = 0; i < neighbors.length; i += 1) {
+      const neighbor = neighbors[i];
+
+      if (!neighbor || neighbor.blocked) continue;
+
+      const kinship = Number.isFinite(neighbor.kinship)
+        ? clamp(neighbor.kinship, 0, 1)
+        : null;
+
+      if (kinship == null) continue;
+
+      diversityTotal += 1 - kinship;
+      sampleTotal += 1;
+    }
+
+    if (sampleTotal === 0) {
+      return 0;
+    }
+
+    return clamp(diversityTotal / sampleTotal, 0, 1);
+  }
+
   #averageSimilarity(list = []) {
-    if (!Array.isArray(list) || list.length === 0) return 0;
-    const { total, count } = list.reduce(
-      (accumulator, entry) => {
-        if (!entry?.target) return accumulator;
-        const similarity = this.#safeSimilarityTo(entry.target, {
-          context: "average similarity aggregation",
-          fallback: Number.NaN,
-        });
+    const summary = this.#summarizeTargetSimilarity(list);
 
-        if (!Number.isFinite(similarity)) return accumulator;
-
-        accumulator.total += similarity;
-        accumulator.count += 1;
-
-        return accumulator;
-      },
-      { total: 0, count: 0 },
-    );
-
-    return count > 0 ? total / count : 0;
+    return summary.similarity;
   }
 
   #safeSimilarityTo(
@@ -3757,6 +3831,90 @@ export default class Cell {
     return next;
   }
 
+  #estimateDiversityOpportunitySignal() {
+    const samples = Number.isFinite(this.diversityOpportunitySamples)
+      ? this.diversityOpportunitySamples
+      : 0;
+
+    if (samples <= 0) {
+      return 0;
+    }
+
+    const alignment = clamp(
+      Number.isFinite(this.diversityOpportunityAlignmentScore)
+        ? this.diversityOpportunityAlignmentScore / samples
+        : 0,
+      0,
+      1,
+    );
+    const neglect = clamp(
+      Number.isFinite(this.diversityOpportunityNeglectScore)
+        ? this.diversityOpportunityNeglectScore / samples
+        : 0,
+      0,
+      1,
+    );
+    const presence = clamp(samples / (samples + 4), 0, 1);
+
+    return clamp(alignment * 0.7 + presence * 0.2 - neglect * 0.3, 0, 1);
+  }
+
+  #resolveDiversityDrive({
+    availableDiversity = null,
+    diversityOpportunity = null,
+    noveltyPressure = null,
+  } = {}) {
+    const appetite = clamp(
+      Number.isFinite(this.diversityAppetite) ? this.diversityAppetite : 0,
+      0,
+      1,
+    );
+    const memory = clamp(this.#resolveMateDiversityMemory(), 0, 1);
+    const observed = clamp(
+      Number.isFinite(availableDiversity) ? availableDiversity : memory,
+      0,
+      1,
+    );
+    const novelty = clamp(
+      Number.isFinite(noveltyPressure)
+        ? noveltyPressure
+        : this.#resolveMateNoveltyPressure(),
+      0,
+      1,
+    );
+    const opportunity = clamp(
+      Number.isFinite(diversityOpportunity)
+        ? diversityOpportunity
+        : this.#estimateDiversityOpportunitySignal(),
+      0,
+      1,
+    );
+    const bias = clamp(
+      Number.isFinite(this.matePreferenceBias) ? this.matePreferenceBias : 0,
+      -1,
+      1,
+    );
+    const kinLean = Math.max(0, bias);
+    const curiosityLean = clamp(appetite + Math.max(0, -bias) * 0.6, 0, 1.6);
+    const desire = clamp(
+      curiosityLean * (0.55 + novelty * 0.25) + opportunity * (0.3 + novelty * 0.2),
+      0,
+      1.4,
+    );
+    const comfort = clamp(
+      memory * (0.5 + kinLean * 0.3) + observed * (0.35 + kinLean * 0.25),
+      0,
+      1.4,
+    );
+    const drive = clamp((desire - comfort) * (1 + curiosityLean * 0.15), -1.2, 1.2);
+
+    return clamp(drive, -1, 1);
+  }
+
+  getDiversityDrive(context = {}) {
+    return this.#resolveDiversityDrive(context);
+  }
+
   #movementSensors({
     localDensity = 0,
     densityEffectMultiplier = 1,
@@ -3786,14 +3944,25 @@ export default class Cell {
       tileEnergyDelta,
     });
     const ageFrac = this.lifespan > 0 ? clamp(this.age / this.lifespan, 0, 1) : 0;
-    const allySimilarity = this.#averageSimilarity(society);
-    const enemySimilarity = this.#averageSimilarity(enemies);
-    const mateSimilarity = this.#averageSimilarity(mates);
+    const allySummary = this.#summarizeTargetSimilarity(society);
+    const enemySummary = this.#summarizeTargetSimilarity(enemies);
+    const mateSummary = this.#summarizeTargetSimilarity(mates);
+    const allySimilarity = allySummary.similarity;
+    const enemySimilarity = enemySummary.similarity;
+    const mateSimilarity = mateSummary.similarity;
+    const localDiversity = this.#resolveDiversitySignalFromSummaries(
+      allySummary,
+      enemySummary,
+      mateSummary,
+    );
     const riskTolerance = this.#resolveRiskTolerance();
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
     const interactionMomentum = this.#resolveInteractionMomentum();
     const neuralFatigue = this.#currentNeuralFatigue();
     const { scarcityMemory, confidenceMemory } = this.#riskMemorySensorValues();
+    const diversityDrive = this.#resolveDiversityDrive({
+      availableDiversity: localDiversity,
+    });
 
     return {
       energy: energyFrac,
@@ -3804,6 +3973,7 @@ export default class Cell {
       allySimilarity,
       enemySimilarity,
       mateSimilarity,
+      diversityDrive,
       ageFraction: ageFrac,
       riskTolerance,
       interactionMomentum,
@@ -4065,12 +4235,21 @@ export default class Cell {
       tileEnergyDelta,
     });
     const ageFrac = this.lifespan > 0 ? clamp(this.age / this.lifespan, 0, 1) : 0;
-    const enemySimilarity = this.#averageSimilarity(enemies);
-    const allySimilarity = this.#averageSimilarity(allies);
+    const enemySummary = this.#summarizeTargetSimilarity(enemies);
+    const allySummary = this.#summarizeTargetSimilarity(allies);
+    const enemySimilarity = enemySummary.similarity;
+    const allySimilarity = allySummary.similarity;
+    const localDiversity = this.#resolveDiversitySignalFromSummaries(
+      enemySummary,
+      allySummary,
+    );
     const riskTolerance = this.#resolveRiskTolerance();
     const eventPressure = clamp(this.lastEventPressure || 0, 0, 1);
     const interactionMomentum = this.#resolveInteractionMomentum();
     const neuralFatigue = this.#currentNeuralFatigue();
+    const diversityDrive = this.#resolveDiversityDrive({
+      availableDiversity: localDiversity,
+    });
 
     return {
       energy: energyFrac,
@@ -4079,6 +4258,7 @@ export default class Cell {
       allyFraction: allyFrac,
       enemySimilarity,
       allySimilarity,
+      diversityDrive,
       ageFraction: ageFrac,
       riskTolerance,
       interactionMomentum,
@@ -4140,6 +4320,10 @@ export default class Cell {
     const interactionMomentum = this.#resolveInteractionMomentum();
     const neuralFatigue = this.#currentNeuralFatigue();
     const { scarcityMemory, confidenceMemory } = this.#riskMemorySensorValues();
+    const partnerDiversity = clamp(1 - similarity, 0, 1);
+    const diversityDrive = this.#resolveDiversityDrive({
+      availableDiversity: partnerDiversity,
+    });
 
     return {
       energy: energyFrac,
@@ -4158,6 +4342,7 @@ export default class Cell {
       scarcityMemory,
       confidenceMemory,
       opportunitySignal: this.#currentOpportunitySignal(),
+      diversityDrive,
     };
   }
 
@@ -4199,6 +4384,10 @@ export default class Cell {
     );
     const { scarcityMemory, confidenceMemory } = this.#riskMemorySensorValues();
     const opportunitySignal = this.#currentOpportunitySignal();
+    const partnerDiversity = clamp(1 - similarity, 0, 1);
+    const diversityDrive = this.#resolveDiversityDrive({
+      availableDiversity: partnerDiversity,
+    });
 
     return {
       energy,
@@ -4222,6 +4411,7 @@ export default class Cell {
       enemySimilarity: 0,
       mateSimilarity: similarity,
       effectiveDensity: 0,
+      diversityDrive,
     };
   }
 
@@ -4334,6 +4524,20 @@ export default class Cell {
     );
 
     weight *= clamp(1 + opportunitySignal * (0.2 + 0.1 * strategyGene), 0.5, 1.6);
+
+    const diversityDrive = clamp(
+      Number.isFinite(resolvedSensors.diversityDrive)
+        ? resolvedSensors.diversityDrive
+        : this.#resolveDiversityDrive(),
+      -1,
+      1,
+    );
+
+    if (diversityDrive > 0) {
+      weight *= 1 + diversityDrive * (0.12 + fertilityGene * 0.1);
+    } else if (diversityDrive < 0) {
+      weight *= 1 + diversityDrive * (0.14 + parentalGene * 0.08);
+    }
 
     const resourceTrend = clamp(
       Number.isFinite(resolvedSensors.resourceTrend)
@@ -5178,7 +5382,11 @@ export default class Cell {
     const hunger = 1 - clamp(energyFrac, 0, 1);
     const normalizedTile = clamp(tileLevel ?? 0, 0, 1);
     const resourceDrive = clamp(this.resourceTrendAdaptation ?? 0.35, 0, 1);
-    const diversity = clamp(this.diversityAppetite ?? 0, 0, 1);
+    const neighborDiversity = this.#estimateNeighborDiversity(neighbors);
+    const diversityDrive = this.#resolveDiversityDrive({
+      availableDiversity: neighborDiversity,
+    });
+    const diversity = clamp((diversityDrive + 1) / 2, 0, 1);
     const results = [];
 
     for (let i = 0; i < neighbors.length; i += 1) {
@@ -7260,6 +7468,17 @@ export default class Cell {
         : 0.5;
     const fertilityDrive = clamp((fertilityA + fertilityB) / 2, 0, 1);
     const parentalDrive = clamp((parentalA + parentalB) / 2, 0, 1);
+    const partnerSimilarity = clamp(
+      this.#safeSimilarityTo(partner, {
+        context: "reproduction probability similarity",
+        fallback: 0.5,
+      }),
+      0,
+      1,
+    );
+    const diversityDrive = this.#resolveDiversityDrive({
+      availableDiversity: clamp(1 - partnerSimilarity, 0, 1),
+    });
     const survivalInstinct = clamp(
       this.neuralReinforcementProfile?.survivalInstinct ?? 0.5,
       0,
@@ -7287,8 +7506,13 @@ export default class Cell {
       0.25,
       1.4,
     );
+    const diversityMultiplier =
+      diversityDrive >= 0
+        ? clamp(1 + diversityDrive * (0.18 + fertilityDrive * 0.12), 0.65, 1.6)
+        : clamp(1 + diversityDrive * (0.22 + parentalDrive * 0.1), 0.45, 1.2);
     const baseProbability = baseReproProb * reproMul * Math.max(0.2, senPenalty);
-    const adjustedProbability = baseProbability * energyMultiplier;
+    const adjustedProbability =
+      baseProbability * energyMultiplier * diversityMultiplier;
 
     return Math.min(0.95, Math.max(0.01, adjustedProbability));
   }

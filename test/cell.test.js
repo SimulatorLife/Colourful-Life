@@ -2436,6 +2436,93 @@ test("recordMatingOutcome penalizes repetitive mates through neural imprint", ()
   );
 });
 
+test("diversity drive responds to appetite, novelty, and memory", () => {
+  const dna = new DNA(120, 80, 160);
+  const cell = new Cell(0, 0, dna, 6);
+
+  cell.diversityAppetite = 0.85;
+  cell.matePreferenceBias = 0;
+  cell._mateDiversityMemory = 0.2;
+  cell._mateNoveltyPressure = 0.6;
+
+  const positive = cell.getDiversityDrive({ availableDiversity: 0.3 });
+
+  cell.diversityAppetite = 0.08;
+  cell._mateDiversityMemory = 0.9;
+  cell._mateNoveltyPressure = 0.05;
+  cell.matePreferenceBias = 0.4;
+
+  const negative = cell.getDiversityDrive({ availableDiversity: 0.1 });
+
+  assert.ok(positive > 0.15, "curious genomes should seek diversity when underexposed");
+  assert.ok(
+    negative < -0.1,
+    "sated and kin-biased genomes should cool diversity drive",
+  );
+});
+
+test("diversity drive modulates reproduction probability", () => {
+  const setupPair = ({ appetite, memory, novelty, similarity }) => {
+    const dnaA = new DNA(80, 120, 160);
+    const dnaB = new DNA(100, 90, 70);
+
+    dnaA.reproductionProb = () => 0.42;
+    dnaB.reproductionProb = () => 0.42;
+    dnaA.senescenceRate = () => 0.15;
+    dnaB.senescenceRate = () => 0.15;
+    dnaA.geneFraction = () => 0.5;
+    dnaB.geneFraction = () => 0.5;
+
+    const cell = new Cell(0, 0, dnaA, 6);
+    const partner = new Cell(0, 1, dnaB, 6);
+
+    cell.energy = 6;
+    partner.energy = 6;
+    cell.diversityAppetite = appetite;
+    cell.matePreferenceBias = 0;
+    cell._mateDiversityMemory = memory;
+    cell._mateNoveltyPressure = novelty;
+    cell.similarityTo = () => similarity;
+
+    return { cell, partner };
+  };
+
+  const context = {
+    localDensity: 0.35,
+    densityEffectMultiplier: 1,
+    maxTileEnergy: 12,
+    tileEnergy: 0.65,
+    tileEnergyDelta: 0.02,
+  };
+
+  const eager = setupPair({
+    appetite: 0.92,
+    memory: 0.18,
+    novelty: 0.55,
+    similarity: 0.22,
+  });
+  const reluctant = setupPair({
+    appetite: 0.1,
+    memory: 0.92,
+    novelty: 0.05,
+    similarity: 0.94,
+  });
+
+  const eagerProbability = eager.cell.computeReproductionProbability(
+    eager.partner,
+    context,
+  );
+  const reluctantProbability = reluctant.cell.computeReproductionProbability(
+    reluctant.partner,
+    context,
+  );
+
+  assert.ok(
+    eagerProbability > reluctantProbability + 0.05,
+    "diversity-seeking pairings should raise reproduction probability",
+  );
+});
+
 test("recordCombatOutcome reinforces successful combat cues", () => {
   const dna = new DNA(90, 120, 150);
   const cell = new Cell(0, 0, dna, 8);

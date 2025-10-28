@@ -1467,6 +1467,7 @@ export class DNA {
     const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
     const senescence = this.geneFraction(GENE_LOCI.SENESCENCE);
     const foraging = this.geneFraction(GENE_LOCI.FORAGING);
+    const courtship = this.geneFraction(GENE_LOCI.COURTSHIP);
     const fatigueProfile = this.neuralFatigueProfile();
     const fatigueBaseline = clamp(fatigueProfile?.baseline ?? 0.35, 0, 1);
     const fatigueRiskWeight = clamp(
@@ -1585,6 +1586,15 @@ export class DNA {
       gain: 0.6 + 0.35 * parental,
       target: toSigned(0.45 + 0.25 * parental - 0.25 * exploration, 0.5, 1),
       jitter: 0.08,
+    });
+
+    const diversityAppetite = this.diversityAppetite();
+    const mateBias = this.mateSimilarityBias();
+
+    updateModulation("diversityDrive", {
+      gain: 0.62 + 0.28 * exploration + 0.24 * courtship,
+      target: clamp((diversityAppetite ?? 0.5) * 2 - 1 - (mateBias ?? 0) * 0.25, -1, 1),
+      jitter: 0.12,
     });
 
     updateModulation("baseReproductionProbability", {
