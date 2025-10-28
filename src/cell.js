@@ -785,10 +785,11 @@ export default class Cell {
     return scored;
   }
 
-  selectMateWeighted(potentialMates = [], context = {}) {
-    const evaluated = this.scorePotentialMates(potentialMates, context).filter(
-      (m) => m && m.selectionWeight > 0 && m.target,
-    );
+  selectMateWeighted(potentialMates = [], context = {}, scoredCandidates = null) {
+    const scored = Array.isArray(scoredCandidates)
+      ? scoredCandidates
+      : this.scorePotentialMates(potentialMates, context);
+    const evaluated = scored.filter((m) => m && m.selectionWeight > 0 && m.target);
 
     if (evaluated.length === 0) return { chosen: null, evaluated: [], mode: "none" };
 
@@ -928,12 +929,14 @@ export default class Cell {
     return bestMate;
   }
 
-  findBestMate(potentialMates, context = {}) {
+  findBestMate(potentialMates, context = {}, scoredCandidates = null) {
     if (!Array.isArray(potentialMates) || potentialMates.length === 0) return null;
 
-    const scored = this.scorePotentialMates(potentialMates, context);
+    const scored = Array.isArray(scoredCandidates)
+      ? scoredCandidates
+      : this.scorePotentialMates(potentialMates, context);
 
-    if (scored.length === 0) {
+    if (!Array.isArray(scored) || scored.length === 0) {
       return this.#fallbackMateSelection(potentialMates);
     }
 

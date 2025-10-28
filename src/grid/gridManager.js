@@ -6985,8 +6985,12 @@ export default class GridManager {
       parentCol: col,
     };
 
+    const scoredCandidates =
+      typeof cell.scorePotentialMates === "function"
+        ? cell.scorePotentialMates(matePool, reproductionContext)
+        : EMPTY_TARGET_LIST;
     const selection = cell.selectMateWeighted
-      ? cell.selectMateWeighted(matePool, reproductionContext)
+      ? cell.selectMateWeighted(matePool, reproductionContext, scoredCandidates)
       : null;
     const selectedMate = selection?.chosen ?? null;
     const evaluated = Array.isArray(selection?.evaluated)
@@ -6997,7 +7001,9 @@ export default class GridManager {
     let bestMate = selectedMate;
 
     if (!bestMate || !bestMate.target) {
-      bestMate = cell.findBestMate(matePool, reproductionContext);
+      bestMate = cell.findBestMate
+        ? cell.findBestMate(matePool, reproductionContext, scoredCandidates)
+        : null;
 
       if (!bestMate) return false;
     }
@@ -7104,11 +7110,9 @@ export default class GridManager {
     let effectiveReproProb = clamp(reproProb ?? 0, 0, 1);
     let scarcityMultiplier = 1;
     const opportunityCandidates =
-      evaluated.length > 0
-        ? evaluated
-        : typeof cell.scorePotentialMates === "function"
-          ? cell.scorePotentialMates(matePool, reproductionContext)
-          : EMPTY_TARGET_LIST;
+      Array.isArray(scoredCandidates) && scoredCandidates.length > 0
+        ? scoredCandidates
+        : evaluated;
     const diversityOpportunitySummary = GridManager.#summarizeMateDiversityOpportunity({
       candidates: opportunityCandidates,
       chosenDiversity: diversity,
