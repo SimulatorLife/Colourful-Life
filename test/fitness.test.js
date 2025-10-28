@@ -147,6 +147,10 @@ test("computeFitness rewards opportunity engagement and penalizes neglect", asyn
   const monotonyRate = Math.min(1, 0.4 / 4);
   const opportunityAlignmentRate = 1.8 / 3;
   const opportunityNeglectRate = Math.min(1, 0.9 / 3);
+  const opportunityPressure = Math.min(
+    1,
+    cell.diversityOpportunitySamples / cell.matingAttempts,
+  );
   const expected =
     diversityRate * 1.2 +
     successRate * 0.4 +
@@ -154,8 +158,55 @@ test("computeFitness rewards opportunity engagement and penalizes neglect", asyn
     penaltyRate * 0.6 -
     monotonyRate * 0.4 -
     (1 - complementRate) * penaltyRate * 0.2 +
-    opportunityAlignmentRate * (0.6 + diversityRate * 0.2) -
-    opportunityNeglectRate * 0.5;
+    opportunityAlignmentRate * (0.6 + diversityRate * 0.2 + opportunityPressure * 0.3) -
+    opportunityNeglectRate * (0.5 + opportunityPressure * 0.3) +
+    opportunityPressure * (0.2 + diversityRate * 0.25 + complementRate * 0.15);
+
+  approxEqual(result, expected, 1e-9);
+});
+
+test("computeFitness caps opportunity pressure and rewards exploration", async () => {
+  const { computeFitness } = await computeFitnessModulePromise;
+  const cell = {
+    fightsWon: 0,
+    fightsLost: 0,
+    offspring: 0,
+    energy: 0,
+    age: 0,
+    lifespan: 100,
+    matingAttempts: 2,
+    matingSuccesses: 1,
+    diverseMateScore: 0.5,
+    complementaryMateScore: 0.4,
+    similarityPenalty: 0,
+    strategyPenalty: 0,
+    diversityOpportunitySamples: 5,
+    diversityOpportunityAlignmentScore: 4,
+    diversityOpportunityNeglectScore: 0.5,
+  };
+
+  const result = computeFitness(cell, 10);
+  const diversityRate = 0.5 / 1;
+  const successRate = 1 / 2;
+  const complementRate = 0.4 / 1;
+  const penaltyRate = 0;
+  const monotonyRate = 0;
+  const opportunityAlignmentRate = 4 / 5;
+  const opportunityNeglectRate = Math.min(1, 0.5 / 5);
+  const opportunityPressure = Math.min(
+    1,
+    cell.diversityOpportunitySamples / cell.matingAttempts,
+  );
+  const expected =
+    diversityRate * 1.2 +
+    successRate * 0.4 +
+    complementRate * (0.9 + diversityRate * 0.35) -
+    penaltyRate * 0.6 -
+    monotonyRate * 0.4 -
+    (1 - complementRate) * penaltyRate * 0.2 +
+    opportunityAlignmentRate * (0.6 + diversityRate * 0.2 + opportunityPressure * 0.3) -
+    opportunityNeglectRate * (0.5 + opportunityPressure * 0.3) +
+    opportunityPressure * (0.2 + diversityRate * 0.25 + complementRate * 0.15);
 
   approxEqual(result, expected, 1e-9);
 });
