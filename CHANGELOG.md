@@ -9,6 +9,9 @@ where practical.
 
 ### Added
 
+- Optional Aurora Celebration Veil overlay that tints the canvas with a low-contrast,
+  energy- and birth-responsive aurora while keeping other telemetry readable and
+  disabled by default.
 - Simulation clock in Evolution Insights showing elapsed simulated time and the
   cumulative tick count so pacing stays visible without mental math.
 - Regression tests ensuring the insights, life events, and leaderboard panels

@@ -26,6 +26,38 @@ const OBSTACLE_MASK_ALPHA = 0.35;
 const GRID_LINE_COLOR = "rgba(255, 255, 255, 0.1)";
 const GRID_LINE_EMPHASIS_COLOR = "rgba(255, 255, 255, 0.2)";
 const GRID_LINE_EMPHASIS_STEP = 5;
+const AURORA_VEIL_MIN_ALPHA = 0.12;
+const AURORA_VEIL_MAX_ALPHA = 0.36;
+const AURORA_VEIL_BASE_HUE = 168;
+const AURORA_VEIL_PEAK_HUE = 312;
+const AURORA_VEIL_BASE_SATURATION = 58;
+const AURORA_VEIL_PEAK_SATURATION = 82;
+const AURORA_VEIL_BASE_LIGHTNESS = 18;
+const AURORA_VEIL_PEAK_LIGHTNESS = 42;
+const AURORA_VEIL_FADE_WINDOW_FALLBACK = 72;
+const AURORA_VEIL_RIBBONS = Object.freeze([
+  Object.freeze({
+    start: Object.freeze({ x: -0.04, y: 0.34 }),
+    control1: Object.freeze({ x: 0.26, y: 0.16 }),
+    control2: Object.freeze({ x: 0.58, y: 0.44 }),
+    end: Object.freeze({ x: 1.04, y: 0.26 }),
+    thickness: 0.04,
+  }),
+  Object.freeze({
+    start: Object.freeze({ x: -0.1, y: 0.54 }),
+    control1: Object.freeze({ x: 0.18, y: 0.42 }),
+    control2: Object.freeze({ x: 0.64, y: 0.68 }),
+    end: Object.freeze({ x: 1.08, y: 0.5 }),
+    thickness: 0.052,
+  }),
+  Object.freeze({
+    start: Object.freeze({ x: 0, y: 0.78 }),
+    control1: Object.freeze({ x: 0.32, y: 0.7 }),
+    control2: Object.freeze({ x: 0.72, y: 0.86 }),
+    end: Object.freeze({ x: 1.04, y: 0.76 }),
+    thickness: 0.038,
+  }),
+]);
 
 function computeLifeEventAlpha(
   ageTicks,
@@ -729,6 +761,197 @@ export function drawGridLines(ctx, cellSize, rows, cols, options = {}) {
   ctx.restore();
 }
 
+function computeAuroraCelebrationRatio(
+  lifeEvents,
+  currentTick,
+  fadeTicks = AURORA_VEIL_FADE_WINDOW_FALLBACK,
+) {
+  if (!Array.isArray(lifeEvents) || lifeEvents.length === 0) {
+    return 0;
+  }
+
+  const resolvedFade =
+    Number.isFinite(fadeTicks) && fadeTicks > 0
+      ? fadeTicks
+      : AURORA_VEIL_FADE_WINDOW_FALLBACK;
+  let birthWeight = 0;
+  let deathWeight = 0;
+
+  for (let i = 0; i < lifeEvents.length; i += 1) {
+    const event = lifeEvents[i];
+
+    if (!event) continue;
+
+    const type = event.type;
+
+    if (type !== "birth" && type !== "death") continue;
+
+    let weight = 1;
+    const eventTick = Number(event.tick);
+
+    if (Number.isFinite(currentTick) && Number.isFinite(eventTick)) {
+      const age = currentTick - eventTick;
+
+      if (age < 0) continue;
+
+      const normalized = clamp01(age / resolvedFade);
+      const eased = 1 - normalized * normalized;
+
+      weight = eased > 0 ? eased : 0;
+    }
+
+    if (type === "birth") {
+      birthWeight += weight;
+    } else {
+      deathWeight += weight * 0.55;
+    }
+  }
+
+  const total = birthWeight + deathWeight;
+
+  if (!(total > 0)) {
+    return 0;
+  }
+
+  return clamp01(birthWeight / total);
+}
+
+function drawAuroraRibbons(
+  ctx,
+  width,
+  height,
+  { hue, saturation, lightness, alpha, vibrancy },
+) {
+  if (!ctx || typeof ctx.beginPath !== "function") {
+    return;
+  }
+
+  const primaryColor = `hsla(${Math.round(hue + 24)}, ${Math.round(
+    clamp(saturation + 12, 0, 100),
+  )}%, ${Math.round(clamp(lightness + 18, 0, 100))}%, ${formatAlpha(
+    alpha * clamp(0.6 + vibrancy * 0.3, 0, 1),
+  )})`;
+  const secondaryColor = `hsla(${Math.round(hue - 28)}, ${Math.round(
+    clamp(saturation - 6, 0, 100),
+  )}%, ${Math.round(clamp(lightness + 8, 0, 100))}%, ${formatAlpha(alpha * 0.55)})`;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  for (let i = 0; i < AURORA_VEIL_RIBBONS.length; i += 1) {
+    const ribbon = AURORA_VEIL_RIBBONS[i];
+
+    if (!ribbon) continue;
+
+    const thickness = clamp(ribbon.thickness ?? 0.04, 0.01, 0.12) * height;
+    const wobble = (i - 1) * vibrancy * 0.02 * height;
+
+    ctx.beginPath();
+    ctx.moveTo(ribbon.start.x * width, ribbon.start.y * height);
+    ctx.bezierCurveTo(
+      ribbon.control1.x * width,
+      ribbon.control1.y * height + wobble,
+      ribbon.control2.x * width,
+      ribbon.control2.y * height - wobble,
+      ribbon.end.x * width,
+      ribbon.end.y * height,
+    );
+    ctx.strokeStyle = i === 1 ? primaryColor : secondaryColor;
+    ctx.lineWidth = thickness;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawAuroraVeil(grid, ctx, cellSize, options = {}) {
+  if (!ctx || typeof ctx.fillRect !== "function") return;
+
+  const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
+  const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
+
+  if (!(rows > 0 && cols > 0) || !(cellSize > 0)) {
+    return;
+  }
+
+  const width = cols * cellSize;
+  const height = rows * cellSize;
+
+  if (!(width > 0 && height > 0)) {
+    return;
+  }
+
+  const {
+    maxTileEnergy = MAX_TILE_ENERGY,
+    energyStats,
+    lifeEvents,
+    currentTick,
+    fadeTicks,
+  } = options;
+
+  const stats = energyStats ?? computeEnergyStats(grid, maxTileEnergy);
+  const averageEnergy = Number.isFinite(stats?.average) ? stats.average : 0;
+  const normalizedEnergy =
+    maxTileEnergy > 0 ? clamp01(averageEnergy / maxTileEnergy) : clamp01(averageEnergy);
+  const celebrationRatio = computeAuroraCelebrationRatio(
+    lifeEvents,
+    currentTick,
+    fadeTicks,
+  );
+  const vibrancy = clamp01(normalizedEnergy * 0.65 + celebrationRatio * 0.35);
+
+  const hue = lerp(AURORA_VEIL_BASE_HUE, AURORA_VEIL_PEAK_HUE, celebrationRatio);
+  const saturation = lerp(
+    AURORA_VEIL_BASE_SATURATION,
+    AURORA_VEIL_PEAK_SATURATION,
+    vibrancy,
+  );
+  const lightness = lerp(
+    AURORA_VEIL_BASE_LIGHTNESS,
+    AURORA_VEIL_PEAK_LIGHTNESS,
+    clamp01(normalizedEnergy * 0.7 + celebrationRatio * 0.3),
+  );
+  const alpha = lerp(AURORA_VEIL_MIN_ALPHA, AURORA_VEIL_MAX_ALPHA, vibrancy || 0.05);
+
+  ctx.save();
+
+  const gradient = ctx.createLinearGradient(0, height * 0.2, width, height);
+
+  gradient.addColorStop(
+    0,
+    `hsla(${Math.round(hue + 26)}, ${Math.round(clamp(saturation + 10, 0, 100))}%, ${Math.round(
+      clamp(lightness + 14, 0, 100),
+    )}%, ${formatAlpha(alpha * 0.7)})`,
+  );
+  gradient.addColorStop(
+    0.45,
+    `hsla(${Math.round(hue)}, ${Math.round(clamp(saturation, 0, 100))}%, ${Math.round(
+      clamp(lightness + 4, 0, 100),
+    )}%, ${formatAlpha(alpha)})`,
+  );
+  gradient.addColorStop(
+    1,
+    `hsla(${Math.round(hue - 32)}, ${Math.round(clamp(saturation - 14, 0, 100))}%, ${Math.round(
+      clamp(lightness - 2, 0, 100),
+    )}%, ${formatAlpha(alpha * 0.55)})`,
+  );
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  drawAuroraRibbons(ctx, width, height, {
+    hue,
+    saturation,
+    lightness,
+    alpha,
+    vibrancy,
+  });
+
+  ctx.restore();
+}
+
 function formatAlpha(alpha) {
   if (!(alpha > 0)) return "0";
   if (alpha >= 1) return "1";
@@ -1123,6 +1346,7 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showAge,
     showFitness,
     showLifeEventMarkers,
+    showAuroraVeil,
     showGridLines,
     showObstacles = true,
     showReproductiveZones = true,
@@ -1142,6 +1366,17 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   const selectionManager = explicitSelection || grid?.selectionManager;
   const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
   const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
+  let cachedEnergyStats = null;
+  let energyStatsComputed = false;
+
+  const resolveEnergyStats = () => {
+    if (!energyStatsComputed) {
+      cachedEnergyStats = computeEnergyStats(grid, maxTileEnergy);
+      energyStatsComputed = true;
+    }
+
+    return cachedEnergyStats;
+  };
 
   if (Array.isArray(activeEvents) && activeEvents.length > 0) {
     drawEventOverlays(ctx, cellSize, activeEvents, getEventColor);
@@ -1152,7 +1387,17 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   }
   if (showObstacles) drawObstacleMask(grid, ctx, cellSize);
 
-  if (showEnergy) drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy);
+  if (showEnergy) {
+    const stats = showAuroraVeil
+      ? resolveEnergyStats()
+      : computeEnergyStats(grid, maxTileEnergy);
+
+    drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy, stats);
+    if (!showAuroraVeil) {
+      cachedEnergyStats = stats;
+      energyStatsComputed = true;
+    }
+  }
   if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
   if (showAge) drawAgeHeatmap(grid, ctx, cellSize);
   if (showFitness) {
@@ -1165,6 +1410,17 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   }
   if (showGridLines) {
     drawGridLines(ctx, cellSize, rows, cols, gridLineOptions);
+  }
+  if (showAuroraVeil) {
+    const stats = energyStatsComputed ? cachedEnergyStats : resolveEnergyStats();
+
+    drawAuroraVeil(grid, ctx, cellSize, {
+      maxTileEnergy,
+      energyStats: stats,
+      lifeEvents,
+      currentTick: lifeEventCurrentTick,
+      fadeTicks: lifeEventFadeTicks,
+    });
   }
   if (showLifeEventMarkers && Array.isArray(lifeEvents) && lifeEvents.length > 0) {
     drawLifeEventMarkers(ctx, cellSize, lifeEvents, {
@@ -1182,17 +1438,21 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
  * @param {CanvasRenderingContext2D} ctx - Rendering context.
  * @param {number} cellSize - Size of a single grid cell in pixels.
  * @param {number} [maxTileEnergy=MAX_TILE_ENERGY] - Energy cap used to normalise colours.
+ * @param {{min:number,max:number,average:number}|null} [statsOverride] - Optional
+ *   precomputed energy statistics to reuse when multiple overlays need the
+ *   same summary values.
  */
 export function drawEnergyHeatmap(
   grid,
   ctx,
   cellSize,
   maxTileEnergy = MAX_TILE_ENERGY,
+  statsOverride = null,
 ) {
   if (!grid || !Array.isArray(grid.energyGrid) || !grid.rows || !grid.cols) return;
 
   const scale = 0.99;
-  const stats = computeEnergyStats(grid, maxTileEnergy);
+  const stats = statsOverride ?? computeEnergyStats(grid, maxTileEnergy);
 
   drawScalarHeatmap(
     grid,

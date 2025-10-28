@@ -292,6 +292,7 @@ export default class SimulationEngine {
       showAge: defaults.showAge,
       showFitness: defaults.showFitness,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
+      showAuroraVeil: defaults.showAuroraVeil,
       showGridLines: defaults.showGridLines,
       showReproductiveZones: defaults.showReproductiveZones,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
@@ -785,6 +786,7 @@ export default class SimulationEngine {
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
       showLifeEventMarkers: includeLifeEventMarkers,
+      showAuroraVeil: this.state.showAuroraVeil ?? false,
       showGridLines: this.state.showGridLines ?? false,
       showReproductiveZones:
         this.state.showReproductiveZones !== undefined
@@ -800,6 +802,7 @@ export default class SimulationEngine {
       selectionManager: this.selectionManager,
       lifeEvents: recentLifeEvents,
       currentTick: totalTicks,
+      lifeEventFadeTicks: this.stats?.lifeEventFadeTicks,
     });
 
     if (this.telemetry.hasPending()) {
@@ -1129,6 +1132,7 @@ export default class SimulationEngine {
       showFitness: this.state.showFitness ?? false,
       showObstacles,
       showLifeEventMarkers: includeLifeEventMarkers,
+      showAuroraVeil: this.state.showAuroraVeil ?? false,
       showGridLines: this.state.showGridLines ?? false,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
@@ -1140,6 +1144,7 @@ export default class SimulationEngine {
       selectionManager: this.selectionManager,
       lifeEvents: recentLifeEvents,
       currentTick: totalTicks,
+      lifeEventFadeTicks: this.stats?.lifeEventFadeTicks,
     });
 
     this.telemetry.resetThrottle(this.now());
@@ -1396,6 +1401,7 @@ export default class SimulationEngine {
     showAge,
     showFitness,
     showLifeEventMarkers,
+    showAuroraVeil,
     showGridLines,
     showReproductiveZones,
   }) {
@@ -1406,6 +1412,7 @@ export default class SimulationEngine {
       showAge,
       showFitness,
       showLifeEventMarkers,
+      showAuroraVeil,
       showGridLines,
       showReproductiveZones,
     })
@@ -1520,6 +1527,7 @@ export default class SimulationEngine {
       case "showAge":
       case "showFitness":
       case "showLifeEventMarkers":
+      case "showAuroraVeil":
       case "showGridLines":
       case "showReproductiveZones":
         this.setOverlayVisibility({ [key]: value });
