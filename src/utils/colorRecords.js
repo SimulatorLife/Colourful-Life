@@ -9,7 +9,7 @@ let colorCacheEvictIndex = 0;
 const CELL_COLOR_RECORD_CACHE = new WeakMap();
 
 const RGB_PATTERN =
-  /rgba?\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)(?:\s*,\s*([0-9.]+)\s*)?\)/i;
+  /rgba?\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)(?:\s*,\s*([0-9.]+%?)\s*)?\)/i;
 const HEX_PATTERN = /^#([0-9a-f]{3,8})$/i;
 const EMPTY_RGBA = Object.freeze([0, 0, 0, 0]);
 
@@ -203,8 +203,22 @@ export function resolveColorRecord(color) {
       const g = clamp(Number.parseInt(match[2], 10) || 0, 0, 255);
       const b = clamp(Number.parseInt(match[3], 10) || 0, 0, 255);
       const alphaMatch = match[4];
-      const alpha = alphaMatch != null ? Number.parseFloat(alphaMatch) : 1;
-      const normalizedAlpha = Number.isFinite(alpha) ? alpha : 1;
+      let normalizedAlpha = 1;
+
+      if (typeof alphaMatch === "string") {
+        const trimmedAlpha = alphaMatch.trim();
+
+        if (trimmedAlpha.length > 0) {
+          const alphaNumeric = Number.parseFloat(trimmedAlpha);
+
+          if (Number.isFinite(alphaNumeric)) {
+            normalizedAlpha = trimmedAlpha.endsWith("%")
+              ? alphaNumeric / 100
+              : alphaNumeric;
+          }
+        }
+      }
+
       const a = clamp(Math.round(normalizedAlpha * 255), 0, 255);
 
       record = createColorRecord(r, g, b, a);
