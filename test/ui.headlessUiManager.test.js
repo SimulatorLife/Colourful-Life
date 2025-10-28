@@ -93,6 +93,23 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   assert.is(manager.getAutoPauseOnBlur(), true);
 });
 
+test("createHeadlessUiManager clamps energy rates to the unit interval", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  manager.setEnergyRegenRate(5);
+  manager.setEnergyDiffusionRate(2.2);
+
+  assert.equal(notifications.slice(-2), [
+    ["energyRegenRate", 1],
+    ["energyDiffusionRate", 1],
+  ]);
+  assert.is(manager.getEnergyRegenRate(), 1);
+  assert.is(manager.getEnergyDiffusionRate(), 1);
+});
+
 test("createHeadlessUiManager clamps combat sharpness to the engine minimum", () => {
   const notifications = [];
   const manager = createHeadlessUiManager({

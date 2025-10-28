@@ -257,13 +257,13 @@ export function createHeadlessUiManager(options = {}) {
     getCombatTerritoryEdgeFactor: () => settings.combatTerritoryEdgeFactor,
     getEnergyRegenRate: () => settings.energyRegenRate,
     setEnergyRegenRate: (value) => {
-      if (updateIfFinite("energyRegenRate", value, { min: 0 })) {
+      if (updateIfFinite("energyRegenRate", value, { min: 0, max: 1 })) {
         notify("energyRegenRate", settings.energyRegenRate);
       }
     },
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
     setEnergyDiffusionRate: (value) => {
-      if (updateIfFinite("energyDiffusionRate", value, { min: 0 })) {
+      if (updateIfFinite("energyDiffusionRate", value, { min: 0, max: 1 })) {
         notify("energyDiffusionRate", settings.energyDiffusionRate);
       }
     },
