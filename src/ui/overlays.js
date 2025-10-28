@@ -303,9 +303,7 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
 
   prepared.length = 0;
 
-  for (let i = 0; i < events.length; i += 1) {
-    const event = events[i];
-
+  for (const event of events) {
     if (!event) continue;
 
     const reusable = acquireLifeEventMarker();
@@ -382,8 +380,8 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
   }
   if (canSave && typeof ctx.restore === "function") ctx.restore();
 
-  for (let i = 0; i < availableMarkers; i += 1) {
-    releaseLifeEventMarker(prepared[i]);
+  for (const descriptor of prepared) {
+    releaseLifeEventMarker(descriptor);
   }
 
   prepared.length = 0;
