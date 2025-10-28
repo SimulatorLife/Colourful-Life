@@ -68,22 +68,21 @@ function sampleFromDistribution(probabilities = [], labels = [], rng = Math.rand
   if (!Array.isArray(probabilities) || probabilities.length === 0) return null;
 
   const length = probabilities.length;
-  let total = 0;
-
-  for (let i = 0; i < length; i++) {
-    total += probabilities[i];
-  }
+  const total = probabilities.reduce((sum, weight) => sum + weight, 0);
 
   if (!Number.isFinite(total) || total <= EPSILON) return null;
 
   const randomSource = typeof rng === "function" ? rng : Math.random;
-  const r = randomSource() * total;
-  let acc = 0;
+  const threshold = randomSource() * total;
+  let cumulative = 0;
+  const selectedIndex = probabilities.findIndex((weight) => {
+    cumulative += weight;
 
-  for (let i = 0; i < length; i++) {
-    acc += probabilities[i];
+    return threshold <= cumulative + EPSILON;
+  });
 
-    if (r <= acc + EPSILON) return labels[i] ?? i;
+  if (selectedIndex !== -1) {
+    return labels[selectedIndex] ?? selectedIndex;
   }
 
   const fallbackIndex = length - 1;
