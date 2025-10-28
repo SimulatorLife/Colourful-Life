@@ -943,75 +943,145 @@ export default class GridManager {
     const useScarcity = maxTileEnergy > 0;
     const invMaxTileEnergy = useScarcity ? 1 / maxTileEnergy : 0;
 
-    for (let r = 0; r < rows; r++) {
-      const gridRow = grid[r];
+    const applyCrowdingContribution = (occupant, r, c) => {
+      if (!occupant) return false;
 
-      if (!gridRow) continue;
+      let tolerance = Number.isFinite(occupant._crowdingTolerance)
+        ? occupant._crowdingTolerance
+        : Number.isFinite(occupant.baseCrowdingTolerance)
+          ? occupant.baseCrowdingTolerance
+          : 0.5;
 
-      for (let c = 0; c < cols; c++) {
-        const occupant = gridRow[c];
+      if (tolerance <= 0) {
+        tolerance = 0;
+      } else if (tolerance >= 1) {
+        tolerance = 1;
+      }
 
-        if (!occupant) continue;
+      let scarcityContribution = 0;
 
-        let tolerance = Number.isFinite(occupant._crowdingTolerance)
-          ? occupant._crowdingTolerance
-          : Number.isFinite(occupant.baseCrowdingTolerance)
-            ? occupant.baseCrowdingTolerance
-            : 0.5;
+      if (useScarcity) {
+        let normalizedEnergy = Number.isFinite(occupant.energy)
+          ? occupant.energy * invMaxTileEnergy
+          : 0;
 
-        if (tolerance <= 0) {
-          tolerance = 0;
-        } else if (tolerance >= 1) {
-          tolerance = 1;
+        if (normalizedEnergy <= 0) {
+          normalizedEnergy = 0;
+        } else if (normalizedEnergy >= 1) {
+          normalizedEnergy = 1;
         }
 
-        let scarcityContribution = 0;
+        scarcityContribution = 1 - normalizedEnergy;
+      }
+
+      for (let i = 0; i < NEIGHBOR_OFFSETS.length; i++) {
+        const offset = NEIGHBOR_OFFSETS[i];
+
+        if (!offset) continue;
+
+        const nr = r + offset[0];
+        const nc = c + offset[1];
+
+        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+
+        const comfortRow = comfort[nr];
+        const countRow = counts[nr];
+        const scarcityRow = scarcity[nr];
+        const revisionRow = revisionGrid[nr];
+
+        if (revisionRow[nc] !== revision) {
+          revisionRow[nc] = revision;
+          comfortRow[nc] = 0;
+          countRow[nc] = 0;
+
+          if (scarcityRow) {
+            scarcityRow[nc] = 0;
+          }
+        }
+
+        comfortRow[nc] += tolerance;
+        countRow[nc] += 1;
 
         if (useScarcity) {
-          let normalizedEnergy = Number.isFinite(occupant.energy)
-            ? occupant.energy * invMaxTileEnergy
-            : 0;
+          scarcityRow[nc] += scarcityContribution;
+        }
+      }
 
-          if (normalizedEnergy <= 0) {
-            normalizedEnergy = 0;
-          } else if (normalizedEnergy >= 1) {
-            normalizedEnergy = 1;
+      return true;
+    };
+
+    let processedViaActiveSet = false;
+    const activeCells = this.activeCells;
+
+    if (activeCells && activeCells.size > 0) {
+      let processedCount = 0;
+
+      for (const occupant of activeCells) {
+        if (!occupant) continue;
+
+        let r = Number.isInteger(occupant.row) ? occupant.row : null;
+        let c = Number.isInteger(occupant.col) ? occupant.col : null;
+
+        if (!Number.isInteger(r) || !Number.isInteger(c)) {
+          const tracked = this.cellPositions?.get?.(occupant);
+
+          if (tracked) {
+            if (!Number.isInteger(r)) r = tracked.row;
+            if (!Number.isInteger(c)) c = tracked.col;
           }
-
-          scarcityContribution = 1 - normalizedEnergy;
         }
 
-        for (let i = 0; i < NEIGHBOR_OFFSETS.length; i++) {
-          const offset = NEIGHBOR_OFFSETS[i];
+        if (!Number.isInteger(r) || !Number.isInteger(c)) {
+          continue;
+        }
 
-          if (!offset) continue;
+        if (r < 0 || r >= rows || c < 0 || c >= cols) {
+          continue;
+        }
 
-          const nr = r + offset[0];
-          const nc = c + offset[1];
+        const gridRow = grid[r];
 
-          if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+        if (!gridRow || gridRow[c] !== occupant) {
+          const tracked = this.cellPositions?.get?.(occupant);
 
-          const comfortRow = comfort[nr];
-          const countRow = counts[nr];
-          const scarcityRow = scarcity[nr];
-          const revisionRow = revisionGrid[nr];
+          if (tracked) {
+            const { row: trackedRow, col: trackedCol } = tracked;
 
-          if (revisionRow[nc] !== revision) {
-            revisionRow[nc] = revision;
-            comfortRow[nc] = 0;
-            countRow[nc] = 0;
-
-            if (scarcityRow) {
-              scarcityRow[nc] = 0;
+            if (Number.isInteger(trackedRow) && Number.isInteger(trackedCol)) {
+              r = trackedRow;
+              c = trackedCol;
             }
           }
+        }
 
-          comfortRow[nc] += tolerance;
-          countRow[nc] += 1;
+        if (r < 0 || r >= rows || c < 0 || c >= cols) {
+          continue;
+        }
 
-          if (useScarcity) {
-            scarcityRow[nc] += scarcityContribution;
-          }
+        const finalRow = grid[r];
+
+        if (!finalRow || finalRow[c] !== occupant) {
+          continue;
+        }
+
+        if (applyCrowdingContribution(occupant, r, c)) {
+          processedCount += 1;
+        }
+      }
+
+      processedViaActiveSet = processedCount > 0;
+    }
+
+    if (!processedViaActiveSet) {
+      for (let r = 0; r < rows; r++) {
+        const gridRow = grid[r];
+
+        if (!gridRow) continue;
+
+        for (let c = 0; c < cols; c++) {
+          if (!gridRow[c]) continue;
+
+          applyCrowdingContribution(gridRow[c], r, c);
         }
       }
     }
