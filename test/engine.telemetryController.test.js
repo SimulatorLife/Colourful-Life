@@ -213,10 +213,6 @@ test("TelemetryController sanitizes retained snapshots for leaderboard consumers
       },
       null,
     ],
-    brainSnapshots: [
-      { id: "alpha-brain", color: null, cell: { color: "#ff00ff" } },
-      { id: "beta-brain" },
-    ],
     populationCells: [{ id: 1 }],
   };
 
@@ -239,10 +235,6 @@ test("TelemetryController sanitizes retained snapshots for leaderboard consumers
     color: "#ddeeff",
   });
   assert.is(retained.entries[2], null);
-  assert.equal(retained.brainSnapshots, [
-    { id: "alpha-brain", color: "#aabbcc" },
-    { id: "beta-brain", color: "#ddeeff" },
-  ]);
   assert.not.ok("populationCells" in retained);
   assert.not.ok("cell" in retained.entries[0]);
   assert.not.ok("cell" in retained.entries[1]);

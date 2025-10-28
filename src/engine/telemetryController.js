@@ -315,24 +315,6 @@ export default class TelemetryController {
       }
     });
 
-    const brainSnapshots = Array.isArray(snapshot.brainSnapshots)
-      ? snapshot.brainSnapshots
-      : null;
-
-    brainSnapshots?.forEach((entry, index) => {
-      if (!entry || typeof entry !== "object") return;
-
-      const entryColor = entries?.[index]?.color;
-
-      if (entry.color == null && typeof entryColor === "string") {
-        entry.color = entryColor;
-      }
-
-      if ("cell" in entry) {
-        delete entry.cell;
-      }
-    });
-
     if (Array.isArray(snapshot.populationCells)) {
       snapshot.populationCells.length = 0;
     }

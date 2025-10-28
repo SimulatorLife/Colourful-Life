@@ -10,7 +10,6 @@ import {
   COMBAT_TERRITORY_EDGE_FACTOR,
   SIMULATION_DEFAULTS,
   resolveSimulationDefaults,
-  BRAIN_SNAPSHOT_LIMIT_DEFAULT,
   LEADERBOARD_INTERVAL_MIN_MS,
 } from "./config.js";
 import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
@@ -83,8 +82,6 @@ function sanitizeMaxConcurrentEvents(value, fallback = MAX_CONCURRENT_EVENTS_FAL
  * @param {Window} [options.window] - Optional window reference for SSR/test injection.
  * @param {Document} [options.document] - Optional document reference for SSR/test injection.
  * @param {boolean} [options.autoStart=true] - When true the engine immediately starts ticking.
- * @param {Function|{captureFromEntries: Function}} [options.brainSnapshotCollector]
- *   Hook used by {@link GridManager} to build brain snapshots for the leaderboard.
  */
 export default class SimulationEngine {
   constructor({
@@ -99,7 +96,6 @@ export default class SimulationEngine {
     window: injectedWindow,
     document: injectedDocument,
     autoStart = true,
-    brainSnapshotCollector,
     selectionManager,
     selectionManagerFactory,
   } = {}) {
@@ -177,14 +173,6 @@ export default class SimulationEngine {
     );
 
     defaults.maxConcurrentEvents = maxConcurrentEvents;
-    const brainSnapshotLimit = sanitizePositiveInteger(defaults.brainSnapshotLimit, {
-      fallback: Number.isFinite(SIMULATION_DEFAULTS.brainSnapshotLimit)
-        ? SIMULATION_DEFAULTS.brainSnapshotLimit
-        : BRAIN_SNAPSHOT_LIMIT_DEFAULT,
-      min: 0,
-    });
-
-    defaults.brainSnapshotLimit = brainSnapshotLimit;
 
     const baseUpdatesCandidate =
       Number.isFinite(defaults.speedMultiplier) && defaults.speedMultiplier > 0
@@ -268,13 +256,8 @@ export default class SimulationEngine {
       randomObstaclePresetPool: config.randomObstaclePresetPool,
       obstaclePresets: this._obstaclePresets,
       rng,
-      brainSnapshotCollector,
-      brainSnapshotLimit,
       performanceNow: this.now,
     });
-
-    this.brainSnapshotCollector = brainSnapshotCollector ?? null;
-    this.brainSnapshotLimit = brainSnapshotLimit;
 
     if (win) {
       win.grid = this.grid;
@@ -313,7 +296,6 @@ export default class SimulationEngine {
       showReproductiveZones: defaults.showReproductiveZones,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       leaderboardSize: defaults.leaderboardSize,
-      brainSnapshotLimit,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
       lowDiversityReproMultiplier: defaults.lowDiversityReproMultiplier,
       initialTileEnergyFraction: defaults.initialTileEnergyFraction,
@@ -1439,32 +1421,6 @@ export default class SimulationEngine {
     }
   }
 
-  setBrainSnapshotCollector(collector) {
-    this.brainSnapshotCollector = collector ?? null;
-    this.grid?.setBrainSnapshotCollector(collector);
-  }
-
-  setBrainSnapshotLimit(value) {
-    const fallback =
-      Number.isFinite(this.brainSnapshotLimit) && this.brainSnapshotLimit >= 0
-        ? this.brainSnapshotLimit
-        : (SIMULATION_DEFAULTS.brainSnapshotLimit ?? BRAIN_SNAPSHOT_LIMIT_DEFAULT);
-    const sanitized = sanitizePositiveInteger(value, {
-      fallback,
-      min: 0,
-    });
-
-    if (this.brainSnapshotLimit === sanitized) {
-      return this.brainSnapshotLimit;
-    }
-
-    this.brainSnapshotLimit = sanitized;
-    this.grid?.setBrainSnapshotLimit?.(sanitized);
-    this.#updateState({ brainSnapshotLimit: sanitized });
-
-    return this.brainSnapshotLimit;
-  }
-
   setAutoPauseOnBlur(value) {
     const enabled = coerceBoolean(value, this.autoPauseOnBlur);
 
@@ -1557,9 +1513,6 @@ export default class SimulationEngine {
       }
       case "leaderboardIntervalMs":
         this.setLeaderboardInterval(value);
-        break;
-      case "brainSnapshotLimit":
-        this.setBrainSnapshotLimit(value);
         break;
       case "showObstacles":
       case "showEnergy":

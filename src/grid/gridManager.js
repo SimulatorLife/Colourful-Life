@@ -6,7 +6,7 @@ import {
   sanitizePositiveInteger,
   sanitizeUnitInterval,
 } from "../utils/math.js";
-import { createRankedBuffer, isArrayLike } from "../utils/collections.js";
+import { isArrayLike } from "../utils/collections.js";
 import { resolveCellColor } from "../utils/cell.js";
 import { warnOnce } from "../utils/error.js";
 import DNA from "../genome.js";
@@ -49,9 +49,7 @@ import {
   DECAY_RELEASE_BASE,
   DECAY_RELEASE_RATE,
   INITIAL_TILE_ENERGY_FRACTION_DEFAULT,
-  BRAIN_SNAPSHOT_LIMIT_DEFAULT,
 } from "../config.js";
-const DEFAULT_BRAIN_SNAPSHOT_LIMIT = BRAIN_SNAPSHOT_LIMIT_DEFAULT;
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 const EMPTY_TARGET_LIST = Object.freeze([]);
@@ -437,18 +435,6 @@ function getPairSimilarity(cellA, cellB) {
   cacheB.set(cellA, value);
 
   return value;
-}
-
-function toBrainSnapshotCollector(candidate) {
-  if (typeof candidate === "function") {
-    return candidate;
-  }
-
-  if (candidate && typeof candidate.captureFromEntries === "function") {
-    return (entries, options) => candidate.captureFromEntries(entries, options);
-  }
-
-  return null;
 }
 
 /**
@@ -1971,8 +1957,6 @@ export default class GridManager {
       randomObstaclePresetPool = null,
       obstaclePresets,
       rng,
-      brainSnapshotCollector,
-      brainSnapshotLimit,
     } = options;
     const {
       eventManager: resolvedEventManager,
@@ -2102,13 +2086,6 @@ export default class GridManager {
     this.cellPositionTelemetry = { mismatches: 0, lastTick: 0 };
     this.onMoveCallback = (payload) => this.#handleCellMoved(payload);
     this.populationScarcitySignal = 0;
-    const resolvedBrainSnapshotLimit = sanitizePositiveInteger(brainSnapshotLimit, {
-      fallback: DEFAULT_BRAIN_SNAPSHOT_LIMIT,
-      min: 0,
-    });
-
-    this.brainSnapshotCollector = toBrainSnapshotCollector(brainSnapshotCollector);
-    this.brainSnapshotLimit = resolvedBrainSnapshotLimit;
     this.boundTryMove = (
       gridArr,
       sourceRow,
@@ -2745,25 +2722,6 @@ export default class GridManager {
 
   setSelectionManager(selectionManager) {
     this.reproductionZones.setSelectionManager(selectionManager);
-  }
-
-  setBrainSnapshotCollector(collector) {
-    this.brainSnapshotCollector = toBrainSnapshotCollector(collector);
-  }
-
-  setBrainSnapshotLimit(limit) {
-    const fallback =
-      Number.isFinite(this.brainSnapshotLimit) && this.brainSnapshotLimit >= 0
-        ? this.brainSnapshotLimit
-        : DEFAULT_BRAIN_SNAPSHOT_LIMIT;
-    const sanitized = sanitizePositiveInteger(limit, {
-      fallback,
-      min: 0,
-    });
-
-    this.brainSnapshotLimit = sanitized;
-
-    return this.brainSnapshotLimit;
   }
 
   setInitialTileEnergyFraction(fraction, options = {}) {
@@ -7927,15 +7885,6 @@ export default class GridManager {
       maxFitness: 0,
       entries,
     };
-    const brainSnapshotLimit =
-      Number.isFinite(this.brainSnapshotLimit) && this.brainSnapshotLimit >= 0
-        ? this.brainSnapshotLimit
-        : DEFAULT_BRAIN_SNAPSHOT_LIMIT;
-    const topBrainEntries = createRankedBuffer(
-      brainSnapshotLimit,
-      (a, b) => (b?.fitness ?? -Infinity) - (a?.fitness ?? -Infinity),
-    );
-
     const activeCells = this.activeCells;
 
     if (activeCells && activeCells.size > 0) {
@@ -7974,24 +7923,13 @@ export default class GridManager {
         entries.push(entry);
         populationCells.push(cell);
 
-        if (Number.isFinite(entry.fitness)) {
-          topBrainEntries.add({ row, col, cell, fitness: entry.fitness });
-          if (entry.fitness > snapshot.maxFitness) {
-            snapshot.maxFitness = entry.fitness;
-          }
+        if (Number.isFinite(entry.fitness) && entry.fitness > snapshot.maxFitness) {
+          snapshot.maxFitness = entry.fitness;
         }
       }
     }
 
-    const ranked = topBrainEntries.getItems();
-    const collector =
-      this.brainSnapshotCollector ?? toBrainSnapshotCollector(GLOBAL.BrainDebugger);
-    const collected = collector
-      ? collector(ranked, { limit: brainSnapshotLimit, gridManager: this, snapshot })
-      : ranked;
-
     snapshot.populationCells = populationCells;
-    snapshot.brainSnapshots = Array.isArray(collected) ? collected : ranked;
     snapshot.populationScarcity = clamp(
       Number.isFinite(this.populationScarcitySignal)
         ? this.populationScarcitySignal

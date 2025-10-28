@@ -1,6 +1,5 @@
 import SimulationEngine from "./simulationEngine.js";
 import UIManager from "./ui/uiManager.js";
-import BrainDebugger from "./ui/brainDebugger.js";
 import SelectionManager from "./grid/selectionManager.js";
 import { drawOverlays } from "./ui/overlays.js";
 
@@ -12,7 +11,6 @@ const engine = new SimulationEngine({
     cellSize: 5,
   },
   autoStart: false,
-  brainSnapshotCollector: BrainDebugger,
   selectionManagerFactory: (rows, cols) => new SelectionManager(rows, cols),
   drawOverlays,
 });
@@ -68,7 +66,6 @@ uiManager.setPauseState(engine.isPaused());
 
 if (typeof window !== "undefined") {
   window.uiManager = uiManager;
-  window.BrainDebugger = BrainDebugger;
 }
 
 const startPaused = engine.isPaused();

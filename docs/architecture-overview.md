@@ -22,11 +22,7 @@ This document captures how the Colourful Life simulation composes its core syste
    sliders) back to the engine. Headless consumers receive a plain-object control
    surface with the same callbacks, making automated runs and browser sessions
    behave identically.
-4. **BrainDebugger** (`src/ui/brainDebugger.js`) receives neuron snapshots from
-   the grid and exposes them to the browser console for inspection. The debugger
-   is optional in headless environments and doubles as the default brain
-   snapshot collector for headless runs.
-5. **Environment adapters** (`src/engine/environment.js`) normalise canvas
+4. **Environment adapters** (`src/engine/environment.js`) normalise canvas
    lookup, sizing, and timing primitives so the engine can run in browsers,
    tests, or automation without bespoke wiring.
 
@@ -38,7 +34,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - Drives reproduction, mutation, movement, combat, cooperation, and death each tick.
 - Enforces energy exclusivity by immediately draining or redistributing tile reserves when a cell occupies a coordinate so no tile reports a resident and stored energy simultaneously.
 - Delegates complex social interactions to **InteractionSystem** and neural decision making to **Brain** instances.
-- Collects leaderboard entries by combining `computeFitness` with Brain snapshots.
+- Collects leaderboard entries by combining `computeFitness` with per-cell telemetry.
 - Applies obstacle presets resolved via `resolveObstaclePresetCatalog` and exposes helpers such as
   `burstRandomCells` and `applyObstaclePreset` that the UI surfaces. Embedding contexts can pass
   `config.obstaclePresets` to extend or replace the catalog without touching core code.
@@ -50,7 +46,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - Implemented in [`src/cell.js`](../src/cell.js), each `Cell` instance encapsulates DNA-derived behaviour, neural wiring, and telemetry gathered during simulation ticks.
 - Maintains rolling histories for decisions, risk memories, and mating preferences so overlays and analytics modules can display recent context.
 - Applies DNA-driven caps (e.g. crowding tolerance, neural fatigue profiles, diversity appetites) when responding to environment and interaction hooks.
-- Emits brain snapshots and decision traces consumed by the debugger, leaderboard, and overlays.
+- Emits decision traces consumed by telemetry pipelines and overlays.
 
 ### EnergySystem
 
@@ -111,7 +107,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - Successful or penalized matings imprint DNA-tuned mate affinity plasticity back into neural sensors, nudging `partnerSimilarity`, `mateSimilarity`, and `opportunitySignal` toward strategies that prove rewarding instead of freezing mate choice to static similarity heuristics.
 - Baseline neural activity and mutation probability respond to the `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` and `COLOURFUL_LIFE_MUTATION_CHANCE` overrides, giving deployments coarse-grained levers for energising or calming populations and for tuning how quickly genomes mutate without editing DNA accessors.
 - Post-mortem energy recycling honours the `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` and `COLOURFUL_LIFE_DECAY_MAX_AGE` overrides so deployments can dial how much energy decaying organisms return to nearby tiles and how long the reservoir persists, keeping scarcity or abundance experiments configuration-driven, while reproduction still flows through DNA-defined demand fractions modulated by both the configurable viability buffer and each genome's heritable viability temperament.
-- Decision telemetry is available through `cell.getDecisionTelemetry`, which the debugger captures for UI display.
+- Decision telemetry is available through `cell.getDecisionTelemetry`, which instrumentation and overlays can consume for richer context.
 
 ### InteractionSystem
 
@@ -126,8 +122,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - **Fitness** (`src/engine/fitness.mjs`) computes composite organism scores that blend survival, energy trends, and reproduction cadence. The leaderboard and overlays consume these scores to highlight thriving lineages.
 - Life event summaries combine rolling birth/death counts with a net population delta and cadence indicator surfaced through the UI's "Life Event Log" panel, keeping the trend accessible to keyboard and assistive technology users. The Life Event Markers toggle now lives alongside the other map overlays in the Simulation Controls panel so observers can enable grid markers while dialing in canvas layers from a single location.
 - Headless sampling over 300 ticks on a 60×60 grid (seed 12345) showed the prior `0.45` mating diversity threshold averaging ~0.27 diversity with five successes across 241 mate choices, while the gentler `0.42` baseline lifted diversity to ~0.30 with six successes in 269 attempts, so the default now reflects the less restrictive gate to avoid reproduction stalls in homogenised periods.
-- **Leaderboard** (`src/stats/leaderboard.js`) combines `computeFitness` output with brain snapshots to surface top-performing organisms.
-- **BrainDebugger** (`src/ui/brainDebugger.js`) mirrors neuron traces into the browser console for inspection. `SimulationEngine` forwards snapshots each tick when the debugger is available, and the debugger doubles as the default brain snapshot collector for headless runs.
+- **Leaderboard** (`src/stats/leaderboard.js`) combines `computeFitness` output with per-cell telemetry to surface top-performing organisms.
 
 ### UI and overlays
 

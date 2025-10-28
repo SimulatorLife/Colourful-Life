@@ -6910,7 +6910,6 @@ export default class UIManager {
       const summaryFitness = Number.isFinite(entry.fitness)
         ? entry.fitness
         : Number.NaN;
-      const brain = entry.brain ?? {};
       const card = document.createElement("li");
 
       card.className = "leaderboard-entry";
@@ -6982,9 +6981,6 @@ export default class UIManager {
       const detailRows = [];
 
       detailRows.push(
-        { label: "Brain Fitness", value: formatFloat(brain.fitness) },
-        { label: "Neurons", value: formatCount(brain.neuronCount) },
-        { label: "Connections", value: formatCount(brain.connectionCount) },
         { label: "Offspring", value: formatCount(entry.offspring) },
         { label: "Fights Won", value: formatCount(entry.fightsWon) },
         { label: "Age (ticks)", value: formatCount(entry.age) },
@@ -7012,9 +7008,6 @@ export default class UIManager {
 
       const tooltipParts = [
         `${summaryLabel.textContent} ${formatFloat(summaryFitness)}`,
-        `Brain ${formatFloat(brain.fitness)}`,
-        `Neurons ${formatCount(brain.neuronCount)}`,
-        `Connections ${formatCount(brain.connectionCount)}`,
         `Offspring ${formatCount(entry.offspring)}`,
         `Fights ${formatCount(entry.fightsWon)}`,
         `Age ${formatCount(entry.age)} ticks`,
