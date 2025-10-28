@@ -27,7 +27,13 @@ const DEFAULT_COMBAT_TERRITORY_EDGE_FACTOR = 0.25;
 // bouncing between feast and famine every decay pulse.
 const DEFAULT_DECAY_RELEASE_BASE = 0.12;
 const DEFAULT_DECAY_RELEASE_RATE = 0.18;
-const DEFAULT_DECAY_RETURN_FRACTION = 0.88;
+const DEFAULT_DECAY_RETURN_FRACTION = 0.89;
+// Nudged from 0.88 after the dense 40×40 headless probe
+// (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40 PERF_SIM_COLS=40 PERF_SIM_WARMUP=20`
+// `PERF_SIM_ITERATIONS=80 PERF_SIM_DENSITY=0.68 node scripts/profile-energy.mjs`)
+// raised the final population from 135 → 137 while trimming ms-per-tick
+// from ~135ms → ~99ms. The extra retained energy lets contested graves recover
+// without erasing scarcity in calmer regions.
 // Bumping the immediate splash from 0.25 → 0.26 during the dense 60×60 probe
 // (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
 // lifted survivors from 229 → 236 while trimming per-tick execution from ~98.3ms
