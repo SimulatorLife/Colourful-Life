@@ -65,6 +65,18 @@ test("resolveColorRecord clamps rgba component and alpha ranges", async () => {
   assert.equal(record.rgba, [255, 20, 50, 255]);
 });
 
+test("resolveColorRecord handles percentage rgb components", async () => {
+  const { resolveColorRecord } = await loadColorRecordsModule("percent");
+
+  const rgbPercent = resolveColorRecord("rgb(100%, 0%, 25%)");
+
+  assert.equal(rgbPercent.rgba, [255, 0, 64, 255]);
+
+  const rgbaPercent = resolveColorRecord("rgba(12.5%, 50%, 0%, 50%)");
+
+  assert.equal(rgbaPercent.rgba, [32, 128, 0, 128]);
+});
+
 test("resolveCellColorRecord memoizes per cell and reacts to color changes", async () => {
   const { resolveCellColorRecord, resolveColorRecord, EMPTY_COLOR_RECORD } =
     await loadColorRecordsModule("cell-cache");

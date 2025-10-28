@@ -10,7 +10,7 @@ let colorCacheEvictIndex = 0;
 const CELL_COLOR_RECORD_CACHE = new WeakMap();
 
 const RGB_PATTERN =
-  /rgba?\(\s*([0-9]+)\s*(?:,\s*|\s+)([0-9]+)\s*(?:,\s*|\s+)([0-9]+)(?:\s*(?:,\s*|\/\s*)([0-9.]+%?))?\s*\)/i;
+  /rgba?\(\s*([0-9]+(?:\.[0-9]+)?%?)\s*(?:,\s*|\s+)([0-9]+(?:\.[0-9]+)?%?)\s*(?:,\s*|\s+)([0-9]+(?:\.[0-9]+)?%?)(?:\s*(?:,\s*|\/\s*)([0-9.]+%?))?\s*\)/i;
 const HEX_PATTERN = /^#([0-9a-f]{3,8})$/i;
 const EMPTY_RGBA = Object.freeze([0, 0, 0, 0]);
 
@@ -82,6 +82,31 @@ function rememberColor(normalized, record) {
     COLOR_CACHE_LIMIT > 0 ? (evictIndex + 1) % COLOR_CACHE_LIMIT : 0;
 
   return record;
+}
+
+function parseRgbComponent(raw) {
+  if (typeof raw !== "string") {
+    return 0;
+  }
+
+  const trimmed = raw.trim();
+
+  if (trimmed.length === 0) {
+    return 0;
+  }
+
+  const hasPercent = trimmed.endsWith("%");
+  const numeric = Number.parseFloat(trimmed);
+
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+
+  if (hasPercent) {
+    return clamp(Math.round((numeric / 100) * 255), 0, 255);
+  }
+
+  return clamp(Math.round(numeric), 0, 255);
 }
 
 function parseHexColorComponents(hex) {
@@ -200,9 +225,9 @@ export function resolveColorRecord(color) {
     const match = RGB_PATTERN.exec(normalized);
 
     if (match) {
-      const r = clamp(Number.parseInt(match[1], 10) || 0, 0, 255);
-      const g = clamp(Number.parseInt(match[2], 10) || 0, 0, 255);
-      const b = clamp(Number.parseInt(match[3], 10) || 0, 0, 255);
+      const r = parseRgbComponent(match[1]);
+      const g = parseRgbComponent(match[2]);
+      const b = parseRgbComponent(match[3]);
       const alphaMatch = match[4];
       let normalizedAlpha = 1;
 
