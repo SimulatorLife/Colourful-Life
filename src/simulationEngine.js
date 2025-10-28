@@ -1002,7 +1002,6 @@ export default class SimulationEngine {
     this.telemetry.ingestSnapshot(snapshot);
     this.telemetry.markPending();
     this.telemetry.resetThrottle(Number.NEGATIVE_INFINITY);
-    this.lastUpdateTime = this.now();
 
     this.#updateState({
       cellSize: this.cellSize,
@@ -1018,6 +1017,8 @@ export default class SimulationEngine {
     } else {
       this.setPaused(wasPaused);
     }
+
+    this.lastUpdateTime = this.now();
 
     return { cellSize: this.cellSize, rows: this.rows, cols: this.cols };
   }
@@ -1150,6 +1151,8 @@ export default class SimulationEngine {
     } else {
       this.setPaused(wasPaused);
     }
+
+    this.lastUpdateTime = this.now();
   }
 
   stop() {
