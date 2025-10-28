@@ -1,5 +1,6 @@
 import { clamp } from "./math.js";
 import { warnOnce } from "./error.js";
+import { isCellLike } from "./cell.js";
 
 const COLOR_CACHE_LIMIT = 4096;
 const COLOR_CACHE = new Map();
@@ -229,7 +230,7 @@ export function resolveColorRecord(color) {
 }
 
 export function resolveCellColorRecord(cell) {
-  if (!cell || typeof cell !== "object") {
+  if (!isCellLike(cell)) {
     return EMPTY_COLOR_RECORD;
   }
 
