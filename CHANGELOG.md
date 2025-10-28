@@ -30,6 +30,7 @@ where practical.
 
 ### Changed
 
+- Tightened the primary documentation (README, developer guide, architecture notes) to streamline quick-start guidance, highlight subsystem profiling harnesses, and document the shared trait aggregation helpers used by Stats.
 - Refreshed the README, developer guide, and architecture overview to streamline
   the quick-start flow, trim stale metrics, and clarify where configuration
   overrides live so primary docs mirror the current architecture.

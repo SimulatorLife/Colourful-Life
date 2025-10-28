@@ -17,12 +17,12 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 Colourful Life targets the Node.js **25.x** series (the included `.nvmrc` pins to 25.0.0). After cloning:
 
 1. Run `nvm use` (install with `nvm install` if necessary) so `node --version` reports 25.x.
-2. Install dependencies with `npm ci` (or `npm install` when you are intentionally updating the lockfile), then run `npm run prepare` once so Husky hooks stay active after fresh clones or `.husky/` edits.
-3. Launch the dev server with `npm run start` and open `http://localhost:1234`.
-4. Use `npm run check` before committing. It chains linting, formatting verification, and the Node test runner (including the energy benchmark). While iterating, run focused loops—`npm run lint`, `npm run format:check`, `npm test -- --watch`, or `npm test -- path/to/file.test.js`—and finish with `npm run check` once you are satisfied.
-5. Clear Parcel caches with `npm run clean -- --dry-run` to review the targets before deleting them, then re-run without `--dry-run` when Parcel hot reloading stalls.
+2. Install dependencies with `npm ci` (reach for `npm install` only when you intentionally touch the lockfile), then run `npm run prepare` once to restore Husky hooks after fresh clones or `.husky/` edits.
+3. Start developing with `npm run start` and open `http://localhost:1234`.
+4. While iterating, rely on focused loops—`npm run lint`, `npm run format:check`, `npm test -- --watch`, or `npm test -- path/to/file.test.js`—and finish with `npm run check` before committing so linting, formatting verification, the energy benchmark, and the Node.js test suites all pass together.
+5. If Parcel hot reloading stalls, run `npm run clean -- --dry-run` to preview the cache cleanup, then rerun without `--dry-run` to remove stale artifacts.
 
-Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, then browse [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, and testing expectations once the quick start is familiar.
+Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, then browse [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, profiling harnesses, and testing expectations once the quick start is familiar.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
@@ -100,7 +100,7 @@ The simulation runs on cooperating modules housed in `src/`:
 - **Genetics and brains** (`src/genome.js`, `src/brain.js`) — DNA factories encode traits ranging from combat appetite to neural wiring. Brains interpret sensor inputs, adapt gains over time, and emit movement/interaction intents.
 - **Interaction system** (`src/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
 - **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and color overlays.
-- **Stats & leaderboard** (`src/stats/index.js`, `src/stats/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface environmental summaries, and select the top-performing organisms.
+- **Stats & leaderboard** (`src/stats/index.js`, `src/stats/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface environmental summaries, select the top-performing organisms, and share trait aggregation helpers with [`src/stats/traitAggregation.js`](src/stats/traitAggregation.js) for telemetry.
 - **Fitness scoring** (`src/engine/fitness.mjs`) — Computes composite organism fitness used by the leaderboard, overlays, and telemetry.
 - **UI manager** (`src/ui/uiManager.js`) — Builds the sidebar controls, overlays, and metrics panels. A headless adapter in `src/ui/headlessUiManager.js` mirrors the interface for tests and Node scripts.
 - **UI bridge** (`src/ui/simulationUiBridge.js`) — Wires the simulation engine to either the full UI or the headless adapter, keeping metrics streams, pause state, reproduction multipliers, and slider updates in sync across environments.
@@ -161,18 +161,20 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 ## Key scripts and commands
 
-| Command                                                                | Purpose                                                                                                                       |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `npm run start`                                                        | Launch the Parcel development server with hot module replacement at `http://localhost:1234`.                                  |
-| `npm run build`                                                        | Produce an optimized production bundle in `dist/`.                                                                            |
-| `npm run check`                                                        | Run linting, formatting verification, and tests sequentially for a pre-commit confidence sweep.                               |
-| `npm run clean [-- --dry-run]`                                         | Remove `dist/` and `.parcel-cache/` via `scripts/clean-parcel.mjs`, or preview the removals first with `--dry-run`.           |
-| `npm run lint` / `npm run lint:fix`                                    | Run ESLint across the codebase, optionally applying autofixes.                                                                |
-| `npm run format` / `npm run format:check` / `npm run format:workflows` | Apply or verify Prettier formatting for source, documentation, configuration files, and GitHub workflow definitions.          |
-| `npm test`                                                             | Run the energy benchmark and then execute the Node.js test suites. Accepts file paths, directories, and `-- --watch`.         |
-| `npm run benchmark`                                                    | Profile the energy preparation loop via `scripts/profile-energy.mjs`; combine with `PERF_*` variables to mirror CI scenarios. |
-| `npm run deploy:public`                                                | Publish the production bundle to a public Git repository using `scripts/publish-public-build.sh`.                             |
-| `npm run prepare`                                                      | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                                        |
+| Command/Script                               | Purpose                                                                                                  |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `npm run start`                              | Launch the Parcel development server at `http://localhost:1234`.                                         |
+| `npm run build`                              | Produce an optimized production bundle in `dist/`.                                                       |
+| `npm run check`                              | Run linting, formatting verification, the energy benchmark, and the Node.js test suites.                 |
+| `npm run clean [-- --dry-run]`               | Remove `dist/` and `.parcel-cache/`, or preview the removals first with `--dry-run`.                     |
+| `npm run lint` / `npm run lint:fix`          | Run ESLint across the codebase, optionally applying autofixes.                                           |
+| `npm run format` / `npm run format:check`    | Apply or verify Prettier formatting for source, docs, configs, and workflow definitions.                 |
+| `npm test`                                   | Run the energy benchmark, then execute the Node.js test suites (paths, dirs, and watch flags supported). |
+| `npm run benchmark`                          | Profile the energy preparation loop; combine with `PERF_*` variables to mirror CI scenarios.             |
+| `node scripts/profile-density-cache.mjs`     | Benchmark cached density lookups in `GridManager` to confirm the density grid remains fast.              |
+| `node scripts/profile-trait-aggregation.mjs` | Measure the trait aggregation pipeline that powers Stats overlays and dashboards.                        |
+| `npm run deploy:public`                      | Publish the production bundle using `scripts/publish-public-build.sh`.                                   |
+| `npm run prepare`                            | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                   |
 
 ## Further reading
 
