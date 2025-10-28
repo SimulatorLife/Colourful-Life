@@ -1848,16 +1848,110 @@ export default class Cell {
         (this.complementaryMateScore || 0) + clamp(behaviorComplementarity ?? 0, 0, 1);
     }
 
-    if (penalized) {
-      const penalty = clamp(1 - (penaltyMultiplier ?? 1), 0, 1);
+    const penaltyDrag = clamp(1 - (penaltyMultiplier ?? 1), 0, 1);
 
-      this.similarityPenalty = (this.similarityPenalty || 0) + penalty;
+    if (penalized && penaltyDrag > 0) {
+      this.similarityPenalty = (this.similarityPenalty || 0) + penaltyDrag;
     }
 
-    const strategyPenalty = clamp(1 - (strategyPenaltyMultiplier ?? 1), 0, 1);
+    const strategyDrag = clamp(1 - (strategyPenaltyMultiplier ?? 1), 0, 1);
 
-    if (strategyPenalty > 0) {
-      this.strategyPenalty = (this.strategyPenalty || 0) + strategyPenalty;
+    if (strategyDrag > 0) {
+      this.strategyPenalty = (this.strategyPenalty || 0) + strategyDrag;
+    }
+
+    const opportunitySignal = clamp(
+      Number.isFinite(diversityOpportunity) ? diversityOpportunity : 0,
+      0,
+      1,
+    );
+    const opportunityWeightValue = clamp(
+      Number.isFinite(diversityOpportunityWeight) ? diversityOpportunityWeight : 0,
+      0,
+      1,
+    );
+    const opportunityAvailabilityValue = clamp(
+      Number.isFinite(diversityOpportunityAvailability)
+        ? diversityOpportunityAvailability
+        : 0,
+      0,
+      1,
+    );
+    const opportunityGapValue = clamp(
+      Number.isFinite(diversityOpportunityGap) ? diversityOpportunityGap : 0,
+      0,
+      1,
+    );
+    const opportunityAlignmentValue = clamp(
+      Number.isFinite(diversityOpportunityAlignment)
+        ? diversityOpportunityAlignment
+        : opportunityAvailabilityValue > 0
+          ? clamp(1 - opportunityGapValue, 0, 1)
+          : 0,
+      0,
+      1,
+    );
+    const opportunityMultiplierValue = clamp(
+      Number.isFinite(diversityOpportunityMultiplier)
+        ? diversityOpportunityMultiplier
+        : 1,
+      0,
+      2,
+    );
+    const opportunityPresent =
+      opportunitySignal > 0 ||
+      opportunityAvailabilityValue > 0 ||
+      opportunityWeightValue > 0 ||
+      opportunityGapValue > 0 ||
+      opportunityMultiplierValue !== 1;
+
+    if (opportunityPresent) {
+      const weightedPresence =
+        opportunitySignal * 0.45 +
+        opportunityAvailabilityValue * 0.35 +
+        opportunityWeightValue * 0.2;
+      const gapDemand = opportunityGapValue * 0.15;
+      const multiplierDemand =
+        opportunityMultiplierValue > 1
+          ? Math.min(opportunityMultiplierValue - 1, 1) * 0.25
+          : (1 - opportunityMultiplierValue) * 0.2;
+      const sampleWeight = clamp(
+        weightedPresence + gapDemand + multiplierDemand,
+        0.05,
+        1,
+      );
+
+      this.diversityOpportunitySamples =
+        (this.diversityOpportunitySamples || 0) + sampleWeight;
+
+      const alignmentContribution =
+        opportunityAlignmentValue * sampleWeight * (success ? 1 : 0.5);
+
+      if (alignmentContribution > 0) {
+        this.diversityOpportunityAlignmentScore =
+          (this.diversityOpportunityAlignmentScore || 0) + alignmentContribution;
+      }
+
+      let neglect = 0;
+
+      if (!success) {
+        neglect += (1 - opportunityAlignmentValue) * sampleWeight;
+      } else if (opportunityAlignmentValue < 0.75 && opportunityGapValue > 0) {
+        neglect += (1 - opportunityAlignmentValue) * opportunityGapValue * sampleWeight;
+      }
+
+      if (penaltyDrag > 0) {
+        neglect += penaltyDrag * 0.5 * sampleWeight;
+      }
+
+      if (strategyDrag > 0) {
+        neglect += strategyDrag * 0.35 * sampleWeight;
+      }
+
+      if (neglect > 0) {
+        this.diversityOpportunityNeglectScore =
+          (this.diversityOpportunityNeglectScore || 0) + neglect;
+      }
     }
 
     this.#updateMateDiversityDynamics({

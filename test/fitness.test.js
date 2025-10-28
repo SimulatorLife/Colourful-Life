@@ -97,6 +97,9 @@ test("computeFitness rewards diverse mating and penalizes similarity pressure", 
     complementaryMateScore: 1.4,
     similarityPenalty: 1,
     strategyPenalty: 0.8,
+    diversityOpportunitySamples: 0,
+    diversityOpportunityAlignmentScore: 0,
+    diversityOpportunityNeglectScore: 0,
   };
 
   const result = computeFitness(cell, 10);
@@ -112,6 +115,47 @@ test("computeFitness rewards diverse mating and penalizes similarity pressure", 
     penaltyRate * 0.6 -
     monotonyRate * 0.4 -
     (1 - complementRate) * penaltyRate * 0.2;
+
+  approxEqual(result, expected, 1e-9);
+});
+
+test("computeFitness rewards opportunity engagement and penalizes neglect", async () => {
+  const { computeFitness } = await computeFitnessModulePromise;
+  const cell = {
+    fightsWon: 0,
+    fightsLost: 0,
+    offspring: 0,
+    energy: 0,
+    age: 0,
+    lifespan: 100,
+    matingAttempts: 4,
+    matingSuccesses: 2,
+    diverseMateScore: 0.8,
+    complementaryMateScore: 0.6,
+    similarityPenalty: 0.5,
+    strategyPenalty: 0.4,
+    diversityOpportunitySamples: 3,
+    diversityOpportunityAlignmentScore: 1.8,
+    diversityOpportunityNeglectScore: 0.9,
+  };
+
+  const result = computeFitness(cell, 10);
+  const diversityRate = 0.8 / 2;
+  const successRate = 2 / 4;
+  const complementRate = 0.6 / 2;
+  const penaltyRate = Math.min(1, 0.5 / 4);
+  const monotonyRate = Math.min(1, 0.4 / 4);
+  const opportunityAlignmentRate = 1.8 / 3;
+  const opportunityNeglectRate = Math.min(1, 0.9 / 3);
+  const expected =
+    diversityRate * 1.2 +
+    successRate * 0.4 +
+    complementRate * (0.9 + diversityRate * 0.35) -
+    penaltyRate * 0.6 -
+    monotonyRate * 0.4 -
+    (1 - complementRate) * penaltyRate * 0.2 +
+    opportunityAlignmentRate * (0.6 + diversityRate * 0.2) -
+    opportunityNeglectRate * 0.5;
 
   approxEqual(result, expected, 1e-9);
 });
