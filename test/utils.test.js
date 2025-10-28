@@ -24,6 +24,7 @@ import {
   invokeWithErrorBoundary,
   warnOnce,
 } from "../src/utils/error.js";
+import { resolveColorRecord } from "../src/utils/colorRecords.js";
 
 function* cycle(values) {
   let index = 0;
@@ -140,6 +141,18 @@ test("resolveCellColor falls back to DNA color when runtime color is blank", () 
     "#abcdef",
     "whitespace color strings should not block DNA fallback",
   );
+});
+
+test("resolveColorRecord parses rgba alpha percentages", () => {
+  const record = resolveColorRecord("rgba(10, 20, 30, 50%)");
+
+  assert.equal(record.rgba, [10, 20, 30, 128]);
+});
+
+test("resolveColorRecord parses fractional alpha values", () => {
+  const record = resolveColorRecord("rgba(10, 20, 30, 0.25)");
+
+  assert.equal(record.rgba, [10, 20, 30, 64]);
 });
 
 test("sanitizeNumber treats blank strings as missing overrides", () => {
