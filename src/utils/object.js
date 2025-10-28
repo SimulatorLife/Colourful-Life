@@ -26,32 +26,28 @@ export function toPlainObject(candidate) {
  * @param {Object} trace - Snapshot returned by `brain.snapshot()`.
  * @returns {Object|null} Cloned trace.
  */
-let STRUCTURED_CLONE_IMPL =
+let structuredCloneImpl =
   typeof globalThis !== "undefined" && typeof globalThis.structuredClone === "function"
     ? globalThis.structuredClone.bind(globalThis)
     : null;
 
-if (
-  !STRUCTURED_CLONE_IMPL &&
-  typeof process !== "undefined" &&
-  process?.versions?.node
-) {
+if (!structuredCloneImpl && typeof process !== "undefined" && process?.versions?.node) {
   try {
     const { structuredClone: nodeStructuredClone } = await import("node:util");
 
     if (typeof nodeStructuredClone === "function") {
-      STRUCTURED_CLONE_IMPL = nodeStructuredClone;
+      structuredCloneImpl = nodeStructuredClone;
     }
   } catch (error) {
     // Continue attempting other fallbacks when util.structuredClone is unavailable.
   }
 
-  if (!STRUCTURED_CLONE_IMPL) {
+  if (!structuredCloneImpl) {
     try {
       const { serialize, deserialize } = await import("node:v8");
 
       if (typeof serialize === "function" && typeof deserialize === "function") {
-        STRUCTURED_CLONE_IMPL = (value) => deserialize(serialize(value));
+        structuredCloneImpl = (value) => deserialize(serialize(value));
       }
     } catch (error) {
       // Ignore failures when the V8 helpers are unavailable.
@@ -62,12 +58,12 @@ if (
 export function cloneTracePayload(trace) {
   if (trace == null) return null;
 
-  if (!STRUCTURED_CLONE_IMPL) {
+  if (!structuredCloneImpl) {
     return null;
   }
 
   try {
-    return STRUCTURED_CLONE_IMPL(trace);
+    return structuredCloneImpl(trace);
   } catch (error) {
     return null;
   }
