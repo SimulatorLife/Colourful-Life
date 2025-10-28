@@ -1,7 +1,7 @@
 import UIManager, { OVERLAY_TOGGLE_SETTERS } from "./uiManager.js";
 import { createHeadlessUiManager } from "./headlessUiManager.js";
 import { toPlainObject } from "../utils/object.js";
-import { invokeWithErrorBoundary } from "../utils/error.js";
+import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
 function normalizeLayoutOptions({ engine, uiOptions = {}, sanitizedDefaults = {} }) {
   const normalizedUi = toPlainObject(uiOptions);
@@ -87,20 +87,74 @@ function createHeadlessOptions({
   return mergedOptions;
 }
 
+const UI_WARNING_CONTEXTS = Object.freeze({
+  metrics: "rendering metrics update",
+  leaderboard: "rendering leaderboard update",
+  state: "synchronizing engine state",
+  initial: "initializing UI from engine snapshot",
+  geometry: "applying grid geometry change",
+  overlay: "synchronizing overlay toggle state",
+  speed: "synchronizing updates-per-second control",
+});
+
+const DEFAULT_UI_WARNING_CONTEXT = "processing UI update";
+
+function formatUiWarning(methodName, context = DEFAULT_UI_WARNING_CONTEXT) {
+  const label =
+    typeof methodName === "string" && methodName.length > 0
+      ? methodName
+      : "(anonymous)";
+  const activity =
+    typeof context === "string" && context.length > 0
+      ? context
+      : DEFAULT_UI_WARNING_CONTEXT;
+
+  return `UI manager method "${label}" threw while ${activity}; ignoring failure.`;
+}
+
+function invokeUiManagerMethod(
+  uiManager,
+  methodName,
+  args = [],
+  context = UI_WARNING_CONTEXTS.state,
+) {
+  if (!uiManager || typeof methodName !== "string" || methodName.length === 0) {
+    return undefined;
+  }
+
+  const method = uiManager[methodName];
+
+  if (typeof method !== "function") {
+    return undefined;
+  }
+
+  const message = formatUiWarning(methodName, context);
+
+  return invokeWithErrorBoundary(method, args, {
+    thisArg: uiManager,
+    reporter: warnOnce,
+    once: true,
+    message,
+  });
+}
+
 function subscribeEngineToUi(engine, uiManager) {
   if (!engine || !uiManager) {
     return [];
   }
 
-  const syncUpdatesPerSecond = (changes) => {
-    if (typeof uiManager.setUpdatesPerSecond !== "function") {
-      return;
-    }
+  const callUi = (methodName, args = [], context = UI_WARNING_CONTEXTS.state) =>
+    invokeUiManagerMethod(uiManager, methodName, args, context);
 
+  const syncUpdatesPerSecond = (changes) => {
     const nextValue = changes?.updatesPerSecond;
 
     if (nextValue !== undefined) {
-      uiManager.setUpdatesPerSecond(nextValue, { notify: false });
+      callUi(
+        "setUpdatesPerSecond",
+        [nextValue, { notify: false }],
+        UI_WARNING_CONTEXTS.speed,
+      );
 
       return;
     }
@@ -117,173 +171,172 @@ function subscribeEngineToUi(engine, uiManager) {
       return;
     }
 
-    uiManager.setUpdatesPerSecond(currentValue, { notify: false });
+    callUi(
+      "setUpdatesPerSecond",
+      [currentValue, { notify: false }],
+      UI_WARNING_CONTEXTS.speed,
+    );
   };
 
   return [
     engine.on?.("metrics", ({ stats, metrics, environment }) => {
-      if (typeof uiManager.renderMetrics === "function") {
-        uiManager.renderMetrics(stats, metrics, environment);
-      }
+      callUi(
+        "renderMetrics",
+        [stats, metrics, environment],
+        UI_WARNING_CONTEXTS.metrics,
+      );
     }),
     engine.on?.("leaderboard", ({ entries }) => {
-      if (typeof uiManager.renderLeaderboard === "function") {
-        uiManager.renderLeaderboard(entries);
-      }
+      callUi("renderLeaderboard", [entries], UI_WARNING_CONTEXTS.leaderboard);
     }),
     engine.on?.("state", ({ changes }) => {
-      if (
-        changes?.paused !== undefined &&
-        typeof uiManager.setPauseState === "function"
-      ) {
-        uiManager.setPauseState(changes.paused);
+      if (changes?.paused !== undefined) {
+        callUi("setPauseState", [changes.paused], UI_WARNING_CONTEXTS.state);
       }
 
-      if (
-        changes?.autoPauseOnBlur !== undefined &&
-        typeof uiManager.setAutoPauseOnBlur === "function"
-      ) {
-        uiManager.setAutoPauseOnBlur(changes.autoPauseOnBlur, { notify: false });
+      if (changes?.autoPauseOnBlur !== undefined) {
+        callUi(
+          "setAutoPauseOnBlur",
+          [changes.autoPauseOnBlur, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.autoPausePending !== undefined &&
-        typeof uiManager.setAutoPausePending === "function"
-      ) {
-        uiManager.setAutoPausePending(changes.autoPausePending);
+      if (changes?.autoPausePending !== undefined) {
+        callUi(
+          "setAutoPausePending",
+          [changes.autoPausePending],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.societySimilarity !== undefined &&
-        typeof uiManager.setSocietySimilarity === "function"
-      ) {
-        uiManager.setSocietySimilarity(changes.societySimilarity, { notify: false });
+      if (changes?.societySimilarity !== undefined) {
+        callUi(
+          "setSocietySimilarity",
+          [changes.societySimilarity, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.enemySimilarity !== undefined &&
-        typeof uiManager.setEnemySimilarity === "function"
-      ) {
-        uiManager.setEnemySimilarity(changes.enemySimilarity, { notify: false });
+      if (changes?.enemySimilarity !== undefined) {
+        callUi(
+          "setEnemySimilarity",
+          [changes.enemySimilarity, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.eventStrengthMultiplier !== undefined &&
-        typeof uiManager.setEventStrengthMultiplier === "function"
-      ) {
-        uiManager.setEventStrengthMultiplier(changes.eventStrengthMultiplier, {
-          notify: false,
-        });
+      if (changes?.eventStrengthMultiplier !== undefined) {
+        callUi(
+          "setEventStrengthMultiplier",
+          [changes.eventStrengthMultiplier, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.eventFrequencyMultiplier !== undefined &&
-        typeof uiManager.setEventFrequencyMultiplier === "function"
-      ) {
-        uiManager.setEventFrequencyMultiplier(changes.eventFrequencyMultiplier, {
-          notify: false,
-        });
+      if (changes?.eventFrequencyMultiplier !== undefined) {
+        callUi(
+          "setEventFrequencyMultiplier",
+          [changes.eventFrequencyMultiplier, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.densityEffectMultiplier !== undefined &&
-        typeof uiManager.setDensityEffectMultiplier === "function"
-      ) {
-        uiManager.setDensityEffectMultiplier(changes.densityEffectMultiplier, {
-          notify: false,
-        });
+      if (changes?.densityEffectMultiplier !== undefined) {
+        callUi(
+          "setDensityEffectMultiplier",
+          [changes.densityEffectMultiplier, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.energyRegenRate !== undefined &&
-        typeof uiManager.setEnergyRegenRate === "function"
-      ) {
-        uiManager.setEnergyRegenRate(changes.energyRegenRate, { notify: false });
+      if (changes?.energyRegenRate !== undefined) {
+        callUi(
+          "setEnergyRegenRate",
+          [changes.energyRegenRate, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.energyDiffusionRate !== undefined &&
-        typeof uiManager.setEnergyDiffusionRate === "function"
-      ) {
-        uiManager.setEnergyDiffusionRate(changes.energyDiffusionRate, {
-          notify: false,
-        });
+      if (changes?.energyDiffusionRate !== undefined) {
+        callUi(
+          "setEnergyDiffusionRate",
+          [changes.energyDiffusionRate, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.mutationMultiplier !== undefined &&
-        typeof uiManager.setMutationMultiplier === "function"
-      ) {
-        uiManager.setMutationMultiplier(changes.mutationMultiplier, { notify: false });
+      if (changes?.mutationMultiplier !== undefined) {
+        callUi(
+          "setMutationMultiplier",
+          [changes.mutationMultiplier, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.leaderboardIntervalMs !== undefined &&
-        typeof uiManager.setLeaderboardIntervalMs === "function"
-      ) {
-        uiManager.setLeaderboardIntervalMs(changes.leaderboardIntervalMs, {
-          notify: false,
-        });
+      if (changes?.leaderboardIntervalMs !== undefined) {
+        callUi(
+          "setLeaderboardIntervalMs",
+          [changes.leaderboardIntervalMs, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.lifeEventFadeTicks !== undefined &&
-        typeof uiManager.setLifeEventFadeTicks === "function"
-      ) {
-        uiManager.setLifeEventFadeTicks(changes.lifeEventFadeTicks, { notify: false });
+      if (changes?.lifeEventFadeTicks !== undefined) {
+        callUi(
+          "setLifeEventFadeTicks",
+          [changes.lifeEventFadeTicks, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
       syncUpdatesPerSecond(changes);
 
-      if (
-        changes?.lowDiversityReproMultiplier !== undefined &&
-        typeof uiManager.setLowDiversityReproMultiplier === "function"
-      ) {
-        uiManager.setLowDiversityReproMultiplier(changes.lowDiversityReproMultiplier, {
-          notify: false,
-        });
+      if (changes?.lowDiversityReproMultiplier !== undefined) {
+        callUi(
+          "setLowDiversityReproMultiplier",
+          [changes.lowDiversityReproMultiplier, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.combatEdgeSharpness !== undefined &&
-        typeof uiManager.setCombatEdgeSharpness === "function"
-      ) {
-        uiManager.setCombatEdgeSharpness(changes.combatEdgeSharpness, {
-          notify: false,
-        });
+      if (changes?.combatEdgeSharpness !== undefined) {
+        callUi(
+          "setCombatEdgeSharpness",
+          [changes.combatEdgeSharpness, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.combatTerritoryEdgeFactor !== undefined &&
-        typeof uiManager.setCombatTerritoryEdgeFactor === "function"
-      ) {
-        uiManager.setCombatTerritoryEdgeFactor(changes.combatTerritoryEdgeFactor, {
-          notify: false,
-        });
+      if (changes?.combatTerritoryEdgeFactor !== undefined) {
+        callUi(
+          "setCombatTerritoryEdgeFactor",
+          [changes.combatTerritoryEdgeFactor, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
-      if (
-        changes?.initialTileEnergyFraction !== undefined &&
-        typeof uiManager.setInitialTileEnergyFraction === "function"
-      ) {
-        uiManager.setInitialTileEnergyFraction(changes.initialTileEnergyFraction, {
-          notify: false,
-        });
+      if (changes?.initialTileEnergyFraction !== undefined) {
+        callUi(
+          "setInitialTileEnergyFraction",
+          [changes.initialTileEnergyFraction, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
       }
 
       if (changes) {
         for (const [overlayKey, setterName] of Object.entries(OVERLAY_TOGGLE_SETTERS)) {
-          if (
-            changes[overlayKey] !== undefined &&
-            typeof uiManager[setterName] === "function"
-          ) {
-            uiManager[setterName](changes[overlayKey], { notify: false });
+          if (changes[overlayKey] !== undefined) {
+            callUi(
+              setterName,
+              [changes[overlayKey], { notify: false }],
+              UI_WARNING_CONTEXTS.overlay,
+            );
           }
         }
       }
 
       const geometryChanged =
-        typeof uiManager.setGridGeometry === "function" &&
         changes &&
         (Object.hasOwn(changes, "gridRows") ||
           Object.hasOwn(changes, "gridCols") ||
@@ -308,7 +361,7 @@ function subscribeEngineToUi(engine, uiManager) {
               : undefined,
         };
 
-        uiManager.setGridGeometry(geometry);
+        callUi("setGridGeometry", [geometry], UI_WARNING_CONTEXTS.geometry);
       }
     }),
   ].filter(Boolean);
@@ -379,122 +432,192 @@ export function bindSimulationToUi({
       layout,
     );
 
-    if (typeof uiManager.setPauseState === "function") {
-      uiManager.setPauseState(engine?.isPaused?.());
-    }
+    invokeUiManagerMethod(
+      uiManager,
+      "setPauseState",
+      [engine?.isPaused?.()],
+      UI_WARNING_CONTEXTS.initial,
+    );
   }
 
-  if (uiManager && typeof uiManager.setLowDiversityReproMultiplier === "function") {
+  if (uiManager) {
     const lowDiversity = engine?.state?.lowDiversityReproMultiplier;
 
     if (typeof lowDiversity === "number") {
-      uiManager.setLowDiversityReproMultiplier(lowDiversity, { notify: false });
+      invokeUiManagerMethod(
+        uiManager,
+        "setLowDiversityReproMultiplier",
+        [lowDiversity, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setCombatEdgeSharpness === "function") {
+  if (uiManager) {
     const sharpness = engine?.state?.combatEdgeSharpness;
 
     if (typeof sharpness === "number") {
-      uiManager.setCombatEdgeSharpness(sharpness, { notify: false });
+      invokeUiManagerMethod(
+        uiManager,
+        "setCombatEdgeSharpness",
+        [sharpness, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setCombatTerritoryEdgeFactor === "function") {
+  if (uiManager) {
     const factor = engine?.state?.combatTerritoryEdgeFactor;
 
     if (typeof factor === "number") {
-      uiManager.setCombatTerritoryEdgeFactor(factor, { notify: false });
+      invokeUiManagerMethod(
+        uiManager,
+        "setCombatTerritoryEdgeFactor",
+        [factor, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setAutoPausePending === "function") {
+  if (uiManager) {
     const pending = engine?.state?.autoPausePending;
 
     if (pending !== undefined) {
-      uiManager.setAutoPausePending(Boolean(pending));
+      invokeUiManagerMethod(
+        uiManager,
+        "setAutoPausePending",
+        [Boolean(pending)],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setSocietySimilarity === "function") {
-    const similarity = engine?.state?.societySimilarity;
+  if (uiManager) {
+    const societySimilarity = engine?.state?.societySimilarity;
 
-    if (typeof similarity === "number") {
-      uiManager.setSocietySimilarity(similarity, { notify: false });
+    if (typeof societySimilarity === "number") {
+      invokeUiManagerMethod(
+        uiManager,
+        "setSocietySimilarity",
+        [societySimilarity, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setEnemySimilarity === "function") {
-    const similarity = engine?.state?.enemySimilarity;
+  if (uiManager) {
+    const enemySimilarity = engine?.state?.enemySimilarity;
 
-    if (typeof similarity === "number") {
-      uiManager.setEnemySimilarity(similarity, { notify: false });
+    if (typeof enemySimilarity === "number") {
+      invokeUiManagerMethod(
+        uiManager,
+        "setEnemySimilarity",
+        [enemySimilarity, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setEventStrengthMultiplier === "function") {
-    const strength = engine?.state?.eventStrengthMultiplier;
+  if (uiManager) {
+    const eventStrength = engine?.state?.eventStrengthMultiplier;
 
-    if (typeof strength === "number") {
-      uiManager.setEventStrengthMultiplier(strength, { notify: false });
+    if (typeof eventStrength === "number") {
+      invokeUiManagerMethod(
+        uiManager,
+        "setEventStrengthMultiplier",
+        [eventStrength, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setEventFrequencyMultiplier === "function") {
-    const frequency = engine?.state?.eventFrequencyMultiplier;
+  if (uiManager) {
+    const eventFrequency = engine?.state?.eventFrequencyMultiplier;
 
-    if (typeof frequency === "number") {
-      uiManager.setEventFrequencyMultiplier(frequency, { notify: false });
+    if (typeof eventFrequency === "number") {
+      invokeUiManagerMethod(
+        uiManager,
+        "setEventFrequencyMultiplier",
+        [eventFrequency, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setDensityEffectMultiplier === "function") {
-    const density = engine?.state?.densityEffectMultiplier;
+  if (uiManager) {
+    const densityMultiplier = engine?.state?.densityEffectMultiplier;
 
-    if (typeof density === "number") {
-      uiManager.setDensityEffectMultiplier(density, { notify: false });
+    if (typeof densityMultiplier === "number") {
+      invokeUiManagerMethod(
+        uiManager,
+        "setDensityEffectMultiplier",
+        [densityMultiplier, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setEnergyRegenRate === "function") {
-    const regen = engine?.state?.energyRegenRate;
+  if (uiManager) {
+    const energyRegen = engine?.state?.energyRegenRate;
 
-    if (typeof regen === "number") {
-      uiManager.setEnergyRegenRate(regen, { notify: false });
+    if (typeof energyRegen === "number") {
+      invokeUiManagerMethod(
+        uiManager,
+        "setEnergyRegenRate",
+        [energyRegen, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setEnergyDiffusionRate === "function") {
-    const diffusion = engine?.state?.energyDiffusionRate;
+  if (uiManager) {
+    const energyDiffusion = engine?.state?.energyDiffusionRate;
 
-    if (typeof diffusion === "number") {
-      uiManager.setEnergyDiffusionRate(diffusion, { notify: false });
+    if (typeof energyDiffusion === "number") {
+      invokeUiManagerMethod(
+        uiManager,
+        "setEnergyDiffusionRate",
+        [energyDiffusion, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setMutationMultiplier === "function") {
-    const mutation = engine?.state?.mutationMultiplier;
+  if (uiManager) {
+    const mutationMultiplier = engine?.state?.mutationMultiplier;
 
-    if (typeof mutation === "number") {
-      uiManager.setMutationMultiplier(mutation, { notify: false });
+    if (typeof mutationMultiplier === "number") {
+      invokeUiManagerMethod(
+        uiManager,
+        "setMutationMultiplier",
+        [mutationMultiplier, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
-  if (uiManager && typeof uiManager.setLeaderboardIntervalMs === "function") {
-    const interval = engine?.state?.leaderboardIntervalMs;
+  if (uiManager) {
+    const leaderboardInterval = engine?.state?.leaderboardIntervalMs;
 
-    if (typeof interval === "number") {
-      uiManager.setLeaderboardIntervalMs(interval, { notify: false });
+    if (typeof leaderboardInterval === "number") {
+      invokeUiManagerMethod(
+        uiManager,
+        "setLeaderboardIntervalMs",
+        [leaderboardInterval, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
     }
   }
 
   if (uiManager) {
     for (const [overlayKey, setterName] of Object.entries(OVERLAY_TOGGLE_SETTERS)) {
-      if (
-        typeof uiManager[setterName] === "function" &&
-        engine?.state?.[overlayKey] !== undefined
-      ) {
-        uiManager[setterName](engine.state[overlayKey], { notify: false });
+      if (engine?.state?.[overlayKey] !== undefined) {
+        invokeUiManagerMethod(
+          uiManager,
+          setterName,
+          [engine.state[overlayKey], { notify: false }],
+          UI_WARNING_CONTEXTS.initial,
+        );
       }
     }
   }
