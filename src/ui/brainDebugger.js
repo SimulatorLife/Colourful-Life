@@ -52,10 +52,20 @@ function cloneSnapshotList(list) {
   return cloneTracePayload(list) ?? [];
 }
 
-function publishSnapshots(list) {
+// Mirrors the latest snapshots to the global scope so developers can inspect
+// them from browser devtools. When callers set `reuseList`, the helper reuses
+// the already-cloned array instead of performing another deep copy, which
+// reduces allocation churn for large telemetry payloads.
+function publishSnapshots(list, { reuseList = false } = {}) {
   const scope = getGlobalScope();
 
   if (!scope) return;
+
+  if (reuseList) {
+    scope[DEBUG_PROPERTY] = Array.isArray(list) ? list.slice() : [];
+
+    return;
+  }
 
   scope[DEBUG_PROPERTY] = cloneSnapshotList(list);
 }
@@ -69,7 +79,7 @@ function publishSnapshots(list) {
 const BrainDebugger = {
   update(snapshots = []) {
     state.snapshots = cloneSnapshotList(snapshots);
-    publishSnapshots(state.snapshots);
+    publishSnapshots(state.snapshots, { reuseList: true });
 
     return state.snapshots;
   },
