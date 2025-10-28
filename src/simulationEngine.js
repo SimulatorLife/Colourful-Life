@@ -1308,16 +1308,38 @@ export default class SimulationEngine {
     const changes = {};
 
     if (regen !== undefined) {
+      const fallback = clamp(
+        Number.isFinite(this.state.energyRegenRate)
+          ? this.state.energyRegenRate
+          : Number.isFinite(SIMULATION_DEFAULTS.energyRegenRate)
+            ? SIMULATION_DEFAULTS.energyRegenRate
+            : 0,
+        0,
+        1,
+      );
+
       changes.energyRegenRate = sanitizeNumber(regen, {
-        fallback: this.state.energyRegenRate,
+        fallback,
         min: 0,
+        max: 1,
       });
     }
 
     if (diffusion !== undefined) {
+      const fallback = clamp(
+        Number.isFinite(this.state.energyDiffusionRate)
+          ? this.state.energyDiffusionRate
+          : Number.isFinite(SIMULATION_DEFAULTS.energyDiffusionRate)
+            ? SIMULATION_DEFAULTS.energyDiffusionRate
+            : 0,
+        0,
+        1,
+      );
+
       changes.energyDiffusionRate = sanitizeNumber(diffusion, {
-        fallback: this.state.energyDiffusionRate,
+        fallback,
         min: 0,
+        max: 1,
       });
     }
 
