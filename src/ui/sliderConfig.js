@@ -4,6 +4,7 @@ import {
   LEADERBOARD_INTERVAL_MIN_MS,
   SIMULATION_DEFAULTS,
 } from "../config.js";
+import { clamp } from "../utils/math.js";
 
 // UI defaults and slider bounds derived from canonical simulation defaults.
 export const UI_SLIDER_CONFIG = Object.freeze({
@@ -146,4 +147,53 @@ export function resolveSliderBounds(key, overrides = {}) {
   };
 
   return resolved;
+}
+
+/**
+ * Coerces a slider candidate to the resolved bounds for the given key.
+ * Consumers can optionally supply overrides for the canonical limits and a
+ * fallback used when the candidate cannot be converted to a finite number.
+ *
+ * @param {keyof typeof UI_SLIDER_CONFIG|string} key - Slider identifier.
+ * @param {unknown} value - Candidate value provided by the caller.
+ * @param {{
+ *   fallback?: unknown,
+ *   min?: number,
+ *   max?: number,
+ *   floor?: number,
+ * }} [overrides] - Optional configuration applied on top of the canonical
+ *   slider config.
+ * @returns {{
+ *   value: unknown,
+ *   bounds: {
+ *     default: number | undefined,
+ *     min: number | undefined,
+ *     max: number | undefined,
+ *     step: number | undefined,
+ *     floor: number | undefined,
+ *   },
+ * }} Normalized slider value and the resolved bounds used for coercion.
+ */
+export function clampSliderValue(key, value, overrides = {}) {
+  const { fallback, ...boundsOverrides } = overrides;
+  const bounds = resolveSliderBounds(key, boundsOverrides);
+  const floor = Number.isFinite(bounds.floor) ? bounds.floor : undefined;
+  const min = Number.isFinite(bounds.min) ? bounds.min : undefined;
+  const max = Number.isFinite(bounds.max) ? bounds.max : undefined;
+  const lowerBound = floor ?? min ?? Number.NEGATIVE_INFINITY;
+  const upperBound = max ?? Number.POSITIVE_INFINITY;
+  const numeric = Number(value);
+  let normalized;
+
+  if (Number.isFinite(numeric)) {
+    normalized = clamp(numeric, lowerBound, upperBound);
+  } else if (Object.prototype.hasOwnProperty.call(overrides, "fallback")) {
+    if (typeof fallback === "number" && Number.isFinite(fallback)) {
+      normalized = clamp(fallback, lowerBound, upperBound);
+    } else {
+      normalized = fallback;
+    }
+  }
+
+  return { value: normalized, bounds };
 }
