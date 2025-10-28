@@ -41,7 +41,7 @@
     "@eslint/eslintrc": {
       "globals": "16.4.0"
     },
-    "@eslint/config-array": {
+    "@parcel/packager-js": {
       "globals": "16.4.0"
     }
   },
