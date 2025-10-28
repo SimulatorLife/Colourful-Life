@@ -107,7 +107,6 @@ export default class ReproductionZonePolicy {
     }
 
     let encounteredError = false;
-    const filtered = [];
     const boundaryArgs = [0, 0];
     const boundaryOptions = {
       thisArg: manager,
@@ -119,11 +118,13 @@ export default class ReproductionZonePolicy {
       },
     };
 
-    for (let index = 0; index < candidates.length; index += 1) {
-      const candidate = candidates[index];
-
+    const filtered = candidates.filter((candidate) => {
       if (!candidate) {
-        continue;
+        return false;
+      }
+
+      if (encounteredError) {
+        return true;
       }
 
       boundaryArgs[0] = candidate.r;
@@ -131,10 +132,8 @@ export default class ReproductionZonePolicy {
 
       const result = invokeWithErrorBoundary(tester, boundaryArgs, boundaryOptions);
 
-      if (result) {
-        filtered.push(candidate);
-      }
-    }
+      return Boolean(result);
+    });
 
     if (encounteredError) {
       return candidates;
