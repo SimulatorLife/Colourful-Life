@@ -1,4 +1,3 @@
-import { MAX_TILE_ENERGY } from "../config.js";
 import { pickFirstFinitePositive } from "../utils/math.js";
 import { clearTileEnergyBuffers } from "./energyUtils.js";
 
@@ -8,8 +7,21 @@ import { clearTileEnergyBuffers } from "./energyUtils.js";
  * {@link InteractionSystem} and tests to swap in mock managers.
  */
 export default class GridInteractionAdapter {
-  constructor({ gridManager } = {}) {
+  constructor({ gridManager, maxTileEnergy: maxTileEnergyOverride } = {}) {
     this.gridManager = gridManager ?? null;
+    this.#maxTileEnergyOverride = this.#sanitizeMaxTileEnergy(maxTileEnergyOverride);
+  }
+
+  #maxTileEnergyOverride = null;
+
+  #sanitizeMaxTileEnergy(value) {
+    if (!Number.isFinite(value)) {
+      return null;
+    }
+
+    const normalized = Number(value);
+
+    return normalized > 0 ? normalized : null;
   }
 
   #managerHas(method) {
@@ -158,11 +170,13 @@ export default class GridInteractionAdapter {
 
   maxTileEnergy() {
     const positiveOverride = pickFirstFinitePositive([
+      this.#maxTileEnergyOverride,
       this.gridManager?.maxTileEnergy,
+      this.gridManager?.constructor?.maxTileEnergy,
       globalThis?.GridManager?.maxTileEnergy,
     ]);
 
-    return positiveOverride ?? MAX_TILE_ENERGY;
+    return positiveOverride > 0 ? positiveOverride : 0;
   }
 
   densityAt(row, col, { densityGrid } = {}) {
