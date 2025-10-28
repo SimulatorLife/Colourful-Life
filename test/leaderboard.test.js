@@ -1,7 +1,7 @@
 import { assert, test } from "#tests/harness";
 import { computeLeaderboard } from "../src/stats/leaderboard.js";
 
-test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots", () => {
+test("computeLeaderboard ranks entries with sanitized inputs", () => {
   const snapshot = {
     entries: [
       {
@@ -51,11 +51,6 @@ test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots
         fitness: 9,
       },
     ],
-    brainSnapshots: [
-      { row: 1, col: 1, brain: "primary" },
-      { row: 1, col: 1, brain: "secondary" },
-      { row: 2, col: 2, brain: "tertiary" },
-    ],
   };
 
   const result = computeLeaderboard(snapshot, "3.9");
@@ -78,7 +73,6 @@ test("computeLeaderboard ranks entries with sanitized inputs and brain snapshots
       fightsWon: 0,
       age: 0,
       color: "#202020",
-      brain: { row: 1, col: 1, brain: "primary" },
     },
     {
       row: 4,

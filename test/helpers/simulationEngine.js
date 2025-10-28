@@ -31,7 +31,6 @@ export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) 
         },
       },
     ],
-    brainSnapshots: [],
   };
   const metrics = { averageEnergy: 0.5 };
   const fixedEventTemplate = {
@@ -50,8 +49,6 @@ export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) 
     "draw",
     "getLastSnapshot",
     "setMatingDiversityOptions",
-    "setBrainSnapshotCollector",
-    "setBrainSnapshotLimit",
   ];
   const statsMethods = [
     "resetTick",

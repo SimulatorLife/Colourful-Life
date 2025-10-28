@@ -22,7 +22,7 @@ function resolveStatValue(primary, secondary, fallback = 0) {
  * ranks entries by their raw fitness and attaches optional brain telemetry so
  * UI panels can highlight the most successful organisms.
  *
- * @param {{entries?: Array, brainSnapshots?: Array}} snapshot - Data collected
+ * @param {{entries?: Array}} snapshot - Data collected
  *   by {@link GridManager}.
  * @param {number} [topN=5] - Maximum number of entries to return.
  * @returns {Array<Object>} Ranked list sorted by raw fitness.
@@ -39,24 +39,11 @@ export function computeLeaderboard(snapshot, topN = 5) {
   }
 
   const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
-  const brainSnapshots = Array.isArray(snapshot?.brainSnapshots)
-    ? snapshot.brainSnapshots
-    : [];
   const compareItems = (a, b) => {
     const fitnessDiff = (b?.fitness ?? Number.NaN) - (a?.fitness ?? Number.NaN);
 
     return Number.isNaN(fitnessDiff) ? 0 : fitnessDiff;
   };
-
-  const brainLookup = brainSnapshots.reduce((lookup, entry) => {
-    if (!entry) return lookup;
-
-    const key = `${entry.row},${entry.col}`;
-
-    if (!lookup.has(key)) lookup.set(key, entry);
-
-    return lookup;
-  }, new Map());
 
   const topItems = createRankedBuffer(sanitizedTopN, compareItems);
 
@@ -85,12 +72,6 @@ export function computeLeaderboard(snapshot, topN = 5) {
 
     if (row !== null) item.row = row;
     if (col !== null) item.col = col;
-    const key = `${entry.row},${entry.col}`;
-    const brain = brainLookup.get(key);
-
-    if (brain) {
-      item.brain = brain;
-    }
     topItems.add(item);
   }
 

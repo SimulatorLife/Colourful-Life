@@ -324,21 +324,6 @@ test("headless UI suppresses callbacks for engine-driven updates", async () => {
   }
 });
 
-test("createSimulation accepts a custom brain snapshot collector", async () => {
-  const { createSimulation } = await simulationModulePromise;
-  const collector = { captureFromEntries: () => [] };
-
-  const simulation = createSimulation({
-    headless: true,
-    autoStart: false,
-    brainSnapshotCollector: collector,
-  });
-
-  assert.is(simulation.engine.brainSnapshotCollector, collector);
-
-  simulation.destroy();
-});
-
 test("browser UI keeps auto-pause disabled by default", async () => {
   const restore = setupDom();
 
