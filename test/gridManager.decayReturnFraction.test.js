@@ -65,13 +65,14 @@ function measureReturnForDNA(dna, energy = 20) {
   grid.registerDeath({ energy, dna }, { row: 1, col: 1 });
 
   const after = grid.energyGrid.map((row) => row.slice());
-  let immediateReturn = 0;
+  const immediateReturn = after.reduce((total, row, rowIndex) => {
+    const rowDelta = row.reduce(
+      (rowTotal, value, colIndex) => rowTotal + value - before[rowIndex][colIndex],
+      0,
+    );
 
-  for (let r = 0; r < after.length; r++) {
-    for (let c = 0; c < after[r].length; c++) {
-      immediateReturn += after[r][c] - before[r][c];
-    }
-  }
+    return total + rowDelta;
+  }, 0);
 
   const reserveReturn = grid.decayAmount?.[1]?.[1] ?? 0;
   const total = immediateReturn + reserveReturn;
