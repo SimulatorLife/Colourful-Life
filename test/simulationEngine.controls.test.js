@@ -256,6 +256,31 @@ test("setLeaderboardInterval enforces minimum throttle", async () => {
   }
 });
 
+test("setLifeEventFadeTicks normalizes values and updates stats", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.setLifeEventFadeTicks(18.6);
+
+    assert.is(engine.state.lifeEventFadeTicks, 19);
+    assert.is(engine.stats.lifeEventFadeTicks, 19);
+
+    engine.setLifeEventFadeTicks(0);
+
+    assert.is(engine.state.lifeEventFadeTicks, 1);
+
+    engine.setLifeEventFadeTicks(1500);
+
+    assert.is(engine.state.lifeEventFadeTicks, 1000);
+    assert.is(engine.stats.lifeEventFadeTicks, 1000);
+  } finally {
+    restore();
+  }
+});
+
 test("updateSetting routes updatesPerSecond through the setter", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
@@ -285,6 +310,22 @@ test("updateSetting routes maxConcurrentEvents through the setter", async () => 
 
     assert.is(engine.state.maxConcurrentEvents, 6);
     assert.ok(engine.pendingSlowUiUpdate, "setter marks slow UI work pending");
+  } finally {
+    restore();
+  }
+});
+
+test("updateSetting routes lifeEventFadeTicks through the setter", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.updateSetting("lifeEventFadeTicks", 48);
+
+    assert.is(engine.state.lifeEventFadeTicks, 48);
+    assert.is(engine.stats.lifeEventFadeTicks, 48);
   } finally {
     restore();
   }

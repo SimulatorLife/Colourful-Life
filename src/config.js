@@ -519,6 +519,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showAuroraVeil: false,
   showGridLines: false,
   showReproductiveZones: true,
+  lifeEventFadeTicks: 36,
   leaderboardIntervalMs: 750,
   leaderboardSize: LEADERBOARD_SIZE_DEFAULT,
   // Lowered from 0.45 after a 300-tick headless sample (60x60 grid, RNG seed
@@ -670,6 +671,10 @@ export function resolveSimulationDefaults(overrides = {}) {
   sanitizeNumeric("energyDiffusionRate", { min: 0, max: 1 });
   sanitizeNumeric("combatEdgeSharpness", { min: 0.1 });
   sanitizeNumeric("combatTerritoryEdgeFactor", { min: 0, max: 1 });
+  sanitizeNumeric("lifeEventFadeTicks", {
+    min: 1,
+    round: Math.round,
+  });
   const intervalCandidate = sanitizeNumber(merged.leaderboardIntervalMs, {
     fallback: Number.NaN,
   });

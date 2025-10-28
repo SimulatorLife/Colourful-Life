@@ -59,7 +59,7 @@ Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/
 
 ### Life event marker overlay
 
-Open the **Simulation Controls** panel and head to the **Overlays** section to toggle **Life Event Markers** alongside the other map overlays. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps. A compact legend now anchors to the canvas corner, tallying visible births, deaths, and the net population swing so you can interpret the markers at a glance. Architecture details live in [`docs/architecture-overview.md`](docs/architecture-overview.md#ui-and-overlays) for readers interested in extending the renderer.
+Open the **Simulation Controls** panel and head to the **Overlays** section to toggle **Life Event Markers** alongside the other map overlays. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps. A compact legend now anchors to the canvas corner, tallying visible births, deaths, and the net population swing so you can interpret the markers at a glance. Architecture details live in [`docs/architecture-overview.md`](docs/architecture-overview.md#ui-and-overlays) for readers interested in extending the renderer. Need longer-lasting telemetry or a quicker clear? Nudge the **Life Event Fade Window** slider to keep markers on-screen for dozens more ticks or trim them down to a blink-and-you-miss-it pulse.
 
 ### Age heatmap overlay
 

@@ -92,6 +92,13 @@ export const UI_SLIDER_CONFIG = Object.freeze({
     step: 0.05,
     floor: 0,
   },
+  lifeEventFadeTicks: {
+    default: SIMULATION_DEFAULTS.lifeEventFadeTicks,
+    min: 1,
+    max: 180,
+    step: 1,
+    floor: 1,
+  },
   energyRegenRate: {
     min: 0,
     max: 0.2,
