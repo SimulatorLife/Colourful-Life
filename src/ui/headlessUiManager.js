@@ -45,6 +45,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @param {boolean} [options.showAge] - Whether organism age overlays are shown.
  * @param {boolean} [options.showFitness] - Whether fitness overlays are shown.
  * @param {boolean} [options.showLifeEventMarkers] - Whether life event markers are shown.
+ * @param {boolean} [options.showAuroraVeil] - Whether the aurora celebration veil overlay is shown.
  * @param {boolean} [options.showGridLines] - Whether grid lines outlining each tile are shown.
  * @param {boolean} [options.showReproductiveZones] - Whether reproductive zone shading is shown.
  * @param {number} [options.leaderboardIntervalMs] - Minimum time between leaderboard updates.
@@ -78,6 +79,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  *   getShowAge: () => boolean,
  *   getShowFitness: () => boolean,
  *   getShowLifeEventMarkers: () => boolean,
+ *   getShowAuroraVeil: () => boolean,
  *   getShowGridLines: () => boolean,
  *   shouldRenderSlowUi: (timestamp: number) => boolean,
  *   renderMetrics: Function,
@@ -317,6 +319,7 @@ export function createHeadlessUiManager(options = {}) {
     getShowAge: () => settings.showAge,
     getShowFitness: () => settings.showFitness,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
+    getShowAuroraVeil: () => settings.showAuroraVeil,
     getShowGridLines: () => settings.showGridLines,
     getShowReproductiveZones: () => settings.showReproductiveZones,
     setShowObstacles: (value) => {
@@ -366,6 +369,14 @@ export function createHeadlessUiManager(options = {}) {
 
       settings.showLifeEventMarkers = normalized;
       notify("showLifeEventMarkers", settings.showLifeEventMarkers);
+    },
+    setShowAuroraVeil: (value) => {
+      const normalized = coerceBoolean(value, settings.showAuroraVeil);
+
+      if (settings.showAuroraVeil === normalized) return;
+
+      settings.showAuroraVeil = normalized;
+      notify("showAuroraVeil", settings.showAuroraVeil);
     },
     setShowGridLines: (value) => {
       const normalized = coerceBoolean(value, settings.showGridLines);

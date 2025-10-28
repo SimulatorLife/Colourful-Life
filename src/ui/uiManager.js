@@ -28,6 +28,9 @@ const LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION =
 const AGE_HEATMAP_OVERLAY_DESCRIPTION =
   "Shade older organisms more intensely so elders nearing their lifespan stand out.";
 
+const AURORA_VEIL_OVERLAY_DESCRIPTION =
+  "Lay a celebratory aurora wash across the grid that responds to average energy and recent births without overpowering other overlays.";
+
 const GRID_GEOMETRY_BOUNDS = Object.freeze({
   cellSize: Object.freeze({ min: 2, max: 20, step: 1 }),
   rows: Object.freeze({ min: 40, max: 240, step: 1 }),
@@ -533,6 +536,7 @@ export default class UIManager {
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
+    this.showAuroraVeil = defaults.showAuroraVeil;
     this.showGridLines = defaults.showGridLines;
     this.showReproductiveZones =
       defaults.showReproductiveZones !== undefined
@@ -4291,6 +4295,15 @@ export default class UIManager {
         initial: this.showLifeEventMarkers,
       },
       {
+        key: "showAuroraVeil",
+        label: "Aurora Celebration Veil",
+        options: {
+          title: AURORA_VEIL_OVERLAY_DESCRIPTION,
+          description: AURORA_VEIL_OVERLAY_DESCRIPTION,
+        },
+        initial: this.showAuroraVeil,
+      },
+      {
         key: "showReproductiveZones",
         label: "Highlight Reproductive Zones",
         title:
@@ -5368,6 +5381,9 @@ export default class UIManager {
   }
   getShowLifeEventMarkers() {
     return this.showLifeEventMarkers;
+  }
+  getShowAuroraVeil() {
+    return this.showAuroraVeil;
   }
   getShowGridLines() {
     return this.showGridLines;
