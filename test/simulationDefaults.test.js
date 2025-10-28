@@ -288,6 +288,19 @@ test("resolveSimulationDefaults coerces string boolean overrides", async () => {
   assert.is(defaults.updatesPerSecond, SIMULATION_DEFAULTS.updatesPerSecond);
 });
 
+test("resolveSimulationDefaults falls back for object boolean overrides", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+  const defaults = resolveSimulationDefaults({
+    autoPauseOnBlur: {},
+    showDensity: { enabled: false },
+    showEnergy: { enabled: true },
+  });
+
+  assert.is(defaults.autoPauseOnBlur, SIMULATION_DEFAULTS.autoPauseOnBlur);
+  assert.is(defaults.showDensity, SIMULATION_DEFAULTS.showDensity);
+  assert.is(defaults.showEnergy, SIMULATION_DEFAULTS.showEnergy);
+});
+
 test("resolveSimulationDefaults keeps event frequency overrides opt-in", async () => {
   const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
 

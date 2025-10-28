@@ -111,8 +111,22 @@ test("coerceBoolean normalizes boolean-like values with sane fallbacks", () => {
   );
   assert.is(coerceBoolean("   ", true), true, "empty strings after trim use fallback");
 
-  assert.is(coerceBoolean({}), true, "objects coerce via Boolean constructor");
-  assert.is(coerceBoolean(Symbol("token")), true, "symbols coerce to true");
+  assert.is(coerceBoolean({}, true), true, "objects fall back to the provided default");
+  assert.is(
+    coerceBoolean({}, false),
+    false,
+    "objects respect a false fallback when unspecified",
+  );
+  assert.is(
+    coerceBoolean(Symbol("token"), true),
+    true,
+    "symbols fall back to the provided default",
+  );
+  assert.is(
+    coerceBoolean(Symbol("token"), false),
+    false,
+    "symbols respect a false fallback",
+  );
 });
 
 test("resolveNonEmptyString filters out blank or non-string values", () => {
