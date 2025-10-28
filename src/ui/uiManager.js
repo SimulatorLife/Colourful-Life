@@ -1,5 +1,5 @@
 import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
-import { resolveSliderBounds } from "./sliderConfig.js";
+import { clampSliderValue, resolveSliderBounds } from "./sliderConfig.js";
 import {
   createControlButtonRow,
   createControlGrid,
@@ -2016,33 +2016,13 @@ export default class UIManager {
   }
 
   #sanitizeSpeedMultiplier(value) {
-    const bounds = resolveSliderBounds("speedMultiplier", {
+    const { value: sanitized } = clampSliderValue("speedMultiplier", value, {
       floor: 0.1,
       min: 0.5,
       max: 100,
     });
-    const floor = Number.isFinite(bounds.floor) ? bounds.floor : undefined;
-    const min = Number.isFinite(bounds.min) ? bounds.min : undefined;
-    const max = Number.isFinite(bounds.max) ? bounds.max : undefined;
-    const lowerBound = floor ?? min ?? 0.1;
-    const upperBound = max ?? 100;
-    const numeric = Number(value);
 
-    if (!Number.isFinite(numeric)) return null;
-
-    return clamp(numeric, lowerBound, upperBound);
-  }
-
-  #formatSpeedDisplay(value) {
-    const numeric = Number(value);
-
-    if (!Number.isFinite(numeric)) return "—";
-
-    const rounded = Math.round(numeric * 10) / 10;
-    const isWhole = Math.abs(rounded - Math.round(rounded)) < 1e-9;
-    const displayValue = isWhole ? Math.round(rounded) : rounded.toFixed(1);
-
-    return `${displayValue}×`;
+    return Number.isFinite(sanitized) ? sanitized : null;
   }
 
   #formatMultiplierDisplay(value, decimals = 2) {
@@ -3550,7 +3530,7 @@ export default class UIManager {
       step: normalizedSpeedStep,
       value: this.speedMultiplier,
       title: speedHotkeyHint,
-      format: (v) => this.#formatSpeedDisplay(v),
+      format: (v) => this.#formatMultiplierDisplay(v, 1),
       onInput: (value) => {
         this.#setSpeedMultiplier(value);
       },
@@ -3570,7 +3550,7 @@ export default class UIManager {
         ? this.baseUpdatesPerSecond
         : (SIMULATION_DEFAULTS.updatesPerSecond ?? 60);
     const describeSpeedPreset = (multiplier) => {
-      const display = this.#formatSpeedDisplay(multiplier);
+      const display = this.#formatMultiplierDisplay(multiplier, 1);
       const updates = Number.isFinite(baseUpdates)
         ? Math.round(baseUpdates * multiplier)
         : 0;
@@ -5518,21 +5498,11 @@ export default class UIManager {
   }
 
   setCombatEdgeSharpness(value, { notify = true } = {}) {
-    const bounds = resolveSliderBounds("combatEdgeSharpness", {
+    const { value: sanitized } = clampSliderValue("combatEdgeSharpness", value, {
+      fallback: this.combatEdgeSharpness,
       min: 0.5,
       max: 6,
       floor: 0.1,
-    });
-    const lowerBound = Number.isFinite(bounds.floor)
-      ? bounds.floor
-      : Number.isFinite(bounds.min)
-        ? bounds.min
-        : 0.1;
-    const upperBound = Number.isFinite(bounds.max) ? bounds.max : undefined;
-    const sanitized = sanitizeNumber(value, {
-      fallback: this.combatEdgeSharpness,
-      min: lowerBound,
-      max: upperBound,
     });
 
     if (!Number.isFinite(sanitized)) {
@@ -5550,7 +5520,7 @@ export default class UIManager {
   }
 
   setCombatTerritoryEdgeFactor(value, { notify = true } = {}) {
-    const sanitized = sanitizeNumber(value, {
+    const { value: sanitized } = clampSliderValue("combatTerritoryEdgeFactor", value, {
       fallback: this.combatTerritoryEdgeFactor,
       min: 0,
       max: 1,
@@ -6084,7 +6054,7 @@ export default class UIManager {
         const cadenceText = `${formatted} updates/sec`;
 
         if (Number.isFinite(baseCadence) && baseCadence > 0) {
-          const multiplierText = this.#formatSpeedDisplay(value / baseCadence);
+          const multiplierText = this.#formatMultiplierDisplay(value / baseCadence, 1);
 
           if (multiplierText && multiplierText !== "—") {
             return `${cadenceText} (${multiplierText})`;

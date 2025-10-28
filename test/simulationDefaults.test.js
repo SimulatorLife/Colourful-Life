@@ -178,6 +178,30 @@ test("resolveSliderBounds merges canonical slider configuration", async () => {
   assert.is(fallback.default, 1);
 });
 
+test("clampSliderValue normalizes slider inputs", async () => {
+  const { UI_SLIDER_CONFIG, clampSliderValue } = await sliderConfigModulePromise;
+  const belowFloor = clampSliderValue("speedMultiplier", -10);
+
+  assert.equal(belowFloor.value, UI_SLIDER_CONFIG.speedMultiplier.floor);
+  assert.equal(belowFloor.bounds.min, UI_SLIDER_CONFIG.speedMultiplier.min);
+
+  const aboveMax = clampSliderValue("combatEdgeSharpness", 42);
+
+  assert.equal(aboveMax.value, UI_SLIDER_CONFIG.combatEdgeSharpness.max);
+
+  const fallbackResult = clampSliderValue("combatEdgeSharpness", "oops", {
+    fallback: 9,
+  });
+
+  assert.equal(fallbackResult.value, UI_SLIDER_CONFIG.combatEdgeSharpness.max);
+
+  const nullFallback = clampSliderValue("speedMultiplier", "oops", {
+    fallback: null,
+  });
+
+  assert.equal(nullFallback.value, null);
+});
+
 test("simulation defaults keep environmental events dormant by default", async () => {
   const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
   const { UI_SLIDER_CONFIG } = await sliderConfigModulePromise;
