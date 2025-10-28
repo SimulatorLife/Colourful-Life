@@ -2555,46 +2555,46 @@ export class DNA {
       for (; i < blockLength; i += 8) {
         const delta0 = selfData[i] - otherData[i];
 
-        distSq += delta0 * delta0;
+        distSq += Math.imul(delta0, delta0);
         const delta1 = selfData[i + 1] - otherData[i + 1];
 
-        distSq += delta1 * delta1;
+        distSq += Math.imul(delta1, delta1);
         const delta2 = selfData[i + 2] - otherData[i + 2];
 
-        distSq += delta2 * delta2;
+        distSq += Math.imul(delta2, delta2);
         const delta3 = selfData[i + 3] - otherData[i + 3];
 
-        distSq += delta3 * delta3;
+        distSq += Math.imul(delta3, delta3);
         const delta4 = selfData[i + 4] - otherData[i + 4];
 
-        distSq += delta4 * delta4;
+        distSq += Math.imul(delta4, delta4);
         const delta5 = selfData[i + 5] - otherData[i + 5];
 
-        distSq += delta5 * delta5;
+        distSq += Math.imul(delta5, delta5);
         const delta6 = selfData[i + 6] - otherData[i + 6];
 
-        distSq += delta6 * delta6;
+        distSq += Math.imul(delta6, delta6);
         const delta7 = selfData[i + 7] - otherData[i + 7];
 
-        distSq += delta7 * delta7;
+        distSq += Math.imul(delta7, delta7);
       }
 
       for (; i < sharedLength; i++) {
         const delta = selfData[i] - otherData[i];
 
-        distSq += delta * delta;
+        distSq += Math.imul(delta, delta);
       }
 
       for (let index = sharedLength; index < selfLength; index++) {
         const value = selfData[index];
 
-        distSq += value * value;
+        distSq += Math.imul(value, value);
       }
 
       for (let index = sharedLength; index < otherLen; index++) {
         const value = otherData[index];
 
-        distSq += value * value;
+        distSq += Math.imul(value, value);
       }
     } else {
       const fallbackLen =
@@ -2620,7 +2620,7 @@ export class DNA {
 
         const delta = a - (Number.isFinite(b) ? b : 0);
 
-        distSq += delta * delta;
+        distSq += Math.imul(delta, delta);
       }
     }
 
@@ -2628,6 +2628,10 @@ export class DNA {
       typeof inverseMaxDistance === "number" && Number.isFinite(inverseMaxDistance)
         ? inverseMaxDistance
         : this.#resolveInverseMaxDistance(geneCount);
+
+    if (distSq === 0) {
+      return 1;
+    }
 
     if (squared) {
       const invMaxSq = invMax * invMax;
