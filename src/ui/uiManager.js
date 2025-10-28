@@ -402,6 +402,7 @@ export default class UIManager {
     this.burstButton = null;
     this.resetWorldButton = null;
     this.resetWorldBusy = false;
+    this.resetWorldButtonRestoreFocus = false;
     this.resetWorldButtonDefaults = null;
     this._documentKeydownListener = null;
     this.metricsPlaceholder = null;
@@ -1260,6 +1261,7 @@ export default class UIManager {
       if (controls.geometryBusy) return false;
 
       controls.geometryBusy = true;
+      controls.applyButtonRestoreFocus = this.#elementHasFocus(button);
       if (!controls.applyButtonDefaultLabel) {
         controls.applyButtonDefaultLabel = button.textContent || "Apply Geometry";
       }
@@ -1313,6 +1315,9 @@ export default class UIManager {
     if (!controls.geometryBusy) return false;
 
     controls.geometryBusy = false;
+    const shouldRestoreFocus = Boolean(controls.applyButtonRestoreFocus);
+
+    controls.applyButtonRestoreFocus = false;
     if (typeof button.removeAttribute === "function")
       button.removeAttribute("data-busy");
     else button.setAttribute("data-busy", "false");
@@ -1365,6 +1370,10 @@ export default class UIManager {
 
     button.setAttribute("aria-disabled", button.disabled ? "true" : "false");
 
+    if (shouldRestoreFocus) {
+      this.#restoreFocus(button);
+    }
+
     return true;
   }
 
@@ -1376,6 +1385,8 @@ export default class UIManager {
       const button = this.resetWorldButton;
 
       if (!button) return true;
+
+      this.resetWorldButtonRestoreFocus = this.#elementHasFocus(button);
 
       if (!this.resetWorldButtonDefaults) {
         const defaultLabel = button.textContent || "Regenerate World";
@@ -1433,6 +1444,14 @@ export default class UIManager {
       button.setAttribute("aria-label", defaults.ariaLabel);
     } else {
       this.#removeElementAttribute(button, "aria-label");
+    }
+
+    const shouldRestoreFocus = Boolean(this.resetWorldButtonRestoreFocus);
+
+    this.resetWorldButtonRestoreFocus = false;
+
+    if (shouldRestoreFocus) {
+      this.#restoreFocus(button);
     }
 
     return true;
@@ -1802,6 +1821,29 @@ export default class UIManager {
     }
 
     return null;
+  }
+
+  #elementHasFocus(element) {
+    if (!element) return false;
+    if (typeof document === "undefined") return false;
+
+    return document.activeElement === element;
+  }
+
+  #restoreFocus(element) {
+    if (!element) return false;
+    if (typeof document === "undefined") return false;
+    if (document.activeElement === element) return true;
+    if (typeof element.focus !== "function") return false;
+    if ("isConnected" in element && element.isConnected === false) return false;
+
+    try {
+      element.focus({ preventScroll: true });
+    } catch (error) {
+      element.focus();
+    }
+
+    return true;
   }
 
   #readElementAttribute(element, name) {
@@ -3838,6 +3880,7 @@ export default class UIManager {
       previewCellsEl: cellsValueEl,
       previewPixelsEl: pixelsValueEl,
       geometryBusy: false,
+      applyButtonRestoreFocus: false,
     };
 
     const handlePreviewChange = () => {
