@@ -1707,12 +1707,66 @@ export default class GridManager {
 
     const rowStore = this.decayAmount[row];
     const ageRow = this.decayAge[row];
+    const persistenceRow = this.decayPersistence?.[row];
 
-    if (!rowStore || !ageRow) return;
+    if (!rowStore || !ageRow || !persistenceRow) return;
 
-    rowStore[col] = (rowStore[col] || 0) + reserve;
+    const previousReserve = Number.isFinite(rowStore[col]) ? rowStore[col] : 0;
+    const updatedReserve = previousReserve + reserve;
+
+    rowStore[col] = updatedReserve;
     ageRow[col] = 0;
+
+    const dnaPersistence = this.#resolveDecayPersistenceTicks(cell, DECAY_MAX_AGE);
+    const existingPersistence =
+      previousReserve > DECAY_EPSILON &&
+      Number.isFinite(persistenceRow[col]) &&
+      persistenceRow[col] > 0
+        ? persistenceRow[col]
+        : DECAY_MAX_AGE;
+    const totalReserve = updatedReserve;
+
+    if (totalReserve > DECAY_EPSILON) {
+      const weighted =
+        (existingPersistence * previousReserve + dnaPersistence * reserve) /
+        totalReserve;
+
+      persistenceRow[col] = Math.max(
+        1,
+        Math.round(clamp(weighted, 1, DECAY_MAX_AGE * 4)),
+      );
+    } else {
+      persistenceRow[col] = dnaPersistence;
+    }
+
     this.decayActive.add(row * this.cols + col);
+  }
+
+  #resolveDecayPersistenceTicks(cell, baseAge = DECAY_MAX_AGE) {
+    const fallback = Math.max(
+      1,
+      Math.round(Number.isFinite(baseAge) && baseAge > 0 ? baseAge : DECAY_MAX_AGE),
+    );
+
+    const dna = cell?.dna;
+
+    if (!dna || typeof dna.decayPersistenceTicks !== "function") {
+      return fallback;
+    }
+
+    const ticks = dna.decayPersistenceTicks(fallback);
+
+    if (!Number.isFinite(ticks) || ticks <= 0) {
+      warnOnce(
+        "GridManager received non-finite decay persistence from DNA; falling back to configuration value.",
+      );
+
+      return fallback;
+    }
+
+    const normalized = clamp(ticks, 1, fallback * 4);
+
+    return Math.max(1, Math.round(normalized));
   }
 
   #applyDecayDeltas() {
@@ -1758,6 +1812,9 @@ export default class GridManager {
 
     this.decayAmount = Array.from({ length: rowCount }, () => Array(colCount).fill(0));
     this.decayAge = Array.from({ length: rowCount }, () => Array(colCount).fill(0));
+    this.decayPersistence = Array.from({ length: rowCount }, () =>
+      Array(colCount).fill(0),
+    );
     if (this.decayActive) {
       this.decayActive.clear();
     } else {
@@ -1876,11 +1933,15 @@ export default class GridManager {
       for (let r = 0; r < this.decayAmount.length; r++) {
         const rowStore = this.decayAmount[r];
         const ageRow = this.decayAge?.[r];
+        const persistRow = this.decayPersistence?.[r];
 
         if (!rowStore || !ageRow) continue;
 
         rowStore.fill(0);
         ageRow.fill(0);
+        if (persistRow) {
+          persistRow.fill(0);
+        }
       }
 
       return;
@@ -1898,6 +1959,7 @@ export default class GridManager {
 
       const rowStore = this.decayAmount[row];
       const ageRow = this.decayAge[row];
+      const persistenceRow = this.decayPersistence?.[row];
 
       if (!rowStore || !ageRow) continue;
 
@@ -1906,6 +1968,9 @@ export default class GridManager {
       if (pool <= DECAY_EPSILON) {
         rowStore[col] = 0;
         ageRow[col] = 0;
+        if (persistenceRow) {
+          persistenceRow[col] = 0;
+        }
 
         continue;
       }
@@ -1923,9 +1988,19 @@ export default class GridManager {
         age += 1;
       }
 
-      if (nextAmount <= DECAY_EPSILON || age >= DECAY_MAX_AGE) {
+      const maxAgeCandidate =
+        persistenceRow &&
+        Number.isFinite(persistenceRow[col]) &&
+        persistenceRow[col] > 0
+          ? persistenceRow[col]
+          : DECAY_MAX_AGE;
+
+      if (nextAmount <= DECAY_EPSILON || age >= maxAgeCandidate) {
         rowStore[col] = 0;
         ageRow[col] = 0;
+        if (persistenceRow) {
+          persistenceRow[col] = 0;
+        }
 
         continue;
       }
