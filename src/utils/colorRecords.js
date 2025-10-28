@@ -1,5 +1,5 @@
-import { clamp } from "../utils/math.js";
-import { warnOnce } from "../utils/error.js";
+import { clamp } from "./math.js";
+import { warnOnce } from "./error.js";
 
 const COLOR_CACHE_LIMIT = 4096;
 const COLOR_CACHE = new Map();
