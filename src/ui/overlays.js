@@ -431,6 +431,10 @@ function drawLegendDeathBadge(ctx, centerX, centerY, size, color) {
 function drawLifeEventLegend(ctx, cellSize, counts = {}, metadata = {}) {
   if (!ctx) return;
 
+  if (typeof ctx.fillRect !== "function" || typeof ctx.fillText !== "function") {
+    return;
+  }
+
   const drawnCount = Number.isFinite(metadata.drawnCount) ? metadata.drawnCount : 0;
 
   if (drawnCount <= 0) {
@@ -479,7 +483,9 @@ function drawLifeEventLegend(ctx, cellSize, counts = {}, metadata = {}) {
     { text: `Net: ${net > 0 ? "+" : ""}${net}`, type: "net" },
   ].filter(Boolean);
 
-  ctx.save();
+  const canSave = typeof ctx.save === "function";
+
+  if (canSave) ctx.save();
   ctx.textBaseline = "top";
   ctx.font = titleFont;
   const titleWidth =
@@ -540,7 +546,9 @@ function drawLifeEventLegend(ctx, cellSize, counts = {}, metadata = {}) {
     cursorY += lineHeight;
   }
 
-  ctx.restore();
+  if (canSave && typeof ctx.restore === "function") {
+    ctx.restore();
+  }
 }
 
 function createFitnessPalette(steps, hue) {
