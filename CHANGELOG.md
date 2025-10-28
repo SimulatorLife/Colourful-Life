@@ -91,6 +91,12 @@ where practical.
 - Lowered the default energy regeneration rate to `0.0117`, trimmed diffusion to
   `0.05`, and set the density penalty to `0.39` so crowded hubs return less
   energy each tick while sparse tiles still recover reliably.
+- Raised the default decay return fraction to `0.89` after the dense 40×40
+  headless probe (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40 PERF_SIM_COLS=40
+PERF_SIM_WARMUP=20 PERF_SIM_ITERATIONS=80 PERF_SIM_DENSITY=0.68 node
+scripts/profile-energy.mjs`) lifted survivors from 135 → 137 and trimmed the
+  ms-per-tick average from ~135 ms → ~99 ms by recycling a touch more
+  corpse energy into contested hubs without flooding calm regions.
 - Increased the reproduction viability buffer by 15 % so offspring only spawn
   when parents stockpile meaningful reserves instead of skimming the minimum
   threshold.

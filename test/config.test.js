@@ -211,7 +211,7 @@ test("resolveMutationChance clamps invalid overrides", async () => {
 test("DECAY_RETURN_FRACTION exposes the environment-aware default", async () => {
   const { DECAY_RETURN_FRACTION } = await configModulePromise;
 
-  assert.is(DECAY_RETURN_FRACTION, 0.88);
+  assert.is(DECAY_RETURN_FRACTION, 0.89);
 });
 
 test("resolveDecayReturnFraction respects overrides", async () => {
@@ -238,7 +238,7 @@ test("resolveDecayReturnFraction clamps invalid overrides", async () => {
 
   assert.is(
     resolveDecayReturnFraction({ COLOURFUL_LIFE_DECAY_RETURN_FRACTION: "NaN" }),
-    0.88,
+    0.89,
   );
 });
 
