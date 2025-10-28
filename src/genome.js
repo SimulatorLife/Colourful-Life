@@ -5,6 +5,7 @@ import {
   MUTATION_CHANCE_BASELINE,
   OFFSPRING_VIABILITY_BUFFER,
   DECAY_RETURN_FRACTION,
+  DECAY_MAX_AGE,
 } from "./config.js";
 
 const ACTIVITY_RATE_SPAN = 0.7;
@@ -979,6 +980,42 @@ export class DNA {
     );
 
     return clamp(bounded, 0.05, 0.98);
+  }
+
+  decayPersistenceTicks(globalMaxAge = DECAY_MAX_AGE) {
+    const baseline = Math.max(
+      1,
+      Math.round(
+        Number.isFinite(globalMaxAge) && globalMaxAge > 0
+          ? globalMaxAge
+          : DECAY_MAX_AGE,
+      ),
+    );
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
+    const senescence = this.geneFraction(GENE_LOCI.SENESCENCE);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
+    const rng = this.prngFor("decayPersistenceTicks");
+    const structuralPreservation =
+      0.55 * density + 0.2 * recovery + 0.15 * capacity + 0.1 * efficiency;
+    const socialGuard = 0.25 + cooperation * 0.45;
+    const longevityBias = 0.35 + senescence * 0.55 + socialGuard * 0.25;
+    const scavengerPressure = 0.35 + risk * 0.4 + exploration * 0.25 + movement * 0.2;
+    const baselineMultiplier =
+      0.55 +
+      structuralPreservation * 0.65 +
+      longevityBias * 0.45 -
+      scavengerPressure * 0.55;
+    const jitter = (rng() - 0.5) * 0.12;
+    const multiplier = clamp(baselineMultiplier + jitter, 0.35, 1.8);
+    const ticks = Math.round(baseline * multiplier);
+
+    return Math.max(1, ticks);
   }
 
   metabolicProfile() {
