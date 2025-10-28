@@ -279,23 +279,14 @@ class FixedSizeRingBuffer {
       return [];
     }
 
-    const result = new Array(normalizedLimit);
-    let index = this.start + length - 1;
+    const buffer = this.buffer;
+    const baseIndex = (this.start + length - 1) % capacity;
 
-    if (index >= capacity) {
-      index -= capacity;
-    }
+    return Array.from({ length: normalizedLimit }, (_, offset) => {
+      const index = baseIndex - offset;
 
-    for (let i = 0; i < normalizedLimit; i++) {
-      result[i] = this.buffer[index];
-      index -= 1;
-
-      if (index < 0) {
-        index += capacity;
-      }
-    }
-
-    return result;
+      return buffer[index >= 0 ? index : index + capacity];
+    });
   }
 
   forEach(callback, thisArg) {
