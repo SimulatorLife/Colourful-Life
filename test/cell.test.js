@@ -13,6 +13,7 @@ let InteractionSystem;
 let Brain;
 let OUTPUT_GROUPS;
 let OFFSPRING_VIABILITY_BUFFER;
+let REPRODUCTION_COOLDOWN_BASE;
 
 function investmentFor(
   energy,
@@ -99,7 +100,9 @@ test.before(async () => {
   ));
   ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
   ({ default: Brain, OUTPUT_GROUPS } = await import("../src/brain.js"));
-  ({ OFFSPRING_VIABILITY_BUFFER } = await import("../src/config.js"));
+  ({ OFFSPRING_VIABILITY_BUFFER, REPRODUCTION_COOLDOWN_BASE } = await import(
+    "../src/config.js"
+  ));
   if (typeof global.window === "undefined") global.window = globalThis;
   if (!window.GridManager) window.GridManager = {};
   if (typeof window.GridManager.maxTileEnergy !== "number") {
@@ -153,6 +156,45 @@ function predictDeterministicOffspring(
 
   return genes;
 }
+
+test("startReproductionCooldown respects the environment baseline", () => {
+  const dna = new DNA(0, 0, 0);
+  const cell = new Cell(0, 0, dna, 6);
+  const baseline = Math.max(1, Math.round(REPRODUCTION_COOLDOWN_BASE));
+
+  cell._reproductionCooldown = 0;
+  cell.dna.reproductionCooldownTicks = undefined;
+  cell.startReproductionCooldown();
+
+  assert.is(
+    cell.getReproductionCooldown(),
+    baseline,
+    "fallback should honor the configured baseline",
+  );
+
+  cell._reproductionCooldown = 0;
+  cell.dna.reproductionCooldownTicks = () => baseline - 1;
+  cell.startReproductionCooldown();
+
+  assert.is(
+    cell.getReproductionCooldown(),
+    baseline,
+    "baseline should clamp DNA values that dip below the floor",
+  );
+
+  cell._reproductionCooldown = 0;
+  const elevated = baseline + 3.6;
+
+  cell.dna.reproductionCooldownTicks = () => elevated;
+  cell.startReproductionCooldown();
+  const expectedHigh = Math.max(baseline, Math.round(elevated));
+
+  assert.is(
+    cell.getReproductionCooldown(),
+    expectedHigh,
+    "DNA values above the floor should persist after rounding",
+  );
+});
 
 test("manageEnergy applies DNA-driven metabolism and starvation rules", () => {
   const dna = new DNA(30, 200, 100);
