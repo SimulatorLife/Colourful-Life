@@ -107,19 +107,34 @@ export default class ReproductionZonePolicy {
     }
 
     let encounteredError = false;
-    const filtered = candidates.filter(({ r, c }) => {
-      const result = invokeWithErrorBoundary(tester, [r, c], {
-        thisArg: manager,
-        message: WARNINGS.membership,
-        reporter: warnOnce,
-        once: true,
-        onError: () => {
-          encounteredError = true;
-        },
-      });
+    const filtered = [];
+    const boundaryArgs = [0, 0];
+    const boundaryOptions = {
+      thisArg: manager,
+      message: WARNINGS.membership,
+      reporter: warnOnce,
+      once: true,
+      onError: () => {
+        encounteredError = true;
+      },
+    };
 
-      return Boolean(result);
-    });
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = candidates[index];
+
+      if (!candidate) {
+        continue;
+      }
+
+      boundaryArgs[0] = candidate.r;
+      boundaryArgs[1] = candidate.c;
+
+      const result = invokeWithErrorBoundary(tester, boundaryArgs, boundaryOptions);
+
+      if (result) {
+        filtered.push(candidate);
+      }
+    }
 
     if (encounteredError) {
       return candidates;
