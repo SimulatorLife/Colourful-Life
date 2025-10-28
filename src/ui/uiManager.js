@@ -910,15 +910,21 @@ export default class UIManager {
 
   #resolveGeometryFallback(candidate = {}) {
     const resolvePositive = (values, fallback) => {
-      for (const value of values) {
+      let resolved = null;
+
+      values?.find?.((value) => {
         const numeric = Number(value);
 
-        if (Number.isFinite(numeric) && numeric > 0) {
-          return numeric;
+        if (!Number.isFinite(numeric) || numeric <= 0) {
+          return false;
         }
-      }
 
-      return fallback;
+        resolved = numeric;
+
+        return true;
+      });
+
+      return resolved ?? fallback;
     };
 
     const rows = resolvePositive([candidate.rows, this.gridRows], 120);
