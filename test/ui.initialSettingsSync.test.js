@@ -193,7 +193,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
     );
     const gridToggle = findCheckboxByLabel(uiManager.controlsPanel, "Show Grid Lines");
     const autoPauseToggle = findCheckboxByLabel(
-      uiManager.controlsPanel,
+      uiManager.pauseOverlay,
       "Pause When Hidden",
     );
 

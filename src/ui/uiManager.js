@@ -1623,6 +1623,30 @@ export default class UIManager {
     overlay.appendChild(hint);
     overlay.appendChild(autopause);
 
+    const autoPauseInput = this.#addCheckbox(
+      overlay,
+      "Pause When Hidden",
+      { title: AUTO_PAUSE_DESCRIPTION, description: AUTO_PAUSE_DESCRIPTION },
+      this.autoPauseOnBlur,
+      (checked) => {
+        this.setAutoPauseOnBlur(checked);
+      },
+    );
+
+    if (autoPauseInput) {
+      this.autoPauseCheckbox = autoPauseInput;
+      const row =
+        typeof autoPauseInput.closest === "function"
+          ? autoPauseInput.closest("label")
+          : autoPauseInput.parentElement?.parentElement;
+
+      if (row instanceof HTMLElement) {
+        row.classList.add("canvas-pause-indicator__autopause-control");
+      }
+    } else {
+      this.autoPauseCheckbox = null;
+    }
+
     this.canvasContainer.appendChild(overlay);
 
     this.pauseOverlay = overlay;
@@ -3603,16 +3627,6 @@ export default class UIManager {
     });
 
     this.#updateSpeedMultiplierUI(this.speedMultiplier);
-
-    this.autoPauseCheckbox = this.#addCheckbox(
-      body,
-      "Pause When Hidden",
-      { title: AUTO_PAUSE_DESCRIPTION, description: AUTO_PAUSE_DESCRIPTION },
-      this.autoPauseOnBlur,
-      (checked) => {
-        this.setAutoPauseOnBlur(checked);
-      },
-    );
 
     this.#buildHotkeyReference(body);
   }
