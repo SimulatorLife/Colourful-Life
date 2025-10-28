@@ -168,6 +168,30 @@ test("numeric setters sanitize input, clamp values, and flag slow UI updates", a
   }
 });
 
+test("setEnergyRates clamps to the unit interval", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.setEnergyRates({ regen: 5, diffusion: 2 });
+
+    assert.is(
+      engine.state.energyRegenRate,
+      1,
+      "regen rate should not exceed the upper bound",
+    );
+    assert.is(
+      engine.state.energyDiffusionRate,
+      1,
+      "diffusion rate should not exceed the upper bound",
+    );
+  } finally {
+    restore();
+  }
+});
+
 test("setMaxConcurrentEvents floors values and schedules slow UI work", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
