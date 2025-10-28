@@ -195,6 +195,10 @@ export default class SimulationEngine {
       rng,
       leaderboardSize: defaults.leaderboardSize,
       now: this.now,
+      statsOptions:
+        config && typeof config.statsOptions === "object"
+          ? config.statsOptions
+          : undefined,
     });
 
     this.stats = runtimeServices.stats;

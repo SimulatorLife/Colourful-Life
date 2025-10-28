@@ -312,6 +312,11 @@ if (configuration.includeSimulation) {
       showDensity: false,
       showEnergy: false,
       showFitness: false,
+      statsOptions: {
+        historySize: 240,
+        traitResampleInterval: 240,
+        diversitySampleInterval: 120,
+      },
     },
     rng: simulationRng,
     requestAnimationFrame: () => 0,
