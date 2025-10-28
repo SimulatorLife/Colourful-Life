@@ -434,6 +434,7 @@ export default class UIManager {
     this.lifeEventsSummaryEmptyMessage = null;
     this.lifeEventMarkersToggle = null;
     this._overlayToggleInputs = new Map();
+    this._zoneToggleInputs = new Map();
     this.lifeEventsSummaryTrend = null;
     this.lifeEventsSummaryNet = null;
     this.lifeEventsSummaryDirection = null;
@@ -2011,6 +2012,54 @@ export default class UIManager {
     }
   }
 
+  #syncZoneToggleInputs() {
+    if (!this._zoneToggleInputs) return;
+
+    if (
+      !this.selectionManager ||
+      typeof this.selectionManager.getPatterns !== "function"
+    ) {
+      this._zoneToggleInputs.clear();
+
+      return;
+    }
+
+    const patterns = this.selectionManager.getPatterns();
+
+    if (!Array.isArray(patterns)) {
+      this._zoneToggleInputs.clear();
+
+      return;
+    }
+
+    const knownIds = new Set();
+
+    patterns.forEach((pattern) => {
+      const key =
+        typeof pattern?.id === "string" && pattern.id.length > 0 ? pattern.id : null;
+
+      if (!key) return;
+
+      knownIds.add(key);
+
+      const checkbox = this._zoneToggleInputs.get(key);
+
+      if (checkbox) {
+        const nextChecked = Boolean(pattern.active);
+
+        if (checkbox.checked !== nextChecked) {
+          checkbox.checked = nextChecked;
+        }
+      }
+    });
+
+    Array.from(this._zoneToggleInputs.keys()).forEach((key) => {
+      if (!knownIds.has(key)) {
+        this._zoneToggleInputs.delete(key);
+      }
+    });
+  }
+
   #registerSliderElement(key, element) {
     if (!key || !element) return;
     if (!this._sliderInputs) {
@@ -2195,6 +2244,8 @@ export default class UIManager {
         this.zoneSummaryList.hidden = true;
       }
     }
+
+    this.#syncZoneToggleInputs();
   }
   // Reusable checkbox row helper
   #addCheckbox(body, label, titleOrOptions, initial, onChange) {
@@ -4442,7 +4493,15 @@ export default class UIManager {
     body.appendChild(zoneIntro);
 
     const zoneGrid = createControlGrid(body, "control-grid--compact");
-    const patterns = this.selectionManager.getPatterns();
+
+    if (this._zoneToggleInputs) {
+      this._zoneToggleInputs.clear();
+    }
+
+    const patterns =
+      typeof this.selectionManager.getPatterns === "function"
+        ? this.selectionManager.getPatterns()
+        : [];
 
     patterns.forEach((pattern) => {
       const description =
@@ -4450,7 +4509,7 @@ export default class UIManager {
           ? pattern.description
           : null;
 
-      this.#addCheckbox(
+      const checkbox = this.#addCheckbox(
         zoneGrid,
         pattern.name,
         { title: description || "", description, color: pattern.color },
@@ -4461,6 +4520,13 @@ export default class UIManager {
           this.#scheduleUpdate();
         },
       );
+
+      const key =
+        typeof pattern?.id === "string" && pattern.id.length > 0 ? pattern.id : null;
+
+      if (key && checkbox && this._zoneToggleInputs) {
+        this._zoneToggleInputs.set(key, checkbox);
+      }
     });
 
     const summaryValue = document.createElement("div");
