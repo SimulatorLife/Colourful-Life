@@ -13,20 +13,38 @@ class MockClassList {
     this.owner.className = Array.from(this.classes).join(" ");
   }
 
+  _setFromString(value) {
+    this.classes.clear();
+
+    if (typeof value !== "string" || value.length === 0) {
+      return;
+    }
+
+    value
+      .split(/\s+/)
+      .filter(Boolean)
+      .forEach((token) => {
+        this.classes.add(token);
+      });
+  }
+
   add(token) {
     if (!token) return;
+    this._setFromString(this.owner?._className ?? this.owner?.className ?? "");
     this.classes.add(token);
     this.#apply();
   }
 
   remove(token) {
     if (!token) return;
+    this._setFromString(this.owner?._className ?? this.owner?.className ?? "");
     this.classes.delete(token);
     this.#apply();
   }
 
   toggle(token, force) {
     if (!token) return false;
+    this._setFromString(this.owner?._className ?? this.owner?.className ?? "");
     const shouldAdd = force ?? !this.classes.has(token);
 
     if (shouldAdd) {
@@ -39,7 +57,25 @@ class MockClassList {
   }
 
   contains(token) {
-    return this.classes.has(token);
+    if (typeof token !== "string" || token.length === 0) {
+      return false;
+    }
+
+    if (this.classes.size === 0) {
+      this._setFromString(this.owner?._className ?? this.owner?.className ?? "");
+    }
+
+    if (this.classes.has(token)) {
+      return true;
+    }
+
+    if (typeof this.owner?.className === "string" && this.owner.className.length > 0) {
+      const classNames = this.owner.className.split(/\s+/).filter(Boolean);
+
+      return classNames.includes(token);
+    }
+
+    return false;
   }
 }
 
@@ -53,14 +89,27 @@ export class MockElement {
     this.tagName = tagName.toUpperCase();
     this.children = [];
     this.parentElement = null;
-    this.className = "";
+    this._className = "";
     this.classList = new MockClassList(this);
+    this.className = "";
     this.attributes = {};
     this.eventListeners = Object.create(null);
     this.style = {};
     this._textContent = "";
     this.innerHTML = "";
     this.id = "";
+  }
+
+  get className() {
+    return this._className;
+  }
+
+  set className(value) {
+    this._className = value != null ? String(value) : "";
+
+    if (this.classList) {
+      this.classList._setFromString(this._className);
+    }
   }
 
   #matchesSelector(selector) {
