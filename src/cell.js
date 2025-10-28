@@ -1323,7 +1323,6 @@ export default class Cell {
   }
 
   recordForageOutcome({
-    energyBefore = this.energy,
     energyAfter = this.energy,
     intake = 0,
     expectedDemand = 0,
@@ -1399,11 +1398,6 @@ export default class Cell {
     );
     const normalizedAvailable = clamp(
       Number.isFinite(availableEnergyBefore) ? availableEnergyBefore / capacity : 0,
-      0,
-      1,
-    );
-    const normalizedEnergyBefore = clamp(
-      Number.isFinite(energyBefore) ? energyBefore / capacity : 0,
       0,
       1,
     );
@@ -4170,7 +4164,7 @@ export default class Cell {
 
   #cooperationSensors(
     partner,
-    { baseShare = 0, selfEnergy = 0, partnerEnergy = 0, kinship = null } = {},
+    { selfEnergy = 0, partnerEnergy = 0, kinship = null } = {},
   ) {
     const energy = clamp(Number.isFinite(selfEnergy) ? selfEnergy : 0, 0, 1);
     const partnerNorm = clamp(
@@ -8213,7 +8207,6 @@ export default class Cell {
   } = {}) {
     const baseShare = clamp(Number.isFinite(baseline) ? baseline : 0, 0, 1);
     const sensors = this.#cooperationSensors(partner, {
-      baseShare,
       selfEnergy,
       partnerEnergy,
       kinship,

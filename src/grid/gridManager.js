@@ -2,7 +2,6 @@ import {
   randomRange,
   clamp,
   lerp,
-  sanitizeNumber,
   sanitizePositiveInteger,
   sanitizeUnitInterval,
 } from "../utils/math.js";
@@ -4179,7 +4178,6 @@ export default class GridManager {
 
     if (typeof cell.recordForageOutcome === "function") {
       cell.recordForageOutcome({
-        energyBefore,
         energyAfter,
         intake: take,
         expectedDemand: demand,

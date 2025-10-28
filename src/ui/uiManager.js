@@ -1887,7 +1887,7 @@ export default class UIManager {
 
     try {
       element.focus({ preventScroll: true });
-    } catch (error) {
+    } catch {
       element.focus();
     }
 

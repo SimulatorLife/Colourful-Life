@@ -15,7 +15,6 @@ import {
 import { resolveObstaclePresetCatalog } from "./grid/obstaclePresets.js";
 import {
   clamp,
-  clamp01,
   pickFirstFinitePositive,
   sanitizeNumber,
   sanitizePositiveInteger,
