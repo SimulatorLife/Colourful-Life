@@ -4471,75 +4471,98 @@ export default class GridManager {
       regenAdd = 0,
       drain = 0,
     ) => {
-      if (!obstacleRow && !upObstacleRow && !downObstacleRow) {
-        const densityValue = this.#resolveCachedDensityValue(
-          r,
-          c,
-          densityRow,
-          densityGrid,
-        );
+      const currentEnergy = energyRow[c];
+      let regen = 0;
 
-        let effectiveDensity = (densityValue ?? 0) * normalizedDensityMultiplier;
+      if (positiveMaxTileEnergy > 0) {
+        const deficit = positiveMaxTileEnergy - currentEnergy;
 
-        if (effectiveDensity <= 0) {
-          effectiveDensity = 0;
-        } else if (effectiveDensity >= 1) {
-          effectiveDensity = 1;
-        }
+        if (deficit > 0) {
+          let regenPenalty = 1;
 
-        const currentEnergy = energyRow[c];
-        let regen = 0;
+          if (normalizedDensityMultiplier !== 0) {
+            let densityValue = densityRow ? densityRow[c] : undefined;
 
-        if (positiveMaxTileEnergy > 0) {
-          const deficit = positiveMaxTileEnergy - currentEnergy;
+            if (densityValue == null) {
+              densityValue = this.#resolveCachedDensityValue(r, c, null, densityGrid);
+            }
 
-          if (deficit > 0) {
-            let densityImpact = REGEN_DENSITY_PENALTY * effectiveDensity;
+            if (densityValue != null) {
+              let effectiveDensity = densityValue * normalizedDensityMultiplier;
 
-            if (densityImpact > 0) {
-              const feedback = this.#crowdingPrepared
-                ? this.#resolvePreparedCrowdingFeedback(r, c)
-                : computeCrowdingFeedback({
-                    grid,
-                    row: r,
-                    col: c,
-                    rows,
-                    cols,
-                    neighborOffsets: NEIGHBOR_OFFSETS,
-                    maxTileEnergy: positiveMaxTileEnergy,
-                    result: this.#crowdingFeedbackScratch,
-                  });
+              if (effectiveDensity <= 0) {
+                effectiveDensity = 0;
+              } else if (effectiveDensity >= 1) {
+                effectiveDensity = 1;
+              }
 
-              if (feedback.count > 0) {
-                const comfort = feedback.comfort;
-                const scarcitySignal = feedback.scarcity;
-                const pressure =
-                  effectiveDensity > comfort ? effectiveDensity - comfort : 0;
-                const relief =
-                  comfort > effectiveDensity ? comfort - effectiveDensity : 0;
-                const scarcityWeight = clamp(scarcitySignal, 0, 1);
-                const sensitivity = clamp(
-                  1 +
-                    pressure * (0.6 + scarcityWeight * 0.55) -
-                    relief * (0.35 + (1 - scarcityWeight) * 0.15),
-                  0.35,
-                  1.8,
-                );
+              if (effectiveDensity > 0) {
+                let densityImpact = REGEN_DENSITY_PENALTY * effectiveDensity;
 
-                densityImpact *= sensitivity;
+                if (densityImpact > 0) {
+                  const feedback = this.#crowdingPrepared
+                    ? this.#resolvePreparedCrowdingFeedback(r, c)
+                    : computeCrowdingFeedback({
+                        grid,
+                        row: r,
+                        col: c,
+                        rows,
+                        cols,
+                        neighborOffsets: NEIGHBOR_OFFSETS,
+                        maxTileEnergy: positiveMaxTileEnergy,
+                        result: this.#crowdingFeedbackScratch,
+                      });
+
+                  if (feedback.count > 0) {
+                    const comfort = feedback.comfort;
+                    const scarcitySignal = feedback.scarcity;
+                    const pressure =
+                      effectiveDensity > comfort ? effectiveDensity - comfort : 0;
+                    const relief =
+                      comfort > effectiveDensity ? comfort - effectiveDensity : 0;
+                    let scarcityWeight = scarcitySignal;
+
+                    if (scarcityWeight <= 0) {
+                      scarcityWeight = 0;
+                    } else if (scarcityWeight >= 1) {
+                      scarcityWeight = 1;
+                    }
+
+                    let sensitivity =
+                      1 +
+                      pressure * (0.6 + scarcityWeight * 0.55) -
+                      relief * (0.35 + (1 - scarcityWeight) * 0.15);
+
+                    if (sensitivity <= 0.35) {
+                      sensitivity = 0.35;
+                    } else if (sensitivity >= 1.8) {
+                      sensitivity = 1.8;
+                    }
+
+                    densityImpact *= sensitivity;
+                  }
+                }
+
+                if (densityImpact <= 0) {
+                  densityImpact = 0;
+                } else if (densityImpact >= 1.1) {
+                  densityImpact = 1.1;
+                }
+
+                regenPenalty -= densityImpact;
               }
             }
+          }
 
-            const regenPenalty = 1 - clamp(densityImpact, 0, 1.1);
-
-            if (regenPenalty > 0) {
-              regen = regenRate * deficit * regenPenalty;
-            }
+          if (regenPenalty > 0) {
+            regen = regenRate * deficit * regenPenalty;
           }
         }
+      }
 
-        let diffusion = 0;
+      let diffusion = 0;
 
+      if (!obstacleRow && !upObstacleRow && !downObstacleRow) {
         if (useDiffusion) {
           let neighborSum = 0;
           let neighborCount = 0;
@@ -4568,33 +4591,10 @@ export default class GridManager {
             diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
           }
         }
+      } else {
+        const isObstacle = obstacleRow && obstacleRow[c];
 
-        if (regenMultiplier !== 1) {
-          regen *= regenMultiplier;
-        }
-
-        if (regenAdd !== 0) {
-          regen += regenAdd;
-        }
-
-        let nextEnergy = currentEnergy + regen + diffusion;
-
-        if (drain !== 0) {
-          nextEnergy -= drain;
-        }
-
-        if (nextEnergy <= 0) {
-          nextEnergy = 0;
-        } else if (positiveMaxTileEnergy > 0 && nextEnergy >= positiveMaxTileEnergy) {
-          nextEnergy = positiveMaxTileEnergy;
-        }
-
-        const occupant = gridRow ? gridRow[c] : null;
-
-        if (occupant) {
-          if (occupantRegenRow) occupantRegenRow[c] = nextEnergy;
-          if (occupantRegenVersionRow) occupantRegenVersionRow[c] = occupantRevision;
-
+        if (isObstacle) {
           nextRow[c] = 0;
           energyRow[c] = 0;
           if (hasDeltaRow) {
@@ -4608,102 +4608,33 @@ export default class GridManager {
           return;
         }
 
-        nextRow[c] = nextEnergy;
-        energyRow[c] = nextEnergy;
+        if (useDiffusion) {
+          let neighborSum = 0;
+          let neighborCount = 0;
 
-        if (hasDeltaRow) {
-          let normalizedDelta = (nextEnergy - currentEnergy) * invMaxTileEnergy;
-
-          if (normalizedDelta < -1) {
-            normalizedDelta = -1;
-          } else if (normalizedDelta > 1) {
-            normalizedDelta = 1;
+          if (upEnergyRow && (!upObstacleRow || !upObstacleRow[c])) {
+            neighborSum += upEnergyRow[c];
+            neighborCount += 1;
           }
 
-          deltaRow[c] = normalizedDelta;
-
-          if (trackSparseDelta && deltaDirtyTiles) {
-            deltaDirtyTiles.add(r * cols + c);
+          if (downEnergyRow && (!downObstacleRow || !downObstacleRow[c])) {
+            neighborSum += downEnergyRow[c];
+            neighborCount += 1;
           }
-        }
 
-        return;
-      }
-
-      const isObstacle = obstacleRow && obstacleRow[c];
-
-      if (isObstacle) {
-        nextRow[c] = 0;
-        energyRow[c] = 0;
-        if (hasDeltaRow) {
-          deltaRow[c] = 0;
-
-          if (trackSparseDelta && deltaDirtyTiles) {
-            deltaDirtyTiles.add(r * cols + c);
+          if (c > 0 && (!obstacleRow || !obstacleRow[c - 1])) {
+            neighborSum += energyRow[c - 1];
+            neighborCount += 1;
           }
-        }
 
-        return;
-      }
-
-      const densityValue = this.#resolveCachedDensityValue(
-        r,
-        c,
-        densityRow,
-        densityGrid,
-      );
-
-      let effectiveDensity = (densityValue ?? 0) * normalizedDensityMultiplier;
-
-      if (effectiveDensity <= 0) {
-        effectiveDensity = 0;
-      } else if (effectiveDensity >= 1) {
-        effectiveDensity = 1;
-      }
-
-      const currentEnergy = energyRow[c];
-      let regen = 0;
-
-      if (positiveMaxTileEnergy > 0) {
-        const deficit = positiveMaxTileEnergy - currentEnergy;
-
-        if (deficit > 0) {
-          const regenPenalty = 1 - REGEN_DENSITY_PENALTY * effectiveDensity;
-
-          if (regenPenalty > 0) {
-            regen = regenRate * deficit * regenPenalty;
+          if (c < cols - 1 && (!obstacleRow || !obstacleRow[c + 1])) {
+            neighborSum += energyRow[c + 1];
+            neighborCount += 1;
           }
-        }
-      }
 
-      let diffusion = 0;
-
-      if (useDiffusion) {
-        let neighborSum = 0;
-        let neighborCount = 0;
-
-        if (upEnergyRow && (!upObstacleRow || !upObstacleRow[c])) {
-          neighborSum += upEnergyRow[c];
-          neighborCount += 1;
-        }
-
-        if (downEnergyRow && (!downObstacleRow || !downObstacleRow[c])) {
-          neighborSum += downEnergyRow[c];
-          neighborCount += 1;
-        }
-
-        if (c > 0 && (!obstacleRow || !obstacleRow[c - 1])) {
-          neighborSum += energyRow[c - 1];
-          neighborCount += 1;
-        }
-
-        if (c < cols - 1 && (!obstacleRow || !obstacleRow[c + 1])) {
-          neighborSum += energyRow[c + 1];
-          neighborCount += 1;
-        }
-
-        if (neighborCount > 0) {
-          diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
+          if (neighborCount > 0) {
+            diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
+          }
         }
       }
 
