@@ -58,14 +58,8 @@ const DIVERSITY_SIMILARITY_WARNING =
 const UNRESOLVED_SEED = Symbol("stats.unresolvedSeed");
 
 function clampWindowToSpan(requestedWindow, observedSpan) {
-  const normalizedWindow = Math.max(
-    1,
-    Math.floor(Number.isFinite(requestedWindow) ? requestedWindow : 1),
-  );
-  const normalizedSpan = Math.max(
-    1,
-    Math.floor(Number.isFinite(observedSpan) ? observedSpan : 1),
-  );
+  const normalizedWindow = sanitizePositiveInteger(requestedWindow);
+  const normalizedSpan = sanitizePositiveInteger(observedSpan);
 
   return Math.min(normalizedWindow, normalizedSpan);
 }
