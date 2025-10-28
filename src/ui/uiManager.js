@@ -13,6 +13,7 @@ import {
   clamp01,
   pickFirstFinitePositive,
   sanitizeNumber,
+  sanitizeUnitInterval,
 } from "../utils/math.js";
 import { coerceBoolean } from "../utils/primitives.js";
 import { toPlainObject } from "../utils/object.js";
@@ -5193,7 +5194,7 @@ export default class UIManager {
   }
 
   setInitialTileEnergyFraction(value, { notify = true } = {}) {
-    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
+    const clamped = sanitizeUnitInterval(value);
 
     if (clamped === null) return;
 
@@ -5209,7 +5210,7 @@ export default class UIManager {
   }
 
   setLowDiversityReproMultiplier(value, { notify = true } = {}) {
-    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
+    const clamped = sanitizeUnitInterval(value);
 
     if (clamped === null) return;
     const changed = this.lowDiversityReproMultiplier !== clamped;

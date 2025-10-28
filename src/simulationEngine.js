@@ -19,6 +19,7 @@ import {
   clamp01,
   sanitizeNumber,
   sanitizePositiveInteger,
+  sanitizeUnitInterval,
   toFiniteOrNull,
   applyIntervalFloor,
 } from "./utils/math.js";
@@ -1561,7 +1562,7 @@ export default class SimulationEngine {
   }
 
   setMatingDiversityThreshold(value) {
-    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
+    const clamped = sanitizeUnitInterval(value);
 
     if (clamped === null) return;
 
@@ -1585,7 +1586,7 @@ export default class SimulationEngine {
   }
 
   setLowDiversityReproMultiplier(value) {
-    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
+    const clamped = sanitizeUnitInterval(value);
 
     if (clamped === null) return;
 

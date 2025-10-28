@@ -4,6 +4,7 @@ import {
   lerp,
   sanitizeNumber,
   sanitizePositiveInteger,
+  sanitizeUnitInterval,
 } from "../utils/math.js";
 import { createRankedBuffer, isArrayLike } from "../utils/collections.js";
 import { resolveCellColor } from "../utils/cell.js";
@@ -2836,7 +2837,7 @@ export default class GridManager {
 
   setMatingDiversityOptions({ threshold, lowDiversityMultiplier } = {}) {
     if (threshold !== undefined) {
-      const clamped = sanitizeNumber(threshold, { fallback: null, min: 0, max: 1 });
+      const clamped = sanitizeUnitInterval(threshold);
 
       if (clamped !== null) {
         this.matingDiversityThreshold = clamped;
@@ -2846,11 +2847,7 @@ export default class GridManager {
     }
 
     if (lowDiversityMultiplier !== undefined) {
-      const clamped = sanitizeNumber(lowDiversityMultiplier, {
-        fallback: null,
-        min: 0,
-        max: 1,
-      });
+      const clamped = sanitizeUnitInterval(lowDiversityMultiplier);
 
       if (clamped !== null) {
         this.lowDiversityReproMultiplier = clamped;

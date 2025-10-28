@@ -4,6 +4,7 @@ import {
   clamp01,
   sanitizeNumber,
   sanitizePositiveInteger,
+  sanitizeUnitInterval,
   toFiniteOrNull,
 } from "../utils/math.js";
 import { warnOnce } from "../utils/error.js";
@@ -1941,7 +1942,7 @@ export default class Stats {
   }
 
   setMatingDiversityThreshold(value) {
-    const clamped = sanitizeNumber(value, { fallback: null, min: 0, max: 1 });
+    const clamped = sanitizeUnitInterval(value);
 
     if (clamped === null) return;
 
