@@ -74,6 +74,7 @@ const DEFAULT_CROWDING_SUMMARY = Object.freeze({
   scarcity: 0,
   count: 0,
 });
+const CROWDING_REVISION_LIMIT = 0xffffffff;
 
 const NOOP_INTERACTION_SYSTEM = Object.freeze({
   resolveIntent() {
@@ -461,6 +462,8 @@ export default class GridManager {
   #crowdingComfortGrid = null;
   #crowdingScarcityGrid = null;
   #crowdingCountGrid = null;
+  #crowdingRevisionGrid = null;
+  #crowdingRevision = 0;
   #crowdingPrepared = false;
   #crowdingPreparedUseScarcity = false;
   #activeCellSnapshotScratch = null;
@@ -783,7 +786,16 @@ export default class GridManager {
     const comfortGrid = this.#crowdingComfortGrid;
     const scarcityGrid = this.#crowdingScarcityGrid;
     const countGrid = this.#crowdingCountGrid;
-    const ensureRow = (grid, factory) => {
+    let revisionGrid = this.#crowdingRevisionGrid;
+    let revision = this.#crowdingRevision + 1;
+    let forceClear = false;
+
+    if (!Number.isFinite(revision) || revision >= CROWDING_REVISION_LIMIT) {
+      revision = 1;
+      forceClear = true;
+    }
+
+    const ensureRow = (grid, factory, { clear = false } = {}) => {
       if (!Array.isArray(grid) || grid.length !== rows) {
         return Array.from({ length: rows }, factory);
       }
@@ -793,7 +805,7 @@ export default class GridManager {
 
         if (!existing || existing.length !== cols) {
           grid[r] = factory();
-        } else {
+        } else if (clear) {
           existing.fill(0);
         }
       }
@@ -801,8 +813,12 @@ export default class GridManager {
       return grid;
     };
 
-    this.#crowdingComfortGrid = ensureRow(comfortGrid, () => new Float32Array(cols));
-    this.#crowdingCountGrid = ensureRow(countGrid, () => new Uint8Array(cols));
+    this.#crowdingComfortGrid = ensureRow(comfortGrid, () => new Float32Array(cols), {
+      clear: forceClear,
+    });
+    this.#crowdingCountGrid = ensureRow(countGrid, () => new Uint8Array(cols), {
+      clear: forceClear,
+    });
 
     if (scarcityGrid && scarcityGrid.length === rows) {
       for (let r = 0; r < rows; r++) {
@@ -810,7 +826,7 @@ export default class GridManager {
 
         if (!existing || existing.length !== cols) {
           this.#crowdingScarcityGrid[r] = new Float32Array(cols);
-        } else {
+        } else if (forceClear) {
           existing.fill(0);
         }
       }
@@ -821,18 +837,18 @@ export default class GridManager {
       );
     }
 
+    revisionGrid = ensureRow(revisionGrid, () => new Uint32Array(cols), {
+      clear: forceClear,
+    });
+    this.#crowdingRevisionGrid = revisionGrid;
+    this.#crowdingRevision = revision;
+
     const comfort = this.#crowdingComfortGrid;
     const scarcity = this.#crowdingScarcityGrid;
     const counts = this.#crowdingCountGrid;
     const grid = this.grid;
     const useScarcity = maxTileEnergy > 0;
     const invMaxTileEnergy = useScarcity ? 1 / maxTileEnergy : 0;
-
-    if (!useScarcity) {
-      for (let r = 0; r < rows; r++) {
-        scarcity[r].fill(0);
-      }
-    }
 
     for (let r = 0; r < rows; r++) {
       const gridRow = grid[r];
@@ -882,11 +898,26 @@ export default class GridManager {
 
           if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
 
-          comfort[nr][nc] += tolerance;
-          counts[nr][nc] += 1;
+          const comfortRow = comfort[nr];
+          const countRow = counts[nr];
+          const scarcityRow = scarcity[nr];
+          const revisionRow = revisionGrid[nr];
+
+          if (revisionRow[nc] !== revision) {
+            revisionRow[nc] = revision;
+            comfortRow[nc] = 0;
+            countRow[nc] = 0;
+
+            if (scarcityRow) {
+              scarcityRow[nc] = 0;
+            }
+          }
+
+          comfortRow[nc] += tolerance;
+          countRow[nc] += 1;
 
           if (useScarcity) {
-            scarcity[nr][nc] += scarcityContribution;
+            scarcityRow[nc] += scarcityContribution;
           }
         }
       }
@@ -902,8 +933,17 @@ export default class GridManager {
     const out = this.#crowdingFeedbackScratch;
     const comfortRow = this.#crowdingComfortGrid?.[row];
     const countRow = this.#crowdingCountGrid?.[row];
+    const revisionRow = this.#crowdingRevisionGrid?.[row];
 
-    if (!comfortRow || !countRow) {
+    if (!comfortRow || !countRow || !revisionRow) {
+      out.comfort = 0.5;
+      out.scarcity = 0;
+      out.count = 0;
+
+      return out;
+    }
+
+    if (revisionRow[col] !== this.#crowdingRevision) {
       out.comfort = 0.5;
       out.scarcity = 0;
       out.count = 0;
