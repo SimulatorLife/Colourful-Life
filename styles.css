@@ -1165,6 +1165,7 @@ canvas {
   font-size: 0.78rem;
   color: var(--color-text-subtle);
   max-width: 60ch;
+  grid-column: 1 / -1;
 }
 
 .life-events-timeline__stats {
