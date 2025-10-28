@@ -2,6 +2,7 @@ import { performance } from "node:perf_hooks";
 import { test, assert } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 import { summarizeMateDiversityOpportunity } from "../src/grid/diversityOpportunity.js";
+import { MATE_DIVERSITY_SAMPLE_LIMIT_DEFAULT } from "../src/config.js";
 import { clamp } from "../src/utils/math.js";
 
 function legacySummarize({
@@ -36,7 +37,7 @@ function legacySummarize({
     .sort((a, b) => b - a);
 
   const best = values[0] ?? 0;
-  const sampleCount = Math.min(values.length, 5);
+  const sampleCount = Math.min(values.length, MATE_DIVERSITY_SAMPLE_LIMIT_DEFAULT);
   const topAverage =
     sampleCount > 0
       ? values.slice(0, sampleCount).reduce((sum, value) => sum + value, 0) /

@@ -376,6 +376,48 @@ test("resolveDecayMaxAge falls back when override is invalid", async () => {
   assert.is(resolveDecayMaxAge({ COLOURFUL_LIFE_DECAY_MAX_AGE: "NaN" }), 240);
 });
 
+test("MATE_DIVERSITY_SAMPLE_LIMIT_DEFAULT exposes the environment-aware default", async () => {
+  const { MATE_DIVERSITY_SAMPLE_LIMIT_DEFAULT } = await configModulePromise;
+
+  assert.is(MATE_DIVERSITY_SAMPLE_LIMIT_DEFAULT, 5);
+});
+
+test("resolveMateDiversitySampleLimit respects overrides", async () => {
+  const { resolveMateDiversitySampleLimit } = await configModulePromise;
+
+  assert.is(
+    resolveMateDiversitySampleLimit({
+      COLOURFUL_LIFE_MATE_DIVERSITY_SAMPLE_LIMIT: "7",
+    }),
+    7,
+  );
+});
+
+test("resolveMateDiversitySampleLimit clamps invalid overrides", async () => {
+  const { resolveMateDiversitySampleLimit } = await configModulePromise;
+
+  assert.is(
+    resolveMateDiversitySampleLimit({
+      COLOURFUL_LIFE_MATE_DIVERSITY_SAMPLE_LIMIT: "0",
+    }),
+    5,
+  );
+
+  assert.is(
+    resolveMateDiversitySampleLimit({
+      COLOURFUL_LIFE_MATE_DIVERSITY_SAMPLE_LIMIT: "64",
+    }),
+    5,
+  );
+
+  assert.is(
+    resolveMateDiversitySampleLimit({
+      COLOURFUL_LIFE_MATE_DIVERSITY_SAMPLE_LIMIT: "NaN",
+    }),
+    5,
+  );
+});
+
 test("OFFSPRING_VIABILITY_BUFFER exposes the environment-aware default", async () => {
   const { OFFSPRING_VIABILITY_BUFFER } = await configModulePromise;
 
