@@ -424,7 +424,6 @@ export default class Stats {
   #pairSampleHashMask;
   #pairSampleHashTags;
   #pairSampleHashGeneration;
-  #pairIndexScratch;
   #diversityDnaScratch;
   #dnaSimilarityCache;
   #diversitySeedScratch;
@@ -522,7 +521,6 @@ export default class Stats {
     this.#pairSampleHashMask = 0;
     this.#pairSampleHashTags = null;
     this.#pairSampleHashGeneration = 0;
-    this.#pairIndexScratch = { first: 0, second: 0 };
     this.#diversityDnaScratch = [];
     this.#dnaSimilarityCache = new WeakMap();
     this.#diversitySeedScratch = new Map();
@@ -1216,37 +1214,6 @@ export default class Stats {
     return similarity;
   }
 
-  #resolvePairFromIndex(index, populationSize) {
-    const totalPairs = (populationSize * (populationSize - 1)) / 2;
-
-    if (!(index >= 0 && index < totalPairs)) {
-      return null;
-    }
-
-    const t = 2 * populationSize - 1;
-    const discriminant = t * t - 8 * index;
-
-    if (!(discriminant >= 0)) {
-      return null;
-    }
-
-    const first = Math.max(0, Math.floor((t - Math.sqrt(discriminant)) / 2));
-    const offset = (first * (2 * populationSize - first - 1)) / 2;
-    const second = first + 1 + (index - offset);
-
-    if (!(second >= 0 && second < populationSize)) {
-      return null;
-    }
-
-    const pair =
-      this.#pairIndexScratch ?? (this.#pairIndexScratch = { first: 0, second: 0 });
-
-    pair.first = first;
-    pair.second = second;
-
-    return pair;
-  }
-
   #rebuildTraitAggregates(cellSources) {
     const pool = Array.isArray(cellSources) ? cellSources : [];
 
@@ -1710,19 +1677,39 @@ export default class Stats {
         return 0;
       }
 
+      const combos = sampledView.subarray(0, filled);
+
+      if (filled > 1) {
+        combos.sort();
+      }
+
       let sum = 0;
       let count = 0;
+      let firstIndex = 0;
+      let baseOffset = 0;
+      let span = populationSize - 1;
 
-      for (let i = 0; i < filled; i += 1) {
-        const comboIndex = sampledView[i];
-        const pair = this.#resolvePairFromIndex(comboIndex, populationSize);
+      for (let i = 0; i < combos.length; i += 1) {
+        const comboIndex = combos[i];
 
-        if (!pair) {
+        while (span > 0 && comboIndex >= baseOffset + span) {
+          baseOffset += span;
+          firstIndex += 1;
+          span -= 1;
+        }
+
+        if (!(span > 0) || firstIndex >= populationSize - 1) {
+          break;
+        }
+
+        const secondIndex = firstIndex + 1 + (comboIndex - baseOffset);
+
+        if (!(secondIndex > firstIndex && secondIndex < populationSize)) {
           continue;
         }
 
-        const dnaA = validDna[pair.first];
-        const dnaB = validDna[pair.second];
+        const dnaA = validDna[firstIndex];
+        const dnaB = validDna[secondIndex];
         const similarity = this.#resolveDnaSimilarity(dnaA, dnaB);
 
         if (!Number.isFinite(similarity)) {
