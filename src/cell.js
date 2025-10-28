@@ -713,6 +713,8 @@ export default class Cell {
     const neuralInfluence = this.#resolveNeuralMateInfluence();
     const applyNeuralLift = neuralInfluence > 0;
     const safeMinWeight = 0.0001;
+    const shouldComputeBaseProbability =
+      applyNeuralLift || Boolean(context?.precomputeBaseProbability);
 
     for (let i = 0; i < potentialMates.length; i++) {
       const mate = potentialMates[i];
@@ -730,23 +732,49 @@ export default class Cell {
       const evaluated = this.evaluateMateCandidate(mate);
 
       if (evaluated) {
-        if (evaluated.target) {
-          const baseProbability = this.computeReproductionProbability(
-            evaluated.target,
-            context,
-          );
+        const target = evaluated.target;
+        let baseProbability = null;
 
-          if (Number.isFinite(baseProbability)) {
-            evaluated.baseReproductionProbability = clamp(baseProbability, 0, 1);
+        if (!shouldComputeBaseProbability) {
+          if (Object.hasOwn(evaluated, "baseReproductionProbability")) {
+            evaluated.baseReproductionProbability = undefined;
           }
 
-          const neuralAffinity = this.#estimateNeuralMateAffinity(evaluated.target, {
-            ...context,
-            baseProbability,
-          });
+          if (Object.hasOwn(evaluated, "neuralAffinity")) {
+            evaluated.neuralAffinity = undefined;
+          }
+        }
 
-          if (Number.isFinite(neuralAffinity)) {
-            evaluated.neuralAffinity = clamp(neuralAffinity, 0, 1);
+        if (target && shouldComputeBaseProbability) {
+          const cachedBase = Number.isFinite(evaluated.baseReproductionProbability)
+            ? evaluated.baseReproductionProbability
+            : null;
+
+          baseProbability = cachedBase;
+
+          if (!Number.isFinite(baseProbability)) {
+            const resolvedBase = this.computeReproductionProbability(target, context);
+
+            if (Number.isFinite(resolvedBase)) {
+              baseProbability = clamp(resolvedBase, 0, 1);
+              evaluated.baseReproductionProbability = baseProbability;
+            } else {
+              baseProbability = null;
+              evaluated.baseReproductionProbability = undefined;
+            }
+          }
+
+          if (applyNeuralLift) {
+            const neuralAffinity = this.#estimateNeuralMateAffinity(target, {
+              ...context,
+              baseProbability,
+            });
+
+            if (Number.isFinite(neuralAffinity)) {
+              evaluated.neuralAffinity = clamp(neuralAffinity, 0, 1);
+            } else if (Object.hasOwn(evaluated, "neuralAffinity")) {
+              evaluated.neuralAffinity = undefined;
+            }
           }
         }
 
