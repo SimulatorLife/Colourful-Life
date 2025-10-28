@@ -62,7 +62,7 @@ Open the **Simulation Controls** panel and head to the **Overlays** section to t
 
 ### Age heatmap overlay
 
-Curious which colonies are dominated by elders close to the end of their lifespan? Flip on **Show Age Heatmap** in the Overlays panel to bathe older organisms in a warm glow that intensifies as their age approaches their encoded lifespan. The overlay leaves newborn tiles untouched, pairs with a legend in the opposite corner of the canvas, and layers cleanly with the existing energy and density guides so you can track lineage longevity without sacrificing other telemetry.
+Curious which colonies are dominated by elders close to the end of their lifespan? Flip on **Show Age Heatmap** in the Overlays panel to bathe older organisms in a warm glow that intensifies as their age approaches their encoded lifespan. The overlay leaves newborn tiles untouched, pairs with a legend in the opposite corner of the canvas, and layers cleanly with the existing energy and density guides so you can track lineage longevity without sacrificing other telemetry. Need a quicker toggle? Press **A** to flip the heatmap without leaving the canvas.
 
 ### Grid line overlay
 

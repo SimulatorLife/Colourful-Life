@@ -290,6 +290,108 @@ test("createSimulation keeps engine cadence in sync with speed defaults", async 
   }
 });
 
+test("age heatmap hotkey toggles the overlay and advertises its shortcut", async () => {
+  const restore = setupDom();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const updates = [];
+    const frameRequests = [];
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {
+          frameRequests.push(Symbol("frame"));
+        },
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: (key, value) => {
+          updates.push([key, value]);
+        },
+      },
+      "#app",
+      {},
+      { canvasElement: new MockCanvas(160, 160) },
+    );
+
+    const ageToggle = findCheckboxByLabel(uiManager.controlsPanel, "Show Age Heatmap");
+
+    assert.ok(ageToggle, "age overlay toggle should render");
+    assert.is(ageToggle.checked, false, "overlay should start disabled");
+    assert.is(uiManager.showAge, false, "UI state should match the checkbox");
+
+    const descriptionId = ageToggle.getAttribute("aria-describedby");
+    const descriptionEl = descriptionId ? document.getElementById(descriptionId) : null;
+
+    assert.match(
+      descriptionEl?.textContent ?? "",
+      /Shortcut: A\./,
+      "age overlay hint should include the keyboard shortcut",
+    );
+    assert.is(
+      ageToggle.getAttribute("aria-keyshortcuts"),
+      "A",
+      "aria-keyshortcuts should expose the A hotkey",
+    );
+
+    const keydownHandlers = global.document.eventListeners?.keydown ?? [];
+
+    assert.ok(keydownHandlers.length > 0, "keyboard listeners should be registered");
+
+    const pressKey = (value) => {
+      const event = {
+        key: value,
+        shiftKey: false,
+        target: global.document.body,
+        defaultPrevented: false,
+        preventDefault() {
+          this.defaultPrevented = true;
+        },
+      };
+
+      keydownHandlers.forEach((handler) => handler(event));
+
+      return event;
+    };
+
+    const firstEvent = pressKey("a");
+
+    assert.is(
+      firstEvent.defaultPrevented,
+      true,
+      "hotkey should prevent default actions",
+    );
+    assert.is(
+      ageToggle.checked,
+      true,
+      "overlay should toggle on after the first press",
+    );
+    assert.is(uiManager.showAge, true, "UI state should track the hotkey toggle");
+    assert.deepEqual(updates[updates.length - 1], ["showAge", true]);
+    assert.is(frameRequests.length, 1, "toggling should schedule a redraw");
+
+    const secondEvent = pressKey("A");
+
+    assert.is(
+      secondEvent.defaultPrevented,
+      true,
+      "hotkey should continue preventing defaults",
+    );
+    assert.is(
+      ageToggle.checked,
+      false,
+      "overlay should toggle off on the second press",
+    );
+    assert.is(uiManager.showAge, false, "UI state should reflect the disabled overlay");
+    assert.deepEqual(updates[updates.length - 1], ["showAge", false]);
+    assert.is(frameRequests.length, 2, "second toggle should also schedule a redraw");
+
+    uiManager.destroy();
+  } finally {
+    restore();
+  }
+});
+
 test("layout initial settings yield to sanitized config overrides", async () => {
   const restore = setupDom();
 

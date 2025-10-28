@@ -418,6 +418,7 @@ export default class UIManager {
     this.lifeEventsSummaryTotalCount = null;
     this.lifeEventsSummaryEmptyMessage = null;
     this.lifeEventMarkersToggle = null;
+    this.ageOverlayToggle = null;
     this.lifeEventsSummaryTrend = null;
     this.lifeEventsSummaryNet = null;
     this.lifeEventsSummaryDirection = null;
@@ -557,6 +558,7 @@ export default class UIManager {
       "0",
     ]);
     this.burstHotkeySet = this.#resolveHotkeySet(layoutConfig.burstHotkeys, ["b"]);
+    this.ageHotkeySet = this.#resolveHotkeySet(layoutConfig.ageHotkeys, ["a"]);
 
     const canvasEl =
       layoutConfig.canvasElement || this.#resolveNode(layoutConfig.canvasSelector);
@@ -676,6 +678,13 @@ export default class UIManager {
     if (this.speedResetHotkeySet.has(key)) {
       event.preventDefault();
       this.#resetSpeedMultiplier();
+
+      return;
+    }
+
+    if (this.ageHotkeySet?.has(key)) {
+      event.preventDefault();
+      this.#toggleAgeOverlay();
     }
   }
 
@@ -711,6 +720,18 @@ export default class UIManager {
         once: true,
       });
     }
+  }
+
+  #toggleAgeOverlay({ notify = true } = {}) {
+    const next = !this.showAge;
+
+    this.#updateSetting("showAge", next, { notify });
+
+    if (this.ageOverlayToggle) {
+      this.ageOverlayToggle.checked = next;
+    }
+
+    this.#scheduleUpdate();
   }
 
   #resolveHotkeySet(candidate, fallbackKeys = ["p"]) {
@@ -4076,6 +4097,11 @@ export default class UIManager {
     createSectionHeading(body, "Overlays", { className: "overlay-header" });
 
     const overlayGrid = createControlGrid(body, "control-grid--compact");
+    const ageHotkeyLabel = this.#formatHotkeyList(this.ageHotkeySet);
+    const ageOverlayDescription =
+      ageHotkeyLabel.length > 0
+        ? `${AGE_HEATMAP_OVERLAY_DESCRIPTION} Shortcut: ${ageHotkeyLabel}.`
+        : AGE_HEATMAP_OVERLAY_DESCRIPTION;
 
     const overlayConfigs = [
       {
@@ -4100,8 +4126,8 @@ export default class UIManager {
         key: "showAge",
         label: "Show Age Heatmap",
         options: {
-          title: AGE_HEATMAP_OVERLAY_DESCRIPTION,
-          description: AGE_HEATMAP_OVERLAY_DESCRIPTION,
+          title: ageOverlayDescription,
+          description: ageOverlayDescription,
         },
         initial: this.showAge,
       },
@@ -4149,6 +4175,18 @@ export default class UIManager {
 
       if (key === "showLifeEventMarkers") {
         this.lifeEventMarkersToggle = checkbox;
+      }
+
+      if (key === "showAge") {
+        this.ageOverlayToggle = checkbox;
+
+        const shortcutValue = this.#formatAriaKeyShortcuts(this.ageHotkeySet);
+
+        if (shortcutValue.length > 0) {
+          checkbox.setAttribute("aria-keyshortcuts", shortcutValue);
+        } else {
+          checkbox.removeAttribute("aria-keyshortcuts");
+        }
       }
     });
   }
