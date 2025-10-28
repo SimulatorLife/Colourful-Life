@@ -37,6 +37,31 @@ function lookupEventEffect(eventType, resolveEffect, effectCache) {
   return resolved;
 }
 
+function applyEventEffectModifiers(target, effect, strength) {
+  if (!effect) {
+    return target;
+  }
+
+  const { regenScale, regenAdd: effectRegenAdd, drainAdd: effectDrainAdd } = effect;
+
+  if (regenScale) {
+    const { base = 1, change = 0, min = 0 } = regenScale;
+    const scale = Math.max(min, base + change * strength);
+
+    target.regenMultiplier *= scale;
+  }
+
+  if (typeof effectRegenAdd === "number") {
+    target.regenAdd += effectRegenAdd * strength;
+  }
+
+  if (typeof effectDrainAdd === "number") {
+    target.drainAdd += effectDrainAdd * strength;
+  }
+
+  return target;
+}
+
 export function resolveEventContribution({
   event,
   strengthMultiplier = 1,
@@ -71,28 +96,11 @@ export function resolveEventContribution({
     return { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
   }
 
-  const { regenScale, regenAdd: effectRegenAdd, drainAdd: effectDrainAdd } = effect;
+  const modifiers = { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
 
-  let regenMultiplier = 1;
-  let regenAdd = 0;
-  let drainAdd = 0;
+  applyEventEffectModifiers(modifiers, effect, strength);
 
-  if (regenScale) {
-    const { base = 1, change = 0, min = 0 } = regenScale;
-    const scale = Math.max(min, base + change * strength);
-
-    regenMultiplier *= scale;
-  }
-
-  if (typeof effectRegenAdd === "number") {
-    regenAdd += effectRegenAdd * strength;
-  }
-
-  if (typeof effectDrainAdd === "number") {
-    drainAdd += effectDrainAdd * strength;
-  }
-
-  return { regenMultiplier, regenAdd, drainAdd };
+  return modifiers;
 }
 
 export function accumulateEventModifiers({
@@ -109,9 +117,6 @@ export function accumulateEventModifiers({
   const shouldCollect = collectAppliedEvents !== false;
   const providedEvents = Array.isArray(events) ? events : [];
 
-  let regenMultiplier = 1;
-  let regenAdd = 0;
-  let drainAdd = 0;
   let appliedEvents = shouldCollect ? null : EMPTY_APPLIED_EVENTS;
 
   if (providedEvents.length === 0) {
@@ -141,6 +146,15 @@ export function accumulateEventModifiers({
     ? numericStrengthMultiplier
     : 1;
 
+  const modifiers =
+    providedResult && typeof providedResult === "object"
+      ? providedResult
+      : { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
+
+  modifiers.regenMultiplier = 1;
+  modifiers.regenAdd = 0;
+  modifiers.drainAdd = 0;
+
   for (const eventInstance of providedEvents) {
     if (!eventInstance) continue;
     if (eventApplies && !eventApplies(eventInstance, row, col)) continue;
@@ -165,26 +179,7 @@ export function accumulateEventModifiers({
 
     if (!eventEffect) continue;
 
-    const {
-      regenScale,
-      regenAdd: effectRegenAdd,
-      drainAdd: effectDrainAdd,
-    } = eventEffect;
-
-    if (regenScale) {
-      const { base = 1, change = 0, min = 0 } = regenScale;
-      const scale = Math.max(min, base + change * strength);
-
-      regenMultiplier *= scale;
-    }
-
-    if (typeof effectRegenAdd === "number") {
-      regenAdd += effectRegenAdd * strength;
-    }
-
-    if (typeof effectDrainAdd === "number") {
-      drainAdd += effectDrainAdd * strength;
-    }
+    applyEventEffectModifiers(modifiers, eventEffect, strength);
 
     if (shouldCollect) {
       (appliedEvents ??= []).push({
@@ -196,10 +191,6 @@ export function accumulateEventModifiers({
   }
 
   if (providedResult && typeof providedResult === "object") {
-    providedResult.regenMultiplier = regenMultiplier;
-    providedResult.regenAdd = regenAdd;
-    providedResult.drainAdd = drainAdd;
-
     if (shouldCollect) {
       const existingApplied = providedResult.appliedEvents;
       const targetEvents =
@@ -219,14 +210,11 @@ export function accumulateEventModifiers({
     return providedResult;
   }
 
-  return {
-    regenMultiplier,
-    regenAdd,
-    drainAdd,
-    appliedEvents: shouldCollect
-      ? (appliedEvents ?? EMPTY_APPLIED_EVENTS)
-      : EMPTY_APPLIED_EVENTS,
-  };
+  modifiers.appliedEvents = shouldCollect
+    ? (appliedEvents ?? EMPTY_APPLIED_EVENTS)
+    : EMPTY_APPLIED_EVENTS;
+
+  return modifiers;
 }
 
 export { DEFAULT_EVENT_MODIFIERS, EMPTY_APPLIED_EVENTS };
