@@ -152,6 +152,7 @@ export const OVERLAY_TOGGLE_SETTERS = Object.freeze({
   showAge: "setShowAge",
   showFitness: "setShowFitness",
   showLifeEventMarkers: "setShowLifeEventMarkers",
+  showAuroraVeil: "setShowAuroraVeil",
   showGridLines: "setShowGridLines",
   showReproductiveZones: "setShowReproductiveZones",
 });
@@ -5461,6 +5462,18 @@ export default class UIManager {
 
     if (changed && notify) {
       this.#notifySettingChange("showLifeEventMarkers", normalized);
+    }
+  }
+
+  setShowAuroraVeil(value, { notify = true } = {}) {
+    const normalized = coerceBoolean(value, this.showAuroraVeil);
+    const changed = this.showAuroraVeil !== normalized;
+
+    this.showAuroraVeil = normalized;
+    this.#syncOverlayToggleInput("showAuroraVeil", normalized);
+
+    if (changed && notify) {
+      this.#notifySettingChange("showAuroraVeil", normalized);
     }
   }
 
