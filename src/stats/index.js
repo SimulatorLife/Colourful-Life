@@ -1109,6 +1109,48 @@ export default class Stats {
     return groupScratch;
   }
 
+  #resolveDiversitySeed(dna, activeSeeds, seedCache) {
+    if (!dna) {
+      return null;
+    }
+
+    let seed;
+
+    if (activeSeeds) {
+      seed = activeSeeds.get(dna);
+
+      if (seed !== undefined) {
+        if (seed === UNRESOLVED_SEED) {
+          seed = this.#resolveDnaSeed(dna);
+          activeSeeds.set(dna, seed);
+          seedCache.set(dna, seed);
+        }
+
+        return seed;
+      }
+    }
+
+    seed = seedCache.get(dna);
+
+    if (seed !== undefined) {
+      if (activeSeeds) {
+        activeSeeds.set(dna, seed);
+      }
+
+      return seed;
+    }
+
+    seed = this.#resolveDnaSeed(dna);
+
+    if (activeSeeds) {
+      activeSeeds.set(dna, seed);
+    }
+
+    seedCache.set(dna, seed);
+
+    return seed;
+  }
+
   #resolveDnaSimilarity(dnaA, dnaB) {
     if (!dnaA || !dnaB) {
       return null;
@@ -1132,57 +1174,8 @@ export default class Stats {
       this.#diversitySeedCache = seedCache;
     }
 
-    let seedA;
-
-    if (activeSeeds && activeSeeds.has(dnaA)) {
-      seedA = activeSeeds.get(dnaA);
-
-      if (seedA === UNRESOLVED_SEED) {
-        seedA = this.#resolveDnaSeed(dnaA);
-        activeSeeds.set(dnaA, seedA);
-        seedCache.set(dnaA, seedA);
-      }
-    } else if (seedCache.has(dnaA)) {
-      seedA = seedCache.get(dnaA);
-
-      if (activeSeeds) {
-        activeSeeds.set(dnaA, seedA);
-      }
-    } else {
-      seedA = this.#resolveDnaSeed(dnaA);
-
-      if (activeSeeds) {
-        activeSeeds.set(dnaA, seedA);
-      }
-
-      seedCache.set(dnaA, seedA);
-    }
-
-    let seedB;
-
-    if (activeSeeds && activeSeeds.has(dnaB)) {
-      seedB = activeSeeds.get(dnaB);
-
-      if (seedB === UNRESOLVED_SEED) {
-        seedB = this.#resolveDnaSeed(dnaB);
-        activeSeeds.set(dnaB, seedB);
-        seedCache.set(dnaB, seedB);
-      }
-    } else if (seedCache.has(dnaB)) {
-      seedB = seedCache.get(dnaB);
-
-      if (activeSeeds) {
-        activeSeeds.set(dnaB, seedB);
-      }
-    } else {
-      seedB = this.#resolveDnaSeed(dnaB);
-
-      if (activeSeeds) {
-        activeSeeds.set(dnaB, seedB);
-      }
-
-      seedCache.set(dnaB, seedB);
-    }
+    const seedA = this.#resolveDiversitySeed(dnaA, activeSeeds, seedCache);
+    const seedB = this.#resolveDiversitySeed(dnaB, activeSeeds, seedCache);
 
     const cacheA = this.#obtainDnaCacheRecord(dnaA, seedA);
     const cached = cacheA?.map?.get(dnaB);
