@@ -34,7 +34,7 @@ function normalizeLeaderboardSize(value, fallback = LEADERBOARD_SIZE_DEFAULT) {
     const numeric = Number(trimmed);
 
     if (!Number.isFinite(numeric)) {
-      return 0;
+      return sanitizedFallback;
     }
 
     return sanitizeNonNegativeInteger(numeric, { fallback: 0 });
