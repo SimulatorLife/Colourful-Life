@@ -68,21 +68,27 @@ function sampleFromDistribution(probabilities = [], labels = [], rng = Math.rand
   if (!Array.isArray(probabilities) || probabilities.length === 0) return null;
 
   const length = probabilities.length;
-  const total = probabilities.reduce((sum, weight) => sum + weight, 0);
+  let total = 0;
+
+  // Manual loops avoid callback allocations from `reduce`/`findIndex` on this
+  // inner decision path. They also let us reuse the computed weights without
+  // creating intermediate closures that V8 struggles to inline.
+  for (let i = 0; i < length; i++) {
+    total += probabilities[i];
+  }
 
   if (!Number.isFinite(total) || total <= EPSILON) return null;
 
   const randomSource = typeof rng === "function" ? rng : Math.random;
   const threshold = randomSource() * total;
   let cumulative = 0;
-  const selectedIndex = probabilities.findIndex((weight) => {
-    cumulative += weight;
 
-    return threshold <= cumulative + EPSILON;
-  });
+  for (let i = 0; i < length; i++) {
+    cumulative += probabilities[i];
 
-  if (selectedIndex !== -1) {
-    return labels[selectedIndex] ?? selectedIndex;
+    if (threshold <= cumulative + EPSILON) {
+      return labels[i] ?? i;
+    }
   }
 
   const fallbackIndex = length - 1;
