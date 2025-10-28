@@ -106,6 +106,45 @@ test("SimulationEngine skips initial events when maxConcurrentEvents is zero", a
   }
 });
 
+test("SimulationEngine forwards statsOptions to runtime services", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const engine = new SimulationEngine({
+    canvas: new MockCanvas(20, 20),
+    autoStart: false,
+    performanceNow: () => 0,
+    requestAnimationFrame: () => {},
+    cancelAnimationFrame: () => {},
+    config: {
+      statsOptions: {
+        historySize: 64,
+        traitResampleInterval: 200,
+        diversitySampleInterval: 180,
+      },
+    },
+  });
+
+  try {
+    assert.is(
+      engine.stats.historySize,
+      64,
+      "stats history size should respect statsOptions override",
+    );
+    assert.is(
+      engine.stats.traitResampleInterval,
+      200,
+      "trait resample interval should respect statsOptions override",
+    );
+    assert.is(
+      engine.stats.diversitySampleInterval,
+      180,
+      "diversity sample interval should respect statsOptions override",
+    );
+  } finally {
+    engine.destroy();
+  }
+});
+
 test("numeric setters sanitize input, clamp values, and flag slow UI updates", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);

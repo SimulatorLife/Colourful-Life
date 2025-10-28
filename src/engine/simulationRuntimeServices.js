@@ -83,8 +83,12 @@ export function createSimulationRuntimeServices({
   computeLeaderboard = defaultComputeLeaderboard,
   leaderboardSize,
   now,
+  statsOptions,
 } = {}) {
-  const stats = new Stats(undefined, { rng });
+  const normalizedStatsOptions =
+    statsOptions && typeof statsOptions === "object" ? statsOptions : null;
+  const { historySize, ...statOverrides } = normalizedStatsOptions ?? {};
+  const stats = new Stats(historySize, { rng, ...statOverrides });
   const telemetry = new TelemetryController({
     stats,
     computeLeaderboard,
