@@ -162,6 +162,21 @@ export function sanitizeNumber(
 }
 
 /**
+ * Normalizes loosely-typed input into the 0..1 interval. Invalid candidates use
+ * the provided fallback while valid values are clamped to the unit range. This
+ * mirrors the common `sanitizeNumber` usage for probability-like inputs without
+ * repeating the range configuration at each call site.
+ *
+ * @param {any} value - Candidate value supplied by callers.
+ * @param {number|null} [fallback=null] - Replacement when the candidate cannot
+ *   be coerced to a finite number.
+ * @returns {number|null} Sanitized unit-interval value or the fallback when invalid.
+ */
+export function sanitizeUnitInterval(value, fallback = null) {
+  return sanitizeNumber(value, { fallback, min: 0, max: 1 });
+}
+
+/**
  * Normalizes loosely-typed input into a positive integer using the provided
  * fallback when coercion fails. Useful for dimension-like values (rows, cols,
  * cell sizes) that must stay above a minimum bound. Values are floored to the

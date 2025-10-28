@@ -7,6 +7,7 @@ import {
   sanitizeNumber,
   sanitizePositiveInteger,
   sanitizeNonNegativeInteger,
+  sanitizeUnitInterval,
   pickFirstFinitePositive,
   createRNG,
   toFiniteOrNull,
@@ -121,6 +122,22 @@ test("sanitizeNumber treats blank strings as missing overrides", () => {
     sanitizePositiveInteger("", { fallback: 9, min: 1 }),
     9,
     "positive integer sanitizer inherits blank string handling",
+  );
+});
+
+test("sanitizeUnitInterval clamps candidates into the unit range", () => {
+  assert.is(sanitizeUnitInterval(0.5), 0.5);
+  assert.is(sanitizeUnitInterval(2), 1, "values above the upper bound clamp to 1");
+  assert.is(sanitizeUnitInterval(-0.3), 0, "values below the lower bound clamp to 0");
+  assert.is(
+    sanitizeUnitInterval("0.25"),
+    0.25,
+    "string inputs are coerced when numeric",
+  );
+  assert.is(
+    sanitizeUnitInterval("oops", 0.4),
+    0.4,
+    "invalid inputs use the provided fallback",
   );
 });
 
