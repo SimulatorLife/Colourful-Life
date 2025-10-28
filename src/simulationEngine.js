@@ -1470,10 +1470,18 @@ export default class SimulationEngine {
 
     if (this.autoPauseOnBlur === enabled) return;
 
+    const wasPendingAutoResume = this._autoPauseResumePending === true;
+    const wasPaused = this.isPaused();
+    const wasRunning = this.running;
+
     this.autoPauseOnBlur = enabled;
 
     if (!enabled) {
       this.#setAutoPausePending(false);
+
+      if (wasPendingAutoResume && wasPaused && wasRunning) {
+        this.resume();
+      }
     }
 
     this.#updateState({ autoPauseOnBlur: enabled });
