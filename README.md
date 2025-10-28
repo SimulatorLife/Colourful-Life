@@ -19,10 +19,15 @@ Colourful Life targets the Node.js **25.x** series (the included `.nvmrc` pins t
 1. Run `nvm use` (install with `nvm install` if necessary) so `node --version` reports 25.x.
 2. Install dependencies with `npm ci` (reach for `npm install` only when you intentionally touch the lockfile), then run `npm run prepare` once to restore Husky hooks after fresh clones or `.husky/` edits.
 3. Start developing with `npm run start` and open `http://localhost:1234`.
-4. While iterating, rely on focused loops—`npm run lint`, `npm run format:check`, `npm test -- --watch`, or `npm test -- path/to/file.test.js`—and finish with `npm run check` before committing so linting, formatting verification, the energy benchmark, and the Node.js test suites all pass together.
+4. While iterating, lean on focused loops and finish with a full check before you commit:
+   - `npm run lint` — ESLint with the shared ruleset (or `npm run lint:fix` for safe autofixes).
+   - `npm run format:check` — Verify Prettier formatting without writing.
+   - `npm test -- --watch` or `npm test -- path/to/file.test.js` — Exercise targeted Node.js test suites with the energy benchmark.
+   - `npm run check` — Chain linting, formatting verification, the energy benchmark, and the Node.js test suites before you push.
+
 5. If Parcel hot reloading stalls, run `npm run clean -- --dry-run` to preview the cache cleanup, then rerun without `--dry-run` to remove stale artifacts.
 
-Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, then browse [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, profiling harnesses, and testing expectations once the quick start is familiar.
+Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, then browse [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, profiling harnesses, and testing expectations once the quick start is familiar, including when to lean on each feedback loop.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
@@ -178,6 +183,7 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 | `npm run benchmark`                          | Profile the energy preparation loop; combine with `PERF_*` variables to mirror CI scenarios.             |
 | `node scripts/profile-density-cache.mjs`     | Benchmark cached density lookups in `GridManager` to confirm the density grid remains fast.              |
 | `node scripts/profile-trait-aggregation.mjs` | Measure the trait aggregation pipeline that powers Stats overlays and dashboards.                        |
+| `node scripts/profile-zone-filter.mjs`       | Benchmark the reproduction zone candidate filter used by `ReproductionZonePolicy`.                       |
 | `npm run deploy:public`                      | Publish the production bundle using `scripts/publish-public-build.sh`.                                   |
 | `npm run prepare`                            | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                   |
 
