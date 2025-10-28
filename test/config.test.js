@@ -208,6 +208,34 @@ test("resolveMutationChance clamps invalid overrides", async () => {
   assert.is(resolveMutationChance({ COLOURFUL_LIFE_MUTATION_CHANCE: "NaN" }), 0.15);
 });
 
+test("REPRODUCTION_COOLDOWN_BASE exposes the environment-aware default", async () => {
+  const { REPRODUCTION_COOLDOWN_BASE } = await configModulePromise;
+
+  assert.is(REPRODUCTION_COOLDOWN_BASE, 2);
+});
+
+test("resolveReproductionCooldownBase respects overrides", async () => {
+  const { resolveReproductionCooldownBase } = await configModulePromise;
+
+  assert.is(
+    resolveReproductionCooldownBase({
+      COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE: "5",
+    }),
+    5,
+  );
+});
+
+test("resolveReproductionCooldownBase falls back when override is invalid", async () => {
+  const { resolveReproductionCooldownBase } = await configModulePromise;
+
+  assert.is(
+    resolveReproductionCooldownBase({
+      COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE: "-3",
+    }),
+    2,
+  );
+});
+
 test("DECAY_RETURN_FRACTION exposes the environment-aware default", async () => {
   const { DECAY_RETURN_FRACTION } = await configModulePromise;
 

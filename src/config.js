@@ -51,6 +51,7 @@ const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // 14×14 performance probe.
 const DEFAULT_ACTIVITY_BASE_RATE = 0.2822;
 const DEFAULT_MUTATION_CHANCE = 0.15;
+const DEFAULT_REPRODUCTION_COOLDOWN_BASE = 2;
 // Leaned from 0.012 after rerunning the dense 60×60 headless probe
 // (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
 // with regeneration at 0.0117. Survivors ticked up from 344 → 346 while the
@@ -449,6 +450,27 @@ export function resolveMutationChance(env = RUNTIME_ENV) {
 }
 
 export const MUTATION_CHANCE_BASELINE = resolveMutationChance();
+
+/**
+ * Resolves the minimum reproduction cooldown applied after a successful birth
+ * when genomes do not specify their own duration or attempt to undercut the
+ * global pacing. Environment overrides let deployments slow or accelerate the
+ * reproductive cadence without rewriting DNA accessors, while the sanitizer
+ * keeps values non-negative so tests remain deterministic.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Non-negative cooldown baseline applied as a floor.
+ */
+export function resolveReproductionCooldownBase(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE", {
+    fallback: DEFAULT_REPRODUCTION_COOLDOWN_BASE,
+    min: 0,
+  });
+}
+
+export const REPRODUCTION_COOLDOWN_BASE = resolveReproductionCooldownBase();
 /**
  * Resolves the multiplier applied to the higher of two parents' minimum energy
  * demand when determining whether offspring are viable. This keeps the

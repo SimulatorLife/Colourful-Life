@@ -9,6 +9,7 @@ import {
   MAX_TILE_ENERGY,
   MUTATION_CHANCE_BASELINE,
   OFFSPRING_VIABILITY_BUFFER,
+  REPRODUCTION_COOLDOWN_BASE,
 } from "./config.js";
 
 const EPSILON = 1e-9;
@@ -506,11 +507,19 @@ export default class Cell {
   }
 
   startReproductionCooldown() {
-    const base =
+    const baselineCandidate = Number.isFinite(REPRODUCTION_COOLDOWN_BASE)
+      ? REPRODUCTION_COOLDOWN_BASE
+      : 2;
+    const baseline = Math.max(1, Math.round(baselineCandidate));
+    const dnaCooldown =
       typeof this.dna?.reproductionCooldownTicks === "function"
         ? this.dna.reproductionCooldownTicks()
-        : 2;
-    const duration = Math.max(1, Math.round(base));
+        : baseline;
+    const normalized =
+      Number.isFinite(dnaCooldown) && dnaCooldown > 0
+        ? Math.round(dnaCooldown)
+        : baseline;
+    const duration = Math.max(baseline, normalized);
 
     this._reproductionCooldown = Math.max(this.getReproductionCooldown(), duration);
   }
