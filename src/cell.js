@@ -5494,10 +5494,8 @@ export default class Cell {
       { dr: 0, dc: -1 },
       { dr: 0, dc: 1 },
     ];
-    const neighbors = [];
 
-    for (let i = 0; i < directions.length; i += 1) {
-      const { dr, dc } = directions[i];
+    const neighbors = directions.map(({ dr, dc }) => {
       const rr = Number.isFinite(row) ? row + dr : null;
       const cc = Number.isFinite(col) ? col + dc : null;
       const outOfBounds =
@@ -5517,7 +5515,7 @@ export default class Cell {
           ? getEnergyDeltaAt(rr, cc)
           : null;
 
-      neighbors.push({
+      return {
         dr,
         dc,
         blocked,
@@ -5525,8 +5523,8 @@ export default class Cell {
         kinship,
         energy: Number.isFinite(energy) ? energy : null,
         energyDelta: Number.isFinite(energyDelta) ? energyDelta : null,
-      });
-    }
+      };
+    });
 
     context.neighbors = neighbors;
 
