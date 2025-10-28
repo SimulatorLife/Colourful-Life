@@ -2368,6 +2368,148 @@ export default class UIManager {
     return valueEl;
   }
 
+  #describeStrategyValue(value) {
+    if (!Number.isFinite(value)) {
+      return "";
+    }
+
+    const normalized = clamp(value, 0, 1);
+
+    if (normalized < 0.2) return "Cautious planner";
+    if (normalized < 0.45) return "Balanced strategist";
+    if (normalized < 0.7) return "Adaptive opportunist";
+    if (normalized < 0.9) return "Bold explorer";
+
+    return "Relentless aggressor";
+  }
+
+  #describeMateBias(value) {
+    if (!Number.isFinite(value)) {
+      return "";
+    }
+
+    const clamped = clamp(value, -1, 1);
+    const formatted = `${clamped >= 0 ? "+" : ""}${clamped.toFixed(2)}`;
+    const intensity = Math.abs(clamped);
+
+    if (intensity < 0.05) {
+      return `Balanced mate bias (${formatted})`;
+    }
+
+    if (clamped > 0) {
+      return intensity >= 0.35
+        ? `Strong kin preference (${formatted})`
+        : `Leans toward kin (${formatted})`;
+    }
+
+    return intensity >= 0.35
+      ? `Strong novelty preference (${formatted})`
+      : `Leans toward novelty (${formatted})`;
+  }
+
+  #appendGenomeDetails(container, genome = {}) {
+    if (!(container instanceof HTMLElement) || !genome) {
+      return;
+    }
+
+    const brainParts = [];
+    const neuronCount = Number.isFinite(genome.neurons)
+      ? Math.round(genome.neurons)
+      : null;
+    const connectionCount = Number.isFinite(genome.connections)
+      ? Math.round(genome.connections)
+      : null;
+
+    if (neuronCount != null) {
+      brainParts.push(`${neuronCount.toLocaleString()} neurons`);
+    }
+    if (connectionCount != null) {
+      brainParts.push(`${connectionCount.toLocaleString()} connections`);
+    }
+
+    if (brainParts.length > 0) {
+      this.#appendLifeEventDetail(container, {
+        label: "Brain",
+        value: brainParts.join(" • "),
+      });
+    }
+
+    const sightValue = Number.isFinite(genome.sight) ? Math.max(0, genome.sight) : null;
+
+    if (sightValue != null) {
+      const precision = Math.abs(Math.round(sightValue) - sightValue) < 0.05 ? 0 : 1;
+      const formattedSight = sightValue.toFixed(precision);
+      const tileLabel = Number(formattedSight) === 1 ? "tile" : "tiles";
+
+      this.#appendLifeEventDetail(container, {
+        label: "Sight",
+        value: `${formattedSight} ${tileLabel}`,
+      });
+    }
+
+    const strategyParts = [];
+    const strategyValue = Number.isFinite(genome?.strategy?.value)
+      ? clamp(genome.strategy.value, 0, 1)
+      : null;
+
+    if (strategyValue != null) {
+      const descriptor = this.#describeStrategyValue(strategyValue);
+
+      if (descriptor) {
+        strategyParts.push(descriptor);
+      }
+
+      strategyParts.push(`(${strategyValue.toFixed(2)})`);
+    }
+
+    const diversityAppetite = Number.isFinite(genome.diversityAppetite)
+      ? clamp01(genome.diversityAppetite)
+      : null;
+
+    if (diversityAppetite != null) {
+      strategyParts.push(`Diversity appetite ${Math.round(diversityAppetite * 100)}%`);
+    }
+
+    const mateBias = Number.isFinite(genome.matePreferenceBias)
+      ? clamp(genome.matePreferenceBias, -1, 1)
+      : null;
+
+    if (mateBias != null) {
+      const biasDescriptor = this.#describeMateBias(mateBias);
+
+      if (biasDescriptor) {
+        strategyParts.push(biasDescriptor);
+      }
+    }
+
+    if (strategyParts.length > 0) {
+      this.#appendLifeEventDetail(container, {
+        label: "Social profile",
+        value: strategyParts.join(" • "),
+      });
+    }
+
+    const metabolism = genome.metabolism || {};
+    const metabolismParts = [];
+
+    if (Number.isFinite(metabolism.baseline)) {
+      metabolismParts.push(`Baseline ${metabolism.baseline.toFixed(2)}`);
+    }
+    if (Number.isFinite(metabolism.neuralDrag)) {
+      metabolismParts.push(`Neural drag ${metabolism.neuralDrag.toFixed(2)}`);
+    }
+    if (Number.isFinite(metabolism.crowdingTax)) {
+      metabolismParts.push(`Crowding tax ${metabolism.crowdingTax.toFixed(2)}`);
+    }
+
+    if (metabolismParts.length > 0) {
+      this.#appendLifeEventDetail(container, {
+        label: "Metabolism",
+        value: metabolismParts.join(" • "),
+      });
+    }
+  }
+
   #resolveDeathCauseColor(causeKey) {
     const map = this.deathCauseColorMap ?? DEFAULT_DEATH_CAUSE_COLOR_MAP;
     const fallback = map.unknown ?? DEFAULT_DEATH_CAUSE_COLOR_MAP.unknown;
@@ -3152,6 +3294,10 @@ export default class UIManager {
           label: "Note",
           value: event.note,
         });
+      }
+
+      if (event.genome) {
+        this.#appendGenomeDetails(details, event.genome);
       }
 
       if (!details.hasChildNodes()) {

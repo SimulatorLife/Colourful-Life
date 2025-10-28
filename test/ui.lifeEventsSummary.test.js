@@ -895,6 +895,136 @@ test("life event timeline summarises cadence when events arrive", async () => {
   }
 });
 
+test("life event genome summaries expose brain and strategy cues", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements({ width: 320, height: 96 });
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      { getCellSize: () => 5 },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    openPanel(uiManager.insightsPanel);
+    openPanel(uiManager.lifeEventsPanel);
+
+    const stats = {
+      ...createMetricsStatsFixture(),
+      deathBreakdown: {},
+      getRecentLifeEvents: () => [
+        {
+          type: "birth",
+          tick: 215,
+          row: 5,
+          col: 7,
+          genome: {
+            neurons: 128,
+            connections: 420,
+            sight: 4,
+            strategy: { value: 0.6 },
+            diversityAppetite: 0.7,
+            matePreferenceBias: -0.32,
+            metabolism: { baseline: 0.82, neuralDrag: 0.41 },
+          },
+        },
+      ],
+      getLifeEventRateSummary: () => ({
+        births: 1,
+        deaths: 0,
+        net: 1,
+        total: 1,
+        window: 120,
+        eventsPer100Ticks: 0.8,
+        birthsPer100Ticks: 0.8,
+        deathsPer100Ticks: 0,
+      }),
+      getLifeEventTimeline: () => ({
+        window: 120,
+        bucketSize: 10,
+        startTick: 200,
+        endTick: 219,
+        totalBirths: 1,
+        totalDeaths: 0,
+        maxBirths: 1,
+        maxDeaths: 0,
+        buckets: [{ index: 0, startTick: 200, endTick: 209, births: 1, deaths: 0 }],
+      }),
+    };
+    const snapshot = createSnapshotFixture();
+
+    uiManager.renderMetrics(stats, snapshot, {
+      eventStrengthMultiplier: 1,
+      activeEvents: [],
+    });
+
+    const eventItem = uiManager.lifeEventList.querySelector(".life-event");
+
+    assert.ok(eventItem, "life event entry should render after stats update");
+
+    const detailMap = new Map();
+
+    eventItem.querySelectorAll(".life-event-detail-label").forEach((labelNode) => {
+      const text = (labelNode.textContent || "").trim();
+      const valueNode = labelNode.nextElementSibling;
+      const valueText = (valueNode?.textContent || "").replace(/\s+/g, " ").trim();
+
+      detailMap.set(text, valueText);
+    });
+
+    const brainText = detailMap.get("Brain") || "";
+
+    assert.match(brainText, /128\s+neurons/, "brain detail should list neuron count");
+    assert.match(
+      brainText,
+      /420\s+connections/,
+      "brain detail should list synapse count",
+    );
+
+    const socialText = detailMap.get("Social profile") || "";
+
+    assert.include(
+      socialText,
+      "Adaptive opportunist",
+      "strategy descriptor should be surfaced",
+    );
+    assert.include(
+      socialText,
+      "Diversity appetite 70%",
+      "social detail should include diversity appetite",
+    );
+    assert.match(
+      socialText,
+      /novelty preference|Leans toward novelty/,
+      "mate bias descriptor should highlight novelty lean",
+    );
+
+    const metabolismText = detailMap.get("Metabolism") || "";
+
+    assert.include(
+      metabolismText,
+      "Baseline 0.82",
+      "metabolism detail should expose baseline rate",
+    );
+    assert.include(
+      metabolismText,
+      "Neural drag 0.41",
+      "metabolism detail should include neural drag",
+    );
+  } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
 test("life event timeline shows empty state until events occur", async () => {
   const restore = setupDom();
   const restoreCanvas = stubCanvasElements({ width: 320, height: 96 });

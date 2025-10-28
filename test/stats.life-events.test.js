@@ -79,6 +79,45 @@ test("life event payload trims context strings and falls back to cell data", asy
   assert.is("note" in event, false, "drops whitespace-only notes");
 });
 
+test("life event payload surfaces genome summary when cell data is present", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+  const cell = {
+    dna: { toColor: () => "#abc" },
+    brain: { neuronCount: 128, connectionCount: 420 },
+    neurons: 128,
+    sight: 4.2,
+    metabolicProfile: {
+      baseline: 0.82,
+      neuralDrag: 0.41,
+      crowdingTax: 0.19,
+      neuralSignature: 0.57,
+    },
+    strategy: 0.58,
+    diversityAppetite: 0.71,
+    matePreferenceBias: -0.33,
+    interactionGenes: {},
+  };
+
+  stats.onBirth(cell);
+
+  const [event] = stats.getRecentLifeEvents(1);
+
+  assert.ok(event.genome, "life event should include genome summary payload");
+  assert.equal(event.genome.neurons, 128);
+  assert.equal(event.genome.connections, 420);
+  assert.equal(event.genome.sight, 4.2);
+  assert.equal(event.genome.strategy, { value: 0.58 });
+  assert.equal(event.genome.diversityAppetite, 0.71);
+  assert.equal(event.genome.matePreferenceBias, -0.33);
+  assert.equal(event.genome.metabolism, {
+    baseline: 0.82,
+    neuralDrag: 0.41,
+    crowdingTax: 0.19,
+    neuralSignature: 0.57,
+  });
+});
+
 test("getLifeEventRateSummary captures windowed birth/death cadence", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats();

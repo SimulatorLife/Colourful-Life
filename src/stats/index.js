@@ -387,6 +387,25 @@ const isCellLike = (candidate) => {
   return Number.isFinite(candidate.energy);
 };
 
+function summarizeMetabolismProfile(profile) {
+  if (!profile || typeof profile !== "object") {
+    return null;
+  }
+
+  const baseline = toFiniteOrNull(profile.baseline);
+  const neuralDrag = toFiniteOrNull(profile.neuralDrag);
+  const crowdingTax = toFiniteOrNull(profile.crowdingTax);
+  const neuralSignature = toFiniteOrNull(profile.neuralSignature);
+  const summary = {};
+
+  if (baseline != null) summary.baseline = baseline;
+  if (neuralDrag != null) summary.neuralDrag = neuralDrag;
+  if (crowdingTax != null) summary.crowdingTax = crowdingTax;
+  if (neuralSignature != null) summary.neuralSignature = neuralSignature;
+
+  return Object.keys(summary).length > 0 ? summary : null;
+}
+
 /**
  * Aggregates per-tick simulation metrics and exposes rolling history series
  * for UI components. This class is intentionally stateful so the simulation
@@ -1327,6 +1346,38 @@ export default class Stats {
     };
   }
 
+  #summarizeGenome(cell) {
+    if (!isCellLike(cell)) {
+      return null;
+    }
+
+    const brain = cell?.brain;
+    const neurons = toFiniteOrNull(brain?.neuronCount ?? cell?.neurons);
+    const connections = toFiniteOrNull(brain?.connectionCount);
+    const sight = toFiniteOrNull(cell?.sight);
+    const metabolism = summarizeMetabolismProfile(cell?.metabolicProfile);
+    const strategyValue = toFiniteOrNull(cell?.strategy);
+    const diversityAppetite = toFiniteOrNull(cell?.diversityAppetite);
+    const mateBias = toFiniteOrNull(cell?.matePreferenceBias);
+    const summary = {};
+
+    if (neurons != null) summary.neurons = neurons;
+    if (connections != null) summary.connections = connections;
+    if (sight != null) summary.sight = sight;
+    if (metabolism) summary.metabolism = metabolism;
+    if (strategyValue != null) {
+      summary.strategy = { value: clamp01(strategyValue) };
+    }
+    if (diversityAppetite != null) {
+      summary.diversityAppetite = clamp01(diversityAppetite);
+    }
+    if (mateBias != null) {
+      summary.matePreferenceBias = clamp(mateBias, -1, 1);
+    }
+
+    return Object.keys(summary).length > 0 ? summary : null;
+  }
+
   #buildLifeEventPayload(type, cell, context = {}) {
     if (!type) return null;
 
@@ -1402,6 +1453,12 @@ export default class Stats {
     }
     if (parentColors && parentColors.length > 0) {
       event.parents = parentColors;
+    }
+
+    const genomeSummary = this.#summarizeGenome(resolvedCell);
+
+    if (genomeSummary) {
+      event.genome = genomeSummary;
     }
 
     return event;

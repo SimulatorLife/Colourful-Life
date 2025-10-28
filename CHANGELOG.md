@@ -9,6 +9,9 @@ where practical.
 
 ### Added
 
+- Genome snapshots in the Life Event Log summarising brain complexity, sensory reach,
+  strategy lean, and social appetites so every birth and death immediately explains
+  the lineage traits driving it.
 - Simulation clock in Evolution Insights showing elapsed simulated time and the
   cumulative tick count so pacing stays visible without mental math.
 - Regression tests ensuring the insights, life events, and leaderboard panels

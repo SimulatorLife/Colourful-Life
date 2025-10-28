@@ -60,6 +60,8 @@ Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/
 
 Open the **Simulation Controls** panel and head to the **Overlays** section to toggle **Life Event Markers** alongside the other map overlays. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps. A compact legend now anchors to the canvas corner, tallying visible births, deaths, and the net population swing so you can interpret the markers at a glance. Architecture details live in [`docs/architecture-overview.md`](docs/architecture-overview.md#ui-and-overlays) for readers interested in extending the renderer.
 
+Pair the overlay with the **Life Event Log** to see a fresh **Genome Snapshot** for every birth and death. Each entry now lists brain complexity, sensory reach, strategic lean, and social appetite so you can connect canvas markers to the DNA that shaped them without digging through debuggers.
+
 ### Grid line overlay
 
 Need precise spatial context while you tune density or energy flows? Flip on **Show Grid Lines** inside the Overlays panel to outline every tile with a low-contrast lattice. Minor separators stay subtle while a slightly brighter line highlights each fifth row and column so you can judge distances at a glance without obscuring the heatmaps beneath.
