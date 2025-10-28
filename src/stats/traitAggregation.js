@@ -138,19 +138,16 @@ export function accumulateTraitAggregates(
 
   const metadataLength = prepareTraitMetadata(traitIndexes, computeFns, thresholds);
   const hasTraits = metadataLength > 0;
-  let population = 0;
 
   if (!hasTraits) {
-    for (let i = 0; i < sources.length; i += 1) {
-      const cell = resolveCellFromSource(sources[i]);
+    return sources.reduce((count, source) => {
+      const cell = resolveCellFromSource(source);
 
-      if (cell && typeof cell === "object") {
-        population += 1;
-      }
-    }
-
-    return population;
+      return cell && typeof cell === "object" ? count + 1 : count;
+    }, 0);
   }
+
+  let population = 0;
 
   for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
     const cell = resolveCellFromSource(sources[sourceIndex]);
