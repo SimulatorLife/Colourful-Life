@@ -427,6 +427,9 @@ export default class UIManager {
     this._sliderInputs = new Map();
     this.lifeEventList = null;
     this.lifeEventsEmptyState = null;
+    this.lifeEventsSummaryWrapper = null;
+    this.lifeEventsSummaryMeta = null;
+    this.lifeEventsSummaryWindow = null;
     this.lifeEventsSummary = null;
     this.lifeEventsSummaryBirthItem = null;
     this.lifeEventsSummaryDeathItem = null;
@@ -2733,6 +2736,22 @@ export default class UIManager {
       ? `over the last ${windowTicks.toLocaleString()} ${windowTicks === 1 ? "tick" : "ticks"}`
       : null;
 
+    const resolvedWindowLabel = windowLabel ?? "Latest tick";
+    const resolvedWindowDescription = windowDescription ?? "during the latest tick";
+
+    if (this.lifeEventsSummaryWindow) {
+      this.lifeEventsSummaryWindow.textContent = resolvedWindowLabel;
+      const descriptionText =
+        resolvedWindowDescription.charAt(0).toUpperCase() +
+        resolvedWindowDescription.slice(1);
+
+      this.lifeEventsSummaryWindow.title = descriptionText;
+      this.lifeEventsSummaryWindow.setAttribute(
+        "aria-label",
+        `Observation window: ${resolvedWindowLabel}`,
+      );
+    }
+
     const birthOverrides = hasWindowSpan
       ? {
           periodLabel: windowLabel,
@@ -2816,8 +2835,8 @@ export default class UIManager {
             : "Net change of 0";
       const rateLabel =
         Number.isFinite(eventsPer100) && eventsPer100 > 0
-          ? `${eventsPer100.toFixed(1)} events per 100 ticks`
-          : "No recent events per 100 ticks";
+          ? `Average events per 100 ticks: ${eventsPer100.toFixed(1)}`
+          : "Average events per 100 ticks: 0";
 
       trendEl.setAttribute("aria-label", `${netLabel}; ${rateLabel}`);
       trendEl.title = `${netLabel}. ${rateLabel}.`;
@@ -2837,10 +2856,30 @@ export default class UIManager {
       if (Number.isFinite(eventsPer100) && eventsPer100 > 0) {
         const formattedEvents = eventsPer100.toFixed(1);
 
-        this.lifeEventsSummaryRate.textContent = `Rolling 100-tick avg: ≈${formattedEvents} events per 100 ticks`;
+        this.lifeEventsSummaryRate.textContent = `Avg events/100 ticks: ${formattedEvents}`;
+        this.lifeEventsSummaryRate.title = `Average of ${formattedEvents} combined births and deaths per 100 ticks.`;
       } else {
-        this.lifeEventsSummaryRate.textContent =
-          "Rolling 100-tick avg: no events per 100 ticks";
+        this.lifeEventsSummaryRate.textContent = "Avg events/100 ticks: 0";
+        this.lifeEventsSummaryRate.title =
+          "No recorded births or deaths in the last 100 ticks.";
+      }
+    }
+
+    if (this.lifeEventsSummaryMeta) {
+      const metaPieces = [];
+
+      if (this.lifeEventsSummaryWindow?.textContent) {
+        metaPieces.push(
+          `Observation window ${this.lifeEventsSummaryWindow.textContent}`,
+        );
+      }
+
+      if (this.lifeEventsSummaryRate?.textContent) {
+        metaPieces.push(this.lifeEventsSummaryRate.textContent);
+      }
+
+      if (metaPieces.length > 0) {
+        this.lifeEventsSummaryMeta.setAttribute("aria-label", metaPieces.join(". "));
       }
     }
   }
@@ -2944,10 +2983,13 @@ export default class UIManager {
       bucketSpan === 1 ? "1 tick" : `${bucketSpan.toLocaleString()} ticks`;
     const perBucketLabel =
       bucketSpan === 1 ? "per tick" : `per ${bucketSpan.toLocaleString()}-tick bucket`;
+    const windowPhrase = `${windowTicks.toLocaleString()} ${
+      windowTicks === 1 ? "tick" : "ticks"
+    }`;
 
     if (summaryMessage) {
       if (maxCount > 0) {
-        summaryMessage.textContent = `Last ${windowTicks.toLocaleString()} ticks of births and deaths.`;
+        summaryMessage.textContent = `Last ${windowPhrase} of births and deaths (bucket: ${bucketSizeLabel}).`;
       } else {
         summaryMessage.textContent = LIFE_EVENT_TIMELINE_EMPTY_MESSAGE;
       }
@@ -5000,6 +5042,47 @@ export default class UIManager {
       };
     };
 
+    const summaryWrapper = document.createElement("div");
+
+    summaryWrapper.className = "life-events-summary-wrapper";
+    this.lifeEventsSummaryWrapper = summaryWrapper;
+
+    const summaryMeta = document.createElement("div");
+
+    summaryMeta.className = "life-events-summary__meta";
+    summaryMeta.setAttribute("role", "group");
+    summaryMeta.setAttribute("aria-live", "polite");
+
+    const summaryMetaWindow = document.createElement("div");
+
+    summaryMetaWindow.className = "life-events-summary__meta-window";
+    const summaryMetaLabel = document.createElement("span");
+
+    summaryMetaLabel.className = "life-events-summary__meta-label";
+    summaryMetaLabel.textContent = "Observation window";
+    const summaryMetaValue = document.createElement("span");
+
+    summaryMetaValue.className = "life-events-summary__meta-value";
+    summaryMetaValue.textContent = "Latest tick";
+    summaryMetaValue.title = "Events recorded during the latest tick";
+    summaryMetaWindow.appendChild(summaryMetaLabel);
+    summaryMetaWindow.appendChild(summaryMetaValue);
+
+    const summaryMetaRate = document.createElement("span");
+
+    summaryMetaRate.className =
+      "life-events-summary__meta-rate life-events-summary__trend-rate";
+    summaryMetaRate.textContent = "Avg events/100 ticks: none yet";
+
+    summaryMeta.appendChild(summaryMetaWindow);
+    summaryMeta.appendChild(summaryMetaRate);
+
+    this.lifeEventsSummaryMeta = summaryMeta;
+    this.lifeEventsSummaryWindow = summaryMetaValue;
+    this.lifeEventsSummaryRate = summaryMetaRate;
+
+    summaryWrapper.appendChild(summaryMeta);
+
     this.lifeEventsSummary = document.createElement("div");
     this.lifeEventsSummary.className = "life-events-summary";
     this.lifeEventsSummary.setAttribute("role", "list");
@@ -5076,13 +5159,7 @@ export default class UIManager {
     trendValue.className = "life-events-summary__trend-value";
     trendValue.textContent = "+0";
 
-    const trendRate = document.createElement("span");
-
-    trendRate.className = "life-events-summary__trend-rate";
-    trendRate.textContent = "Rolling 100-tick avg: none yet";
-
     trendValues.appendChild(trendValue);
-    trendValues.appendChild(trendRate);
 
     trendSummary.appendChild(trendHeader);
     trendSummary.appendChild(trendValues);
@@ -5090,10 +5167,10 @@ export default class UIManager {
     this.lifeEventsSummaryTrend = trendSummary;
     this.lifeEventsSummaryNet = trendValue;
     this.lifeEventsSummaryDirection = trendDirection;
-    this.lifeEventsSummaryRate = trendRate;
 
     this.lifeEventsSummary.appendChild(trendSummary);
-    lifeBody.appendChild(this.lifeEventsSummary);
+    summaryWrapper.appendChild(this.lifeEventsSummary);
+    lifeBody.appendChild(summaryWrapper);
 
     const summaryEmptyMessage = document.createElement("p");
 
@@ -5107,7 +5184,7 @@ export default class UIManager {
     summaryEmptyMessage.setAttribute("role", "status");
     summaryEmptyMessage.setAttribute("aria-live", "polite");
     summaryEmptyMessage.setAttribute("aria-atomic", "true");
-    lifeBody.appendChild(summaryEmptyMessage);
+    summaryWrapper.appendChild(summaryEmptyMessage);
 
     this.lifeEventsSummaryEmptyMessage = summaryEmptyMessage;
     this.lifeEventsSummary.setAttribute("aria-describedby", summaryEmptyId);

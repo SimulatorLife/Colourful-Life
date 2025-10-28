@@ -1114,13 +1114,55 @@ canvas {
 .life-events-body {
   display: flex;
   flex-direction: column;
+  gap: var(--space-md);
+}
+
+.life-events-summary-wrapper {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-sm);
+}
+
+.life-events-summary__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 0 2px var(--space-sm);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.life-events-summary__meta-window {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+
+.life-events-summary__meta-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.life-events-summary__meta-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.life-events-summary__meta-rate {
+  margin-left: auto;
+  font-size: 0.78rem;
+  text-align: right;
 }
 
 .life-events-summary {
   display: grid;
   gap: var(--space-sm);
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   align-items: stretch;
 }
 
@@ -1287,13 +1329,11 @@ canvas {
 
 .life-events-summary__item {
   position: relative;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-md);
-  row-gap: var(--space-sm);
-  flex-wrap: wrap;
-  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-sm) var(--space-md);
+  padding: 16px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-accent);
@@ -1314,12 +1354,39 @@ canvas {
   background: var(--color-life-birth);
 }
 
+.life-events-summary__item--birth {
+  border-color: rgba(76, 175, 80, 0.45);
+  background: linear-gradient(
+    135deg,
+    rgba(76, 175, 80, 0.18) 0%,
+    rgba(76, 175, 80, 0.04) 100%
+  );
+}
+
 .life-events-summary__item--death::before {
   background: var(--color-life-death);
 }
 
+.life-events-summary__item--death {
+  border-color: rgba(231, 76, 60, 0.45);
+  background: linear-gradient(
+    135deg,
+    rgba(231, 76, 60, 0.18) 0%,
+    rgba(231, 76, 60, 0.05) 100%
+  );
+}
+
 .life-events-summary__item--total::before {
   background: var(--color-metric-growth);
+}
+
+.life-events-summary__item--total {
+  border-color: rgba(245, 198, 105, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba(245, 198, 105, 0.18) 0%,
+    rgba(245, 198, 105, 0.05) 100%
+  );
 }
 
 .life-events-summary__item--muted {
@@ -1344,7 +1411,6 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1 1 220px;
   min-width: 0;
 }
 
@@ -1382,8 +1448,8 @@ canvas {
   color: var(--color-text);
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
-  margin-left: auto;
-  align-self: flex-start;
+  justify-self: end;
+  align-self: start;
   text-align: right;
 }
 
@@ -1396,6 +1462,7 @@ canvas {
   color: var(--color-text-subtle);
   text-align: center;
   line-height: 1.5;
+  grid-column: 1 / -1;
 }
 
 .life-events-summary__trend {
@@ -1403,7 +1470,7 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  padding: 14px;
+  padding: 16px;
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-sm);
   background: linear-gradient(
@@ -1443,7 +1510,7 @@ canvas {
 .life-events-summary__trend-values {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .life-events-summary__trend-value {
