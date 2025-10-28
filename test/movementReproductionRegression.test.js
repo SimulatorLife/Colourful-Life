@@ -19,6 +19,41 @@ test("GridManager.tryMove updates a cell's stored coordinates", async () => {
   assert.is(cell.col, 1);
 });
 
+test("GridManager.tryMove charges movement energy based on genome costs", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+
+  const dna = new DNA(5, 15, 25);
+  const baseMoveCost = 0.0065;
+
+  dna.moveCost = () => baseMoveCost;
+
+  const cell = new Cell(0, 0, dna, 1);
+  const startEnergy = cell.energy;
+
+  cell.ageEnergyMultiplier = () => 1.4;
+
+  const grid = [
+    [cell, null],
+    [null, null],
+  ];
+
+  const moved = GridManager.tryMove(grid, 0, 0, 0, 1, 2, 2);
+
+  assert.ok(moved, "movement should succeed to the adjacent empty tile");
+
+  const expectedEnergy = startEnergy - baseMoveCost * 1.4;
+
+  approxEqual(
+    cell.energy,
+    expectedEnergy,
+    1e-12,
+    "movement must debit energy according to Law 9's metabolism requirement",
+  );
+  assert.ok(cell.energy < startEnergy, "movement should never increase stored energy");
+});
+
 test("GridManager.tryMove ignores empty sources without mutating density data", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
 
