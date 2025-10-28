@@ -189,7 +189,7 @@ test("resolveActivityBaseRate clamps invalid overrides", async () => {
 test("MUTATION_CHANCE_BASELINE exposes the environment-aware default", async () => {
   const { MUTATION_CHANCE_BASELINE } = await configModulePromise;
 
-  assert.is(MUTATION_CHANCE_BASELINE, 0.15);
+  assert.is(MUTATION_CHANCE_BASELINE, 0.142);
 });
 
 test("resolveMutationChance respects overrides", async () => {
@@ -205,7 +205,7 @@ test("resolveMutationChance clamps invalid overrides", async () => {
 
   assert.is(resolveMutationChance({ COLOURFUL_LIFE_MUTATION_CHANCE: "2" }), 1);
 
-  assert.is(resolveMutationChance({ COLOURFUL_LIFE_MUTATION_CHANCE: "NaN" }), 0.15);
+  assert.is(resolveMutationChance({ COLOURFUL_LIFE_MUTATION_CHANCE: "NaN" }), 0.142);
 });
 
 test("REPRODUCTION_COOLDOWN_BASE exposes the environment-aware default", async () => {
