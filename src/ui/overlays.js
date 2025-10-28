@@ -140,6 +140,7 @@ function resolveLifeEventColor(event, overridesInput) {
 function createLifeEventMarkerDescriptor(
   event,
   { currentTick, fadeWindow, colorOverrides },
+  target = null,
 ) {
   if (!event) return null;
 
@@ -167,7 +168,21 @@ function createLifeEventMarkerDescriptor(
   const type =
     event.type === "death" ? "death" : event.type === "birth" ? "birth" : "other";
 
-  return { row, col, color, alpha, type };
+  const descriptor = target ?? {
+    row,
+    col,
+    color,
+    alpha,
+    type,
+  };
+
+  descriptor.row = row;
+  descriptor.col = col;
+  descriptor.color = color;
+  descriptor.alpha = alpha;
+  descriptor.type = type;
+
+  return descriptor;
 }
 
 function drawDeathMarker(ctx, centerX, centerY, radius, color) {
@@ -234,6 +249,30 @@ function drawBirthMarker(ctx, centerX, centerY, radius, color) {
  *   colors?: Record<string, string>,
  * }} [options] - Rendering customisations.
  */
+const LIFE_EVENT_MARKER_POOL_LIMIT = 256;
+let lifeEventMarkerScratch = [];
+let lifeEventMarkerPool = [];
+
+function acquireLifeEventMarker() {
+  return (
+    lifeEventMarkerPool.pop() ?? { row: 0, col: 0, color: "", alpha: 0, type: "other" }
+  );
+}
+
+function releaseLifeEventMarker(descriptor) {
+  if (!descriptor) return;
+
+  descriptor.row = 0;
+  descriptor.col = 0;
+  descriptor.color = "";
+  descriptor.alpha = 0;
+  descriptor.type = "other";
+
+  if (lifeEventMarkerPool.length < LIFE_EVENT_MARKER_POOL_LIMIT) {
+    lifeEventMarkerPool.push(descriptor);
+  }
+}
+
 export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
   if (!ctx || !(cellSize > 0)) return;
   if (!Array.isArray(events) || events.length === 0) return;
@@ -250,34 +289,41 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
   const strokeWidth = Math.max(cellSize * 0.18, 1.25);
   const colorOverrides = options.colors;
 
-  const prepared = events.reduce((list, event) => {
-    const descriptor = createLifeEventMarkerDescriptor(event, {
-      currentTick,
-      fadeWindow,
-      colorOverrides,
-    });
+  const prepared = lifeEventMarkerScratch;
+
+  prepared.length = 0;
+
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i];
+
+    if (!event) continue;
+
+    const reusable = acquireLifeEventMarker();
+    const descriptor = createLifeEventMarkerDescriptor(
+      event,
+      { currentTick, fadeWindow, colorOverrides },
+      reusable,
+    );
 
     if (descriptor) {
-      list.push(descriptor);
+      prepared.push(descriptor);
+    } else {
+      // Reclaim the unused descriptor when validation rejects the event.
+      releaseLifeEventMarker(reusable);
     }
+  }
 
-    return list;
-  }, []);
+  const availableMarkers = prepared.length;
 
-  if (prepared.length === 0) {
+  if (availableMarkers === 0) {
     return;
   }
 
-  const toRender = prepared.slice(0, maxCount);
-
-  // Render older markers first so the newest events remain visible on top of
-  // any overlapping strokes. Stats#getRecentLifeEvents returns entries in
-  // newest-first order, so reversing keeps draw order aligned with visual
-  // priority.
-  toRender.reverse();
+  const toRender = Math.min(maxCount, availableMarkers);
   const renderedCounts = { birth: 0, death: 0, other: 0 };
+  const canSave = typeof ctx.save === "function";
 
-  if (typeof ctx.save === "function") ctx.save();
+  if (canSave) ctx.save();
 
   if (ctx.lineJoin !== undefined) ctx.lineJoin = "round";
   if (ctx.lineCap !== undefined) ctx.lineCap = "round";
@@ -286,7 +332,10 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
 
   if (ctx.lineWidth !== undefined) ctx.lineWidth = strokeWidth;
 
-  for (const entry of toRender) {
+  let drawn = 0;
+
+  for (let index = availableMarkers - 1; index >= 0 && drawn < toRender; index -= 1) {
+    const entry = prepared[index];
     const { row, col, color: rawColor, alpha, type } = entry;
 
     if (ctx.globalAlpha !== undefined) {
@@ -311,6 +360,8 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
       drawBirthMarker(ctx, centerX, centerY, markerRadius, color);
       renderedCounts.other++;
     }
+
+    drawn += 1;
   }
 
   if (ctx.globalAlpha !== undefined) {
@@ -319,7 +370,13 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
   if (ctx.lineWidth !== undefined && Number.isFinite(previousLineWidth)) {
     ctx.lineWidth = previousLineWidth;
   }
-  if (typeof ctx.restore === "function") ctx.restore();
+  if (canSave && typeof ctx.restore === "function") ctx.restore();
+
+  for (let i = 0; i < availableMarkers; i += 1) {
+    releaseLifeEventMarker(prepared[i]);
+  }
+
+  prepared.length = 0;
 
   const legendColors = {
     birth: resolveLifeEventColor({ type: "birth" }, colorOverrides),
@@ -329,8 +386,8 @@ export function drawLifeEventMarkers(ctx, cellSize, events, options = {}) {
   drawLifeEventLegend(ctx, cellSize, renderedCounts, {
     colors: legendColors,
     fadeWindow,
-    drawnCount: toRender.length,
-    visibleCount: prepared.length,
+    drawnCount: drawn,
+    visibleCount: availableMarkers,
   });
 }
 
