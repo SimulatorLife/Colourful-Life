@@ -34,24 +34,18 @@ function rememberTopValue(values, candidate) {
   const targetIndex = insertIndex + 1;
 
   if (length < limit) {
-    values.push(candidate);
-
-    for (let i = values.length - 1; i > targetIndex; i -= 1) {
-      values[i] = values[i - 1];
-    }
-
-    values[targetIndex] = candidate;
+    values.splice(targetIndex, 0, candidate);
 
     return candidate;
   }
 
   const displaced = values[tailIndex];
 
-  for (let i = tailIndex; i > targetIndex; i -= 1) {
-    values[i] = values[i - 1];
-  }
+  values.splice(targetIndex, 0, candidate);
 
-  values[targetIndex] = candidate;
+  if (values.length > limit) {
+    values.length = limit;
+  }
 
   return candidate - displaced;
 }
