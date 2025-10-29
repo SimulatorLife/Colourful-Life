@@ -2567,6 +2567,65 @@ test("diverse matings relieve accumulated novelty pressure penalties", () => {
   );
 });
 
+test("mate diversity suppression builds from repetition and eases with exploration", () => {
+  const dna = new DNA(85, 95, 105);
+  const cell = new Cell(0, 0, dna, 6);
+
+  cell.diversityAppetite = 0.25;
+
+  for (let i = 0; i < 5; i += 1) {
+    cell.recordMatingOutcome({
+      diversity: 0.08,
+      success: i % 2 === 0,
+      penalized: true,
+      penaltyMultiplier: 0.6,
+      strategyPenaltyMultiplier: 0.7,
+      diversityOpportunity: 0.65,
+      diversityOpportunityWeight: 0.5,
+      diversityOpportunityAvailability: 0.8,
+      diversityOpportunityAlignment: 0.2,
+      complementOpportunity: 0.45,
+      complementOpportunityWeight: 0.3,
+      complementOpportunityAvailability: 0.6,
+      complementOpportunityAlignment: 0.18,
+    });
+  }
+
+  const suppressionAfterRepetition = cell.getMateDiversitySuppression();
+
+  assert.ok(
+    suppressionAfterRepetition > 0.1,
+    "repeated similar pairings should accumulate suppression",
+  );
+
+  cell.recordMatingOutcome({
+    diversity: 0.88,
+    success: true,
+    penalized: false,
+    penaltyMultiplier: 1,
+    strategyPenaltyMultiplier: 1,
+    diversityOpportunity: 0.25,
+    diversityOpportunityWeight: 0.4,
+    diversityOpportunityAvailability: 0.5,
+    diversityOpportunityAlignment: 0.78,
+    complementOpportunity: 0.35,
+    complementOpportunityWeight: 0.25,
+    complementOpportunityAvailability: 0.5,
+    complementOpportunityAlignment: 0.72,
+  });
+
+  const suppressionAfterExploration = cell.getMateDiversitySuppression();
+
+  assert.ok(
+    suppressionAfterExploration < suppressionAfterRepetition,
+    "novel success should relieve accumulated suppression",
+  );
+  assert.ok(
+    suppressionAfterExploration >= 0,
+    "suppression remains within valid bounds",
+  );
+});
+
 test("recordMatingOutcome imprints DNA-driven mate affinity into neural sensors", () => {
   const dna = new DNA(90, 120, 180);
   const cell = new Cell(0, 0, dna, 6);

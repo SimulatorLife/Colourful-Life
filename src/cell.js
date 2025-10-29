@@ -338,6 +338,9 @@ export default class Cell {
     this.diverseMateScore = 0;
     this.similarityPenalty = 0;
     this.strategyPenalty = 0;
+    this._mateSimilarityMomentum = 0;
+    this._mateOpportunityMomentum = 0;
+    this._mateDiversitySuppression = 0;
   }
 
   static breed(parentA, parentB, mutationMultiplier = 1, options = {}) {
@@ -1985,6 +1988,8 @@ export default class Cell {
       0,
       2,
     );
+    let opportunitySampleWeight = 0;
+    let neglectSignal = 0;
     const opportunityPresent =
       opportunitySignal > 0 ||
       opportunityAvailabilityValue > 0 ||
@@ -2022,6 +2027,8 @@ export default class Cell {
         0.05,
         1,
       );
+
+      opportunitySampleWeight = sampleWeight;
 
       this.diversityOpportunitySamples =
         (this.diversityOpportunitySamples || 0) + sampleWeight;
@@ -2075,7 +2082,100 @@ export default class Cell {
         this.diversityOpportunityNeglectScore =
           (this.diversityOpportunityNeglectScore || 0) + neglect;
       }
+
+      neglectSignal = clamp(neglect, 0, 1);
     }
+
+    const normalizedDiversity = clamp(diversity ?? 0, 0, 1);
+    const similarityValue = clamp(1 - normalizedDiversity, 0, 1);
+    const successWeight = success ? 1 : 0.5;
+    const appetite = clamp(this.diversityAppetite ?? 0, 0, 1);
+    const prevSimilarityMomentum = Number.isFinite(this._mateSimilarityMomentum)
+      ? clamp(this._mateSimilarityMomentum, 0, 1)
+      : 0;
+    const prevOpportunityMomentum = Number.isFinite(this._mateOpportunityMomentum)
+      ? clamp(this._mateOpportunityMomentum, 0, 1)
+      : 0;
+    const prevSuppression = Number.isFinite(this._mateDiversitySuppression)
+      ? clamp(this._mateDiversitySuppression, 0, 1)
+      : 0;
+    const opportunityPressureSignal = clamp(
+      opportunitySignal * (0.55 + opportunityAvailabilityValue * 0.3) +
+        opportunityAvailabilityValue * 0.25 +
+        complementOpportunitySignal * 0.2,
+      0,
+      1,
+    );
+    const similarityWeight = clamp(
+      0.18 + successWeight * 0.12 + opportunityAvailabilityValue * 0.2,
+      0.08,
+      0.45,
+    );
+    const nextSimilarityMomentum =
+      prevSimilarityMomentum * (1 - similarityWeight) +
+      similarityValue * similarityWeight;
+    const opportunityWeight = clamp(
+      0.12 + opportunityAvailabilityValue * 0.25 + (success ? 0.05 : 0),
+      0.08,
+      0.35,
+    );
+    const nextOpportunityMomentum =
+      prevOpportunityMomentum * (1 - opportunityWeight) +
+      opportunityPressureSignal * opportunityWeight;
+    const stagnationBaseline = 0.45 + nextOpportunityMomentum * 0.25 - appetite * 0.12;
+    const stagnationSignal = clamp(nextSimilarityMomentum - stagnationBaseline, 0, 1);
+    const alignmentRelief = clamp(
+      opportunityAlignmentValue * (0.4 + opportunityAvailabilityValue * 0.3) +
+        complementOpportunityAlignmentValue * 0.25,
+      0,
+      1,
+    );
+    const neglectReinforcement = clamp(
+      neglectSignal * (0.35 + opportunityAvailabilityValue * 0.25),
+      0,
+      1,
+    );
+    const penaltyReinforcement = clamp(penaltyDrag * 0.45 + strategyDrag * 0.35, 0, 1);
+    const suppressionSignal = clamp(
+      stagnationSignal *
+        (0.6 + opportunityAvailabilityValue * 0.25) *
+        (1 - alignmentRelief * 0.6) +
+        neglectReinforcement +
+        penaltyReinforcement,
+      0,
+      1,
+    );
+    const suppressionWeight = clamp(0.16 + opportunityPressureSignal * 0.2, 0.1, 0.45);
+    let nextSuppression =
+      prevSuppression * (1 - suppressionWeight) + suppressionSignal * suppressionWeight;
+    const reliefWeight = clamp(
+      0.1 +
+        opportunityAlignmentValue * 0.2 +
+        complementOpportunityAlignmentValue * 0.15,
+      0.05,
+      0.35,
+    );
+    const diversityRelief = normalizedDiversity * (success ? 0.6 : 0.35);
+
+    nextSuppression =
+      nextSuppression * (1 - reliefWeight) +
+      Math.max(0, nextSuppression - diversityRelief) * reliefWeight;
+
+    if (normalizedDiversity >= 0.7 && opportunityAvailabilityValue > 0) {
+      nextSuppression *= 0.85;
+    }
+
+    if (!opportunityPresent && normalizedDiversity >= 0.5) {
+      nextSuppression *= 0.9;
+    }
+
+    if (opportunitySampleWeight <= 0.1 && normalizedDiversity >= 0.65) {
+      nextSuppression *= 0.92;
+    }
+
+    this._mateSimilarityMomentum = clamp(nextSimilarityMomentum, 0, 1);
+    this._mateOpportunityMomentum = clamp(nextOpportunityMomentum, 0, 1);
+    this._mateDiversitySuppression = clamp(nextSuppression, 0, 1);
 
     this.#updateMateDiversityDynamics({
       diversity,
@@ -2107,6 +2207,14 @@ export default class Cell {
 
   getMateNoveltyPressure() {
     return this.#resolveMateNoveltyPressure();
+  }
+
+  getMateDiversitySuppression() {
+    const value = Number.isFinite(this._mateDiversitySuppression)
+      ? clamp(this._mateDiversitySuppression, 0, 1)
+      : 0;
+
+    return value;
   }
 
   // Internal: nearest target utility

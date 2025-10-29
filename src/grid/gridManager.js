@@ -8171,6 +8171,7 @@ export default class GridManager {
     let diversityPenaltyMultiplier = 1;
     let strategyPenaltyMultiplier = 1;
     let penaltyMultiplier = 1;
+    let mateSuppressionMultiplier = 1;
     let penalizedForSimilarity = false;
 
     const originalParentRow = cell.row;
@@ -8473,6 +8474,55 @@ export default class GridManager {
           }
         }
       }
+    }
+
+    if (effectiveReproProb > 0) {
+      const parentSuppression =
+        typeof cell.getMateDiversitySuppression === "function"
+          ? clamp(cell.getMateDiversitySuppression(), 0, 1)
+          : clamp(cell._mateDiversitySuppression ?? 0, 0, 1);
+      const mateSuppression =
+        typeof bestMate.target?.getMateDiversitySuppression === "function"
+          ? clamp(bestMate.target.getMateDiversitySuppression(), 0, 1)
+          : clamp(bestMate.target?._mateDiversitySuppression ?? 0, 0, 1);
+      const combinedSuppression = Math.max(parentSuppression, mateSuppression);
+
+      if (combinedSuppression > 0) {
+        const complementRelief =
+          clamp(
+            Number.isFinite(behaviorComplementarity) ? behaviorComplementarity : 0,
+            0,
+            1,
+          ) * 0.25;
+        const diversityRelief =
+          diversity >= pairDiversityThreshold
+            ? clamp(diversity - pairDiversityThreshold, 0, 1) * 0.2
+            : 0;
+        const suppressionScale =
+          0.18 +
+          diversityPressure * 0.25 +
+          scarcitySignal * 0.2 +
+          behaviorEvenness * 0.15;
+        const suppressionStrength = clamp(
+          combinedSuppression *
+            Math.max(0, suppressionScale - complementRelief - diversityRelief),
+          0,
+          0.85,
+        );
+
+        if (suppressionStrength > 0) {
+          mateSuppressionMultiplier = clamp(1 - suppressionStrength, 0, 1);
+          effectiveReproProb = clamp(
+            effectiveReproProb * mateSuppressionMultiplier,
+            0,
+            1,
+          );
+        }
+      }
+    }
+
+    if (mateSuppressionMultiplier < strategyPenaltyMultiplier) {
+      strategyPenaltyMultiplier = mateSuppressionMultiplier;
     }
 
     if (opportunityAlignmentMultiplier !== 1) {
