@@ -6718,6 +6718,55 @@ export default class UIManager {
       title: "Estimated mean pairwise genetic distance",
     });
 
+    const neuralStats = s.neural || stats?.neuralSummary || null;
+    const neuralSection = createSection("Neural Activity", {
+      accent: "var(--color-metric-neural)",
+    });
+    const neuralSampleCount = Number.isFinite(neuralStats?.neuralPopulation)
+      ? neuralStats.neuralPopulation
+      : 0;
+
+    appendMetricRow(neuralSection, {
+      label: "Coverage",
+      value: percentOrDash(neuralStats?.coverage),
+      title: "Share of living cells with active neural wiring.",
+    });
+    appendMetricRow(neuralSection, {
+      label: "Mean Neurons",
+      value: neuralSampleCount > 0 ? fixedOrDash(neuralStats?.meanNeuronCount, 1) : "—",
+      title: "Average neuron count among neural-enabled organisms.",
+    });
+    appendMetricRow(neuralSection, {
+      label: "Mean Connections",
+      value:
+        neuralSampleCount > 0 ? fixedOrDash(neuralStats?.meanConnectionCount, 1) : "—",
+      title: "Average synaptic connections per neural-enabled organism.",
+    });
+    appendMetricRow(neuralSection, {
+      label: "Activation Load",
+      value:
+        neuralSampleCount > 0 ? fixedOrDash(neuralStats?.meanActivationLoad, 1) : "—",
+      title: "Average neurons activated per tick among neural-enabled organisms.",
+    });
+    appendMetricRow(neuralSection, {
+      label: "Learning Rate",
+      value:
+        neuralSampleCount > 0
+          ? fixedOrDash(neuralStats?.meanPlasticityLearningRate, 2)
+          : "—",
+      title: "Average DNA-programmed neural learning rate.",
+    });
+    appendMetricRow(neuralSection, {
+      label: "Peak Complexity",
+      value:
+        neuralSampleCount > 0
+          ? finiteOrDash(neuralStats?.peakComplexity, (v) =>
+              Math.round(v).toLocaleString(),
+            )
+          : "—",
+      title: "Highest neural complexity (neurons or connections) observed this tick.",
+    });
+
     const environmentSection = createSection("Environmental Events", {
       accent: "var(--color-metric-event-strength)",
     });
