@@ -17,7 +17,7 @@ import {
 import { coerceBoolean, resolveNonEmptyString } from "../src/utils/primitives.js";
 import { resolveCellColor } from "../src/utils/cell.js";
 import { cloneTracePayload, toPlainObject } from "../src/utils/object.js";
-import { createRankedBuffer, isArrayLike } from "../src/utils/collections.js";
+import { createRankedBuffer, isArrayLike, toArray } from "../src/utils/collections.js";
 import {
   __dangerousGetWarnOnceSize,
   __dangerousResetWarnOnce,
@@ -448,6 +448,37 @@ test("isArrayLike recognizes indexed sequences and filters non-arrays", () => {
   assert.not.ok(isArrayLike({ length: 3 }), "plain objects are not array-like");
   assert.not.ok(isArrayLike(new Map([["a", 1]])));
   assert.not.ok(isArrayLike(null));
+});
+
+test("toArray normalizes iterables and honours fallbacks", () => {
+  const list = [1, 2, 3];
+  const normalizedList = toArray(list);
+
+  assert.equal(normalizedList, list, "existing arrays are returned intact");
+
+  const typed = new Uint8Array([7, 8]);
+
+  assert.equal(toArray(typed), [7, 8], "typed arrays are converted to standard arrays");
+
+  const iterable = new Set(["a", "b"]);
+
+  assert.equal(toArray(iterable), ["a", "b"], "iterables are collected into arrays");
+
+  const arrayLike = { 0: "x", 1: "y", length: 2 };
+
+  assert.equal(
+    toArray(arrayLike),
+    ["x", "y"],
+    "array-like objects fallback to index-based collection",
+  );
+
+  const fallback = [42];
+
+  assert.equal(
+    toArray(null, { fallback }),
+    fallback,
+    "null candidates collapse to the provided fallback",
+  );
 });
 
 test("createRankedBuffer sorts entries, trims capacity, and preserves tie order", () => {

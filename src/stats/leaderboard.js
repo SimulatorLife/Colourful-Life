@@ -1,4 +1,4 @@
-import { createRankedBuffer } from "../utils/collections.js";
+import { createRankedBuffer, toArray } from "../utils/collections.js";
 import { sanitizeNumber } from "../utils/math.js";
 
 function sanitizeCoordinate(value) {
@@ -38,7 +38,7 @@ export function computeLeaderboard(snapshot, topN = 5) {
     return [];
   }
 
-  const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
+  const entries = toArray(snapshot?.entries);
   const compareItems = (a, b) => {
     const fitnessDiff = (b?.fitness ?? Number.NaN) - (a?.fitness ?? Number.NaN);
 

@@ -12,6 +12,43 @@ export function isArrayLike(candidate) {
 }
 
 /**
+ * Normalizes loosely-typed input into a standard array. Arrays are returned
+ * intact to preserve reference semantics, while array-like objects and
+ * iterables are copied into a new array. All other values collapse to the
+ * provided fallback so callers can safely iterate without additional guards.
+ *
+ * @template T
+ * @param {Iterable<T> | ArrayLike<T> | null | undefined} candidate - Value to normalize.
+ * @param {Object} [options]
+ * @param {Array<T>} [options.fallback=[]] - Replacement array used when the
+ *   candidate is not iterable.
+ * @returns {Array<T>} Normalized array suitable for iteration.
+ */
+export function toArray(candidate, { fallback = [] } = {}) {
+  if (Array.isArray(candidate)) {
+    return candidate;
+  }
+
+  if (candidate == null) {
+    return Array.isArray(fallback) ? fallback : [];
+  }
+
+  if (ArrayBuffer.isView(candidate)) {
+    return Array.from(candidate);
+  }
+
+  if (typeof candidate[Symbol.iterator] === "function") {
+    return Array.from(candidate);
+  }
+
+  if (typeof candidate.length === "number" && candidate.length >= 0) {
+    return Array.from({ length: candidate.length }, (_, index) => candidate[index]);
+  }
+
+  return Array.isArray(fallback) ? fallback : [];
+}
+
+/**
  * Maintains a sorted, size-limited buffer using the provided comparator.
  * Callers typically use the helper when they only care about the "best"
  * handful of entries (for example, the leaderboard) and want deterministic
