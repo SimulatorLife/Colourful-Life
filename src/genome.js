@@ -618,6 +618,38 @@ export class DNA {
     return clamp(base + jitter, 0.08, 0.55);
   }
 
+  spawnEnergyBufferFrac(context = {}) {
+    const rng = this.prngFor("spawnEnergyBufferFrac");
+    const scarcity = clamp(
+      Number.isFinite(context?.scarcity) ? context.scarcity : 0,
+      0,
+      1,
+    );
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const cooperation = this.geneFraction(GENE_LOCI.COOPERATION);
+    const gestation = this.geneFraction(GENE_LOCI.GESTATION_EFFICIENCY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+
+    const nurture = 0.05 + parental * 0.12 + cooperation * 0.08;
+    const reserves = 0.04 + capacity * 0.12 + gestation * 0.08;
+    const thrift = 0.05 + efficiency * 0.1;
+    const daring = 0.03 + risk * 0.12;
+    const scarcityLift = scarcity * (0.03 + fertility * 0.05 + (1 - efficiency) * 0.04);
+    const base =
+      0.04 +
+      nurture * 0.45 +
+      reserves * 0.35 +
+      scarcityLift -
+      thrift * 0.35 -
+      daring * 0.25;
+    const jitter = (rng() - 0.5) * 0.04;
+
+    return clamp(base + jitter, 0.02, 0.2);
+  }
+
   offspringEnergyTransferEfficiency() {
     const rng = this.prngFor("offspringEnergyTransferEfficiency");
     const gestation = this.geneFraction(GENE_LOCI.GESTATION_EFFICIENCY);
