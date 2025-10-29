@@ -175,6 +175,26 @@ export function resolveInitialTileEnergyFraction(env = RUNTIME_ENV) {
 
 export const INITIAL_TILE_ENERGY_FRACTION_DEFAULT = resolveInitialTileEnergyFraction();
 export const DENSITY_RADIUS_DEFAULT = 1;
+
+/**
+ * Resolves the neighbourhood radius used when sampling crowd density around a
+ * tile. Allowing environment overrides keeps the crowd feedback loop tunable
+ * without code edits while clamping the value to a positive integer so grid
+ * integration stays deterministic across browser and headless runs.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Positive integer radius applied when measuring density.
+ */
+export function resolveDensityRadius(env = RUNTIME_ENV) {
+  return sanitizePositiveInteger(env?.COLOURFUL_LIFE_DENSITY_RADIUS, {
+    fallback: DENSITY_RADIUS_DEFAULT,
+    min: 1,
+  });
+}
+
+export const DENSITY_RADIUS = resolveDensityRadius();
 export const COMBAT_EDGE_SHARPNESS_DEFAULT = 3.2;
 export const COMBAT_TERRITORY_EDGE_FACTOR = resolveCombatTerritoryEdgeFactor();
 export const DECAY_RETURN_FRACTION = resolveDecayReturnFraction();

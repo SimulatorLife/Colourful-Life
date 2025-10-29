@@ -37,7 +37,7 @@ import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
   ENERGY_DIFFUSION_RATE_DEFAULT,
-  DENSITY_RADIUS_DEFAULT,
+  DENSITY_RADIUS,
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   COMBAT_TERRITORY_EDGE_FACTOR,
   REGEN_DENSITY_PENALTY,
@@ -548,7 +548,7 @@ export default class GridManager {
   static energyRegenRate = ENERGY_REGEN_RATE_DEFAULT;
   // Fraction to diffuse toward neighbors each tick
   static energyDiffusionRate = ENERGY_DIFFUSION_RATE_DEFAULT;
-  static DENSITY_RADIUS = DENSITY_RADIUS_DEFAULT;
+  static DENSITY_RADIUS = DENSITY_RADIUS;
   static maxTileEnergy = MAX_TILE_ENERGY;
   static combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT;
   static combatTerritoryEdgeFactor = COMBAT_TERRITORY_EDGE_FACTOR;
