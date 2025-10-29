@@ -3856,12 +3856,17 @@ export default class GridManager {
     presetId,
     { clearExisting = true, append = false, presetOptions = {}, evict = true } = {},
   ) {
-    const normalizedId =
-      typeof presetId === "string"
-        ? presetId.trim()
-        : presetId === "none"
-          ? "none"
-          : "";
+    let normalizedId = "";
+
+    if (typeof presetId === "string") {
+      normalizedId = presetId.trim();
+    } else if (
+      presetId &&
+      typeof presetId === "object" &&
+      typeof presetId.id === "string"
+    ) {
+      normalizedId = presetId.id.trim();
+    }
     const isClearPreset = normalizedId === "none";
     const isKnownPreset = isClearPreset || this.#getPresetById(normalizedId) != null;
 
