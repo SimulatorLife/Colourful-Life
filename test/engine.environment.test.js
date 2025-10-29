@@ -20,6 +20,44 @@ test("resolveCanvas returns explicit canvas when supplied", () => {
   assert.is(result, explicitCanvas);
 });
 
+test("resolveCanvas locates canvas by identifier string", () => {
+  const byIdCanvas = { id: "gameCanvas" };
+  const documentRef = {
+    getElementById(id) {
+      this.calls = (this.calls ?? 0) + 1;
+
+      return id === "gameCanvas" ? byIdCanvas : null;
+    },
+  };
+
+  const result = resolveCanvas("gameCanvas", documentRef);
+
+  assert.is(result, byIdCanvas);
+  assert.is(documentRef.calls, 1);
+});
+
+test("resolveCanvas supports selector strings when id lookup fails", () => {
+  const canvas = { id: "altCanvas" };
+  const documentRef = {
+    getElementById(id) {
+      this.ids = (this.ids ?? []).concat(id);
+
+      return null;
+    },
+    querySelector(selector) {
+      this.selectors = (this.selectors ?? []).concat(selector);
+
+      return selector === "#altCanvas" ? canvas : null;
+    },
+  };
+
+  const result = resolveCanvas("#altCanvas", documentRef);
+
+  assert.is(result, canvas);
+  assert.equal(documentRef.ids, ["#altCanvas"]);
+  assert.equal(documentRef.selectors, ["#altCanvas"]);
+});
+
 test("resolveCanvas locates default canvas on provided document", () => {
   const fallbackCanvas = { id: "gameCanvas" };
   const documentRef = {
