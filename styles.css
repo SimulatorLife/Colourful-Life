@@ -503,6 +503,22 @@ canvas {
   accent-color: var(--color-text);
 }
 
+.control-line input[type="range"]:disabled,
+.control-line input[type="number"]:disabled,
+.control-line select:disabled {
+  cursor: not-allowed;
+}
+
+.control-row[aria-disabled="true"] .control-line {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.control-row[aria-disabled="true"] .control-name,
+.control-row[aria-disabled="true"] .control-value {
+  color: var(--color-text-subtle);
+}
+
 .control-line input[type="number"] {
   flex: 0 0 120px;
   width: 100%;
