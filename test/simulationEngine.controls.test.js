@@ -1033,7 +1033,7 @@ test("autoPauseOnBlur setter keeps engine state aligned", async () => {
   }
 });
 
-test("disabling autopause resumes the simulation when an auto pause is pending", async () => {
+test("disabling autopause leaves the simulation paused when an auto pause is pending", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
 
@@ -1057,11 +1057,17 @@ test("disabling autopause resumes the simulation when an auto pause is pending",
 
     assert.is(
       engine.isPaused(),
-      false,
-      "disabling autopause should resume the simulation",
+      true,
+      "disabling autopause should not resume the simulation",
     );
     assert.is(engine._autoPauseResumePending, false);
     assert.is(engine.state.autoPausePending, false);
+    engine.resume();
+    assert.is(
+      engine.isPaused(),
+      false,
+      "simulation can still resume manually after disabling autopause",
+    );
   } finally {
     restore();
   }
