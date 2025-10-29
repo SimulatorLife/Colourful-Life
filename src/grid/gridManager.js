@@ -3009,11 +3009,28 @@ export default class GridManager {
     }
   }
 
-  #getRowOccupantColumns(row, bucket) {
+  #getRowOccupantColumns(row, bucket, { refresh = false } = {}) {
     this.#ensureRowOccupancyCache(row);
-    const list = this.#rowOccupancySorted[row];
+    let list = this.#rowOccupancySorted[row];
 
-    if (Array.isArray(list) && list.length === 0 && bucket && bucket.size > 0) {
+    if (!Array.isArray(list)) {
+      list = [];
+      this.#rowOccupancySorted[row] = list;
+    }
+
+    if (refresh) {
+      const refreshed = bucket
+        ? Array.from(bucket)
+            .filter((value) => Number.isInteger(value))
+            .sort((a, b) => a - b)
+        : [];
+
+      this.#rowOccupancySorted[row] = refreshed;
+
+      return refreshed;
+    }
+
+    if (list.length === 0 && bucket && bucket.size > 0) {
       for (const value of bucket) {
         if (Number.isInteger(value)) {
           this.#insertIntoSortedList(list, value);
@@ -3021,7 +3038,39 @@ export default class GridManager {
       }
     }
 
-    return Array.isArray(list) ? list : [];
+    return list;
+  }
+
+  #getColumnOccupantRows(col, bucket, { refresh = false } = {}) {
+    this.#ensureColumnOccupancyCache(col);
+    let list = this.#columnOccupancySorted[col];
+
+    if (!Array.isArray(list)) {
+      list = [];
+      this.#columnOccupancySorted[col] = list;
+    }
+
+    if (refresh) {
+      const refreshed = bucket
+        ? Array.from(bucket)
+            .filter((value) => Number.isInteger(value))
+            .sort((a, b) => a - b)
+        : [];
+
+      this.#columnOccupancySorted[col] = refreshed;
+
+      return refreshed;
+    }
+
+    if (list.length === 0 && bucket && bucket.size > 0) {
+      for (const value of bucket) {
+        if (Number.isInteger(value)) {
+          this.#insertIntoSortedList(list, value);
+        }
+      }
+    }
+
+    return list;
   }
 
   #trackCellPosition(cell, row, col) {
@@ -9510,6 +9559,7 @@ export default class GridManager {
     { densityEffectMultiplier = 1, societySimilarity = 1, enemySimilarity = 0 } = {},
   ) {
     const { mates, enemies, society } = this.#beginTargetScan();
+    const seenTargets = new WeakSet();
     const d =
       this.densityGrid?.[row]?.[col] ??
       this.localDensity(row, col, GridManager.DENSITY_RADIUS);
@@ -9563,6 +9613,12 @@ export default class GridManager {
 
         return false;
       }
+
+      if (seenTargets.has(target)) {
+        return false;
+      }
+
+      seenTargets.add(target);
 
       const similarity = this.#resolveTargetSimilarity(cell, target);
 
@@ -9625,6 +9681,8 @@ export default class GridManager {
 
       const bucket = occupancyRows?.[targetRow] ?? null;
       let processed = 0;
+      let attemptedCachedScan = false;
+      let rowOccupancyDirty = false;
 
       if (bucket && bucket.size > 0) {
         const columns = this.#getRowOccupantColumns(targetRow, bucket);
@@ -9639,8 +9697,11 @@ export default class GridManager {
               break;
             }
 
+            attemptedCachedScan = true;
+
             if (!bucket.has(targetCol)) {
-              columns.splice(index, 1);
+              rowOccupancyDirty = true;
+              index += 1;
 
               continue;
             }
@@ -9648,6 +9709,7 @@ export default class GridManager {
             const target = gridRow[targetCol];
 
             if (!target) {
+              rowOccupancyDirty = true;
               bucket.delete(targetCol);
 
               const columnBucket = occupancyColumns?.[targetCol];
@@ -9667,7 +9729,7 @@ export default class GridManager {
                 }
               }
 
-              columns.splice(index, 1);
+              index += 1;
 
               continue;
             }
@@ -9687,9 +9749,104 @@ export default class GridManager {
         }
       }
 
+      if (rowOccupancyDirty) {
+        this.#getRowOccupantColumns(targetRow, bucket, { refresh: true });
+      }
+
+      if (processed === 0 && !attemptedCachedScan) {
+        let columnProcessed = 0;
+
+        if (Array.isArray(occupancyColumns)) {
+          for (let targetCol = minCol; targetCol <= maxCol; targetCol++) {
+            const columnBucket = occupancyColumns?.[targetCol] ?? null;
+
+            if (!columnBucket || columnBucket.size === 0) {
+              continue;
+            }
+
+            const rowsForColumn = this.#getColumnOccupantRows(targetCol, columnBucket);
+
+            if (!Array.isArray(rowsForColumn) || rowsForColumn.length === 0) {
+              continue;
+            }
+
+            let columnRowsDirty = false;
+            let rowIndex = lowerBound(rowsForColumn, minRow);
+
+            while (rowIndex < rowsForColumn.length) {
+              const candidateRow = rowsForColumn[rowIndex];
+
+              if (candidateRow > maxRow) {
+                break;
+              }
+
+              if (!columnBucket.has(candidateRow)) {
+                columnRowsDirty = true;
+                rowIndex += 1;
+
+                continue;
+              }
+
+              let candidateRowBucket = occupancyRows?.[candidateRow] ?? null;
+              const target = this.grid[candidateRow]?.[targetCol];
+
+              if (!target) {
+                columnRowsDirty = true;
+                columnBucket.delete(candidateRow);
+                candidateRowBucket?.delete?.(targetCol);
+                this.#getRowOccupantColumns(candidateRow, candidateRowBucket, {
+                  refresh: true,
+                });
+                rowIndex += 1;
+
+                continue;
+              }
+
+              if (candidateRow === row && targetCol === col) {
+                rowIndex += 1;
+
+                continue;
+              }
+
+              if (!candidateRowBucket?.has?.(targetCol)) {
+                this.#recordOccupancy(candidateRow, targetCol);
+                candidateRowBucket = occupancyRows?.[candidateRow] ?? null;
+              }
+
+              if (
+                handleCandidate(candidateRow, targetCol, target, candidateRowBucket)
+              ) {
+                columnProcessed += 1;
+              }
+
+              rowIndex += 1;
+            }
+
+            if (columnRowsDirty) {
+              this.#getColumnOccupantRows(targetCol, columnBucket, { refresh: true });
+            }
+
+            if (columnProcessed > 0) {
+              break;
+            }
+          }
+        }
+
+        if (columnProcessed > 0) {
+          processed += columnProcessed;
+          attemptedCachedScan = true;
+        }
+      }
+
       if (processed === 0) {
+        let encounteredUntracked = false;
+
         for (let targetCol = minCol; targetCol <= maxCol; targetCol++) {
           if (targetRow === row && targetCol === col) {
+            continue;
+          }
+
+          if (bucket?.has?.(targetCol)) {
             continue;
           }
 
@@ -9699,13 +9856,16 @@ export default class GridManager {
             continue;
           }
 
-          if (bucket && bucket.has(targetCol)) {
-            continue;
-          }
+          encounteredUntracked = true;
 
           if (handleCandidate(targetRow, targetCol, target, bucket)) {
             this.#recordOccupancy(targetRow, targetCol);
+            processed += 1;
           }
+        }
+
+        if (!encounteredUntracked) {
+          continue;
         }
       }
     }
