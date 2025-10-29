@@ -4,37 +4,48 @@ import { resolveSimulationDefaults } from "../config.js";
 import { toPlainObject } from "../utils/object.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
+function mergeLayoutInitialSettings({ sanitizedDefaults, layoutInitialSettings }) {
+  const overrideKeys = Object.keys(layoutInitialSettings);
+
+  if (overrideKeys.length === 0) {
+    return { ...sanitizedDefaults };
+  }
+
+  const sanitizedLayoutOverrides = resolveSimulationDefaults(layoutInitialSettings);
+  const overrideKeySet = new Set(overrideKeys);
+  const initialSettings = { ...sanitizedDefaults };
+
+  for (const key of overrideKeys) {
+    if (Object.hasOwn(sanitizedLayoutOverrides, key)) {
+      initialSettings[key] = sanitizedLayoutOverrides[key];
+      continue;
+    }
+
+    initialSettings[key] = layoutInitialSettings[key];
+  }
+
+  for (const [key, value] of Object.entries(sanitizedLayoutOverrides)) {
+    if (overrideKeySet.has(key)) {
+      continue;
+    }
+
+    if (!Object.is(value, sanitizedDefaults[key])) {
+      initialSettings[key] = value;
+    }
+  }
+
+  return initialSettings;
+}
+
 function normalizeLayoutOptions({ engine, uiOptions = {}, sanitizedDefaults = {} }) {
   const normalizedUi = toPlainObject(uiOptions);
   const layoutConfig = toPlainObject(normalizedUi.layout);
   const sanitizedInitialSettings = toPlainObject(sanitizedDefaults);
   const layoutInitialSettings = toPlainObject(layoutConfig.initialSettings);
-  const initialSettings = { ...sanitizedInitialSettings };
-
-  if (Object.keys(layoutInitialSettings).length > 0) {
-    const sanitizedLayoutOverrides = resolveSimulationDefaults(layoutInitialSettings);
-    const overrideKeys = new Set(Object.keys(layoutInitialSettings));
-
-    overrideKeys.forEach((key) => {
-      if (Object.hasOwn(sanitizedLayoutOverrides, key)) {
-        initialSettings[key] = sanitizedLayoutOverrides[key];
-      } else {
-        initialSettings[key] = layoutInitialSettings[key];
-      }
-    });
-
-    Object.entries(sanitizedLayoutOverrides).forEach(([key, value]) => {
-      if (overrideKeys.has(key)) {
-        return;
-      }
-
-      const defaultValue = sanitizedInitialSettings[key];
-
-      if (!Object.is(value, defaultValue)) {
-        initialSettings[key] = value;
-      }
-    });
-  }
+  const initialSettings = mergeLayoutInitialSettings({
+    sanitizedDefaults: sanitizedInitialSettings,
+    layoutInitialSettings,
+  });
 
   return {
     options: normalizedUi,
