@@ -284,6 +284,14 @@ function subscribeEngineToUi(engine, uiManager) {
         );
       }
 
+      if (changes?.maxConcurrentEvents !== undefined) {
+        callUi(
+          "setMaxConcurrentEvents",
+          [changes.maxConcurrentEvents],
+          UI_WARNING_CONTEXTS.state,
+        );
+      }
+
       if (changes?.leaderboardIntervalMs !== undefined) {
         callUi(
           "setLeaderboardIntervalMs",
@@ -601,6 +609,19 @@ export function bindSimulationToUi({
         uiManager,
         "setMutationMultiplier",
         [mutationMultiplier, { notify: false }],
+        UI_WARNING_CONTEXTS.initial,
+      );
+    }
+  }
+
+  if (uiManager) {
+    const maxConcurrentEvents = engine?.state?.maxConcurrentEvents;
+
+    if (typeof maxConcurrentEvents === "number") {
+      invokeUiManagerMethod(
+        uiManager,
+        "setMaxConcurrentEvents",
+        [maxConcurrentEvents],
         UI_WARNING_CONTEXTS.initial,
       );
     }

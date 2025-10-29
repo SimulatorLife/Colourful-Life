@@ -110,6 +110,27 @@ test("headless simulation clamps leaderboard cadence like the engine", async () 
   simulation.destroy();
 });
 
+test("headless ui mirrors engine max concurrent event updates", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({ headless: true, autoStart: false });
+
+  simulation.engine.updateSetting("maxConcurrentEvents", 3.7);
+
+  assert.is(
+    simulation.engine.state.maxConcurrentEvents,
+    3,
+    "engine clamps max concurrent events to an integer",
+  );
+  assert.is(
+    simulation.uiManager.getMaxConcurrentEvents(),
+    3,
+    "headless ui reflects the clamped max concurrent events",
+  );
+
+  simulation.destroy();
+});
+
 test("createSimulation reuses a provided selection manager", async () => {
   const { createSimulation } = await simulationModulePromise;
   const customSelectionManager = {
