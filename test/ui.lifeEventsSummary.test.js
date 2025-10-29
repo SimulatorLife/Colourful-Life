@@ -87,6 +87,12 @@ function createMetricsStatsFixture() {
         sight: [0.65, 0.66, 0.67],
       },
     },
+    meanBehaviorComplementarity: 0.48,
+    successfulBehaviorComplementarity: 0.6,
+    meanStrategyPenalty: 0.85,
+    meanStrategyPressure: 0.4,
+    strategyPressure: 0.35,
+    mateNoveltyPressure: 0.5,
     getRecentLifeEvents: () => [],
     getLifeEventRateSummary: () => ({
       births: 0,
@@ -129,6 +135,12 @@ function createSnapshotFixture() {
     meanDiversityAppetite: 0.5,
     curiositySelections: 2,
     behaviorEvenness: 0.6,
+    meanBehaviorComplementarity: 0.52,
+    successfulBehaviorComplementarity: 0.61,
+    meanStrategyPenalty: 0.8,
+    meanStrategyPressure: 0.45,
+    strategyPressure: 0.33,
+    mateNoveltyPressure: 0.54,
   };
 }
 
@@ -775,6 +787,96 @@ test("population snapshot reports occupancy share", async () => {
       occupancyCard?.getAttribute?.("title") ?? "",
       /10 of 20 tiles in use/,
       "occupancy tooltip should describe tiles in use",
+    );
+  } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
+test("reproduction metrics highlight complementarity and pressure signals", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        getCellSize: () => 5,
+      },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    openPanel(uiManager.insightsPanel);
+
+    const stats = createMetricsStatsFixture();
+    const snapshot = createSnapshotFixture();
+    const environment = { eventStrengthMultiplier: 1, activeEvents: [] };
+
+    uiManager.renderMetrics(stats, snapshot, environment);
+
+    const sections = Array.from(
+      uiManager.metricsBox.querySelectorAll(".metrics-section"),
+    );
+    const reproductionSection = sections.find((section) => {
+      const heading = section.querySelector(".metrics-section-title");
+
+      return heading?.textContent?.trim() === "Reproduction Trends";
+    });
+
+    assert.ok(reproductionSection, "should render the reproduction trends section");
+
+    const labels = Array.from(
+      reproductionSection.querySelectorAll(".metrics-stat-label"),
+    ).map((node) => node.textContent.trim());
+
+    assert.include(labels, "Avg Complementarity");
+    assert.include(labels, "Successful Complementarity");
+    assert.include(labels, "Strategy Penalty");
+    assert.include(labels, "Strategy Pressure");
+    assert.include(labels, "Global Pressure");
+    assert.include(labels, "Novelty Pressure");
+
+    const readValue = (label) => {
+      const stat = Array.from(
+        reproductionSection.querySelectorAll(".metrics-stat"),
+      ).find(
+        (node) =>
+          node.querySelector(".metrics-stat-label")?.textContent.trim() === label,
+      );
+
+      return stat?.querySelector(".metrics-stat-value")?.textContent.trim();
+    };
+
+    assert.is(
+      readValue("Avg Complementarity"),
+      "52%",
+      "should show mean complementarity",
+    );
+    assert.is(
+      readValue("Successful Complementarity"),
+      "61%",
+      "should show successful complementarity",
+    );
+    assert.is(readValue("Strategy Penalty"), "80%", "should show average penalty");
+    assert.is(readValue("Strategy Pressure"), "45%", "should show mean pressure");
+    assert.is(
+      readValue("Global Pressure"),
+      "33%",
+      "should show global pressure signal",
+    );
+    assert.is(
+      readValue("Novelty Pressure"),
+      "54%",
+      "should show novelty pressure signal",
     );
   } finally {
     restoreCanvas();
