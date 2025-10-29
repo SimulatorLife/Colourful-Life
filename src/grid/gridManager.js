@@ -52,6 +52,8 @@ import {
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 const EMPTY_TARGET_LIST = Object.freeze([]);
+const EMPTY_FLOAT64_ARRAY = Object.freeze(new Float64Array(0));
+const EMPTY_UINT8_ARRAY = Object.freeze(new Uint8Array(0));
 
 const similarityCache = new WeakMap();
 // Cache crowding metrics directly on occupants to avoid repeated preference and
@@ -548,6 +550,8 @@ export default class GridManager {
   static combatEdgeSharpness = COMBAT_EDGE_SHARPNESS_DEFAULT;
   static combatTerritoryEdgeFactor = COMBAT_TERRITORY_EDGE_FACTOR;
   #spawnCandidateScratch = null;
+  #spawnCandidateWeightsScratch = null;
+  #spawnCandidateEnergizedScratch = null;
   #segmentWindowScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
@@ -1622,8 +1626,7 @@ export default class GridManager {
       return null;
     }
 
-    const weights = new Array(candidates.length);
-    const energizedFlags = new Array(candidates.length);
+    const { weights, energized } = this.#ensureSpawnScoringScratch(candidates.length);
     let totalWeight = 0;
     let energizedCount = 0;
 
@@ -1633,7 +1636,7 @@ export default class GridManager {
       const energyValue = energyRow ? energyRow[candidate.c] : null;
       const hasEnergy = Number.isFinite(energyValue) && energyValue > 0;
 
-      energizedFlags[i] = hasEnergy;
+      energized[i] = hasEnergy ? 1 : 0;
 
       if (hasEnergy) {
         energizedCount += 1;
@@ -1650,7 +1653,7 @@ export default class GridManager {
         let pick = Math.floor(this.#random() * energizedCount);
 
         for (let i = 0; i < candidates.length; i++) {
-          if (!energizedFlags[i]) continue;
+          if (!energized[i]) continue;
 
           if (pick === 0) {
             return candidates[i] ?? null;
@@ -2144,6 +2147,36 @@ export default class GridManager {
     this.#spawnCandidateScratch.set.clear();
 
     return this.#spawnCandidateScratch;
+  }
+
+  #ensureSpawnScoringScratch(size) {
+    const capacity = Math.max(0, Math.floor(size));
+
+    if (capacity === 0) {
+      return {
+        weights: this.#spawnCandidateWeightsScratch ?? EMPTY_FLOAT64_ARRAY,
+        energized: this.#spawnCandidateEnergizedScratch ?? EMPTY_UINT8_ARRAY,
+      };
+    }
+
+    let weights = this.#spawnCandidateWeightsScratch;
+    let energized = this.#spawnCandidateEnergizedScratch;
+
+    if (!weights || weights.length < capacity) {
+      const nextCapacity = weights
+        ? Math.max(capacity, weights.length * 2)
+        : Math.max(8, capacity);
+
+      weights = new Float64Array(nextCapacity);
+      energized = new Uint8Array(nextCapacity);
+      this.#spawnCandidateWeightsScratch = weights;
+      this.#spawnCandidateEnergizedScratch = energized;
+    } else if (!energized || energized.length < weights.length) {
+      energized = new Uint8Array(weights.length);
+      this.#spawnCandidateEnergizedScratch = energized;
+    }
+
+    return { weights, energized };
   }
 
   #enqueueDecay(row, col, cell) {
