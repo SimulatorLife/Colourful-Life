@@ -316,15 +316,21 @@ class FixedSizeRingBuffer {
       return;
     }
 
-    let index = this.start;
+    const limit = Math.min(count, length);
 
-    for (let i = 0; i < count; i++) {
-      if (index >= capacity) {
-        index = 0;
+    if (limit <= 0) {
+      return;
+    }
+
+    let written = 0;
+
+    for (const value of this.#iterateValues()) {
+      target[offset + written] = value;
+      written += 1;
+
+      if (written >= limit) {
+        break;
       }
-
-      target[offset + i] = this.buffer[index];
-      index += 1;
     }
   }
 
