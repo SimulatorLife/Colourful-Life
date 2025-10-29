@@ -1254,67 +1254,6 @@ export default class GridManager {
     return true;
   }
 
-  #resolvePreparedCrowdingFeedback(row, col) {
-    const out = this.#crowdingFeedbackScratch;
-    const comfortRow = this.#crowdingComfortGrid?.[row];
-    const countRow = this.#crowdingCountGrid?.[row];
-    const revisionRow = this.#crowdingRevisionGrid?.[row];
-
-    if (!comfortRow || !countRow || !revisionRow) {
-      out.comfort = 0.5;
-      out.scarcity = 0;
-      out.count = 0;
-
-      return out;
-    }
-
-    if (revisionRow[col] !== this.#crowdingRevision) {
-      out.comfort = 0.5;
-      out.scarcity = 0;
-      out.count = 0;
-
-      return out;
-    }
-
-    const count = countRow[col] ?? 0;
-
-    if (!(count > 0)) {
-      out.comfort = 0.5;
-      out.scarcity = 0;
-      out.count = 0;
-
-      return out;
-    }
-
-    let comfort = comfortRow[col] / count;
-
-    if (comfort <= 0) {
-      comfort = 0;
-    } else if (comfort >= 1) {
-      comfort = 1;
-    }
-
-    out.comfort = comfort;
-    out.count = count;
-
-    if (this.#crowdingPreparedUseScarcity) {
-      const scarcityRow = this.#crowdingScarcityGrid?.[row];
-      let scarcity = scarcityRow ? scarcityRow[col] / count : 0;
-
-      if (scarcity <= 0) {
-        scarcity = 0;
-      } else if (scarcity >= 1) {
-        scarcity = 1;
-      }
-
-      out.scarcity = scarcity;
-    } else {
-      out.scarcity = 0;
-    }
-
-    return out;
-  }
-
   #ensureOccupantRegenBuffers(rowCount, colCount) {
     const { rows, cols } = normalizeDimensions(rowCount, colCount);
 
@@ -4698,6 +4637,22 @@ export default class GridManager {
       }
     }
     this.#prepareCrowdingFeedback(rows, cols, positiveMaxTileEnergy);
+    const crowdingPrepared = Boolean(this.#crowdingPrepared);
+    const crowdingRevision = crowdingPrepared ? this.#crowdingRevision : 0;
+    const crowdingUseScarcity =
+      crowdingPrepared && Boolean(this.#crowdingPreparedUseScarcity);
+    const crowdingComfortGrid = crowdingPrepared ? this.#crowdingComfortGrid : null;
+    const crowdingCountGrid = crowdingPrepared ? this.#crowdingCountGrid : null;
+    const crowdingScarcityGrid =
+      crowdingUseScarcity && this.#crowdingScarcityGrid
+        ? this.#crowdingScarcityGrid
+        : null;
+    const crowdingRevisionGrid = crowdingPrepared ? this.#crowdingRevisionGrid : null;
+    const crowdingScratch = this.#crowdingFeedbackScratch;
+    let crowdComfortRow = null;
+    let crowdCountRow = null;
+    let crowdScarcityRow = null;
+    let crowdRevisionRow = null;
 
     let computeGeneralEventModifiers = null;
 
@@ -4908,9 +4863,47 @@ export default class GridManager {
                 let densityImpact = REGEN_DENSITY_PENALTY * effectiveDensity;
 
                 if (densityImpact > 0) {
-                  const feedback = this.#crowdingPrepared
-                    ? this.#resolvePreparedCrowdingFeedback(r, c)
-                    : computeCrowdingFeedback({
+                  let crowdCount = 0;
+                  let crowdComfort = 0.5;
+                  let scarcitySignal = 0;
+
+                  if (crowdingPrepared) {
+                    if (
+                      crowdRevisionRow &&
+                      crowdRevisionRow[c] === crowdingRevision &&
+                      crowdCountRow &&
+                      crowdComfortRow
+                    ) {
+                      const neighborCount = crowdCountRow[c] ?? 0;
+
+                      if (neighborCount > 0) {
+                        crowdCount = neighborCount;
+                        let aggregatedComfort = crowdComfortRow[c] / neighborCount;
+
+                        if (aggregatedComfort <= 0) {
+                          aggregatedComfort = 0;
+                        } else if (aggregatedComfort >= 1) {
+                          aggregatedComfort = 1;
+                        }
+
+                        crowdComfort = aggregatedComfort;
+
+                        if (crowdingUseScarcity && crowdScarcityRow) {
+                          let aggregatedScarcity = crowdScarcityRow[c] / neighborCount;
+
+                          if (aggregatedScarcity <= 0) {
+                            aggregatedScarcity = 0;
+                          } else if (aggregatedScarcity >= 1) {
+                            aggregatedScarcity = 1;
+                          }
+
+                          scarcitySignal = aggregatedScarcity;
+                        }
+                      }
+                    }
+                  } else {
+                    const fallbackCrowding =
+                      computeCrowdingFeedback({
                         grid,
                         row: r,
                         col: c,
@@ -4918,12 +4911,18 @@ export default class GridManager {
                         cols,
                         neighborOffsets: NEIGHBOR_OFFSETS,
                         maxTileEnergy: positiveMaxTileEnergy,
-                        result: this.#crowdingFeedbackScratch,
-                      });
+                        result: crowdingScratch,
+                      }) ?? DEFAULT_CROWDING_SUMMARY;
 
-                  if (feedback.count > 0) {
-                    const comfort = feedback.comfort;
-                    const scarcitySignal = feedback.scarcity;
+                    crowdCount = fallbackCrowding.count ?? 0;
+                    crowdComfort =
+                      fallbackCrowding.comfort ?? DEFAULT_CROWDING_SUMMARY.comfort;
+                    scarcitySignal =
+                      fallbackCrowding.scarcity ?? DEFAULT_CROWDING_SUMMARY.scarcity;
+                  }
+
+                  if (crowdCount > 0) {
+                    const comfort = crowdComfort;
                     const pressure =
                       effectiveDensity > comfort ? effectiveDensity - comfort : 0;
                     const relief =
@@ -5202,6 +5201,11 @@ export default class GridManager {
             ? occupantRegenVersion[r]
             : null;
 
+          crowdComfortRow = crowdingComfortGrid ? crowdingComfortGrid[r] : null;
+          crowdCountRow = crowdingCountGrid ? crowdingCountGrid[r] : null;
+          crowdScarcityRow = crowdingScarcityGrid ? crowdingScarcityGrid[r] : null;
+          crowdRevisionRow = crowdingRevisionGrid ? crowdingRevisionGrid[r] : null;
+
           const columnCount = columns.length;
 
           const rowEvents = hasEvents
@@ -5469,6 +5473,11 @@ export default class GridManager {
         const occupantRegenVersionRow = occupantRegenVersion
           ? occupantRegenVersion[r]
           : null;
+
+        crowdComfortRow = crowdingComfortGrid ? crowdingComfortGrid[r] : null;
+        crowdCountRow = crowdingCountGrid ? crowdingCountGrid[r] : null;
+        crowdScarcityRow = crowdingScarcityGrid ? crowdingScarcityGrid[r] : null;
+        crowdRevisionRow = crowdingRevisionGrid ? crowdingRevisionGrid[r] : null;
 
         const rowEvents = hasEvents
           ? eventsByRow
