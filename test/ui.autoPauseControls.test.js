@@ -42,6 +42,10 @@ test("autopause toggle updates pause indicator and notifies listeners", async ()
     const controlRow = toggle.parentElement?.parentElement;
 
     assert.is(controlRow?.tagName, "LABEL");
+    assert.ok(
+      controlRow?.classList.contains("control-row--checkbox"),
+      "autopause toggle rows should inherit checkbox affordance styling",
+    );
     const expectedDescription =
       "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
 

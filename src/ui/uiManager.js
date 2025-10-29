@@ -2347,6 +2347,7 @@ export default class UIManager {
     const row = document.createElement("label");
 
     row.className = "control-row";
+    row.classList.add("control-row--checkbox");
     if (title) row.title = title;
     const line = document.createElement("div");
 
