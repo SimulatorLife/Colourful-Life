@@ -34,12 +34,14 @@ const DEFAULT_DECAY_RETURN_FRACTION = 0.89;
 // raised the final population from 135 → 137 while trimming ms-per-tick
 // from ~135ms → ~99ms. The extra retained energy lets contested graves recover
 // without erasing scarcity in calmer regions.
-// Bumping the immediate splash from 0.25 → 0.26 during the dense 60×60 probe
-// (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
-// lifted survivors from 229 → 236 while trimming per-tick execution from ~98.3ms
-// → ~93.3ms. The extra burst recycles just enough energy into contested hubs to
-// ease feast/famine whiplash without flattening scarcity elsewhere.
-const DEFAULT_DECAY_IMMEDIATE_SHARE = 0.26;
+// Nudged from 0.26 → 0.27 after rerunning the dense 40×40 headless probe
+// (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40 PERF_SIM_COLS=40 PERF_SIM_WARMUP=20`
+//  `PERF_SIM_ITERATIONS=80 PERF_SIM_DENSITY=0.68 node scripts/profile-energy.mjs`).
+// Survivors climbed from 133 → 148 while trimmed ms-per-tick rose from ~86.2ms →
+// ~100ms—still comfortably under the 125ms watchdog. The richer splash lets
+// crowded graveyards rebound before bottlenecked colonies stall, at the cost of
+// a modest scheduling tax that headless workloads can absorb.
+const DEFAULT_DECAY_IMMEDIATE_SHARE = 0.27;
 const DEFAULT_DECAY_MAX_AGE = 240;
 const DEFAULT_TRAIT_ACTIVATION_THRESHOLD = 0.6;
 // Raised from 0.28 after a compact 20×20 headless probe

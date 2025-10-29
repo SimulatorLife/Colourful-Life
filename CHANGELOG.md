@@ -33,6 +33,14 @@ where practical.
 
 ### Changed
 
+- Raised the default decay immediate share to `0.27` after rerunning the dense
+  40×40 headless probe (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40
+PERF_SIM_COLS=40 PERF_SIM_WARMUP=20 PERF_SIM_ITERATIONS=80
+PERF_SIM_DENSITY=0.68 node scripts/profile-energy.mjs`). Survivors climbed
+  from 133 → 148 while trimmed ms-per-tick nudged from ~86.2 ms → ~100 ms,
+  staying well under the 125 ms watchdog. The stronger splash lets congested
+  graveyards recycle energy fast enough to prevent bottleneck stalls even if it
+  costs a modest scheduling tax.
 - Raised the default offspring viability buffer to `1.13` after rerunning the
   dense 40×40 headless probe (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40
 PERF_SIM_COLS=40 PERF_SIM_WARMUP=20 PERF_SIM_ITERATIONS=80
