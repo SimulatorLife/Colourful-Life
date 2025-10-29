@@ -98,4 +98,83 @@ test("regenerate world button shows busy feedback while resetting", async () => 
   }
 });
 
+test("keyboard shortcut regenerates the world", async () => {
+  const restore = setupDom();
+
+  try {
+    const rafQueue = [];
+
+    window.requestAnimationFrame = (callback) => {
+      if (typeof callback === "function") {
+        rafQueue.push(callback);
+      }
+
+      return rafQueue.length;
+    };
+
+    const resetWorldCalls = [];
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        resetWorld: (options) => {
+          resetWorldCalls.push(options);
+        },
+      },
+      "#app",
+    );
+
+    const button = uiManager.resetWorldButton;
+
+    assert.ok(button, "reset world button should render");
+    assert.equal(
+      button.getAttribute("aria-keyshortcuts"),
+      "R",
+      "hotkey is announced to assistive tech",
+    );
+
+    const keydownHandlers = document.eventListeners?.keydown ?? [];
+
+    assert.ok(keydownHandlers.length > 0, "document listens for keyboard shortcuts");
+
+    const event = {
+      key: "r",
+      shiftKey: true,
+      target: document.body,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+    };
+
+    keydownHandlers.forEach((handler) => handler(event));
+
+    assert.equal(
+      resetWorldCalls,
+      [{ randomizeObstacles: true }],
+      "hotkey triggers a randomized regeneration",
+    );
+    assert.is(event.defaultPrevented, true, "hotkey prevents default browser behavior");
+    assert.is(button.getAttribute("data-busy"), "true", "hotkey enters busy state");
+    assert.is(
+      button.getAttribute("data-busy-mode"),
+      "randomize",
+      "hotkey inherits shift modifier",
+    );
+
+    while (rafQueue.length > 0) {
+      const next = rafQueue.shift();
+
+      if (typeof next === "function") next(0);
+    }
+
+    assert.equal(
+      button.getAttribute("aria-disabled"),
+      "false",
+      "busy state clears after regeneration",
+    );
+  } finally {
+    restore();
+  }
+});
+
 test.run();

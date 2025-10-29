@@ -474,6 +474,7 @@ export default class UIManager {
     this.leaderBody = null;
     this.leaderEntriesContainer = null;
     this.stepHotkeySet = new Set();
+    this.resetWorldHotkeySet = new Set();
     this.geometryControls = null;
     this.deathBreakdownMaxEntries = this.#resolveDeathBreakdownLimit(
       layoutConfig.deathBreakdownMaxEntries,
@@ -597,6 +598,9 @@ export default class UIManager {
       "0",
     ]);
     this.burstHotkeySet = this.#resolveHotkeySet(layoutConfig.burstHotkeys, ["b"]);
+    this.resetWorldHotkeySet = this.#resolveHotkeySet(layoutConfig.resetWorldHotkeys, [
+      "r",
+    ]);
 
     const canvasEl =
       layoutConfig.canvasElement || this.#resolveNode(layoutConfig.canvasSelector);
@@ -695,6 +699,13 @@ export default class UIManager {
       return;
     }
 
+    if (this.resetWorldHotkeySet?.has(key)) {
+      event.preventDefault();
+      this.#handleResetWorldTrigger({ shiftKey: event.shiftKey });
+
+      return;
+    }
+
     if (this.speedIncreaseHotkeySet.has(key)) {
       event.preventDefault();
       const steps = event.shiftKey ? 5 : 1;
@@ -736,6 +747,33 @@ export default class UIManager {
       });
 
       return;
+    }
+  }
+
+  #handleResetWorldTrigger(options = {}) {
+    const randomizeObstacles = Boolean(options?.shiftKey);
+    const busyActivated = this.#setResetWorldBusy(true, { randomizeObstacles });
+
+    if (!busyActivated) return;
+
+    const executeReset = () => {
+      if (typeof this.simulationCallbacks?.resetWorld === "function") {
+        return this.simulationCallbacks.resetWorld({ randomizeObstacles });
+      }
+
+      return undefined;
+    };
+
+    try {
+      invokeWithErrorBoundary(executeReset, [], {
+        message: WARNINGS.resetWorld,
+        reporter: warnOnce,
+        once: true,
+      });
+    } finally {
+      this.#updateZoneSummary();
+      this.#scheduleUpdate();
+      this.#releaseResetWorldBusy({ randomizeObstacles });
     }
   }
 
@@ -3633,35 +3671,11 @@ export default class UIManager {
       title:
         "Clear the map and spawn a fresh population. Hold Shift to randomize obstacle layouts.",
       onClick: (event) => {
-        const randomizeObstacles = Boolean(event?.shiftKey);
-        const options = {
-          randomizeObstacles,
-        };
-        const busyActivated = this.#setResetWorldBusy(true, { randomizeObstacles });
-
-        if (!busyActivated) return;
-
-        try {
-          const executeReset = () => {
-            if (typeof this.simulationCallbacks?.resetWorld === "function") {
-              return this.simulationCallbacks.resetWorld(options);
-            }
-
-            return undefined;
-          };
-
-          invokeWithErrorBoundary(executeReset, [], {
-            message: WARNINGS.resetWorld,
-            reporter: warnOnce,
-            once: true,
-          });
-        } finally {
-          this.#updateZoneSummary();
-          this.#scheduleUpdate();
-          this.#releaseResetWorldBusy();
-        }
+        this.#handleResetWorldTrigger({ shiftKey: Boolean(event?.shiftKey) });
       },
     });
+
+    this.#applyButtonHotkeys(this.resetWorldButton, this.resetWorldHotkeySet);
 
     if (this.resetWorldButton) {
       this.resetWorldButton.setAttribute("aria-live", "polite");
@@ -3774,6 +3788,12 @@ export default class UIManager {
         action: "Spawn Cell Burst",
         keys: this.#formatHotkeyList(this.burstHotkeySet),
         description: "Drop a quick cluster of organisms anywhere on the map.",
+      },
+      {
+        action: "Regenerate World",
+        keys: this.#formatHotkeyList(this.resetWorldHotkeySet),
+        description:
+          "Clear the map for a fresh population. Hold Shift with the shortcut to randomize obstacle layouts.",
       },
       {
         action: "Speed Up Playback",
