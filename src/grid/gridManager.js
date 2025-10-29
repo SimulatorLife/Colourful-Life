@@ -603,6 +603,167 @@ export default class GridManager {
   #densityIntegralCols = 0;
   #densityIntegralDirty = true;
   #densityTotalsCache = new Map();
+  #renderDirtyIndices = [];
+  #renderDirtyFlags = null;
+  #renderDirtyRevision = 1;
+  #renderDirtyView = null;
+
+  #initializeRenderDirtyTracking(rows, cols) {
+    const total = Math.max(0, Math.floor(rows) * Math.floor(cols));
+
+    this.#renderDirtyIndices = [];
+    this.#renderDirtyFlags = total > 0 ? new Uint32Array(total) : null;
+    this.#renderDirtyRevision = 1;
+
+    if (!this.#renderDirtyView) {
+      this.#renderDirtyView = this.#createRenderDirtyView();
+      Object.defineProperty(this, "renderDirtyTiles", {
+        configurable: true,
+        enumerable: false,
+        value: this.#renderDirtyView,
+      });
+    }
+  }
+
+  #ensureRenderDirtyCapacity() {
+    const total = Math.max(0, Math.floor(this.rows) * Math.floor(this.cols));
+
+    if (!this.#renderDirtyFlags || this.#renderDirtyFlags.length !== total) {
+      this.#renderDirtyFlags = total > 0 ? new Uint32Array(total) : null;
+      this.#renderDirtyIndices.length = 0;
+      this.#renderDirtyRevision = 1;
+    }
+
+    return Boolean(this.#renderDirtyFlags);
+  }
+
+  #createRenderDirtyView() {
+    const manager = this;
+
+    return {
+      add(value) {
+        manager.#markRenderDirtyIndex(value);
+
+        return this;
+      },
+      clear() {
+        manager.#clearRenderDirtyTiles();
+      },
+      has(value) {
+        return manager.#hasRenderDirtyIndex(value);
+      },
+      delete(value) {
+        return manager.#deleteRenderDirtyIndex(value);
+      },
+      get size() {
+        return manager.#renderDirtyIndices.length;
+      },
+      [Symbol.iterator]() {
+        return manager.#renderDirtyIndices[Symbol.iterator]();
+      },
+    };
+  }
+
+  #hasRenderDirtyIndex(index) {
+    if (!Number.isInteger(index) || index < 0) {
+      return false;
+    }
+
+    const flags = this.#renderDirtyFlags;
+
+    if (!flags || index >= flags.length) {
+      return false;
+    }
+
+    return flags[index] === this.#renderDirtyRevision;
+  }
+
+  #markRenderDirtyIndex(index) {
+    if (!Number.isInteger(index) || index < 0) {
+      return false;
+    }
+
+    if (!this.#ensureRenderDirtyCapacity()) {
+      return false;
+    }
+
+    const flags = this.#renderDirtyFlags;
+
+    if (!flags || index >= flags.length) {
+      return false;
+    }
+
+    const revision = this.#renderDirtyRevision;
+
+    if (flags[index] === revision) {
+      return false;
+    }
+
+    flags[index] = revision;
+    this.#renderDirtyIndices.push(index);
+
+    return true;
+  }
+
+  #deleteRenderDirtyIndex(index) {
+    if (!Number.isInteger(index) || index < 0) {
+      return false;
+    }
+
+    const flags = this.#renderDirtyFlags;
+
+    if (!flags || index >= flags.length) {
+      return false;
+    }
+
+    if (flags[index] !== this.#renderDirtyRevision) {
+      return false;
+    }
+
+    flags[index] = 0;
+
+    const list = this.#renderDirtyIndices;
+
+    for (let i = 0; i < list.length; i++) {
+      if (list[i] === index) {
+        list.splice(i, 1);
+
+        break;
+      }
+    }
+
+    return true;
+  }
+
+  #markRenderTileDirty(row, col) {
+    if (!Number.isInteger(row) || !Number.isInteger(col)) {
+      return;
+    }
+
+    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) {
+      return;
+    }
+
+    const index = row * this.cols + col;
+
+    this.#markRenderDirtyIndex(index);
+  }
+
+  #clearRenderDirtyTiles() {
+    if (this.#renderDirtyIndices.length > 0) {
+      this.#renderDirtyIndices.length = 0;
+    }
+
+    this.#renderDirtyRevision = (this.#renderDirtyRevision + 1) >>> 0;
+
+    if (this.#renderDirtyRevision === 0) {
+      this.#renderDirtyRevision = 1;
+
+      if (this.#renderDirtyFlags) {
+        this.#renderDirtyFlags.fill(0);
+      }
+    }
+  }
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -2429,6 +2590,7 @@ export default class GridManager {
     this.rows = rows;
     this.cols = cols;
     this.grid = Array.from({ length: rows }, () => Array(cols).fill(null));
+    this.#initializeRenderDirtyTracking(rows, cols);
     this.#initializeOccupancy(this.rows, this.cols);
     this.#resetDensityIntegral();
     this.maxTileEnergy =
@@ -2464,7 +2626,6 @@ export default class GridManager {
     this.stats = resolvedStats;
     this.renderStrategy =
       typeof options?.renderStrategy === "string" ? options.renderStrategy : "auto";
-    this.renderDirtyTiles = new Set();
     this.renderStats = {
       frameCount: 0,
       lastFrameMs: 0,
@@ -3949,6 +4110,7 @@ export default class GridManager {
     this.cols = colsInt;
     this.cellSize = cellSizeValue;
     this.grid = Array.from({ length: rowsInt }, () => Array(colsInt).fill(null));
+    this.#initializeRenderDirtyTracking(rowsInt, colsInt);
     this.#initializeOccupancy(this.rows, this.cols);
     this.#resetDensityIntegral();
     this.energyGrid = Array.from({ length: rowsInt }, () => {
@@ -5903,14 +6065,7 @@ export default class GridManager {
   }
 
   #markTileDirty(row, col) {
-    if (!Number.isInteger(row) || !Number.isInteger(col)) return;
-    if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return;
-
-    if (!this.renderDirtyTiles) {
-      this.renderDirtyTiles = new Set();
-    }
-
-    this.renderDirtyTiles.add(row * this.cols + col);
+    this.#markRenderTileDirty(row, col);
   }
 
   markEnergyDirty(row, col, options = {}) {
@@ -5922,12 +6077,7 @@ export default class GridManager {
   }
 
   #markAllTilesDirty() {
-    if (!this.renderDirtyTiles) {
-      this.renderDirtyTiles = new Set();
-    } else {
-      this.renderDirtyTiles.clear();
-    }
-
+    this.#clearRenderDirtyTiles();
     this.#imageDataNeedsFullRefresh = true;
   }
 
@@ -5937,7 +6087,8 @@ export default class GridManager {
     this.#imageData = null;
     this.#imageData32 = null;
     this.#imageDataNeedsFullRefresh = true;
-    this.renderDirtyTiles = new Set();
+    this.#ensureRenderDirtyCapacity();
+    this.#clearRenderDirtyTiles();
   }
 
   #syncDensitySnapshot(force = false) {
@@ -6499,7 +6650,8 @@ export default class GridManager {
     let maxRow = -1;
     let maxCol = -1;
 
-    for (const key of dirtyTiles) {
+    for (let i = 0; i < dirtyTiles.length; i++) {
+      const key = dirtyTiles[i];
       const row = Math.floor(key / cols);
       const col = key % cols;
 
@@ -6807,9 +6959,7 @@ export default class GridManager {
       }
     }
 
-    if (this.renderDirtyTiles) {
-      this.renderDirtyTiles.clear();
-    }
+    this.#clearRenderDirtyTiles();
     this.#imageDataNeedsFullRefresh = true;
 
     return {
@@ -6826,8 +6976,8 @@ export default class GridManager {
     }
 
     const totalTiles = this.rows * this.cols;
-    const dirtyTiles = this.renderDirtyTiles ?? new Set();
-    let dirtyCount = dirtyTiles.size;
+    const dirtyTiles = this.#renderDirtyIndices;
+    let dirtyCount = dirtyTiles.length;
     let processedTiles = 0;
     let refreshType = "cached";
 
@@ -6842,9 +6992,7 @@ export default class GridManager {
       refreshType = "partial";
     }
 
-    if (this.renderDirtyTiles) {
-      this.renderDirtyTiles.clear();
-    }
+    this.#clearRenderDirtyTiles();
 
     const previousSmoothing = ctx.imageSmoothingEnabled;
 
@@ -6951,7 +7099,7 @@ export default class GridManager {
     let cellStats = {
       processedTiles: 0,
       paintedCells: this.activeCells?.size ?? 0,
-      dirtyCount: this.renderDirtyTiles?.size ?? 0,
+      dirtyCount: this.#renderDirtyIndices.length,
       refreshType: "none",
     };
 
