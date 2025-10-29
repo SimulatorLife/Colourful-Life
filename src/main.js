@@ -4,6 +4,16 @@ import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { bindSimulationToUi } from "./ui/simulationUiBridge.js";
 import { resolveSimulationDefaults } from "./config.js";
 import { toPlainObject } from "./utils/object.js";
+import { warnOnce, invokeWithErrorBoundary } from "./utils/error.js";
+
+const DESTROY_WARNINGS = Object.freeze({
+  uiDestroy: "UI manager destroy handler threw; continuing cleanup.",
+  unsubscribe: "Simulation cleanup handler threw during destroy; continuing cleanup.",
+  engineDestroy:
+    "Simulation engine destroy handler threw; attempting graceful shutdown.",
+  engineStop: "Simulation engine stop handler threw; shutdown may be incomplete.",
+});
+
 import {
   buildHeadlessCanvasOverrides,
   createHeadlessCanvas,
@@ -259,19 +269,40 @@ export function createSimulation({
     resetWorld: (options) => engine.resetWorld(options),
     destroy: () => {
       if (uiManager && typeof uiManager.destroy === "function") {
-        uiManager.destroy();
+        invokeWithErrorBoundary(uiManager.destroy, [], {
+          thisArg: uiManager,
+          reporter: warnOnce,
+          once: true,
+          message: DESTROY_WARNINGS.uiDestroy,
+        });
       }
       const unsubscribeFns = unsubscribers.splice(0).reverse();
 
       unsubscribeFns.forEach((unsubscribe) => {
-        if (typeof unsubscribe === "function") {
-          unsubscribe();
+        if (typeof unsubscribe !== "function") {
+          return;
         }
+
+        invokeWithErrorBoundary(unsubscribe, [], {
+          reporter: warnOnce,
+          once: true,
+          message: DESTROY_WARNINGS.unsubscribe,
+        });
       });
       if (typeof engine.destroy === "function") {
-        engine.destroy();
-      } else {
-        engine.stop();
+        invokeWithErrorBoundary(engine.destroy, [], {
+          thisArg: engine,
+          reporter: warnOnce,
+          once: true,
+          message: DESTROY_WARNINGS.engineDestroy,
+        });
+      } else if (typeof engine.stop === "function") {
+        invokeWithErrorBoundary(engine.stop, [], {
+          thisArg: engine,
+          reporter: warnOnce,
+          once: true,
+          message: DESTROY_WARNINGS.engineStop,
+        });
       }
     },
   };
