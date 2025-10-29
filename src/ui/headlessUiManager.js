@@ -48,6 +48,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @param {boolean} [options.showGridLines] - Whether grid lines outlining each tile are shown.
  * @param {boolean} [options.showReproductiveZones] - Whether reproductive zone shading is shown.
  * @param {number} [options.lifeEventFadeTicks] - Number of ticks life event markers remain visible.
+ * @param {number} [options.lifeEventLimit] - Maximum life event markers rendered at once.
  * @param {number} [options.leaderboardIntervalMs] - Minimum time between leaderboard updates.
  * @param {Object} [options.selectionManager=null] - Shared selection manager instance.
  * @returns {{
@@ -321,6 +322,7 @@ export function createHeadlessUiManager(options = {}) {
     getShowGridLines: () => settings.showGridLines,
     getShowReproductiveZones: () => settings.showReproductiveZones,
     getLifeEventFadeTicks: () => settings.lifeEventFadeTicks,
+    getLifeEventLimit: () => settings.lifeEventLimit,
     setShowObstacles: (value) => {
       const normalized = coerceBoolean(value, settings.showObstacles);
 
@@ -391,6 +393,14 @@ export function createHeadlessUiManager(options = {}) {
         shouldNotify
       ) {
         notify("lifeEventFadeTicks", settings.lifeEventFadeTicks);
+      }
+    },
+    setLifeEventLimit: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("lifeEventLimit", value, { min: 0, round: Math.floor }) &&
+        shouldNotify
+      ) {
+        notify("lifeEventLimit", settings.lifeEventLimit);
       }
     },
     getLeaderboardIntervalMs: () => settings.leaderboardIntervalMs,

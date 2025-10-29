@@ -332,6 +332,14 @@ function subscribeEngineToUi(engine, uiManager) {
         );
       }
 
+      if (changes?.lifeEventLimit !== undefined) {
+        callUi(
+          "setLifeEventLimit",
+          [changes.lifeEventLimit, { notify: false }],
+          UI_WARNING_CONTEXTS.state,
+        );
+      }
+
       syncUpdatesPerSecond(changes);
 
       if (changes?.lowDiversityReproMultiplier !== undefined) {

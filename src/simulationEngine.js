@@ -272,6 +272,12 @@ export default class SimulationEngine {
         min: 1,
       },
     );
+    const initialLifeEventLimit = sanitizeNumber(defaults.lifeEventLimit, {
+      fallback: SIMULATION_DEFAULTS.lifeEventLimit ?? 24,
+      min: 0,
+      max: 256,
+      round: Math.floor,
+    });
 
     this.state = {
       paused: Boolean(defaults.paused),
@@ -297,6 +303,7 @@ export default class SimulationEngine {
       showGridLines: defaults.showGridLines,
       showReproductiveZones: defaults.showReproductiveZones,
       lifeEventFadeTicks: initialLifeEventFadeTicks,
+      lifeEventLimit: initialLifeEventLimit,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
       leaderboardSize: defaults.leaderboardSize,
       matingDiversityThreshold: defaults.matingDiversityThreshold,
@@ -825,6 +832,7 @@ export default class SimulationEngine {
       lifeEvents: recentLifeEvents,
       currentTick: totalTicks,
       lifeEventFadeTicks: this.stats?.lifeEventFadeTicks,
+      lifeEventLimit: this.state.lifeEventLimit,
     });
 
     if (this.telemetry.hasPending()) {
@@ -1470,6 +1478,25 @@ export default class SimulationEngine {
     return sanitized;
   }
 
+  setLifeEventLimit(value) {
+    const fallback = sanitizeNumber(this.state.lifeEventLimit, {
+      fallback: SIMULATION_DEFAULTS.lifeEventLimit ?? 24,
+      min: 0,
+      max: 256,
+      round: Math.floor,
+    });
+    const sanitized = sanitizeNumber(value, {
+      fallback,
+      min: 0,
+      max: 256,
+      round: Math.floor,
+    });
+
+    this.#updateState({ lifeEventLimit: sanitized });
+
+    return sanitized;
+  }
+
   setOverlayVisibility({
     showObstacles,
     showEnergy,
@@ -1589,6 +1616,9 @@ export default class SimulationEngine {
         break;
       case "lifeEventFadeTicks":
         this.setLifeEventFadeTicks(value);
+        break;
+      case "lifeEventLimit":
+        this.setLifeEventLimit(value);
         break;
       case "showObstacles":
       case "showEnergy":

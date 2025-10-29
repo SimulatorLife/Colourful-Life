@@ -149,6 +149,10 @@ test("resolveSimulationDefaults returns expected baseline configuration", async 
     UI_SLIDER_CONFIG.lifeEventFadeTicks.default,
     SIMULATION_DEFAULTS.lifeEventFadeTicks,
   );
+  assert.is(
+    UI_SLIDER_CONFIG.lifeEventLimit.default,
+    SIMULATION_DEFAULTS.lifeEventLimit,
+  );
 });
 
 test("resolveSliderBounds merges canonical slider configuration", async () => {
@@ -548,6 +552,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     showGridLines: defaults.showGridLines,
     showReproductiveZones: defaults.showReproductiveZones,
     lifeEventFadeTicks: defaults.lifeEventFadeTicks,
+    lifeEventLimit: defaults.lifeEventLimit,
     leaderboardIntervalMs: defaults.leaderboardIntervalMs,
     leaderboardSize: defaults.leaderboardSize,
     matingDiversityThreshold: defaults.matingDiversityThreshold,
