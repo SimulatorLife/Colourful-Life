@@ -1,7 +1,7 @@
 import { assert, test } from "#tests/harness";
 
 async function loadColorRecordsModule(label) {
-  const moduleUrl = new URL("../src/utils/colorRecords.js", import.meta.url);
+  const moduleUrl = new URL("../src/grid/colorRecords.js", import.meta.url);
 
   moduleUrl.searchParams.set(
     "case",

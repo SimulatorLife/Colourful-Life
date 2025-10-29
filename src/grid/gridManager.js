@@ -32,7 +32,7 @@ import {
   EMPTY_COLOR_RECORD,
   resolveCellColorRecord,
   supportsPackedColor,
-} from "../utils/colorRecords.js";
+} from "./colorRecords.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
