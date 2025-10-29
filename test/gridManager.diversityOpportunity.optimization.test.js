@@ -118,6 +118,21 @@ test("summarizeMateDiversityOpportunity matches legacy results", () => {
     "weight should match legacy math",
   );
   approxEqual(optimized.gap, legacy.gap, 1e-12, "gap should match legacy math");
+  approxEqual(optimized.complementScore, 0, 1e-12, "complement score should be zero");
+  approxEqual(
+    optimized.complementAvailability,
+    0,
+    1e-12,
+    "complement availability should be zero",
+  );
+  approxEqual(optimized.complementWeight, 0, 1e-12, "complement weight should be zero");
+  approxEqual(optimized.complementGap, 0, 1e-12, "complement gap should be zero");
+  approxEqual(
+    optimized.complementAlignment,
+    0,
+    1e-12,
+    "complement alignment should be zero",
+  );
 });
 
 test("optimized diversity opportunity summary avoids repeated sorts", () => {
@@ -151,5 +166,40 @@ test("optimized diversity opportunity summary avoids repeated sorts", () => {
   assert.ok(
     optimizedElapsed <= legacyElapsed * 0.6,
     `Expected optimized path (${optimizedElapsed.toFixed(3)}ms) to be at least 40% faster than legacy (${legacyElapsed.toFixed(3)}ms)`,
+  );
+});
+
+test("summarizeMateDiversityOpportunity rewards complementary pairings", () => {
+  const candidates = [
+    { diversity: 0.42, behaviorComplementarityOpportunity: 0.2 },
+    { diversity: 0.51, behaviorComplementarityOpportunity: 0.75 },
+    { diversity: 0.48, behaviorComplementarityOpportunity: 0.1 },
+  ];
+
+  const withoutComplement = summarizeMateDiversityOpportunity({
+    candidates: candidates.map(({ diversity }) => ({ diversity })),
+    chosenDiversity: 0.45,
+    chosenComplementarity: 0.1,
+    diversityThreshold: 0.4,
+  });
+
+  const withComplement = summarizeMateDiversityOpportunity({
+    candidates,
+    chosenDiversity: 0.45,
+    chosenComplementarity: 0.1,
+    diversityThreshold: 0.4,
+  });
+
+  assert.ok(
+    withComplement.score > withoutComplement.score,
+    "Complementary options should increase overall opportunity score",
+  );
+  assert.ok(
+    withComplement.complementScore > 0,
+    "Complement opportunity score should reflect complementary mates",
+  );
+  assert.ok(
+    withComplement.complementAvailability > 0,
+    "Complement opportunity availability should detect complementary candidates",
   );
 });

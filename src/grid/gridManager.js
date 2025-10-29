@@ -7574,6 +7574,10 @@ export default class GridManager {
     scarcity = 0,
     diversityOpportunity = 0,
     diversityOpportunityAvailability = 0,
+    complementOpportunity = 0,
+    complementOpportunityAvailability = 0,
+    complementOpportunityGap = 0,
+    complementOpportunityAlignment = 0,
     noveltyPressure = 0,
   } = {}) {
     const sliderFloor = clamp(Number.isFinite(floor) ? floor : 0, 0, 1);
@@ -7634,6 +7638,38 @@ export default class GridManager {
       0,
       1,
     );
+    const complementOpportunitySignal = clamp(
+      Number.isFinite(complementOpportunity) ? complementOpportunity : 0,
+      0,
+      1,
+    );
+    const complementAvailability = clamp(
+      Number.isFinite(complementOpportunityAvailability)
+        ? complementOpportunityAvailability
+        : complementOpportunitySignal > 0
+          ? 1
+          : 0,
+      0,
+      1,
+    );
+    const complementGapValue = clamp(
+      Number.isFinite(complementOpportunityGap)
+        ? complementOpportunityGap
+        : complementOpportunitySignal > 0
+          ? clamp(1 - complementOpportunitySignal, 0, 1)
+          : 0,
+      0,
+      1,
+    );
+    const complementAlignmentValue = clamp(
+      Number.isFinite(complementOpportunityAlignment)
+        ? complementOpportunityAlignment
+        : complementAvailability > 0
+          ? clamp(1 - complementGapValue, 0, 1)
+          : 0,
+      0,
+      1,
+    );
 
     const pressure = clamp(
       Number.isFinite(diversityPressure) ? diversityPressure : 0,
@@ -7675,6 +7711,22 @@ export default class GridManager {
       severity *= 1 + availabilityDemand * 0.2;
     }
 
+    if (complementOpportunitySignal > 0) {
+      const complementDemand =
+        complementOpportunitySignal *
+        (0.18 + pressure * 0.25 + combinedDrive * 0.2 + probabilitySlack * 0.2);
+      const complementAvailabilityDemand =
+        complementAvailability *
+        (0.14 + strategyPressureValue * 0.22 + probabilitySlack * 0.18);
+      const gapIntensity =
+        complementGapValue *
+        (0.22 + pressure * 0.18 + strategyPressureValue * 0.2 + closeness * 0.15);
+
+      severity += complementDemand * (0.45 + complementGapValue * 0.35);
+      severity += complementAvailabilityDemand * (0.35 + complementDemand * 0.2);
+      severity *= 1 + gapIntensity;
+    }
+
     if (novelty > 0) {
       const noveltyDemand =
         novelty * (0.18 + probabilitySlack * 0.28 + closeness * 0.3 + pressure * 0.25);
@@ -7696,6 +7748,14 @@ export default class GridManager {
 
       severity *= clamp(1 - relief, 0.25, 1);
       severity -= complementarity * evennessDrag * 0.12;
+    }
+
+    if (complementAlignmentValue > 0) {
+      const complementRelief =
+        complementAlignmentValue *
+        (0.12 + complementarity * 0.2 + (1 - closeness) * 0.1 + pressure * 0.1);
+
+      severity *= clamp(1 - complementRelief, 0.3, 1);
     }
 
     severity = clamp(severity, 0, 1);
@@ -7949,9 +8009,31 @@ export default class GridManager {
       Array.isArray(scoredCandidates) && scoredCandidates.length > 0
         ? scoredCandidates
         : evaluated;
+
+    if (Array.isArray(opportunityCandidates) && opportunityCandidates.length > 0) {
+      for (let i = 0; i < opportunityCandidates.length; i += 1) {
+        const candidate = opportunityCandidates[i];
+
+        if (!candidate) continue;
+
+        const partner = candidate.target ?? null;
+
+        if (!partner) continue;
+
+        const complementValue = computeBehaviorComplementarity(cell, partner);
+
+        if (Number.isFinite(complementValue) && complementValue > 0) {
+          candidate.behaviorComplementarityOpportunity = complementValue;
+        } else if (Object.hasOwn(candidate, "behaviorComplementarityOpportunity")) {
+          candidate.behaviorComplementarityOpportunity = undefined;
+        }
+      }
+    }
+
     const diversityOpportunitySummary = GridManager.#summarizeMateDiversityOpportunity({
       candidates: opportunityCandidates,
       chosenDiversity: diversity,
+      chosenComplementarity: behaviorComplementarity,
       diversityThreshold: pairDiversityThreshold,
     });
     const diversityOpportunityScore = diversityOpportunitySummary.score;
@@ -7977,6 +8059,42 @@ export default class GridManager {
     const opportunityAlignmentWeighted = opportunityAlignment * opportunityAvailability;
     let opportunityAlignmentMultiplier = 1;
     let opportunityPenaltyMultiplier = 1;
+    const complementOpportunityScore = Number.isFinite(
+      diversityOpportunitySummary.complementScore,
+    )
+      ? clamp(diversityOpportunitySummary.complementScore, 0, 1)
+      : 0;
+    const complementOpportunityAvailability = clamp(
+      Number.isFinite(diversityOpportunitySummary.complementAvailability)
+        ? diversityOpportunitySummary.complementAvailability
+        : 0,
+      0,
+      1,
+    );
+    const complementOpportunityWeight = clamp(
+      Number.isFinite(diversityOpportunitySummary.complementWeight)
+        ? diversityOpportunitySummary.complementWeight
+        : 0,
+      0,
+      1,
+    );
+    const complementOpportunityGap = clamp(
+      Number.isFinite(diversityOpportunitySummary.complementGap)
+        ? diversityOpportunitySummary.complementGap
+        : 0,
+      0,
+      1,
+    );
+    const complementOpportunityAlignment = clamp(
+      Number.isFinite(diversityOpportunitySummary.complementAlignment)
+        ? diversityOpportunitySummary.complementAlignment
+        : complementOpportunityAvailability > 0
+          ? clamp(1 - complementOpportunityGap, 0, 1)
+          : 0,
+      0,
+      1,
+    );
+    let complementOpportunityMultiplier = 1;
     const parentNovelty =
       typeof cell.getMateNoveltyPressure === "function"
         ? cell.getMateNoveltyPressure()
@@ -8012,6 +8130,10 @@ export default class GridManager {
         scarcity: scarcitySignal,
         diversityOpportunity: diversityOpportunityScore,
         diversityOpportunityAvailability,
+        complementOpportunity: complementOpportunityScore,
+        complementOpportunityAvailability,
+        complementOpportunityGap,
+        complementOpportunityAlignment,
         noveltyPressure: combinedNovelty,
       });
 
@@ -8078,6 +8200,54 @@ export default class GridManager {
           }
         }
       }
+
+      if (complementOpportunityWeight > 0) {
+        const complementAlignmentWeighted =
+          complementOpportunityAlignment *
+          complementOpportunityAvailability *
+          complementOpportunityWeight *
+          complementOpportunityScore;
+
+        if (complementAlignmentWeighted > 0 && behaviorComplementarity > 0) {
+          const complementBonusScale =
+            0.1 + behaviorComplementarity * 0.25 + strategyPressure * 0.18;
+          const complementBonus = clamp(
+            1 + complementAlignmentWeighted * complementBonusScale,
+            1,
+            1.5,
+          );
+
+          opportunityAlignmentMultiplier *= complementBonus;
+          complementOpportunityMultiplier *= complementBonus;
+        }
+
+        const complementGapWeighted =
+          complementOpportunityGap *
+          complementOpportunityAvailability *
+          complementOpportunityWeight *
+          complementOpportunityScore;
+
+        if (complementGapWeighted > 0.001) {
+          const complementPenaltyScale =
+            complementOpportunityScore *
+            (0.05 + strategyPressure * 0.12 + (1 - behaviorComplementarity) * 0.15);
+          const complementPenaltyCandidate = clamp(
+            1 - complementGapWeighted * complementPenaltyScale,
+            penaltyFloor > 0 ? penaltyFloor : 0.65,
+            1,
+          );
+
+          if (complementPenaltyCandidate < 1) {
+            opportunityPenaltyMultiplier = Math.min(
+              opportunityPenaltyMultiplier,
+              complementPenaltyCandidate,
+            );
+            opportunityAlignmentMultiplier *= complementPenaltyCandidate;
+            complementOpportunityMultiplier *= complementPenaltyCandidate;
+            penalizedForSimilarity = true;
+          }
+        }
+      }
     }
 
     if (opportunityAlignmentMultiplier !== 1) {
@@ -8108,6 +8278,15 @@ export default class GridManager {
       if (diversityOpportunityScore > 0) {
         monotonySeverity *= 1 + diversityOpportunityScore * 0.28;
         monotonySeverity += diversityOpportunityScore * 0.08;
+      }
+
+      if (complementOpportunityScore > 0.05) {
+        const complementDemand =
+          complementOpportunityScore *
+          (0.12 + complementOpportunityAvailability * 0.24 + complementGap * 0.18);
+
+        monotonySeverity += complementDemand;
+        monotonySeverity *= 1 + complementOpportunityGap * 0.15;
       }
 
       monotonySeverity = clamp(monotonySeverity, 0, 0.55);
@@ -8473,6 +8652,12 @@ export default class GridManager {
         diversityOpportunityGap,
         diversityOpportunityAlignment: opportunityAlignmentWeighted,
         diversityOpportunityMultiplier: opportunityAlignmentMultiplier,
+        complementOpportunity: complementOpportunityScore,
+        complementOpportunityWeight,
+        complementOpportunityAvailability,
+        complementOpportunityGap,
+        complementOpportunityAlignment,
+        complementOpportunityMultiplier,
         distanceProbabilityMultiplier: clamp(distanceScaling?.probability ?? 1, 0, 1),
         distanceEnergyMultiplier: Number.isFinite(distanceScaling?.energy)
           ? Math.max(1, distanceScaling.energy)
@@ -8496,6 +8681,12 @@ export default class GridManager {
           diversityOpportunityGap,
           diversityOpportunityAlignment: opportunityAlignmentWeighted,
           diversityOpportunityMultiplier: opportunityAlignmentMultiplier,
+          complementOpportunity: complementOpportunityScore,
+          complementOpportunityWeight,
+          complementOpportunityAvailability,
+          complementOpportunityGap,
+          complementOpportunityAlignment,
+          complementOpportunityMultiplier,
         });
       }
     };

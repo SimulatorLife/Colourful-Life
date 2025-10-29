@@ -2,6 +2,7 @@ import { clamp, clampFinite } from "../utils/math.js";
 import { MATE_DIVERSITY_SAMPLE_LIMIT_DEFAULT } from "../config.js";
 
 const SAMPLE_LIMIT = MATE_DIVERSITY_SAMPLE_LIMIT_DEFAULT;
+const COMPLEMENT_BASELINE = 0.35;
 
 function rememberTopValue(values, candidate) {
   // Maintain `values` in descending order while returning the contribution that
@@ -61,15 +62,37 @@ function normalizeCandidateValue(candidate) {
   return clampFinite(raw, 0, 1, 0);
 }
 
+function normalizeComplementValue(candidate) {
+  if (!candidate || typeof candidate !== "object") {
+    return 0;
+  }
+
+  if (Number.isFinite(candidate.behaviorComplementarityOpportunity)) {
+    return clampFinite(candidate.behaviorComplementarityOpportunity, 0, 1, 0);
+  }
+
+  if (Number.isFinite(candidate.behaviorComplementarity)) {
+    return clampFinite(candidate.behaviorComplementarity, 0, 1, 0);
+  }
+
+  if (Number.isFinite(candidate.complementarity)) {
+    return clampFinite(candidate.complementarity, 0, 1, 0);
+  }
+
+  return 0;
+}
+
 export function summarizeMateDiversityOpportunity({
   candidates = [],
   chosenDiversity = 0,
+  chosenComplementarity = 0,
   diversityThreshold = 0,
 } = {}) {
   const list = Array.isArray(candidates) ? candidates : [];
   const count = list.length;
   const threshold = clampFinite(diversityThreshold, 0, 1, 0);
   const chosen = clampFinite(chosenDiversity, 0, 1, 0);
+  const chosenComplement = clampFinite(chosenComplementarity, 0, 1, 0);
 
   if (count <= 1) {
     return {
@@ -77,16 +100,26 @@ export function summarizeMateDiversityOpportunity({
       availability: 0,
       weight: 0,
       gap: 0,
+      complementScore: 0,
+      complementAvailability: 0,
+      complementWeight: 0,
+      complementGap: 0,
+      complementAlignment: 0,
     };
   }
 
   let best = 0;
+  let bestComplement = 0;
   let aboveThresholdCount = 0;
+  let complementAboveBaseline = 0;
   const topValues = [];
+  const topComplementValues = [];
   let topSum = 0;
+  let topComplementSum = 0;
 
   for (let index = 0; index < count; index += 1) {
     const value = normalizeCandidateValue(list[index]);
+    const complementValue = normalizeComplementValue(list[index]);
 
     if (value > best) {
       best = value;
@@ -97,10 +130,25 @@ export function summarizeMateDiversityOpportunity({
     }
 
     topSum += rememberTopValue(topValues, value);
+
+    if (complementValue > bestComplement) {
+      bestComplement = complementValue;
+    }
+
+    if (complementValue >= COMPLEMENT_BASELINE) {
+      complementAboveBaseline += 1;
+    }
+
+    if (complementValue > 0) {
+      topComplementSum += rememberTopValue(topComplementValues, complementValue);
+    }
   }
 
   const sampleCount = topValues.length;
   const topAverage = sampleCount > 0 ? topSum / sampleCount : 0;
+  const complementSampleCount = topComplementValues.length;
+  const complementTopAverage =
+    complementSampleCount > 0 ? topComplementSum / complementSampleCount : 0;
 
   const availableAbove = Math.max(
     0,
@@ -122,17 +170,80 @@ export function summarizeMateDiversityOpportunity({
 
   score = clamp(score, 0, 1);
 
-  const weight = clamp(
-    availability * 0.65 + depth * 0.25 + (gap > 0.2 ? 0.1 : 0),
+  const chosenAboveBaseline = chosenComplement >= COMPLEMENT_BASELINE ? 1 : 0;
+  const complementAvailableAbove = Math.max(
+    0,
+    complementAboveBaseline - chosenAboveBaseline,
+  );
+  const complementAvailability = clamp(
+    count > 0 ? complementAvailableAbove / count : 0,
     0,
     1,
   );
+  const complementDepth =
+    complementAboveBaseline > 0 ? clamp(complementAboveBaseline / 4, 0, 1) : 0;
+  const complementGap = clamp(complementTopAverage - chosenComplement, 0, 1);
+  const complementHeadroom = clamp(bestComplement - chosenComplement, 0, 1);
+  let complementScore =
+    complementGap * (0.4 + complementAvailability * 0.35 + complementDepth * 0.25);
+
+  if (chosenComplement < COMPLEMENT_BASELINE) {
+    complementScore += complementAvailability * 0.2;
+  }
+
+  complementScore += complementHeadroom * 0.15;
+  complementScore = clamp(complementScore, 0, 1);
+
+  const complementSignal =
+    complementScore > 0 ||
+    complementAvailability > 0 ||
+    complementGap > 0 ||
+    complementHeadroom > 0;
+
+  if (complementSignal) {
+    const diversityBoost = clamp(score * complementAvailability * 0.15, 0, 0.3);
+    const complementBlend = clamp(
+      complementScore * (0.35 + availability * 0.2 + complementDepth * 0.15),
+      0,
+      0.9,
+    );
+
+    score = clamp(score + diversityBoost + complementBlend, 0, 1);
+  }
+
+  let weight = clamp(availability * 0.65 + depth * 0.25 + (gap > 0.2 ? 0.1 : 0), 0, 1);
+
+  if (complementSignal) {
+    weight = clamp(
+      weight +
+        complementAvailability * 0.25 +
+        complementDepth * 0.15 +
+        (complementGap > 0.2 ? 0.1 : 0),
+      0,
+      1,
+    );
+  }
+
+  const complementWeight = clamp(
+    complementAvailability * 0.65 +
+      complementDepth * 0.25 +
+      (complementGap > 0.2 ? 0.1 : 0),
+    0,
+    1,
+  );
+  const complementAlignment =
+    complementAvailability > 0 ? clamp(1 - complementGap, 0, 1) : 0;
 
   return {
     score,
     availability,
     weight,
     gap,
+    complementScore,
+    complementAvailability,
+    complementWeight,
+    complementGap,
+    complementAlignment,
   };
 }
 

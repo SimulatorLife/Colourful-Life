@@ -1289,6 +1289,147 @@ test("low-diversity penalties respond to mate preferences and environment", asyn
   );
 });
 
+test("ignoring complementary mates intensifies low-diversity penalties", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  const originalRandom = Math.random;
+
+  Math.random = () => 1;
+
+  const runScenario = (includeComplement) => {
+    const records = [];
+    const stats = {
+      onBirth() {},
+      onDeath() {},
+      getBehavioralEvenness: () => 0.35,
+      getDiversityPressure: () => 0.25,
+      getStrategyPressure: () => 0.2,
+      recordMateChoice: (data) => {
+        records.push(data);
+      },
+    };
+
+    const cols = includeComplement ? 3 : 2;
+    const gm = new TestGridManager(1, cols, {
+      eventManager: { activeEvents: [] },
+      stats,
+    });
+
+    gm.setMatingDiversityOptions({ threshold: 0.6, lowDiversityMultiplier: 0.15 });
+
+    gm.densityGrid = [new Array(cols).fill(0.1)];
+    gm.energyGrid = [new Array(cols).fill(MAX_TILE_ENERGY)];
+    gm.energyDeltaGrid = [new Array(cols).fill(0)];
+
+    const parent = new Cell(0, 0, new DNA(20, 40, 80), MAX_TILE_ENERGY);
+
+    parent.energy = MAX_TILE_ENERGY;
+    parent.dna.reproductionThresholdFrac = () => 0.45;
+    parent.computeReproductionProbability = () => 1;
+    parent.decideReproduction = () => ({ probability: 1 });
+    parent.similarityTo = () => 0.9;
+    parent.interactionGenes = { cooperate: 0.2, fight: 0.1, avoid: 0.65 };
+
+    const kinMate = new Cell(0, 1, new DNA(18, 38, 78), MAX_TILE_ENERGY);
+
+    kinMate.energy = MAX_TILE_ENERGY;
+    kinMate.dna.reproductionThresholdFrac = () => 0.45;
+    kinMate.interactionGenes = { cooperate: 0.2, fight: 0.1, avoid: 0.65 };
+
+    const kinEntry = {
+      target: kinMate,
+      row: kinMate.row,
+      col: kinMate.col,
+      similarity: 0.9,
+      diversity: 0.1,
+      selectionWeight: 1,
+      preferenceScore: 1,
+    };
+
+    const evaluated = [kinEntry];
+    const matePool = [kinEntry];
+
+    if (includeComplement) {
+      const complementMate = new Cell(0, 2, new DNA(210, 50, 120), MAX_TILE_ENERGY);
+
+      complementMate.energy = MAX_TILE_ENERGY;
+      complementMate.dna.reproductionThresholdFrac = () => 0.45;
+      complementMate.interactionGenes = { cooperate: 0.85, fight: 0.75, avoid: 0.1 };
+
+      const complementEntry = {
+        target: complementMate,
+        row: complementMate.row,
+        col: complementMate.col,
+        similarity: 0.35,
+        diversity: 0.65,
+        selectionWeight: 0.8,
+        preferenceScore: 0.8,
+      };
+
+      evaluated.push(complementEntry);
+      matePool.push(complementEntry);
+      gm.setCell(0, 2, complementMate);
+    }
+
+    parent.selectMateWeighted = () => ({
+      chosen: kinEntry,
+      evaluated: evaluated.slice(),
+      mode: "preference",
+    });
+    parent.findBestMate = () => kinEntry;
+    parent.scorePotentialMates = () => evaluated.slice();
+
+    gm.setCell(0, 0, parent);
+    gm.setCell(0, 1, kinMate);
+
+    gm.handleReproduction(
+      0,
+      0,
+      parent,
+      { mates: matePool, society: [] },
+      {
+        stats,
+        densityGrid: gm.densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 1,
+      },
+    );
+
+    return records[0];
+  };
+
+  try {
+    const recordWithoutComplement = runScenario(false);
+    const recordWithComplement = runScenario(true);
+
+    assert.ok(recordWithoutComplement);
+    assert.ok(recordWithComplement);
+    assert.ok(
+      recordWithComplement.penaltyMultiplier <
+        recordWithoutComplement.penaltyMultiplier,
+      "complementary mates should intensify penalties when ignored",
+    );
+    assert.ok(
+      recordWithComplement.complementOpportunity >
+        recordWithoutComplement.complementOpportunity,
+      "complement opportunity signal should reflect additional complementary candidates",
+    );
+    assert.ok(
+      recordWithComplement.penaltyMultiplier < 1,
+      "penalty multiplier should reduce reproduction odds when complement is available",
+    );
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
 test("strategy pressure dampens homogeneous pair reproduction even above diversity threshold", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
   const { default: Cell } = await import("../src/cell.js");
