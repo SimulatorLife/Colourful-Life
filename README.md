@@ -125,6 +125,11 @@ For an architectural deep dive—including subsystem hand-offs, data flow, and e
 - Mount the full UI via [`UIManager`](src/ui/uiManager.js) or build a headless adapter with [`createHeadlessUiManager`](src/ui/headlessUiManager.js).
 - Link the engine and UI through [`bindSimulationToUi`](src/ui/simulationUiBridge.js) so pause state, reproduction multipliers, metrics streams, and leaderboard updates stay synchronised across browser and headless contexts.
 
+To tweak the in-browser bootstrap without editing [`src/bootstrap.js`](src/bootstrap.js), define
+`window.COLOURFUL_LIFE_BOOT_OPTIONS` before loading the bundle. Supplying properties such as
+`{ canvasId: "customCanvas", config: { cellSize: 8 } }` lets you point at a different canvas or adjust the default simulation
+configuration while preserving the existing behaviour when no overrides are provided.
+
 Headless consumers can call `controller.tick()` to advance the simulation one step, `controller.resetWorld()` to clear the ecosystem (pass `{ reseed: true }` to trigger a fresh initial seeding), and subscribe to `SimulationEngine` events (`tick`, `metrics`, `leaderboard`, `state`) for instrumentation.
 
 ## The Simulation Laws
