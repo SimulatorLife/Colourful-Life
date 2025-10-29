@@ -238,7 +238,7 @@ export function createSimulation({
   if (autoStart) {
     engine.start();
     if (startPaused) engine.pause();
-  } else if (startPaused) {
+  } else if (!engine.isPaused()) {
     engine.pause();
   }
 

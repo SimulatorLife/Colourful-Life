@@ -20,7 +20,18 @@ test("simulation relies on lineage reproduction after initial seeding", async ()
   const delta = 1000 / updatesPerSecond;
   let timestamp = 0;
 
-  for (let i = 0; i < 420; i++) {
+  assert.ok(
+    engine.isPaused(),
+    "auto-start controllers configured with autoStart=false should begin paused",
+  );
+
+  timestamp += delta;
+  assert.ok(
+    simulation.tick(timestamp),
+    "manual ticks should advance even while the engine is paused but idle",
+  );
+
+  for (let i = 1; i < 420; i++) {
     timestamp += delta;
     simulation.tick(timestamp);
   }
