@@ -373,57 +373,56 @@ export default class EventManager {
   }
 
   updateEvent(frequencyMultiplier = 1, maxConcurrent = 2) {
-    const events = this.activeEvents;
+    let events = this.activeEvents;
 
     if (!Array.isArray(events)) {
       this.activeEvents = [];
-
-      return;
+      events = this.activeEvents;
     }
 
-    if (events.length === 0) {
-      return;
-    }
+    if (events.length > 0) {
+      // Update existing events in place while compacting finished entries without reallocating.
+      let writeIndex = 0;
 
-    // Update existing events in place while compacting finished entries without reallocating.
-    let writeIndex = 0;
+      for (let readIndex = 0; readIndex < events.length; readIndex += 1) {
+        const ev = events[readIndex];
 
-    for (let readIndex = 0; readIndex < events.length; readIndex += 1) {
-      const ev = events[readIndex];
+        if (!ev) continue;
 
-      if (!ev) continue;
+        ev.remaining = Math.max(0, ev.remaining - 1);
 
-      ev.remaining = Math.max(0, ev.remaining - 1);
+        if (ev.remaining <= 0) continue;
 
-      if (ev.remaining <= 0) continue;
+        events[writeIndex] = ev;
+        writeIndex += 1;
+      }
 
-      events[writeIndex] = ev;
-      writeIndex += 1;
-    }
-
-    if (writeIndex < events.length) {
-      events.length = writeIndex;
+      if (writeIndex < events.length) {
+        events.length = writeIndex;
+      }
     }
 
     // Spawn new events when cooldown expires
     if (this.cooldown > 0) this.cooldown--;
     const canSpawn =
-      this.activeEvents.length < Math.max(0, maxConcurrent) && frequencyMultiplier > 0;
+      events.length < Math.max(0, maxConcurrent) && frequencyMultiplier > 0;
 
     if (this.cooldown <= 0 && canSpawn) {
       const ev = this.generateRandomEvent();
 
-      this.activeEvents.push(ev);
-      // Next cooldown scales inversely with frequency multiplier
-      const base = Math.floor(randomRange(180, 480, this.rng));
+      if (ev) {
+        events.push(ev);
+        // Next cooldown scales inversely with frequency multiplier
+        const base = Math.floor(randomRange(180, 480, this.rng));
 
-      this.cooldown = Math.max(
-        0,
-        Math.floor(base / Math.max(0.01, frequencyMultiplier)),
-      );
+        this.cooldown = Math.max(
+          0,
+          Math.floor(base / Math.max(0.01, frequencyMultiplier)),
+        );
+      }
     }
 
     // Maintain compatibility: expose the first active event as currentEvent
-    this.currentEvent = this.activeEvents.length > 0 ? this.activeEvents[0] : null;
+    this.currentEvent = events.length > 0 ? events[0] : null;
   }
 }
