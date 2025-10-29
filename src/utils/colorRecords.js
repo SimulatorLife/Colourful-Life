@@ -34,7 +34,7 @@ const PACK_RGBA32 = (() => {
       return (r, g, b, a) => ((a << 24) | (b << 16) | (g << 8) | r) >>> 0;
     }
   } catch (error) {
-    warnOnce("Uint32 color packing unsupported", error);
+    warnOnce("Uint32 color packing unsupported.", error);
   }
 
   return null;
