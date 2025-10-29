@@ -194,7 +194,7 @@ export function clampSliderValue(key, value, overrides = {}) {
 
   if (Number.isFinite(numeric)) {
     normalized = clamp(numeric, lowerBound, upperBound);
-  } else if (Object.prototype.hasOwnProperty.call(overrides, "fallback")) {
+  } else if (Object.hasOwn(overrides, "fallback")) {
     if (typeof fallback === "number" && Number.isFinite(fallback)) {
       normalized = clamp(fallback, lowerBound, upperBound);
     } else {
