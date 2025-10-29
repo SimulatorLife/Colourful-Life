@@ -36,6 +36,13 @@ where practical.
 
 ### Changed
 
+- Raised the default offspring viability buffer to `1.13` after rerunning the
+  dense 40×40 headless probe (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40
+PERF_SIM_COLS=40 PERF_SIM_WARMUP=20 PERF_SIM_ITERATIONS=80
+PERF_SIM_DENSITY=0.68 node scripts/profile-energy.mjs`), where survivors
+  climbed from 135 → 142 while the trimmed ms-per-tick average held near 76 ms
+  (75.5 → 76.4). The slightly stricter reserve demand steadies recovery births
+  without reviving feast/famine swings.
 - Tightened the primary documentation (README, developer guide, architecture notes) to streamline quick-start guidance, highlight subsystem profiling harnesses, and document the shared trait aggregation helpers used by Stats.
 - Moved the "Pause When Hidden" toggle from the Simulation Controls panel to the pause overlay so focus behaviour can be tweaked beside the autopause hint that appears while the grid is halted.
 - Refreshed the README, developer guide, and architecture overview to streamline
