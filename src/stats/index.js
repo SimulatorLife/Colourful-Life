@@ -386,6 +386,12 @@ const createEmptyMatingSnapshot = () => ({
   diversityOpportunityGapSum: 0,
   diversityOpportunityAlignmentSum: 0,
   diversityOpportunityMultiplierSum: 0,
+  complementOpportunitySum: 0,
+  complementOpportunityWeight: 0,
+  complementOpportunityAvailabilitySum: 0,
+  complementOpportunityGapSum: 0,
+  complementOpportunityAlignmentSum: 0,
+  complementOpportunityMultiplierSum: 0,
   blocks: 0,
   lastBlockReason: null,
 });
@@ -512,6 +518,11 @@ export default class Stats {
     this.diversityOpportunityGap = 0;
     this.diversityOpportunityAlignment = 0;
     this.diversityOpportunityMultiplier = 1;
+    this.complementOpportunity = 0;
+    this.complementOpportunityAvailability = 0;
+    this.complementOpportunityGap = 0;
+    this.complementOpportunityAlignment = 0;
+    this.complementOpportunityMultiplier = 1;
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
     this.lifeEventSequence = 0;
     this.lifeEventFadeTicks = LIFE_EVENT_FADE_DEFAULT;
@@ -1825,6 +1836,21 @@ export default class Stats {
       choiceCount > 0 ? mateStats.diversityOpportunityAlignmentSum / choiceCount : 0;
     const diversityOpportunityMultiplier =
       choiceCount > 0 ? mateStats.diversityOpportunityMultiplierSum / choiceCount : 1;
+    const complementOpportunityWeight = mateStats.complementOpportunityWeight || 0;
+    const complementOpportunity =
+      complementOpportunityWeight > 0
+        ? mateStats.complementOpportunitySum / complementOpportunityWeight
+        : 0;
+    const complementOpportunityAvailability =
+      complementOpportunityWeight > 0
+        ? mateStats.complementOpportunityAvailabilitySum / complementOpportunityWeight
+        : 0;
+    const complementOpportunityGap =
+      choiceCount > 0 ? mateStats.complementOpportunityGapSum / choiceCount : 0;
+    const complementOpportunityAlignment =
+      choiceCount > 0 ? mateStats.complementOpportunityAlignmentSum / choiceCount : 0;
+    const complementOpportunityMultiplier =
+      choiceCount > 0 ? mateStats.complementOpportunityMultiplierSum / choiceCount : 1;
 
     this.#updateDiversityPressure(
       diversity,
@@ -1842,6 +1868,11 @@ export default class Stats {
     this.diversityOpportunityGap = diversityOpportunityGap;
     this.diversityOpportunityAlignment = diversityOpportunityAlignment;
     this.diversityOpportunityMultiplier = diversityOpportunityMultiplier;
+    this.complementOpportunity = complementOpportunity;
+    this.complementOpportunityAvailability = complementOpportunityAvailability;
+    this.complementOpportunityGap = complementOpportunityGap;
+    this.complementOpportunityAlignment = complementOpportunityAlignment;
+    this.complementOpportunityMultiplier = complementOpportunityMultiplier;
 
     this.pushHistory("population", pop);
     this.pushHistory("diversity", diversity);
@@ -1850,6 +1881,11 @@ export default class Stats {
     this.pushHistory(
       "diversityOpportunityAvailability",
       diversityOpportunityAvailability,
+    );
+    this.pushHistory("complementOpportunity", complementOpportunity);
+    this.pushHistory(
+      "complementOpportunityAvailability",
+      complementOpportunityAvailability,
     );
     this.pushHistory("energy", meanEnergy);
     this.pushHistory("growth", this.births - this.deaths);
@@ -1981,6 +2017,12 @@ export default class Stats {
     diversityOpportunityGap = undefined,
     diversityOpportunityAlignment = undefined,
     diversityOpportunityMultiplier = undefined,
+    complementOpportunity = 0,
+    complementOpportunityWeight = undefined,
+    complementOpportunityAvailability = undefined,
+    complementOpportunityGap = undefined,
+    complementOpportunityAlignment = undefined,
+    complementOpportunityMultiplier = undefined,
   } = {}) {
     if (!this.mating) {
       this.mating = createEmptyMatingSnapshot();
@@ -2048,6 +2090,45 @@ export default class Stats {
     this.mating.diversityOpportunityAlignmentSum += opportunityAlignment;
     this.mating.diversityOpportunityMultiplierSum += opportunityMultiplier;
 
+    const complementOpportunityScore = clamp01(
+      Number.isFinite(complementOpportunity) ? complementOpportunity : 0,
+    );
+    const complementWeight = clamp01(
+      Number.isFinite(complementOpportunityWeight) ? complementOpportunityWeight : 0,
+    );
+    const complementAvailability = clamp01(
+      Number.isFinite(complementOpportunityAvailability)
+        ? complementOpportunityAvailability
+        : complementOpportunityScore > 0
+          ? 1
+          : 0,
+    );
+    const complementGapValue = clamp01(
+      Number.isFinite(complementOpportunityGap) ? complementOpportunityGap : 0,
+    );
+    const complementAlignmentValue = clamp01(
+      Number.isFinite(complementOpportunityAlignment)
+        ? complementOpportunityAlignment
+        : complementAvailability > 0
+          ? clamp01(1 - complementGapValue)
+          : 0,
+    );
+    const complementMultiplier = Number.isFinite(complementOpportunityMultiplier)
+      ? clamp(complementOpportunityMultiplier, 0, 2)
+      : 1;
+
+    if (complementWeight > 0) {
+      this.mating.complementOpportunitySum +=
+        complementOpportunityScore * complementWeight;
+      this.mating.complementOpportunityWeight += complementWeight;
+      this.mating.complementOpportunityAvailabilitySum +=
+        complementAvailability * complementWeight;
+    }
+
+    this.mating.complementOpportunityGapSum += complementGapValue;
+    this.mating.complementOpportunityAlignmentSum += complementAlignmentValue;
+    this.mating.complementOpportunityMultiplierSum += complementMultiplier;
+
     if (success) {
       this.mating.successes++;
       if (isDiverse) this.mating.diverseSuccesses++;
@@ -2075,6 +2156,12 @@ export default class Stats {
       diversityOpportunityGap: opportunityGap,
       diversityOpportunityAlignment: opportunityAlignment,
       diversityOpportunityMultiplier: opportunityMultiplier,
+      complementOpportunity: complementOpportunityScore,
+      complementOpportunityWeight: complementWeight,
+      complementOpportunityAvailability: complementAvailability,
+      complementOpportunityGap: complementGapValue,
+      complementOpportunityAlignment: complementAlignmentValue,
+      complementOpportunityMultiplier: complementMultiplier,
       blockedReason: this.mating.lastBlockReason || undefined,
     };
     // Consume the one-time reason so the next mating record does not reuse it.

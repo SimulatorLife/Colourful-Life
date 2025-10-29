@@ -1874,6 +1874,12 @@ export default class Cell {
     diversityOpportunityGap = 0,
     diversityOpportunityAlignment = 0,
     diversityOpportunityMultiplier = 1,
+    complementOpportunity = 0,
+    complementOpportunityWeight = 0,
+    complementOpportunityAvailability = 0,
+    complementOpportunityGap = 0,
+    complementOpportunityAlignment = 0,
+    complementOpportunityMultiplier = 1,
   } = {}) {
     this.matingAttempts = (this.matingAttempts || 0) + 1;
 
@@ -1935,25 +1941,80 @@ export default class Cell {
       0,
       2,
     );
+    const complementOpportunitySignal = clamp(
+      Number.isFinite(complementOpportunity) ? complementOpportunity : 0,
+      0,
+      1,
+    );
+    const complementOpportunityWeightValue = clamp(
+      Number.isFinite(complementOpportunityWeight) ? complementOpportunityWeight : 0,
+      0,
+      1,
+    );
+    const complementOpportunityAvailabilityValue = clamp(
+      Number.isFinite(complementOpportunityAvailability)
+        ? complementOpportunityAvailability
+        : complementOpportunitySignal > 0
+          ? 1
+          : 0,
+      0,
+      1,
+    );
+    const complementOpportunityGapValue = clamp(
+      Number.isFinite(complementOpportunityGap) ? complementOpportunityGap : 0,
+      0,
+      1,
+    );
+    const complementOpportunityAlignmentValue = clamp(
+      Number.isFinite(complementOpportunityAlignment)
+        ? complementOpportunityAlignment
+        : complementOpportunityAvailabilityValue > 0
+          ? clamp(1 - complementOpportunityGapValue, 0, 1)
+          : 0,
+      0,
+      1,
+    );
+    const complementOpportunityMultiplierValue = clamp(
+      Number.isFinite(complementOpportunityMultiplier)
+        ? complementOpportunityMultiplier
+        : 1,
+      0,
+      2,
+    );
     const opportunityPresent =
       opportunitySignal > 0 ||
       opportunityAvailabilityValue > 0 ||
       opportunityWeightValue > 0 ||
       opportunityGapValue > 0 ||
-      opportunityMultiplierValue !== 1;
+      opportunityMultiplierValue !== 1 ||
+      complementOpportunitySignal > 0 ||
+      complementOpportunityAvailabilityValue > 0 ||
+      complementOpportunityWeightValue > 0 ||
+      complementOpportunityGapValue > 0 ||
+      complementOpportunityMultiplierValue !== 1;
 
     if (opportunityPresent) {
+      const complementPresence =
+        complementOpportunitySignal * 0.35 +
+        complementOpportunityAvailabilityValue * 0.3 +
+        complementOpportunityWeightValue * 0.2;
       const weightedPresence =
         opportunitySignal * 0.45 +
         opportunityAvailabilityValue * 0.35 +
-        opportunityWeightValue * 0.2;
-      const gapDemand = opportunityGapValue * 0.15;
+        opportunityWeightValue * 0.2 +
+        complementPresence;
+      const gapDemand =
+        opportunityGapValue * 0.15 + complementOpportunityGapValue * 0.12;
       const multiplierDemand =
         opportunityMultiplierValue > 1
           ? Math.min(opportunityMultiplierValue - 1, 1) * 0.25
           : (1 - opportunityMultiplierValue) * 0.2;
+      const complementMultiplierDemand =
+        complementOpportunityMultiplierValue > 1
+          ? Math.min(complementOpportunityMultiplierValue - 1, 1) * 0.22
+          : (1 - complementOpportunityMultiplierValue) * 0.18;
       const sampleWeight = clamp(
-        weightedPresence + gapDemand + multiplierDemand,
+        weightedPresence + gapDemand + multiplierDemand + complementMultiplierDemand,
         0.05,
         1,
       );
@@ -1963,10 +2024,18 @@ export default class Cell {
 
       const alignmentContribution =
         opportunityAlignmentValue * sampleWeight * (success ? 1 : 0.5);
+      const complementAlignmentContribution =
+        complementOpportunityAlignmentValue * sampleWeight * 0.6 * (success ? 1 : 0.5);
 
       if (alignmentContribution > 0) {
         this.diversityOpportunityAlignmentScore =
           (this.diversityOpportunityAlignmentScore || 0) + alignmentContribution;
+      }
+
+      if (complementAlignmentContribution > 0) {
+        this.diversityOpportunityAlignmentScore =
+          (this.diversityOpportunityAlignmentScore || 0) +
+          complementAlignmentContribution;
       }
 
       let neglect = 0;
@@ -1975,6 +2044,19 @@ export default class Cell {
         neglect += (1 - opportunityAlignmentValue) * sampleWeight;
       } else if (opportunityAlignmentValue < 0.75 && opportunityGapValue > 0) {
         neglect += (1 - opportunityAlignmentValue) * opportunityGapValue * sampleWeight;
+      }
+
+      if (!success) {
+        neglect += (1 - complementOpportunityAlignmentValue) * sampleWeight * 0.6;
+      } else if (
+        complementOpportunityAlignmentValue < 0.75 &&
+        complementOpportunityGapValue > 0
+      ) {
+        neglect +=
+          (1 - complementOpportunityAlignmentValue) *
+          complementOpportunityGapValue *
+          sampleWeight *
+          0.6;
       }
 
       if (penaltyDrag > 0) {
