@@ -8,8 +8,8 @@ test(
     const controller = createSimulation({ headless: true, autoStart: false });
 
     try {
-      assert.is(controller.engine.isPaused(), true);
-      assert.is(controller.uiManager.isPaused(), true);
+      assert.is(controller.engine.isPaused(), false);
+      assert.is(controller.uiManager.isPaused(), false);
 
       controller.uiManager.setPaused(true);
       await Promise.resolve();

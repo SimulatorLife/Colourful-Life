@@ -1212,14 +1212,17 @@ export default class SimulationEngine {
    * @returns {boolean} Whether a simulation update occurred.
    */
   step(timestamp) {
-    if (!this.state.paused) return false;
+    const paused = Boolean(this.state.paused);
+    const idle = !this.running;
+
+    if (!paused && !idle) return false;
 
     const effectiveTimestamp = Number.isFinite(timestamp) ? timestamp : this.now();
 
     return this.#frame(effectiveTimestamp, {
       scheduleNext: false,
       force: true,
-      allowPausedTick: true,
+      allowPausedTick: paused || idle,
     });
   }
 

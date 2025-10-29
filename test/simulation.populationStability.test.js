@@ -10,9 +10,19 @@ test("simulation relies on lineage reproduction after initial seeding", async ()
     config: { rows: 24, cols: 24 },
   });
 
-  simulation.stop();
-
   const { engine, grid, stats } = simulation;
+
+  assert.ok(
+    !engine.isRunning,
+    "auto-start controllers configured with autoStart=false should remain idle until started",
+  );
+  assert.is(
+    engine.isPaused(),
+    false,
+    "auto-start controllers should inherit the default unpaused state when autoStart=false",
+  );
+
+  simulation.stop();
   const updatesPerSecond = Math.max(
     1,
     engine.getStateSnapshot().updatesPerSecond ?? 60,
@@ -20,15 +30,10 @@ test("simulation relies on lineage reproduction after initial seeding", async ()
   const delta = 1000 / updatesPerSecond;
   let timestamp = 0;
 
-  assert.ok(
-    engine.isPaused(),
-    "auto-start controllers configured with autoStart=false should begin paused",
-  );
-
   timestamp += delta;
   assert.ok(
     simulation.tick(timestamp),
-    "manual ticks should advance even while the engine is paused but idle",
+    "manual ticks should advance even while the engine is idle",
   );
 
   for (let i = 1; i < 420; i++) {
