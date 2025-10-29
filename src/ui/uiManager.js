@@ -1669,30 +1669,6 @@ export default class UIManager {
     overlay.appendChild(hint);
     overlay.appendChild(autopause);
 
-    const autoPauseInput = this.#addCheckbox(
-      overlay,
-      "Pause When Hidden",
-      { title: AUTO_PAUSE_DESCRIPTION, description: AUTO_PAUSE_DESCRIPTION },
-      this.autoPauseOnBlur,
-      (checked) => {
-        this.setAutoPauseOnBlur(checked);
-      },
-    );
-
-    if (autoPauseInput) {
-      this.autoPauseCheckbox = autoPauseInput;
-      const row =
-        typeof autoPauseInput.closest === "function"
-          ? autoPauseInput.closest("label")
-          : autoPauseInput.parentElement?.parentElement;
-
-      if (row instanceof HTMLElement) {
-        row.classList.add("canvas-pause-indicator__autopause-control");
-      }
-    } else {
-      this.autoPauseCheckbox = null;
-    }
-
     this.canvasContainer.appendChild(overlay);
 
     this.pauseOverlay = overlay;
@@ -1898,7 +1874,7 @@ export default class UIManager {
       if (this.autoPausePending) {
         this.pauseOverlayAutopause.hidden = false;
         this.pauseOverlayAutopause.textContent =
-          "Autopause resumes when the tab regains focus.";
+          "Autopause resumes when the tab regains focus. Adjust Pause When Hidden from Simulation Controls if you need to change this behaviour.";
       } else {
         this.pauseOverlayAutopause.hidden = true;
         this.pauseOverlayAutopause.textContent = "";
@@ -3763,6 +3739,20 @@ export default class UIManager {
     });
 
     this.#updateSpeedMultiplierUI(this.speedMultiplier);
+
+    const autopauseCheckbox = this.#addCheckbox(
+      body,
+      "Pause When Hidden",
+      { title: AUTO_PAUSE_DESCRIPTION, description: AUTO_PAUSE_DESCRIPTION },
+      this.autoPauseOnBlur,
+      (checked) => {
+        this.setAutoPauseOnBlur(checked);
+      },
+    );
+
+    if (autopauseCheckbox) {
+      this.autoPauseCheckbox = autopauseCheckbox;
+    }
 
     this.#buildHotkeyReference(body);
   }

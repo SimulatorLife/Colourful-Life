@@ -42,7 +42,7 @@ PERF_SIM_DENSITY=0.68 node scripts/profile-energy.mjs`), where survivors
   without reviving feast/famine swings.
 - Clarified the supported Node.js range (>= 18.18.0 with 25.0.0 pinned via `.nvmrc`) and refreshed the README and developer guide quick-start loops so onboarding matches the tooling used in CI and profiling.
 - Tightened the primary documentation (README, developer guide, architecture notes) to streamline quick-start guidance, highlight subsystem profiling harnesses, and document the shared trait aggregation helpers used by Stats.
-- Moved the "Pause When Hidden" toggle from the Simulation Controls panel to the pause overlay so focus behaviour can be tweaked beside the autopause hint that appears while the grid is halted.
+- Relocated the "Pause When Hidden" toggle into the Simulation Controls playback stack so autopause management sits beside the pause and speed controls instead of hiding within the pause overlay.
 - Refreshed the README, developer guide, and architecture overview to streamline
   the quick-start flow, trim stale metrics, and clarify where configuration
   overrides live so primary docs mirror the current architecture.

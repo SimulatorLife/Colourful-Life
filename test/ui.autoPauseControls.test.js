@@ -33,7 +33,7 @@ test("autopause toggle updates pause indicator and notifies listeners", async ()
     assert.is(uiManager.pauseOverlayAutopause.hidden, true);
     assert.is(uiManager.pauseOverlayAutopause.textContent, "");
 
-    const toggle = findCheckboxByLabel(uiManager.pauseOverlay, "Pause When Hidden");
+    const toggle = findCheckboxByLabel(uiManager.controlsPanel, "Pause When Hidden");
 
     assert.ok(toggle, "autopause checkbox should be discoverable");
     assert.is(toggle.type, "checkbox");
@@ -71,7 +71,7 @@ test("autopause toggle updates pause indicator and notifies listeners", async ()
     assert.is(uiManager.pauseOverlayAutopause.hidden, false);
     assert.is(
       uiManager.pauseOverlayAutopause.textContent,
-      "Autopause resumes when the tab regains focus.",
+      "Autopause resumes when the tab regains focus. Adjust Pause When Hidden from Simulation Controls if you need to change this behaviour.",
     );
 
     uiManager.setAutoPausePending(false);
