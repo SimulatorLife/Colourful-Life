@@ -9,8 +9,11 @@ let colorCacheEvictIndex = 0;
 
 const CELL_COLOR_RECORD_CACHE = new WeakMap();
 
-const RGB_PATTERN =
-  /rgba?\(\s*([0-9]+(?:\.[0-9]+)?%?)\s*(?:,\s*|\s+)([0-9]+(?:\.[0-9]+)?%?)\s*(?:,\s*|\s+)([0-9]+(?:\.[0-9]+)?%?)(?:\s*(?:,\s*|\/\s*)([0-9.]+%?))?\s*\)/i;
+const RGB_NUMBER_PATTERN = "[0-9]*\\.?[0-9]+%?";
+const RGB_PATTERN = new RegExp(
+  `rgba?\\(\\s*(${RGB_NUMBER_PATTERN})\\s*(?:,\\s*|\\s+)(${RGB_NUMBER_PATTERN})\\s*(?:,\\s*|\\s+)(${RGB_NUMBER_PATTERN})(?:\\s*(?:,\\s*|\\/\\s*)(${RGB_NUMBER_PATTERN}))?\\s*\\)`,
+  "i",
+);
 const HEX_PATTERN = /^#([0-9a-f]{3,8})$/i;
 const EMPTY_RGBA = Object.freeze([0, 0, 0, 0]);
 

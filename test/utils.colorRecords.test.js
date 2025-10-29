@@ -77,6 +77,18 @@ test("resolveColorRecord handles percentage rgb components", async () => {
   assert.equal(rgbaPercent.rgba, [32, 128, 0, 128]);
 });
 
+test("resolveColorRecord parses decimal rgb components without leading zeros", async () => {
+  const { resolveColorRecord } = await loadColorRecordsModule("decimal");
+
+  const decimal = resolveColorRecord("rgba(.5, .25, .125, .5)");
+
+  assert.equal(decimal.rgba, [1, 0, 0, 128]);
+
+  const slashSeparated = resolveColorRecord("rgb(.5 .25 .125 / .5)");
+
+  assert.equal(slashSeparated.rgba, [1, 0, 0, 128]);
+});
+
 test("resolveCellColorRecord memoizes per cell and reacts to color changes", async () => {
   const { resolveCellColorRecord, resolveColorRecord, EMPTY_COLOR_RECORD } =
     await loadColorRecordsModule("cell-cache");
