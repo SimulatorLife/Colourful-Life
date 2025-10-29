@@ -103,16 +103,10 @@ test("handleReproduction records the full mate pool size when prioritizing candi
   assert.is(seenPoolLength, 12, "prioritization should limit the mating pool");
   assert.is(recorded.length, 1, "expected mate choice to be recorded");
   assert.is(recorded[0].poolSize, mateCount);
-  assert.ok(Object.prototype.hasOwnProperty.call(recorded[0], "diversityOpportunity"));
-  assert.ok(
-    Object.prototype.hasOwnProperty.call(recorded[0], "diversityOpportunityGap"),
-  );
-  assert.ok(
-    Object.prototype.hasOwnProperty.call(recorded[0], "diversityOpportunityAlignment"),
-  );
-  assert.ok(
-    Object.prototype.hasOwnProperty.call(recorded[0], "diversityOpportunityMultiplier"),
-  );
+  assert.ok(Object.hasOwn(recorded[0], "diversityOpportunity"));
+  assert.ok(Object.hasOwn(recorded[0], "diversityOpportunityGap"));
+  assert.ok(Object.hasOwn(recorded[0], "diversityOpportunityAlignment"));
+  assert.ok(Object.hasOwn(recorded[0], "diversityOpportunityMultiplier"));
 });
 
 test("handleReproduction weights diversity opportunity by available variety", async () => {
