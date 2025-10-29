@@ -612,6 +612,7 @@ export default class GridManager {
   #densityTotalsCache = new Map();
   #renderDirtyIndices = [];
   #renderDirtyFlags = null;
+  #renderDirtyPositions = null;
   #renderDirtyRevision = 1;
   #renderDirtyView = null;
 
@@ -620,6 +621,7 @@ export default class GridManager {
 
     this.#renderDirtyIndices = [];
     this.#renderDirtyFlags = total > 0 ? new Uint32Array(total) : null;
+    this.#renderDirtyPositions = total > 0 ? new Int32Array(total).fill(-1) : null;
     this.#renderDirtyRevision = 1;
 
     if (!this.#renderDirtyView) {
@@ -639,6 +641,9 @@ export default class GridManager {
       this.#renderDirtyFlags = total > 0 ? new Uint32Array(total) : null;
       this.#renderDirtyIndices.length = 0;
       this.#renderDirtyRevision = 1;
+      this.#renderDirtyPositions = total > 0 ? new Int32Array(total).fill(-1) : null;
+    } else if (this.#renderDirtyPositions?.length !== total) {
+      this.#renderDirtyPositions = total > 0 ? new Int32Array(total).fill(-1) : null;
     }
 
     return Boolean(this.#renderDirtyFlags);
@@ -695,6 +700,7 @@ export default class GridManager {
     }
 
     const flags = this.#renderDirtyFlags;
+    const positions = this.#renderDirtyPositions;
 
     if (!flags || index >= flags.length) {
       return false;
@@ -707,7 +713,13 @@ export default class GridManager {
     }
 
     flags[index] = revision;
+    const nextPosition = this.#renderDirtyIndices.length;
+
     this.#renderDirtyIndices.push(index);
+
+    if (positions && index < positions.length) {
+      positions[index] = nextPosition;
+    }
 
     return true;
   }
@@ -730,12 +742,42 @@ export default class GridManager {
     flags[index] = 0;
 
     const list = this.#renderDirtyIndices;
+    const positions = this.#renderDirtyPositions;
+    const last = list.length - 1;
 
-    for (let i = 0; i < list.length; i++) {
-      if (list[i] === index) {
-        list.splice(i, 1);
+    if (last >= 0) {
+      let position = -1;
 
-        break;
+      if (positions && index < positions.length) {
+        position = positions[index];
+      }
+
+      if (position < 0 || position > last) {
+        for (let i = 0; i <= last; i++) {
+          if (list[i] === index) {
+            position = i;
+
+            break;
+          }
+        }
+      }
+
+      if (position >= 0 && position <= last) {
+        const lastValue = list[last];
+
+        if (position !== last) {
+          list[position] = lastValue;
+
+          if (positions && lastValue < positions.length) {
+            positions[lastValue] = position;
+          }
+        }
+
+        list.length = last;
+      }
+
+      if (positions && index < positions.length) {
+        positions[index] = -1;
       }
     }
 
@@ -757,8 +799,21 @@ export default class GridManager {
   }
 
   #clearRenderDirtyTiles() {
-    if (this.#renderDirtyIndices.length > 0) {
-      this.#renderDirtyIndices.length = 0;
+    const indices = this.#renderDirtyIndices;
+    const positions = this.#renderDirtyPositions;
+
+    if (indices.length > 0) {
+      if (positions) {
+        for (let i = 0; i < indices.length; i++) {
+          const tileIndex = indices[i];
+
+          if (tileIndex < positions.length) {
+            positions[tileIndex] = -1;
+          }
+        }
+      }
+
+      indices.length = 0;
     }
 
     this.#renderDirtyRevision = (this.#renderDirtyRevision + 1) >>> 0;
@@ -768,6 +823,10 @@ export default class GridManager {
 
       if (this.#renderDirtyFlags) {
         this.#renderDirtyFlags.fill(0);
+      }
+
+      if (positions) {
+        positions.fill(-1);
       }
     }
   }
