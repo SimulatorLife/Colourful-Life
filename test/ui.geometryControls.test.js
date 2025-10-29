@@ -418,6 +418,57 @@ test("Apply Geometry surfaces busy feedback while resizing", async () => {
   }
 });
 
+test("geometry busy fallback preserves aria-label strings", async () => {
+  const restore = setupDom();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      { requestFrame: () => {} },
+      "#app",
+      {
+        setWorldGeometry: (options) => ({
+          cellSize: options.cellSize ?? 5,
+          rows: options.rows ?? 60,
+          cols: options.cols ?? 60,
+        }),
+        getCellSize: () => 5,
+        getGridDimensions: () => ({ rows: 60, cols: 60, cellSize: 5 }),
+      },
+      { canvasElement: new MockCanvas(300, 300) },
+    );
+
+    const applyButton = findButtonByText(uiManager.controlsPanel, "Apply Geometry");
+
+    assert.ok(applyButton, "apply button should exist");
+
+    applyButton.attributes["aria-label"] = {
+      value: "Resize the world using these values.",
+    };
+    uiManager.geometryControls.applyButtonDefaultAriaLabel = null;
+    const originalGetter = applyButton.getAttribute;
+
+    applyButton.getAttribute = () => {
+      throw new Error("getAttribute intentionally unavailable");
+    };
+
+    applyButton.dispatchEvent({ type: "click" });
+
+    const storedLabel = applyButton.attributes["aria-label"];
+
+    assert.is(
+      storedLabel,
+      "Resize the world using these values.",
+      "aria-label should restore the original string when busy state clears",
+    );
+
+    applyButton.getAttribute = originalGetter;
+  } finally {
+    restore();
+  }
+});
+
 test("setGridGeometry mirrors engine dimensions outside UI bounds", async () => {
   const restore = setupDom();
 

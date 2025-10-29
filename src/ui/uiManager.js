@@ -1956,9 +1956,27 @@ export default class UIManager {
     }
 
     if (element.attributes && typeof element.attributes === "object") {
-      const value = element.attributes[name];
+      const attribute = element.attributes[name];
 
-      if (value != null) return value;
+      if (attribute != null) {
+        if (typeof attribute === "object") {
+          if (Object.hasOwn(attribute, "value") && attribute.value != null) {
+            return typeof attribute.value === "string"
+              ? attribute.value
+              : String(attribute.value);
+          }
+
+          if (Object.hasOwn(attribute, "nodeValue") && attribute.nodeValue != null) {
+            return typeof attribute.nodeValue === "string"
+              ? attribute.nodeValue
+              : String(attribute.nodeValue);
+          }
+
+          return null;
+        }
+
+        return attribute;
+      }
     }
 
     return null;
