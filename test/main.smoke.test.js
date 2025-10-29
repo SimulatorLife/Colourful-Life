@@ -33,10 +33,14 @@ test("createSimulation runs in a headless Node environment", async () => {
   assert.ok(simulation.grid, "grid is returned");
   assert.ok(simulation.uiManager, "uiManager is returned");
 
-  simulation.pause();
+  assert.is(
+    simulation.engine.isPaused(),
+    true,
+    "autoStart=false should leave the engine paused",
+  );
   const stepped = simulation.step(123);
 
-  assert.is(stepped, true, "step should advance once when paused");
+  assert.is(stepped, true, "step should advance once while paused");
   assert.is(
     rafHandles.length,
     0,
@@ -547,7 +551,7 @@ test("engine.resetWorld clears the ecosystem by default and reseeds on request",
     config: { rows: 12, cols: 12, cellSize: 5 },
   });
 
-  simulation.engine.tick();
+  simulation.step();
 
   const { stats, selectionManager, grid } = simulation;
 

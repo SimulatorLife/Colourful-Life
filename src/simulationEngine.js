@@ -712,10 +712,11 @@ export default class SimulationEngine {
     let tickOccurred = false;
 
     const paused = Boolean(this.state.paused);
+    const idle = !this.running;
     const interval = 1000 / Math.max(1, this.state.updatesPerSecond);
     const elapsed = effectiveTimestamp - this.lastUpdateTime;
     const shouldAdvance =
-      (force && (!paused || allowPausedTick)) ||
+      (force && (!paused || allowPausedTick || idle)) ||
       (!paused && elapsed >= interval) ||
       (allowPausedTick && paused);
 
