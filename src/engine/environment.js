@@ -185,15 +185,49 @@ export function buildHeadlessCanvasOverrides(config, size) {
  *   when unavailable.
  */
 export function resolveCanvas(canvas, documentRef, options = {}) {
-  if (canvas) return canvas;
+  if (canvas && typeof canvas === "object") {
+    return canvas;
+  }
+
+  const doc =
+    documentRef && typeof documentRef.getElementById === "function"
+      ? documentRef
+      : null;
+
+  if (typeof canvas === "string" && canvas.trim().length > 0) {
+    const lookup = canvas.trim();
+
+    if (doc) {
+      const byId = doc.getElementById(lookup);
+
+      if (byId) {
+        return byId;
+      }
+    }
+
+    const queryDoc =
+      doc && typeof doc.querySelector === "function"
+        ? doc
+        : typeof documentRef?.querySelector === "function"
+          ? documentRef
+          : null;
+
+    if (queryDoc) {
+      const bySelector = queryDoc.querySelector(lookup);
+
+      if (bySelector) {
+        return bySelector;
+      }
+    }
+  }
 
   const fallbackId =
     typeof options?.fallbackId === "string" && options.fallbackId.trim().length > 0
       ? options.fallbackId.trim()
       : "gameCanvas";
 
-  if (documentRef && typeof documentRef.getElementById === "function") {
-    return documentRef.getElementById(fallbackId);
+  if (doc) {
+    return doc.getElementById(fallbackId);
   }
 
   return null;
