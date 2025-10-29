@@ -1068,9 +1068,9 @@ export default class GridManager {
     ) {
       this.#sparseDirtyColumnsScratch = Array.from({ length: rowCount }, () => []);
     } else {
-      for (let i = 0; i < this.#sparseDirtyColumnsScratch.length; i++) {
-        this.#sparseDirtyColumnsScratch[i].length = 0;
-      }
+      this.#sparseDirtyColumnsScratch.forEach((column) => {
+        column.length = 0;
+      });
     }
 
     return this.#sparseDirtyColumnsScratch;
@@ -1090,9 +1090,9 @@ export default class GridManager {
     if (!this.#eventRowsScratch || this.#eventRowsScratch.length !== rowCount) {
       this.#eventRowsScratch = Array.from({ length: rowCount }, () => []);
     } else {
-      for (let i = 0; i < this.#eventRowsScratch.length; i++) {
-        this.#eventRowsScratch[i].length = 0;
-      }
+      this.#eventRowsScratch.forEach((rowEvents) => {
+        rowEvents.length = 0;
+      });
     }
 
     return this.#eventRowsScratch;
