@@ -485,6 +485,12 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
     createCell({
       interactionGenes: { cooperate: 0.5, fight: 0.4 },
       sight: 2,
+      brain: {
+        neuronCount: 12,
+        connectionCount: 30,
+        lastActivationCount: 18,
+      },
+      neuralPlasticityProfile: { learningRate: 0.25 },
     }),
     createCell({
       interactionGenes: { cooperate: 0.8, fight: 0.9 },
@@ -532,6 +538,14 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(result.mutationMultiplier, 2);
   assert.is(result.blockedMatings, 1);
   assert.equal(result.lastBlockedReproduction.reason, "Still recent");
+  assert.equal(result.neural, stats.neuralSummary);
+  approxEqual(result.neural.coverage, 0.5, 1e-9);
+  approxEqual(result.neural.meanNeuronCount, 12, 1e-9);
+  approxEqual(result.neural.meanConnectionCount, 30, 1e-9);
+  approxEqual(result.neural.meanActivationLoad, 18, 1e-9);
+  approxEqual(result.neural.meanPlasticityLearningRate, 0.25, 1e-9);
+  approxEqual(result.neural.peakComplexity, 30, 1e-9);
+  assert.is(result.neural.neuralPopulation, 1);
 
   approxEqual(stats.getBehavioralEvenness(), 1, 1e-9);
   approxEqual(stats.diversityOpportunityGap, 0.35, 1e-9);
@@ -555,6 +569,14 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.is(stats.history.mateNoveltyPressure.length, 1);
   approxEqual(stats.history.mateNoveltyPressure[0], 0.45, 1e-9);
   assert.is(stats.history.mutationMultiplier.length, 1);
+  assert.is(stats.history.neuralCoverage.length, 1);
+  approxEqual(stats.history.neuralCoverage[0], 0.5, 1e-9);
+  assert.is(stats.history.neuralActivationLoad.length, 1);
+  approxEqual(stats.history.neuralActivationLoad[0], 18, 1e-9);
+  assert.is(stats.history.neuralPlasticity.length, 1);
+  approxEqual(stats.history.neuralPlasticity[0], 0.25, 1e-9);
+  assert.is(stats.history.neuralComplexity.length, 1);
+  approxEqual(stats.history.neuralComplexity[0], 30, 1e-9);
 
   assert.is(stats.traitHistory.presence.cooperation.length, 1);
   assert.is(stats.traitHistory.average.cooperation.length, 1);
@@ -604,6 +626,34 @@ test("updateFromSnapshot aggregates metrics and caps histories", async () => {
   assert.equal(stats.history.deathsPerTick, [0, 0, 0]);
   assert.equal(stats.getHistorySeries("population"), [1, 1, 1]);
   assert.equal(stats.getTraitHistorySeries("presence", "cooperation"), [0.5, 0.5, 0.5]);
+});
+
+test("neural summary falls back to dna plasticity profile", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(4, {
+    diversitySampleInterval: 1,
+    traitResampleInterval: 1,
+  });
+
+  stats.updateFromSnapshot({
+    population: 1,
+    totalEnergy: 3,
+    totalAge: 5,
+    entries: toEntries([
+      createCell({
+        brain: { neuronCount: 8, connectionCount: 16, lastActivationCount: 6 },
+        neuralPlasticityProfile: null,
+        dna: {
+          reproductionProb: () => 0,
+          similarity: () => 0,
+          neuralPlasticityProfile: () => ({ learningRate: 0.4 }),
+        },
+      }),
+    ]),
+  });
+
+  approxEqual(stats.neuralSummary.meanPlasticityLearningRate, 0.4, 1e-9);
+  assert.is(stats.neuralSummary.plasticitySamples, 1);
 });
 
 test("updateFromSnapshot releases population cell references", async () => {

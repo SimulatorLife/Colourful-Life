@@ -34,6 +34,10 @@ const HISTORY_SERIES_KEYS = [
   "mateNoveltyPressure",
   "mutationMultiplier",
   "starvationRate",
+  "neuralCoverage",
+  "neuralActivationLoad",
+  "neuralPlasticity",
+  "neuralComplexity",
 ];
 
 const DIVERSITY_TARGET_DEFAULT = 0.35;
@@ -56,6 +60,8 @@ const TRAIT_COMPUTE_WARNING =
   "Trait compute function failed; defaulting to neutral contribution.";
 const DIVERSITY_SIMILARITY_WARNING =
   "Failed to compute DNA similarity while estimating diversity.";
+const NEURAL_PLASTICITY_WARNING =
+  "Failed to resolve neural plasticity profile from DNA.";
 
 const UNRESOLVED_SEED = Symbol("stats.unresolvedSeed");
 
@@ -397,6 +403,44 @@ const createEmptyMatingSnapshot = () => ({
   lastBlockReason: null,
 });
 
+const createEmptyNeuralSummary = () => ({
+  population: 0,
+  neuralPopulation: 0,
+  coverage: 0,
+  meanNeuronCount: 0,
+  meanConnectionCount: 0,
+  meanActivationLoad: 0,
+  meanPlasticityLearningRate: 0,
+  plasticitySamples: 0,
+  peakComplexity: 0,
+});
+
+const resolveNeuralPlasticityProfile = (cell) => {
+  if (!cell || typeof cell !== "object") {
+    return null;
+  }
+
+  const directProfile = cell.neuralPlasticityProfile;
+
+  if (directProfile && typeof directProfile === "object") {
+    return directProfile;
+  }
+
+  const dna = cell.dna;
+
+  if (dna && typeof dna.neuralPlasticityProfile === "function") {
+    try {
+      const resolved = dna.neuralPlasticityProfile();
+
+      return resolved && typeof resolved === "object" ? resolved : null;
+    } catch (error) {
+      warnOnce(NEURAL_PLASTICITY_WARNING, error);
+    }
+  }
+
+  return null;
+};
+
 const isCellLike = (candidate) => {
   if (!candidate || typeof candidate !== "object") return false;
 
@@ -524,6 +568,7 @@ export default class Stats {
     this.complementOpportunityGap = 0;
     this.complementOpportunityAlignment = 0;
     this.complementOpportunityMultiplier = 1;
+    this.neuralSummary = createEmptyNeuralSummary();
     this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
     this.lifeEventSequence = 0;
     this.lifeEventFadeTicks = LIFE_EVENT_FADE_DEFAULT;
@@ -640,6 +685,7 @@ export default class Stats {
       history: createHistoryRing(240),
     };
     this.starvationRateSmoothed = 0;
+    this.neuralSummary = createEmptyNeuralSummary();
   }
 
   setDiversityTarget(value) {
@@ -1271,6 +1317,100 @@ export default class Stats {
     return view;
   }
 
+  #computeNeuralSummary(cellSources, population) {
+    const summary = this.neuralSummary ?? createEmptyNeuralSummary();
+    const totalPopulation = Math.max(0, Math.floor(Number(population) || 0));
+    const pool = toArray(cellSources);
+
+    summary.population = totalPopulation;
+    summary.neuralPopulation = 0;
+    summary.coverage = 0;
+    summary.meanNeuronCount = 0;
+    summary.meanConnectionCount = 0;
+    summary.meanActivationLoad = 0;
+    summary.meanPlasticityLearningRate = 0;
+    summary.plasticitySamples = 0;
+    summary.peakComplexity = 0;
+
+    if (!pool.length || totalPopulation <= 0) {
+      return summary;
+    }
+
+    let neuronSum = 0;
+    let connectionSum = 0;
+    let activationSum = 0;
+    let plasticitySum = 0;
+    let plasticitySamples = 0;
+    let peakComplexity = 0;
+    let neuralCount = 0;
+
+    for (let index = 0; index < pool.length; index += 1) {
+      const entry = pool[index];
+      const cell = isCellLike(entry)
+        ? entry
+        : entry && typeof entry === "object" && isCellLike(entry.cell)
+          ? entry.cell
+          : null;
+
+      if (!cell) {
+        continue;
+      }
+
+      const brain = cell.brain;
+      const connectionCount = Number.isFinite(brain?.connectionCount)
+        ? brain.connectionCount
+        : null;
+
+      if (!(connectionCount > 0)) {
+        continue;
+      }
+
+      neuralCount += 1;
+
+      const neuronCount = Number.isFinite(brain?.neuronCount)
+        ? brain.neuronCount
+        : Number.isFinite(cell.neurons)
+          ? cell.neurons
+          : 0;
+      const activationLoad = Number.isFinite(brain?.lastActivationCount)
+        ? brain.lastActivationCount
+        : 0;
+
+      neuronSum += neuronCount;
+      connectionSum += connectionCount;
+      activationSum += activationLoad;
+
+      const complexityCandidate = Math.max(
+        0,
+        connectionCount ?? 0,
+        Number.isFinite(neuronCount) ? neuronCount : 0,
+      );
+
+      if (complexityCandidate > peakComplexity) {
+        peakComplexity = complexityCandidate;
+      }
+
+      const plasticity = resolveNeuralPlasticityProfile(cell);
+
+      if (plasticity && Number.isFinite(plasticity.learningRate)) {
+        plasticitySum += plasticity.learningRate;
+        plasticitySamples += 1;
+      }
+    }
+
+    summary.neuralPopulation = neuralCount;
+    summary.coverage = neuralCount > 0 ? clamp01(neuralCount / totalPopulation) : 0;
+    summary.meanNeuronCount = neuralCount > 0 ? neuronSum / neuralCount : 0;
+    summary.meanConnectionCount = neuralCount > 0 ? connectionSum / neuralCount : 0;
+    summary.meanActivationLoad = neuralCount > 0 ? activationSum / neuralCount : 0;
+    summary.meanPlasticityLearningRate =
+      plasticitySamples > 0 ? plasticitySum / plasticitySamples : 0;
+    summary.plasticitySamples = plasticitySamples;
+    summary.peakComplexity = peakComplexity;
+
+    return summary;
+  }
+
   #resolveInteractionHighlight(interactionGenes) {
     if (!interactionGenes || typeof interactionGenes !== "object") {
       return null;
@@ -1875,6 +2015,10 @@ export default class Stats {
     this.complementOpportunityAlignment = complementOpportunityAlignment;
     this.complementOpportunityMultiplier = complementOpportunityMultiplier;
 
+    const neuralSummary = this.#computeNeuralSummary(populationSources, pop);
+
+    this.neuralSummary = neuralSummary;
+
     this.pushHistory("population", pop);
     this.pushHistory("diversity", diversity);
     this.pushHistory("diversityPressure", this.diversityPressure);
@@ -1913,6 +2057,10 @@ export default class Stats {
 
     this.starvationRateSmoothed = clamp01(blendedStarvation);
     this.pushHistory("starvationRate", this.starvationRateSmoothed);
+    this.pushHistory("neuralCoverage", neuralSummary.coverage);
+    this.pushHistory("neuralActivationLoad", neuralSummary.meanActivationLoad);
+    this.pushHistory("neuralPlasticity", neuralSummary.meanPlasticityLearningRate);
+    this.pushHistory("neuralComplexity", neuralSummary.peakComplexity);
 
     this.traitPresence = traitPresence;
     this.behavioralEvenness = behaviorEvenness;
@@ -1970,6 +2118,7 @@ export default class Stats {
       lastBlockedReproduction: this.lastBlockedReproduction,
       deathBreakdown: this.deathCausesTick ? { ...this.deathCausesTick } : {},
       starvationRate: this.starvationRateSmoothed,
+      neural: neuralSummary,
     };
   }
 
