@@ -1086,6 +1086,79 @@ test("interaction momentum responds to conflicts and cooperation history", () =>
   assert.ok(decayed > afterLoss, "decay pulls momentum back toward baseline");
 });
 
+test("cooperative interactions imprint neural social expectations", () => {
+  const dna = new DNA(200, 180, 90);
+
+  dna.genes[GENE_LOCI.NEURAL] = 230;
+  dna.genes[GENE_LOCI.COOPERATION] = 240;
+  dna.genes[GENE_LOCI.PARENTAL] = 210;
+  dna.genes[GENE_LOCI.RECOVERY] = 220;
+  dna.genes[GENE_LOCI.SENSE] = 200;
+
+  const cell = new Cell(1, 1, dna, 6);
+  const imprintCalls = [];
+  const feedbackCalls = [];
+
+  cell.brain = {
+    sensorPlasticity: { enabled: true, learningRate: 0.24, volatility: 0.4 },
+    applyExperienceImprint(payload) {
+      imprintCalls.push(payload);
+    },
+    applySensorFeedback(payload) {
+      feedbackCalls.push(payload);
+    },
+  };
+
+  const partnerDna = new DNA(150, 190, 120);
+
+  partnerDna.genes[GENE_LOCI.COOPERATION] = 220;
+  partnerDna.genes[GENE_LOCI.NEURAL] = 200;
+  const partner = new Cell(2, 1, partnerDna, 5);
+
+  const next = cell.experienceInteraction({
+    type: "cooperate",
+    outcome: "receive",
+    partner,
+    energyDelta: 1.6,
+    intensity: 1.1,
+  });
+
+  assert.is(imprintCalls.length, 1, "neural imprint emitted once");
+
+  const payload = imprintCalls[0];
+
+  assert.ok(Array.isArray(payload.adjustments), "imprint payload includes adjustments");
+
+  const findAdjustment = (key) =>
+    payload.adjustments.find((adjustment) => adjustment?.sensor === key) || null;
+
+  const allyAdjustment = findAdjustment("allyFraction");
+
+  assert.ok(allyAdjustment, "ally fraction adjustment captured");
+  assert.ok(allyAdjustment.assimilation > 0, "ally adjustment assimilates positively");
+  assert.ok(
+    allyAdjustment.target > 0,
+    "ally expectation shifts toward supportive values",
+  );
+
+  const riskAdjustment = findAdjustment("riskTolerance");
+
+  assert.ok(riskAdjustment, "risk tolerance adjustment recorded");
+  assert.ok(riskAdjustment.assimilation > 0, "risk adjustment blends experience");
+
+  const momentumAdjustment = findAdjustment("interactionMomentum");
+
+  assert.ok(momentumAdjustment, "momentum adjustment present");
+  approxEqual(
+    momentumAdjustment.target,
+    next,
+    1e-6,
+    "momentum sensor target follows updated value",
+  );
+
+  assert.is(feedbackCalls.length, 0, "no sensor feedback without evaluation context");
+});
+
 test("breed returns null when either parent lacks investable energy", () => {
   const dnaA = new DNA(240, 10, 10);
   const dnaB = new DNA(240, 10, 10);
