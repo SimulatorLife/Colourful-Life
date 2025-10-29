@@ -35,12 +35,12 @@ test("createSimulation runs in a headless Node environment", async () => {
 
   assert.is(
     simulation.engine.isPaused(),
-    true,
-    "autoStart=false should leave the engine paused",
+    false,
+    "autoStart=false should keep the engine idle without forcing a pause",
   );
   const stepped = simulation.step(123);
 
-  assert.is(stepped, true, "step should advance once while paused");
+  assert.is(stepped, true, "step should advance once even when the engine is idle");
   assert.is(
     rafHandles.length,
     0,
