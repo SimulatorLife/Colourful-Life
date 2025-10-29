@@ -19,11 +19,16 @@ function softmax(logits = []) {
 
   const { length } = logits;
   // Manual loops avoid multiple temporary arrays that the previous implementation
-  // created via spread/map/reduce inside per-tick decision hot paths.
+  // created via spread/map/reduce inside per-tick decision hot paths. We reuse
+  // the output buffer to store the numeric logits during the first pass so we
+  // only coerce each entry once before exponentiating.
+  const expValues = new Array(length);
   let maxLogit = Number.NEGATIVE_INFINITY;
 
   for (let i = 0; i < length; i++) {
     const value = Number(logits[i]);
+
+    expValues[i] = value;
 
     if (Number.isNaN(value)) {
       maxLogit = NaN;
@@ -35,7 +40,6 @@ function softmax(logits = []) {
     }
   }
 
-  const expValues = new Array(length);
   let sum = 0;
 
   if (Number.isNaN(maxLogit)) {
@@ -44,7 +48,7 @@ function softmax(logits = []) {
     }
   } else {
     for (let i = 0; i < length; i++) {
-      const expValue = Math.exp(Number(logits[i]) - maxLogit);
+      const expValue = Math.exp(expValues[i] - maxLogit);
 
       expValues[i] = expValue;
       sum += expValue;
