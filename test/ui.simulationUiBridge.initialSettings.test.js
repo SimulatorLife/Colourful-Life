@@ -82,4 +82,32 @@ test("sanitized defaults survive layout overrides when values are invalid", asyn
     "boolean overrides should be coerced before reaching layout consumers",
   );
 });
+
+test("speed multiplier overrides keep derived cadence in sync", async () => {
+  const { bindSimulationToUi } = await import("../src/ui/simulationUiBridge.js");
+  const { resolveSimulationDefaults } = await import("../src/config.js");
+
+  const sanitizedDefaults = resolveSimulationDefaults({});
+  const overrideSettings = { speedMultiplier: 1.5 };
+  const expected = resolveSimulationDefaults(overrideSettings);
+
+  const { layout } = bindSimulationToUi({
+    engine: { canvas: {}, selectionManager: null },
+    uiOptions: { layout: { initialSettings: overrideSettings } },
+    sanitizedDefaults,
+    simulationCallbacks: {},
+    headless: true,
+  });
+
+  assert.is(
+    layout.initialSettings.speedMultiplier,
+    expected.speedMultiplier,
+    "layout overrides should preserve the requested speed multiplier",
+  );
+  assert.is(
+    layout.initialSettings.updatesPerSecond,
+    expected.updatesPerSecond,
+    "derived updates-per-second should follow the speed override",
+  );
+});
 test.run();
