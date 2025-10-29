@@ -1,10 +1,47 @@
 const EMPTY_APPLIED_EVENTS = Object.freeze([]);
-const DEFAULT_EVENT_MODIFIERS = Object.freeze({
+
+const NEUTRAL_EVENT_MODIFIER_VALUES = Object.freeze({
   regenMultiplier: 1,
   regenAdd: 0,
   drainAdd: 0,
+});
+
+const DEFAULT_EVENT_MODIFIERS = Object.freeze({
+  ...NEUTRAL_EVENT_MODIFIER_VALUES,
   appliedEvents: EMPTY_APPLIED_EVENTS,
 });
+
+function createNeutralEventModifiers() {
+  return { ...NEUTRAL_EVENT_MODIFIER_VALUES };
+}
+
+function resetEventModifiers(target) {
+  if (!target || typeof target !== "object") {
+    return createNeutralEventModifiers();
+  }
+
+  target.regenMultiplier = NEUTRAL_EVENT_MODIFIER_VALUES.regenMultiplier;
+  target.regenAdd = NEUTRAL_EVENT_MODIFIER_VALUES.regenAdd;
+  target.drainAdd = NEUTRAL_EVENT_MODIFIER_VALUES.drainAdd;
+
+  return target;
+}
+
+function normalizeEventStrength(value) {
+  const numeric = Number(value);
+
+  return Number.isFinite(numeric) && numeric !== 0 ? numeric : null;
+}
+
+function prepareAppliedEventsCollection(existing) {
+  if (Array.isArray(existing) && !Object.isFrozen(existing)) {
+    existing.length = 0;
+
+    return existing;
+  }
+
+  return [];
+}
 
 function prepareEffectCache(resolveEffect, sharedEffectCache) {
   if (!resolveEffect) return null;
@@ -69,21 +106,21 @@ export function resolveEventContribution({
   effectCache: externalEffectCache,
 } = {}) {
   if (!event) {
-    return { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
+    return createNeutralEventModifiers();
   }
 
-  const baseStrength = Number(event?.strength ?? 0);
+  const baseStrength = normalizeEventStrength(event?.strength);
 
-  if (!Number.isFinite(baseStrength) || baseStrength === 0) {
-    return { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
+  if (baseStrength == null) {
+    return createNeutralEventModifiers();
   }
 
   const numericMultiplier = Number(strengthMultiplier);
   const multiplier = Number.isFinite(numericMultiplier) ? numericMultiplier : 1;
-  const strength = baseStrength * multiplier;
+  const strength = normalizeEventStrength(baseStrength * multiplier);
 
-  if (!Number.isFinite(strength) || strength === 0) {
-    return { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
+  if (strength == null) {
+    return createNeutralEventModifiers();
   }
 
   const resolveEffect = typeof getEventEffect === "function" ? getEventEffect : null;
@@ -93,10 +130,10 @@ export function resolveEventContribution({
     : null;
 
   if (!effect) {
-    return { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
+    return createNeutralEventModifiers();
   }
 
-  const modifiers = { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
+  const modifiers = createNeutralEventModifiers();
 
   applyEventEffectModifiers(modifiers, effect, strength);
 
@@ -121,16 +158,10 @@ export function accumulateEventModifiers({
 
   if (providedEvents.length === 0) {
     if (providedResult && typeof providedResult === "object") {
-      providedResult.regenMultiplier = 1;
-      providedResult.regenAdd = 0;
-      providedResult.drainAdd = 0;
+      resetEventModifiers(providedResult);
       providedResult.appliedEvents = shouldCollect
-        ? (providedResult.appliedEvents ?? [])
+        ? prepareAppliedEventsCollection(providedResult.appliedEvents)
         : EMPTY_APPLIED_EVENTS;
-
-      if (shouldCollect && providedResult.appliedEvents.length > 0) {
-        providedResult.appliedEvents.length = 0;
-      }
 
       return providedResult;
     }
@@ -146,28 +177,23 @@ export function accumulateEventModifiers({
     ? numericStrengthMultiplier
     : 1;
 
-  const modifiers =
-    providedResult && typeof providedResult === "object"
-      ? providedResult
-      : { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
-
-  modifiers.regenMultiplier = 1;
-  modifiers.regenAdd = 0;
-  modifiers.drainAdd = 0;
+  const modifiers = resetEventModifiers(
+    providedResult && typeof providedResult === "object" ? providedResult : undefined,
+  );
 
   for (const eventInstance of providedEvents) {
     if (!eventInstance) continue;
     if (eventApplies && !eventApplies(eventInstance, row, col)) continue;
 
-    const baseStrength = Number(eventInstance?.strength ?? 0);
+    const baseStrength = normalizeEventStrength(eventInstance?.strength);
 
-    if (!Number.isFinite(baseStrength) || baseStrength === 0) {
+    if (baseStrength == null) {
       continue;
     }
 
-    const strength = baseStrength * strengthMultiplier;
+    const strength = normalizeEventStrength(baseStrength * strengthMultiplier);
 
-    if (!Number.isFinite(strength) || strength === 0) {
+    if (strength == null) {
       continue;
     }
 
@@ -192,13 +218,9 @@ export function accumulateEventModifiers({
 
   if (providedResult && typeof providedResult === "object") {
     if (shouldCollect) {
-      const existingApplied = providedResult.appliedEvents;
-      const targetEvents =
-        Array.isArray(existingApplied) && !Object.isFrozen(existingApplied)
-          ? existingApplied
-          : (providedResult.appliedEvents = []);
+      const targetEvents = prepareAppliedEventsCollection(providedResult.appliedEvents);
 
-      targetEvents.length = 0;
+      providedResult.appliedEvents = targetEvents;
 
       if (appliedEvents) {
         targetEvents.push(...appliedEvents);
