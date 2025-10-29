@@ -741,6 +741,117 @@ test("trait metrics render custom definitions", async () => {
   }
 });
 
+test("behavior balance meter announces evenness with accessible meter semantics", async () => {
+  const restore = setupDom();
+  const restoreCanvas = stubCanvasElements();
+
+  try {
+    const { default: UIManager } = await import("../src/ui/uiManager.js");
+
+    const uiManager = new UIManager(
+      {
+        requestFrame: () => {},
+        togglePause: () => false,
+        step: () => {},
+        onSettingChange: () => {},
+      },
+      "#app",
+      {
+        getCellSize: () => 5,
+      },
+      { canvasElement: new MockCanvas(400, 400) },
+    );
+
+    openPanel(uiManager.insightsPanel);
+    openPanel(uiManager.lifeEventsPanel);
+
+    const stats = createMetricsStatsFixture();
+    const snapshot = createSnapshotFixture();
+
+    snapshot.behaviorEvenness = 0.83;
+
+    uiManager.renderMetrics(stats, snapshot, {
+      eventStrengthMultiplier: 1,
+      activeEvents: [],
+    });
+
+    const balanceCard = uiManager.metricsBox.querySelector(".trait-balance");
+
+    assert.ok(
+      balanceCard,
+      "Behavior Balance card should render when trait evenness data is available",
+    );
+    assert.is(
+      balanceCard.classList.contains("trait-balance--empty"),
+      false,
+      "card should not render as empty when a population sample exists",
+    );
+
+    const value = balanceCard.querySelector(".trait-balance-value");
+
+    assert.is(
+      value?.textContent,
+      "83% Balanced",
+      "value label should reflect evenness",
+    );
+    assert.is(
+      balanceCard.title,
+      "Traits are evenly expressed across the population this tick. Normalized evenness 83%.",
+      "tooltip should narrate the evenness description and normalized percent",
+    );
+
+    const summary = balanceCard.querySelector(".trait-balance-summary");
+
+    assert.is(
+      summary?.textContent,
+      "Traits are evenly expressed across the population this tick.",
+      "summary copy should describe the balanced state",
+    );
+
+    const meter = balanceCard.querySelector(".trait-balance-meter");
+
+    assert.ok(meter, "meter element should be present for assistive tech");
+    assert.is(
+      meter?.getAttribute("role"),
+      "meter",
+      "meter should expose semantic role",
+    );
+    assert.is(
+      meter?.getAttribute("aria-label"),
+      "Behavior balance across traits",
+      "aria-label should clarify what the meter represents",
+    );
+    assert.is(meter?.getAttribute("aria-valuemin"), "0", "aria-valuemin should be 0");
+    assert.is(meter?.getAttribute("aria-valuemax"), "1", "aria-valuemax should be 1");
+    assert.is(
+      meter?.getAttribute("aria-valuenow"),
+      "0.83",
+      "aria-valuenow should match the normalized evenness",
+    );
+    assert.is(
+      meter?.getAttribute("aria-valuetext"),
+      "83% of behaviors are evenly distributed",
+      "aria-valuetext should narrate the evenness percent",
+    );
+
+    const fill = meter?.querySelector(".trait-balance-fill");
+
+    assert.is(
+      fill?.style.width,
+      "83%",
+      "fill width should mirror the evenness percent",
+    );
+    assert.is(
+      fill?.style.background,
+      "#2ecc71",
+      "balanced state should use the success palette color",
+    );
+  } finally {
+    restoreCanvas();
+    restore();
+  }
+});
+
 test("population snapshot reports occupancy share", async () => {
   const restore = setupDom();
   const restoreCanvas = stubCanvasElements();
