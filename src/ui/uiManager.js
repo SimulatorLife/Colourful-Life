@@ -6733,6 +6733,81 @@ export default class UIManager {
       appendMetricRow(reproductionSection, { label, value, title }),
     );
 
+    const resolveMetricValue = (primary, secondary) =>
+      Number.isFinite(primary)
+        ? primary
+        : Number.isFinite(secondary)
+          ? secondary
+          : null;
+
+    const meanComplementarity = resolveMetricValue(
+      s.meanBehaviorComplementarity,
+      stats?.meanBehaviorComplementarity,
+    );
+    const successfulComplementarity = resolveMetricValue(
+      s.successfulBehaviorComplementarity,
+      stats?.successfulBehaviorComplementarity,
+    );
+    const meanStrategyPenalty = resolveMetricValue(
+      s.meanStrategyPenalty,
+      stats?.meanStrategyPenalty,
+    );
+    const meanStrategyPressure = resolveMetricValue(
+      s.meanStrategyPressure,
+      stats?.meanStrategyPressure,
+    );
+    const globalStrategyPressure = resolveMetricValue(
+      s.strategyPressure,
+      stats?.strategyPressure,
+    );
+    const noveltyPressure = resolveMetricValue(
+      s.mateNoveltyPressure,
+      stats?.mateNoveltyPressure,
+    );
+
+    const advancedReproductionMetrics = [
+      {
+        label: "Avg Complementarity",
+        value: percentOrDash(meanComplementarity),
+        title:
+          "Average behavioral complementarity across evaluated mate pairings this tick.",
+      },
+      {
+        label: "Successful Complementarity",
+        value: percentOrDash(successfulComplementarity),
+        title:
+          "Average complementarity for mate pairings that successfully reproduced this tick.",
+      },
+      {
+        label: "Strategy Penalty",
+        value: percentOrDash(meanStrategyPenalty),
+        title:
+          "Average penalty multiplier applied to similar-strategy pairings (100% means fully enforced).",
+      },
+      {
+        label: "Strategy Pressure",
+        value: percentOrDash(meanStrategyPressure),
+        title:
+          "Average pressure signal encountered while evaluating potential mates this tick.",
+      },
+      {
+        label: "Global Pressure",
+        value: percentOrDash(globalStrategyPressure),
+        title:
+          "Current system-wide pressure nudging reproduction toward diverse behavioral strategies.",
+      },
+      {
+        label: "Novelty Pressure",
+        value: percentOrDash(noveltyPressure),
+        title:
+          "Average incentive encouraging selection of novel or less familiar mates this tick.",
+      },
+    ];
+
+    advancedReproductionMetrics.forEach(({ label, value, title }) =>
+      appendMetricRow(reproductionSection, { label, value, title }),
+    );
+
     const diversityValue = Number.isFinite(s.diversity)
       ? s.diversity
       : stats?.diversity;
