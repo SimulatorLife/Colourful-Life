@@ -50,19 +50,21 @@ export const EMPTY_COLOR_RECORD = Object.freeze({
   packed: PACK_RGBA32 ? PACK_RGBA32(0, 0, 0, 0) : 0,
 });
 
-function rememberColor(normalized, record) {
+function rememberColor(normalized, record, assumeMiss = false) {
   if (COLOR_CACHE_LIMIT <= 0) {
     return record;
   }
 
-  const cached = COLOR_CACHE.get(normalized);
+  if (!assumeMiss) {
+    const cached = COLOR_CACHE.get(normalized);
 
-  // The cache only stores concrete color records, so an `undefined` read
-  // reliably indicates a miss. By avoiding the extra `.has()` probe we shave
-  // a hash lookup from the hottest path where repeated color lookups hit the
-  // cache every frame.
-  if (cached !== undefined) {
-    return cached;
+    // The cache only stores concrete color records, so an `undefined` read
+    // reliably indicates a miss. By avoiding the extra `.has()` probe we shave
+    // a hash lookup from the hottest path where repeated color lookups hit the
+    // cache every frame.
+    if (cached !== undefined) {
+      return cached;
+    }
   }
 
   COLOR_CACHE.set(normalized, record);
@@ -247,7 +249,7 @@ export function resolveColorRecord(color) {
     }
   }
 
-  return rememberColor(normalized, record);
+  return rememberColor(normalized, record, true);
 }
 
 export function resolveCellColorRecord(cell) {
