@@ -303,116 +303,75 @@ test("cloneTracePayload performs deep copies of sensors and nodes", () => {
   assert.is(cloneTracePayload(null), null);
 });
 
-test("cloneTracePayload delegates to structuredClone when available", async () => {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "structuredClone");
-  const moduleUrl = new URL("../src/utils/object.js", import.meta.url);
-
-  moduleUrl.searchParams.set("structuredCloneDelegate", Date.now().toString());
-
-  try {
-    const calls = [];
-
-    Object.defineProperty(globalThis, "structuredClone", {
-      configurable: true,
-      writable: true,
-      value: (value) => {
-        calls.push(value);
-
-        return JSON.parse(JSON.stringify(value));
-      },
-    });
-
-    const { cloneTracePayload: localCloneTracePayload } = await import(moduleUrl.href);
-    const trace = {
-      sensors: [
-        { id: "energy", value: 0.5 },
-        { id: "neighbors", value: 3 },
-      ],
-      nodes: [
-        {
-          id: "hidden-1",
-          bias: 0.1,
-          inputs: [
-            { id: "input-1", weight: 0.2 },
-            { id: "input-2", weight: 0.3 },
-          ],
+test("cloneTracePayload deeply clones nodes and normalizes numeric fields", () => {
+  const trace = {
+    sensors: [],
+    nodes: [
+      {
+        id: "hidden-1",
+        sum: "1.2",
+        output: "0.4",
+        bias: 0.1,
+        inputs: [
+          {
+            id: "input-1",
+            weight: "0.2",
+            value: "0.3",
+            extras: { path: ["a", "b"] },
+          },
+        ],
+        extras: {
+          config: { threshold: "0.5" },
+          history: [{ weight: "0.1" }],
         },
-      ],
-    };
+      },
+    ],
+  };
 
-    const clone = localCloneTracePayload(trace);
+  const clone = cloneTracePayload(trace);
 
-    assert.ok(calls[0] === trace, "trace should be passed through to structuredClone");
-    assert.ok(clone !== trace);
-    assert.ok(clone.nodes[0] !== trace.nodes[0]);
-    assert.ok(clone.nodes[0].inputs[0] !== trace.nodes[0].inputs[0]);
-  } finally {
-    if (descriptor) {
-      Object.defineProperty(globalThis, "structuredClone", descriptor);
-    } else {
-      delete globalThis.structuredClone;
-    }
-  }
+  assert.ok(clone !== trace);
+  assert.ok(clone.nodes !== trace.nodes);
+  assert.ok(clone.nodes[0] !== trace.nodes[0]);
+  assert.ok(clone.nodes[0].inputs !== trace.nodes[0].inputs);
+  assert.ok(clone.nodes[0].inputs[0] !== trace.nodes[0].inputs[0]);
+  assert.is(clone.nodes[0].sum, 1.2);
+  assert.is(clone.nodes[0].output, 0.4);
+  assert.is(clone.nodes[0].inputs[0].weight, 0.2);
+  assert.is(clone.nodes[0].inputs[0].value, 0.3);
+  assert.ok(clone.nodes[0].extras !== trace.nodes[0].extras);
+
+  clone.nodes[0].inputs[0].weight = 1;
+  assert.is(trace.nodes[0].inputs[0].weight, "0.2");
 });
 
-test("cloneTracePayload uses Node structuredClone when the global helper is unavailable", async () => {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "structuredClone");
-  const moduleUrl = new URL("../src/utils/object.js", import.meta.url);
+test("cloneTracePayload clones sensor arrays with referential independence", () => {
+  const trace = {
+    sensors: [
+      {
+        id: "energy",
+        key: "energy",
+        value: "3.5",
+        history: [1, "2", { nested: ["a", "b"] }],
+      },
+      { id: "neighbors", value: 2 },
+    ],
+    nodes: [],
+  };
 
-  moduleUrl.searchParams.set("noStructuredClone", Date.now().toString());
+  const clone = cloneTracePayload(trace);
 
-  try {
-    Object.defineProperty(globalThis, "structuredClone", {
-      configurable: true,
-      writable: true,
-      value: undefined,
-    });
+  assert.ok(clone !== trace);
+  assert.ok(clone.sensors !== trace.sensors);
+  assert.ok(clone.sensors[0] !== trace.sensors[0]);
+  assert.is(clone.sensors[0].value, 3.5);
+  assert.ok(clone.sensors[0].history !== trace.sensors[0].history);
+  assert.is(clone.sensors[0].history[1], 2);
+  assert.ok(clone.sensors[0].history[2] !== trace.sensors[0].history[2]);
+  assert.ok(clone.sensors[0].history[2].nested !== trace.sensors[0].history[2].nested);
 
-    const { cloneTracePayload: localCloneTracePayload } = await import(moduleUrl.href);
-    const trace = {
-      sensors: [
-        {
-          id: "input-1",
-          values: [0.1, 0.2, 0.3],
-        },
-      ],
-      nodes: [
-        {
-          id: "hidden-1",
-          bias: 0.1,
-          inputs: [
-            { id: "input-1", weight: 0.2 },
-            { id: "input-2", weight: 0.3 },
-          ],
-        },
-      ],
-    };
-
-    const clone = localCloneTracePayload(trace);
-
-    assert.ok(clone !== trace, "Node fallback should clone top-level object");
-    assert.ok(clone?.nodes?.[0] !== trace.nodes[0], "node objects should be cloned");
-    assert.ok(
-      clone?.nodes?.[0]?.inputs?.[0] !== trace.nodes[0].inputs[0],
-      "nested arrays should be cloned",
-    );
-    assert.equal(
-      clone?.sensors?.[0]?.values,
-      trace.sensors[0].values,
-      "arrays should match",
-    );
-    assert.is.not(
-      clone?.sensors?.[0]?.values,
-      trace.sensors[0].values,
-      "arrays should be cloned",
-    );
-  } finally {
-    if (descriptor) {
-      Object.defineProperty(globalThis, "structuredClone", descriptor);
-    } else {
-      delete globalThis.structuredClone;
-    }
-  }
+  clone.sensors[0].history.push(99);
+  assert.is(trace.sensors[0].history.length, 3);
 });
 
 test("sanitizeNumber normalizes input with bounds and rounding strategies", () => {
