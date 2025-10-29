@@ -123,6 +123,23 @@ export function sanitizeRandomEventConfig(candidate) {
   return { durationRange, strengthRange, span };
 }
 
+/**
+ * Samples the horizontal or vertical span (in grid cells) that a randomly
+ * generated event should cover. The helper defends against misconfigured
+ * ranges by clamping values to sane bounds so downstream code never receives a
+ * zero or negative length.
+ *
+ * @param {number} limit - Maximum available span, typically the grid dimension
+ *   under consideration.
+ * @param {() => number} rng - Random number generator returning a float in the
+ *   range `[0, 1)`.
+ * @param {{min?: number, ratio?: number}} [spanConfig=DEFAULT_RANDOM_EVENT_CONFIG.span]
+ *   - Caller-supplied overrides for the minimum span and the fraction of the
+ *   limit to target. Missing or invalid properties fall back to
+ *   `DEFAULT_RANDOM_EVENT_CONFIG.span`.
+ * @returns {number} Integer span guaranteed to be at least 1 and at most the
+ *   provided limit.
+ */
 export function sampleEventSpan(
   limit,
   rng,
@@ -143,6 +160,16 @@ export function sampleEventSpan(
   return clamp(raw, 1, maxSpan);
 }
 
+/**
+ * Ensures an event's starting coordinate keeps the requested span within the
+ * grid bounds. When the grid is smaller than the span, the event is forced to
+ * start at `0`, which effectively covers the entire axis without wrapping.
+ *
+ * @param {number} rawStart - Proposed starting index for the event.
+ * @param {number} span - Number of cells the event should cover.
+ * @param {number} limit - Total number of cells along the axis being targeted.
+ * @returns {number} Clamped starting index in the inclusive range `[0, limit - span]`.
+ */
 export function clampEventStart(rawStart, span, limit) {
   const maxStart = Math.max(0, Math.floor(limit) - span);
 
