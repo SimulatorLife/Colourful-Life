@@ -565,7 +565,8 @@ export default class GridManager {
   #crowdingRevision = 0;
   #crowdingPrepared = false;
   #crowdingPreparedUseScarcity = false;
-  #crowdingTouchedTiles = [];
+  #crowdingTouchedRows = [];
+  #crowdingTouchedCols = [];
   #activeCellSnapshotScratch = null;
   #eventModifierScratch = null;
   #sparseDirtyColumnsScratch = null;
@@ -1173,9 +1174,11 @@ export default class GridManager {
     const invMaxTileEnergy = useScarcity ? 1 / maxTileEnergy : 0;
     const fillScarcity = useScarcity && Array.isArray(scarcity);
 
-    const touchedTiles = this.#crowdingTouchedTiles;
+    const touchedRows = this.#crowdingTouchedRows;
+    const touchedCols = this.#crowdingTouchedCols;
 
-    touchedTiles.length = 0;
+    touchedRows.length = 0;
+    touchedCols.length = 0;
 
     if (forceClear) {
       for (let r = 0; r < rows; r++) {
@@ -1260,7 +1263,8 @@ export default class GridManager {
             scarcityRow[nc] = 0;
           }
 
-          touchedTiles.push(nr * cols + nc);
+          touchedRows.push(nr);
+          touchedCols.push(nc);
         }
 
         comfortRow[nc] += tolerance;
@@ -1350,10 +1354,9 @@ export default class GridManager {
       }
     }
 
-    for (let i = 0; i < touchedTiles.length; i++) {
-      const index = touchedTiles[i];
-      const rr = Math.trunc(index / cols);
-      const cc = index - rr * cols;
+    for (let i = 0; i < touchedRows.length; i++) {
+      const rr = touchedRows[i];
+      const cc = touchedCols[i];
       const comfortRow = comfort[rr];
       const countRow = counts[rr];
       const scarcityRow = useScarcity ? scarcity[rr] : null;
@@ -4691,6 +4694,7 @@ export default class GridManager {
     const regenRate = Number.isFinite(R) ? R : 0;
     const diffusionRate = Number.isFinite(D) ? D : 0;
     const useDiffusion = diffusionRate !== 0;
+    const diffusionRateQuarter = useDiffusion ? diffusionRate * 0.25 : 0;
     const maxTileEnergy = this.maxTileEnergy;
     const invMaxTileEnergy = maxTileEnergy > 0 ? 1 / maxTileEnergy : 1;
     const positiveMaxTileEnergy = maxTileEnergy > 0 ? maxTileEnergy : 0;
@@ -5091,31 +5095,38 @@ export default class GridManager {
 
       if (!obstacleRow && !upObstacleRow && !downObstacleRow) {
         if (useDiffusion) {
-          let neighborSum = 0;
-          let neighborCount = 0;
+          if (c > 0 && c < cols - 1 && upEnergyRow && downEnergyRow) {
+            const neighborSum =
+              upEnergyRow[c] + downEnergyRow[c] + energyRow[c - 1] + energyRow[c + 1];
 
-          if (upEnergyRow) {
-            neighborSum += upEnergyRow[c];
-            neighborCount += 1;
-          }
+            diffusion = diffusionRateQuarter * (neighborSum - currentEnergy * 4);
+          } else {
+            let neighborSum = 0;
+            let neighborCount = 0;
 
-          if (downEnergyRow) {
-            neighborSum += downEnergyRow[c];
-            neighborCount += 1;
-          }
+            if (upEnergyRow) {
+              neighborSum += upEnergyRow[c];
+              neighborCount += 1;
+            }
 
-          if (c > 0) {
-            neighborSum += energyRow[c - 1];
-            neighborCount += 1;
-          }
+            if (downEnergyRow) {
+              neighborSum += downEnergyRow[c];
+              neighborCount += 1;
+            }
 
-          if (c < cols - 1) {
-            neighborSum += energyRow[c + 1];
-            neighborCount += 1;
-          }
+            if (c > 0) {
+              neighborSum += energyRow[c - 1];
+              neighborCount += 1;
+            }
 
-          if (neighborCount > 0) {
-            diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
+            if (c < cols - 1) {
+              neighborSum += energyRow[c + 1];
+              neighborCount += 1;
+            }
+
+            if (neighborCount > 0) {
+              diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
+            }
           }
         }
       } else {
