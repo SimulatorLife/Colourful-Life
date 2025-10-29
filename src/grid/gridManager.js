@@ -71,6 +71,18 @@ const NEIGHBOR_OFFSETS = [
   [1, 0],
   [1, 1],
 ];
+const CROWDING_INV_NEIGHBOR_COUNT = Object.freeze([
+  0,
+  1,
+  0.5,
+  1 / 3,
+  0.25,
+  0.2,
+  1 / 6,
+  1 / 7,
+  0.125,
+]);
+const DIFFUSION_INV_NEIGHBOR_COUNT = Object.freeze([0, 1, 0.5, 1 / 3, 0.25]);
 const DEFAULT_CROWDING_SUMMARY = Object.freeze({
   comfort: 0.5,
   scarcity: 0,
@@ -1176,6 +1188,7 @@ export default class GridManager {
 
     const touchedRows = this.#crowdingTouchedRows;
     const touchedCols = this.#crowdingTouchedCols;
+    const invCountLookup = CROWDING_INV_NEIGHBOR_COUNT;
 
     touchedRows.length = 0;
     touchedCols.length = 0;
@@ -1354,7 +1367,9 @@ export default class GridManager {
       }
     }
 
-    for (let i = 0; i < touchedRows.length; i++) {
+    const touchedCount = touchedRows.length;
+
+    for (let i = 0; i < touchedCount; i++) {
       const rr = touchedRows[i];
       const cc = touchedCols[i];
       const comfortRow = comfort[rr];
@@ -1366,12 +1381,21 @@ export default class GridManager {
       const neighborCount = countRow[cc] ?? 0;
 
       if (neighborCount > 0) {
-        const invCount = 1 / neighborCount;
+        const invCount = invCountLookup[neighborCount] ?? 1 / neighborCount;
+        const normalizedComfort = comfortRow[cc] * invCount;
 
-        comfortRow[cc] = clamp(comfortRow[cc] * invCount, 0, 1);
+        comfortRow[cc] =
+          normalizedComfort <= 0 ? 0 : normalizedComfort >= 1 ? 1 : normalizedComfort;
 
         if (scarcityRow) {
-          scarcityRow[cc] = clamp(scarcityRow[cc] * invCount, 0, 1);
+          const normalizedScarcity = scarcityRow[cc] * invCount;
+
+          scarcityRow[cc] =
+            normalizedScarcity <= 0
+              ? 0
+              : normalizedScarcity >= 1
+                ? 1
+                : normalizedScarcity;
         }
       } else {
         comfortRow[cc] = 0.5;
@@ -4663,6 +4687,8 @@ export default class GridManager {
     const evs = Array.isArray(events) ? events : events ? [events] : EMPTY_EVENT_LIST;
     const hasEvents = evs.length > 0;
     const hasDensityGrid = Array.isArray(densityGrid);
+    const resolvedDensityGrid = hasDensityGrid ? densityGrid : this.densityGrid;
+    const resolvedDensityLiveGrid = hasDensityGrid ? null : this.densityLiveGrid;
     let occupantRegenGrid = this.pendingOccupantRegen;
     let occupantRegenVersion = this.#occupantRegenVersion;
 
@@ -4695,6 +4721,7 @@ export default class GridManager {
     const diffusionRate = Number.isFinite(D) ? D : 0;
     const useDiffusion = diffusionRate !== 0;
     const diffusionRateQuarter = useDiffusion ? diffusionRate * 0.25 : 0;
+    const diffusionInvLookup = DIFFUSION_INV_NEIGHBOR_COUNT;
     const maxTileEnergy = this.maxTileEnergy;
     const invMaxTileEnergy = maxTileEnergy > 0 ? 1 / maxTileEnergy : 1;
     const positiveMaxTileEnergy = maxTileEnergy > 0 ? maxTileEnergy : 0;
@@ -4954,6 +4981,47 @@ export default class GridManager {
     let deltaDirtyTiles = null;
 
     const grid = this.grid;
+    const getDensityValue = (rowIndex, colIndex, directRow) => {
+      if (directRow) {
+        const directValue = directRow[colIndex];
+
+        if (directValue != null) {
+          return directValue;
+        }
+      }
+
+      if (resolvedDensityGrid) {
+        const fallbackRow = resolvedDensityGrid[rowIndex];
+
+        if (fallbackRow) {
+          const fallbackValue = fallbackRow[colIndex];
+
+          if (fallbackValue != null) {
+            return fallbackValue;
+          }
+        }
+      }
+
+      if (resolvedDensityLiveGrid) {
+        const liveRow = resolvedDensityLiveGrid[rowIndex];
+
+        if (liveRow) {
+          const liveValue = liveRow[colIndex];
+
+          if (liveValue != null) {
+            return liveValue;
+          }
+        }
+      }
+
+      return this.#resolveCachedDensityValue(
+        rowIndex,
+        colIndex,
+        null,
+        resolvedDensityGrid,
+      );
+    };
+
     const processTileBase = (
       r,
       c,
@@ -4984,11 +5052,7 @@ export default class GridManager {
           let regenPenalty = 1;
 
           if (normalizedDensityMultiplier !== 0) {
-            let densityValue = densityRow ? densityRow[c] : undefined;
-
-            if (densityValue == null) {
-              densityValue = this.#resolveCachedDensityValue(r, c, null, densityGrid);
-            }
+            const densityValue = getDensityValue(r, c, densityRow);
 
             if (densityValue != null) {
               let effectiveDensity = densityValue * normalizedDensityMultiplier;
@@ -5125,7 +5189,10 @@ export default class GridManager {
             }
 
             if (neighborCount > 0) {
-              diffusion = diffusionRate * (neighborSum / neighborCount - currentEnergy);
+              const invCount = diffusionInvLookup[neighborCount] ?? 1 / neighborCount;
+              const neighborAverage = neighborSum * invCount;
+
+              diffusion = diffusionRate * (neighborAverage - currentEnergy);
             }
           }
         }
@@ -5313,7 +5380,7 @@ export default class GridManager {
 
           const deltaRow = deltaGrid ? deltaGrid[r] : null;
           const hasDeltaRow = Boolean(deltaRow);
-          const densityRow = hasDensityGrid ? densityGrid[r] : null;
+          const densityRow = resolvedDensityGrid ? resolvedDensityGrid[r] : null;
           const rowObstacleCount = obstacleRowCounts ? obstacleRowCounts[r] : 0;
           const obstacleRow = rowObstacleCount > 0 ? obstacles[r] : null;
           const gridRow = this.grid[r];
@@ -5586,7 +5653,7 @@ export default class GridManager {
         const nextRow = next[r];
         const deltaRow = deltaGrid ? deltaGrid[r] : null;
         const hasDeltaRow = Boolean(deltaRow);
-        const densityRow = hasDensityGrid ? densityGrid[r] : null;
+        const densityRow = resolvedDensityGrid ? resolvedDensityGrid[r] : null;
         const rowObstacleCount = obstacleRowCounts ? obstacleRowCounts[r] : 0;
         const obstacleRow = rowObstacleCount > 0 ? obstacles[r] : null;
         const gridRow = this.grid[r];
