@@ -24,7 +24,7 @@ import {
   invokeWithErrorBoundary,
   warnOnce,
 } from "../src/utils/error.js";
-import { resolveColorRecord } from "../src/utils/colorRecords.js";
+import { resolveColorRecord } from "../src/grid/colorRecords.js";
 
 function* cycle(values) {
   let index = 0;

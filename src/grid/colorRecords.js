@@ -1,6 +1,6 @@
-import { clamp } from "./math.js";
-import { warnOnce } from "./error.js";
-import { isCellLike } from "./cell.js";
+import { clamp } from "../utils/math.js";
+import { warnOnce } from "../utils/error.js";
+import { isCellLike } from "../utils/cell.js";
 
 const COLOR_CACHE_LIMIT = 4096;
 const COLOR_CACHE = new Map();
