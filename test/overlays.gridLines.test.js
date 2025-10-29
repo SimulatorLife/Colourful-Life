@@ -3,10 +3,11 @@ import { drawGridLines } from "../src/ui/overlays.js";
 
 const test = suite("ui overlays: grid lines");
 
-function createMockContext() {
+function createMockContext({ withDrawImage = false } = {}) {
   const calls = [];
   let strokeStyle = null;
   let lineWidth = 0;
+  let smoothingEnabled = true;
 
   return {
     get calls() {
@@ -26,6 +27,13 @@ function createMockContext() {
     get lineWidth() {
       return lineWidth;
     },
+    get imageSmoothingEnabled() {
+      return smoothingEnabled;
+    },
+    set imageSmoothingEnabled(value) {
+      smoothingEnabled = value;
+      calls.push({ type: "setImageSmoothing", value });
+    },
     save() {
       calls.push({ type: "save" });
     },
@@ -44,6 +52,11 @@ function createMockContext() {
     stroke() {
       calls.push({ type: "stroke", strokeStyle, lineWidth });
     },
+    drawImage: withDrawImage
+      ? (...args) => {
+          calls.push({ type: "drawImage", args });
+        }
+      : undefined,
   };
 }
 
@@ -107,4 +120,44 @@ test("drawGridLines highlights emphasis intervals with alternate styling", () =>
     emphasisMoves.length > 0,
     "grid lines include coordinates aligned with emphasis interval",
   );
+});
+
+test("drawGridLines caches repeated geometry when offscreen surfaces are available", () => {
+  const originalOffscreen = globalThis.OffscreenCanvas;
+  let created = 0;
+
+  class StubOffscreenCanvas {
+    constructor(width, height) {
+      this.width = width;
+      this.height = height;
+      this._context = createMockContext();
+      created += 1;
+    }
+
+    getContext(type) {
+      if (type !== "2d") return null;
+
+      return this._context;
+    }
+  }
+
+  globalThis.OffscreenCanvas = StubOffscreenCanvas;
+
+  try {
+    const ctx = createMockContext({ withDrawImage: true });
+
+    drawGridLines(ctx, 6, 4, 4);
+    drawGridLines(ctx, 6, 4, 4);
+
+    const drawCalls = ctx.calls.filter((call) => call.type === "drawImage");
+
+    assert.equal(drawCalls.length, 2, "each invocation blits the cached surface");
+    assert.is(created, 1, "reused surface should avoid allocating multiple canvases");
+    assert.not.ok(
+      ctx.calls.some((call) => call.type === "moveTo"),
+      "cached path should not issue stroke commands on the main context",
+    );
+  } finally {
+    globalThis.OffscreenCanvas = originalOffscreen;
+  }
 });

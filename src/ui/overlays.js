@@ -26,6 +26,10 @@ const OBSTACLE_MASK_ALPHA = 0.35;
 const GRID_LINE_COLOR = "rgba(255, 255, 255, 0.1)";
 const GRID_LINE_EMPHASIS_COLOR = "rgba(255, 255, 255, 0.2)";
 const GRID_LINE_EMPHASIS_STEP = 5;
+const GRID_LINE_CACHE_LIMIT = 6;
+
+const gridLineCache = new Map();
+const gridLineCacheOrder = [];
 
 const DENSITY_GRADIENT_STOPS = Object.freeze([
   Object.freeze({ t: 0, color: Object.freeze([59, 76, 192]) }),
@@ -770,20 +774,59 @@ function drawObstacleMask(
   ctx.restore();
 }
 
-export function drawGridLines(ctx, cellSize, rows, cols, options = {}) {
-  if (!ctx || !(cellSize > 0) || !(rows > 0) || !(cols > 0)) return;
+function createGridLineCacheKey({
+  rows,
+  cols,
+  cellSize,
+  lineWidth,
+  baseColor,
+  highlightColor,
+  emphasisInterval,
+}) {
+  return JSON.stringify([
+    rows,
+    cols,
+    cellSize,
+    lineWidth,
+    baseColor,
+    highlightColor,
+    emphasisInterval,
+  ]);
+}
 
-  const { color, emphasisColor, emphasisStep, lineWidth } = toPlainObject(options);
+function createGridLineCanvas(width, height) {
+  if (!(width > 0) || !(height > 0)) {
+    return null;
+  }
+
+  if (typeof OffscreenCanvas === "function") {
+    try {
+      return new OffscreenCanvas(width, height);
+    } catch (error) {
+      warnOnce("Failed to allocate OffscreenCanvas for grid lines.", error);
+    }
+  }
+
+  if (typeof document !== "undefined" && typeof document.createElement === "function") {
+    const canvas = document.createElement("canvas");
+
+    canvas.width = width;
+    canvas.height = height;
+
+    return canvas;
+  }
+
+  return null;
+}
+
+function paintGridLinesToContext(
+  ctx,
+  { cellSize, rows, cols, baseColor, highlightColor, emphasisInterval, lineWidth },
+) {
+  if (!ctx) return false;
+
   const width = cols * cellSize;
   const height = rows * cellSize;
-  const baseColor = resolveNonEmptyString(color, GRID_LINE_COLOR);
-  const highlightColor = resolveNonEmptyString(emphasisColor, GRID_LINE_EMPHASIS_COLOR);
-  const emphasisInterval =
-    Number.isFinite(emphasisStep) && emphasisStep > 1
-      ? Math.floor(emphasisStep)
-      : GRID_LINE_EMPHASIS_STEP;
-  const resolvedLineWidth =
-    Number.isFinite(lineWidth) && lineWidth > 0 ? lineWidth : cellSize >= 18 ? 2 : 1;
 
   const minorVertical = [];
   const majorVertical = [];
@@ -805,15 +848,15 @@ export function drawGridLines(ctx, cellSize, rows, cols, options = {}) {
     else minorHorizontal.push(target);
   }
 
-  const drawLines = (positions, orientation, strokeStyle, widthSetting) => {
+  const drawLines = (positions, orientation, strokeStyle) => {
     if (!positions.length) return;
     if (typeof ctx.beginPath !== "function") return;
     if (typeof ctx.moveTo !== "function" || typeof ctx.lineTo !== "function") return;
     if (typeof ctx.stroke !== "function") return;
 
     ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = widthSetting;
-    const offset = widthSetting % 2 === 0 ? 0 : 0.5;
+    ctx.lineWidth = lineWidth;
+    const offset = lineWidth % 2 === 0 ? 0 : 0.5;
 
     ctx.beginPath();
 
@@ -834,12 +877,139 @@ export function drawGridLines(ctx, cellSize, rows, cols, options = {}) {
     ctx.stroke();
   };
 
-  ctx.save();
-  drawLines(minorVertical, "vertical", baseColor, resolvedLineWidth);
-  drawLines(minorHorizontal, "horizontal", baseColor, resolvedLineWidth);
-  drawLines(majorVertical, "vertical", highlightColor, resolvedLineWidth);
-  drawLines(majorHorizontal, "horizontal", highlightColor, resolvedLineWidth);
-  ctx.restore();
+  drawLines(minorVertical, "vertical", baseColor);
+  drawLines(minorHorizontal, "horizontal", baseColor);
+  drawLines(majorVertical, "vertical", highlightColor);
+  drawLines(majorHorizontal, "horizontal", highlightColor);
+
+  return true;
+}
+
+function getGridLineSurface(config) {
+  const { cellSize, rows, cols } = config;
+  const width = cols * cellSize;
+  const height = rows * cellSize;
+
+  if (!(width > 0) || !(height > 0)) {
+    return null;
+  }
+
+  const key = createGridLineCacheKey(config);
+  let entry = gridLineCache.get(key);
+
+  if (entry && entry.width === width && entry.height === height) {
+    return entry;
+  }
+
+  const canvas = createGridLineCanvas(width, height);
+
+  if (!canvas) {
+    gridLineCache.delete(key);
+
+    return null;
+  }
+
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    gridLineCache.delete(key);
+
+    return null;
+  }
+
+  if (context.imageSmoothingEnabled != null) {
+    context.imageSmoothingEnabled = false;
+  }
+
+  const painted = paintGridLinesToContext(context, config);
+
+  if (!painted) {
+    gridLineCache.delete(key);
+
+    return null;
+  }
+
+  entry = { canvas, width, height };
+  gridLineCache.set(key, entry);
+
+  const existingIndex = gridLineCacheOrder.indexOf(key);
+
+  if (existingIndex !== -1) {
+    gridLineCacheOrder.splice(existingIndex, 1);
+  }
+
+  gridLineCacheOrder.push(key);
+
+  if (gridLineCacheOrder.length > GRID_LINE_CACHE_LIMIT) {
+    const evictKey = gridLineCacheOrder.shift();
+
+    if (evictKey && evictKey !== key) {
+      gridLineCache.delete(evictKey);
+    }
+  }
+
+  return entry;
+}
+
+export function drawGridLines(ctx, cellSize, rows, cols, options = {}) {
+  if (!ctx || !(cellSize > 0) || !(rows > 0) || !(cols > 0)) return;
+
+  const { color, emphasisColor, emphasisStep, lineWidth } = toPlainObject(options);
+  const baseColor = resolveNonEmptyString(color, GRID_LINE_COLOR);
+  const highlightColor = resolveNonEmptyString(emphasisColor, GRID_LINE_EMPHASIS_COLOR);
+  const emphasisInterval =
+    Number.isFinite(emphasisStep) && emphasisStep > 1
+      ? Math.floor(emphasisStep)
+      : GRID_LINE_EMPHASIS_STEP;
+  const resolvedLineWidth =
+    Number.isFinite(lineWidth) && lineWidth > 0 ? lineWidth : cellSize >= 18 ? 2 : 1;
+
+  const config = {
+    cellSize,
+    rows,
+    cols,
+    baseColor,
+    highlightColor,
+    emphasisInterval,
+    lineWidth: resolvedLineWidth,
+  };
+
+  const surface = getGridLineSurface(config);
+
+  if (surface && typeof ctx.drawImage === "function") {
+    const { width, height } = surface;
+    const previousSmoothing = ctx.imageSmoothingEnabled;
+
+    if (typeof ctx.save === "function") ctx.save();
+
+    if (ctx.imageSmoothingEnabled != null) {
+      ctx.imageSmoothingEnabled = false;
+    }
+
+    ctx.drawImage(
+      surface.canvas,
+      0,
+      0,
+      width,
+      height,
+      0,
+      0,
+      cols * cellSize,
+      rows * cellSize,
+    );
+
+    if (ctx.imageSmoothingEnabled != null) {
+      ctx.imageSmoothingEnabled = previousSmoothing;
+    }
+
+    if (typeof ctx.restore === "function") ctx.restore();
+
+    return;
+  }
+
+  if (typeof ctx.save === "function") ctx.save();
+  paintGridLinesToContext(ctx, config);
+  if (typeof ctx.restore === "function") ctx.restore();
 }
 
 function formatAlpha(alpha) {
