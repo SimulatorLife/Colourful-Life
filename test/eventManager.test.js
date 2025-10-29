@@ -209,3 +209,48 @@ test("isEventAffecting checks if coordinates fall within event area", () => {
   assert.not.ok(isEventAffecting(event, 12, 8), "outside width excluded");
   assert.not.ok(isEventAffecting(null, 10, 5), "null event excluded");
 });
+
+test("updateEvent spawns new events after the queue empties", () => {
+  const rows = 30;
+  const cols = 45;
+  const sequence = [0.12, 0.34, 0.28, 0.51, 0.76, 0.18, 0.63, 0.42];
+  const rng = makeSequenceRng(sequence.slice());
+  const manager = new EventManager(rows, cols, rng, { startWithEvent: false });
+
+  manager.updateEvent(1, 3);
+
+  const expected = expectedEventFromSequence(
+    sequence.slice(0, 7),
+    rows,
+    cols,
+    EVENT_TYPES,
+  );
+
+  assert.is(manager.activeEvents.length, 1, "a new event should be spawned");
+  assert.equal(manager.activeEvents[0], expected);
+  assert.equal(manager.currentEvent, expected);
+
+  const base = Math.floor(sequence[7] * (480 - 180) + 180);
+
+  assert.is(manager.cooldown, Math.floor(base / 1));
+  assert.is(rng.getCalls(), sequence.length, "all RNG samples should be consumed");
+});
+
+test("updateEvent counts down cooldown and spawns once ready", () => {
+  const rows = 20;
+  const cols = 20;
+  const sequence = [0.15, 0.27, 0.39, 0.41, 0.52, 0.64, 0.73, 0.85];
+  const rng = makeSequenceRng(sequence.slice());
+  const manager = new EventManager(rows, cols, rng, { startWithEvent: false });
+
+  manager.cooldown = 2;
+  manager.updateEvent(1, 2);
+  assert.is(manager.cooldown, 1, "cooldown should decrement when no events are active");
+  assert.is(manager.activeEvents.length, 0);
+  assert.is(rng.getCalls(), 0, "no RNG usage while waiting");
+
+  manager.updateEvent(1, 2);
+  assert.is(manager.activeEvents.length, 1, "event spawns once cooldown reaches zero");
+  assert.is(rng.getCalls(), sequence.length, "spawn should consume the RNG sequence");
+  assert.ok(manager.cooldown > 0, "cooldown resets after spawning");
+});
