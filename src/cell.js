@@ -8682,7 +8682,7 @@ export default class Cell {
     const dampenedPrevious = previousPressure * (1 - rebound);
 
     this.lastEventPressure = Math.max(dampenedPrevious, pressurePeak);
-    this.energy = Math.max(0, Math.min(maxTileEnergy, this.energy));
+    this.energy = clamp(this.energy, 0, maxTileEnergy);
 
     this._reinforceEventAnticipation({
       previousPressure,
