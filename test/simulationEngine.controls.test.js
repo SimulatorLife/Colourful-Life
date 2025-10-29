@@ -320,6 +320,26 @@ test("setLifeEventFadeTicks normalizes values and updates stats", async () => {
   }
 });
 
+test("setLifeEventLimit enforces bounds", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.setLifeEventLimit(12.6);
+    assert.is(engine.state.lifeEventLimit, 12);
+
+    engine.setLifeEventLimit(-5);
+    assert.is(engine.state.lifeEventLimit, 0);
+
+    engine.setLifeEventLimit(900);
+    assert.is(engine.state.lifeEventLimit, 256);
+  } finally {
+    restore();
+  }
+});
+
 test("updateSetting routes updatesPerSecond through the setter", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
@@ -365,6 +385,21 @@ test("updateSetting routes lifeEventFadeTicks through the setter", async () => {
 
     assert.is(engine.state.lifeEventFadeTicks, 48);
     assert.is(engine.stats.lifeEventFadeTicks, 48);
+  } finally {
+    restore();
+  }
+});
+
+test("updateSetting routes lifeEventLimit through the setter", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.updateSetting("lifeEventLimit", 40.3);
+
+    assert.is(engine.state.lifeEventLimit, 40);
   } finally {
     restore();
   }

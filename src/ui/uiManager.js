@@ -28,6 +28,9 @@ const LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION =
 const LIFE_EVENT_FADE_WINDOW_DESCRIPTION =
   "Control how many ticks birth and death markers linger before fading from view.";
 
+const LIFE_EVENT_MARKER_LIMIT_DESCRIPTION =
+  "Cap how many recent life event markers stay visible so busy worlds stay readable.";
+
 const AGE_HEATMAP_OVERLAY_DESCRIPTION =
   "Shade older organisms more intensely so elders nearing their lifespan stand out.";
 
@@ -544,6 +547,10 @@ export default class UIManager {
     this.lifeEventFadeTicks = Number.isFinite(defaults.lifeEventFadeTicks)
       ? defaults.lifeEventFadeTicks
       : SIMULATION_DEFAULTS.lifeEventFadeTicks;
+    this.lifeEventLimit =
+      Number.isFinite(defaults.lifeEventLimit) && defaults.lifeEventLimit >= 0
+        ? defaults.lifeEventLimit
+        : (SIMULATION_DEFAULTS.lifeEventLimit ?? 24);
     this.showGridLines = defaults.showGridLines;
     this.showReproductiveZones =
       defaults.showReproductiveZones !== undefined
@@ -552,6 +559,9 @@ export default class UIManager {
     this.lifeEventFadeSlider = null;
     this.lifeEventFadeSliderRow = null;
     this.lifeEventFadeSliderTitle = LIFE_EVENT_FADE_WINDOW_DESCRIPTION;
+    this.lifeEventLimitSlider = null;
+    this.lifeEventLimitSliderRow = null;
+    this.lifeEventLimitSliderTitle = LIFE_EVENT_MARKER_LIMIT_DESCRIPTION;
     this.autoPauseOnBlur = defaults.autoPauseOnBlur;
     this.autoPausePending = false;
     this.obstaclePreset = this.obstaclePresets[0]?.id ?? "none";
@@ -2095,29 +2105,40 @@ export default class UIManager {
     }
   }
 
-  #updateLifeEventFadeControlState() {
-    if (!this.lifeEventFadeSlider) return;
-
+  #updateLifeEventControlsState() {
     const disabled = !this.showLifeEventMarkers;
+    const applyState = (slider, row, baseTitle, disabledHint) => {
+      if (slider) {
+        slider.disabled = disabled;
 
-    this.lifeEventFadeSlider.disabled = disabled;
+        if (typeof baseTitle === "string") {
+          const suffix = disabled ? ` ${disabledHint}` : "";
 
-    if (this.lifeEventFadeSliderRow) {
-      if (disabled) {
-        this.lifeEventFadeSliderRow.setAttribute("aria-disabled", "true");
-      } else {
-        this.lifeEventFadeSliderRow.removeAttribute("aria-disabled");
+          slider.title = `${baseTitle}${suffix}`.trim();
+        }
       }
-    }
 
-    if (typeof this.lifeEventFadeSliderTitle === "string") {
-      const suffix = disabled
-        ? " Enable Life Event Markers to adjust this fade window."
-        : "";
+      if (row && typeof row.setAttribute === "function") {
+        if (disabled) {
+          row.setAttribute("aria-disabled", "true");
+        } else {
+          row.removeAttribute("aria-disabled");
+        }
+      }
+    };
 
-      this.lifeEventFadeSlider.title =
-        `${this.lifeEventFadeSliderTitle}${suffix}`.trim();
-    }
+    applyState(
+      this.lifeEventFadeSlider,
+      this.lifeEventFadeSliderRow,
+      this.lifeEventFadeSliderTitle,
+      "Enable Life Event Markers to adjust this fade window.",
+    );
+    applyState(
+      this.lifeEventLimitSlider,
+      this.lifeEventLimitSliderRow,
+      this.lifeEventLimitSliderTitle,
+      "Enable Life Event Markers to adjust this limit.",
+    );
   }
 
   #syncZoneToggleInputs() {
@@ -4548,8 +4569,49 @@ export default class UIManager {
       this.lifeEventFadeSliderRow = fadeRow;
     }
 
+    const limitBounds = resolveSliderBounds("lifeEventLimit");
+    const limitMin = Number.isFinite(limitBounds.min) ? limitBounds.min : 0;
+    const limitMax = Number.isFinite(limitBounds.max) ? limitBounds.max : 60;
+    const limitStep =
+      Number.isFinite(limitBounds.step) && limitBounds.step > 0 ? limitBounds.step : 1;
+    const limitTitle = LIFE_EVENT_MARKER_LIMIT_DESCRIPTION;
+    const limitLabel = "Life Event Marker Limit";
+    const limitSlider = createSliderRow(overlayGrid, {
+      label: limitLabel,
+      min: limitMin,
+      max: limitMax,
+      step: limitStep,
+      value: this.lifeEventLimit,
+      title: limitTitle,
+      format: (value) => {
+        const rounded = Math.max(limitMin, Math.round(value));
+
+        if (rounded <= 0) {
+          return "Off";
+        }
+
+        return `${rounded} marker${rounded === 1 ? "" : "s"}`;
+      },
+      onInput: (value) => {
+        this.setLifeEventLimit(value);
+      },
+    });
+
+    this.lifeEventLimitSlider = limitSlider;
+    this.lifeEventLimitSliderTitle = limitTitle;
+
+    const limitRow =
+      typeof limitSlider?.closest === "function"
+        ? limitSlider.closest("label")
+        : (limitSlider?.parentElement?.parentElement ?? null);
+
+    if (limitRow instanceof HTMLElement) {
+      this.lifeEventLimitSliderRow = limitRow;
+    }
+
     this.#registerSliderElement("lifeEventFadeTicks", fadeSlider);
-    this.#updateLifeEventFadeControlState();
+    this.#registerSliderElement("lifeEventLimit", limitSlider);
+    this.#updateLifeEventControlsState();
   }
 
   #buildObstacleControls(body) {
@@ -5649,6 +5711,10 @@ export default class UIManager {
     return this.lifeEventFadeTicks;
   }
 
+  getLifeEventLimit() {
+    return this.lifeEventLimit;
+  }
+
   setShowDensity(value, options) {
     this.#applyOverlayToggle("showDensity", value, options);
   }
@@ -5676,7 +5742,7 @@ export default class UIManager {
     this.#applyOverlayToggle("showLifeEventMarkers", value, {
       ...passThrough,
       afterChange: (normalized, changed) => {
-        this.#updateLifeEventFadeControlState();
+        this.#updateLifeEventControlsState();
 
         if (typeof userAfterChange === "function") {
           userAfterChange(normalized, changed);
@@ -5716,11 +5782,46 @@ export default class UIManager {
       this.lifeEventFadeSlider.value = String(normalized);
     }
 
-    this.#updateLifeEventFadeControlState();
+    this.#updateLifeEventControlsState();
 
     if (changed) {
       if (notify) {
         this.#notifySettingChange("lifeEventFadeTicks", normalized);
+      }
+
+      this.#scheduleUpdate();
+    }
+  }
+
+  setLifeEventLimit(value, { notify = true } = {}) {
+    const { value: sanitized, bounds } = clampSliderValue("lifeEventLimit", value, {
+      fallback: this.lifeEventLimit,
+    });
+
+    if (!Number.isFinite(sanitized)) {
+      return;
+    }
+
+    const step = Number.isFinite(bounds?.step) && bounds.step > 0 ? bounds.step : 1;
+    const min = Number.isFinite(bounds?.min) ? bounds.min : 0;
+    const max = Number.isFinite(bounds?.max) ? bounds.max : sanitized;
+    const rounded = Math.round(sanitized / step) * step;
+    const clamped = clamp(rounded, min, max);
+    const normalized = clamped < min ? min : clamped;
+    const changed = this.lifeEventLimit !== normalized;
+
+    this.lifeEventLimit = normalized;
+    this.#syncSliderInput("lifeEventLimit", normalized);
+
+    if (this.lifeEventLimitSlider) {
+      this.lifeEventLimitSlider.value = String(normalized);
+    }
+
+    this.#updateLifeEventControlsState();
+
+    if (changed) {
+      if (notify) {
+        this.#notifySettingChange("lifeEventLimit", normalized);
       }
 
       this.#scheduleUpdate();
@@ -6004,6 +6105,9 @@ export default class UIManager {
     applySetting("leaderboardIntervalMs", defaults.leaderboardIntervalMs);
     if (defaults.lifeEventFadeTicks !== undefined) {
       this.setLifeEventFadeTicks(defaults.lifeEventFadeTicks, { notify });
+    }
+    if (defaults.lifeEventLimit !== undefined) {
+      this.setLifeEventLimit(defaults.lifeEventLimit, { notify });
     }
 
     if (defaults.lowDiversityReproMultiplier !== undefined) {

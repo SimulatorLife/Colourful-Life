@@ -88,6 +88,10 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       uiManager.controlsPanel,
       "Life Event Fade Window",
     );
+    const limitSlider = findSliderByLabel(
+      uiManager.controlsPanel,
+      "Life Event Marker Limit",
+    );
 
     assert.ok(playbackSlider, "playback speed slider should exist");
     assert.is(
@@ -100,6 +104,12 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       fadeSlider.value,
       String(uiManager.getLifeEventFadeTicks()),
       "fade slider should match the default fade window",
+    );
+    assert.ok(limitSlider, "life event marker limit slider should exist");
+    assert.is(
+      limitSlider.value,
+      String(uiManager.getLifeEventLimit()),
+      "limit slider should match the default marker cap",
     );
 
     const sliderRow = playbackSlider?.parentElement?.parentElement ?? null;
@@ -153,6 +163,8 @@ test("createSimulation honours layout initial settings overrides", async () => {
               autoPauseOnBlur: true,
               updatesPerSecond: 48,
               paused: true,
+              lifeEventFadeTicks: 72,
+              lifeEventLimit: 10,
             },
           },
         },
@@ -203,8 +215,13 @@ test("createSimulation honours layout initial settings overrides", async () => {
       uiManager.controlsPanel,
       "Life Event Fade Window",
     );
+    const limitSlider = findSliderByLabel(
+      uiManager.controlsPanel,
+      "Life Event Marker Limit",
+    );
 
     assert.ok(fadeSlider, "life event fade slider should render");
+    assert.ok(limitSlider, "life event marker limit slider should render");
 
     assert.is(energyToggle.checked, true);
     assert.is(densityToggle.checked, true);
@@ -214,6 +231,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.is(gridToggle.checked, true);
     assert.is(autoPauseToggle.checked, true);
     assert.is(fadeSlider.value, String(uiManager.getLifeEventFadeTicks()));
+    assert.is(limitSlider.value, String(uiManager.getLifeEventLimit()));
     assert.is(uiManager.getUpdatesPerSecond(), 48);
     assert.is(uiManager.isPaused(), true);
 
@@ -227,6 +245,8 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.is(state.showLifeEventMarkers, true);
     assert.is(state.showGridLines, true);
     assert.is(state.autoPauseOnBlur, true);
+    assert.is(state.lifeEventFadeTicks, 72);
+    assert.is(state.lifeEventLimit, 10);
     assert.is(simulation.engine.isPaused(), true);
 
     simulation.destroy();
