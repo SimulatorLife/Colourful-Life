@@ -13,11 +13,24 @@ function normalizeLayoutOptions({ engine, uiOptions = {}, sanitizedDefaults = {}
 
   if (Object.keys(layoutInitialSettings).length > 0) {
     const sanitizedLayoutOverrides = resolveSimulationDefaults(layoutInitialSettings);
+    const overrideKeys = new Set(Object.keys(layoutInitialSettings));
 
-    Object.entries(layoutInitialSettings).forEach(([key, value]) => {
+    overrideKeys.forEach((key) => {
       if (Object.hasOwn(sanitizedLayoutOverrides, key)) {
         initialSettings[key] = sanitizedLayoutOverrides[key];
       } else {
+        initialSettings[key] = layoutInitialSettings[key];
+      }
+    });
+
+    Object.entries(sanitizedLayoutOverrides).forEach(([key, value]) => {
+      if (overrideKeys.has(key)) {
+        return;
+      }
+
+      const defaultValue = sanitizedInitialSettings[key];
+
+      if (!Object.is(value, defaultValue)) {
         initialSettings[key] = value;
       }
     });
