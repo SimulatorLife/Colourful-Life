@@ -1282,6 +1282,34 @@ export default class GridManager {
       }
     }
 
+    for (let r = 0; r < rows; r++) {
+      const comfortRow = comfort[r];
+      const countRow = counts[r];
+      const scarcityRow = fillScarcity ? scarcity[r] : null;
+
+      if (!comfortRow || !countRow) continue;
+
+      for (let c = 0; c < cols; c++) {
+        const neighborCount = countRow[c] ?? 0;
+
+        if (neighborCount > 0) {
+          const invCount = 1 / neighborCount;
+
+          comfortRow[c] = clamp(comfortRow[c] * invCount, 0, 1);
+
+          if (scarcityRow) {
+            scarcityRow[c] = clamp(scarcityRow[c] * invCount, 0, 1);
+          }
+        } else {
+          comfortRow[c] = 0.5;
+
+          if (scarcityRow) {
+            scarcityRow[c] = 0;
+          }
+        }
+      }
+    }
+
     this.#crowdingPrepared = true;
     this.#crowdingPreparedUseScarcity = useScarcity;
 
@@ -4917,26 +4945,10 @@ export default class GridManager {
 
                       if (neighborCount > 0) {
                         crowdCount = neighborCount;
-                        let aggregatedComfort = crowdComfortRow[c] / neighborCount;
-
-                        if (aggregatedComfort <= 0) {
-                          aggregatedComfort = 0;
-                        } else if (aggregatedComfort >= 1) {
-                          aggregatedComfort = 1;
-                        }
-
-                        crowdComfort = aggregatedComfort;
+                        crowdComfort = crowdComfortRow[c];
 
                         if (crowdingUseScarcity && crowdScarcityRow) {
-                          let aggregatedScarcity = crowdScarcityRow[c] / neighborCount;
-
-                          if (aggregatedScarcity <= 0) {
-                            aggregatedScarcity = 0;
-                          } else if (aggregatedScarcity >= 1) {
-                            aggregatedScarcity = 1;
-                          }
-
-                          scarcitySignal = aggregatedScarcity;
+                          scarcitySignal = crowdScarcityRow[c];
                         }
                       }
                     }
