@@ -11,6 +11,7 @@ import { warnOnce } from "../utils/error.js";
 import { accumulateTraitAggregates } from "./traitAggregation.js";
 import { resolveCellColor } from "../utils/cell.js";
 import { resolveNonEmptyString } from "../utils/primitives.js";
+import { toArray } from "../utils/collections.js";
 
 // Trait values >= threshold are considered "active" for presence stats.
 const TRAIT_THRESHOLD = TRAIT_ACTIVATION_THRESHOLD;
@@ -1225,7 +1226,7 @@ export default class Stats {
   }
 
   #rebuildTraitAggregates(cellSources) {
-    const pool = Array.isArray(cellSources) ? cellSources : [];
+    const pool = toArray(cellSources);
 
     this.#traitSums.fill(0);
     this.#traitActiveCounts.fill(0);
@@ -1755,10 +1756,10 @@ export default class Stats {
     const pop = Number.isFinite(rawPopulation)
       ? Math.max(0, Math.floor(rawPopulation))
       : 0;
-    const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
-    const populationSources = Array.isArray(snapshot?.populationCells)
-      ? snapshot.populationCells
-      : entries;
+    const entries = toArray(snapshot?.entries);
+    const populationSources = toArray(snapshot?.populationCells, {
+      fallback: entries,
+    });
     const totalEnergy = Number.isFinite(snapshot?.totalEnergy)
       ? snapshot.totalEnergy
       : 0;
