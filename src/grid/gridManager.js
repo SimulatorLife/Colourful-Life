@@ -602,6 +602,7 @@ export default class GridManager {
   #densityIntegralRows = 0;
   #densityIntegralCols = 0;
   #densityIntegralDirty = true;
+  #densityTotalsCache = new Map();
 
   static #normalizeMoveOptions(options = {}) {
     const {
@@ -1312,6 +1313,7 @@ export default class GridManager {
     this.#densityIntegralRows = 0;
     this.#densityIntegralCols = 0;
     this.#densityIntegralDirty = true;
+    this.#densityTotalsCache.clear();
   }
 
   #markDensityIntegralDirty() {
@@ -5807,41 +5809,61 @@ export default class GridManager {
       0,
       Math.floor(Number.isFinite(radius) ? radius : (this.densityRadius ?? 0)),
     );
+    const cacheKey = `${rows}x${cols}:${normalizedRadius}`;
+    const cachedTotals = this.#densityTotalsCache.get(cacheKey);
+
+    if (cachedTotals) {
+      return cachedTotals;
+    }
+
+    let totals;
 
     if (normalizedRadius === 0) {
-      return Array.from({ length: rows }, () => Array(cols).fill(0));
-    }
+      totals = Array.from({ length: rows }, () => Array(cols).fill(0));
+    } else {
+      const rowSpans = new Array(rows);
 
-    const rowSpans = new Array(rows);
+      for (let r = 0; r < rows; r++) {
+        const minRow = r - normalizedRadius < 0 ? 0 : r - normalizedRadius;
+        const maxRow = r + normalizedRadius >= rows ? rows - 1 : r + normalizedRadius;
 
-    for (let r = 0; r < rows; r++) {
-      const minRow = r - normalizedRadius < 0 ? 0 : r - normalizedRadius;
-      const maxRow = r + normalizedRadius >= rows ? rows - 1 : r + normalizedRadius;
-
-      rowSpans[r] = maxRow - minRow + 1;
-    }
-
-    const colSpans = new Array(cols);
-
-    for (let c = 0; c < cols; c++) {
-      const minCol = c - normalizedRadius < 0 ? 0 : c - normalizedRadius;
-      const maxCol = c + normalizedRadius >= cols ? cols - 1 : c + normalizedRadius;
-
-      colSpans[c] = maxCol - minCol + 1;
-    }
-
-    return Array.from({ length: rows }, (_, r) => {
-      const span = rowSpans[r];
-      const totals = new Array(cols);
-
-      for (let c = 0; c < cols; c++) {
-        const neighbors = span * colSpans[c] - 1;
-
-        totals[c] = neighbors > 0 ? neighbors : 0;
+        rowSpans[r] = maxRow - minRow + 1;
       }
 
-      return totals;
-    });
+      const colSpans = new Array(cols);
+
+      for (let c = 0; c < cols; c++) {
+        const minCol = c - normalizedRadius < 0 ? 0 : c - normalizedRadius;
+        const maxCol = c + normalizedRadius >= cols ? cols - 1 : c + normalizedRadius;
+
+        colSpans[c] = maxCol - minCol + 1;
+      }
+
+      totals = Array.from({ length: rows }, (_, r) => {
+        const span = rowSpans[r];
+        const totalsRow = new Array(cols);
+
+        for (let c = 0; c < cols; c++) {
+          const neighbors = span * colSpans[c] - 1;
+
+          totalsRow[c] = neighbors > 0 ? neighbors : 0;
+        }
+
+        return totalsRow;
+      });
+    }
+
+    this.#densityTotalsCache.set(cacheKey, totals);
+
+    if (this.#densityTotalsCache.size > 8) {
+      const firstKey = this.#densityTotalsCache.keys().next().value;
+
+      if (firstKey !== cacheKey) {
+        this.#densityTotalsCache.delete(firstKey);
+      }
+    }
+
+    return totals;
   }
 
   #markDensityDirty(row, col) {
