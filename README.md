@@ -22,7 +22,8 @@ Colourful Life supports any Node.js runtime **>= 18.18.0**. The included `.nvmrc
 4. While iterating, pick the feedback loop that fits your change and close with a full sweep before committing:
    - `npm run lint` / `npm run lint:fix` — Run ESLint (with optional autofixes) against the shared ruleset.
    - `npm run format:check` — Verify Prettier formatting without writing changes.
-   - `npm test -- --watch` or `npm test -- path/to/file.test.js` — Execute targeted Node.js suites. The script always runs the energy benchmark in `scripts/profile-energy.mjs` before the tests so performance regressions surface early.
+   - `npm run test:watch` — Continuously execute the Node.js suites with watch mode enabled. The script always runs the energy benchmark in `scripts/profile-energy.mjs` before the tests so performance regressions surface early.
+   - `npm test -- path/to/file.test.js` — Run a focused Node.js suite once (all CLI flags pass through to the underlying runner).
    - `npm run check` — Chain linting, formatting verification, the energy benchmark, and the Node.js suites for a pre-push safety net.
 
 If Parcel's hot module reload gets stuck, run `npm run clean -- --dry-run` to confirm what will be removed, then rerun without `--dry-run` to clear stale artifacts.
@@ -172,21 +173,22 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 ## Key scripts and commands
 
-| Command/Script                               | Purpose                                                                                                  |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `npm run start`                              | Launch the Parcel development server at `http://localhost:1234`.                                         |
-| `npm run build`                              | Produce an optimized production bundle in `dist/`.                                                       |
-| `npm run check`                              | Run linting, formatting verification, the energy benchmark, and the Node.js test suites.                 |
-| `npm run clean [-- --dry-run]`               | Remove `dist/` and `.parcel-cache/`, or preview the removals first with `--dry-run`.                     |
-| `npm run lint` / `npm run lint:fix`          | Run ESLint across the codebase, optionally applying autofixes.                                           |
-| `npm run format` / `npm run format:check`    | Apply or verify Prettier formatting for source, docs, configs, and workflow definitions.                 |
-| `npm test`                                   | Run the energy benchmark, then execute the Node.js test suites (paths, dirs, and watch flags supported). |
-| `npm run benchmark`                          | Profile the energy preparation loop; combine with `PERF_*` variables to mirror CI scenarios.             |
-| `node scripts/profile-density-cache.mjs`     | Benchmark cached density lookups in `GridManager` to confirm the density grid remains fast.              |
-| `node scripts/profile-trait-aggregation.mjs` | Measure the trait aggregation pipeline that powers Stats overlays and dashboards.                        |
-| `node scripts/profile-zone-filter.mjs`       | Benchmark the reproduction zone candidate filter used by `ReproductionZonePolicy`.                       |
-| `npm run deploy:public`                      | Publish the production bundle using `scripts/publish-public-build.sh`.                                   |
-| `npm run prepare`                            | Reinstall Husky hooks after cloning or when `.husky/` contents change.                                   |
+| Command/Script                               | Purpose                                                                                            |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `npm run start`                              | Launch the Parcel development server at `http://localhost:1234`.                                   |
+| `npm run build`                              | Produce an optimized production bundle in `dist/`.                                                 |
+| `npm run check`                              | Run linting, formatting verification, the energy benchmark, and the Node.js test suites.           |
+| `npm run clean [-- --dry-run]`               | Remove `dist/` and `.parcel-cache/`, or preview the removals first with `--dry-run`.               |
+| `npm run lint` / `npm run lint:fix`          | Run ESLint across the codebase, optionally applying autofixes.                                     |
+| `npm run format` / `npm run format:check`    | Apply or verify Prettier formatting for source, docs, configs, and workflow definitions.           |
+| `npm test`                                   | Run the energy benchmark, then execute the Node.js test suites (paths, dirs, and flags supported). |
+| `npm run test:watch`                         | Re-run the energy benchmark and Node.js suites whenever watched files change.                      |
+| `npm run benchmark`                          | Profile the energy preparation loop; combine with `PERF_*` variables to mirror CI scenarios.       |
+| `node scripts/profile-density-cache.mjs`     | Benchmark cached density lookups in `GridManager` to confirm the density grid remains fast.        |
+| `node scripts/profile-trait-aggregation.mjs` | Measure the trait aggregation pipeline that powers Stats overlays and dashboards.                  |
+| `node scripts/profile-zone-filter.mjs`       | Benchmark the reproduction zone candidate filter used by `ReproductionZonePolicy`.                 |
+| `npm run deploy:public`                      | Publish the production bundle using `scripts/publish-public-build.sh`.                             |
+| `npm run prepare`                            | Reinstall Husky hooks after cloning or when `.husky/` contents change.                             |
 
 ## Further reading
 
