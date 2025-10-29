@@ -3920,7 +3920,243 @@ export default class Cell {
       resultingMomentum: next,
     };
 
+    this.#imprintInteractionNeuralExperience({
+      event,
+      kinship,
+      intensity,
+      energyDelta,
+      signal,
+      momentum: next,
+      baseline,
+      learning,
+    });
+
     return next;
+  }
+
+  #imprintInteractionNeuralExperience({
+    event,
+    kinship = 0,
+    intensity = 1,
+    energyDelta = 0,
+    signal = 0,
+    momentum = 0,
+    baseline = 0,
+    learning = 0,
+  } = {}) {
+    if (!event || event.type !== "cooperate") {
+      return;
+    }
+
+    const brain = this.brain;
+
+    if (
+      !brain ||
+      typeof brain.applyExperienceImprint !== "function" ||
+      !brain.sensorPlasticity?.enabled
+    ) {
+      return;
+    }
+
+    const plasticity = brain.sensorPlasticity || {};
+    const reinforcement = this.neuralReinforcementProfile || {};
+    const learningFactor = clamp(Number.isFinite(learning) ? learning : 0.35, 0.05, 1);
+    const alignmentWeight = clamp(
+      Number.isFinite(reinforcement.interactionAlignmentWeight)
+        ? reinforcement.interactionAlignmentWeight
+        : 0.4,
+      0,
+      1.3,
+    );
+    const energyWeight = clamp(
+      Number.isFinite(reinforcement.energyDeltaWeight)
+        ? reinforcement.energyDeltaWeight
+        : 0.4,
+      0,
+      1.5,
+    );
+    const fatigueReliefWeight = clamp(
+      Number.isFinite(reinforcement.fatigueReliefWeight)
+        ? reinforcement.fatigueReliefWeight
+        : 0.3,
+      0,
+      1.5,
+    );
+    const survivalInstinct = clamp(
+      Number.isFinite(reinforcement.survivalInstinct)
+        ? reinforcement.survivalInstinct
+        : 0.5,
+      0,
+      1.5,
+    );
+
+    const baseLearning = clamp(
+      Number.isFinite(plasticity.learningRate) ? plasticity.learningRate : 0.12,
+      0.01,
+      0.5,
+    );
+    const volatility = clamp(
+      Number.isFinite(plasticity.volatility) ? plasticity.volatility : 0.25,
+      0,
+      2,
+    );
+    const normalizedSignal = clamp(Number.isFinite(signal) ? signal : 0, -2, 2);
+    const normalizedMomentum = clamp(
+      Number.isFinite(momentum) ? momentum : Number.isFinite(baseline) ? baseline : 0,
+      -1,
+      1,
+    );
+    const normalizedIntensity = clamp(Number.isFinite(intensity) ? intensity : 1, 0, 2);
+    const normalizedEnergy = clamp(
+      Number.isFinite(energyDelta) ? energyDelta : 0,
+      -1,
+      1,
+    );
+    const kin = clamp(Number.isFinite(kinship) ? kinship : 0, 0, 1);
+
+    const assimilationBase = clamp(
+      baseLearning *
+        (0.55 + alignmentWeight * 0.3 + Math.abs(normalizedSignal) * 0.2) *
+        (0.6 + learningFactor * 0.3),
+      0.02,
+      0.85,
+    );
+    const gainBase = clamp(
+      (volatility * 0.35 + alignmentWeight * 0.4 + Math.abs(normalizedSignal) * 0.25) *
+        (0.5 + learningFactor * 0.3),
+      0,
+      1,
+    );
+
+    const adjustments = [];
+    const toSigned = (value) => clamp(value * 2 - 1, -1, 1);
+    const support =
+      event.outcome === "receive" ? 1 : event.outcome === "give" ? 0.6 : 0.4;
+    const positiveSignal = Math.max(0, normalizedSignal);
+
+    const allyTarget = clamp(
+      0.35 + support * 0.35 + kin * 0.3 + normalizedEnergy * 0.2 + positiveSignal * 0.1,
+      0,
+      1,
+    );
+    const allyAssimilation = clamp(
+      assimilationBase * (0.7 + normalizedIntensity * 0.15),
+      0.02,
+      0.9,
+    );
+    const allyGain = clamp(gainBase * (0.6 + kin * 0.2), 0, 1);
+
+    adjustments.push({
+      sensor: "allyFraction",
+      target: toSigned(allyTarget),
+      assimilation: allyAssimilation,
+      gainInfluence: allyGain,
+      gainShift: support * 0.2,
+    });
+
+    adjustments.push({
+      sensor: "allySimilarity",
+      target: toSigned(clamp(0.45 + kin * 0.4 + support * 0.2, 0, 1)),
+      assimilation: clamp(assimilationBase * 0.75, 0.01, 0.8),
+      gainInfluence: clamp(gainBase * 0.5, 0, 1),
+    });
+
+    const enemyTarget = clamp(
+      0.25 - support * 0.3 - kin * 0.25 - positiveSignal * 0.2,
+      0,
+      1,
+    );
+
+    adjustments.push({
+      sensor: "enemyFraction",
+      target: toSigned(enemyTarget),
+      assimilation: clamp(assimilationBase * 0.55, 0.01, 0.7),
+      gainInfluence: clamp(gainBase * 0.45, 0, 1),
+      gainShift: clamp(-support * 0.25 - normalizedSignal * 0.12, -0.6, 0),
+    });
+
+    const riskBase = clamp(
+      this.#resolveRiskTolerance() +
+        (support * 0.18 + kin * 0.12 - Math.max(0, -normalizedEnergy) * 0.1) *
+          survivalInstinct,
+      -1,
+      1,
+    );
+
+    adjustments.push({
+      sensor: "riskTolerance",
+      target: riskBase,
+      assimilation: clamp(assimilationBase * 0.5, 0.01, 0.65),
+      gainInfluence: clamp(gainBase * 0.4, 0, 1),
+    });
+
+    const opportunityTarget = clamp(
+      normalizedMomentum * 0.45 +
+        normalizedEnergy * energyWeight * 0.5 +
+        kin * 0.25 +
+        support * 0.2,
+      -1,
+      1,
+    );
+
+    adjustments.push({
+      sensor: "opportunitySignal",
+      target: opportunityTarget,
+      assimilation: clamp(assimilationBase * (0.6 + support * 0.25), 0.02, 0.85),
+      gainInfluence: clamp(gainBase * (0.5 + support * 0.3), 0, 1),
+    });
+
+    adjustments.push({
+      sensor: "interactionMomentum",
+      target: normalizedMomentum,
+      assimilation: clamp(
+        assimilationBase * (0.65 + normalizedIntensity * 0.15),
+        0.02,
+        0.85,
+      ),
+      gainInfluence: clamp(gainBase * 0.5, 0, 1),
+    });
+
+    if (adjustments.length === 0) {
+      return;
+    }
+
+    brain.applyExperienceImprint({
+      adjustments,
+      assimilation: assimilationBase,
+      gainInfluence: gainBase,
+    });
+
+    if (typeof brain.applySensorFeedback === "function") {
+      const context = this._decisionContextIndex?.get("interaction");
+      const sensorVector = context?.sensorVector;
+
+      if (sensorVector && sensorVector.length > 0) {
+        const rewardSignal = clamp(
+          normalizedSignal * (0.55 + alignmentWeight * 0.3) +
+            normalizedEnergy * energyWeight * 0.5 +
+            kin * 0.15,
+          -1,
+          1,
+        );
+
+        if (Math.abs(rewardSignal) > 1e-4) {
+          const activationCount = Number.isFinite(context?.activationCount)
+            ? context.activationCount
+            : 0;
+
+          brain.applySensorFeedback({
+            group: context.group,
+            sensorVector,
+            activationCount,
+            rewardSignal,
+            energyCost: 0,
+            fatigueDelta: -normalizedEnergy * fatigueReliefWeight,
+            maxTileEnergy: MAX_TILE_ENERGY,
+          });
+        }
+      }
+    }
   }
 
   #estimateDiversityOpportunitySignal() {
