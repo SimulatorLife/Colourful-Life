@@ -33,6 +33,7 @@ where practical.
 
 ### Changed
 
+- Streamlined the README quick start, key command reference, and documentation map, and aligned the developer guide's environment setup guidance with the refreshed onboarding flow.
 - Raised the default decay immediate share to `0.27` after rerunning the dense
   40×40 headless probe (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40
 PERF_SIM_COLS=40 PERF_SIM_WARMUP=20 PERF_SIM_ITERATIONS=80
