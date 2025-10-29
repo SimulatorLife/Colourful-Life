@@ -70,10 +70,6 @@ Open the **Simulation Controls** panel and head to the **Overlays** section to t
 
 Curious which colonies are dominated by elders close to the end of their lifespan? Flip on **Show Age Heatmap** in the Overlays panel to bathe older organisms in a warm glow that intensifies as their age approaches their encoded lifespan. The overlay leaves newborn tiles untouched, pairs with a legend in the opposite corner of the canvas, and layers cleanly with the existing energy and density guides so you can track lineage longevity without sacrificing other telemetry.
 
-### Aurora celebration veil
-
-When you want a celebratory mood without drowning the grid in noise, enable **Aurora Celebration Veil** from the Overlays panel. The canvas gains a low-contrast aurora that shimmers brighter as the world’s average energy climbs and recent births outpace losses. The veil defaults to a subdued teal so the simulation remains legible, ramps up saturation only when the ecosystem is thriving, and keeps alpha low enough that heatmaps, markers, and reproductive zones stay readable for motion-sensitive viewers.
-
 ### Grid line overlay
 
 Need precise spatial context while you tune density or energy flows? Flip on **Show Grid Lines** inside the Overlays panel to outline every tile with a low-contrast lattice. Minor separators stay subtle while a slightly brighter line highlights each fifth row and column so you can judge distances at a glance without obscuring the heatmaps beneath.

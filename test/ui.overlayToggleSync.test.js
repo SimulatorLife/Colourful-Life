@@ -25,37 +25,27 @@ test("overlay checkboxes mirror engine visibility changes", async () => {
       uiManager.controlsPanel,
       "Life Event Markers",
     );
-    const auroraCheckbox = findCheckboxByLabel(
-      uiManager.controlsPanel,
-      "Aurora Celebration Veil",
-    );
 
     assert.ok(energyCheckbox, "expected energy overlay checkbox to be rendered");
     assert.ok(
       lifeMarkersCheckbox,
       "expected life event markers overlay checkbox to be rendered",
     );
-    assert.ok(auroraCheckbox, "expected aurora overlay checkbox to be rendered");
 
     assert.is(energyCheckbox.checked, uiManager.getShowEnergy());
     assert.is(lifeMarkersCheckbox.checked, uiManager.getShowLifeEventMarkers());
-    assert.is(auroraCheckbox.checked, uiManager.getShowAuroraVeil());
 
     engine.setOverlayVisibility({
       showEnergy: true,
       showLifeEventMarkers: true,
-      showAuroraVeil: true,
     });
 
     assert.is(engine.state.showEnergy, true);
     assert.is(engine.state.showLifeEventMarkers, true);
-    assert.is(engine.state.showAuroraVeil, true);
     assert.is(energyCheckbox.checked, true);
     assert.is(lifeMarkersCheckbox.checked, true);
-    assert.is(auroraCheckbox.checked, true);
     assert.is(uiManager.getShowEnergy(), true);
     assert.is(uiManager.getShowLifeEventMarkers(), true);
-    assert.is(uiManager.getShowAuroraVeil(), true);
 
     engine.setOverlayVisibility({ showEnergy: false });
     assert.is(engine.state.showEnergy, false);
@@ -66,11 +56,6 @@ test("overlay checkboxes mirror engine visibility changes", async () => {
     assert.is(engine.state.showLifeEventMarkers, false);
     assert.is(lifeMarkersCheckbox.checked, false);
     assert.is(uiManager.getShowLifeEventMarkers(), false);
-
-    engine.setOverlayVisibility({ showAuroraVeil: false });
-    assert.is(engine.state.showAuroraVeil, false);
-    assert.is(auroraCheckbox.checked, false);
-    assert.is(uiManager.getShowAuroraVeil(), false);
 
     simulation.destroy();
   } finally {
