@@ -14,18 +14,18 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 ## Quick start
 
-Colourful Life targets the Node.js **25.x** series (the included `.nvmrc` pins to 25.0.0). After cloning:
+Colourful Life supports any Node.js runtime **>= 18.18.0**. The included `.nvmrc` pins to **25.0.0**, which is what CI and local profiling use. After cloning:
 
-1. Run `nvm use` (install with `nvm install` if necessary) so `node --version` reports 25.x.
-2. Install dependencies with `npm ci` (reach for `npm install` only when you intentionally touch the lockfile), then run `npm run prepare` once to restore Husky hooks after fresh clones or `.husky/` edits.
+1. Run `nvm use` (or `nvm install` if it is not available) so your shell adopts the pinned toolchain. If you prefer a different Node 18+ release, make sure `node --version` reports at least 18.18.0.
+2. Install dependencies with `npm ci` (stick to `npm install` only when you intentionally update the lockfile), then execute `npm run prepare` once so Husky reinstalls Git hooks after fresh clones or `.husky/` edits.
 3. Start developing with `npm run start` and open `http://localhost:1234`.
-4. While iterating, lean on focused loops and finish with a full check before you commit:
-   - `npm run lint` — ESLint with the shared ruleset (or `npm run lint:fix` for safe autofixes).
-   - `npm run format:check` — Verify Prettier formatting without writing.
-   - `npm test -- --watch` or `npm test -- path/to/file.test.js` — Exercise targeted Node.js test suites with the energy benchmark.
-   - `npm run check` — Chain linting, formatting verification, the energy benchmark, and the Node.js test suites before you push.
+4. While iterating, pick the feedback loop that fits your change and close with a full sweep before committing:
+   - `npm run lint` / `npm run lint:fix` — Run ESLint (with optional autofixes) against the shared ruleset.
+   - `npm run format:check` — Verify Prettier formatting without writing changes.
+   - `npm test -- --watch` or `npm test -- path/to/file.test.js` — Execute targeted Node.js suites. The script always runs the energy benchmark in `scripts/profile-energy.mjs` before the tests so performance regressions surface early.
+   - `npm run check` — Chain linting, formatting verification, the energy benchmark, and the Node.js suites for a pre-push safety net.
 
-5. If Parcel hot reloading stalls, run `npm run clean -- --dry-run` to preview the cache cleanup, then rerun without `--dry-run` to remove stale artifacts.
+If Parcel's hot module reload gets stuck, run `npm run clean -- --dry-run` to confirm what will be removed, then rerun without `--dry-run` to clear stale artifacts.
 
 Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, then browse [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, profiling harnesses, and testing expectations once the quick start is familiar, including when to lean on each feedback loop.
 
