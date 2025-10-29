@@ -501,6 +501,9 @@ const TIMESTAMP_NOW =
     ? () => performance.now()
     : () => Date.now();
 
+const IMAGE_DATA_SPARSE_AREA_RATIO = 12;
+const IMAGE_DATA_SPARSE_MIN_TILES = 1;
+
 function getPairSimilarity(cellA, cellB) {
   if (!cellA || !cellB) return 0;
 
@@ -6739,20 +6742,135 @@ export default class GridManager {
     if (maxRow >= minRow && maxCol >= minCol) {
       const dirtyWidth = maxCol - minCol + 1;
       const dirtyHeight = maxRow - minRow + 1;
+      const dirtyCount = dirtyTiles.length;
+      const dirtyArea = dirtyWidth * dirtyHeight;
+      let usedSparseFlush = false;
 
-      this.#imageDataCtx.putImageData(
-        this.#imageData,
-        0,
-        0,
-        minCol,
-        minRow,
-        dirtyWidth,
-        dirtyHeight,
-      );
+      if (
+        dirtyCount >= IMAGE_DATA_SPARSE_MIN_TILES &&
+        dirtyArea > dirtyCount * IMAGE_DATA_SPARSE_AREA_RATIO
+      ) {
+        usedSparseFlush = this.#flushSparseImageData(dirtyTiles, {
+          minRow,
+          maxRow,
+          cols,
+        });
+      }
+
+      if (!usedSparseFlush) {
+        this.#imageDataCtx.putImageData(
+          this.#imageData,
+          0,
+          0,
+          minCol,
+          minRow,
+          dirtyWidth,
+          dirtyHeight,
+        );
+      }
       this.#imageDataNeedsFullRefresh = false;
     }
 
     return { minRow, minCol, maxRow, maxCol };
+  }
+
+  #flushSparseImageData(dirtyTiles, bounds) {
+    if (
+      !this.#imageData ||
+      !this.#imageDataCtx ||
+      typeof this.#imageDataCtx.putImageData !== "function"
+    ) {
+      return false;
+    }
+
+    const { minRow, maxRow, cols } = bounds ?? {};
+
+    if (
+      !Number.isInteger(minRow) ||
+      !Number.isInteger(maxRow) ||
+      !Number.isInteger(cols) ||
+      minRow > maxRow
+    ) {
+      return false;
+    }
+
+    const rowBuckets = this.#prepareSparseDirtyColumns(this.rows);
+    const rowList = this.#getSparseDirtyRowList();
+
+    for (let i = 0; i < dirtyTiles.length; i++) {
+      const key = dirtyTiles[i];
+      const row = Math.floor(key / cols);
+      const col = key % cols;
+
+      if (row < minRow || row > maxRow) {
+        continue;
+      }
+
+      const bucket = rowBuckets[row];
+
+      if (!bucket) {
+        continue;
+      }
+
+      if (bucket.length === 0) {
+        rowList.push(row);
+      }
+
+      bucket.push(col);
+    }
+
+    if (rowList.length === 0) {
+      return false;
+    }
+
+    rowList.sort((a, b) => a - b);
+
+    const imageData = this.#imageData;
+    const ctx = this.#imageDataCtx;
+
+    for (let i = 0; i < rowList.length; i++) {
+      const row = rowList[i];
+      const bucket = rowBuckets[row];
+
+      if (!bucket || bucket.length === 0) {
+        continue;
+      }
+
+      bucket.sort((a, b) => a - b);
+
+      let start = bucket[0];
+      let previous = start;
+
+      for (let j = 1; j < bucket.length; j++) {
+        const col = bucket[j];
+
+        if (col === previous + 1) {
+          previous = col;
+
+          continue;
+        }
+
+        const width = previous - start + 1;
+
+        if (width > 0) {
+          ctx.putImageData(imageData, 0, 0, start, row, width, 1);
+        }
+
+        start = previous = col;
+      }
+
+      const width = previous - start + 1;
+
+      if (width > 0) {
+        ctx.putImageData(imageData, 0, 0, start, row, width, 1);
+      }
+
+      bucket.length = 0;
+    }
+
+    rowList.length = 0;
+
+    return true;
   }
 
   #resetObstacleRenderCache() {
