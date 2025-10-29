@@ -12,9 +12,6 @@ where practical.
 - Diversity-drive sensor linking DNA appetite, novelty pressure, and lived
   diversity into neural controls so movement, interaction, and reproduction
   policies adapt to neighbourhood variety instead of fixed appetites.
-- Optional Aurora Celebration Veil overlay that tints the canvas with a low-contrast,
-  energy- and birth-responsive aurora while keeping other telemetry readable and
-  disabled by default.
 - Simulation clock in Evolution Insights showing elapsed simulated time and the
   cumulative tick count so pacing stays visible without mental math.
 - Regression tests ensuring the insights, life events, and leaderboard panels
@@ -78,6 +75,12 @@ where practical.
 - Refreshed documentation across the README, developer guide, and architecture
   notes to highlight the UI bridge, fitness scoring module, Husky hook setup,
   and new formatting scripts so contributor workflows mirror the current code.
+
+### Removed
+
+- Aurora Celebration Veil overlay and its configuration toggles. The aesthetic veil
+  overlapped the energy heatmap and life event markers without delivering actionable
+  feedback while imposing extra rendering and testing surface area.
 - Grouped configuration override guidance across the README, developer guide,
   and architecture overview while tightening the quick-start flow to call out
   `npm run prepare`, cache resets, and the supporting documentation map.

@@ -31,9 +31,6 @@ const LIFE_EVENT_FADE_WINDOW_DESCRIPTION =
 const AGE_HEATMAP_OVERLAY_DESCRIPTION =
   "Shade older organisms more intensely so elders nearing their lifespan stand out.";
 
-const AURORA_VEIL_OVERLAY_DESCRIPTION =
-  "Lay a celebratory aurora wash across the grid that responds to average energy and recent births without overpowering other overlays.";
-
 const GRID_GEOMETRY_BOUNDS = Object.freeze({
   cellSize: Object.freeze({ min: 2, max: 20, step: 1 }),
   rows: Object.freeze({ min: 40, max: 240, step: 1 }),
@@ -155,7 +152,6 @@ export const OVERLAY_TOGGLE_SETTERS = Object.freeze({
   showAge: "setShowAge",
   showFitness: "setShowFitness",
   showLifeEventMarkers: "setShowLifeEventMarkers",
-  showAuroraVeil: "setShowAuroraVeil",
   showGridLines: "setShowGridLines",
   showReproductiveZones: "setShowReproductiveZones",
 });
@@ -548,7 +544,6 @@ export default class UIManager {
     this.lifeEventFadeTicks = Number.isFinite(defaults.lifeEventFadeTicks)
       ? defaults.lifeEventFadeTicks
       : SIMULATION_DEFAULTS.lifeEventFadeTicks;
-    this.showAuroraVeil = defaults.showAuroraVeil;
     this.showGridLines = defaults.showGridLines;
     this.showReproductiveZones =
       defaults.showReproductiveZones !== undefined
@@ -4457,15 +4452,6 @@ export default class UIManager {
         initial: this.showLifeEventMarkers,
       },
       {
-        key: "showAuroraVeil",
-        label: "Aurora Celebration Veil",
-        options: {
-          title: AURORA_VEIL_OVERLAY_DESCRIPTION,
-          description: AURORA_VEIL_OVERLAY_DESCRIPTION,
-        },
-        initial: this.showAuroraVeil,
-      },
-      {
         key: "showReproductiveZones",
         label: "Highlight Reproductive Zones",
         title:
@@ -5633,9 +5619,6 @@ export default class UIManager {
   getShowLifeEventMarkers() {
     return this.showLifeEventMarkers;
   }
-  getShowAuroraVeil() {
-    return this.showAuroraVeil;
-  }
   getShowGridLines() {
     return this.showGridLines;
   }
@@ -5681,10 +5664,6 @@ export default class UIManager {
         }
       },
     });
-  }
-
-  setShowAuroraVeil(value, options) {
-    this.#applyOverlayToggle("showAuroraVeil", value, options);
   }
 
   setShowGridLines(value, options) {
