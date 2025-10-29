@@ -1,5 +1,6 @@
 import UIManager, { OVERLAY_TOGGLE_SETTERS } from "./uiManager.js";
 import { createHeadlessUiManager } from "./headlessUiManager.js";
+import { resolveSimulationDefaults } from "../config.js";
 import { toPlainObject } from "../utils/object.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
@@ -8,10 +9,19 @@ function normalizeLayoutOptions({ engine, uiOptions = {}, sanitizedDefaults = {}
   const layoutConfig = toPlainObject(normalizedUi.layout);
   const sanitizedInitialSettings = toPlainObject(sanitizedDefaults);
   const layoutInitialSettings = toPlainObject(layoutConfig.initialSettings);
-  const initialSettings = {
-    ...sanitizedInitialSettings,
-    ...layoutInitialSettings,
-  };
+  const initialSettings = { ...sanitizedInitialSettings };
+
+  if (Object.keys(layoutInitialSettings).length > 0) {
+    const sanitizedLayoutOverrides = resolveSimulationDefaults(layoutInitialSettings);
+
+    Object.entries(layoutInitialSettings).forEach(([key, value]) => {
+      if (Object.hasOwn(sanitizedLayoutOverrides, key)) {
+        initialSettings[key] = sanitizedLayoutOverrides[key];
+      } else {
+        initialSettings[key] = value;
+      }
+    });
+  }
 
   return {
     options: normalizedUi,
