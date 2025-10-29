@@ -2024,6 +2024,26 @@ export default class UIManager {
     }
   }
 
+  #applyOverlayToggle(propertyKey, value, options) {
+    const { notify = true, afterChange } =
+      options && typeof options === "object" ? options : {};
+
+    const currentValue = this[propertyKey];
+    const normalized = coerceBoolean(value, currentValue);
+    const changed = currentValue !== normalized;
+
+    this[propertyKey] = normalized;
+    this.#syncOverlayToggleInput(propertyKey, normalized);
+
+    if (typeof afterChange === "function") {
+      afterChange(normalized, changed);
+    }
+
+    if (changed && notify) {
+      this.#notifySettingChange(propertyKey, normalized);
+    }
+  }
+
   #updateLifeEventFadeControlState() {
     if (!this.lifeEventFadeSlider) return;
 
@@ -5607,113 +5627,52 @@ export default class UIManager {
     return this.lifeEventFadeTicks;
   }
 
-  setShowDensity(value, { notify = true } = {}) {
-    const normalized = coerceBoolean(value, this.showDensity);
-    const changed = this.showDensity !== normalized;
-
-    this.showDensity = normalized;
-    this.#syncOverlayToggleInput("showDensity", normalized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("showDensity", normalized);
-    }
+  setShowDensity(value, options) {
+    this.#applyOverlayToggle("showDensity", value, options);
   }
 
-  setShowEnergy(value, { notify = true } = {}) {
-    const normalized = coerceBoolean(value, this.showEnergy);
-    const changed = this.showEnergy !== normalized;
-
-    this.showEnergy = normalized;
-    this.#syncOverlayToggleInput("showEnergy", normalized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("showEnergy", normalized);
-    }
+  setShowEnergy(value, options) {
+    this.#applyOverlayToggle("showEnergy", value, options);
   }
 
-  setShowAge(value, { notify = true } = {}) {
-    const normalized = coerceBoolean(value, this.showAge);
-    const changed = this.showAge !== normalized;
-
-    this.showAge = normalized;
-    this.#syncOverlayToggleInput("showAge", normalized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("showAge", normalized);
-    }
+  setShowAge(value, options) {
+    this.#applyOverlayToggle("showAge", value, options);
   }
 
-  setShowFitness(value, { notify = true } = {}) {
-    const normalized = coerceBoolean(value, this.showFitness);
-    const changed = this.showFitness !== normalized;
-
-    this.showFitness = normalized;
-    this.#syncOverlayToggleInput("showFitness", normalized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("showFitness", normalized);
-    }
+  setShowFitness(value, options) {
+    this.#applyOverlayToggle("showFitness", value, options);
   }
 
-  setShowObstacles(value, { notify = true } = {}) {
-    const normalized = coerceBoolean(value, this.showObstacles);
-    const changed = this.showObstacles !== normalized;
-
-    this.showObstacles = normalized;
-    this.#syncOverlayToggleInput("showObstacles", normalized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("showObstacles", normalized);
-    }
+  setShowObstacles(value, options) {
+    this.#applyOverlayToggle("showObstacles", value, options);
   }
 
-  setShowLifeEventMarkers(value, { notify = true } = {}) {
-    const normalized = coerceBoolean(value, this.showLifeEventMarkers);
-    const changed = this.showLifeEventMarkers !== normalized;
+  setShowLifeEventMarkers(value, options) {
+    const baseOptions = options && typeof options === "object" ? options : undefined;
+    const { afterChange: userAfterChange, ...passThrough } = baseOptions ?? {};
 
-    this.showLifeEventMarkers = normalized;
-    this.#syncOverlayToggleInput("showLifeEventMarkers", normalized);
-    this.#updateLifeEventFadeControlState();
+    this.#applyOverlayToggle("showLifeEventMarkers", value, {
+      ...passThrough,
+      afterChange: (normalized, changed) => {
+        this.#updateLifeEventFadeControlState();
 
-    if (changed && notify) {
-      this.#notifySettingChange("showLifeEventMarkers", normalized);
-    }
+        if (typeof userAfterChange === "function") {
+          userAfterChange(normalized, changed);
+        }
+      },
+    });
   }
 
-  setShowAuroraVeil(value, { notify = true } = {}) {
-    const normalized = coerceBoolean(value, this.showAuroraVeil);
-    const changed = this.showAuroraVeil !== normalized;
-
-    this.showAuroraVeil = normalized;
-    this.#syncOverlayToggleInput("showAuroraVeil", normalized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("showAuroraVeil", normalized);
-    }
+  setShowAuroraVeil(value, options) {
+    this.#applyOverlayToggle("showAuroraVeil", value, options);
   }
 
-  setShowGridLines(value, { notify = true } = {}) {
-    const normalized = coerceBoolean(value, this.showGridLines);
-    const changed = this.showGridLines !== normalized;
-
-    this.showGridLines = normalized;
-    this.#syncOverlayToggleInput("showGridLines", normalized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("showGridLines", normalized);
-    }
+  setShowGridLines(value, options) {
+    this.#applyOverlayToggle("showGridLines", value, options);
   }
 
-  setShowReproductiveZones(value, { notify = true } = {}) {
-    const normalized = coerceBoolean(value, this.showReproductiveZones);
-    const changed = this.showReproductiveZones !== normalized;
-
-    this.showReproductiveZones = normalized;
-    this.#syncOverlayToggleInput("showReproductiveZones", normalized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("showReproductiveZones", normalized);
-    }
+  setShowReproductiveZones(value, options) {
+    this.#applyOverlayToggle("showReproductiveZones", value, options);
   }
 
   setLifeEventFadeTicks(value, { notify = true } = {}) {
