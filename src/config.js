@@ -68,11 +68,16 @@ const DEFAULT_INITIAL_TILE_ENERGY_FRACTION = 0.5;
 const DEFAULT_ENERGY_DIFFUSION_RATE = 0.05; // smoothing between tiles (per tick)
 // Relaxed from 1.15 after a 60×60 dense seeding probe
 // (`PERF_INCLUDE_SIM=1 PERF_SIM_ITERATIONS=120 node scripts/profile-energy.mjs`)
-// where the final population recovered from ~218 → ~225 survivors.
-// The gentler surplus requirement still forces parents to stockpile beyond
-// their pickier demand fraction but keeps collapse loops from starving
-// recovering lineages before births can land.
-const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.12;
+// where the final population recovered from ~218 → ~225 survivors. Nudged back
+// up from 1.12 after rerunning the dense 40×40 headless probe
+// (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40 PERF_SIM_COLS=40 PERF_SIM_WARMUP=20`
+// `PERF_SIM_ITERATIONS=80 PERF_SIM_DENSITY=0.68 node scripts/profile-energy.mjs`)
+// lifted survivors from 135 → 142 while the trimmed-ms-per-tick average held
+// near 76 ms (75.5 → 76.4). The slightly firmer reserve requirement keeps
+// post-bottleneck births from draining recovery tiles before they stabilise
+// without reviving the feast/famine loops we quelled when stepping down from
+// 1.15.
+const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.13;
 const DEFAULT_MATE_DIVERSITY_SAMPLE_LIMIT = 5;
 // Telemetry defaults to highlighting the top five lineages. Expose the size so
 // headless consumers and UI presets can extend the leaderboard without touching
