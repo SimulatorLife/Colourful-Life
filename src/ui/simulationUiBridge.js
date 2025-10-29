@@ -67,14 +67,14 @@ function createHeadlessOptions({
   mergedOptions.onSettingChange = (key, value) => {
     if (key === "updatesPerSecond") {
       engine?.setUpdatesPerSecond?.(value);
-    } else {
-      invokeSettingChange(
-        simulationOnSettingChange,
-        key,
-        value,
-        "Headless simulation onSettingChange callback",
-      );
     }
+
+    invokeSettingChange(
+      simulationOnSettingChange,
+      key,
+      value,
+      "Headless simulation onSettingChange callback",
+    );
 
     invokeSettingChange(
       userOnSettingChange,
