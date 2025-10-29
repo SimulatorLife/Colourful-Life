@@ -140,7 +140,7 @@ const DEFAULT_TRAIT_DISPLAY_CONFIG = Object.freeze({
 
 const WARNINGS = Object.freeze({
   burstAction: "Burst action handler threw.",
-  resolveCssColor: "Failed to resolve CSS variable color",
+  resolveCssColor: "Failed to resolve CSS variable color.",
   readObstaclePreset: "Failed to read current obstacle preset from actions.",
   readGridDimensions: "Failed to read grid dimensions from actions.",
   updateWorldGeometry: "Failed to update world geometry.",
