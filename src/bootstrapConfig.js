@@ -81,8 +81,11 @@ export function resolveBootstrapOptions({ globalOptions, documentRef } = {}) {
   const canvasId = toNonEmptyString(overrides.canvasId);
   const canvas = resolveCanvas({ canvas: overrides.canvas, canvasId }, documentRef);
   const config = mergeConfig(DEFAULT_BOOT_CONFIG, overrides.config);
-  const { canvasId: _ignoredCanvasId, ...rest } = overrides;
-  const result = { ...rest, canvas, config };
+  const result = { ...overrides, canvas, config };
+
+  if (Object.hasOwn(result, "canvasId")) {
+    delete result.canvasId;
+  }
 
   if (!Object.hasOwn(result, "defaultCanvasId")) {
     result.defaultCanvasId = canvasId || DEFAULT_CANVAS_ID;
