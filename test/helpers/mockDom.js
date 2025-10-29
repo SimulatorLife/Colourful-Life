@@ -13,7 +13,7 @@ class MockClassList {
     this.owner.className = Array.from(this.classes).join(" ");
   }
 
-  _setFromString(value) {
+  #setFromString(value) {
     this.classes.clear();
 
     if (typeof value !== "string" || value.length === 0) {
@@ -28,23 +28,27 @@ class MockClassList {
       });
   }
 
+  syncFromOwner() {
+    this.#setFromString(this.owner?._className ?? this.owner?.className ?? "");
+  }
+
   add(token) {
     if (!token) return;
-    this._setFromString(this.owner?._className ?? this.owner?.className ?? "");
+    this.syncFromOwner();
     this.classes.add(token);
     this.#apply();
   }
 
   remove(token) {
     if (!token) return;
-    this._setFromString(this.owner?._className ?? this.owner?.className ?? "");
+    this.syncFromOwner();
     this.classes.delete(token);
     this.#apply();
   }
 
   toggle(token, force) {
     if (!token) return false;
-    this._setFromString(this.owner?._className ?? this.owner?.className ?? "");
+    this.syncFromOwner();
     const shouldAdd = force ?? !this.classes.has(token);
 
     if (shouldAdd) {
@@ -62,7 +66,7 @@ class MockClassList {
     }
 
     if (this.classes.size === 0) {
-      this._setFromString(this.owner?._className ?? this.owner?.className ?? "");
+      this.syncFromOwner();
     }
 
     if (this.classes.has(token)) {
@@ -108,7 +112,7 @@ export class MockElement {
     this._className = value != null ? String(value) : "";
 
     if (this.classList) {
-      this.classList._setFromString(this._className);
+      this.classList.syncFromOwner();
     }
   }
 
