@@ -121,6 +121,10 @@ export function sanitizeNumber(
     round = false,
   } = {},
 ) {
+  if (value == null) {
+    return fallback;
+  }
+
   let numeric;
 
   if (typeof value === "string") {

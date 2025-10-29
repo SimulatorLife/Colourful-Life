@@ -74,6 +74,20 @@ test("resolveConsumptionDensityPenalty falls back when override is invalid", asy
   );
 });
 
+test("resolveSimulationDefaults ignores null overrides", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+
+  const merged = resolveSimulationDefaults({
+    energyRegenRate: null,
+    mutationMultiplier: null,
+    lifeEventFadeTicks: null,
+  });
+
+  assert.is(merged.energyRegenRate, SIMULATION_DEFAULTS.energyRegenRate);
+  assert.is(merged.mutationMultiplier, SIMULATION_DEFAULTS.mutationMultiplier);
+  assert.is(merged.lifeEventFadeTicks, SIMULATION_DEFAULTS.lifeEventFadeTicks);
+});
+
 test("INITIAL_TILE_ENERGY_FRACTION_DEFAULT exposes the environment-aware default", async () => {
   const { INITIAL_TILE_ENERGY_FRACTION_DEFAULT } = await configModulePromise;
 

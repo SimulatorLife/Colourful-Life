@@ -193,6 +193,11 @@ test("sanitizeNumber treats blank strings as missing overrides", () => {
     "control characters are trimmed before coercion",
   );
   assert.is(
+    sanitizeNumber(null, { fallback: 11 }),
+    11,
+    "null candidates use the provided fallback",
+  );
+  assert.is(
     sanitizePositiveInteger("", { fallback: 9, min: 1 }),
     9,
     "positive integer sanitizer inherits blank string handling",
