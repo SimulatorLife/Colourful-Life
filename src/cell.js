@@ -7167,7 +7167,142 @@ export default class Cell {
       reach += (similarity - 0.5) * affinityWeight;
     }
 
-    return clamp(reach, minReach, maxReach);
+    const baseReach = clamp(reach, minReach, maxReach);
+
+    if (!this.#canUseNeuralPolicies()) {
+      return baseReach;
+    }
+
+    const clampProb = (value, fallback = 0.5) =>
+      Number.isFinite(value) ? clamp(value, 0, 1) : fallback;
+    const span = Math.max(1e-3, maxReach - minReach);
+    const normalizedBase = clamp((baseReach - minReach) / span, 0, 1);
+    const normalizedSpan = clamp(span / 4, 0, 1);
+    const normalizedMin = clamp(minReach / 4, 0, 1);
+    const normalizedMax = clamp(maxReach / 4, 0, 1);
+    let baseProbability = null;
+
+    if (partner && typeof partner.dna?.reproductionProb === "function") {
+      baseProbability = clampProb(
+        this.computeReproductionProbability(partner, {
+          localDensity,
+          densityEffectMultiplier: 1,
+          maxTileEnergy: MAX_TILE_ENERGY,
+          tileEnergy,
+          tileEnergyDelta,
+        }),
+      );
+    } else if (typeof this.dna?.reproductionProb === "function") {
+      baseProbability = clampProb(this.dna.reproductionProb());
+    } else {
+      baseProbability = 0.5;
+    }
+
+    const sensors = this.#reproductionSensors(partner, {
+      localDensity,
+      densityEffectMultiplier: 1,
+      maxTileEnergy: MAX_TILE_ENERGY,
+      baseProbability,
+      tileEnergy,
+      tileEnergyDelta,
+    });
+
+    sensors.reproductionReachBase = normalizedBase;
+    sensors.reproductionReachSpan = normalizedSpan;
+    sensors.reproductionReachMin = normalizedMin;
+    sensors.reproductionReachMax = normalizedMax;
+
+    const values = this.#evaluateBrainGroup("reproductionReach", sensors);
+
+    if (!values) {
+      return baseReach;
+    }
+
+    const entries = OUTPUT_GROUPS.reproductionReach;
+    const logits = entries.map(({ key }) => Number(values[key]) || 0);
+    const probabilities = softmax(logits);
+    const logitsByKey = {};
+    const probabilitiesByKey = {};
+
+    for (let i = 0; i < entries.length; i += 1) {
+      const { key } = entries[i];
+
+      logitsByKey[key] = logits[i] ?? 0;
+      probabilitiesByKey[key] = probabilities[i] ?? 0;
+    }
+
+    const anchors = {
+      contract: minReach,
+      stabilize: baseReach,
+      extend: maxReach,
+    };
+    let neuralTarget = baseReach;
+    let totalProbability = 0;
+    let dominantIntent = { key: null, probability: 0 };
+    let runnerUpIntent = { key: null, probability: 0 };
+
+    for (let i = 0; i < entries.length; i += 1) {
+      const { key } = entries[i];
+      const probability = clamp(probabilitiesByKey[key] ?? 0, 0, 1);
+
+      totalProbability += probability;
+
+      if (probability > dominantIntent.probability) {
+        runnerUpIntent = dominantIntent;
+        dominantIntent = { key, probability };
+      } else if (probability > runnerUpIntent.probability) {
+        runnerUpIntent = { key, probability };
+      }
+    }
+
+    if (totalProbability > 1e-6) {
+      let weighted = 0;
+
+      for (let i = 0; i < entries.length; i += 1) {
+        const { key } = entries[i];
+        const anchor = anchors[key] ?? baseReach;
+
+        weighted += (probabilitiesByKey[key] ?? 0) * anchor;
+      }
+
+      neuralTarget = clamp(weighted / totalProbability, minReach, maxReach);
+    }
+
+    const stretchSignal = clamp(
+      (probabilitiesByKey.extend ?? 0) - (probabilitiesByKey.contract ?? 0),
+      -1,
+      1,
+    );
+    const advantage = Math.max(
+      0,
+      dominantIntent.probability - runnerUpIntent.probability,
+    );
+    const neuralMix = clamp(
+      0.3 + advantage * 0.4 + Math.abs(stretchSignal) * 0.25,
+      0.1,
+      0.9,
+    );
+    const adjustedReach = clamp(
+      lerp(baseReach, neuralTarget, neuralMix),
+      minReach,
+      maxReach,
+    );
+
+    this.#assignDecisionOutcome("reproductionReach", {
+      usedNetwork: true,
+      baseReach,
+      reach: adjustedReach,
+      neuralTarget,
+      neuralMix,
+      neuralAnchors: anchors,
+      neuralDominant: dominantIntent.key,
+      neuralAdvantage: advantage,
+      stretchSignal,
+      probabilities: probabilitiesByKey,
+      logits: logitsByKey,
+    });
+
+    return adjustedReach;
   }
 
   /**
