@@ -1176,6 +1176,8 @@ export default class SimulationEngine {
       this.caf(this.frameHandle);
       this.frameHandle = null;
     }
+
+    this.#setAutoPausePending(false);
   }
 
   destroy() {
