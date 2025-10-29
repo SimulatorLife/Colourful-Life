@@ -29,33 +29,25 @@ const cloneArray = (source) => {
     return [];
   }
 
-  const cloned = new Array(source.length);
-
-  for (let i = 0; i < source.length; i += 1) {
-    const entry = source[i];
-
+  return Array.from(source, (entry) => {
     if (!entry || typeof entry !== "object") {
-      cloned[i] = cloneNumeric(entry);
-
-      continue;
+      return cloneNumeric(entry);
     }
 
-    cloned[i] = { ...entry };
+    const copy = { ...entry };
 
-    for (const key of Object.keys(cloned[i])) {
-      const value = cloned[i][key];
-
+    for (const [key, value] of Object.entries(copy)) {
       if (Array.isArray(value)) {
-        cloned[i][key] = cloneArray(value);
+        copy[key] = cloneArray(value);
       } else if (typeof value === "object" && value !== null) {
-        cloned[i][key] = { ...value };
+        copy[key] = { ...value };
       } else if (key === "value" || key === "weight") {
-        cloned[i][key] = cloneNumeric(value);
+        copy[key] = cloneNumeric(value);
       }
     }
-  }
 
-  return cloned;
+    return copy;
+  });
 };
 
 const cloneTraceInputs = (inputs) => {
@@ -63,19 +55,13 @@ const cloneTraceInputs = (inputs) => {
     return [];
   }
 
-  const cloned = new Array(inputs.length);
-
-  for (let i = 0; i < inputs.length; i += 1) {
-    const entry = inputs[i];
-
+  return Array.from(inputs, (entry) => {
     if (!entry || typeof entry !== "object") {
-      cloned[i] = {
+      return {
         source: entry?.source ?? null,
         weight: cloneNumeric(entry?.weight),
         value: cloneNumeric(entry?.value),
       };
-
-      continue;
     }
 
     const copy = { ...entry };
@@ -83,9 +69,7 @@ const cloneTraceInputs = (inputs) => {
     if ("weight" in copy) copy.weight = cloneNumeric(copy.weight);
     if ("value" in copy) copy.value = cloneNumeric(copy.value);
 
-    for (const key of Object.keys(copy)) {
-      const value = copy[key];
-
+    for (const [key, value] of Object.entries(copy)) {
       if (Array.isArray(value)) {
         copy[key] = cloneArray(value);
       } else if (typeof value === "object" && value !== null) {
@@ -93,10 +77,8 @@ const cloneTraceInputs = (inputs) => {
       }
     }
 
-    cloned[i] = copy;
-  }
-
-  return cloned;
+    return copy;
+  });
 };
 
 const cloneTraceNodes = (nodes) => {
@@ -104,15 +86,9 @@ const cloneTraceNodes = (nodes) => {
     return [];
   }
 
-  const cloned = new Array(nodes.length);
-
-  for (let i = 0; i < nodes.length; i += 1) {
-    const node = nodes[i];
-
+  return Array.from(nodes, (node) => {
     if (!node || typeof node !== "object") {
-      cloned[i] = { inputs: [] };
-
-      continue;
+      return { inputs: [] };
     }
 
     const copy = { ...node };
@@ -122,10 +98,8 @@ const cloneTraceNodes = (nodes) => {
     if ("sum" in copy) copy.sum = cloneNumeric(copy.sum);
     if ("output" in copy) copy.output = cloneNumeric(copy.output);
 
-    for (const key of Object.keys(copy)) {
+    for (const [key, value] of Object.entries(copy)) {
       if (key === "inputs") continue;
-
-      const value = copy[key];
 
       if (Array.isArray(value)) {
         copy[key] = cloneArray(value);
@@ -134,10 +108,8 @@ const cloneTraceNodes = (nodes) => {
       }
     }
 
-    cloned[i] = copy;
-  }
-
-  return cloned;
+    return copy;
+  });
 };
 
 const cloneTraceSensors = (sensors) => {
@@ -145,24 +117,16 @@ const cloneTraceSensors = (sensors) => {
     return [];
   }
 
-  const cloned = new Array(sensors.length);
-
-  for (let i = 0; i < sensors.length; i += 1) {
-    const sensor = sensors[i];
-
+  return Array.from(sensors, (sensor) => {
     if (!sensor || typeof sensor !== "object") {
-      cloned[i] = { id: null, key: null, value: 0 };
-
-      continue;
+      return { id: null, key: null, value: 0 };
     }
 
     const copy = { ...sensor };
 
     if ("value" in copy) copy.value = cloneNumeric(copy.value);
 
-    for (const key of Object.keys(copy)) {
-      const value = copy[key];
-
+    for (const [key, value] of Object.entries(copy)) {
       if (Array.isArray(value)) {
         copy[key] = cloneArray(value);
       } else if (typeof value === "object" && value !== null) {
@@ -170,10 +134,8 @@ const cloneTraceSensors = (sensors) => {
       }
     }
 
-    cloned[i] = copy;
-  }
-
-  return cloned;
+    return copy;
+  });
 };
 
 /**
