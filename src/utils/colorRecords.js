@@ -85,28 +85,26 @@ function rememberColor(normalized, record) {
 }
 
 function parseRgbComponent(raw) {
-  if (typeof raw !== "string") {
+  if (typeof raw !== "string" || raw.length === 0) {
     return 0;
   }
 
-  const trimmed = raw.trim();
-
-  if (trimmed.length === 0) {
-    return 0;
-  }
-
-  const hasPercent = trimmed.endsWith("%");
-  const numeric = Number.parseFloat(trimmed);
+  const numeric = Number.parseFloat(raw);
 
   if (!Number.isFinite(numeric)) {
     return 0;
   }
 
-  if (hasPercent) {
-    return clamp(Math.round((numeric / 100) * 255), 0, 255);
+  let index = raw.length - 1;
+
+  while (index >= 0 && raw.charCodeAt(index) <= 32) {
+    index -= 1;
   }
 
-  return clamp(Math.round(numeric), 0, 255);
+  const isPercent = index >= 0 && raw.charCodeAt(index) === 37; /* % */
+  const scaled = isPercent ? (numeric / 100) * 255 : numeric;
+
+  return clamp(Math.round(scaled), 0, 255);
 }
 
 function parseHexColorComponents(hex) {
