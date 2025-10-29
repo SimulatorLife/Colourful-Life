@@ -207,6 +207,7 @@ export function createSimulation({
     applyObstaclePreset: (id, options) => engine.applyObstaclePreset(id, options),
     obstaclePresets: engine.obstaclePresets,
     getCurrentObstaclePreset: () => engine.getCurrentObstaclePreset(),
+    clearLifeEventMarkers: () => engine.clearLifeEventMarkers(),
     selectionManager: engine.selectionManager,
     getCellSize: () => engine.cellSize,
     getGridDimensions: () => ({

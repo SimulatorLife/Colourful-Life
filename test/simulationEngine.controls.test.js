@@ -405,6 +405,49 @@ test("updateSetting routes lifeEventLimit through the setter", async () => {
   }
 });
 
+test("clearLifeEventMarkers empties marker history and emits metrics", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+    const stats = engine.stats;
+
+    stats.lifeEventLog.push({ type: "birth", tick: 5 });
+    stats.lifeEventLog.push({ type: "death", tick: 6 });
+
+    assert.is(stats.getRecentLifeEvents(10).length, 2);
+
+    let frameRequested = false;
+
+    engine.requestFrame = () => {
+      frameRequested = true;
+    };
+
+    const payloads = [];
+
+    engine.on("metrics", (payload) => {
+      payloads.push(payload);
+    });
+
+    const cleared = engine.clearLifeEventMarkers();
+
+    assert.is(cleared, true);
+    assert.equal(stats.getRecentLifeEvents(10), []);
+    assert.ok(frameRequested, "clearing markers should request a redraw");
+    assert.is(payloads.length, 1, "clearing markers should emit a metrics update");
+    assert.is(payloads[0]?.stats, stats);
+    assert.is(
+      payloads[0]?.environment?.updatesPerSecond,
+      engine.state.updatesPerSecond,
+    );
+
+    engine.destroy();
+  } finally {
+    restore();
+  }
+});
+
 test("setWorldGeometry resizes the grid and updates dependent systems", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;

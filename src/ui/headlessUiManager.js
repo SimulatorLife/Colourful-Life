@@ -81,6 +81,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  *   getShowFitness: () => boolean,
  *   getShowLifeEventMarkers: () => boolean,
  *   getShowGridLines: () => boolean,
+ *   clearLifeEventMarkers: () => void,
  *   shouldRenderSlowUi: (timestamp: number) => boolean,
  *   renderMetrics: Function,
  *   renderLeaderboard: Function,
@@ -96,6 +97,7 @@ export function createHeadlessUiManager(options = {}) {
     pause: pauseControl,
     resume: resumeControl,
     togglePause: toggleControl,
+    clearLifeEventMarkers: clearLifeEventMarkersAction,
     ...overrides
   } = options;
   const defaults = resolveSimulationDefaults(overrides);
@@ -370,6 +372,17 @@ export function createHeadlessUiManager(options = {}) {
 
       settings.showLifeEventMarkers = normalized;
       notify("showLifeEventMarkers", settings.showLifeEventMarkers);
+    },
+    clearLifeEventMarkers: () => {
+      if (typeof clearLifeEventMarkersAction !== "function") {
+        return;
+      }
+
+      invokeWithErrorBoundary(clearLifeEventMarkersAction, [], {
+        message:
+          "Headless UI clearLifeEventMarkers handler threw; continuing without interruption.",
+        once: true,
+      });
     },
     setShowGridLines: (value) => {
       const normalized = coerceBoolean(value, settings.showGridLines);

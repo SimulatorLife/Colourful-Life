@@ -112,6 +112,26 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       "limit slider should match the default marker cap",
     );
 
+    const clearMarkersButton = Array.from(
+      uiManager.controlsPanel.querySelectorAll("button"),
+    ).find((button) => button.textContent === "Clear Life Event Markers");
+
+    assert.ok(clearMarkersButton, "clear life event markers button should render");
+    assert.is(clearMarkersButton.disabled, false);
+
+    uiManager.setShowLifeEventMarkers(false, { notify: false });
+
+    assert.is(clearMarkersButton.disabled, true);
+    assert.match(
+      clearMarkersButton.title,
+      /enable life event markers/i,
+      "disabled button should hint at enabling markers",
+    );
+
+    uiManager.setShowLifeEventMarkers(true, { notify: false });
+
+    assert.is(clearMarkersButton.disabled, false);
+
     const sliderRow = playbackSlider?.parentElement?.parentElement ?? null;
     const panelBody = uiManager.controlsPanel.children.find(
       (child) => child?.className === "panel-body",

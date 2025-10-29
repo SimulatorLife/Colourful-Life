@@ -2240,6 +2240,14 @@ export default class Stats {
     this.pushHistory("eventStrength", s);
   }
 
+  clearLifeEvents() {
+    const ring = this.lifeEventLog;
+
+    if (ring && typeof ring.clear === "function") {
+      ring.clear();
+    }
+  }
+
   getRecentLifeEvents(limit = 12) {
     const ring = this.lifeEventLog;
 

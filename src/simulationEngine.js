@@ -1497,6 +1497,53 @@ export default class SimulationEngine {
     return sanitized;
   }
 
+  clearLifeEventMarkers() {
+    if (!this.stats) {
+      this.requestFrame();
+
+      return false;
+    }
+
+    let cleared = false;
+
+    if (typeof this.stats.clearLifeEvents === "function") {
+      this.stats.clearLifeEvents();
+      cleared = true;
+    } else if (
+      this.stats.lifeEventLog &&
+      typeof this.stats.lifeEventLog.clear === "function"
+    ) {
+      this.stats.lifeEventLog.clear();
+      cleared = true;
+    }
+
+    if (!cleared) {
+      this.requestFrame();
+
+      return false;
+    }
+
+    const environment = {
+      activeEvents: this.#summarizeActiveEvents(),
+      updatesPerSecond: Math.max(1, Math.round(this.state.updatesPerSecond ?? 60)),
+      eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
+        ? this.state.eventStrengthMultiplier
+        : 1,
+      combatTerritoryEdgeFactor:
+        this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
+    };
+
+    this.emit("metrics", {
+      stats: this.stats,
+      metrics: this.telemetry?.metrics ?? null,
+      environment,
+    });
+
+    this.requestFrame();
+
+    return true;
+  }
+
   setOverlayVisibility({
     showObstacles,
     showEnergy,

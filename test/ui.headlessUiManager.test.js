@@ -167,6 +167,19 @@ test("createHeadlessUiManager pause controls delegate to simulation callbacks", 
   assert.is(manager.isPaused(), false);
 });
 
+test("createHeadlessUiManager forwards clearLifeEventMarkers actions", () => {
+  const calls = [];
+  const manager = createHeadlessUiManager({
+    clearLifeEventMarkers: () => {
+      calls.push("cleared");
+    },
+  });
+
+  manager.clearLifeEventMarkers();
+
+  assert.equal(calls, ["cleared"]);
+});
+
 test("createHeadlessUiManager pause controls coerce string inputs", () => {
   const manager = createHeadlessUiManager();
 

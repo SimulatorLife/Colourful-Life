@@ -438,6 +438,9 @@ export default class UIManager {
     this.lifeEventsSummaryTotalCount = null;
     this.lifeEventsSummaryEmptyMessage = null;
     this.lifeEventMarkersToggle = null;
+    this.clearLifeEventMarkersButton = null;
+    this.clearLifeEventMarkersButtonTitle = null;
+    this.clearLifeEventMarkersRow = null;
     this._overlayToggleInputs = new Map();
     this._zoneToggleInputs = new Map();
     this.lifeEventsSummaryTrend = null;
@@ -456,6 +459,8 @@ export default class UIManager {
     this._pendingMetrics = null;
     this._pendingLeaderboardEntries = null;
     this._pendingLifeEventsStats = null;
+    this._lastLifeEventsStats = null;
+    this._lastLifeEventsMetrics = null;
     this.deathBreakdownList = null;
     this.deathBreakdownEmptyState = null;
     this.sparkMetricDescriptors = [];
@@ -2139,6 +2144,27 @@ export default class UIManager {
       this.lifeEventLimitSliderTitle,
       "Enable Life Event Markers to adjust this limit.",
     );
+
+    if (this.clearLifeEventMarkersButton) {
+      this.clearLifeEventMarkersButton.disabled = disabled;
+
+      if (typeof this.clearLifeEventMarkersButtonTitle === "string") {
+        const suffix = disabled
+          ? " Enable Life Event Markers to clear existing markers."
+          : "";
+
+        this.clearLifeEventMarkersButton.title =
+          `${this.clearLifeEventMarkersButtonTitle}${suffix}`.trim();
+      }
+    }
+
+    if (this.clearLifeEventMarkersRow) {
+      if (disabled) {
+        this.clearLifeEventMarkersRow.setAttribute("aria-disabled", "true");
+      } else {
+        this.clearLifeEventMarkersRow.removeAttribute("aria-disabled");
+      }
+    }
   }
 
   #syncZoneToggleInputs() {
@@ -4608,6 +4634,35 @@ export default class UIManager {
     if (limitRow instanceof HTMLElement) {
       this.lifeEventLimitSliderRow = limitRow;
     }
+
+    const lifeEventButtonRow = createControlButtonRow(overlayGrid);
+    const clearMarkersButton = document.createElement("button");
+    const clearTitle =
+      "Remove all recent life event markers from the canvas and events list for a fresh view.";
+
+    clearMarkersButton.type = "button";
+    clearMarkersButton.className = "control-button";
+    clearMarkersButton.textContent = "Clear Life Event Markers";
+    clearMarkersButton.title = clearTitle;
+    clearMarkersButton.addEventListener("click", () => {
+      if (typeof this.actions.clearLifeEventMarkers === "function") {
+        invokeWithErrorBoundary(this.actions.clearLifeEventMarkers, [], {
+          thisArg: this.actions,
+          reporter: warnOnce,
+          once: true,
+          message:
+            "Life event marker clearing action threw; continuing without interruption.",
+        });
+      }
+
+      this.refreshLifeEvents();
+      this.#scheduleUpdate();
+    });
+
+    lifeEventButtonRow.appendChild(clearMarkersButton);
+    this.clearLifeEventMarkersButton = clearMarkersButton;
+    this.clearLifeEventMarkersButtonTitle = clearTitle;
+    this.clearLifeEventMarkersRow = lifeEventButtonRow;
 
     this.#registerSliderElement("lifeEventFadeTicks", fadeSlider);
     this.#registerSliderElement("lifeEventLimit", limitSlider);
@@ -7429,6 +7484,9 @@ export default class UIManager {
   }
 
   renderLifeEvents(stats, metrics) {
+    this._lastLifeEventsStats = stats ?? null;
+    this._lastLifeEventsMetrics = metrics ?? null;
+
     if (!this.lifeEventsPanel) {
       this._pendingLifeEventsStats =
         stats || metrics ? { stats: stats ?? null, metrics: metrics ?? null } : null;
@@ -7439,6 +7497,26 @@ export default class UIManager {
     if (this.#isPanelCollapsed(this.lifeEventsPanel)) {
       this._pendingLifeEventsStats =
         stats || metrics ? { stats: stats ?? null, metrics: metrics ?? null } : null;
+
+      return;
+    }
+
+    this._pendingLifeEventsStats = null;
+    this.#renderLifeEvents(stats, metrics);
+  }
+
+  refreshLifeEvents() {
+    const stats = this._lastLifeEventsStats ?? null;
+    const metrics = this._lastLifeEventsMetrics ?? null;
+
+    if (!this.lifeEventsPanel) {
+      this._pendingLifeEventsStats = stats || metrics ? { stats, metrics } : null;
+
+      return;
+    }
+
+    if (this.#isPanelCollapsed(this.lifeEventsPanel)) {
+      this._pendingLifeEventsStats = stats || metrics ? { stats, metrics } : null;
 
       return;
     }
