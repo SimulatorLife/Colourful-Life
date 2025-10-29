@@ -3024,89 +3024,6 @@ export default class GridManager {
     return Array.isArray(list) ? list : [];
   }
 
-  #getColumnOccupantRows(col, bucket) {
-    this.#ensureColumnOccupancyCache(col);
-    const list = this.#columnOccupancySorted[col];
-
-    if (Array.isArray(list) && list.length === 0 && bucket && bucket.size > 0) {
-      for (const value of bucket) {
-        if (Number.isInteger(value)) {
-          this.#insertIntoSortedList(list, value);
-        }
-      }
-    }
-
-    return Array.isArray(list) ? list : [];
-  }
-
-  #forEachRowOccupant(row, startCol, endCol, callback) {
-    if (!Number.isInteger(row) || startCol > endCol) {
-      return 0;
-    }
-
-    const bucket = this.#rowOccupancy?.[row];
-
-    if (!bucket || bucket.size === 0) {
-      return 0;
-    }
-
-    const columns = this.#getRowOccupantColumns(row, bucket);
-
-    if (!Array.isArray(columns) || columns.length === 0) {
-      return 0;
-    }
-
-    const startIndex = lowerBound(columns, startCol);
-    let processed = 0;
-
-    for (let i = startIndex; i < columns.length; i++) {
-      const colIndex = columns[i];
-
-      if (colIndex > endCol) {
-        break;
-      }
-
-      callback(colIndex);
-      processed += 1;
-    }
-
-    return processed;
-  }
-
-  #forEachColumnOccupant(col, startRow, endRow, callback) {
-    if (!Number.isInteger(col) || startRow > endRow) {
-      return 0;
-    }
-
-    const bucket = this.#columnOccupancy?.[col];
-
-    if (!bucket || bucket.size === 0) {
-      return 0;
-    }
-
-    const rows = this.#getColumnOccupantRows(col, bucket);
-
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return 0;
-    }
-
-    const startIndex = lowerBound(rows, startRow);
-    let processed = 0;
-
-    for (let i = startIndex; i < rows.length; i++) {
-      const rowIndex = rows[i];
-
-      if (rowIndex > endRow) {
-        break;
-      }
-
-      callback(rowIndex);
-      processed += 1;
-    }
-
-    return processed;
-  }
-
   #trackCellPosition(cell, row, col) {
     if (
       !GridManager.#isCellRecord(cell) ||
@@ -9636,23 +9553,15 @@ export default class GridManager {
       return this.#targetGroupsView;
     }
 
-    const processCandidate = (targetRow, targetCol, bucket) => {
-      if (targetRow === row && targetCol === col) return;
+    const handleCandidate = (targetRow, targetCol, target, bucket) => {
+      if (!target || (targetRow === row && targetCol === col)) {
+        if (!target && bucket?.delete?.(targetCol)) {
+          const columnBucket = occupancyColumns?.[targetCol];
 
-      const gridRow = grid[targetRow];
+          columnBucket?.delete?.(targetRow);
+        }
 
-      if (!gridRow) {
-        bucket?.delete?.(targetCol);
-
-        return;
-      }
-
-      const target = gridRow[targetCol];
-
-      if (!target) {
-        bucket?.delete?.(targetCol);
-
-        return;
+        return false;
       }
 
       const similarity = this.#resolveTargetSimilarity(cell, target);
@@ -9669,7 +9578,7 @@ export default class GridManager {
 
         society.push(descriptor);
 
-        return;
+        return true;
       }
 
       let classifyAsEnemy = similarity <= enemyT;
@@ -9684,140 +9593,120 @@ export default class GridManager {
         }
       }
 
-      if (classifyAsEnemy) {
-        const descriptor = this.#acquireTargetDescriptor();
-
-        descriptor.row = targetRow;
-        descriptor.col = targetCol;
-        descriptor.target = target;
-        descriptor.classification = "enemy";
-        descriptor.precomputedSimilarity = similarity;
-        descriptor.similarity = similarity;
-
-        enemies.push(descriptor);
-
-        return;
-      }
-
       const descriptor = this.#acquireTargetDescriptor();
 
       descriptor.row = targetRow;
       descriptor.col = targetCol;
       descriptor.target = target;
-      descriptor.classification = "mate";
       descriptor.precomputedSimilarity = similarity;
       descriptor.similarity = similarity;
 
-      mates.push(descriptor);
-    };
-
-    const iterateRowColumns = (targetRow, bucket, startCol, endCol) => {
-      if (!bucket || startCol > endCol) return;
-
-      const processed = this.#forEachRowOccupant(
-        targetRow,
-        startCol,
-        endCol,
-        (value) => {
-          processCandidate(targetRow, value, bucket);
-        },
-      );
-
-      if (processed > 0) {
-        return;
+      if (classifyAsEnemy) {
+        descriptor.classification = "enemy";
+        enemies.push(descriptor);
+      } else {
+        descriptor.classification = "mate";
+        mates.push(descriptor);
       }
 
+      return true;
+    };
+
+    for (let targetRow = minRow; targetRow <= maxRow; targetRow++) {
       const gridRow = grid[targetRow];
 
       if (!gridRow) {
-        return;
+        const bucket = occupancyRows?.[targetRow];
+
+        bucket?.clear?.();
+
+        continue;
       }
 
-      for (let newCol = startCol; newCol <= endCol; newCol++) {
-        if (!gridRow[newCol]) continue;
+      const bucket = occupancyRows?.[targetRow] ?? null;
+      let processed = 0;
 
-        processCandidate(targetRow, newCol, bucket);
-      }
-    };
+      if (bucket && bucket.size > 0) {
+        const columns = this.#getRowOccupantColumns(targetRow, bucket);
 
-    const iterateColumnRows = (targetCol, startRow, endRow) => {
-      if (startRow > endRow) return;
+        if (Array.isArray(columns) && columns.length > 0) {
+          let index = lowerBound(columns, minCol);
 
-      const processed = this.#forEachColumnOccupant(
-        targetCol,
-        startRow,
-        endRow,
-        (value) => {
-          const bucket = occupancyRows?.[value];
+          while (index < columns.length) {
+            const targetCol = columns[index];
 
-          processCandidate(value, targetCol, bucket);
-        },
-      );
+            if (targetCol > maxCol) {
+              break;
+            }
 
-      if (processed > 0) {
-        return;
-      }
+            if (!bucket.has(targetCol)) {
+              columns.splice(index, 1);
 
-      const columnBucket = occupancyColumns?.[targetCol];
+              continue;
+            }
 
-      if (!columnBucket || columnBucket.size === 0) {
-        return;
-      }
+            const target = gridRow[targetCol];
 
-      for (let newRow = startRow; newRow <= endRow; newRow++) {
-        const gridRow = grid[newRow];
+            if (!target) {
+              bucket.delete(targetCol);
 
-        if (!gridRow) continue;
+              const columnBucket = occupancyColumns?.[targetCol];
 
-        if (!gridRow[targetCol]) continue;
+              columnBucket?.delete?.(targetRow);
 
-        processCandidate(newRow, targetCol, occupancyRows?.[newRow]);
-      }
-    };
+              const columnList = this.#columnOccupancySorted?.[targetCol];
 
-    for (let dist = 1; dist <= sight; dist++) {
-      const topRow = row - dist;
+              if (Array.isArray(columnList)) {
+                const removalIndex = lowerBound(columnList, targetRow);
 
-      if (topRow >= minRow) {
-        const bucket = occupancyRows?.[topRow];
+                if (
+                  removalIndex < columnList.length &&
+                  columnList[removalIndex] === targetRow
+                ) {
+                  columnList.splice(removalIndex, 1);
+                }
+              }
 
-        if (bucket && bucket.size > 0) {
-          const startCol = Math.max(minCol, col - dist);
-          const endCol = Math.min(maxCol, col + dist);
+              columns.splice(index, 1);
 
-          iterateRowColumns(topRow, bucket, startCol, endCol);
+              continue;
+            }
+
+            if (targetRow === row && targetCol === col) {
+              index += 1;
+
+              continue;
+            }
+
+            if (handleCandidate(targetRow, targetCol, target, bucket)) {
+              processed += 1;
+            }
+
+            index += 1;
+          }
         }
       }
 
-      const bottomRow = row + dist;
+      if (processed === 0) {
+        for (let targetCol = minCol; targetCol <= maxCol; targetCol++) {
+          if (targetRow === row && targetCol === col) {
+            continue;
+          }
 
-      if (bottomRow <= maxRow && bottomRow !== topRow) {
-        const bucket = occupancyRows?.[bottomRow];
+          const target = gridRow[targetCol];
 
-        if (bucket && bucket.size > 0) {
-          const startCol = Math.max(minCol, col - dist);
-          const endCol = Math.min(maxCol, col + dist);
+          if (!target) {
+            continue;
+          }
 
-          iterateRowColumns(bottomRow, bucket, startCol, endCol);
+          if (bucket && bucket.has(targetCol)) {
+            continue;
+          }
+
+          if (handleCandidate(targetRow, targetCol, target, bucket)) {
+            this.#recordOccupancy(targetRow, targetCol);
+          }
         }
-      }
-
-      const leftCol = col - dist;
-
-      if (leftCol >= minCol) {
-        const startRow = Math.max(minRow, row - dist + 1);
-        const endRow = Math.min(maxRow, row + dist - 1);
-
-        iterateColumnRows(leftCol, startRow, endRow);
-      }
-
-      const rightCol = col + dist;
-
-      if (rightCol <= maxCol && rightCol !== leftCol) {
-        const startRow = Math.max(minRow, row - dist + 1);
-        const endRow = Math.min(maxRow, row + dist - 1);
-
-        iterateColumnRows(rightCol, startRow, endRow);
       }
     }
 
