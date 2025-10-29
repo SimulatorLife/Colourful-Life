@@ -98,13 +98,8 @@ function parseRgbComponent(raw) {
     return 0;
   }
 
-  let index = raw.length - 1;
-
-  while (index >= 0 && raw.charCodeAt(index) <= 32) {
-    index -= 1;
-  }
-
-  const isPercent = index >= 0 && raw.charCodeAt(index) === 37; /* % */
+  const trimmed = raw.trimEnd();
+  const isPercent = trimmed.endsWith("%");
   const scaled = isPercent ? (numeric / 100) * 255 : numeric;
 
   return clamp(Math.round(scaled), 0, 255);
