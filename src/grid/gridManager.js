@@ -7564,6 +7564,10 @@ export default class GridManager {
     scarcity = 0,
     diversityOpportunity = 0,
     diversityOpportunityAvailability = 0,
+    complementOpportunity = 0,
+    complementOpportunityAvailability = 0,
+    complementOpportunityGap = 0,
+    complementOpportunityAlignment = 0,
     noveltyPressure = 0,
   } = {}) {
     const sliderFloor = clamp(Number.isFinite(floor) ? floor : 0, 0, 1);
@@ -7624,6 +7628,38 @@ export default class GridManager {
       0,
       1,
     );
+    const complementOpportunitySignal = clamp(
+      Number.isFinite(complementOpportunity) ? complementOpportunity : 0,
+      0,
+      1,
+    );
+    const complementAvailability = clamp(
+      Number.isFinite(complementOpportunityAvailability)
+        ? complementOpportunityAvailability
+        : complementOpportunitySignal > 0
+          ? 1
+          : 0,
+      0,
+      1,
+    );
+    const complementGapValue = clamp(
+      Number.isFinite(complementOpportunityGap)
+        ? complementOpportunityGap
+        : complementOpportunitySignal > 0
+          ? clamp(1 - complementOpportunitySignal, 0, 1)
+          : 0,
+      0,
+      1,
+    );
+    const complementAlignmentValue = clamp(
+      Number.isFinite(complementOpportunityAlignment)
+        ? complementOpportunityAlignment
+        : complementAvailability > 0
+          ? clamp(1 - complementGapValue, 0, 1)
+          : 0,
+      0,
+      1,
+    );
 
     const pressure = clamp(
       Number.isFinite(diversityPressure) ? diversityPressure : 0,
@@ -7665,6 +7701,22 @@ export default class GridManager {
       severity *= 1 + availabilityDemand * 0.2;
     }
 
+    if (complementOpportunitySignal > 0) {
+      const complementDemand =
+        complementOpportunitySignal *
+        (0.18 + pressure * 0.25 + combinedDrive * 0.2 + probabilitySlack * 0.2);
+      const complementAvailabilityDemand =
+        complementAvailability *
+        (0.14 + strategyPressureValue * 0.22 + probabilitySlack * 0.18);
+      const gapIntensity =
+        complementGapValue *
+        (0.22 + pressure * 0.18 + strategyPressureValue * 0.2 + closeness * 0.15);
+
+      severity += complementDemand * (0.45 + complementGapValue * 0.35);
+      severity += complementAvailabilityDemand * (0.35 + complementDemand * 0.2);
+      severity *= 1 + gapIntensity;
+    }
+
     if (novelty > 0) {
       const noveltyDemand =
         novelty * (0.18 + probabilitySlack * 0.28 + closeness * 0.3 + pressure * 0.25);
@@ -7686,6 +7738,14 @@ export default class GridManager {
 
       severity *= clamp(1 - relief, 0.25, 1);
       severity -= complementarity * evennessDrag * 0.12;
+    }
+
+    if (complementAlignmentValue > 0) {
+      const complementRelief =
+        complementAlignmentValue *
+        (0.12 + complementarity * 0.2 + (1 - closeness) * 0.1 + pressure * 0.1);
+
+      severity *= clamp(1 - complementRelief, 0.3, 1);
     }
 
     severity = clamp(severity, 0, 1);
@@ -8060,6 +8120,10 @@ export default class GridManager {
         scarcity: scarcitySignal,
         diversityOpportunity: diversityOpportunityScore,
         diversityOpportunityAvailability,
+        complementOpportunity: complementOpportunityScore,
+        complementOpportunityAvailability,
+        complementOpportunityGap,
+        complementOpportunityAlignment,
         noveltyPressure: combinedNovelty,
       });
 
