@@ -4275,7 +4275,7 @@ export default class GridManager {
       1,
     );
     const energyFloorFrac = clamp(0.35 + scarcitySignal * 0.15, 0.35, 0.85);
-    const spawnBufferFrac = clamp(0.05 + scarcitySignal * 0.05, 0.05, 0.12);
+    const baselineSpawnBuffer = clamp(0.05 + scarcitySignal * 0.05, 0.05, 0.12);
     const maxSpawnAttempts = 6;
     const empties = [];
     const viable = [];
@@ -4397,6 +4397,16 @@ export default class GridManager {
       for (let attempt = 0; attempt < maxSpawnAttempts; attempt++) {
         const dna = DNA.random(() => this.#random());
         const starvationFrac = clamp(dna.starvationThresholdFrac(), 0, 1);
+        let spawnBufferFrac = baselineSpawnBuffer;
+
+        if (typeof dna.spawnEnergyBufferFrac === "function") {
+          const context = { scarcity: scarcitySignal };
+          const bufferCandidate = dna.spawnEnergyBufferFrac(context);
+
+          if (Number.isFinite(bufferCandidate)) {
+            spawnBufferFrac = clamp(bufferCandidate, 0.02, 0.2);
+          }
+        }
         const spawnTargetFrac = clamp(
           starvationFrac + spawnBufferFrac,
           energyFloorFrac,
