@@ -1,5 +1,5 @@
 import { MAX_TILE_ENERGY } from "../config.js";
-import { clamp, clamp01, clampFinite, lerp } from "../utils/math.js";
+import { clamp, clamp01, clampFinite } from "../utils/math.js";
 import { createRankedBuffer } from "../utils/collections.js";
 import { toPlainObject } from "../utils/object.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
@@ -26,6 +26,46 @@ const OBSTACLE_MASK_ALPHA = 0.35;
 const GRID_LINE_COLOR = "rgba(255, 255, 255, 0.1)";
 const GRID_LINE_EMPHASIS_COLOR = "rgba(255, 255, 255, 0.2)";
 const GRID_LINE_EMPHASIS_STEP = 5;
+
+const DENSITY_GRADIENT_STOPS = Object.freeze([
+  Object.freeze({ t: 0, color: Object.freeze([59, 76, 192]) }),
+  Object.freeze({ t: 0.5, color: Object.freeze([221, 244, 255]) }),
+  Object.freeze({ t: 1, color: Object.freeze([220, 36, 31]) }),
+]);
+
+const DENSITY_GRADIENT_SEGMENTS = Object.freeze(
+  DENSITY_GRADIENT_STOPS.slice(1).map((end, index) => {
+    const start = DENSITY_GRADIENT_STOPS[index];
+    const span = end.t - start.t || 1;
+
+    return Object.freeze({
+      startT: start.t,
+      endT: end.t,
+      span,
+      startColor: start.color,
+      deltaR: end.color[0] - start.color[0],
+      deltaG: end.color[1] - start.color[1],
+      deltaB: end.color[2] - start.color[2],
+    });
+  }),
+);
+
+const DENSITY_GRADIENT_FALLBACK_SEGMENT =
+  DENSITY_GRADIENT_SEGMENTS.length > 0
+    ? DENSITY_GRADIENT_SEGMENTS[DENSITY_GRADIENT_SEGMENTS.length - 1]
+    : Object.freeze({
+        startT: 0,
+        endT: 1,
+        span: 1,
+        startColor: Object.freeze([59, 76, 192]),
+        deltaR: 161,
+        deltaG: 168,
+        deltaB: -161,
+      });
+
+const DENSITY_COLOR_CACHE_SIZE = 512;
+const densityColorCache = new Array(DENSITY_COLOR_CACHE_SIZE);
+const densityColorCacheOpaque = new Array(DENSITY_COLOR_CACHE_SIZE);
 
 function computeLifeEventAlpha(
   ageTicks,
@@ -965,26 +1005,44 @@ export function getDensityAt(grid, r, c) {
  * @returns {string} RGBA colour suitable for `fillStyle`.
  */
 export function densityToRgba(normalizedValue, { opaque = false } = {}) {
-  const clampedValue = Number.isFinite(normalizedValue) ? normalizedValue : 0;
-  const t = clamp01(clampedValue);
-  const stops = [
-    { t: 0, color: [59, 76, 192] },
-    { t: 0.5, color: [221, 244, 255] },
-    { t: 1, color: [220, 36, 31] },
-  ];
+  const normalized = clamp01(Number.isFinite(normalizedValue) ? normalizedValue : 0);
+  const bucket = Math.round(normalized * (DENSITY_COLOR_CACHE_SIZE - 1));
+  const cache = opaque ? densityColorCacheOpaque : densityColorCache;
+  const cached = cache[bucket];
 
-  const endIndex = stops.findIndex((stop, index) => index > 0 && t <= stop.t);
-  const start = endIndex > 0 ? stops[endIndex - 1] : stops[0];
-  const end = endIndex > 0 ? stops[endIndex] : (stops[stops.length - 1] ?? stops[0]);
+  if (cached) {
+    return cached;
+  }
 
-  const segmentSpan = end.t - start.t || 1;
-  const localT = (t - start.t) / segmentSpan;
-  const r = Math.round(lerp(start.color[0], end.color[0], localT));
-  const g = Math.round(lerp(start.color[1], end.color[1], localT));
-  const b = Math.round(lerp(start.color[2], end.color[2], localT));
-  const alpha = opaque ? 1 : 0.18 + 0.65 * t;
+  const segment = resolveDensityGradientSegment(normalized);
+  const localT = segment.span > 0 ? (normalized - segment.startT) / segment.span : 0;
+  const r = Math.round(segment.startColor[0] + segment.deltaR * localT);
+  const g = Math.round(segment.startColor[1] + segment.deltaG * localT);
+  const b = Math.round(segment.startColor[2] + segment.deltaB * localT);
+  const alphaString = opaque ? "1" : (0.18 + 0.65 * normalized).toFixed(3);
+  const color = `rgba(${r},${g},${b},${alphaString})`;
 
-  return `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+  cache[bucket] = color;
+
+  return color;
+}
+
+function resolveDensityGradientSegment(t) {
+  const segmentCount = DENSITY_GRADIENT_SEGMENTS.length;
+
+  if (segmentCount === 0) {
+    return DENSITY_GRADIENT_FALLBACK_SEGMENT;
+  }
+
+  for (let i = 0; i < segmentCount; i++) {
+    const segment = DENSITY_GRADIENT_SEGMENTS[i];
+
+    if (t <= segment.endT) {
+      return segment;
+    }
+  }
+
+  return DENSITY_GRADIENT_FALLBACK_SEGMENT;
 }
 
 function formatDensityLegendValue(value) {
