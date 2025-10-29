@@ -133,6 +133,9 @@ scripts/profile-energy.mjs`) lifted survivors from 135 → 137 and trimmed the
   `scripts/profile-render-loop.mjs`, `scripts/profile-sensor-feedback.mjs`, and
   `scripts/profile-snapshot-memory.mjs`) so the scripts directory focuses on the
   maintained automation entry points.
+- Removed the unused `scripts/memory-benchmark.mjs` and
+  `scripts/memory-segmented-events.mjs` harnesses to keep the profiling catalog
+  limited to the supported entry points.
 - Retired the unused `scripts/brain-memory-profile.mjs` harness now superseded by
   the energy and density profiling scripts, keeping the automation catalog
   limited to maintained entry points.
