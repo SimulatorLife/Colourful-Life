@@ -565,6 +565,7 @@ export default class GridManager {
   #crowdingRevision = 0;
   #crowdingPrepared = false;
   #crowdingPreparedUseScarcity = false;
+  #crowdingTouchedTiles = [];
   #activeCellSnapshotScratch = null;
   #eventModifierScratch = null;
   #sparseDirtyColumnsScratch = null;
@@ -1172,29 +1173,35 @@ export default class GridManager {
     const invMaxTileEnergy = useScarcity ? 1 / maxTileEnergy : 0;
     const fillScarcity = useScarcity && Array.isArray(scarcity);
 
-    for (let r = 0; r < rows; r++) {
-      const comfortRow = comfort[r];
-      const countRow = counts[r];
-      const revisionRow = revisionGrid[r];
+    const touchedTiles = this.#crowdingTouchedTiles;
 
-      if (comfortRow) {
-        comfortRow.fill(0);
-      }
+    touchedTiles.length = 0;
 
-      if (countRow) {
-        countRow.fill(0);
-      }
+    if (forceClear) {
+      for (let r = 0; r < rows; r++) {
+        const comfortRow = comfort[r];
+        const countRow = counts[r];
+        const revisionRow = revisionGrid[r];
 
-      if (fillScarcity) {
-        const scarcityRow = scarcity[r];
-
-        if (scarcityRow) {
-          scarcityRow.fill(0);
+        if (comfortRow) {
+          comfortRow.fill(0);
         }
-      }
 
-      if (revisionRow) {
-        revisionRow.fill(revision);
+        if (countRow) {
+          countRow.fill(0);
+        }
+
+        if (fillScarcity) {
+          const scarcityRow = scarcity[r];
+
+          if (scarcityRow) {
+            scarcityRow.fill(0);
+          }
+        }
+
+        if (revisionRow) {
+          revisionRow.fill(0);
+        }
       }
     }
 
@@ -1241,8 +1248,8 @@ export default class GridManager {
 
         const comfortRow = comfort[nr];
         const countRow = counts[nr];
-        const scarcityRow = scarcity[nr];
         const revisionRow = revisionGrid[nr];
+        const scarcityRow = useScarcity ? scarcity[nr] : null;
 
         if (revisionRow[nc] !== revision) {
           revisionRow[nc] = revision;
@@ -1252,12 +1259,14 @@ export default class GridManager {
           if (scarcityRow) {
             scarcityRow[nc] = 0;
           }
+
+          touchedTiles.push(nr * cols + nc);
         }
 
         comfortRow[nc] += tolerance;
         countRow[nc] += 1;
 
-        if (useScarcity) {
+        if (useScarcity && scarcityRow) {
           scarcityRow[nc] += scarcityContribution;
         }
       }
@@ -1341,30 +1350,31 @@ export default class GridManager {
       }
     }
 
-    for (let r = 0; r < rows; r++) {
-      const comfortRow = comfort[r];
-      const countRow = counts[r];
-      const scarcityRow = fillScarcity ? scarcity[r] : null;
+    for (let i = 0; i < touchedTiles.length; i++) {
+      const index = touchedTiles[i];
+      const rr = Math.trunc(index / cols);
+      const cc = index - rr * cols;
+      const comfortRow = comfort[rr];
+      const countRow = counts[rr];
+      const scarcityRow = useScarcity ? scarcity[rr] : null;
 
       if (!comfortRow || !countRow) continue;
 
-      for (let c = 0; c < cols; c++) {
-        const neighborCount = countRow[c] ?? 0;
+      const neighborCount = countRow[cc] ?? 0;
 
-        if (neighborCount > 0) {
-          const invCount = 1 / neighborCount;
+      if (neighborCount > 0) {
+        const invCount = 1 / neighborCount;
 
-          comfortRow[c] = clamp(comfortRow[c] * invCount, 0, 1);
+        comfortRow[cc] = clamp(comfortRow[cc] * invCount, 0, 1);
 
-          if (scarcityRow) {
-            scarcityRow[c] = clamp(scarcityRow[c] * invCount, 0, 1);
-          }
-        } else {
-          comfortRow[c] = 0.5;
+        if (scarcityRow) {
+          scarcityRow[cc] = clamp(scarcityRow[cc] * invCount, 0, 1);
+        }
+      } else {
+        comfortRow[cc] = 0.5;
 
-          if (scarcityRow) {
-            scarcityRow[c] = 0;
-          }
+        if (scarcityRow) {
+          scarcityRow[cc] = 0;
         }
       }
     }

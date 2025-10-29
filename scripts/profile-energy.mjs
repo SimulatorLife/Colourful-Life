@@ -202,22 +202,25 @@ const populateHighDensityGrid = (engine, { density, rng }) => {
     Math.max(1, Math.round(rows * cols * density)),
   );
 
-  const coordinates = [];
+  const reservoir = [];
+  let available = 0;
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       if (grid.isObstacle?.(row, col)) continue;
 
-      coordinates.push([row, col]);
+      if (reservoir.length < targetPopulation) {
+        reservoir.push([row, col]);
+      } else {
+        const slot = Math.floor(rng() * (available + 1));
+
+        if (slot < targetPopulation) {
+          reservoir[slot] = [row, col];
+        }
+      }
+
+      available += 1;
     }
-  }
-
-  for (let i = coordinates.length - 1; i > 0; i--) {
-    const swapIndex = Math.floor(rng() * (i + 1));
-    const temp = coordinates[i];
-
-    coordinates[i] = coordinates[swapIndex];
-    coordinates[swapIndex] = temp;
   }
 
   let seeded = 0;
@@ -226,8 +229,8 @@ const populateHighDensityGrid = (engine, { density, rng }) => {
     : GridManager.maxTileEnergy;
   const spawnEnergy = maxEnergy * 0.6;
 
-  for (let i = 0; i < coordinates.length && seeded < targetPopulation; i++) {
-    const [row, col] = coordinates[i];
+  for (let i = 0; i < reservoir.length && seeded < targetPopulation; i++) {
+    const [row, col] = reservoir[i];
 
     if (!grid.energyGrid?.[row]) continue;
 
@@ -241,6 +244,34 @@ const populateHighDensityGrid = (engine, { density, rng }) => {
     });
 
     if (spawned) seeded += 1;
+  }
+
+  if (seeded < targetPopulation) {
+    for (let row = 0; row < rows && seeded < targetPopulation; row++) {
+      const obstacleRow = grid.obstacles?.[row];
+      const energyRow = grid.energyGrid?.[row];
+      const gridRow = grid.grid?.[row];
+
+      if (!energyRow || !gridRow) continue;
+
+      for (let col = 0; col < cols && seeded < targetPopulation; col++) {
+        if (obstacleRow?.[col]) continue;
+        if (gridRow[col]) continue;
+
+        energyRow[col] = maxEnergy;
+
+        const dna = DNA.random(rng);
+        const spawned = grid.spawnCell(row, col, {
+          dna,
+          spawnEnergy,
+          recordBirth: true,
+        });
+
+        if (spawned) {
+          seeded += 1;
+        }
+      }
+    }
   }
 
   grid.rebuildActiveCells?.();
