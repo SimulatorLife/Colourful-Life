@@ -2054,9 +2054,7 @@ export default class Cell {
             Object.entries(sensors).map(([key, value]) => [key, Number(value) || 0]),
           )
         : null;
-    const sensorVector = Array.isArray(evaluation.sensors)
-      ? evaluation.sensors.map((value) => (Number.isFinite(value) ? value : 0))
-      : null;
+    const sensorVector = Array.isArray(evaluation.sensors) ? evaluation.sensors : null;
     const activationCount = Math.max(
       0,
       activationLoad || evaluation.activationCount || 0,
@@ -2325,13 +2323,15 @@ export default class Cell {
           ? { ...context.outcome }
           : (context.outcome ?? null);
 
+      const sanitizedVector = Array.isArray(context.sensorVector)
+        ? context.sensorVector.map((value) => (Number.isFinite(value) ? value : 0))
+        : null;
+
       return {
         tick: context.tick,
         group: context.group,
         sensors: context.sensors ? { ...context.sensors } : null,
-        sensorVector: Array.isArray(context.sensorVector)
-          ? [...context.sensorVector]
-          : null,
+        sensorVector: sanitizedVector,
         outputs: context.outputs ? { ...context.outputs } : null,
         activationCount,
         trace: cloneTracePayload(context.trace),
