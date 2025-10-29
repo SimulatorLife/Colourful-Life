@@ -102,41 +102,58 @@ export function summarizeMateDiversityOpportunity({
     };
   }
 
-  let best = 0;
-  let bestComplement = 0;
-  let aboveThresholdCount = 0;
-  let complementAboveBaseline = 0;
-  const topValues = [];
-  const topComplementValues = [];
-  let topSum = 0;
-  let topComplementSum = 0;
+  const {
+    best,
+    bestComplement,
+    aboveThresholdCount,
+    complementAboveBaseline,
+    topValues,
+    topComplementValues,
+    topSum,
+    topComplementSum,
+  } = list.reduce(
+    (accumulator, candidate) => {
+      const value = normalizeCandidateValue(candidate);
+      const complementValue = normalizeComplementValue(candidate);
 
-  for (let index = 0; index < count; index += 1) {
-    const value = normalizeCandidateValue(list[index]);
-    const complementValue = normalizeComplementValue(list[index]);
+      if (value > accumulator.best) {
+        accumulator.best = value;
+      }
 
-    if (value > best) {
-      best = value;
-    }
+      if (value >= threshold) {
+        accumulator.aboveThresholdCount += 1;
+      }
 
-    if (value >= threshold) {
-      aboveThresholdCount += 1;
-    }
+      accumulator.topSum += rememberTopValue(accumulator.topValues, value);
 
-    topSum += rememberTopValue(topValues, value);
+      if (complementValue > accumulator.bestComplement) {
+        accumulator.bestComplement = complementValue;
+      }
 
-    if (complementValue > bestComplement) {
-      bestComplement = complementValue;
-    }
+      if (complementValue >= COMPLEMENT_BASELINE) {
+        accumulator.complementAboveBaseline += 1;
+      }
 
-    if (complementValue >= COMPLEMENT_BASELINE) {
-      complementAboveBaseline += 1;
-    }
+      if (complementValue > 0) {
+        accumulator.topComplementSum += rememberTopValue(
+          accumulator.topComplementValues,
+          complementValue,
+        );
+      }
 
-    if (complementValue > 0) {
-      topComplementSum += rememberTopValue(topComplementValues, complementValue);
-    }
-  }
+      return accumulator;
+    },
+    {
+      best: 0,
+      bestComplement: 0,
+      aboveThresholdCount: 0,
+      complementAboveBaseline: 0,
+      topValues: [],
+      topComplementValues: [],
+      topSum: 0,
+      topComplementSum: 0,
+    },
+  );
 
   const sampleCount = topValues.length;
   const topAverage = sampleCount > 0 ? topSum / sampleCount : 0;
