@@ -850,6 +850,111 @@ test("setAutoPauseOnBlur coerces string inputs", async () => {
   }
 });
 
+test("auto pause does not restart a stopped engine on focus", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  const addListener = (registry, event, handler) => {
+    if (!registry.has(event)) {
+      registry.set(event, new Set());
+    }
+
+    registry.get(event).add(handler);
+  };
+  const removeListener = (registry, event, handler) => {
+    const handlers = registry.get(event);
+
+    if (!handlers) {
+      return;
+    }
+
+    handlers.delete(handler);
+
+    if (handlers.size === 0) {
+      registry.delete(event);
+    }
+  };
+  const emitEvent = (registry, event) => {
+    const handlers = registry.get(event);
+
+    if (!handlers) {
+      return;
+    }
+
+    [...handlers].forEach((handler) => {
+      if (typeof handler === "function") {
+        handler();
+      }
+    });
+  };
+
+  try {
+    const windowListeners = new Map();
+    const documentListeners = new Map();
+    const stubWindow = {
+      devicePixelRatio: 1,
+      addEventListener: (event, handler) =>
+        addListener(windowListeners, event, handler),
+      removeEventListener: (event, handler) =>
+        removeListener(windowListeners, event, handler),
+    };
+    const stubDocument = {
+      visibilityState: "visible",
+      hidden: false,
+      addEventListener: (event, handler) =>
+        addListener(documentListeners, event, handler),
+      removeEventListener: (event, handler) =>
+        removeListener(documentListeners, event, handler),
+      getElementById: () => null,
+    };
+    const fireWindowEvent = (event) => emitEvent(windowListeners, event);
+
+    const engine = new modules.SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+      window: stubWindow,
+      document: stubDocument,
+      config: { autoPauseOnBlur: true },
+    });
+
+    engine.start();
+
+    assert.is(engine.running, true, "engine should start running");
+    assert.is(engine.isPaused(), false, "engine should begin unpaused");
+
+    stubDocument.visibilityState = "visible";
+    fireWindowEvent("blur");
+
+    assert.is(engine.isPaused(), true, "blur should pause the engine");
+    assert.is(
+      engine.state.autoPausePending,
+      true,
+      "auto pause should mark pending resume",
+    );
+
+    engine.stop();
+
+    assert.is(engine.running, false, "engine.stop should stop the loop");
+    assert.is(
+      engine.state.autoPausePending,
+      false,
+      "stopping should clear pending auto pause resumes",
+    );
+
+    fireWindowEvent("focus");
+
+    assert.is(engine.running, false, "focus should not restart a stopped engine");
+    assert.is(engine.isPaused(), true, "engine should remain paused after focus");
+
+    engine.destroy?.();
+  } finally {
+    restore();
+  }
+});
+
 test("setPaused coerces string inputs", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
