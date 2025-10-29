@@ -41,6 +41,47 @@ test("applyObstaclePreset ignores unknown ids without clearing existing obstacle
   }
 });
 
+test("applyObstaclePreset accepts preset descriptors", async () => {
+  const originalWindow = global.window;
+
+  if (typeof global.window === "undefined") {
+    global.window = {};
+  }
+
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  try {
+    const gm = new TestGridManager(6, 6, {
+      eventManager: { activeEvents: [] },
+      stats: {},
+      ctx: {},
+      cellSize: 1,
+    });
+
+    const descriptor = gm.obstaclePresets.find((preset) => preset?.id === "midline");
+
+    assert.ok(descriptor, "fixture should expose the midline preset descriptor");
+
+    gm.applyObstaclePreset(descriptor, { clearExisting: true, evict: true });
+
+    assert.is(
+      gm.currentObstaclePreset,
+      "midline",
+      "descriptor objects should resolve to their preset id",
+    );
+  } finally {
+    if (originalWindow === undefined) {
+      delete global.window;
+    } else {
+      global.window = originalWindow;
+    }
+  }
+});
+
 test("checkerboard preset handles negative offsets without gaps", async () => {
   const originalWindow = global.window;
 
