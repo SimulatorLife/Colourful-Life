@@ -703,13 +703,15 @@ export function resolveSimulationDefaults(overrides = {}) {
         : defaults.speedMultiplier;
   }
 
-  const initialEnergyFraction = Number(merged.initialTileEnergyFraction);
+  const initialEnergyFraction = sanitizeNumber(merged.initialTileEnergyFraction, {
+    fallback: defaults.initialTileEnergyFraction,
+    min: 0,
+    max: 1,
+  });
 
-  if (Number.isFinite(initialEnergyFraction)) {
-    merged.initialTileEnergyFraction = clamp(initialEnergyFraction, 0, 1);
-  } else {
-    merged.initialTileEnergyFraction = defaults.initialTileEnergyFraction;
-  }
+  merged.initialTileEnergyFraction = Number.isFinite(initialEnergyFraction)
+    ? initialEnergyFraction
+    : defaults.initialTileEnergyFraction;
 
   const sanitizeNumeric = (key, options = {}) => {
     merged[key] = sanitizeNumber(merged[key], {

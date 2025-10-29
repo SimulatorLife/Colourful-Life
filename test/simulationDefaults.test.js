@@ -464,6 +464,24 @@ test("resolveSimulationDefaults clamps initial tile energy overrides", async () 
   );
 });
 
+test("resolveSimulationDefaults treats blank initial tile energy overrides as fallback", async () => {
+  const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
+
+  const blank = resolveSimulationDefaults({ initialTileEnergyFraction: "" });
+
+  assert.is(
+    blank.initialTileEnergyFraction,
+    SIMULATION_DEFAULTS.initialTileEnergyFraction,
+  );
+
+  const nullish = resolveSimulationDefaults({ initialTileEnergyFraction: null });
+
+  assert.is(
+    nullish.initialTileEnergyFraction,
+    SIMULATION_DEFAULTS.initialTileEnergyFraction,
+  );
+});
+
 test("UIManager constructor seeds settings from resolveSimulationDefaults", async () => {
   const originalDocument = global.document;
   const originalNode = global.Node;
