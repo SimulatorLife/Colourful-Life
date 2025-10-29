@@ -1111,6 +1111,33 @@ export default class GridManager {
     const grid = this.grid;
     const useScarcity = maxTileEnergy > 0;
     const invMaxTileEnergy = useScarcity ? 1 / maxTileEnergy : 0;
+    const fillScarcity = useScarcity && Array.isArray(scarcity);
+
+    for (let r = 0; r < rows; r++) {
+      const comfortRow = comfort[r];
+      const countRow = counts[r];
+      const revisionRow = revisionGrid[r];
+
+      if (comfortRow) {
+        comfortRow.fill(0);
+      }
+
+      if (countRow) {
+        countRow.fill(0);
+      }
+
+      if (fillScarcity) {
+        const scarcityRow = scarcity[r];
+
+        if (scarcityRow) {
+          scarcityRow.fill(0);
+        }
+      }
+
+      if (revisionRow) {
+        revisionRow.fill(revision);
+      }
+    }
 
     const applyCrowdingContribution = (occupant, r, c) => {
       if (!occupant) return false;
