@@ -673,8 +673,18 @@ export default class SimulationEngine {
   }
 
   requestFrame() {
-    if (!this.running) return;
-    this.#scheduleNextFrame();
+    if (this.running) {
+      this.#scheduleNextFrame();
+
+      return;
+    }
+
+    this.#frame(this.now(), {
+      scheduleNext: false,
+      force: true,
+      allowPausedTick: true,
+      renderOnly: true,
+    });
   }
 
   /**
@@ -704,7 +714,12 @@ export default class SimulationEngine {
    */
   #frame(
     timestamp,
-    { scheduleNext = false, force = false, allowPausedTick = false } = {},
+    {
+      scheduleNext = false,
+      force = false,
+      allowPausedTick = false,
+      renderOnly = false,
+    } = {},
   ) {
     if (!this.running && !force) return false;
 
@@ -720,7 +735,7 @@ export default class SimulationEngine {
       (!paused && elapsed >= interval) ||
       (allowPausedTick && paused);
 
-    if (shouldAdvance) {
+    if (shouldAdvance && !renderOnly) {
       this.lastUpdateTime = effectiveTimestamp;
       tickOccurred = true;
       this.stats.resetTick();

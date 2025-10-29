@@ -779,6 +779,38 @@ test("overlay visibility coercion handles string inputs", async () => {
   }
 });
 
+test("overlay toggles redraw when the engine is idle", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const drawInvocations = [];
+    const engine = new modules.SimulationEngine({
+      canvas: new MockCanvas(16, 16),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {
+        throw new Error("requestAnimationFrame should not be used while idle");
+      },
+      cancelAnimationFrame: () => {},
+      drawOverlays: (...args) => {
+        drawInvocations.push(args);
+      },
+    });
+
+    drawInvocations.length = 0;
+    engine.setOverlayVisibility({ showEnergy: true });
+
+    assert.is(
+      drawInvocations.length,
+      1,
+      "toggling overlays while stopped should trigger a redraw",
+    );
+  } finally {
+    restore();
+  }
+});
+
 test("overlay visibility changes request a redraw while paused", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
