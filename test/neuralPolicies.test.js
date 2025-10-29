@@ -501,3 +501,103 @@ test("cooperation share leverages dedicated neural outputs", () => {
     "neural blend weight should be positive",
   );
 });
+
+test("reproduction reach neural policy modulates range", () => {
+  const dnaExtend = new DNA(90, 120, 150);
+  const dnaContract = new DNA(200, 30, 60);
+  const partnerDNA = new DNA(60, 90, 140);
+  const extendNode = OUTPUT_GROUPS.reproductionReach.find(
+    (entry) => entry.key === "extend",
+  );
+  const contractNode = OUTPUT_GROUPS.reproductionReach.find(
+    (entry) => entry.key === "contract",
+  );
+  const stabilizeNode = OUTPUT_GROUPS.reproductionReach.find(
+    (entry) => entry.key === "stabilize",
+  );
+
+  assert.ok(extendNode, "reproduction reach outputs should include extend");
+  assert.ok(contractNode, "reproduction reach outputs should include contract");
+  assert.ok(stabilizeNode, "reproduction reach outputs should include stabilize");
+
+  const profile = () => ({
+    base: 1.25,
+    min: 0.8,
+    max: 2,
+    densityPenalty: 0.2,
+    energyBonus: 0.35,
+    scarcityBoost: 0.25,
+    affinityWeight: 0.15,
+  });
+
+  dnaExtend.reproductionReachProfile = profile;
+  dnaContract.reproductionReachProfile = profile;
+
+  setNeuralGene(dnaExtend, 0, {
+    source: 0,
+    target: extendNode.id,
+    weight: 0.9,
+  });
+  setNeuralGene(dnaExtend, 1, {
+    source: 0,
+    target: contractNode.id,
+    weight: -0.9,
+  });
+  setNeuralGene(dnaContract, 0, {
+    source: 0,
+    target: contractNode.id,
+    weight: 0.9,
+  });
+  setNeuralGene(dnaContract, 1, {
+    source: 0,
+    target: extendNode.id,
+    weight: -0.9,
+  });
+  setNeuralGene(dnaContract, 2, {
+    source: 0,
+    target: stabilizeNode.id,
+    weight: -0.4,
+  });
+
+  const partner = new Cell(0, 1, partnerDNA, 4);
+
+  partner.age = partner.lifespan / 2;
+  const context = {
+    localDensity: 0.3,
+    tileEnergy: 0.7,
+    tileEnergyDelta: 0.05,
+    partner,
+  };
+
+  const extendCell = new Cell(0, 0, dnaExtend, 4);
+
+  extendCell.age = extendCell.lifespan / 2;
+  const extendBaseline = new Cell(0, 0, dnaExtend, 4);
+
+  extendBaseline.brain = null;
+  extendBaseline.neurons = 0;
+  extendBaseline.age = extendCell.age;
+  const baseExtendReach = extendBaseline.getReproductionReach(context);
+  const neuralExtendReach = extendCell.getReproductionReach(context);
+
+  assert.ok(
+    neuralExtendReach > baseExtendReach,
+    "extend-biased brain should increase reproduction reach",
+  );
+
+  const contractCell = new Cell(0, 0, dnaContract, 4);
+
+  contractCell.age = contractCell.lifespan / 2;
+  const contractBaseline = new Cell(0, 0, dnaContract, 4);
+
+  contractBaseline.brain = null;
+  contractBaseline.neurons = 0;
+  contractBaseline.age = contractCell.age;
+  const baseContractReach = contractBaseline.getReproductionReach(context);
+  const neuralContractReach = contractCell.getReproductionReach(context);
+
+  assert.ok(
+    neuralContractReach < baseContractReach,
+    "contract-biased brain should decrease reproduction reach",
+  );
+});

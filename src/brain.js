@@ -33,6 +33,10 @@ export const SENSOR_KEYS = Object.freeze([
   "confidenceMemory",
   "opportunitySignal",
   "diversityDrive",
+  "reproductionReachBase",
+  "reproductionReachSpan",
+  "reproductionReachMin",
+  "reproductionReachMax",
 ]);
 
 const SENSOR_LOOKUP = new Map(SENSOR_KEYS.map((key, index) => [key, index]));
@@ -68,6 +72,11 @@ export const OUTPUT_GROUPS = Object.freeze({
     [224, "conserve", "Conserve energy"],
     [225, "reciprocate", "Reciprocate fairly"],
     [226, "amplify", "Invest generously"],
+  ]),
+  reproductionReach: createOutputGroup([
+    [232, "contract", "Contract reproductive range"],
+    [233, "stabilize", "Maintain reproductive range"],
+    [234, "extend", "Extend reproductive range"],
   ]),
 });
 
