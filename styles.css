@@ -382,6 +382,30 @@ canvas {
   margin: var(--space-md) 0;
   cursor: default;
 }
+
+.control-row--checkbox {
+  cursor: pointer;
+}
+
+.control-row--checkbox .control-line {
+  padding: calc(var(--space-sm) / 2) var(--space-sm);
+  border-radius: var(--radius-sm);
+  transition:
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.control-row--checkbox:hover .control-line,
+.control-row--checkbox:focus-within .control-line {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.control-row--checkbox:hover .control-name,
+.control-row--checkbox:hover .control-checkbox-description,
+.control-row--checkbox:focus-within .control-name,
+.control-row--checkbox:focus-within .control-checkbox-description {
+  color: var(--color-text);
+}
 .control-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
