@@ -10,11 +10,11 @@ the dev server, then return here for the deeper workflow.
 
 ## Environment setup
 
-1. Install Node.js 18.18.0 or newer. The repository ships with an `.nvmrc` targeting 25.0.0; run `nvm use` (or `nvm install`) after cloning to align with the toolchain used in CI and profiling. Other supported Node 18+ runtimes work as long as `node --version` stays at or above 18.18.0.
-2. Install dependencies with `npm ci` (reserve `npm install` for intentional lockfile edits), then run `npm run prepare` once so Husky reinstalls Git hooks after fresh clones or `.husky/` updates.
-3. Launch the Parcel development server via `npm run start` and open `http://localhost:1234`.
-4. Keep a second terminal handy for `npm run check` before you commit. The meta-command chains `npm run lint`, `npm run format:check`, and `npm test`, and the test script always runs `scripts/profile-energy.mjs` first so performance regressions surface before assertions execute. During feature work, lean on focused loops—`npm test -- --watch` for continuous execution, `npm test path/to/file.test.js` to run a single suite, or `npm run lint` / `npm run format:check` for fast feedback—and finish with `npm run check` once the changes stabilise. The [README quick start](../README.md#quick-start) lists the most common loops at a glance.
-5. If Parcel ever becomes stuck, run `npm run clean` to remove `dist/` and `.parcel-cache/` before restarting the dev server. Append `-- --dry-run` when you just want to confirm the cleanup targets without deleting files.
+1. Install Node.js 18.18.0 or newer. The included `.nvmrc` pins to 25.0.0—the version used in CI and profiling. Run `nvm use` (or `nvm install`) after cloning, or make sure your preferred Node 18+ runtime reports ≥ 18.18.0 via `node --version`.
+2. Install dependencies with `npm ci`, then run `npm run prepare` once so Husky reinstalls Git hooks after a fresh clone or `.husky/` update.
+3. Launch the Parcel dev server with `npm run start` and open `http://localhost:1234`.
+4. Keep a second terminal for feedback loops while you iterate. Reach for `npm run lint`, `npm run format:check`, `npm run test:watch`, or `npm test -- path/to/file.test.js` as needed, then close with `npm run check` before committing. The command chains linting, formatting verification, the energy benchmark, and the Node.js test suites—matching the flow described in the [README quick start](../README.md#quick-start).
+5. If Parcel stalls, inspect the cleanup plan with `npm run clean -- --dry-run`, then rerun `npm run clean` to clear `dist/` and `.parcel-cache/` before restarting the dev server.
 
 ### Quality-of-life tips
 

@@ -14,21 +14,23 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 ## Quick start
 
-Colourful Life supports any Node.js runtime **>= 18.18.0**. The included `.nvmrc` pins to **25.0.0**, which is what CI and local profiling use. After cloning:
+Colourful Life runs on Node.js **18.18.0 or newer**. CI and profiling use **25.0.0** (pinned in `.nvmrc`). After cloning:
 
-1. Run `nvm use` (or `nvm install` if it is not available) so your shell adopts the pinned toolchain. If you prefer a different Node 18+ release, make sure `node --version` reports at least 18.18.0.
-2. Install dependencies with `npm ci` (stick to `npm install` only when you intentionally update the lockfile), then execute `npm run prepare` once so Husky reinstalls Git hooks after fresh clones or `.husky/` edits.
-3. Start developing with `npm run start` and open `http://localhost:1234`.
-4. While iterating, pick the feedback loop that fits your change and close with a full sweep before committing:
-   - `npm run lint` / `npm run lint:fix` — Run ESLint (with optional autofixes) against the shared ruleset.
-   - `npm run format:check` — Verify Prettier formatting without writing changes.
-   - `npm run test:watch` — Continuously execute the Node.js suites with watch mode enabled. The script always runs the energy benchmark in `scripts/profile-energy.mjs` before the tests so performance regressions surface early.
-   - `npm test -- path/to/file.test.js` — Run a focused Node.js suite once (all CLI flags pass through to the underlying runner).
-   - `npm run check` — Chain linting, formatting verification, the energy benchmark, and the Node.js suites for a pre-push safety net.
+1. Run `nvm use` (or `nvm install`) so your shell matches the pinned toolchain. Custom Node 18+ installs are fine as long as `node --version` reports ≥ 18.18.0.
+2. Install dependencies with `npm ci`, then run `npm run prepare` once to reinstall Husky hooks after a fresh clone or `.husky/` change.
+3. Start the Parcel dev server with `npm run start` and open `http://localhost:1234`.
+4. Before committing, finish with `npm run check` to chain linting, formatting verification, the energy benchmark, and the Node.js test suites.
 
-If Parcel's hot module reload gets stuck, run `npm run clean -- --dry-run` to confirm what will be removed, then rerun without `--dry-run` to clear stale artifacts.
+While iterating, pick whichever feedback loop matches the change:
 
-Parcel provides hot module reloading while you edit. Reach for `npm run build` when you need an optimized bundle in `dist/`, then browse [Key scripts and commands](#key-scripts-and-commands) for benchmarking or publishing helpers. The [developer guide](docs/developer-guide.md) expands on branching strategy, tooling, profiling harnesses, and testing expectations once the quick start is familiar, including when to lean on each feedback loop.
+- `npm run lint` / `npm run lint:fix` — Shared ESLint rules (with optional autofixes).
+- `npm run format:check` — Confirm Prettier formatting without writing changes.
+- `npm run test:watch` — Watch mode for the Node.js suites. Every run executes `scripts/profile-energy.mjs` before the tests so performance regressions surface early.
+- `npm test -- path/to/file.test.js` — Run a single suite once (all additional flags pass through to the Node test runner).
+
+If Parcel's hot module reload misbehaves, inspect the cleanup targets with `npm run clean -- --dry-run`, then re-run without `--dry-run` to clear stale artifacts.
+
+Parcel handles hot module replacement during development. Reach for `npm run build` to produce an optimized bundle in `dist/` and consult [Key scripts and commands](#key-scripts-and-commands) for profiling or publishing helpers. Once the basics are familiar, the [developer guide](docs/developer-guide.md) digs into branching strategy, tooling, profiling harnesses, and testing expectations.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
@@ -175,35 +177,28 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 ## Key scripts and commands
 
-| Command/Script                               | Purpose                                                                                            |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `npm run start`                              | Launch the Parcel development server at `http://localhost:1234`.                                   |
-| `npm run build`                              | Produce an optimized production bundle in `dist/`.                                                 |
-| `npm run check`                              | Run linting, formatting verification, the energy benchmark, and the Node.js test suites.           |
-| `npm run clean [-- --dry-run]`               | Remove `dist/` and `.parcel-cache/`, or preview the removals first with `--dry-run`.               |
-| `npm run lint` / `npm run lint:fix`          | Run ESLint across the codebase, optionally applying autofixes.                                     |
-| `npm run format` / `npm run format:check`    | Apply or verify Prettier formatting for source, docs, configs, and workflow definitions.           |
-| `npm test`                                   | Run the energy benchmark, then execute the Node.js test suites (paths, dirs, and flags supported). |
-| `npm run test:watch`                         | Re-run the energy benchmark and Node.js suites whenever watched files change.                      |
-| `npm run benchmark`                          | Profile the energy preparation loop; combine with `PERF_*` variables to mirror CI scenarios.       |
-| `node scripts/profile-density-cache.mjs`     | Benchmark cached density lookups in `GridManager` to confirm the density grid remains fast.        |
-| `node scripts/profile-trait-aggregation.mjs` | Measure the trait aggregation pipeline that powers Stats overlays and dashboards.                  |
-| `node scripts/profile-zone-filter.mjs`       | Benchmark the reproduction zone candidate filter used by `ReproductionZonePolicy`.                 |
-| `npm run deploy:public`                      | Publish the production bundle using `scripts/publish-public-build.sh`.                             |
-| `npm run prepare`                            | Reinstall Husky hooks after cloning or when `.husky/` contents change.                             |
-
-## Further reading
-
-- [`docs/architecture-overview.md`](docs/architecture-overview.md) — Component responsibilities, UI/headless interactions, and data flow diagrams.
-- [`docs/developer-guide.md`](docs/developer-guide.md) — Conventions for contributors, testing expectations, documentation tips, and tooling.
-- [`docs/public-hosting.md`](docs/public-hosting.md) — Step-by-step instructions for publishing compiled builds to a public repository for GitHub Pages hosting.
-- [`CHANGELOG.md`](CHANGELOG.md) — Ongoing log of notable behavioural, tooling, and documentation changes.
-- Inline JSDoc and comments throughout `src/` describing exported functions, complex routines, and configuration helpers.
-- Environment variable reference in [`src/config.js`](src/config.js) for tuning energy caps and regeneration penalties without patching source.
+| Command/Script                               | Purpose                                                                       |
+| -------------------------------------------- | ----------------------------------------------------------------------------- |
+| `npm run start`                              | Launch the Parcel development server at `http://localhost:1234`.              |
+| `npm run build`                              | Produce an optimized production bundle in `dist/`.                            |
+| `npm run check`                              | Chain linting, formatting verification, the energy benchmark, and tests       |
+| `npm run clean [-- --dry-run]`               | Clear `dist/` and `.parcel-cache/` (preview targets first with `--dry-run`).  |
+| `npm run lint` / `npm run lint:fix`          | Run ESLint across the codebase, optionally applying autofixes.                |
+| `npm run format` / `npm run format:check`    | Apply or verify Prettier formatting for source, docs, configs, and workflows. |
+| `npm test`                                   | Run the energy benchmark, then execute the Node.js test suites.               |
+| `npm run test:watch`                         | Re-run the benchmark and suites whenever watched files change.                |
+| `npm run benchmark`                          | Profile the energy preparation loop (combine with `PERF_*` variables).        |
+| `node scripts/profile-density-cache.mjs`     | Benchmark cached density lookups in `GridManager`.                            |
+| `node scripts/profile-trait-aggregation.mjs` | Measure the Stats trait aggregation pipeline.                                 |
+| `node scripts/profile-zone-filter.mjs`       | Benchmark the reproduction zone candidate filter.                             |
+| `npm run deploy:public`                      | Publish the production bundle via `scripts/publish-public-build.sh`.          |
+| `npm run prepare`                            | Reinstall Husky hooks after cloning or `.husky/` changes.                     |
 
 ## Documentation map
 
-- [`docs/architecture-overview.md`](docs/architecture-overview.md) details module boundaries, update loops, subsystem hand-offs, and the UI bridge.
-- [`docs/developer-guide.md`](docs/developer-guide.md) covers environment setup, workflow practices, and expectations for testing and documentation.
-- [`docs/public-hosting.md`](docs/public-hosting.md) explains how to publish the compiled build to a separate public repository or GitHub Pages site.
-- [`CHANGELOG.md`](CHANGELOG.md) captures notable changes between releases so contributors can track evolution over time.
+- [`docs/architecture-overview.md`](docs/architecture-overview.md) — Module boundaries, update loops, subsystem hand-offs, and the UI bridge.
+- [`docs/developer-guide.md`](docs/developer-guide.md) — Environment setup, workflow practices, and expectations for testing and documentation.
+- [`docs/public-hosting.md`](docs/public-hosting.md) — Publishing the compiled build to a separate public repository or GitHub Pages site.
+- [`CHANGELOG.md`](CHANGELOG.md) — Notable behavioural, tooling, and documentation changes between releases.
+- [`src/config.js`](src/config.js) — Environment variable reference for tuning energy caps, regeneration penalties, reproduction buffers, and telemetry thresholds without touching source defaults.
+- Inline JSDoc and comments across `src/` describing exported functions, configuration helpers, and instrumentation entry points.
