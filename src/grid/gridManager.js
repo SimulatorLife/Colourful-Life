@@ -5093,6 +5093,23 @@ export default class GridManager {
       drain = 0,
     ) => {
       const currentEnergy = energyRow[c];
+      const isObstacle = Boolean(obstacleRow?.[c]);
+
+      if (isObstacle) {
+        nextRow[c] = 0;
+        energyRow[c] = 0;
+
+        if (hasDeltaRow) {
+          deltaRow[c] = 0;
+
+          if (trackSparseDelta && deltaDirtyTiles) {
+            deltaDirtyTiles.add(r * cols + c);
+          }
+        }
+
+        return;
+      }
+
       let regen = 0;
 
       if (positiveMaxTileEnergy > 0) {
@@ -5247,22 +5264,6 @@ export default class GridManager {
           }
         }
       } else {
-        const isObstacle = obstacleRow && obstacleRow[c];
-
-        if (isObstacle) {
-          nextRow[c] = 0;
-          energyRow[c] = 0;
-          if (hasDeltaRow) {
-            deltaRow[c] = 0;
-
-            if (trackSparseDelta && deltaDirtyTiles) {
-              deltaDirtyTiles.add(r * cols + c);
-            }
-          }
-
-          return;
-        }
-
         if (useDiffusion) {
           let neighborSum = 0;
           let neighborCount = 0;
