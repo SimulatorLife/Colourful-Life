@@ -1244,21 +1244,14 @@ export function densityToRgba(normalizedValue, { opaque = false } = {}) {
 }
 
 function resolveDensityGradientSegment(t) {
-  const segmentCount = DENSITY_GRADIENT_SEGMENTS.length;
-
-  if (segmentCount === 0) {
+  if (DENSITY_GRADIENT_SEGMENTS.length === 0) {
     return DENSITY_GRADIENT_FALLBACK_SEGMENT;
   }
 
-  for (let i = 0; i < segmentCount; i++) {
-    const segment = DENSITY_GRADIENT_SEGMENTS[i];
-
-    if (t <= segment.endT) {
-      return segment;
-    }
-  }
-
-  return DENSITY_GRADIENT_FALLBACK_SEGMENT;
+  return (
+    DENSITY_GRADIENT_SEGMENTS.find((segment) => t <= segment.endT) ??
+    DENSITY_GRADIENT_FALLBACK_SEGMENT
+  );
 }
 
 function formatDensityLegendValue(value) {
