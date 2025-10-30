@@ -101,6 +101,9 @@ PERF_SIM_DENSITY=0.68 node scripts/profile-energy.mjs`), where survivors
 - Retired the unused `scripts/profile-render-dirty-delete.mjs` profiling probe
   since newer render benchmarking harnesses superseded it and nothing references
   the script anymore.
+- Retired the unused `scripts/measure-reproduction-memory.mjs` helper; ongoing
+  reproduction health is covered by the regression suite, letting us trim the
+  bespoke memory probe without losing safeguards.
 - Aurora Celebration Veil overlay and its configuration toggles. The aesthetic veil
   overlapped the energy heatmap and life event markers without delivering actionable
   feedback while imposing extra rendering and testing surface area.
