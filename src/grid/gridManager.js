@@ -5,7 +5,7 @@ import {
   sanitizePositiveInteger,
   sanitizeUnitInterval,
 } from "../utils/math.js";
-import { isArrayLike } from "../utils/collections.js";
+import { isArrayLike, takeTopBy } from "../utils/collections.js";
 import { resolveCellColor } from "../utils/cell.js";
 import { warnOnce } from "../utils/error.js";
 import DNA from "../genome.js";
@@ -4505,23 +4505,6 @@ export default class GridManager {
       entry.emptyIndex = -1;
     };
 
-    const removeFromViable = (entry) => {
-      const index = entry?.viableIndex;
-
-      if (index == null || index < 0 || index >= viable.length) {
-        entry.viableIndex = -1;
-
-        return;
-      }
-
-      viable.splice(index, 1);
-      entry.viableIndex = -1;
-
-      for (let i = index; i < viable.length; i += 1) {
-        viable[i].viableIndex = i;
-      }
-    };
-
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         if (this.getCell(r, c) || this.isObstacle(r, c)) continue;
@@ -4538,13 +4521,11 @@ export default class GridManager {
           availableEnergy,
           score: normalizedEnergy * 0.7 + (1 - density) * 0.3,
           emptyIndex: empties.length,
-          viableIndex: -1,
         };
 
         empties.push(entry);
 
         if (normalizedEnergy >= energyFloorFrac) {
-          entry.viableIndex = viable.length;
           viable.push(entry);
         }
       }
@@ -4552,39 +4533,45 @@ export default class GridManager {
 
     if (empties.length === 0) return;
 
-    viable.sort((a, b) => b.score - a.score);
+    const resolveScore = (entry) => entry.score;
+    const determineBandSize = (poolSize) =>
+      Math.max(1, Math.min(poolSize, Math.ceil(poolSize * 0.2)));
 
-    for (let i = 0; i < viable.length; i += 1) {
-      viable[i].viableIndex = i;
-    }
+    let viableBand = takeTopBy(viable, determineBandSize(viable.length), resolveScore);
 
     const requiredSeeds = Math.min(target - currentPopulation, empties.length);
 
     let seedsPlaced = 0;
 
     while (seedsPlaced < requiredSeeds) {
-      const pool = viable.length > 0 ? viable : empties;
+      if (viableBand.length === 0 && viable.length > 0) {
+        viableBand = takeTopBy(viable, determineBandSize(viable.length), resolveScore);
+
+        continue;
+      }
+
+      const usingViable = viableBand.length > 0;
+      const pool = usingViable ? viableBand : empties;
 
       if (pool.length === 0) break;
-      const bandSize =
-        pool === viable
-          ? Math.max(1, Math.min(pool.length, Math.ceil(pool.length * 0.2)))
-          : pool.length;
+
       const pickIndex = Math.min(
         pool.length - 1,
-        Math.floor(this.#random() * bandSize),
+        Math.floor(this.#random() * pool.length),
       );
       const candidate = pool[pickIndex];
 
-      if (pool === viable) {
-        removeFromViable(candidate);
+      if (usingViable) {
+        const lastIndex = pool.length - 1;
+
+        if (pickIndex !== lastIndex) {
+          pool[pickIndex] = pool[lastIndex];
+        }
+
+        pool.pop();
         removeFromEmpties(candidate);
       } else {
         removeFromEmpties(candidate);
-
-        if (candidate.viableIndex >= 0) {
-          removeFromViable(candidate);
-        }
       }
 
       const { row, col, availableEnergy } = candidate;

@@ -121,3 +121,137 @@ export function createRankedBuffer(limit, compare) {
     },
   };
 }
+
+function quickselectInPlace(array, index, compare) {
+  let left = 0;
+  let right = array.length - 1;
+
+  while (left <= right) {
+    const pivotIndex = Math.floor((left + right) / 2);
+    const newIndex = partition(array, left, right, pivotIndex, compare);
+
+    if (newIndex === index) {
+      return;
+    }
+
+    if (newIndex > index) {
+      right = newIndex - 1;
+    } else {
+      left = newIndex + 1;
+    }
+  }
+}
+
+function partition(array, left, right, pivotIndex, compare) {
+  const pivotValue = array[pivotIndex];
+
+  swap(array, pivotIndex, right);
+
+  let storeIndex = left;
+
+  for (let i = left; i < right; i += 1) {
+    if (compare(array[i], pivotValue) < 0) {
+      swap(array, storeIndex, i);
+      storeIndex += 1;
+    }
+  }
+
+  swap(array, right, storeIndex);
+
+  return storeIndex;
+}
+
+function swap(array, a, b) {
+  if (a === b) return;
+
+  const tmp = array[a];
+
+  array[a] = array[b];
+  array[b] = tmp;
+}
+
+/**
+ * Extracts the highest-scoring entries from `array`, removing the selected items
+ * from the original list while preserving reference identity. The helper keeps
+ * the operation close to O(n) by relying on an in-place quickselect rather than
+ * sorting the entire collection.
+ *
+ * @template T
+ * @param {Array<T>} array - Source collection to partition.
+ * @param {number} count - Number of entries to extract. Values below 1 return an
+ *   empty list, while values greater than the array length return the entire collection.
+ * @param {(item: T) => number} [scoreAccessor] - Resolver returning the numeric score used
+ *   to rank entries. Defaults to the identity function.
+ * @returns {Array<T>} The extracted top-scoring entries.
+ */
+export function takeTopBy(array, count, scoreAccessor = (value) => value) {
+  if (!Array.isArray(array) || array.length === 0) {
+    return [];
+  }
+
+  const limit = Math.max(0, Math.min(array.length, Math.floor(count ?? 0)));
+
+  if (limit === 0) {
+    return [];
+  }
+
+  if (limit >= array.length) {
+    const result = array.slice();
+
+    array.length = 0;
+
+    return result;
+  }
+
+  const resolveScore =
+    typeof scoreAccessor === "function" ? scoreAccessor : (value) => value;
+  const compare = (a, b) => {
+    const scoreA = resolveScore(a);
+    const scoreB = resolveScore(b);
+
+    if (scoreA === scoreB) return 0;
+
+    return scoreA > scoreB ? -1 : 1;
+  };
+
+  quickselectInPlace(array, limit - 1, compare);
+
+  const thresholdScore = resolveScore(array[limit - 1]);
+  let greaterCount = 0;
+
+  for (let i = 0; i < array.length; i += 1) {
+    if (resolveScore(array[i]) > thresholdScore) {
+      greaterCount += 1;
+    }
+  }
+
+  let thresholdSlots = Math.max(0, limit - greaterCount);
+  const selected = [];
+  const remainder = [];
+
+  for (let i = 0; i < array.length; i += 1) {
+    const entry = array[i];
+    const score = resolveScore(entry);
+
+    if (score > thresholdScore) {
+      selected.push(entry);
+    } else if (score === thresholdScore && thresholdSlots > 0) {
+      selected.push(entry);
+      thresholdSlots -= 1;
+    } else {
+      remainder.push(entry);
+    }
+  }
+
+  while (selected.length > limit) {
+    remainder.push(selected.pop());
+  }
+
+  array.length = 0;
+
+  for (let i = 0; i < remainder.length; i += 1) {
+    array.push(remainder[i]);
+  }
+
+  return selected;
+}

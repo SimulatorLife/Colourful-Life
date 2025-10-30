@@ -17,7 +17,12 @@ import {
 import { coerceBoolean, resolveNonEmptyString } from "../src/utils/primitives.js";
 import { resolveCellColor } from "../src/utils/cell.js";
 import { cloneTracePayload, toPlainObject } from "../src/utils/object.js";
-import { createRankedBuffer, isArrayLike, toArray } from "../src/utils/collections.js";
+import {
+  createRankedBuffer,
+  isArrayLike,
+  takeTopBy,
+  toArray,
+} from "../src/utils/collections.js";
 import {
   __dangerousGetWarnOnceSize,
   __dangerousResetWarnOnce,
@@ -550,6 +555,49 @@ test("createRankedBuffer falls back to insertion order without a comparator", ()
   buffer.add("gamma");
 
   assert.equal(buffer.getItems(), ["alpha", "beta"]);
+});
+
+test("takeTopBy extracts top scoring entries and removes them from the source", () => {
+  const candidates = [
+    { id: "a", score: 0.1 },
+    { id: "b", score: 0.42 },
+    { id: "c", score: 0.9 },
+    { id: "d", score: 0.75 },
+    { id: "e", score: 0.3 },
+    { id: "f", score: 0.88 },
+  ];
+
+  const top = takeTopBy(candidates, 3, (entry) => entry.score);
+
+  assert.equal(
+    top.map((entry) => entry.id).sort(),
+    ["c", "d", "f"],
+    "top entries should include the highest scores",
+  );
+  assert.equal(
+    candidates.map((entry) => entry.id).sort(),
+    ["a", "b", "e"],
+    "original array should only retain the remainder",
+  );
+});
+
+test("takeTopBy gracefully handles duplicates and oversized requests", () => {
+  const entries = [
+    { id: 1, score: 0.8 },
+    { id: 2, score: 0.8 },
+    { id: 3, score: 0.5 },
+    { id: 4, score: 0.5 },
+  ];
+
+  const band = takeTopBy(entries, 3, (entry) => entry.score);
+
+  assert.is(band.length, 3);
+  assert.equal(band.map((entry) => entry.id).sort(), [1, 2, 3]);
+
+  const everything = takeTopBy(entries, 10, (entry) => entry.score);
+
+  assert.equal(everything.map((entry) => entry.id).sort(), [4]);
+  assert.equal(entries, [], "all entries should be removed when count exceeds length");
 });
 
 test("createRNG yields deterministic pseudo-random sequences", () => {
