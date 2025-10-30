@@ -11,12 +11,16 @@ const WATCH_FLAG_ALIASES = new Map([
   ["--watchAll", "--watch"],
   ["--watch-all", "--watch"],
 ]);
+const RUN_IN_BAND_ALIASES = new Set(["--runInBand", "--run-in-band", "-i"]);
+const RUN_IN_BAND_ASSIGNABLE_FLAGS = new Set(["--runInBand", "--run-in-band"]);
+const RUN_IN_BAND_FLAG = "--test-concurrency=1";
 const RUN_TESTS_BY_PATH_FLAGS = new Set(["--runTestsByPath", "--run-tests-by-path"]);
 const TEST_FILE_PATTERN = /\.test\.(?:[cm]?js)$/i;
 
 export function normalizeTestRunnerArgs(rawArgs = []) {
   const flags = [];
   const paths = [];
+  let runInBandNormalized = false;
 
   const args = Array.isArray(rawArgs) ? rawArgs : [];
 
@@ -58,6 +62,45 @@ export function normalizeTestRunnerArgs(rawArgs = []) {
       }
 
       if (handledRunTestsByPath) {
+        continue;
+      }
+    }
+
+    if (RUN_IN_BAND_ALIASES.has(arg)) {
+      if (!runInBandNormalized) {
+        flags.push(RUN_IN_BAND_FLAG);
+        runInBandNormalized = true;
+      }
+
+      continue;
+    }
+
+    if (typeof arg === "string") {
+      let handledRunInBand = false;
+
+      for (const alias of RUN_IN_BAND_ASSIGNABLE_FLAGS) {
+        if (!arg.startsWith(`${alias}=`)) {
+          continue;
+        }
+
+        const rawValue = arg.slice(alias.length + 1);
+        const normalizedValue = rawValue.trim().toLowerCase();
+
+        if (WATCH_FALSE_VALUES.has(normalizedValue)) {
+          handledRunInBand = true;
+          break;
+        }
+
+        if (!runInBandNormalized) {
+          flags.push(RUN_IN_BAND_FLAG);
+          runInBandNormalized = true;
+        }
+
+        handledRunInBand = true;
+        break;
+      }
+
+      if (handledRunInBand) {
         continue;
       }
     }
