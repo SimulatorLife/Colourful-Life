@@ -60,7 +60,7 @@ test("drawAgeHeatmap highlights older organisms", () => {
   assert.is(ctx.cells[0][0], null, "newborn tiles remain unshaded");
   assert.is(
     ctx.cells[0][1],
-    "rgba(255, 138, 0,0.590)",
+    "rgba(255, 138, 0,0.588)",
     "older organisms receive a warm overlay",
   );
 });

@@ -1022,18 +1022,64 @@ function formatAlpha(alpha) {
   return formatted === "1.000" ? "1" : formatted;
 }
 
+const heatmapFillStyleCache = new Map();
+
+function resolveHeatmapFillStyle(color, alpha) {
+  const normalizedAlpha = clampFinite(alpha, 0, 1, 0);
+
+  if (!(normalizedAlpha > 0)) {
+    return null;
+  }
+
+  let bucket = Math.round(normalizedAlpha * 255);
+
+  if (bucket <= 0) {
+    bucket = 1;
+  }
+
+  let colorCache = heatmapFillStyleCache.get(color);
+
+  if (!colorCache) {
+    colorCache = new Array(256);
+    heatmapFillStyleCache.set(color, colorCache);
+  }
+
+  let fillStyle = colorCache[bucket];
+
+  if (!fillStyle) {
+    const bucketAlpha = bucket / 255;
+
+    fillStyle = `rgba(${color},${formatAlpha(bucketAlpha)})`;
+    colorCache[bucket] = fillStyle;
+  }
+
+  return fillStyle;
+}
+
 function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = "0,0,0") {
-  const rows = grid.rows;
-  const cols = grid.cols;
+  const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
+  const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
+
+  if (!(rows > 0) || !(cols > 0)) {
+    return;
+  }
+
+  let lastFillStyle = null;
 
   for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const rawAlpha = alphaAt(r, c);
-      const alpha = clampFinite(rawAlpha, 0, 1, 0);
+    const y = r * cellSize;
 
-      if (alpha <= 0) continue;
-      ctx.fillStyle = `rgba(${color},${formatAlpha(alpha)})`;
-      ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+    for (let c = 0; c < cols; c++) {
+      const fillStyle = resolveHeatmapFillStyle(color, alphaAt(r, c));
+
+      if (!fillStyle) continue;
+
+      if (fillStyle !== lastFillStyle) {
+        ctx.fillStyle = fillStyle;
+        lastFillStyle = fillStyle;
+      }
+
+      ctx.fillRect(c * cellSize, y, cellSize, cellSize);
     }
   }
 }
@@ -2027,3 +2073,7 @@ function drawFitnessLegend(
 
   ctx.restore();
 }
+
+// Expose the scalar heatmap painter for profiling scripts without
+// promoting it to the public API surface.
+export { drawScalarHeatmap as __profileDrawScalarHeatmap };
