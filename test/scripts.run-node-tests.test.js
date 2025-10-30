@@ -73,6 +73,28 @@ test("normalizeTestRunnerArgs maps watchAll to the Node watch flag", () => {
   assert.deepEqual(paths, []);
 });
 
+test("normalizeTestRunnerArgs maps runInBand aliases to concurrency flag", () => {
+  const { flags, paths } = normalizeTestRunnerArgs([
+    "--runInBand",
+    "helpers.test.js",
+    "-i",
+    "--run-in-band",
+  ]);
+
+  assert.deepEqual(flags, ["--test-concurrency=1"]);
+  assert.deepEqual(paths, ["helpers.test.js"]);
+});
+
+test("normalizeTestRunnerArgs ignores falsy runInBand assignments", () => {
+  const { flags, paths } = normalizeTestRunnerArgs([
+    "--runInBand=false",
+    "--run-in-band=0",
+  ]);
+
+  assert.deepEqual(flags, []);
+  assert.deepEqual(paths, []);
+});
+
 test("normalizeTestRunnerArgs treats runTestsByPath as positional paths", () => {
   const { flags, paths } = normalizeTestRunnerArgs([
     "--runTestsByPath",
