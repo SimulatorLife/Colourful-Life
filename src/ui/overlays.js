@@ -4,6 +4,7 @@ import { createRankedBuffer } from "../utils/collections.js";
 import { toPlainObject } from "../utils/object.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 import { resolveNonEmptyString } from "../utils/primitives.js";
+import { getDensityAt } from "../grid/densityUtils.js";
 
 const DEFAULT_FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
@@ -1194,22 +1195,6 @@ function drawEnergyLegend(ctx, cellSize, cols, rows, stats, maxTileEnergy) {
   }
 
   ctx.restore();
-}
-
-/**
- * Reads the normalized density value for the supplied coordinates.
- *
- * @param {{density?: Array<Array<number>>}} grid - Grid snapshot.
- * @param {number} r - Row index.
- * @param {number} c - Column index.
- * @returns {number} Density value in the 0..1 range.
- */
-export function getDensityAt(grid, r, c) {
-  if (typeof grid.getDensityAt === "function") return grid.getDensityAt(r, c);
-  if (Array.isArray(grid.densityGrid)) return grid.densityGrid[r]?.[c] ?? 0;
-  if (typeof grid.localDensity === "function") return grid.localDensity(r, c, 1);
-
-  return 0;
 }
 
 /**
