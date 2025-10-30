@@ -181,6 +181,101 @@ export function clampEventStart(rawStart, span, limit) {
 }
 
 /**
+ * Ensures the manager maintains an array for `activeEvents`, replacing invalid
+ * values with an empty array. Returning the internal reference keeps the
+ * orchestration layer agnostic to the underlying storage details.
+ *
+ * @param {EventManager} manager
+ * @returns {Array}
+ */
+function ensureActiveEvents(manager) {
+  if (Array.isArray(manager.activeEvents)) {
+    return manager.activeEvents;
+  }
+
+  manager.activeEvents = [];
+
+  return manager.activeEvents;
+}
+
+/**
+ * Advances the lifecycle timer for all active events, compacting the list to
+ * remove entries that have expired. The in-place rewrite avoids new
+ * allocations, mirroring the original behaviour while hiding the bookkeeping
+ * from the orchestrator.
+ *
+ * @param {Array} events
+ */
+function advanceEventLifecycle(events) {
+  if (!Array.isArray(events) || events.length === 0) {
+    return;
+  }
+
+  let writeIndex = 0;
+
+  for (let readIndex = 0; readIndex < events.length; readIndex += 1) {
+    const ev = events[readIndex];
+
+    if (!ev) continue;
+
+    ev.remaining = Math.max(0, ev.remaining - 1);
+
+    if (ev.remaining <= 0) continue;
+
+    events[writeIndex] = ev;
+    writeIndex += 1;
+  }
+
+  if (writeIndex < events.length) {
+    events.length = writeIndex;
+  }
+}
+
+/**
+ * Spawns a new environmental event when the cooldown has elapsed and the pool
+ * has capacity. On success the new event is appended to the provided array and
+ * the next cooldown duration is returned.
+ *
+ * @param {Object} params
+ * @param {Array} params.events
+ * @param {number} params.cooldown
+ * @param {number} params.frequencyMultiplier
+ * @param {number} params.maxConcurrent
+ * @param {() => Object|null} params.generateEvent
+ * @param {() => number} params.rng
+ * @returns {number}
+ */
+function maybeSpawnEvent({
+  events,
+  cooldown,
+  frequencyMultiplier,
+  maxConcurrent,
+  generateEvent,
+  rng,
+}) {
+  const canSpawn =
+    Array.isArray(events) &&
+    events.length < Math.max(0, maxConcurrent) &&
+    frequencyMultiplier > 0;
+
+  if (cooldown > 0 || !canSpawn) {
+    return cooldown;
+  }
+
+  const nextEvent = typeof generateEvent === "function" ? generateEvent() : null;
+
+  if (!nextEvent) {
+    return cooldown;
+  }
+
+  events.push(nextEvent);
+
+  const base = Math.floor(randomRange(180, 480, rng));
+
+  return Math.max(0, Math.floor(base / Math.max(0.01, frequencyMultiplier)));
+}
+
+/**
  * Generates and tracks environmental events that influence energy regeneration
  * and drain across the grid. Events are spawned with randomized type, strength,
  * duration, and affected area and are exposed via `activeEvents` for overlays
@@ -400,54 +495,20 @@ export default class EventManager {
   }
 
   updateEvent(frequencyMultiplier = 1, maxConcurrent = 2) {
-    let events = this.activeEvents;
+    const events = ensureActiveEvents(this);
 
-    if (!Array.isArray(events)) {
-      this.activeEvents = [];
-      events = this.activeEvents;
-    }
+    advanceEventLifecycle(events);
 
-    if (events.length > 0) {
-      // Update existing events in place while compacting finished entries without reallocating.
-      let writeIndex = 0;
+    this.cooldown = Math.max(0, this.cooldown - 1);
 
-      for (let readIndex = 0; readIndex < events.length; readIndex += 1) {
-        const ev = events[readIndex];
-
-        if (!ev) continue;
-
-        ev.remaining = Math.max(0, ev.remaining - 1);
-
-        if (ev.remaining <= 0) continue;
-
-        events[writeIndex] = ev;
-        writeIndex += 1;
-      }
-
-      if (writeIndex < events.length) {
-        events.length = writeIndex;
-      }
-    }
-
-    // Spawn new events when cooldown expires
-    if (this.cooldown > 0) this.cooldown--;
-    const canSpawn =
-      events.length < Math.max(0, maxConcurrent) && frequencyMultiplier > 0;
-
-    if (this.cooldown <= 0 && canSpawn) {
-      const ev = this.generateRandomEvent();
-
-      if (ev) {
-        events.push(ev);
-        // Next cooldown scales inversely with frequency multiplier
-        const base = Math.floor(randomRange(180, 480, this.rng));
-
-        this.cooldown = Math.max(
-          0,
-          Math.floor(base / Math.max(0.01, frequencyMultiplier)),
-        );
-      }
-    }
+    this.cooldown = maybeSpawnEvent({
+      events,
+      cooldown: this.cooldown,
+      frequencyMultiplier,
+      maxConcurrent,
+      generateEvent: () => this.generateRandomEvent(),
+      rng: this.rng,
+    });
 
     // Maintain compatibility: expose the first active event as currentEvent
     this.currentEvent = events.length > 0 ? events[0] : null;
