@@ -4527,42 +4527,6 @@ export default class UIManager {
       }
     });
 
-    const fadeBounds = resolveSliderBounds("lifeEventFadeTicks");
-    const fadeMin = Number.isFinite(fadeBounds.min) ? fadeBounds.min : 1;
-    const fadeMax = Number.isFinite(fadeBounds.max) ? fadeBounds.max : 180;
-    const fadeStep =
-      Number.isFinite(fadeBounds.step) && fadeBounds.step > 0 ? fadeBounds.step : 1;
-    const fadeTitle = LIFE_EVENT_FADE_WINDOW_DESCRIPTION;
-    const fadeLabel = "Life Event Fade Window";
-    const fadeSlider = createSliderRow(overlayGrid, {
-      label: fadeLabel,
-      min: fadeMin,
-      max: fadeMax,
-      step: fadeStep,
-      value: this.lifeEventFadeTicks,
-      title: fadeTitle,
-      format: (value) => {
-        const rounded = Math.round(value);
-
-        return `${rounded} tick${rounded === 1 ? "" : "s"}`;
-      },
-      onInput: (value) => {
-        this.setLifeEventFadeTicks(value);
-      },
-    });
-
-    this.lifeEventFadeSlider = fadeSlider;
-    this.lifeEventFadeSliderTitle = fadeTitle;
-
-    const fadeRow =
-      typeof fadeSlider?.closest === "function"
-        ? fadeSlider.closest("label")
-        : (fadeSlider?.parentElement?.parentElement ?? null);
-
-    if (fadeRow instanceof HTMLElement) {
-      this.lifeEventFadeSliderRow = fadeRow;
-    }
-
     const limitBounds = resolveSliderBounds("lifeEventLimit");
     const limitMin = Number.isFinite(limitBounds.min) ? limitBounds.min : 0;
     const limitMax = Number.isFinite(limitBounds.max) ? limitBounds.max : 60;
@@ -4603,7 +4567,6 @@ export default class UIManager {
       this.lifeEventLimitSliderRow = limitRow;
     }
 
-    this.#registerSliderElement("lifeEventFadeTicks", fadeSlider);
     this.#registerSliderElement("lifeEventLimit", limitSlider);
     this.#updateLifeEventControlsState();
   }
@@ -5067,6 +5030,66 @@ export default class UIManager {
     const lifeBody = document.createElement("div");
 
     lifeBody.className = "metrics-section-body life-events-body";
+
+    const markerControls = document.createElement("section");
+
+    markerControls.className = "life-events-marker-controls";
+    markerControls.setAttribute("aria-label", "Life event marker visibility controls");
+
+    const markerTitle = document.createElement("h5");
+
+    markerTitle.className = "life-events-marker-controls__title";
+    markerTitle.textContent = "Marker Visibility";
+    markerControls.appendChild(markerTitle);
+
+    const markerGrid = createControlGrid(markerControls, "control-grid--compact");
+    const fadeBounds = resolveSliderBounds("lifeEventFadeTicks");
+    const fadeMin = Number.isFinite(fadeBounds.min) ? fadeBounds.min : 1;
+    const fadeMax = Number.isFinite(fadeBounds.max) ? fadeBounds.max : 180;
+    const fadeStep =
+      Number.isFinite(fadeBounds.step) && fadeBounds.step > 0 ? fadeBounds.step : 1;
+    const fadeTitle = LIFE_EVENT_FADE_WINDOW_DESCRIPTION;
+    const fadeLabel = "Life Event Fade Window";
+    const fadeSlider = createSliderRow(markerGrid, {
+      label: fadeLabel,
+      min: fadeMin,
+      max: fadeMax,
+      step: fadeStep,
+      value: this.lifeEventFadeTicks,
+      title: fadeTitle,
+      format: (value) => {
+        const rounded = Math.round(value);
+
+        return `${rounded} tick${rounded === 1 ? "" : "s"}`;
+      },
+      onInput: (value) => {
+        this.setLifeEventFadeTicks(value);
+      },
+    });
+
+    this.lifeEventFadeSlider = fadeSlider;
+    this.lifeEventFadeSliderTitle = fadeTitle;
+
+    const fadeRow =
+      typeof fadeSlider?.closest === "function"
+        ? fadeSlider.closest("label")
+        : (fadeSlider?.parentElement?.parentElement ?? null);
+
+    if (fadeRow instanceof HTMLElement) {
+      this.lifeEventFadeSliderRow = fadeRow;
+    }
+
+    const markerHint = document.createElement("p");
+
+    markerHint.className = "life-events-marker-controls__hint control-hint";
+    markerHint.textContent =
+      "Adjust how long birth and death markers remain visible on the main grid. Toggle the overlay from Simulation Controls → Overlays.";
+    markerControls.appendChild(markerHint);
+
+    lifeBody.appendChild(markerControls);
+
+    this.#registerSliderElement("lifeEventFadeTicks", fadeSlider);
+    this.#updateLifeEventControlsState();
 
     const createSummaryItem = (label, modifierClass, options = {}) => {
       const normalizedOptions =

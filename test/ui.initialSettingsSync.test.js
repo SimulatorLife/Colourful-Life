@@ -85,7 +85,7 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       "Playback Speed ×",
     );
     const fadeSlider = findSliderByLabel(
-      uiManager.controlsPanel,
+      uiManager.lifeEventsPanel,
       "Life Event Fade Window",
     );
     const limitSlider = findSliderByLabel(
@@ -212,7 +212,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.ok(gridToggle, "grid toggle should render");
     assert.ok(autoPauseToggle, "auto-pause toggle should render");
     const fadeSlider = findSliderByLabel(
-      uiManager.controlsPanel,
+      uiManager.lifeEventsPanel,
       "Life Event Fade Window",
     );
     const limitSlider = findSliderByLabel(
