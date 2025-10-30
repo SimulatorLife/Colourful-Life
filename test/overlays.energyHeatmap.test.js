@@ -55,5 +55,5 @@ test("drawEnergyHeatmap keeps tiny energy values visible", () => {
   // 0.000, so enabling the overlays still painted a fully transparent tile.
   drawEnergyHeatmap(grid, ctx, 4, 5);
 
-  assert.is(ctx.cells[0][0], "rgba(0,255,0,0.001)");
+  assert.is(ctx.cells[0][0], "rgba(0,255,0,0.004)");
 });
