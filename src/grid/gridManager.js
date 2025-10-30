@@ -22,7 +22,7 @@ import {
   accumulateEventModifiers,
   resolveEventContribution,
 } from "../events/eventModifiers.js";
-import GridInteractionAdapter from "./gridAdapter.js";
+import { createInteractionAdapter } from "./interactionAdapterRegistry.js";
 import { clearTileEnergyBuffers } from "./energyUtils.js";
 import ReproductionZonePolicy from "./reproductionZonePolicy.js";
 import { OBSTACLE_PRESETS, resolveObstaclePresetCatalog } from "./obstaclePresets.js";
@@ -116,7 +116,7 @@ function resolveInteractionAdapter(options, gridManager) {
     }
   }
 
-  return new GridInteractionAdapter({ gridManager });
+  return createInteractionAdapter({ gridManager, options });
 }
 
 function resolveInteractionSystem(options, { gridManager, adapter }) {
