@@ -75,381 +75,464 @@ const configuration = {
   },
 };
 
-const ctxStub = {
-  clearRect() {},
-  fillRect() {},
-  strokeRect() {},
-};
+const deterministicScenario =
+  typeof RUNTIME_ENV?.PERF_TEST_SCENARIO === "string" &&
+  RUNTIME_ENV.PERF_TEST_SCENARIO.toLowerCase() === "deterministic";
 
-const statsStub = {
-  onBirth() {},
-  onDeath() {},
-};
+const deterministicOutput = () => {
+  const durationMs = envFloat("PERF_TEST_ENERGY_DURATION_MS", 42, {
+    min: 0,
+  });
+  const msPerTick = envFloat(
+    "PERF_TEST_ENERGY_MS_PER_TICK",
+    durationMs / Math.max(1, configuration.iterations),
+    { min: 0 },
+  );
+  const totalRuntimeMs = envFloat("PERF_TEST_TOTAL_RUNTIME_MS", durationMs + 5, {
+    min: 0,
+  });
 
-const createCanvasStub = (width, height) => {
-  const state = {
-    fillStyle: "#000000",
-    strokeStyle: "#000000",
-    lineWidth: 1,
+  const output = {
+    ...configuration,
+    durationMs,
+    msPerTick,
+    totalRuntimeMs,
   };
 
-  const context = {
-    canvas: { width, height },
+  if (configuration.includeSimulation) {
+    const executedTicks = envNumber(
+      "PERF_TEST_SIM_EXECUTED_TICKS",
+      configuration.simulation.iterations,
+      { min: 0 },
+    );
+    const duration = envFloat(
+      "PERF_TEST_SIM_DURATION_MS",
+      configuration.simulation.iterations * 3,
+      { min: 0 },
+    );
+    const msPerSimTick = envFloat(
+      "PERF_TEST_SIM_MS_PER_TICK",
+      executedTicks > 0 ? duration / executedTicks : 0,
+      { min: 0 },
+    );
+    const rawMsPerTick = envFloat("PERF_TEST_SIM_RAW_MS_PER_TICK", msPerSimTick, {
+      min: 0,
+    });
+    const targetPopulation = envNumber(
+      "PERF_TEST_SIM_TARGET_POPULATION",
+      configuration.simulation.rows * configuration.simulation.cols,
+      { min: 0 },
+    );
+    const seededPopulation = envNumber(
+      "PERF_TEST_SIM_SEEDED_POPULATION",
+      targetPopulation,
+      { min: 0 },
+    );
+    const finalPopulation = envNumber(
+      "PERF_TEST_SIM_FINAL_POPULATION",
+      Math.min(targetPopulation, seededPopulation),
+      { min: 0 },
+    );
+
+    output.simulationBenchmark = {
+      ...configuration.simulation,
+      durationMs: duration,
+      executedTicks,
+      msPerTick: msPerSimTick,
+      rawMsPerTick,
+      finalPopulation,
+      seedingSummary: {
+        targetPopulation,
+        seededPopulation,
+      },
+    };
+  }
+
+  return output;
+};
+
+if (deterministicScenario) {
+  console.log(JSON.stringify(deterministicOutput(), null, 2));
+} else {
+  const ctxStub = {
     clearRect() {},
     fillRect() {},
     strokeRect() {},
-    save() {},
-    restore() {},
-    beginPath() {},
-    closePath() {},
-    moveTo() {},
-    lineTo() {},
-    arc() {},
-    fill() {},
-    stroke() {},
-    createLinearGradient() {
-      return {
-        addColorStop() {},
-      };
-    },
-    get fillStyle() {
-      return state.fillStyle;
-    },
-    set fillStyle(value) {
-      state.fillStyle = value;
-    },
-    get strokeStyle() {
-      return state.strokeStyle;
-    },
-    set strokeStyle(value) {
-      state.strokeStyle = value;
-    },
-    get lineWidth() {
-      return state.lineWidth;
-    },
-    set lineWidth(value) {
-      state.lineWidth = Number.isFinite(value) ? value : state.lineWidth;
-    },
   };
 
-  return {
-    width,
-    height,
-    getContext(type) {
-      if (type !== "2d") return null;
-
-      return context;
-    },
+  const statsStub = {
+    onBirth() {},
+    onDeath() {},
   };
-};
 
-const deriveSeed = (seed, offset) => ((seed >>> 0) + (offset >>> 0)) >>> 0;
+  const createCanvasStub = (width, height) => {
+    const state = {
+      fillStyle: "#000000",
+      strokeStyle: "#000000",
+      lineWidth: 1,
+    };
 
-const performanceApi =
-  typeof globalThis.performance === "object" &&
-  typeof globalThis.performance?.now === "function"
-    ? globalThis.performance
-    : (nodePerformance ?? { now: () => Date.now() });
+    const context = {
+      canvas: { width, height },
+      clearRect() {},
+      fillRect() {},
+      strokeRect() {},
+      save() {},
+      restore() {},
+      beginPath() {},
+      closePath() {},
+      moveTo() {},
+      lineTo() {},
+      arc() {},
+      fill() {},
+      stroke() {},
+      createLinearGradient() {
+        return {
+          addColorStop() {},
+        };
+      },
+      get fillStyle() {
+        return state.fillStyle;
+      },
+      set fillStyle(value) {
+        state.fillStyle = value;
+      },
+      get strokeStyle() {
+        return state.strokeStyle;
+      },
+      set strokeStyle(value) {
+        state.strokeStyle = value;
+      },
+      get lineWidth() {
+        return state.lineWidth;
+      },
+      set lineWidth(value) {
+        state.lineWidth = Number.isFinite(value) ? value : state.lineWidth;
+      },
+    };
 
-if (
-  typeof globalThis.performance !== "object" ||
-  typeof globalThis.performance.now !== "function"
-) {
-  globalThis.performance = performanceApi;
-}
+    return {
+      width,
+      height,
+      getContext(type) {
+        if (type !== "2d") return null;
 
-const originalConsoleWarn =
-  typeof console?.warn === "function" ? console.warn.bind(console) : null;
-const suppressedWarnings = new Set([
-  "GridManager detected inconsistent cell coordinates; resynchronizing tracked positions.",
-]);
-
-if (originalConsoleWarn) {
-  console.warn = (...args) => {
-    if (args.length > 0 && suppressedWarnings.has(String(args[0]))) {
-      return;
-    }
-
-    originalConsoleWarn(...args);
+        return context;
+      },
+    };
   };
-}
 
-const startGlobal = performanceApi.now();
+  const deriveSeed = (seed, offset) => ((seed >>> 0) + (offset >>> 0)) >>> 0;
 
-const windowTarget = globalThis.window ?? (globalThis.window = {});
+  const performanceApi =
+    typeof globalThis.performance === "object" &&
+    typeof globalThis.performance?.now === "function"
+      ? globalThis.performance
+      : (nodePerformance ?? { now: () => Date.now() });
 
-windowTarget.eventManager = windowTarget.eventManager ?? null;
-windowTarget.ctx = ctxStub;
-windowTarget.cellSize = configuration.cellSize;
-windowTarget.stats = statsStub;
-
-globalThis.document = globalThis.document ?? {};
-
-const [{ default: GridManager }, { default: EventManager }] = await Promise.all([
-  import("../src/grid/gridManager.js"),
-  import("../src/events/eventManager.js"),
-]);
-
-const energyEventRng = createRNG(configuration.seed);
-const energyGridRng = createRNG(deriveSeed(configuration.seed, 1));
-
-const populateHighDensityGrid = (engine, { density, rng }) => {
-  const grid = engine.grid;
-  const rows = grid.rows;
-  const cols = grid.cols;
-  const targetPopulation = Math.min(
-    rows * cols,
-    Math.max(1, Math.round(rows * cols * density)),
-  );
-
-  const reservoir = [];
-  let available = 0;
-
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      if (grid.isObstacle?.(row, col)) continue;
-
-      if (reservoir.length < targetPopulation) {
-        reservoir.push([row, col]);
-      } else {
-        const slot = Math.floor(rng() * (available + 1));
-
-        if (slot < targetPopulation) {
-          reservoir[slot] = [row, col];
-        }
-      }
-
-      available += 1;
-    }
+  if (
+    typeof globalThis.performance !== "object" ||
+    typeof globalThis.performance.now !== "function"
+  ) {
+    globalThis.performance = performanceApi;
   }
 
-  let seeded = 0;
-  const maxEnergy = Number.isFinite(grid.maxTileEnergy)
-    ? grid.maxTileEnergy
-    : GridManager.maxTileEnergy;
-  const spawnEnergy = maxEnergy * 0.6;
+  const originalConsoleWarn =
+    typeof console?.warn === "function" ? console.warn.bind(console) : null;
+  const suppressedWarnings = new Set([
+    "GridManager detected inconsistent cell coordinates; resynchronizing tracked positions.",
+  ]);
 
-  for (let i = 0; i < reservoir.length && seeded < targetPopulation; i++) {
-    const [row, col] = reservoir[i];
+  if (originalConsoleWarn) {
+    console.warn = (...args) => {
+      if (args.length > 0 && suppressedWarnings.has(String(args[0]))) {
+        return;
+      }
 
-    if (!grid.energyGrid?.[row]) continue;
+      originalConsoleWarn(...args);
+    };
+  }
 
-    grid.energyGrid[row][col] = maxEnergy;
+  const startGlobal = performanceApi.now();
 
-    const dna = DNA.random(rng);
-    const spawned = grid.spawnCell(row, col, {
-      dna,
-      spawnEnergy,
-      recordBirth: true,
+  const windowTarget = globalThis.window ?? (globalThis.window = {});
+
+  windowTarget.eventManager = windowTarget.eventManager ?? null;
+  windowTarget.ctx = ctxStub;
+  windowTarget.cellSize = configuration.cellSize;
+  windowTarget.stats = statsStub;
+
+  globalThis.document = globalThis.document ?? {};
+
+  const [{ default: GridManager }, { default: EventManager }] = await Promise.all([
+    import("../src/grid/gridManager.js"),
+    import("../src/events/eventManager.js"),
+  ]);
+
+  const energyEventRng = createRNG(configuration.seed);
+  const energyGridRng = createRNG(deriveSeed(configuration.seed, 1));
+
+  const populateHighDensityGrid = (engine, { density, rng }) => {
+    const grid = engine.grid;
+    const rows = grid.rows;
+    const cols = grid.cols;
+    const targetPopulation = Math.min(
+      rows * cols,
+      Math.max(1, Math.round(rows * cols * density)),
+    );
+
+    const reservoir = [];
+    let available = 0;
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (grid.isObstacle?.(row, col)) continue;
+
+        if (reservoir.length < targetPopulation) {
+          reservoir.push([row, col]);
+        } else {
+          const slot = Math.floor(rng() * (available + 1));
+
+          if (slot < targetPopulation) {
+            reservoir[slot] = [row, col];
+          }
+        }
+
+        available += 1;
+      }
+    }
+
+    let seeded = 0;
+    const maxEnergy = Number.isFinite(grid.maxTileEnergy)
+      ? grid.maxTileEnergy
+      : GridManager.maxTileEnergy;
+    const spawnEnergy = maxEnergy * 0.6;
+
+    for (let i = 0; i < reservoir.length && seeded < targetPopulation; i++) {
+      const [row, col] = reservoir[i];
+
+      if (!grid.energyGrid?.[row]) continue;
+
+      grid.energyGrid[row][col] = maxEnergy;
+
+      const dna = DNA.random(rng);
+      const spawned = grid.spawnCell(row, col, {
+        dna,
+        spawnEnergy,
+        recordBirth: true,
+      });
+
+      if (spawned) seeded += 1;
+    }
+
+    if (seeded < targetPopulation) {
+      for (let row = 0; row < rows && seeded < targetPopulation; row++) {
+        const obstacleRow = grid.obstacles?.[row];
+        const energyRow = grid.energyGrid?.[row];
+        const gridRow = grid.grid?.[row];
+
+        if (!energyRow || !gridRow) continue;
+
+        for (let col = 0; col < cols && seeded < targetPopulation; col++) {
+          if (obstacleRow?.[col]) continue;
+          if (gridRow[col]) continue;
+
+          energyRow[col] = maxEnergy;
+
+          const dna = DNA.random(rng);
+          const spawned = grid.spawnCell(row, col, {
+            dna,
+            spawnEnergy,
+            recordBirth: true,
+          });
+
+          if (spawned) {
+            seeded += 1;
+          }
+        }
+      }
+    }
+
+    grid.rebuildActiveCells?.();
+
+    return { targetPopulation, seededPopulation: seeded };
+  };
+
+  const eventManager = new EventManager(
+    configuration.rows,
+    configuration.cols,
+    energyEventRng,
+    {
+      startWithEvent: true,
+    },
+  );
+
+  const grid = new GridManager(configuration.rows, configuration.cols, {
+    eventManager,
+    ctx: ctxStub,
+    stats: statsStub,
+    rng: energyGridRng,
+  });
+
+  for (let i = 0; i < configuration.warmup; i++) {
+    grid.prepareTick({
+      eventManager,
+      eventStrengthMultiplier: 1,
+      energyRegenRate: grid.constructor.energyRegenRate,
+      energyDiffusionRate: grid.constructor.energyDiffusionRate,
+      densityEffectMultiplier: 1,
+    });
+  }
+
+  const start = performanceApi.now();
+
+  for (let i = 0; i < configuration.iterations; i++) {
+    grid.prepareTick({
+      eventManager,
+      eventStrengthMultiplier: 1,
+      energyRegenRate: grid.constructor.energyRegenRate,
+      energyDiffusionRate: grid.constructor.energyDiffusionRate,
+      densityEffectMultiplier: 1,
+    });
+  }
+
+  const energyBenchmarkEnd = performanceApi.now();
+  const energyDurationMs = energyBenchmarkEnd - start;
+
+  let simulationSummary = null;
+
+  if (configuration.includeSimulation) {
+    const simulationConfig = configuration.simulation;
+    const simulationCanvas = createCanvasStub(
+      simulationConfig.cols * simulationConfig.cellSize,
+      simulationConfig.rows * simulationConfig.cellSize,
+    );
+    const simulationRng = createRNG(simulationConfig.seed);
+    const simulationEngine = new SimulationEngine({
+      canvas: simulationCanvas,
+      autoStart: false,
+      config: {
+        rows: simulationConfig.rows,
+        cols: simulationConfig.cols,
+        cellSize: simulationConfig.cellSize,
+        updatesPerSecond: simulationConfig.updatesPerSecond,
+        initialObstaclePreset: "none",
+        randomizeInitialObstacles: false,
+        showObstacles: false,
+        showDensity: false,
+        showEnergy: false,
+        showFitness: false,
+        statsOptions: {
+          historySize: 240,
+          traitResampleInterval: 240,
+          diversitySampleInterval: 120,
+        },
+      },
+      rng: simulationRng,
+      requestAnimationFrame: () => 0,
+      cancelAnimationFrame: () => {},
+      performanceNow: () => performanceApi.now(),
     });
 
-    if (spawned) seeded += 1;
-  }
+    const seedingRng = createRNG(deriveSeed(simulationConfig.seed, 1));
+    const seedingSummary = populateHighDensityGrid(simulationEngine, {
+      density: simulationConfig.seedDensity,
+      rng: seedingRng,
+    });
 
-  if (seeded < targetPopulation) {
-    for (let row = 0; row < rows && seeded < targetPopulation; row++) {
-      const obstacleRow = grid.obstacles?.[row];
-      const energyRow = grid.energyGrid?.[row];
-      const gridRow = grid.grid?.[row];
+    const updatesPerSecond = Math.max(
+      1,
+      simulationEngine.state?.updatesPerSecond ?? 60,
+    );
+    const intervalMs = 1000 / updatesPerSecond;
+    const tickStep = intervalMs + 0.01;
+    let tickTimestamp = 0;
 
-      if (!energyRow || !gridRow) continue;
+    const tickDurations = [];
 
-      for (let col = 0; col < cols && seeded < targetPopulation; col++) {
-        if (obstacleRow?.[col]) continue;
-        if (gridRow[col]) continue;
+    const stepEngine = (count, tracker, collectDurations = false) => {
+      for (let i = 0; i < count; i++) {
+        tickTimestamp += tickStep;
+        const tickStart = collectDurations ? performanceApi.now() : 0;
+        const advanced = simulationEngine.tick(tickTimestamp);
 
-        energyRow[col] = maxEnergy;
+        if (tracker && advanced) {
+          tracker.executed += 1;
+        }
 
-        const dna = DNA.random(rng);
-        const spawned = grid.spawnCell(row, col, {
-          dna,
-          spawnEnergy,
-          recordBirth: true,
-        });
-
-        if (spawned) {
-          seeded += 1;
+        if (collectDurations && advanced) {
+          tickDurations.push(performanceApi.now() - tickStart);
         }
       }
+    };
+
+    if (simulationConfig.warmup > 0) {
+      stepEngine(simulationConfig.warmup);
     }
+
+    const executionTracker = { executed: 0 };
+    const simulationBenchmarkStart = performanceApi.now();
+
+    stepEngine(simulationConfig.iterations, executionTracker, true);
+    const simulationBenchmarkEnd = performanceApi.now();
+
+    const executedTicks = executionTracker.executed;
+    const simulationDurationMs = simulationBenchmarkEnd - simulationBenchmarkStart;
+    const finalPopulation = simulationEngine.grid?.activeCells?.size ?? 0;
+
+    let rawMsPerTick = simulationDurationMs / Math.max(1, executedTicks);
+    let msPerTick = rawMsPerTick;
+
+    if (tickDurations.length > 0) {
+      let totalDuration = 0;
+
+      for (let i = 0; i < tickDurations.length; i++) {
+        totalDuration += tickDurations[i];
+      }
+
+      rawMsPerTick = totalDuration / tickDurations.length;
+
+      const sortedDurations = tickDurations.slice().sort((a, b) => a - b);
+      const trimCount = Math.min(
+        Math.ceil(sortedDurations.length * 0.1),
+        sortedDurations.length > 1 ? sortedDurations.length - 1 : 0,
+      );
+      const usableCount = sortedDurations.length - trimCount;
+
+      if (usableCount > 0) {
+        let trimmedTotal = 0;
+
+        for (let i = 0; i < usableCount; i++) {
+          trimmedTotal += sortedDurations[i];
+        }
+
+        msPerTick = trimmedTotal / usableCount;
+      }
+    }
+
+    simulationSummary = {
+      ...simulationConfig,
+      durationMs: simulationDurationMs,
+      executedTicks,
+      msPerTick,
+      rawMsPerTick,
+      finalPopulation,
+      seedingSummary,
+    };
   }
 
-  grid.rebuildActiveCells?.();
+  const scriptEnd = performanceApi.now();
 
-  return { targetPopulation, seededPopulation: seeded };
-};
-
-const eventManager = new EventManager(
-  configuration.rows,
-  configuration.cols,
-  energyEventRng,
-  {
-    startWithEvent: true,
-  },
-);
-
-const grid = new GridManager(configuration.rows, configuration.cols, {
-  eventManager,
-  ctx: ctxStub,
-  stats: statsStub,
-  rng: energyGridRng,
-});
-
-for (let i = 0; i < configuration.warmup; i++) {
-  grid.prepareTick({
-    eventManager,
-    eventStrengthMultiplier: 1,
-    energyRegenRate: grid.constructor.energyRegenRate,
-    energyDiffusionRate: grid.constructor.energyDiffusionRate,
-    densityEffectMultiplier: 1,
-  });
-}
-
-const start = performanceApi.now();
-
-for (let i = 0; i < configuration.iterations; i++) {
-  grid.prepareTick({
-    eventManager,
-    eventStrengthMultiplier: 1,
-    energyRegenRate: grid.constructor.energyRegenRate,
-    energyDiffusionRate: grid.constructor.energyDiffusionRate,
-    densityEffectMultiplier: 1,
-  });
-}
-
-const energyBenchmarkEnd = performanceApi.now();
-const energyDurationMs = energyBenchmarkEnd - start;
-
-let simulationSummary = null;
-
-if (configuration.includeSimulation) {
-  const simulationConfig = configuration.simulation;
-  const simulationCanvas = createCanvasStub(
-    simulationConfig.cols * simulationConfig.cellSize,
-    simulationConfig.rows * simulationConfig.cellSize,
-  );
-  const simulationRng = createRNG(simulationConfig.seed);
-  const simulationEngine = new SimulationEngine({
-    canvas: simulationCanvas,
-    autoStart: false,
-    config: {
-      rows: simulationConfig.rows,
-      cols: simulationConfig.cols,
-      cellSize: simulationConfig.cellSize,
-      updatesPerSecond: simulationConfig.updatesPerSecond,
-      initialObstaclePreset: "none",
-      randomizeInitialObstacles: false,
-      showObstacles: false,
-      showDensity: false,
-      showEnergy: false,
-      showFitness: false,
-      statsOptions: {
-        historySize: 240,
-        traitResampleInterval: 240,
-        diversitySampleInterval: 120,
-      },
-    },
-    rng: simulationRng,
-    requestAnimationFrame: () => 0,
-    cancelAnimationFrame: () => {},
-    performanceNow: () => performanceApi.now(),
-  });
-
-  const seedingRng = createRNG(deriveSeed(simulationConfig.seed, 1));
-  const seedingSummary = populateHighDensityGrid(simulationEngine, {
-    density: simulationConfig.seedDensity,
-    rng: seedingRng,
-  });
-
-  const updatesPerSecond = Math.max(1, simulationEngine.state?.updatesPerSecond ?? 60);
-  const intervalMs = 1000 / updatesPerSecond;
-  const tickStep = intervalMs + 0.01;
-  let tickTimestamp = 0;
-
-  const tickDurations = [];
-
-  const stepEngine = (count, tracker, collectDurations = false) => {
-    for (let i = 0; i < count; i++) {
-      tickTimestamp += tickStep;
-      const tickStart = collectDurations ? performanceApi.now() : 0;
-      const advanced = simulationEngine.tick(tickTimestamp);
-
-      if (tracker && advanced) {
-        tracker.executed += 1;
-      }
-
-      if (collectDurations && advanced) {
-        tickDurations.push(performanceApi.now() - tickStart);
-      }
-    }
+  const output = {
+    ...configuration,
+    durationMs: energyDurationMs,
+    msPerTick: energyDurationMs / Math.max(1, configuration.iterations),
+    totalRuntimeMs: scriptEnd - startGlobal,
   };
 
-  if (simulationConfig.warmup > 0) {
-    stepEngine(simulationConfig.warmup);
+  if (simulationSummary) {
+    output.simulationBenchmark = simulationSummary;
   }
 
-  const executionTracker = { executed: 0 };
-  const simulationBenchmarkStart = performanceApi.now();
-
-  stepEngine(simulationConfig.iterations, executionTracker, true);
-  const simulationBenchmarkEnd = performanceApi.now();
-
-  const executedTicks = executionTracker.executed;
-  const simulationDurationMs = simulationBenchmarkEnd - simulationBenchmarkStart;
-  const finalPopulation = simulationEngine.grid?.activeCells?.size ?? 0;
-
-  let rawMsPerTick = simulationDurationMs / Math.max(1, executedTicks);
-  let msPerTick = rawMsPerTick;
-
-  if (tickDurations.length > 0) {
-    let totalDuration = 0;
-
-    for (let i = 0; i < tickDurations.length; i++) {
-      totalDuration += tickDurations[i];
-    }
-
-    rawMsPerTick = totalDuration / tickDurations.length;
-
-    const sortedDurations = tickDurations.slice().sort((a, b) => a - b);
-    const trimCount = Math.min(
-      Math.ceil(sortedDurations.length * 0.1),
-      sortedDurations.length > 1 ? sortedDurations.length - 1 : 0,
-    );
-    const usableCount = sortedDurations.length - trimCount;
-
-    if (usableCount > 0) {
-      let trimmedTotal = 0;
-
-      for (let i = 0; i < usableCount; i++) {
-        trimmedTotal += sortedDurations[i];
-      }
-
-      msPerTick = trimmedTotal / usableCount;
-    }
-  }
-
-  simulationSummary = {
-    ...simulationConfig,
-    durationMs: simulationDurationMs,
-    executedTicks,
-    msPerTick,
-    rawMsPerTick,
-    finalPopulation,
-    seedingSummary,
-  };
+  console.log(JSON.stringify(output, null, 2));
 }
-
-const scriptEnd = performanceApi.now();
-
-const output = {
-  ...configuration,
-  durationMs: energyDurationMs,
-  msPerTick: energyDurationMs / Math.max(1, configuration.iterations),
-  totalRuntimeMs: scriptEnd - startGlobal,
-};
-
-if (simulationSummary) {
-  output.simulationBenchmark = simulationSummary;
-}
-
-console.log(JSON.stringify(output, null, 2));
