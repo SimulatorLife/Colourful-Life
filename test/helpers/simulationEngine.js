@@ -1,20 +1,5 @@
+export { loadSimulationModules } from "#app/testing/simulation-modules";
 export { MockCanvas } from "./mockDom.js";
-
-export async function loadSimulationModules() {
-  const [simulationModule, gridModule, statsModule, eventModule] = await Promise.all([
-    import("../../src/simulationEngine.js"),
-    import("../../src/grid/gridManager.js"),
-    import("../../src/stats/index.js"),
-    import("../../src/events/eventManager.js"),
-  ]);
-
-  return {
-    SimulationEngine: simulationModule.default,
-    GridManager: gridModule.default,
-    Stats: statsModule.default,
-    EventManager: eventModule.default,
-  };
-}
 
 export function patchSimulationPrototypes({ GridManager, Stats, EventManager }) {
   const snapshot = {
