@@ -3133,6 +3133,60 @@ export default class GridManager {
     }
   }
 
+  #pruneSortedOccupancyList(list, bucket) {
+    const target = Array.isArray(list) ? list : [];
+
+    if (!bucket || bucket.size === 0) {
+      target.length = 0;
+
+      return target;
+    }
+
+    const initialLength = target.length;
+    let writeIndex = 0;
+
+    for (let i = 0; i < initialLength; i += 1) {
+      const value = target[i];
+
+      if (!Number.isInteger(value)) {
+        continue;
+      }
+
+      if (bucket.has(value)) {
+        target[writeIndex] = value;
+        writeIndex += 1;
+      }
+    }
+
+    target.length = writeIndex;
+
+    if (target.length === bucket.size) {
+      return target;
+    }
+
+    if (target.length === 0) {
+      return bucket
+        ? Array.from(bucket)
+            .filter((value) => Number.isInteger(value))
+            .sort((a, b) => a - b)
+        : [];
+    }
+
+    for (const value of bucket) {
+      if (!Number.isInteger(value)) {
+        continue;
+      }
+
+      const index = lowerBound(target, value);
+
+      if (index >= target.length || target[index] !== value) {
+        target.splice(index, 0, value);
+      }
+    }
+
+    return target;
+  }
+
   #getRowOccupantColumns(row, bucket, { refresh = false } = {}) {
     this.#ensureRowOccupancyCache(row);
     let list = this.#rowOccupancySorted[row];
@@ -3143,13 +3197,11 @@ export default class GridManager {
     }
 
     if (refresh) {
-      const refreshed = bucket
-        ? Array.from(bucket)
-            .filter((value) => Number.isInteger(value))
-            .sort((a, b) => a - b)
-        : [];
+      const refreshed = this.#pruneSortedOccupancyList(list, bucket);
 
-      this.#rowOccupancySorted[row] = refreshed;
+      if (refreshed !== list) {
+        this.#rowOccupancySorted[row] = refreshed;
+      }
 
       return refreshed;
     }
@@ -3175,13 +3227,11 @@ export default class GridManager {
     }
 
     if (refresh) {
-      const refreshed = bucket
-        ? Array.from(bucket)
-            .filter((value) => Number.isInteger(value))
-            .sort((a, b) => a - b)
-        : [];
+      const refreshed = this.#pruneSortedOccupancyList(list, bucket);
 
-      this.#columnOccupancySorted[col] = refreshed;
+      if (refreshed !== list) {
+        this.#columnOccupancySorted[col] = refreshed;
+      }
 
       return refreshed;
     }
