@@ -60,6 +60,9 @@ PERF_SIM_DENSITY=0.68 node scripts/profile-energy.mjs`), where survivors
 - Relocated the "Life Event Markers" toggle into the Simulation Controls overlay
   stack so the grid markers live beside the other canvas layers they
   complement.
+- Relocated the "Life Event Fade Window" slider into the Life Event Log panel's
+  Marker Visibility card so marker persistence is tuned alongside the birth and
+  death stream while the overlay toggle stays with the other canvas layers.
 - Retired the standalone Dashboard Settings panel and relocated the shared
   "Dashboard Refresh Interval" slider into Evolution Insights so cadence tuning
   sits beside the metrics it drives while still flagging the leaderboard's

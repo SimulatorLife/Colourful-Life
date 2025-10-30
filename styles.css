@@ -1158,6 +1158,31 @@ canvas {
   gap: var(--space-md);
 }
 
+.life-events-marker-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.life-events-marker-controls__title {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text);
+}
+
+.life-events-marker-controls__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-subtle);
+  max-width: 60ch;
+}
+
 .life-events-summary-wrapper {
   display: flex;
   flex-direction: column;
