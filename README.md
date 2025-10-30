@@ -14,23 +14,23 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 
 ## Quick start
 
-Colourful Life runs on Node.js **18.18.0 or newer**. CI and profiling use **25.0.0** (pinned in `.nvmrc`). After cloning:
+Colourful Life runs on Node.js **18.18.0 or newer** (CI and profiling use **25.0.0**, pinned in `.nvmrc`). After cloning:
 
-1. Run `nvm use` (or `nvm install`) so your shell matches the pinned toolchain. Custom Node 18+ installs are fine as long as `node --version` reports ≥ 18.18.0.
-2. Install dependencies with `npm ci`, then run `npm run prepare` once to reinstall Husky hooks after a fresh clone or `.husky/` change.
-3. Start the Parcel dev server with `npm run start` and open `http://localhost:1234`.
-4. Before committing, finish with `npm run check` to chain linting, formatting verification, the energy benchmark, and the Node.js test suites.
+1. Run `nvm use` (or `nvm install`) so your shell adopts the pinned toolchain. Any Node 18+ install works as long as `node --version` reports ≥ 18.18.0.
+2. Install dependencies with `npm ci`. Run `npm run prepare` after each fresh clone or `.husky/` update so Git hooks are restored.
+3. Start the Parcel dev server with `npm run start`, then open `http://localhost:1234`.
+4. Before committing, run `npm run check` to execute ESLint, Prettier verification, the energy benchmark, and the Node.js test suites in one pass.
 
-While iterating, pick whichever feedback loop matches the change:
+During day-to-day work, lean on the focused feedback loops that match your change:
 
 - `npm run lint` / `npm run lint:fix` — Shared ESLint rules (with optional autofixes).
 - `npm run format:check` — Confirm Prettier formatting without writing changes.
-- `npm run test:watch` — Watch mode for the Node.js suites. Every run executes `scripts/profile-energy.mjs` before the tests so performance regressions surface early.
-- `npm test -- path/to/file.test.js` — Run a single suite once (all additional flags pass through to the Node test runner).
+- `npm run test:watch` — Watch mode for the Node.js suites. Each run executes `scripts/profile-energy.mjs` before the tests so performance regressions surface early.
+- `npm test -- path/to/file.test.js` — Run a single suite once (any extra flags pass straight to the Node test runner).
 
-If Parcel's hot module reload misbehaves, inspect the cleanup targets with `npm run clean -- --dry-run`, then re-run without `--dry-run` to clear stale artifacts.
+If Parcel's hot module reload misbehaves, inspect the cleanup targets with `npm run clean -- --dry-run`, then rerun without `--dry-run` to clear stale artifacts.
 
-Parcel handles hot module replacement during development. Reach for `npm run build` to produce an optimized bundle in `dist/` and consult [Key scripts and commands](#key-scripts-and-commands) for profiling or publishing helpers. Once the basics are familiar, the [developer guide](docs/developer-guide.md) digs into branching strategy, tooling, profiling harnesses, and testing expectations.
+Parcel handles hot module replacement during development. Reach for `npm run build` to produce an optimized bundle in `dist/`, and consult [Key scripts and commands](#key-scripts-and-commands) for profiling or publishing helpers. Once the basics are familiar, dive into the [developer guide](docs/developer-guide.md) for branching strategy, tooling deep-dives, and extended testing expectations.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
@@ -67,9 +67,9 @@ Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/
 
 ### Life event marker overlay
 
-Open the **Simulation Controls** panel and head to the **Overlays** section to toggle **Life Event Markers** alongside the other map overlays. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps. A compact legend now anchors to the canvas corner, tallying visible births, deaths, and the net population swing so you can interpret the markers at a glance. Architecture details live in [`docs/architecture-overview.md`](docs/architecture-overview.md#ui-and-overlays) for readers interested in extending the renderer. Need longer-lasting telemetry or a quicker clear? Pop open the **Life Event Log** panel—its Marker Visibility card now hosts the **Life Event Fade Window** slider so you can keep markers on-screen for dozens more ticks or trim them down to a blink-and-you-miss-it pulse.
+Open the **Simulation Controls** panel and head to the **Overlays** section to toggle **Life Event Markers** alongside the other map overlays. The overlay drops color-matched rings for newborn organisms and subtle crosses for fallen ones, fading them over the next few ticks so you can trace population churn without overwhelming the canvas or obscuring other heatmaps. A compact legend anchors to the canvas corner, tallying visible births, deaths, and the net population swing so you can interpret the markers at a glance. Architecture details live in [`docs/architecture-overview.md`](docs/architecture-overview.md#ui-and-overlays) for readers interested in extending the renderer, and [`docs/memory-life-event-markers.md`](docs/memory-life-event-markers.md) captures the profiling notes for the pooled renderer.
 
-Trying to keep frenetic worlds tidy? Dial the **Life Event Marker Limit** slider to cap how many recent events linger on the grid and keep the heatmaps readable even during population booms.
+Need longer-lasting telemetry or a quicker clear? Pop open the **Life Event Log** panel—its Marker Visibility card hosts the **Life Event Fade Window** slider so you can keep markers on-screen for dozens more ticks or trim them down to a blink-and-you-miss-it pulse. Trying to keep frenetic worlds tidy? Dial the **Life Event Marker Limit** slider to cap how many recent events linger on the grid and keep the heatmaps readable even during population booms.
 
 ### Age heatmap overlay
 
@@ -199,6 +199,7 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 - [`docs/architecture-overview.md`](docs/architecture-overview.md) — Module boundaries, update loops, subsystem hand-offs, and the UI bridge.
 - [`docs/developer-guide.md`](docs/developer-guide.md) — Environment setup, workflow practices, and expectations for testing and documentation.
 - [`docs/public-hosting.md`](docs/public-hosting.md) — Publishing the compiled build to a separate public repository or GitHub Pages site.
+- [`docs/memory-life-event-markers.md`](docs/memory-life-event-markers.md) — Memory profiling notes for the pooled life event marker overlay renderer.
 - [`CHANGELOG.md`](CHANGELOG.md) — Notable behavioural, tooling, and documentation changes between releases.
 - [`src/config.js`](src/config.js) — Environment variable reference for tuning energy caps, regeneration penalties, reproduction buffers, and telemetry thresholds without touching source defaults.
 - Inline JSDoc and comments across `src/` describing exported functions, configuration helpers, and instrumentation entry points.
