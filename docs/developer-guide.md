@@ -110,8 +110,9 @@ change behaviour without touching source:
   when computing local crowding. Larger radii make density feedback smoother at
   the cost of extra per-tick work.
 - `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` tunes how strongly crowding suppresses
-  regeneration (0 disables the penalty, 1 preserves the default `0.39`
-  coefficient).
+  regeneration. Set it to `0` to disable the penalty entirely, keep the default
+  `0.39` to preserve the shipped balance, or push it toward `1` for the
+  harshest crowding impact the engine allows.
 - `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` controls the harvesting tax
   organisms pay on packed tiles so you can reward cooperation or sharpen
   competition.
