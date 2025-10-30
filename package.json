@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "imports": {
+    "#app/testing/simulation-modules": "./src/testing/simulationModules.js",
     "#tests/harness": "./test/testHarness.js"
   },
   "scripts": {
