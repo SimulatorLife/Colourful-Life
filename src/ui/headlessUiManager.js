@@ -219,38 +219,53 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getEventFrequencyMultiplier: () => settings.eventFrequencyMultiplier,
-    setEventFrequencyMultiplier: (value) => {
-      if (updateIfFinite("eventFrequencyMultiplier", value, { min: 0 })) {
+    setEventFrequencyMultiplier: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("eventFrequencyMultiplier", value, { min: 0 }) &&
+        shouldNotify
+      ) {
         notify("eventFrequencyMultiplier", settings.eventFrequencyMultiplier);
       }
     },
-    setEventStrengthMultiplier: (value) => {
-      if (updateIfFinite("eventStrengthMultiplier", value, { min: 0 })) {
+    setEventStrengthMultiplier: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("eventStrengthMultiplier", value, { min: 0 }) &&
+        shouldNotify
+      ) {
         notify("eventStrengthMultiplier", settings.eventStrengthMultiplier);
       }
     },
     getMaxConcurrentEvents: () => settings.maxConcurrentEvents,
     getMutationMultiplier: () => settings.mutationMultiplier,
-    setMutationMultiplier: (value) => {
-      if (updateIfFinite("mutationMultiplier", value, { min: 0 })) {
+    setMutationMultiplier: (value, { notify: shouldNotify = true } = {}) => {
+      if (updateIfFinite("mutationMultiplier", value, { min: 0 }) && shouldNotify) {
         notify("mutationMultiplier", settings.mutationMultiplier);
       }
     },
     getDensityEffectMultiplier: () => settings.densityEffectMultiplier,
-    setDensityEffectMultiplier: (value) => {
-      if (updateIfFinite("densityEffectMultiplier", value, { min: 0 })) {
+    setDensityEffectMultiplier: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("densityEffectMultiplier", value, { min: 0 }) &&
+        shouldNotify
+      ) {
         notify("densityEffectMultiplier", settings.densityEffectMultiplier);
       }
     },
     getSocietySimilarity: () => settings.societySimilarity,
-    setSocietySimilarity: (value) => {
-      if (updateIfFinite("societySimilarity", value, { min: 0, max: 1 })) {
+    setSocietySimilarity: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("societySimilarity", value, { min: 0, max: 1 }) &&
+        shouldNotify
+      ) {
         notify("societySimilarity", settings.societySimilarity);
       }
     },
     getEnemySimilarity: () => settings.enemySimilarity,
-    setEnemySimilarity: (value) => {
-      if (updateIfFinite("enemySimilarity", value, { min: 0, max: 1 })) {
+    setEnemySimilarity: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("enemySimilarity", value, { min: 0, max: 1 }) &&
+        shouldNotify
+      ) {
         notify("enemySimilarity", settings.enemySimilarity);
       }
     },
@@ -258,14 +273,20 @@ export function createHeadlessUiManager(options = {}) {
     getCombatEdgeSharpness: () => settings.combatEdgeSharpness,
     getCombatTerritoryEdgeFactor: () => settings.combatTerritoryEdgeFactor,
     getEnergyRegenRate: () => settings.energyRegenRate,
-    setEnergyRegenRate: (value) => {
-      if (updateIfFinite("energyRegenRate", value, { min: 0, max: 1 })) {
+    setEnergyRegenRate: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("energyRegenRate", value, { min: 0, max: 1 }) &&
+        shouldNotify
+      ) {
         notify("energyRegenRate", settings.energyRegenRate);
       }
     },
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
-    setEnergyDiffusionRate: (value) => {
-      if (updateIfFinite("energyDiffusionRate", value, { min: 0, max: 1 })) {
+    setEnergyDiffusionRate: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("energyDiffusionRate", value, { min: 0, max: 1 }) &&
+        shouldNotify
+      ) {
         notify("energyDiffusionRate", settings.energyDiffusionRate);
       }
     },
@@ -293,22 +314,26 @@ export function createHeadlessUiManager(options = {}) {
         notify("lowDiversityReproMultiplier", settings.lowDiversityReproMultiplier);
       }
     },
-    setCombatEdgeSharpness: (value) => {
-      if (updateIfFinite("combatEdgeSharpness", value, { min: 0.1 })) {
+    setCombatEdgeSharpness: (value, { notify: shouldNotify = true } = {}) => {
+      if (updateIfFinite("combatEdgeSharpness", value, { min: 0.1 }) && shouldNotify) {
         notify("combatEdgeSharpness", settings.combatEdgeSharpness);
       }
     },
-    setCombatTerritoryEdgeFactor: (value) => {
-      if (updateIfFinite("combatTerritoryEdgeFactor", value, { min: 0, max: 1 })) {
+    setCombatTerritoryEdgeFactor: (value, { notify: shouldNotify = true } = {}) => {
+      if (
+        updateIfFinite("combatTerritoryEdgeFactor", value, { min: 0, max: 1 }) &&
+        shouldNotify
+      ) {
         notify("combatTerritoryEdgeFactor", settings.combatTerritoryEdgeFactor);
       }
     },
-    setMaxConcurrentEvents: (value) => {
+    setMaxConcurrentEvents: (value, { notify: shouldNotify = true } = {}) => {
       if (
         updateIfFinite("maxConcurrentEvents", value, {
           min: 0,
           round: (candidate) => Math.floor(candidate),
-        })
+        }) &&
+        shouldNotify
       ) {
         notify("maxConcurrentEvents", settings.maxConcurrentEvents);
       }
@@ -323,69 +348,85 @@ export function createHeadlessUiManager(options = {}) {
     getShowReproductiveZones: () => settings.showReproductiveZones,
     getLifeEventFadeTicks: () => settings.lifeEventFadeTicks,
     getLifeEventLimit: () => settings.lifeEventLimit,
-    setShowObstacles: (value) => {
+    setShowObstacles: (value, { notify: shouldNotify = true } = {}) => {
       const normalized = coerceBoolean(value, settings.showObstacles);
 
       if (settings.showObstacles === normalized) return;
 
       settings.showObstacles = normalized;
-      notify("showObstacles", settings.showObstacles);
+      if (shouldNotify) {
+        notify("showObstacles", settings.showObstacles);
+      }
     },
-    setShowEnergy: (value) => {
+    setShowEnergy: (value, { notify: shouldNotify = true } = {}) => {
       const normalized = coerceBoolean(value, settings.showEnergy);
 
       if (settings.showEnergy === normalized) return;
 
       settings.showEnergy = normalized;
-      notify("showEnergy", settings.showEnergy);
+      if (shouldNotify) {
+        notify("showEnergy", settings.showEnergy);
+      }
     },
-    setShowDensity: (value) => {
+    setShowDensity: (value, { notify: shouldNotify = true } = {}) => {
       const normalized = coerceBoolean(value, settings.showDensity);
 
       if (settings.showDensity === normalized) return;
 
       settings.showDensity = normalized;
-      notify("showDensity", settings.showDensity);
+      if (shouldNotify) {
+        notify("showDensity", settings.showDensity);
+      }
     },
-    setShowAge: (value) => {
+    setShowAge: (value, { notify: shouldNotify = true } = {}) => {
       const normalized = coerceBoolean(value, settings.showAge);
 
       if (settings.showAge === normalized) return;
 
       settings.showAge = normalized;
-      notify("showAge", settings.showAge);
+      if (shouldNotify) {
+        notify("showAge", settings.showAge);
+      }
     },
-    setShowFitness: (value) => {
+    setShowFitness: (value, { notify: shouldNotify = true } = {}) => {
       const normalized = coerceBoolean(value, settings.showFitness);
 
       if (settings.showFitness === normalized) return;
 
       settings.showFitness = normalized;
-      notify("showFitness", settings.showFitness);
+      if (shouldNotify) {
+        notify("showFitness", settings.showFitness);
+      }
     },
-    setShowLifeEventMarkers: (value) => {
+    setShowLifeEventMarkers: (value, { notify: shouldNotify = true } = {}) => {
       const normalized = coerceBoolean(value, settings.showLifeEventMarkers);
 
       if (settings.showLifeEventMarkers === normalized) return;
 
       settings.showLifeEventMarkers = normalized;
-      notify("showLifeEventMarkers", settings.showLifeEventMarkers);
+      if (shouldNotify) {
+        notify("showLifeEventMarkers", settings.showLifeEventMarkers);
+      }
     },
-    setShowGridLines: (value) => {
+    setShowGridLines: (value, { notify: shouldNotify = true } = {}) => {
       const normalized = coerceBoolean(value, settings.showGridLines);
 
       if (settings.showGridLines === normalized) return;
 
       settings.showGridLines = normalized;
-      notify("showGridLines", settings.showGridLines);
+      if (shouldNotify) {
+        notify("showGridLines", settings.showGridLines);
+      }
     },
-    setShowReproductiveZones: (value) => {
+    setShowReproductiveZones: (value, { notify: shouldNotify = true } = {}) => {
       const normalized = coerceBoolean(value, settings.showReproductiveZones);
 
       if (settings.showReproductiveZones === normalized) return;
 
       settings.showReproductiveZones = normalized;
-      notify("showReproductiveZones", settings.showReproductiveZones);
+      if (shouldNotify) {
+        notify("showReproductiveZones", settings.showReproductiveZones);
+      }
     },
     setLifeEventFadeTicks: (value, { notify: shouldNotify = true } = {}) => {
       if (
@@ -404,7 +445,7 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getLeaderboardIntervalMs: () => settings.leaderboardIntervalMs,
-    setLeaderboardIntervalMs: (value) => {
+    setLeaderboardIntervalMs: (value, { notify: shouldNotify = true } = {}) => {
       const sanitized = sanitizeNumber(value, {
         fallback: Number.NaN,
         min: 0,
@@ -418,15 +459,18 @@ export function createHeadlessUiManager(options = {}) {
       if (Object.is(settings.leaderboardIntervalMs, normalized)) return;
 
       settings.leaderboardIntervalMs = normalized;
-      notify("leaderboardIntervalMs", settings.leaderboardIntervalMs);
+      if (shouldNotify) {
+        notify("leaderboardIntervalMs", settings.leaderboardIntervalMs);
+      }
     },
     getLeaderboardSize: () => settings.leaderboardSize,
-    setLeaderboardSize: (value) => {
+    setLeaderboardSize: (value, { notify: shouldNotify = true } = {}) => {
       if (
         updateIfFinite("leaderboardSize", value, {
           min: 0,
           round: Math.floor,
-        })
+        }) &&
+        shouldNotify
       ) {
         notify("leaderboardSize", settings.leaderboardSize);
       }
