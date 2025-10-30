@@ -254,3 +254,61 @@ test("updateEvent counts down cooldown and spawns once ready", () => {
   assert.is(rng.getCalls(), sequence.length, "spawn should consume the RNG sequence");
   assert.ok(manager.cooldown > 0, "cooldown resets after spawning");
 });
+
+test("updateEvent removes expired events before exposing the active list", () => {
+  const manager = new EventManager(10, 10, Math.random, { startWithEvent: false });
+  const survivingEvent = { remaining: 2 };
+  const expiredEvent = { remaining: 0 };
+  const negativeRemaining = { remaining: -3 };
+  const originalGenerator = manager.generateRandomEvent;
+
+  manager.activeEvents = [survivingEvent, expiredEvent, negativeRemaining, null];
+  manager.generateRandomEvent = () => null;
+
+  manager.updateEvent(0, 5);
+
+  assert.equal(
+    manager.activeEvents,
+    [survivingEvent],
+    "only active events should remain",
+  );
+  assert.is(
+    survivingEvent.remaining,
+    1,
+    "remaining time should decrement for survivors",
+  );
+  assert.is(
+    manager.currentEvent,
+    survivingEvent,
+    "current event should reflect the first survivor",
+  );
+
+  manager.generateRandomEvent = originalGenerator;
+});
+
+test("updateEvent recovers when activeEvents becomes a non-array", () => {
+  const manager = new EventManager(6, 6, Math.random, { startWithEvent: false });
+  const originalGenerator = manager.generateRandomEvent;
+
+  manager.activeEvents = null;
+  manager.generateRandomEvent = () => null;
+
+  manager.updateEvent(0, 1);
+
+  assert.ok(
+    Array.isArray(manager.activeEvents),
+    "activeEvents should be reinitialised to an array",
+  );
+  assert.is(
+    manager.activeEvents.length,
+    0,
+    "no events should be present when recovery occurs",
+  );
+  assert.is(
+    manager.currentEvent,
+    null,
+    "current event should remain null without active entries",
+  );
+
+  manager.generateRandomEvent = originalGenerator;
+});
