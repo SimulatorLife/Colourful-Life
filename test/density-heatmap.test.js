@@ -1,5 +1,6 @@
 import { assert, test } from "#tests/harness";
-import { drawDensityHeatmap, densityToRgba, getDensityAt } from "../src/ui/overlays.js";
+import { drawDensityHeatmap, densityToRgba } from "../src/ui/overlays.js";
+import { getDensityAt } from "../src/grid/densityUtils.js";
 
 function drawDensityHeatmapBaseline(grid) {
   const { rows, cols } = grid;
