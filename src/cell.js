@@ -198,6 +198,10 @@ export default class Cell {
       typeof this.dna.reproductionReachProfile === "function"
         ? this.dna.reproductionReachProfile()
         : null;
+    this.reproductionEnergyAdaptationProfile =
+      typeof this.dna.reproductionEnergyAdaptationProfile === "function"
+        ? this.dna.reproductionEnergyAdaptationProfile()
+        : null;
     this.mateAffinityPlasticity =
       typeof this.dna.mateAffinityPlasticityProfile === "function"
         ? this.dna.mateAffinityPlasticityProfile()
@@ -237,6 +241,11 @@ export default class Cell {
       reserve: 0,
       reward: 0,
       efficiency: 0,
+    };
+    this._reproductionEnergyMemory = {
+      shortfall: 0,
+      surplus: 0,
+      viability: 0,
     };
     this._opportunitySignal = clamp(
       Number.isFinite(this.opportunityProfile?.baseline)
@@ -461,18 +470,72 @@ export default class Cell {
       requiredShareB,
     );
 
-    if (investA <= 0 || investB <= 0) return null;
-
     const totalInvestment = investA + investB;
+
+    if (investA <= 0 || investB <= 0) {
+      parentA.#recordReproductionEnergyOutcome({
+        success: false,
+        totalInvestment,
+        viabilityThreshold,
+        transferEfficiency,
+        maxTileEnergy: resolvedMaxTileEnergy,
+        reason: "insufficientInvestment",
+      });
+      parentB.#recordReproductionEnergyOutcome({
+        success: false,
+        totalInvestment,
+        viabilityThreshold,
+        transferEfficiency,
+        maxTileEnergy: resolvedMaxTileEnergy,
+        reason: "insufficientInvestment",
+      });
+
+      return null;
+    }
+
     const offspringEnergy = totalInvestment * transferEfficiency;
 
     if (offspringEnergy + EPSILON < viabilityThreshold) {
+      parentA.#recordReproductionEnergyOutcome({
+        success: false,
+        totalInvestment,
+        viabilityThreshold,
+        transferEfficiency,
+        maxTileEnergy: resolvedMaxTileEnergy,
+        reason: "viabilityShortfall",
+      });
+      parentB.#recordReproductionEnergyOutcome({
+        success: false,
+        totalInvestment,
+        viabilityThreshold,
+        transferEfficiency,
+        maxTileEnergy: resolvedMaxTileEnergy,
+        reason: "viabilityShortfall",
+      });
+
       return null;
     }
 
     parentA.energy = Math.max(0, parentA.energy - investA);
     parentB.energy = Math.max(0, parentB.energy - investB);
     const offspring = new Cell(row, col, childDNA, offspringEnergy);
+
+    parentA.#recordReproductionEnergyOutcome({
+      success: true,
+      totalInvestment,
+      viabilityThreshold,
+      transferEfficiency,
+      maxTileEnergy: resolvedMaxTileEnergy,
+      reason: "success",
+    });
+    parentB.#recordReproductionEnergyOutcome({
+      success: true,
+      totalInvestment,
+      viabilityThreshold,
+      transferEfficiency,
+      maxTileEnergy: resolvedMaxTileEnergy,
+      reason: "success",
+    });
     const parentStrategies = [];
 
     if (Number.isFinite(parentA.strategy)) parentStrategies.push(parentA.strategy);
@@ -2698,6 +2761,136 @@ export default class Cell {
     return clamp((this.energy ?? 0) / (MAX_TILE_ENERGY || 1), 0, 1);
   }
 
+  #reproductionEnergyMemorySignals() {
+    const memory = this._reproductionEnergyMemory;
+
+    if (!memory) {
+      return { shortfall: 0, surplus: 0, viability: 0 };
+    }
+
+    const shortfall = clamp(
+      Number.isFinite(memory.shortfall) ? memory.shortfall : 0,
+      0,
+      1,
+    );
+    const surplus = clamp(Number.isFinite(memory.surplus) ? memory.surplus : 0, 0, 1);
+    const viability = clamp(
+      Number.isFinite(memory.viability) ? memory.viability : 0,
+      0,
+      1,
+    );
+
+    return { shortfall, surplus, viability };
+  }
+
+  #recordReproductionEnergyOutcome({
+    success = false,
+    totalInvestment = 0,
+    viabilityThreshold = 0,
+    transferEfficiency = 1,
+    maxTileEnergy = MAX_TILE_ENERGY,
+    reason = null,
+  } = {}) {
+    const profile = this.reproductionEnergyAdaptationProfile || {};
+    const assimilation = clamp(
+      Number.isFinite(profile.assimilation) ? profile.assimilation : 0.32,
+      0.05,
+      0.85,
+    );
+    const retention = clamp(
+      Number.isFinite(profile.retention) ? profile.retention : 0.68,
+      0.3,
+      0.99,
+    );
+    const shortfallWeight = clamp(
+      Number.isFinite(profile.shortfallWeight) ? profile.shortfallWeight : 0.6,
+      0,
+      1.5,
+    );
+    const surplusWeight = clamp(
+      Number.isFinite(profile.surplusWeight) ? profile.surplusWeight : 0.5,
+      0,
+      1.5,
+    );
+    const viabilityWeight = clamp(
+      Number.isFinite(profile.viabilityWeight) ? profile.viabilityWeight : 0.35,
+      0,
+      1.2,
+    );
+
+    const memory =
+      this._reproductionEnergyMemory ||
+      (this._reproductionEnergyMemory = { shortfall: 0, surplus: 0, viability: 0 });
+
+    const degradeRate = clamp(1 - retention, 0, 0.8);
+    const degrade = (value, rate) =>
+      clamp(lerp(Number.isFinite(value) ? value : 0, 0, clamp(rate, 0, 1)), 0, 1);
+
+    memory.shortfall = degrade(memory.shortfall, degradeRate);
+    memory.surplus = degrade(memory.surplus, degradeRate);
+    memory.viability = degrade(memory.viability, degradeRate * 0.6);
+
+    const capacity = Math.max(
+      1e-6,
+      Number.isFinite(maxTileEnergy) && maxTileEnergy > 0
+        ? maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
+    );
+    const viabilityFraction = clamp(
+      Number.isFinite(viabilityThreshold) ? viabilityThreshold / capacity : 0,
+      0,
+      1.5,
+    );
+    const efficiency = Number.isFinite(transferEfficiency)
+      ? clamp(transferEfficiency, 0.05, 2)
+      : 1;
+    const invested = Math.max(
+      0,
+      Number.isFinite(totalInvestment) ? totalInvestment : 0,
+    );
+    const deliveredEnergy = invested * efficiency;
+    const investmentRatio =
+      viabilityThreshold > 0 ? clamp(deliveredEnergy / viabilityThreshold, 0, 3) : 0;
+    const shortfallSignal = success ? 0 : clamp(1 - investmentRatio, 0, 1);
+    const surplusSignal = success ? clamp(Math.max(0, investmentRatio - 1), 0, 1) : 0;
+
+    if (shortfallSignal > 0) {
+      const target = clamp(
+        shortfallSignal * shortfallWeight + viabilityFraction * viabilityWeight,
+        0,
+        1,
+      );
+
+      memory.shortfall = clamp(lerp(memory.shortfall, target, assimilation), 0, 1);
+    } else {
+      memory.shortfall = degrade(memory.shortfall, assimilation * 0.4);
+    }
+
+    if (surplusSignal > 0) {
+      const target = clamp(surplusSignal * surplusWeight, 0, 1);
+
+      memory.surplus = clamp(lerp(memory.surplus, target, assimilation * 0.8), 0, 1);
+    } else {
+      memory.surplus = degrade(memory.surplus, assimilation * 0.3);
+    }
+
+    const viabilityTarget = clamp(viabilityFraction, 0, 1);
+
+    memory.viability = clamp(
+      lerp(memory.viability, viabilityTarget, assimilation * 0.6),
+      0,
+      1,
+    );
+
+    memory.lastOutcome = {
+      success: Boolean(success),
+      reason: reason || (success ? "success" : "energy"),
+      shortfall: shortfallSignal,
+      surplus: surplusSignal,
+      viability: viabilityFraction,
+    };
+  }
+
   #updateNeuralFatigueState({
     dynamicLoad = 0,
     baselineNeurons = 0,
@@ -4760,6 +4953,7 @@ export default class Cell {
     const diversityDrive = this.#resolveDiversityDrive({
       availableDiversity: partnerDiversity,
     });
+    const energyMemory = this.#reproductionEnergyMemorySignals();
 
     return {
       energy: energyFrac,
@@ -4779,6 +4973,8 @@ export default class Cell {
       confidenceMemory,
       opportunitySignal: this.#currentOpportunitySignal(),
       diversityDrive,
+      reproductionEnergyShortfall: energyMemory.shortfall,
+      reproductionEnergySurplus: energyMemory.surplus,
     };
   }
 
@@ -8208,10 +8404,38 @@ export default class Cell {
     );
     const scarcity = clamp(1 - energyMean, 0, 1);
     const cautionFactor = clamp(1 - scarcity * survivalInstinct * 0.28, 0.55, 1);
+    const energyMemory = this.#reproductionEnergyMemorySignals();
+    const energyProfile = this.reproductionEnergyAdaptationProfile || {};
+    const cautionStrength = clamp(
+      Number.isFinite(energyProfile.cautionStrength)
+        ? energyProfile.cautionStrength
+        : 0.4,
+      0,
+      1.5,
+    );
+    const boldnessStrength = clamp(
+      Number.isFinite(energyProfile.boldnessStrength)
+        ? energyProfile.boldnessStrength
+        : 0.35,
+      0,
+      1.5,
+    );
+    const viabilityWeight = clamp(
+      Number.isFinite(energyProfile.viabilityWeight)
+        ? energyProfile.viabilityWeight
+        : 0.35,
+      0,
+      1.2,
+    );
+    const memoryCaution =
+      energyMemory.shortfall * cautionStrength +
+      energyMemory.viability * viabilityWeight;
+    const memoryBoldness = energyMemory.surplus * boldnessStrength;
+    const memoryScale = clamp(1 - memoryCaution + memoryBoldness, 0.35, 1.6);
     const energyMultiplier = clamp(
-      energySupport * driveBoost * cautionFactor,
+      energySupport * driveBoost * cautionFactor * memoryScale,
       0.25,
-      1.4,
+      1.6,
     );
     const diversityMultiplier =
       diversityDrive >= 0

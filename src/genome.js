@@ -1712,6 +1712,18 @@ export class DNA {
       jitter: 0.09,
     });
 
+    updateModulation("reproductionEnergyShortfall", {
+      gain: 0.68 + 0.35 * (1 - efficiency) + 0.25 * parental,
+      target: toSigned(0.38 + 0.4 * (1 - efficiency) + 0.18 * (1 - recovery), 0.5, 1),
+      jitter: 0.1,
+    });
+
+    updateModulation("reproductionEnergySurplus", {
+      gain: 0.66 + 0.3 * fertility + 0.2 * efficiency + 0.15 * cooperation,
+      target: toSigned(0.48 + 0.35 * efficiency + 0.18 * fertility, 0.5, 1),
+      jitter: 0.1,
+    });
+
     return {
       baselineGains: baseline,
       targets,
@@ -1907,6 +1919,54 @@ export class DNA {
         synergyWeight: opportunitySynergy,
         groupWeights: opportunityGroupWeights,
       },
+    };
+  }
+
+  reproductionEnergyAdaptationProfile() {
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const fertility = this.geneFraction(GENE_LOCI.FERTILITY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const capacity = this.geneFraction(GENE_LOCI.ENERGY_CAPACITY);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+
+    const assimilation = clamp(
+      0.2 + 0.3 * parental + 0.28 * (1 - efficiency),
+      0.06,
+      0.78,
+    );
+    const retention = clamp(
+      0.6 + 0.22 * efficiency + 0.18 * recovery + 0.12 * strategy,
+      0.35,
+      0.95,
+    );
+    const shortfallWeight = clamp(
+      0.35 + 0.4 * (1 - efficiency) + 0.25 * risk,
+      0.1,
+      1.4,
+    );
+    const surplusWeight = clamp(0.3 + 0.35 * efficiency + 0.22 * fertility, 0.1, 1.25);
+    const cautionStrength = clamp(
+      0.3 + 0.35 * risk + 0.2 * (1 - efficiency) + 0.15 * (1 - recovery),
+      0.1,
+      1.25,
+    );
+    const boldnessStrength = clamp(
+      0.28 + 0.32 * efficiency + 0.2 * fertility,
+      0.08,
+      1.1,
+    );
+    const viabilityWeight = clamp(0.25 + 0.25 * parental + 0.2 * capacity, 0.08, 1);
+
+    return {
+      assimilation,
+      retention,
+      shortfallWeight,
+      surplusWeight,
+      cautionStrength,
+      boldnessStrength,
+      viabilityWeight,
     };
   }
 
