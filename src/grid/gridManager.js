@@ -3799,12 +3799,57 @@ export default class GridManager {
       }
     }
 
-    for (let row = 0; row < this.rows; row++) {
+    const occupancyRows = this.#rowOccupancy;
+    const rows = this.rows;
+    const cols = this.cols;
+
+    if (Array.isArray(occupancyRows) && occupancyRows.length === rows) {
+      let processedOccupancy = false;
+
+      for (let row = 0; row < rows; row++) {
+        const bucket = occupancyRows[row];
+
+        if (!bucket || bucket.size === 0) continue;
+
+        const gridRow = this.grid[row];
+
+        if (!gridRow) continue;
+
+        const columns = this.#getRowOccupantColumns(row, bucket, { refresh: true });
+
+        for (let i = 0; i < columns.length; i++) {
+          const col = columns[i];
+
+          if (col < 0 || col >= cols) {
+            bucket.delete(col);
+
+            continue;
+          }
+
+          const cell = gridRow[col];
+
+          if (!cell) {
+            bucket.delete(col);
+
+            continue;
+          }
+
+          this.#applyEnergyExclusivityAt(row, col, cell, { previousEnergyGrid });
+          processedOccupancy = true;
+        }
+      }
+
+      if (processedOccupancy) {
+        return;
+      }
+    }
+
+    for (let row = 0; row < rows; row++) {
       const gridRow = this.grid[row];
 
       if (!gridRow) continue;
 
-      for (let col = 0; col < this.cols; col++) {
+      for (let col = 0; col < cols; col++) {
         const cell = gridRow[col];
 
         if (!cell) continue;

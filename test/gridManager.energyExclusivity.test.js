@@ -85,6 +85,80 @@ test("update enforces energy exclusivity across the grid", async () => {
   );
 });
 
+test("energy exclusivity scans occupancy when no active cells are registered", async () => {
+  const [{ default: GridManager }, { default: DNA }] = await Promise.all([
+    import("../src/grid/gridManager.js"),
+    import("../src/genome.js"),
+  ]);
+
+  class TestGridManager extends GridManager {
+    init() {}
+    prepareTick(options) {
+      return { densityGrid: this.densityGrid, ...options };
+    }
+    processCell() {}
+    buildSnapshot() {
+      return null;
+    }
+  }
+
+  const rows = 160;
+  const cols = 160;
+  const gm = new TestGridManager(rows, cols, baseOptions);
+  const dna = new DNA(5, 10, 15);
+
+  const occupied = [];
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      if ((row + col) % 9 === 0) {
+        const cell = gm.spawnCell(row, col, {
+          dna,
+          spawnEnergy: gm.maxTileEnergy / 3,
+        });
+
+        if (cell) {
+          gm.energyGrid[row][col] = gm.maxTileEnergy;
+          occupied.push([row, col]);
+        }
+      }
+    }
+  }
+
+  assert.ok(
+    occupied.length > 2000,
+    "expected dense occupancy to exercise the optimized fallback path",
+  );
+
+  gm.activeCells.clear();
+
+  const { performance } = await import("node:perf_hooks");
+
+  const start = performance.now();
+
+  gm.update({
+    energyRegenRate: 0,
+    energyDiffusionRate: 0,
+    eventStrengthMultiplier: 1,
+    densityEffectMultiplier: 1,
+  });
+
+  const elapsed = performance.now() - start;
+
+  for (const [row, col] of occupied) {
+    assert.is(
+      gm.energyGrid[row][col],
+      0,
+      `occupied tile (${row}, ${col}) should report zero stored energy after fallback scan`,
+    );
+  }
+
+  assert.ok(
+    elapsed <= 120,
+    `fallback scan should complete within 120ms for a ${rows}x${cols} grid, observed ${elapsed.toFixed(3)}ms`,
+  );
+});
+
 test("spawnCell reroutes leftover tile energy to open neighbors", async () => {
   const [{ default: GridManager }, { default: DNA }] = await Promise.all([
     import("../src/grid/gridManager.js"),
