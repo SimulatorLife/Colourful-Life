@@ -42,13 +42,13 @@ PERF_SIM_DENSITY=0.68 node scripts/profile-energy.mjs`). Survivors climbed
   staying well under the 125 ms watchdog. The stronger splash lets congested
   graveyards recycle energy fast enough to prevent bottleneck stalls even if it
   costs a modest scheduling tax.
-- Raised the default offspring viability buffer to `1.13` after rerunning the
-  dense 40×40 headless probe (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40
-PERF_SIM_COLS=40 PERF_SIM_WARMUP=20 PERF_SIM_ITERATIONS=80
-PERF_SIM_DENSITY=0.68 node scripts/profile-energy.mjs`), where survivors
-  climbed from 135 → 142 while the trimmed ms-per-tick average held near 76 ms
-  (75.5 → 76.4). The slightly stricter reserve demand steadies recovery births
-  without reviving feast/famine swings.
+- Softened the default offspring viability buffer to `1.11` after a 30×30
+  headless probe (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=30 PERF_SIM_COLS=30
+PERF_SIM_WARMUP=10 PERF_SIM_ITERATIONS=60 PERF_SIM_DENSITY=0.62 node
+scripts/profile-energy.mjs`) lifted post-warmup survivors from 83 → 92 while
+  raw ms-per-tick stayed well under the 125 ms watchdog (76.8 → 82.1). The
+  lighter reserve requirement lets bottlenecked colonies resume births sooner
+  without reigniting the feast/famine loop triggered by leaner buffers.
 - Clarified the supported Node.js range (>= 18.18.0 with 25.0.0 pinned via `.nvmrc`) and refreshed the README and developer guide quick-start loops so onboarding matches the tooling used in CI and profiling.
 - Tightened the primary documentation (README, developer guide, architecture notes) to streamline quick-start guidance, highlight subsystem profiling harnesses, and document the shared trait aggregation helpers used by Stats.
 - Relocated the "Pause When Hidden" toggle into the Simulation Controls playback block so autopause is discoverable without pausing; the pause overlay now simply points explorers back to its new home.
