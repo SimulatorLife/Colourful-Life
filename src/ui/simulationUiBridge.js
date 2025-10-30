@@ -311,7 +311,7 @@ function subscribeEngineToUi(engine, uiManager) {
       if (changes?.maxConcurrentEvents !== undefined) {
         callUi(
           "setMaxConcurrentEvents",
-          [changes.maxConcurrentEvents],
+          [changes.maxConcurrentEvents, { notify: false }],
           UI_WARNING_CONTEXTS.state,
         );
       }
@@ -653,7 +653,7 @@ export function bindSimulationToUi({
       invokeUiManagerMethod(
         uiManager,
         "setMaxConcurrentEvents",
-        [maxConcurrentEvents],
+        [maxConcurrentEvents, { notify: false }],
         UI_WARNING_CONTEXTS.initial,
       );
     }

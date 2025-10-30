@@ -103,6 +103,66 @@ test("createHeadlessUiManager notifies observers only for sanitized updates", ()
   assert.is(manager.getLifeEventLimit(), 0);
 });
 
+test("createHeadlessUiManager suppresses max concurrent notifications when requested", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  manager.setMaxConcurrentEvents(7.2, { notify: false });
+
+  assert.equal(notifications, []);
+  assert.is(manager.getMaxConcurrentEvents(), 7);
+});
+
+test("createHeadlessUiManager setters respect notify suppression", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  manager.setEventStrengthMultiplier(1.4, { notify: false });
+  manager.setEventFrequencyMultiplier(0.6, { notify: false });
+  manager.setDensityEffectMultiplier(0.3, { notify: false });
+  manager.setMutationMultiplier(0.8, { notify: false });
+  manager.setSocietySimilarity(0.35, { notify: false });
+  manager.setEnemySimilarity(0.45, { notify: false });
+  manager.setEnergyRegenRate(0.2, { notify: false });
+  manager.setEnergyDiffusionRate(0.25, { notify: false });
+  manager.setCombatEdgeSharpness(0.5, { notify: false });
+  manager.setCombatTerritoryEdgeFactor(0.4, { notify: false });
+  manager.setLeaderboardIntervalMs(1600, { notify: false });
+  manager.setShowObstacles(false, { notify: false });
+  manager.setShowEnergy(true, { notify: false });
+  manager.setShowDensity(true, { notify: false });
+  manager.setShowAge(true, { notify: false });
+  manager.setShowFitness(true, { notify: false });
+  manager.setShowLifeEventMarkers(true, { notify: false });
+  manager.setShowGridLines(true, { notify: false });
+  manager.setShowReproductiveZones(false, { notify: false });
+
+  assert.equal(notifications, []);
+  assert.is(manager.getEventStrengthMultiplier(), 1.4);
+  assert.is(manager.getEventFrequencyMultiplier(), 0.6);
+  assert.is(manager.getDensityEffectMultiplier(), 0.3);
+  assert.is(manager.getMutationMultiplier(), 0.8);
+  assert.is(manager.getSocietySimilarity(), 0.35);
+  assert.is(manager.getEnemySimilarity(), 0.45);
+  assert.is(manager.getEnergyRegenRate(), 0.2);
+  assert.is(manager.getEnergyDiffusionRate(), 0.25);
+  assert.is(manager.getCombatEdgeSharpness(), 0.5);
+  assert.is(manager.getCombatTerritoryEdgeFactor(), 0.4);
+  assert.is(manager.getLeaderboardIntervalMs(), 1600);
+  assert.is(manager.getShowObstacles(), false);
+  assert.is(manager.getShowEnergy(), true);
+  assert.is(manager.getShowDensity(), true);
+  assert.is(manager.getShowAge(), true);
+  assert.is(manager.getShowFitness(), true);
+  assert.is(manager.getShowLifeEventMarkers(), true);
+  assert.is(manager.getShowGridLines(), true);
+  assert.is(manager.getShowReproductiveZones(), false);
+});
+
 test("createHeadlessUiManager clamps energy rates to the unit interval", () => {
   const notifications = [];
   const manager = createHeadlessUiManager({
