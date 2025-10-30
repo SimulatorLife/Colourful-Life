@@ -13,7 +13,7 @@ the dev server, then return here for the deeper workflow.
 1. Install Node.js 18.18.0 or newer. The included `.nvmrc` pins to 25.0.0—the version used in CI and profiling. Run `nvm use` (or `nvm install`) after cloning, or make sure your preferred Node 18+ runtime reports ≥ 18.18.0 via `node --version`.
 2. Install dependencies with `npm ci`, then run `npm run prepare` once so Husky reinstalls Git hooks after a fresh clone or `.husky/` update.
 3. Launch the Parcel dev server with `npm run start` and open `http://localhost:1234`.
-4. Keep a second terminal for feedback loops while you iterate. Reach for `npm run lint`, `npm run format:check`, `npm run test:watch`, or `npm test -- path/to/file.test.js` as needed, then close with `npm run check` before committing. The command chains linting, formatting verification, the energy benchmark, and the Node.js test suites—matching the flow described in the [README quick start](../README.md#quick-start).
+4. Keep a second terminal for feedback loops while you iterate. Reach for `npm run lint`, `npm run format:check`, `npm run test:watch`, or `npm test -- path/to/file.test.js` as needed, then finish with `npm run check` before committing. The command chains linting, formatting verification, the energy benchmark, and the Node.js test suites—mirroring the loop described in the [README quick start](../README.md#quick-start).
 5. If Parcel stalls, inspect the cleanup plan with `npm run clean -- --dry-run`, then rerun `npm run clean` to clear `dist/` and `.parcel-cache/` before restarting the dev server.
 
 ### Quality-of-life tips
@@ -33,7 +33,7 @@ the dev server, then return here for the deeper workflow.
 - Parcel performs hot module replacement during development. Use
   `npm run build` when you need a fresh production bundle in `dist/` for manual
   verification or publishing. Refer back to the
-  [README quick start](../README.md#quick-start) whenever you onboard a new environment.
+  [README quick start](../README.md#quick-start) whenever you onboard a new environment, and skim the [Key scripts and commands table](../README.md#key-scripts-and-commands) for a refresher on profiling and publishing helpers.
 
 ## Coding standards
 
@@ -73,6 +73,10 @@ Always run the formatter and linter before committing. Execute `npm test` when
 changing simulation logic, utilities, UI behaviour, or configuration that can
 affect runtime outcomes, and finish with `npm run check` to ensure nothing was
 missed.
+
+## Publishing builds
+
+When you want to share a playable build without exposing the private source, follow the [`docs/public-hosting.md`](public-hosting.md) workflow. It walks through creating a public repository, wiring a publishing remote, and invoking `npm run deploy:public`/`./scripts/publish-public-build.sh` so GitHub Pages (or any static host) receives the latest compiled assets.
 
 ### Performance budgets
 

@@ -33,6 +33,7 @@ where practical.
 
 ### Changed
 
+- Tightened the README and developer guide quick-start guidance, adding cross-links to profiling helpers, publishing instructions, and the life event marker profiling notes so onboarding flows stay accurate.
 - Streamlined the README quick start, key command reference, and documentation map, and aligned the developer guide's environment setup guidance with the refreshed onboarding flow.
 - Raised the default decay immediate share to `0.27` after rerunning the dense
   40×40 headless probe (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40
