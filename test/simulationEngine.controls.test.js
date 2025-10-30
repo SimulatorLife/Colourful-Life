@@ -106,6 +106,96 @@ test("SimulationEngine skips initial events when maxConcurrentEvents is zero", a
   }
 });
 
+test("SimulationEngine clears events when frequency multiplier clamps to zero", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+    });
+
+    const resetCalls = [];
+    const originalReset = engine.eventManager.reset?.bind(engine.eventManager);
+
+    engine.eventManager.reset = (options) => {
+      resetCalls.push(options);
+      originalReset?.(options);
+    };
+
+    engine.setEventFrequencyMultiplier(1.2);
+
+    assert.equal(resetCalls, []);
+
+    engine.eventManager.activeEvents = [
+      {
+        eventType: "heatwave",
+        remaining: 12,
+        affectedArea: { x: 0, y: 0, width: 1, height: 1 },
+      },
+    ];
+    engine.eventManager.currentEvent = engine.eventManager.activeEvents[0];
+    engine.eventManager.cooldown = 7;
+
+    engine.setEventFrequencyMultiplier(0);
+
+    assert.is(engine.state.eventFrequencyMultiplier, 0);
+    assert.equal(resetCalls, [{ startWithEvent: false }]);
+    assert.equal(engine.eventManager.activeEvents, []);
+    assert.is(engine.eventManager.currentEvent, null);
+    assert.is(engine.eventManager.cooldown, 0);
+  } finally {
+    restore();
+  }
+});
+
+test("SimulationEngine clears events without reset hook when frequency multiplier is zero", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = new SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => 0,
+      requestAnimationFrame: () => {},
+      cancelAnimationFrame: () => {},
+    });
+
+    delete engine.eventManager.reset;
+
+    engine.eventManager.activeEvents = [
+      {
+        eventType: "drought",
+        remaining: 8,
+        affectedArea: { x: 1, y: 1, width: 2, height: 2 },
+      },
+      {
+        eventType: "flood",
+        remaining: 5,
+        affectedArea: { x: 0, y: 0, width: 1, height: 1 },
+      },
+    ];
+    engine.eventManager.currentEvent = engine.eventManager.activeEvents[0];
+    engine.eventManager.cooldown = 9;
+
+    engine.setEventFrequencyMultiplier(0);
+
+    assert.is(engine.state.eventFrequencyMultiplier, 0);
+    assert.equal(engine.eventManager.activeEvents, []);
+    assert.is(engine.eventManager.currentEvent, null);
+    assert.is(engine.eventManager.cooldown, 0);
+  } finally {
+    restore();
+  }
+});
+
 test("SimulationEngine forwards statsOptions to runtime services", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;

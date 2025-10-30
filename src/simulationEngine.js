@@ -467,6 +467,22 @@ export default class SimulationEngine {
     return sanitized;
   }
 
+  #resetEventManager({ startWithEvent = false } = {}) {
+    if (!this.eventManager) {
+      return;
+    }
+
+    if (typeof this.eventManager.reset === "function") {
+      this.eventManager.reset({ startWithEvent });
+
+      return;
+    }
+
+    this.eventManager.activeEvents = [];
+    this.eventManager.currentEvent = null;
+    this.eventManager.cooldown = 0;
+  }
+
   #setAutoPausePending(pending) {
     const normalized = Boolean(pending);
 
@@ -996,13 +1012,7 @@ export default class SimulationEngine {
       (this.state.eventFrequencyMultiplier ?? 1) > 0 &&
       (this.state.maxConcurrentEvents ?? MAX_CONCURRENT_EVENTS_FALLBACK) > 0;
 
-    if (typeof this.eventManager?.reset === "function") {
-      this.eventManager.reset({ startWithEvent: shouldStartWithEvent });
-    } else if (this.eventManager) {
-      this.eventManager.activeEvents = [];
-      this.eventManager.currentEvent = null;
-      this.eventManager.cooldown = 0;
-    }
+    this.#resetEventManager({ startWithEvent: shouldStartWithEvent });
 
     if (typeof this.stats?.resetAll === "function") {
       this.stats.resetAll();
@@ -1093,13 +1103,7 @@ export default class SimulationEngine {
       (this.state.eventFrequencyMultiplier ?? 1) > 0 &&
       (this.state.maxConcurrentEvents ?? MAX_CONCURRENT_EVENTS_FALLBACK) > 0;
 
-    if (typeof this.eventManager?.reset === "function") {
-      this.eventManager.reset({ startWithEvent: shouldStartWithEvent });
-    } else if (this.eventManager) {
-      this.eventManager.activeEvents = [];
-      this.eventManager.currentEvent = null;
-      this.eventManager.cooldown = 0;
-    }
+    this.#resetEventManager({ startWithEvent: shouldStartWithEvent });
 
     if (typeof this.grid?.resetWorld === "function") {
       this.grid.resetWorld({
@@ -1282,9 +1286,13 @@ export default class SimulationEngine {
   }
 
   setEventFrequencyMultiplier(value) {
-    this.#sanitizeAndSetState("eventFrequencyMultiplier", value, {
+    const sanitized = this.#sanitizeAndSetState("eventFrequencyMultiplier", value, {
       min: 0,
     });
+
+    if (!(sanitized > 0)) {
+      this.#resetEventManager({ startWithEvent: false });
+    }
   }
 
   setMaxConcurrentEvents(value) {
