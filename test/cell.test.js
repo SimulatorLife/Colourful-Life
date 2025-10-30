@@ -1655,6 +1655,69 @@ test("breed aborts when combined investment misses DNA viability floor", () => {
   );
 });
 
+test("reproduction energy memory responds to shortage and surplus outcomes", () => {
+  const dnaA = new DNA(120, 90, 200);
+  const dnaB = new DNA(80, 140, 60);
+
+  dnaA.offspringEnergyDemandFrac = () => 0.55;
+  dnaB.offspringEnergyDemandFrac = () => 0.55;
+  dnaA.offspringViabilityBuffer = () => 1.3;
+  dnaB.offspringViabilityBuffer = () => 1.3;
+  dnaA.offspringEnergyTransferEfficiency = () => 0.68;
+  dnaB.offspringEnergyTransferEfficiency = () => 0.68;
+  dnaA.parentalInvestmentFrac = () => 0.85;
+  dnaB.parentalInvestmentFrac = () => 0.85;
+
+  const parentA = new Cell(3, 3, dnaA, 1);
+  const parentB = new Cell(3, 4, dnaB, 1);
+  const context = {
+    localDensity: 0.1,
+    densityEffectMultiplier: 1,
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+    tileEnergy: 0.35,
+    tileEnergyDelta: 0,
+  };
+
+  const baseline = parentA.computeReproductionProbability(parentB, context);
+
+  assert.ok(
+    Number.isFinite(baseline) && baseline > 0,
+    "baseline reproduction probability should be a positive finite number",
+  );
+
+  const failure = Cell.breed(parentA, parentB, 1, {
+    maxTileEnergy: context.maxTileEnergy,
+  });
+
+  assert.is(failure, null, "insufficient investment should block reproduction");
+
+  const afterFailure = parentA.computeReproductionProbability(parentB, context);
+
+  assert.ok(
+    afterFailure < baseline,
+    "energy shortfall memory should reduce future reproduction probability",
+  );
+
+  parentA.energy = 30;
+  parentB.energy = 30;
+
+  const success = Cell.breed(parentA, parentB, 1, {
+    maxTileEnergy: context.maxTileEnergy,
+  });
+
+  assert.ok(success instanceof Cell, "ample reserves should enable reproduction");
+
+  parentA.energy = 1;
+  parentB.energy = 1;
+
+  const afterSuccess = parentA.computeReproductionProbability(parentB, context);
+
+  assert.ok(
+    afterSuccess > afterFailure,
+    "successful reproduction should ease prior energy caution",
+  );
+});
+
 test("gestation efficiency genes modulate delivered offspring energy", () => {
   const configureGenome = (geneValue) => {
     const dna = new DNA(90, 140, 210);
