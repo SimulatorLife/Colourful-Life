@@ -435,7 +435,7 @@ test("resolveMateDiversitySampleLimit clamps invalid overrides", async () => {
 test("OFFSPRING_VIABILITY_BUFFER exposes the environment-aware default", async () => {
   const { OFFSPRING_VIABILITY_BUFFER } = await configModulePromise;
 
-  assert.is(OFFSPRING_VIABILITY_BUFFER, 1.13);
+  assert.is(OFFSPRING_VIABILITY_BUFFER, 1.11);
 });
 
 test("resolveOffspringViabilityBuffer respects overrides", async () => {
@@ -470,6 +470,6 @@ test("resolveOffspringViabilityBuffer clamps invalid overrides", async () => {
     resolveOffspringViabilityBuffer({
       COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER: "NaN",
     }),
-    1.13,
+    1.11,
   );
 });
