@@ -1,6 +1,6 @@
 import { clamp, clamp01 } from "./utils/math.js";
 import { resolveCellColor } from "./utils/cell.js";
-import GridInteractionAdapter from "./grid/gridAdapter.js";
+import { createInteractionAdapter } from "./grid/interactionAdapterRegistry.js";
 import {
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   COMBAT_TERRITORY_EDGE_FACTOR,
@@ -397,11 +397,15 @@ export default class InteractionSystem {
     adapter,
     gridManager,
     combatTerritoryEdgeFactor = COMBAT_TERRITORY_EDGE_FACTOR,
+    interactionAdapterFactory,
   } = {}) {
     if (adapter) {
       this.adapter = adapter;
+    } else if (typeof interactionAdapterFactory === "function") {
+      this.adapter =
+        interactionAdapterFactory({ gridManager: gridManager ?? null }) ?? null;
     } else if (gridManager) {
-      this.adapter = new GridInteractionAdapter({ gridManager });
+      this.adapter = createInteractionAdapter({ gridManager });
     } else {
       this.adapter = null;
     }

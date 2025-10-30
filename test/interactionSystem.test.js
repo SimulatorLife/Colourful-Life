@@ -1,5 +1,9 @@
 import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
+import {
+  getInteractionAdapterFactory,
+  setInteractionAdapterFactory,
+} from "../src/grid/interactionAdapterRegistry.js";
 
 let InteractionSystem;
 
@@ -116,6 +120,33 @@ function withFixedRandom(value, fn) {
 
 test.before(async () => {
   ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
+});
+
+test("constructor uses registered adapter factory when only a grid manager is provided", () => {
+  const gridManager = { id: "grid" };
+  const adapter = { id: "adapter" };
+  const previousFactory = getInteractionAdapterFactory();
+  let factoryCalls = 0;
+
+  try {
+    setInteractionAdapterFactory(({ gridManager: factoryGridManager }) => {
+      factoryCalls += 1;
+      assert.is(
+        factoryGridManager,
+        gridManager,
+        "grid manager should be forwarded to the factory",
+      );
+
+      return adapter;
+    });
+
+    const interaction = new InteractionSystem({ gridManager });
+
+    assert.is(interaction.adapter, adapter, "factory result should be used");
+    assert.is(factoryCalls, 1, "factory should be invoked exactly once");
+  } finally {
+    setInteractionAdapterFactory(previousFactory);
+  }
 });
 
 test("fight victory removes defender, relocates attacker, and consumes tile energy", () => {
