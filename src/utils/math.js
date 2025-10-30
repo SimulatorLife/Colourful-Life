@@ -127,18 +127,24 @@ export function sanitizeNumber(
 
   let numeric;
 
-  if (typeof value === "string") {
+  // Fast-path primitive cases so the common paths avoid the slower try/catch
+  // fallback used for objects with custom coercion behaviour.
+  if (typeof value === "number") {
+    numeric = value;
+  } else if (typeof value === "string") {
     const trimmed = value.trim();
 
     if (trimmed.length === 0) {
       return fallback;
     }
 
-    try {
-      numeric = Number(trimmed);
-    } catch {
-      return fallback;
-    }
+    numeric = Number(trimmed);
+  } else if (typeof value === "boolean") {
+    numeric = value ? 1 : 0;
+  } else if (typeof value === "bigint") {
+    numeric = Number(value);
+  } else if (typeof value === "symbol") {
+    return fallback;
   } else {
     try {
       numeric = Number(value);
