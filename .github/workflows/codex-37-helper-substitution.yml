@@ -1,7 +1,7 @@
 name: Codex 37 – Helper Substitution
 on:
   schedule:
-    - cron: "15 2,14 * * *" # twice daily at 02:15, 14:15 UTC
+    - cron: "30 */6 * * *" # every six hours at 30 minutes past the hour UTC
   workflow_dispatch:
 
 permissions:

@@ -2,8 +2,7 @@ name: Codex 30 – Project Organization
 
 on:
   schedule:
-    - cron: "25 5 * * *" # daily at 05:25 UTC
-    - cron: "35 23 * * *" # additional daily run at 23:35 UTC to cover late-evening gap
+    - cron: "10 */3 * * *" # every three hours at 10 minutes past the hour UTC
   workflow_dispatch:
 
 permissions:

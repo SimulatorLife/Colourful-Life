@@ -1,7 +1,7 @@
 name: Codex 14 – Emergent Systems Pass
 on:
   schedule:
-    - cron: "55 7,19 * * *" # twice daily at 07:55, 19:55 UTC
+    - cron: "55 7 * * *" # once daily at 07:55 UTC
   workflow_dispatch:
 
 permissions:

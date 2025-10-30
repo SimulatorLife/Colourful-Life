@@ -1,7 +1,7 @@
 name: Codex 41 – Rendering Throughput Boost
 on:
   schedule:
-    - cron: "55 */6 * * *" # every six hours at fifty-five minutes past the hour UTC
+    - cron: "55 */5 * * *" # every five hours at fifty-five minutes past the hour UTC
   workflow_dispatch:
 
 permissions:
