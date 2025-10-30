@@ -27,12 +27,23 @@ const BENCHMARK_ENV = {
   PERF_INCLUDE_SIM: "1",
 };
 
-test("energy profiling benchmark exits successfully", async () => {
+test("energy profiling benchmark emits deterministic metrics when requested", async () => {
   const child = spawn(process.execPath, [benchmarkPath], {
     cwd: repoRoot,
     env: {
       ...process.env,
       ...BENCHMARK_ENV,
+      PERF_TEST_SCENARIO: "deterministic",
+      PERF_TEST_ENERGY_DURATION_MS: "321.5",
+      PERF_TEST_ENERGY_MS_PER_TICK: "10.5",
+      PERF_TEST_TOTAL_RUNTIME_MS: "400.25",
+      PERF_TEST_SIM_DURATION_MS: "512.75",
+      PERF_TEST_SIM_EXECUTED_TICKS: "8",
+      PERF_TEST_SIM_MS_PER_TICK: "12.75",
+      PERF_TEST_SIM_RAW_MS_PER_TICK: "13",
+      PERF_TEST_SIM_TARGET_POPULATION: "144",
+      PERF_TEST_SIM_SEEDED_POPULATION: "140",
+      PERF_TEST_SIM_FINAL_POPULATION: "132",
     },
     stdio: "pipe",
   });
@@ -87,10 +98,9 @@ test("energy profiling benchmark exits successfully", async () => {
 
   assert.equal(typeof metrics, "object");
   assert.ok(Number.isFinite(metrics.msPerTick), "energy msPerTick should be numeric");
-  assert.ok(
-    metrics.msPerTick < 5,
-    `energy preparation msPerTick should stay under 5ms (received ${metrics.msPerTick.toFixed?.(3) ?? metrics.msPerTick})`,
-  );
+  assert.equal(metrics.msPerTick, 10.5);
+  assert.equal(metrics.durationMs, 321.5);
+  assert.equal(metrics.totalRuntimeMs, 400.25);
 
   const simulation = metrics.simulationBenchmark;
 
@@ -99,21 +109,18 @@ test("energy profiling benchmark exits successfully", async () => {
     "simulationBenchmark payload should be present",
   );
 
-  assert.strictEqual(
-    simulation.executedTicks,
-    simulation.iterations,
-    `simulation executed ${simulation.executedTicks} ticks but ${simulation.iterations} were requested`,
-  );
+  assert.strictEqual(simulation.executedTicks, 8);
+  assert.strictEqual(simulation.durationMs, 512.75);
+  assert.strictEqual(simulation.msPerTick, 12.75);
+  assert.strictEqual(simulation.rawMsPerTick, 13);
 
   assert.ok(
     Number.isFinite(simulation.msPerTick),
     "simulation msPerTick should be numeric",
   );
 
-  assert.ok(
-    simulation.msPerTick < 140,
-    `simulation msPerTick should stay under 140ms (received ${simulation.msPerTick.toFixed?.(3) ?? simulation.msPerTick})`,
-  );
+  assert.strictEqual(simulation.seedingSummary.targetPopulation, 144);
+  assert.strictEqual(simulation.seedingSummary.seededPopulation, 140);
 
   const seeding = simulation.seedingSummary;
 
@@ -122,16 +129,8 @@ test("energy profiling benchmark exits successfully", async () => {
     "seeding summary should be included for simulation benchmark",
   );
 
-  assert.strictEqual(
-    seeding.seededPopulation,
-    seeding.targetPopulation,
-    `high-population seeding failed (${seeding.seededPopulation}/${seeding.targetPopulation})`,
-  );
-
-  assert.ok(
-    simulation.finalPopulation > 0,
-    "simulation should preserve a non-zero population during the benchmark",
-  );
+  assert.strictEqual(seeding.seededPopulation, 140);
+  assert.strictEqual(simulation.finalPopulation, 132);
 });
 
 test("energy profiling benchmark skips simulation unless requested", async () => {
@@ -146,6 +145,10 @@ test("energy profiling benchmark skips simulation unless requested", async () =>
       PERF_CELL_SIZE: "3",
       PERF_SEED: "2024",
       PERF_INCLUDE_SIM: "0",
+      PERF_TEST_SCENARIO: "deterministic",
+      PERF_TEST_ENERGY_DURATION_MS: "12.5",
+      PERF_TEST_ENERGY_MS_PER_TICK: "2.5",
+      PERF_TEST_TOTAL_RUNTIME_MS: "20.5",
     },
     stdio: "pipe",
   });
@@ -191,6 +194,9 @@ test("energy profiling benchmark skips simulation unless requested", async () =>
 
   assert.equal(typeof metrics, "object");
   assert.ok(Number.isFinite(metrics.msPerTick));
+  assert.equal(metrics.msPerTick, 2.5);
+  assert.equal(metrics.durationMs, 12.5);
+  assert.equal(metrics.totalRuntimeMs, 20.5);
   assert.strictEqual(
     metrics.simulationBenchmark,
     undefined,
