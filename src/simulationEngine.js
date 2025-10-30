@@ -75,6 +75,11 @@ function sanitizeMaxConcurrentEvents(value, fallback = MAX_CONCURRENT_EVENTS_FAL
  *   `performance.now` with a Date fallback.
  * @param {Function} [options.drawOverlays] - Optional overlay renderer invoked each frame.
  *   Defaults to a no-op when omitted so the engine can operate without UI dependencies.
+ *   The render loop invokes this hook on every tick, so the placeholder prevents runtime
+ *   errors when the engine is paired with the headless adapter described in
+ *   {@link docs/architecture-overview.md#high-level-loop}. Headless runs rely on the same
+ *   surface to stream telemetry without mounting a DOM-backed UI, so removing the no-op
+ *   guard would crash automation and benchmarks that intentionally omit overlays.
  * @param {Object} [options.selectionManager] - Optional selection manager to reuse.
  * @param {(rows:number, cols:number) => Object} [options.selectionManagerFactory]
  *   Factory invoked to create a selection manager when one is not supplied.
@@ -780,7 +785,12 @@ export default class SimulationEngine {
       this.stats.setMutationMultiplier?.(this.state.mutationMultiplier ?? 1);
 
       const metrics = this.telemetry.ingestSnapshot(snapshot);
-      // Defer leaderboard/metrics publication until the throttle window allows another emit.
+      // Flag telemetry as pending instead of emitting immediately so
+      // TelemetryController.publishIfDue can honor the user-configured cadence
+      // (`leaderboardIntervalMs`). Clearing this mark or emitting eagerly would
+      // cause ticks that arrive inside the throttle window to skip leaderboard
+      // refreshes altogether, regressing both the browser UI and headless
+      // automation flows documented in docs/architecture-overview.md.
 
       this.telemetry.markPending();
 

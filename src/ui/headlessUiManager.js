@@ -21,7 +21,12 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * exposing getters and setters for the mirrored options plus a
  * `selectionManager` reference. Rendering hooks (`renderMetrics`,
  * `renderLeaderboard`) are provided as no-ops to satisfy consumers such as the
- * {@link SimulationEngine} when events are emitted.
+ * {@link SimulationEngine} when events are emitted. The engine always invokes
+ * those hooks during its frame cycle, and the headless adapter deliberately
+ * leaves them empty so CI, profiling scripts, and other non-DOM environments can
+ * run without stubbing their own renderers. See the
+ * {@link docs/architecture-overview.md#high-level-loop Architecture Overview} for
+ * how the bridge keeps headless and browser sessions aligned.
  *
  * @param {Object} [options] - Optional configuration overrides.
  * @param {boolean} [options.paused=false] - Whether the simulation starts paused.
