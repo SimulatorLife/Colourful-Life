@@ -1,3 +1,5 @@
+import { sanitizeNumber } from "./math.js";
+
 /**
  * Object-centric helpers for normalizing configuration payloads and cloning
  * simulation traces. Separating these utilities keeps UI and engine code from
@@ -18,123 +20,117 @@ export function toPlainObject(candidate) {
   return candidate && typeof candidate === "object" ? candidate : {};
 }
 
-const cloneNumeric = (value) => {
-  const numeric = Number(value);
+const sanitizeNumeric = (value) => sanitizeNumber(value, { fallback: 0, round: false });
 
-  return Number.isFinite(numeric) ? numeric : 0;
-};
-
-const cloneArray = (source) => {
+const sanitizeArrayValues = (source) => {
   if (!Array.isArray(source) || source.length === 0) {
     return [];
   }
 
-  return Array.from(source, (entry) => {
-    if (!entry || typeof entry !== "object") {
-      return cloneNumeric(entry);
+  return source.map((entry) => {
+    if (Array.isArray(entry)) {
+      return sanitizeArrayValues(entry);
     }
 
-    const copy = { ...entry };
+    if (!entry || typeof entry !== "object") {
+      return sanitizeNumeric(entry);
+    }
 
-    for (const [key, value] of Object.entries(copy)) {
+    for (const [key, value] of Object.entries(entry)) {
       if (Array.isArray(value)) {
-        copy[key] = cloneArray(value);
-      } else if (typeof value === "object" && value !== null) {
-        copy[key] = { ...value };
+        entry[key] = sanitizeArrayValues(value);
+      } else if (value && typeof value === "object") {
+        // structuredClone already ensures referential independence for nested objects.
       } else if (key === "value" || key === "weight") {
-        copy[key] = cloneNumeric(value);
+        entry[key] = sanitizeNumeric(value);
       }
     }
 
-    return copy;
+    return entry;
   });
 };
 
-const cloneTraceInputs = (inputs) => {
+const sanitizeTraceInputs = (inputs) => {
   if (!Array.isArray(inputs) || inputs.length === 0) {
     return [];
   }
 
-  return Array.from(inputs, (entry) => {
+  return inputs.map((entry) => {
     if (!entry || typeof entry !== "object") {
       return {
         source: entry?.source ?? null,
-        weight: cloneNumeric(entry?.weight),
-        value: cloneNumeric(entry?.value),
+        weight: sanitizeNumeric(entry?.weight),
+        value: sanitizeNumeric(entry?.value),
       };
     }
 
-    const copy = { ...entry };
+    if ("weight" in entry) entry.weight = sanitizeNumeric(entry.weight);
+    if ("value" in entry) entry.value = sanitizeNumeric(entry.value);
 
-    if ("weight" in copy) copy.weight = cloneNumeric(copy.weight);
-    if ("value" in copy) copy.value = cloneNumeric(copy.value);
-
-    for (const [key, value] of Object.entries(copy)) {
+    for (const [key, value] of Object.entries(entry)) {
       if (Array.isArray(value)) {
-        copy[key] = cloneArray(value);
-      } else if (typeof value === "object" && value !== null) {
-        copy[key] = { ...value };
+        entry[key] = sanitizeArrayValues(value);
+      } else if (value && typeof value === "object") {
+        // structuredClone covers nested object cloning.
       }
     }
 
-    return copy;
+    return entry;
   });
 };
 
-const cloneTraceNodes = (nodes) => {
+const sanitizeTraceNodes = (nodes) => {
   if (!Array.isArray(nodes) || nodes.length === 0) {
     return [];
   }
 
-  return Array.from(nodes, (node) => {
+  return nodes.map((node) => {
     if (!node || typeof node !== "object") {
       return { inputs: [] };
     }
 
-    const copy = { ...node };
+    node.inputs = sanitizeTraceInputs(node.inputs);
 
-    copy.inputs = cloneTraceInputs(node.inputs);
+    if ("sum" in node) node.sum = sanitizeNumeric(node.sum);
+    if ("output" in node) node.output = sanitizeNumeric(node.output);
 
-    if ("sum" in copy) copy.sum = cloneNumeric(copy.sum);
-    if ("output" in copy) copy.output = cloneNumeric(copy.output);
-
-    for (const [key, value] of Object.entries(copy)) {
+    for (const [key, value] of Object.entries(node)) {
       if (key === "inputs") continue;
 
       if (Array.isArray(value)) {
-        copy[key] = cloneArray(value);
-      } else if (typeof value === "object" && value !== null) {
-        copy[key] = { ...value };
+        node[key] = sanitizeArrayValues(value);
+      } else if (value && typeof value === "object") {
+        // structuredClone covers nested object cloning.
+      } else if (key === "value" || key === "weight") {
+        node[key] = sanitizeNumeric(value);
       }
     }
 
-    return copy;
+    return node;
   });
 };
 
-const cloneTraceSensors = (sensors) => {
+const sanitizeTraceSensors = (sensors) => {
   if (!Array.isArray(sensors) || sensors.length === 0) {
     return [];
   }
 
-  return Array.from(sensors, (sensor) => {
+  return sensors.map((sensor) => {
     if (!sensor || typeof sensor !== "object") {
       return { id: null, key: null, value: 0 };
     }
 
-    const copy = { ...sensor };
+    if ("value" in sensor) sensor.value = sanitizeNumeric(sensor.value);
 
-    if ("value" in copy) copy.value = cloneNumeric(copy.value);
-
-    for (const [key, value] of Object.entries(copy)) {
+    for (const [key, value] of Object.entries(sensor)) {
       if (Array.isArray(value)) {
-        copy[key] = cloneArray(value);
-      } else if (typeof value === "object" && value !== null) {
-        copy[key] = { ...value };
+        sensor[key] = sanitizeArrayValues(value);
+      } else if (value && typeof value === "object") {
+        // structuredClone covers nested object cloning.
       }
     }
 
-    return copy;
+    return sensor;
   });
 };
 
@@ -151,8 +147,9 @@ export function cloneTracePayload(trace) {
     return null;
   }
 
-  const sensors = cloneTraceSensors(trace.sensors);
-  const nodes = cloneTraceNodes(trace.nodes);
+  const cloned = structuredClone(trace);
+  const sensors = sanitizeTraceSensors(cloned.sensors);
+  const nodes = sanitizeTraceNodes(cloned.nodes);
 
   return { sensors, nodes };
 }
