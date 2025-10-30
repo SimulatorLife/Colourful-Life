@@ -83,10 +83,47 @@ function logWithOptionalError(method, message, error) {
  * @param {unknown} [error] - Optional contextual error payload.
  * @returns {void}
  */
+function normalizeWarningKeySuffix(error) {
+  if (error && typeof error === "object") {
+    const name = typeof error.name === "string" ? error.name : "";
+    const message = typeof error.message === "string" ? error.message : "";
+
+    if (name.length > 0 || message.length > 0) {
+      return `${name}::$${message}`;
+    }
+
+    if (typeof error.toString === "function") {
+      try {
+        const rendered = error.toString();
+
+        if (typeof rendered === "string" && rendered.length > 0) {
+          return `object::$${rendered}`;
+        }
+      } catch {
+        // Fall back to the empty suffix when the custom toString throws.
+      }
+    }
+
+    return "";
+  }
+
+  if (error === undefined || error === null) {
+    return "";
+  }
+
+  try {
+    const rendered = String(error);
+
+    return rendered.length > 0 ? `${typeof error}::$${rendered}` : "";
+  } catch {
+    return "";
+  }
+}
+
 export function warnOnce(message, error) {
   if (typeof message !== "string" || message.length === 0) return;
 
-  const warningKey = `${message}::$${error?.name ?? ""}::$${error?.message ?? ""}`;
+  const warningKey = `${message}::$${normalizeWarningKeySuffix(error)}`;
 
   if (warnedMessages.has(warningKey)) return;
 

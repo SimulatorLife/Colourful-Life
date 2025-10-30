@@ -652,6 +652,40 @@ test("warnOnce logs each unique message/error combination only once", () => {
   assert.is(calls[2][1], fallbackError);
 });
 
+test("warnOnce treats distinct primitive details as unique", () => {
+  __dangerousResetWarnOnce();
+  const originalWarn = console.warn;
+  const calls = [];
+
+  console.warn = (...args) => {
+    calls.push(args);
+  };
+
+  try {
+    warnOnce("primitive-message", "first-detail");
+    warnOnce("primitive-message", "second-detail");
+    warnOnce("primitive-message", 42);
+    warnOnce("primitive-message", 42n);
+    warnOnce("primitive-message", Symbol.for("token"));
+    warnOnce("primitive-message", Symbol.for("token"));
+  } finally {
+    console.warn = originalWarn;
+    __dangerousResetWarnOnce();
+  }
+
+  assert.is(calls.length, 5);
+  assert.equal(
+    calls.map(([message, detail]) => [message, detail]),
+    [
+      ["primitive-message", "first-detail"],
+      ["primitive-message", "second-detail"],
+      ["primitive-message", 42],
+      ["primitive-message", 42n],
+      ["primitive-message", Symbol.for("token")],
+    ],
+  );
+});
+
 test("warnOnce ignores non-string or empty messages", () => {
   __dangerousResetWarnOnce();
   const originalWarn = console.warn;
