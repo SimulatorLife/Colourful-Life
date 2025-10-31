@@ -33,6 +33,12 @@ where practical.
 
 ### Changed
 
+- Relaxed the default offspring viability buffer to `1.09` after rerunning the
+  40×40 headless probe (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40 PERF_SIM_COLS=40`
+  `PERF_SIM_WARMUP=10 PERF_SIM_ITERATIONS=50 PERF_SIM_DENSITY=0.65 node`
+  `scripts/profile-energy.mjs`). Survivors climbed from 206 → 209 while raw
+  ms-per-tick eased from ~405.13 ms → ~385.57 ms, signalling that parents can
+  restart gestation sooner without unleashing runaway low-energy births.
 - Tightened the README and developer guide quick-start guidance, adding cross-links to profiling helpers, publishing instructions, and the life event marker profiling notes so onboarding flows stay accurate.
 - Streamlined the README quick start, key command reference, and documentation map, and aligned the developer guide's environment setup guidance with the refreshed onboarding flow.
 - Raised the default decay immediate share to `0.27` after rerunning the dense
