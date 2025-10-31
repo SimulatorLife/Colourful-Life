@@ -1259,6 +1259,21 @@ test("updateFromSnapshot tolerates missing or invalid totals", async () => {
   assert.equal(stats.history.deathsPerTick, [0, 0]);
 });
 
+test("getTotalTicks exposes a sanitized total tick count", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats();
+
+  assert.is(stats.getTotalTicks(), 0, "zero ticks remain accessible");
+
+  stats.totals.ticks = Number.POSITIVE_INFINITY;
+
+  assert.is(stats.getTotalTicks(), null, "non-finite ticks are hidden");
+
+  stats.totals.ticks = 12;
+
+  assert.is(stats.getTotalTicks(), 12, "finite tick totals are returned");
+});
+
 test("diversity pressure increases when diversity stays below target", async () => {
   const { default: Stats } = await statsModulePromise;
 

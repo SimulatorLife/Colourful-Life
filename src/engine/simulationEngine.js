@@ -826,9 +826,12 @@ export default class SimulationEngine {
 
     const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
     const includeAgeOverlay = Boolean(this.state.showAge);
-    const totalTicks = Number.isFinite(this.stats?.totals?.ticks)
-      ? this.stats.totals.ticks
-      : null;
+    const totalTicks =
+      typeof this.stats?.getTotalTicks === "function"
+        ? this.stats.getTotalTicks()
+        : Number.isFinite(this.stats?.totals?.ticks)
+          ? this.stats.totals.ticks
+          : null;
     const recentLifeEvents =
       includeLifeEventMarkers && typeof this.stats?.getRecentLifeEvents === "function"
         ? this.stats.getRecentLifeEvents()
