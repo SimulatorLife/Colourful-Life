@@ -146,13 +146,11 @@ export function sampleEventSpan(
   spanConfig = DEFAULT_RANDOM_EVENT_CONFIG.span,
 ) {
   const maxSpan = Math.max(1, Math.floor(limit));
-  const minCandidate = Number.isFinite(spanConfig?.min)
-    ? Math.max(1, Math.floor(spanConfig.min))
-    : DEFAULT_RANDOM_EVENT_CONFIG.span.min;
-  const ratio = Number.isFinite(spanConfig?.ratio)
-    ? clamp(spanConfig.ratio, 0, 1)
-    : DEFAULT_RANDOM_EVENT_CONFIG.span.ratio;
-  const minSpan = Math.min(minCandidate, maxSpan);
+  const { min: sanitizedMin, ratio } = sanitizeSpanConfig(
+    spanConfig,
+    DEFAULT_RANDOM_EVENT_CONFIG.span,
+  );
+  const minSpan = Math.min(sanitizedMin, maxSpan);
   const spanCandidate = Math.max(minSpan, Math.floor(maxSpan * ratio));
   const upperExclusive = spanCandidate === minSpan ? minSpan + 1 : spanCandidate + 1;
   const raw = Math.floor(randomRange(minSpan, upperExclusive, rng));
