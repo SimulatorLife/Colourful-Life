@@ -139,7 +139,6 @@ test("createHeadlessUiManager setters respect notify suppression", () => {
   manager.setShowFitness(true, { notify: false });
   manager.setShowLifeEventMarkers(true, { notify: false });
   manager.setShowGridLines(true, { notify: false });
-  manager.setShowReproductiveZones(false, { notify: false });
 
   assert.equal(notifications, []);
   assert.is(manager.getEventStrengthMultiplier(), 1.4);
@@ -160,7 +159,6 @@ test("createHeadlessUiManager setters respect notify suppression", () => {
   assert.is(manager.getShowFitness(), true);
   assert.is(manager.getShowLifeEventMarkers(), true);
   assert.is(manager.getShowGridLines(), true);
-  assert.is(manager.getShowReproductiveZones(), false);
 });
 
 test("createHeadlessUiManager clamps energy rates to the unit interval", () => {

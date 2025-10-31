@@ -159,7 +159,6 @@ export const OVERLAY_TOGGLE_SETTERS = Object.freeze({
   showFitness: "setShowFitness",
   showLifeEventMarkers: "setShowLifeEventMarkers",
   showGridLines: "setShowGridLines",
-  showReproductiveZones: "setShowReproductiveZones",
 });
 
 function toPascalCase(value) {
@@ -555,10 +554,6 @@ export default class UIManager {
         ? defaults.lifeEventLimit
         : (SIMULATION_DEFAULTS.lifeEventLimit ?? 24);
     this.showGridLines = defaults.showGridLines;
-    this.showReproductiveZones =
-      defaults.showReproductiveZones !== undefined
-        ? defaults.showReproductiveZones
-        : true;
     this.lifeEventFadeSlider = null;
     this.lifeEventFadeSliderRow = null;
     this.lifeEventFadeSliderTitle = LIFE_EVENT_FADE_WINDOW_DESCRIPTION;
@@ -4486,13 +4481,6 @@ export default class UIManager {
         initial: this.showLifeEventMarkers,
       },
       {
-        key: "showReproductiveZones",
-        label: "Highlight Reproductive Zones",
-        title:
-          "Shade active reproductive zones so you can see which tiles permit mating",
-        initial: this.showReproductiveZones,
-      },
-      {
         key: "showGridLines",
         label: "Show Grid Lines",
         title: "Outline each tile so the underlying grid stays visible",
@@ -5720,9 +5708,6 @@ export default class UIManager {
   getShowGridLines() {
     return this.showGridLines;
   }
-  getShowReproductiveZones() {
-    return this.showReproductiveZones;
-  }
 
   getLifeEventFadeTicks() {
     return this.lifeEventFadeTicks;
@@ -5770,10 +5755,6 @@ export default class UIManager {
 
   setShowGridLines(value, options) {
     this.#applyOverlayToggle("showGridLines", value, options);
-  }
-
-  setShowReproductiveZones(value, options) {
-    this.#applyOverlayToggle("showReproductiveZones", value, options);
   }
 
   setLifeEventFadeTicks(value, { notify = true } = {}) {

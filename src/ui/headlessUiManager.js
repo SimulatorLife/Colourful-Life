@@ -51,7 +51,6 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @param {boolean} [options.showFitness] - Whether fitness overlays are shown.
  * @param {boolean} [options.showLifeEventMarkers] - Whether life event markers are shown.
  * @param {boolean} [options.showGridLines] - Whether grid lines outlining each tile are shown.
- * @param {boolean} [options.showReproductiveZones] - Whether reproductive zone shading is shown.
  * @param {number} [options.lifeEventFadeTicks] - Number of ticks life event markers remain visible.
  * @param {number} [options.lifeEventLimit] - Maximum life event markers rendered at once.
  * @param {number} [options.leaderboardIntervalMs] - Minimum time between leaderboard updates.
@@ -350,7 +349,6 @@ export function createHeadlessUiManager(options = {}) {
     getShowFitness: () => settings.showFitness,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
     getShowGridLines: () => settings.showGridLines,
-    getShowReproductiveZones: () => settings.showReproductiveZones,
     getLifeEventFadeTicks: () => settings.lifeEventFadeTicks,
     getLifeEventLimit: () => settings.lifeEventLimit,
     setShowObstacles: (value, { notify: shouldNotify = true } = {}) => {
@@ -421,16 +419,6 @@ export function createHeadlessUiManager(options = {}) {
       settings.showGridLines = normalized;
       if (shouldNotify) {
         notify("showGridLines", settings.showGridLines);
-      }
-    },
-    setShowReproductiveZones: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showReproductiveZones);
-
-      if (settings.showReproductiveZones === normalized) return;
-
-      settings.showReproductiveZones = normalized;
-      if (shouldNotify) {
-        notify("showReproductiveZones", settings.showReproductiveZones);
       }
     },
     setLifeEventFadeTicks: (value, { notify: shouldNotify = true } = {}) => {

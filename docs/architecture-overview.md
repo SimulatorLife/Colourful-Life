@@ -144,8 +144,6 @@ This document captures how the Colourful Life simulation composes its core syste
 - The overlay pipeline is orchestrated by `drawOverlays`, which delegates to granular helpers (`drawEventOverlays`,
   `drawEnergyHeatmap`, `drawDensityHeatmap`, `drawFitnessHeatmap`) and reuses color ramps such as `densityToRgba`. Each helper
   exposes legends or palette selection so UI extensions can stay consistent without reimplementing scaling logic.
-- `drawSelectionZones` renders active reproduction zones using cached geometry from the selection manager, ensuring the mating UI
-  and reproduction policy share exactly the same coordinates.
 
 ## Headless and scripted usage
 
