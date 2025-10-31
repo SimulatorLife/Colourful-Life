@@ -272,19 +272,22 @@ class FixedSizeRingBuffer {
       return [];
     }
 
-    const numericLimit = Math.floor(Number(limit));
-    const normalizedLimit = Number.isFinite(numericLimit)
-      ? Math.max(0, Math.min(length, numericLimit))
-      : length;
+    const normalizedLimit = sanitizeNumber(limit, {
+      fallback: length,
+      min: 0,
+      max: length,
+      round: Math.floor,
+    });
 
-    if (normalizedLimit === 0) {
+    if (!Number.isFinite(normalizedLimit) || normalizedLimit <= 0) {
       return [];
     }
 
     const buffer = this.buffer;
     const baseIndex = (this.start + length - 1) % capacity;
+    const count = Math.floor(normalizedLimit);
 
-    return Array.from({ length: normalizedLimit }, (_, offset) => {
+    return Array.from({ length: count }, (_, offset) => {
       const index = baseIndex - offset;
 
       return buffer[index >= 0 ? index : index + capacity];
