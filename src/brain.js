@@ -47,6 +47,32 @@ const SENSOR_COUNT = SENSOR_KEYS.length;
 const createOutputGroup = (entries) =>
   entries.map(([id, key, label]) => ({ id, key, label }));
 
+const isSensorSequence = (candidate) => {
+  if (Array.isArray(candidate)) {
+    return true;
+  }
+
+  if (!candidate || typeof candidate === "string") {
+    return false;
+  }
+
+  if (ArrayBuffer.isView(candidate) && typeof candidate.length === "number") {
+    return true;
+  }
+
+  if (
+    (typeof candidate === "object" || typeof candidate === "function") &&
+    typeof candidate.length === "number" &&
+    Number.isFinite(candidate.length) &&
+    candidate.length >= 0 &&
+    typeof candidate[Symbol.iterator] === "function"
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
 export const OUTPUT_GROUPS = Object.freeze({
   movement: createOutputGroup([
     [192, "rest", "Rest / wait"],
@@ -1112,7 +1138,7 @@ export default class Brain {
   }
 
   #applySensorModulation(sensors) {
-    if (!Array.isArray(sensors) && !(sensors instanceof Float32Array)) return;
+    if (!isSensorSequence(sensors)) return;
     if (!this.sensorGains || !this.sensorBaselines) return;
 
     const min = this.sensorGainLimits.min;

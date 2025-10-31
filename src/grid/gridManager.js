@@ -6333,8 +6333,13 @@ export default class GridManager {
     if (!Number.isInteger(row) || !Number.isInteger(col)) return;
     if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return;
 
+    const targetSetCandidate = options?.targetSet;
     const targetSet =
-      options?.targetSet instanceof Set ? options.targetSet : this.energyDirtyTiles;
+      targetSetCandidate &&
+      typeof targetSetCandidate.add === "function" &&
+      typeof targetSetCandidate.has === "function"
+        ? targetSetCandidate
+        : this.energyDirtyTiles;
 
     if (!targetSet) return;
 
