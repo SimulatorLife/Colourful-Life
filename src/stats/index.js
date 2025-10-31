@@ -2389,6 +2389,23 @@ export default class Stats {
     this.pushHistory("eventStrength", s);
   }
 
+  /**
+   * Returns the total number of ticks recorded by the simulation.
+   *
+   * This accessor protects callers from depending on nested state like
+   * `stats.totals.ticks`, ensuring consumers collaborate with the Stats
+   * facade instead of reaching through it.
+   *
+   * @returns {number|null}
+   *   The current tick count when finite, otherwise `null` to signal that the
+   *   total is unavailable.
+   */
+  getTotalTicks() {
+    const ticks = this.totals?.ticks;
+
+    return Number.isFinite(ticks) ? ticks : null;
+  }
+
   getRecentLifeEvents(limit = 12) {
     const ring = this.lifeEventLog;
 
