@@ -351,7 +351,17 @@ export default class SimulationEngine {
     this._pixelRatioCleanup = this.#installPixelRatioListener(win);
 
     if (autoStart) {
-      this.start();
+      try {
+        this.start();
+      } catch (error) {
+        try {
+          this.destroy();
+        } catch {
+          // Swallow cleanup failures so the original start error bubbles up.
+        }
+
+        throw error;
+      }
     }
   }
 
