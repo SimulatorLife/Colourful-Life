@@ -2820,6 +2820,55 @@ test("diverse matings relieve accumulated novelty pressure penalties", () => {
   );
 });
 
+test("opportunity momentum amplifies preference for diverse mates", () => {
+  const dna = new DNA(90, 110, 70);
+  const cell = new Cell(0, 0, dna, 5);
+  const similarTarget = new Cell(0, 1, new DNA(92, 108, 72), 5);
+  const diverseTarget = new Cell(0, 2, new DNA(180, 30, 60), 5);
+
+  cell.matePreferenceBias = 0.2;
+  cell.diversityAppetite = 0.35;
+  cell._mateSelectionNoiseRng = () => 0.5;
+
+  const baselineSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.88,
+  });
+  const baselineDiverse = cell.evaluateMateCandidate({
+    target: diverseTarget,
+    precomputedSimilarity: 0.25,
+  });
+
+  cell._mateOpportunityMomentum = 0.82;
+  cell._mateDiversitySuppression = 0.55;
+
+  const pressuredSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.88,
+  });
+  const pressuredDiverse = cell.evaluateMateCandidate({
+    target: diverseTarget,
+    precomputedSimilarity: 0.25,
+  });
+
+  assert.ok(
+    pressuredSimilar.selectionWeight < baselineSimilar.selectionWeight,
+    "suppression should shrink weight for repetitive mates when opportunity builds",
+  );
+  assert.ok(
+    pressuredSimilar.preferenceScore < baselineSimilar.preferenceScore,
+    "suppression should dampen preference for repetitive mates under opportunity momentum",
+  );
+  assert.ok(
+    pressuredDiverse.selectionWeight > baselineDiverse.selectionWeight,
+    "opportunity momentum should amplify weight for diverse mates",
+  );
+  assert.ok(
+    pressuredDiverse.preferenceScore > baselineDiverse.preferenceScore,
+    "opportunity momentum should raise preference for diverse mates",
+  );
+});
+
 test("mate diversity suppression builds from repetition and eases with exploration", () => {
   const dna = new DNA(85, 95, 105);
   const cell = new Cell(0, 0, dna, 6);
