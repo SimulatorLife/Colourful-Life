@@ -6809,7 +6809,7 @@ export default class GridManager {
 
       const count = this.densityCounts[row]?.[col] ?? 0;
 
-      return Math.max(0, Math.min(1, count / total));
+      return clamp(count / total, 0, 1);
     }
 
     const { count, total } = this.#countNeighbors(row, col, radius);
