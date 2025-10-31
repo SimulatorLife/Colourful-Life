@@ -1143,6 +1143,11 @@ canvas {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.life-events-marker-controls .control-grid {
+  margin-bottom: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .life-events-marker-controls__title {
   margin: 0;
   font-size: 0.9rem;
@@ -1156,6 +1161,35 @@ canvas {
   font-size: 0.78rem;
   color: var(--color-text-subtle);
   max-width: 60ch;
+}
+
+.life-events-marker-controls__status {
+  margin: 0;
+  padding: calc(var(--space-sm) * 0.75) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.78rem;
+  color: var(--color-text-subtle);
+  line-height: 1.5;
+}
+
+.life-events-marker-controls__status strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.life-events-marker-controls__status[data-state="enabled"] strong {
+  color: var(--color-life-birth);
+}
+
+.life-events-marker-controls__status[data-state="disabled"] strong {
+  color: var(--color-text-subtle);
+}
+
+.life-events-marker-controls--disabled {
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .life-events-summary-wrapper {
