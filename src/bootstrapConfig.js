@@ -5,6 +5,8 @@ const DEFAULT_BOOT_CONFIG = Object.freeze({
   cellSize: 5,
 });
 
+const PROTOTYPE_POLLUTION_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 function toNonEmptyString(value) {
   if (typeof value !== "string") {
     return "";
@@ -59,6 +61,10 @@ function mergeConfig(defaults, overrides) {
   const source = toPlainObject(overrides);
 
   for (const [key, value] of Object.entries(source)) {
+    if (PROTOTYPE_POLLUTION_KEYS.has(key)) {
+      continue;
+    }
+
     base[key] = value;
   }
 
