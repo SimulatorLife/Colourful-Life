@@ -109,7 +109,9 @@ change behaviour without touching source:
 - `COLOURFUL_LIFE_ENERGY_REGEN_RATE` overrides the baseline regeneration rate
   applied to each tile before density penalties and events apply.
 - `COLOURFUL_LIFE_ENERGY_DIFFUSION_RATE` controls how much energy diffuses to
-  neighbouring tiles every tick (values are clamped to the 0–1 range).
+  neighbouring tiles every tick. Non-finite or out-of-range values fall back to
+  the default resolved in `src/config.js` so browser and headless runs stay in
+  sync.
 - `COLOURFUL_LIFE_DENSITY_RADIUS` widens or narrows the neighbourhood sampled
   when computing local crowding. Larger radii make density feedback smoother at
   the cost of extra per-tick work.
