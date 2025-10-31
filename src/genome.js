@@ -70,6 +70,103 @@ const clampGene = (value) => {
   return clamp(normalized, 0, 255);
 };
 
+const toStringTag = Object.prototype.toString;
+
+const isStringObject = (value) =>
+  typeof value === "object" && toStringTag.call(value) === "[object String]";
+
+const toNonNegativeInteger = (value, fallback = 0) => {
+  if (Number.isFinite(value)) {
+    const normalized = Math.floor(value);
+
+    return normalized >= 0 ? normalized : fallback;
+  }
+
+  return fallback;
+};
+
+const isByteView = (value) =>
+  ArrayBuffer.isView(value) &&
+  typeof value?.BYTES_PER_ELEMENT === "number" &&
+  value.BYTES_PER_ELEMENT === 1 &&
+  typeof value.length === "number";
+
+const hasIterableLength = (value) =>
+  value != null &&
+  (typeof value === "object" || typeof value === "function") &&
+  !isStringObject(value) &&
+  typeof value.length === "number" &&
+  Number.isFinite(value.length) &&
+  value.length >= 0;
+
+const isGeneSequenceLike = (value) =>
+  Array.isArray(value) ||
+  isByteView(value) ||
+  (hasIterableLength(value) && typeof value[Symbol.iterator] === "function");
+
+const extractGeneSequence = (candidate) => {
+  if (!candidate) return null;
+
+  if (isGeneSequenceLike(candidate)) {
+    return candidate;
+  }
+
+  const genesProp = candidate?.genes;
+
+  if (genesProp && genesProp !== candidate && isGeneSequenceLike(genesProp)) {
+    return genesProp;
+  }
+
+  return null;
+};
+
+const readGeneFromSequence = (sequence, index) => {
+  if (!sequence || typeof sequence.length !== "number") {
+    return 0;
+  }
+
+  if (index < 0 || index >= sequence.length) {
+    return 0;
+  }
+
+  const value = sequence[index];
+
+  return Number.isFinite(value) ? value : 0;
+};
+
+const createGeneAdapter = (candidate) => {
+  if (!candidate) return null;
+
+  const directSequence = extractGeneSequence(candidate);
+
+  if (directSequence) {
+    const length = toNonNegativeInteger(directSequence.length, 0);
+
+    return {
+      sequence: directSequence,
+      geneAt: null,
+      length,
+    };
+  }
+
+  const geneAtFn =
+    typeof candidate?.geneAt === "function" ? candidate.geneAt.bind(candidate) : null;
+
+  if (!geneAtFn) {
+    return null;
+  }
+
+  const fallbackSequence = extractGeneSequence(candidate?.genes ?? null);
+  const fallbackLength = toNonNegativeInteger(fallbackSequence?.length, 0);
+  const derivedLength = toNonNegativeInteger(candidate.length, fallbackLength);
+
+  return {
+    sequence: fallbackSequence,
+    geneAt: geneAtFn,
+    length: derivedLength,
+  };
+};
+
 export class DNA {
   #genesTarget;
 
@@ -77,17 +174,20 @@ export class DNA {
     let geneCount = options.geneCount ?? DEFAULT_TOTAL_GENE_COUNT;
     let genesInput = null;
 
-    if (Array.isArray(rOrGenes) || rOrGenes instanceof Uint8Array) {
-      genesInput = rOrGenes;
-    } else if (
-      typeof rOrGenes === "object" &&
-      rOrGenes !== null &&
-      !(rOrGenes instanceof Uint8Array)
-    ) {
+    const directGenes = extractGeneSequence(rOrGenes);
+
+    if (typeof rOrGenes === "object" && rOrGenes !== null) {
+      geneCount = rOrGenes.geneCount ?? geneCount;
+    }
+
+    if (directGenes) {
+      genesInput = directGenes;
+    } else if (typeof rOrGenes === "object" && rOrGenes !== null) {
       const config = rOrGenes;
 
-      geneCount = config.geneCount ?? geneCount;
-      genesInput = config.genes ?? genesInput;
+      const configGenes = extractGeneSequence(config.genes ?? config);
+
+      genesInput = configGenes ?? genesInput;
     }
 
     this.#genesTarget = new Uint8Array(geneCount);
@@ -2615,39 +2715,22 @@ export class DNA {
     const { squared = false, inverseMaxDistance } = options ?? {};
     const selfGenes = this.#genesTarget;
     const selfLength = selfGenes.length;
-    const otherObject = typeof other === "object" && other !== null ? other : null;
-    const otherLength =
-      typeof otherObject?.length === "number"
-        ? otherObject.length
-        : (otherObject?.genes?.length ?? 0);
+    const adapter = createGeneAdapter(other);
+    const otherLength = adapter ? toNonNegativeInteger(adapter.length, 0) : 0;
     const geneCount = Math.max(selfLength, otherLength);
 
     if (geneCount === 0) {
       return 1;
     }
 
-    const directGenes =
-      other instanceof DNA
-        ? other.#genesTarget
-        : other instanceof Uint8Array
-          ? other
-          : otherObject?.genes instanceof Uint8Array
-            ? otherObject.genes
-            : Array.isArray(other)
-              ? other
-              : Array.isArray(otherObject?.genes)
-                ? otherObject.genes
-                : null;
-    const fallbackGenes = !directGenes && otherObject?.genes ? otherObject.genes : null;
-    const fallbackGeneAt =
-      !directGenes && typeof otherObject?.geneAt === "function"
-        ? otherObject.geneAt.bind(otherObject)
-        : null;
+    const { sequence: adapterSequence, geneAt: adapterGeneAt } = adapter ?? {};
+    const directGenes = adapterSequence && !adapterGeneAt ? adapterSequence : null;
+    const fallbackGenes = adapterGeneAt ? adapterSequence : null;
 
     let distSq = 0;
 
     if (directGenes) {
-      const otherLen = directGenes.length;
+      const otherLen = toNonNegativeInteger(directGenes.length, 0);
       const sharedLength = selfLength < otherLen ? selfLength : otherLen;
       const selfData = selfGenes;
       const otherData = directGenes;
@@ -2655,34 +2738,43 @@ export class DNA {
       const blockLength = sharedLength & ~7;
 
       for (; i < blockLength; i += 8) {
-        const delta0 = selfData[i] - otherData[i];
+        const other0 = Number.isFinite(otherData[i]) ? otherData[i] : 0;
+        const delta0 = selfData[i] - other0;
 
         distSq += Math.imul(delta0, delta0);
-        const delta1 = selfData[i + 1] - otherData[i + 1];
+        const other1 = Number.isFinite(otherData[i + 1]) ? otherData[i + 1] : 0;
+        const delta1 = selfData[i + 1] - other1;
 
         distSq += Math.imul(delta1, delta1);
-        const delta2 = selfData[i + 2] - otherData[i + 2];
+        const other2 = Number.isFinite(otherData[i + 2]) ? otherData[i + 2] : 0;
+        const delta2 = selfData[i + 2] - other2;
 
         distSq += Math.imul(delta2, delta2);
-        const delta3 = selfData[i + 3] - otherData[i + 3];
+        const other3 = Number.isFinite(otherData[i + 3]) ? otherData[i + 3] : 0;
+        const delta3 = selfData[i + 3] - other3;
 
         distSq += Math.imul(delta3, delta3);
-        const delta4 = selfData[i + 4] - otherData[i + 4];
+        const other4 = Number.isFinite(otherData[i + 4]) ? otherData[i + 4] : 0;
+        const delta4 = selfData[i + 4] - other4;
 
         distSq += Math.imul(delta4, delta4);
-        const delta5 = selfData[i + 5] - otherData[i + 5];
+        const other5 = Number.isFinite(otherData[i + 5]) ? otherData[i + 5] : 0;
+        const delta5 = selfData[i + 5] - other5;
 
         distSq += Math.imul(delta5, delta5);
-        const delta6 = selfData[i + 6] - otherData[i + 6];
+        const other6 = Number.isFinite(otherData[i + 6]) ? otherData[i + 6] : 0;
+        const delta6 = selfData[i + 6] - other6;
 
         distSq += Math.imul(delta6, delta6);
-        const delta7 = selfData[i + 7] - otherData[i + 7];
+        const other7 = Number.isFinite(otherData[i + 7]) ? otherData[i + 7] : 0;
+        const delta7 = selfData[i + 7] - other7;
 
         distSq += Math.imul(delta7, delta7);
       }
 
       for (; i < sharedLength; i++) {
-        const delta = selfData[i] - otherData[i];
+        const otherValue = Number.isFinite(otherData[i]) ? otherData[i] : 0;
+        const delta = selfData[i] - otherValue;
 
         distSq += Math.imul(delta, delta);
       }
@@ -2694,33 +2786,29 @@ export class DNA {
       }
 
       for (let index = sharedLength; index < otherLen; index++) {
-        const value = otherData[index];
+        const otherValue = Number.isFinite(otherData[index]) ? otherData[index] : 0;
 
-        distSq += Math.imul(value, value);
+        distSq += Math.imul(otherValue, otherValue);
       }
     } else {
-      const fallbackLen =
-        fallbackGenes && typeof fallbackGenes.length === "number"
-          ? fallbackGenes.length
-          : 0;
-
       for (let i = 0; i < geneCount; i++) {
         const a = i < selfLength ? selfGenes[i] : 0;
         let b = 0;
 
-        if (fallbackGeneAt) {
-          const candidate = fallbackGeneAt(i);
+        if (adapterGeneAt) {
+          const candidate = adapterGeneAt(i);
 
           if (Number.isFinite(candidate)) {
             b = candidate;
-          } else if (i < fallbackLen) {
-            b = fallbackGenes[i];
+          } else if (fallbackGenes) {
+            b = readGeneFromSequence(fallbackGenes, i);
           }
-        } else if (i < fallbackLen) {
-          b = fallbackGenes[i];
+        } else if (fallbackGenes) {
+          b = readGeneFromSequence(fallbackGenes, i);
         }
 
-        const delta = a - (Number.isFinite(b) ? b : 0);
+        const normalizedB = Number.isFinite(b) ? b : 0;
+        const delta = a - normalizedB;
 
         distSq += Math.imul(delta, delta);
       }
