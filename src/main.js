@@ -6,6 +6,10 @@ import { resolveSimulationDefaults } from "./config.js";
 import { toPlainObject } from "./utils/object.js";
 import { warnOnce, invokeWithErrorBoundary } from "./utils/error.js";
 
+/**
+ * @typedef {import('./ui/headlessUiManager.js').HeadlessUiBridgeSurface} HeadlessUiBridgeSurface
+ */
+
 const DESTROY_WARNINGS = Object.freeze({
   uiDestroy: "UI manager destroy handler threw; continuing cleanup.",
   unsubscribe: "Simulation cleanup handler threw during destroy; continuing cleanup.",
@@ -92,7 +96,7 @@ import {
  * @returns {{
  *   engine: SimulationEngine,
  *   grid: import('./grid/gridManager.js').default,
- *   uiManager: ReturnType<typeof UIManager> | ReturnType<typeof createHeadlessUiManager>,
+ *   uiManager: ReturnType<typeof UIManager> | HeadlessUiBridgeSurface,
  *   eventManager: import('./events/eventManager.js').default,
  *   stats: import('./stats/index.js').default,
  *   selectionManager: import('./grid/selectionManager.js').default,

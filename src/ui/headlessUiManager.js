@@ -59,6 +59,181 @@ function attachBooleanSettingAccessors(
   return target;
 }
 
+// Headless UI consumers historically depended on a single, monolithic manager
+// contract. To keep responsibilities cohesive and encourage interface
+// segregation we now describe the surface as a collection of role-focused
+// slices. Downstream modules can reference only the facets they require instead
+// of inheriting the entire manager shape.
+
+/**
+ * @typedef {(value: number, options?: { notify?: boolean }) => void} HeadlessNumberSetter
+ */
+
+/**
+ * @typedef {(value: boolean, options?: { notify?: boolean }) => void} HeadlessBooleanSetter
+ */
+
+/**
+ * @typedef {object} HeadlessPlaybackControls
+ * @property {() => boolean} isPaused
+ * @property {(value: boolean) => void} setPaused
+ * @property {(value: boolean) => void} setPauseState
+ * @property {() => boolean} togglePause
+ * @property {() => number} getUpdatesPerSecond
+ * @property {HeadlessNumberSetter} setUpdatesPerSecond
+ */
+
+/**
+ * @typedef {object} HeadlessEventCadenceControls
+ * @property {() => number} getEventFrequencyMultiplier
+ * @property {HeadlessNumberSetter} setEventFrequencyMultiplier
+ * @property {HeadlessNumberSetter} setEventStrengthMultiplier
+ * @property {() => number} getMaxConcurrentEvents
+ * @property {HeadlessNumberSetter} setMaxConcurrentEvents
+ */
+
+/**
+ * @typedef {object} HeadlessMutationControls
+ * @property {() => number} getMutationMultiplier
+ * @property {HeadlessNumberSetter} setMutationMultiplier
+ */
+
+/**
+ * @typedef {object} HeadlessDensityControls
+ * @property {() => number} getDensityEffectMultiplier
+ * @property {HeadlessNumberSetter} setDensityEffectMultiplier
+ */
+
+/**
+ * @typedef {object} HeadlessSimilarityControls
+ * @property {() => number} getSocietySimilarity
+ * @property {HeadlessNumberSetter} setSocietySimilarity
+ * @property {() => number} getEnemySimilarity
+ * @property {HeadlessNumberSetter} setEnemySimilarity
+ */
+
+/**
+ * @typedef {object} HeadlessReproductionControls
+ * @property {() => number} getLowDiversityReproMultiplier
+ * @property {HeadlessNumberSetter} setLowDiversityReproMultiplier
+ * @property {() => number} getMatingDiversityThreshold
+ * @property {HeadlessNumberSetter} setMatingDiversityThreshold
+ */
+
+/**
+ * @typedef {object} HeadlessEnergyControls
+ * @property {() => number} getEnergyRegenRate
+ * @property {HeadlessNumberSetter} setEnergyRegenRate
+ * @property {() => number} getEnergyDiffusionRate
+ * @property {HeadlessNumberSetter} setEnergyDiffusionRate
+ * @property {() => number} getInitialTileEnergyFraction
+ * @property {HeadlessNumberSetter} setInitialTileEnergyFraction
+ */
+
+/**
+ * @typedef {object} HeadlessCombatControls
+ * @property {() => number} getCombatEdgeSharpness
+ * @property {HeadlessNumberSetter} setCombatEdgeSharpness
+ * @property {() => number} getCombatTerritoryEdgeFactor
+ * @property {HeadlessNumberSetter} setCombatTerritoryEdgeFactor
+ */
+
+/**
+ * @typedef {object} HeadlessLifeEventControls
+ * @property {() => number} getLifeEventFadeTicks
+ * @property {HeadlessNumberSetter} setLifeEventFadeTicks
+ * @property {() => number} getLifeEventLimit
+ * @property {HeadlessNumberSetter} setLifeEventLimit
+ */
+
+/**
+ * @typedef {object} HeadlessLeaderboardControls
+ * @property {() => number} getLeaderboardIntervalMs
+ * @property {HeadlessNumberSetter} setLeaderboardIntervalMs
+ * @property {() => number} getLeaderboardSize
+ * @property {HeadlessNumberSetter} setLeaderboardSize
+ * @property {(timestamp: number) => boolean} shouldRenderSlowUi
+ */
+
+/**
+ * @typedef {object} HeadlessTelemetryCallbacks
+ * @property {(stats: any, metrics: any, environment: any) => void} renderMetrics
+ * @property {(entries: any[]) => void} renderLeaderboard
+ */
+
+/**
+ * @typedef {object} HeadlessOverlayToggleControls
+ * @property {() => boolean} getShowObstacles
+ * @property {HeadlessBooleanSetter} setShowObstacles
+ * @property {() => boolean} getShowEnergy
+ * @property {HeadlessBooleanSetter} setShowEnergy
+ * @property {() => boolean} getShowDensity
+ * @property {HeadlessBooleanSetter} setShowDensity
+ * @property {() => boolean} getShowAge
+ * @property {HeadlessBooleanSetter} setShowAge
+ * @property {() => boolean} getShowFitness
+ * @property {HeadlessBooleanSetter} setShowFitness
+ * @property {() => boolean} getShowLifeEventMarkers
+ * @property {HeadlessBooleanSetter} setShowLifeEventMarkers
+ * @property {() => boolean} getShowSelectionZones
+ * @property {HeadlessBooleanSetter} setShowSelectionZones
+ * @property {() => boolean} getShowGridLines
+ * @property {HeadlessBooleanSetter} setShowGridLines
+ */
+
+/**
+ * @typedef {object} HeadlessAutoPauseControls
+ * @property {() => boolean} getAutoPauseOnBlur
+ * @property {HeadlessBooleanSetter} setAutoPauseOnBlur
+ * @property {() => boolean} getAutoPausePending
+ * @property {(value: boolean) => void} setAutoPausePending
+ */
+
+/**
+ * @typedef {object} HeadlessSelectionAccess
+ * @property {object|null} selectionManager
+ */
+
+/**
+ * @typedef {HeadlessPlaybackControls &
+ *   HeadlessEventCadenceControls &
+ *   HeadlessMutationControls &
+ *   HeadlessDensityControls &
+ *   HeadlessSimilarityControls &
+ *   HeadlessReproductionControls &
+ *   HeadlessEnergyControls &
+ *   HeadlessCombatControls &
+ *   HeadlessLifeEventControls &
+ *   HeadlessLeaderboardControls &
+ *   HeadlessTelemetryCallbacks &
+ *   HeadlessOverlayToggleControls &
+ *   HeadlessAutoPauseControls &
+ *   HeadlessSelectionAccess} HeadlessUiAdapter
+ */
+
+/**
+ * @typedef {HeadlessPlaybackControls &
+ *   HeadlessEventCadenceControls &
+ *   HeadlessMutationControls &
+ *   HeadlessDensityControls &
+ *   HeadlessSimilarityControls &
+ *   HeadlessReproductionControls &
+ *   HeadlessEnergyControls &
+ *   HeadlessCombatControls &
+ *   HeadlessLifeEventControls &
+ *   HeadlessLeaderboardControls &
+ *   HeadlessOverlayToggleControls &
+ *   HeadlessAutoPauseControls} HeadlessUiStateControls
+ */
+
+/**
+ * @typedef {HeadlessLeaderboardControls & HeadlessTelemetryCallbacks} HeadlessUiTelemetryBridge
+ */
+
+/**
+ * @typedef {HeadlessUiStateControls & HeadlessUiTelemetryBridge & HeadlessSelectionAccess} HeadlessUiBridgeSurface
+ */
+
 /**
  * Creates a lightweight {@link UIManager}-compatible adapter for environments
  * where no DOM-backed UI is available (e.g. tests, server-side rendering, or
@@ -108,43 +283,7 @@ function attachBooleanSettingAccessors(
  * @param {number} [options.lifeEventLimit] - Maximum life event markers rendered at once.
  * @param {number} [options.leaderboardIntervalMs] - Minimum time between leaderboard updates.
  * @param {Object} [options.selectionManager=null] - Shared selection manager instance.
- * @returns {{
- *   isPaused: () => boolean,
- *   setPaused: (value: boolean) => void,
- *   setPauseState: (value: boolean) => void,
- *   togglePause: () => boolean,
- *   getUpdatesPerSecond: () => number,
- *   setUpdatesPerSecond: (value: number) => void,
- *   getEventFrequencyMultiplier: () => number,
- *   getMutationMultiplier: () => number,
- *   getDensityEffectMultiplier: () => number,
- *   getSocietySimilarity: () => number,
- *   getEnemySimilarity: () => number,
- *   getEventStrengthMultiplier: () => number,
- *   getEnergyRegenRate: () => number,
- *   setEnergyRegenRate: (value: number) => void,
- *   getEnergyDiffusionRate: () => number,
- *   setEnergyDiffusionRate: (value: number) => void,
- *   getInitialTileEnergyFraction: () => number,
- *   setInitialTileEnergyFraction: (value: number) => void,
- *   getMatingDiversityThreshold: () => number,
- *   setMatingDiversityThreshold: (value: number) => void,
- *   getLowDiversityReproMultiplier: () => number,
- *   setLowDiversityReproMultiplier: (value: number) => void,
- *   getShowObstacles: () => boolean,
- *   getShowEnergy: () => boolean,
- *   getShowDensity: () => boolean,
- *   getShowAge: () => boolean,
- *   getShowFitness: () => boolean,
- *   getShowLifeEventMarkers: () => boolean,
- *   getShowGridLines: () => boolean,
- *   shouldRenderSlowUi: (timestamp: number) => boolean,
- *   renderMetrics: Function,
- *   renderLeaderboard: Function,
- *   getAutoPauseOnBlur: () => boolean,
- *   setAutoPauseOnBlur: (value: boolean) => void,
- *   selectionManager: Object|null,
- * }} - Headless UI facade that keeps simulation code agnostic to environment.
+ * @returns {HeadlessUiAdapter} Headless UI facade that keeps simulation code agnostic to environment.
  */
 export function createHeadlessUiManager(options = {}) {
   const {
