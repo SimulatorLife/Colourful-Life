@@ -1846,15 +1846,13 @@ export function selectTopFitnessEntries(entries, keepCount) {
 
   const buffer = createRankedBuffer(limit, compareFitnessEntries);
 
-  for (let index = 0; index < list.length; index += 1) {
-    const entry = list[index];
-
+  list.forEach((entry) => {
     if (!entry || typeof entry !== "object") {
-      continue;
+      return;
     }
 
     buffer.add(entry);
-  }
+  });
 
   return buffer.getItems();
 }
