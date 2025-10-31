@@ -2,8 +2,7 @@ name: Codex 24 – Verbose Loop Cleanup
 
 on:
   schedule:
-    # hourly cadence
-    - cron: "0 * * * *"
+    - cron: "15 */3 * * *" # every 3 hours at minute 15 minutes past the hour UTC
   workflow_dispatch:
 
 permissions:

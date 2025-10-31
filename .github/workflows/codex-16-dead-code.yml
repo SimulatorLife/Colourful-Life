@@ -4,7 +4,6 @@ on:
     - cron: "10 9 * * *" # 09:10 UTC
     - cron: "30 16 * * *" # 16:30 UTC
     - cron: "10 21 * * *" # 21:10 UTC
-    - cron: "50 2 * * *" # 02:50 UTC
   workflow_dispatch:
 
 permissions:
