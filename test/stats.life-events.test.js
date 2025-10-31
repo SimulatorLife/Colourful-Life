@@ -33,6 +33,26 @@ test("getRecentLifeEvents returns the most recent events up to the requested lim
   );
 });
 
+test("life event log capacity overrides limit retained events", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(undefined, { lifeEventLogCapacity: 3 });
+
+  ["#111", "#222", "#333", "#444", "#555"].forEach((color) => {
+    stats.onBirth({ color });
+  });
+
+  assert.is(stats.lifeEventLogCapacity, 3);
+  assert.is(stats.lifeEventLog?.capacity, 3);
+
+  const recent = stats.getRecentLifeEvents(10);
+
+  assert.is(recent.length, 3);
+  assert.equal(
+    recent.map((event) => event.color),
+    ["#555", "#444", "#333"],
+  );
+});
+
 test("life event helpers reuse fallback cell data when context is provided first", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats();
