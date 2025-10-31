@@ -4,6 +4,11 @@ import { resolveSimulationDefaults } from "../config.js";
 import { toPlainObject } from "../utils/object.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
+/**
+ * @typedef {import("./headlessUiManager.js").HeadlessUiAdapter} HeadlessUiAdapter
+ * @typedef {import("./headlessUiManager.js").HeadlessUiBridgeSurface} HeadlessUiBridgeSurface
+ */
+
 function mergeLayoutInitialSettings({ sanitizedDefaults, layoutInitialSettings }) {
   const overrideKeys = Object.keys(layoutInitialSettings);
 
@@ -172,6 +177,13 @@ function invokeUiManagerMethod(
   });
 }
 
+/**
+ * Wires simulation engine events to the provided UI surface.
+ *
+ * @param {import('../engine/simulationEngine.js').default} engine
+ * @param {import('./uiManager.js').default | HeadlessUiBridgeSurface} uiManager
+ * @returns {Array<() => void>} Engine listener unsubscribe callbacks.
+ */
 function subscribeEngineToUi(engine, uiManager) {
   if (!engine || !uiManager) {
     return [];
@@ -507,6 +519,13 @@ const INITIAL_STATE_SYNCERS = [
   },
 ];
 
+/**
+ * Replays the engine's persisted state into the UI surface so sliders and
+ * toggles reflect the latest configuration before live updates resume.
+ *
+ * @param {import('../engine/simulationEngine.js').default} engine
+ * @param {import('./uiManager.js').default | HeadlessUiBridgeSurface} uiManager
+ */
 function syncInitialStateToUi(engine, uiManager) {
   if (!uiManager || !engine?.state) {
     return;
@@ -564,7 +583,7 @@ function syncInitialStateToUi(engine, uiManager) {
  * @param {boolean} [options.headless=false] - When true, return a headless
  *   control surface rather than mounting {@link UIManager}.
  * @returns {{
- *   uiManager: import('./uiManager.js').default | ReturnType<typeof createHeadlessUiManager>,
+ *   uiManager: import('./uiManager.js').default | HeadlessUiBridgeSurface,
  *   unsubscribers: Array<() => void>,
  *   headlessOptions: Object|null,
  *   layout: Object,
