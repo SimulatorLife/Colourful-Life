@@ -8792,16 +8792,6 @@ export default class GridManager {
       }
     }
 
-    const thrFracA =
-      typeof cell.dna.reproductionThresholdFrac === "function"
-        ? cell.dna.reproductionThresholdFrac()
-        : 0.4;
-    const thrFracB =
-      typeof bestMate.target.dna.reproductionThresholdFrac === "function"
-        ? bestMate.target.dna.reproductionThresholdFrac()
-        : 0.4;
-    let thrA = thrFracA * this.maxTileEnergy;
-    let thrB = thrFracB * this.maxTileEnergy;
     const appetite = cell.diversityAppetite ?? 0;
     const bias = cell.matePreferenceBias ?? 0;
     const evaluatedPoolSize = evaluated.length > 0 ? evaluated.length : matePool.length;
@@ -8833,6 +8823,72 @@ export default class GridManager {
     const mateEnergyRaw = this.energyGrid?.[mateRow]?.[mateCol] ?? 0;
     const mateTileEnergy = mateEnergyRaw / energyDenominator;
     const mateTileEnergyDelta = this.energyDeltaGrid?.[mateRow]?.[mateCol] ?? 0;
+    const thrFracA =
+      typeof cell.dna.reproductionThresholdFrac === "function"
+        ? cell.dna.reproductionThresholdFrac()
+        : 0.4;
+    const thrFracB =
+      typeof bestMate.target.dna.reproductionThresholdFrac === "function"
+        ? bestMate.target.dna.reproductionThresholdFrac()
+        : 0.4;
+    const resolveEnergyThreshold = (individual, partner, options) => {
+      if (
+        !individual ||
+        typeof individual.resolveReproductionEnergyThreshold !== "function"
+      ) {
+        return null;
+      }
+
+      try {
+        const threshold = individual.resolveReproductionEnergyThreshold(
+          partner,
+          options,
+        );
+
+        return Number.isFinite(threshold) ? threshold : null;
+      } catch (error) {
+        if (process?.env?.NODE_ENV !== "production") {
+          console.warn("Failed to resolve neural reproduction energy threshold", {
+            error,
+            individual,
+          });
+        }
+
+        return null;
+      }
+    };
+    const parentEnergyThreshold = resolveEnergyThreshold(cell, bestMate.target, {
+      densityEffectMultiplier,
+      maxTileEnergy: this.maxTileEnergy,
+      tileEnergy,
+      tileEnergyDelta,
+      localDensity,
+      baseProbability: baseProb,
+    });
+    const mateBaseProbability =
+      typeof bestMate.target.computeReproductionProbability === "function"
+        ? bestMate.target.computeReproductionProbability(cell, {
+            localDensity: mateLocalDensity,
+            densityEffectMultiplier,
+            maxTileEnergy: this.maxTileEnergy,
+            tileEnergy: mateTileEnergy,
+            tileEnergyDelta: mateTileEnergyDelta,
+          })
+        : null;
+    const mateEnergyThreshold = resolveEnergyThreshold(bestMate.target, cell, {
+      densityEffectMultiplier,
+      maxTileEnergy: this.maxTileEnergy,
+      tileEnergy: mateTileEnergy,
+      tileEnergyDelta: mateTileEnergyDelta,
+      localDensity: mateLocalDensity,
+      baseProbability: mateBaseProbability,
+    });
+    let thrA =
+      parentEnergyThreshold != null
+        ? parentEnergyThreshold
+        : thrFracA * this.maxTileEnergy;
+    let thrB =
+      mateEnergyThreshold != null ? mateEnergyThreshold : thrFracB * this.maxTileEnergy;
     const rowDelta = Math.abs(parentRow - mateRow);
     const colDelta = Math.abs(parentCol - mateCol);
     const separation = Math.max(rowDelta, colDelta);
