@@ -112,6 +112,10 @@ change behaviour without touching source:
   neighbouring tiles every tick. Non-finite or out-of-range values fall back to
   the default resolved in `src/config.js` so browser and headless runs stay in
   sync.
+- `COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO` flips the energy preparation loop to
+  the sparse dirty-tile path once the fraction of dirty tiles drops below the
+  configured ratio, letting you bias runs toward lighter or fuller scans without
+  editing source.
 - `COLOURFUL_LIFE_DENSITY_RADIUS` widens or narrows the neighbourhood sampled
   when computing local crowding. Larger radii make density feedback smoother at
   the cost of extra per-tick work.

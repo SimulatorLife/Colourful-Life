@@ -268,6 +268,36 @@ test("resolveEnergyDiffusionRate sanitizes environment overrides", async () => {
   );
 });
 
+test("resolveEnergySparseScanRatio sanitizes environment overrides", async () => {
+  const { resolveEnergySparseScanRatio, ENERGY_SPARSE_SCAN_RATIO } =
+    await configModulePromise;
+
+  assert.is(
+    resolveEnergySparseScanRatio({
+      COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO: "0.18",
+    }),
+    0.18,
+  );
+  assert.is(
+    resolveEnergySparseScanRatio({
+      COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO: "-2",
+    }),
+    0,
+  );
+  assert.is(
+    resolveEnergySparseScanRatio({
+      COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO: "3",
+    }),
+    1,
+  );
+  assert.is(
+    resolveEnergySparseScanRatio({
+      COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO: "not-a-number",
+    }),
+    ENERGY_SPARSE_SCAN_RATIO,
+  );
+});
+
 test("resolveSimulationDefaults coerces string boolean overrides", async () => {
   const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
   const defaults = resolveSimulationDefaults({
