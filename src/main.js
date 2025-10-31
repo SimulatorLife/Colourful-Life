@@ -17,6 +17,7 @@ const DESTROY_WARNINGS = Object.freeze({
 import {
   buildHeadlessCanvasOverrides,
   createHeadlessCanvas,
+  resolveCanvas,
   resolveHeadlessCanvasSize,
 } from "./engine/environment.js";
 
@@ -120,6 +121,8 @@ export function createSimulation({
   defaultCanvasId,
 } = {}) {
   const win = injectedWindow ?? (typeof window !== "undefined" ? window : undefined);
+  const doc =
+    injectedDocument ?? (typeof document !== "undefined" ? document : undefined);
 
   config = toPlainObject(config);
   const layoutInitialSettings = toPlainObject(config?.ui?.layout?.initialSettings);
@@ -127,6 +130,12 @@ export function createSimulation({
   let configWithLayoutDefaults = { ...config, ...layoutInitialSettings };
 
   let resolvedCanvas = canvas;
+
+  if (resolvedCanvas && typeof resolvedCanvas !== "object") {
+    resolvedCanvas = resolveCanvas(resolvedCanvas, doc, {
+      fallbackId: defaultCanvasId,
+    });
+  }
   const headlessCanvasSize = headless
     ? resolveHeadlessCanvasSize(configWithLayoutDefaults)
     : null;
