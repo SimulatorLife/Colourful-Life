@@ -440,6 +440,8 @@ export default class UIManager {
     this.lifeEventsSummaryTotalCount = null;
     this.lifeEventsSummaryEmptyMessage = null;
     this.lifeEventMarkersToggle = null;
+    this.lifeEventMarkerControlsSection = null;
+    this.lifeEventMarkerStatus = null;
     this._overlayToggleInputs = new Map();
     this._zoneToggleInputs = new Map();
     this.lifeEventsSummaryTrend = null;
@@ -2048,17 +2050,58 @@ export default class UIManager {
     }
   }
 
+  #registerOverlayToggleInput(key, input) {
+    if (!key || !input) {
+      return;
+    }
+
+    const existing = this._overlayToggleInputs.get(key);
+
+    if (!existing) {
+      this._overlayToggleInputs.set(key, [input]);
+
+      return;
+    }
+
+    if (Array.isArray(existing)) {
+      if (!existing.includes(input)) {
+        existing.push(input);
+      }
+
+      return;
+    }
+
+    if (existing !== input) {
+      this._overlayToggleInputs.set(key, [existing, input]);
+    }
+  }
+
   #syncOverlayToggleInput(key, value) {
     if (!this._overlayToggleInputs) return;
 
-    const checkbox = this._overlayToggleInputs.get(key);
+    const registered = this._overlayToggleInputs.get(key);
+    const inputs = Array.isArray(registered)
+      ? registered
+      : registered
+        ? [registered]
+        : [];
 
-    if (checkbox) {
-      checkbox.checked = Boolean(value);
-    }
+    inputs.forEach((checkbox) => {
+      if (checkbox) {
+        checkbox.checked = Boolean(value);
+      }
+    });
 
     if (key === "showLifeEventMarkers" && this.lifeEventMarkersToggle) {
-      this.lifeEventMarkersToggle.checked = Boolean(value);
+      const toggles = Array.isArray(this.lifeEventMarkersToggle)
+        ? this.lifeEventMarkersToggle
+        : [this.lifeEventMarkersToggle];
+
+      toggles.forEach((toggle) => {
+        if (toggle) {
+          toggle.checked = Boolean(value);
+        }
+      });
     }
   }
 
@@ -2116,6 +2159,89 @@ export default class UIManager {
       this.lifeEventLimitSliderTitle,
       "Enable Life Event Markers to adjust this limit.",
     );
+
+    if (this.lifeEventMarkerControlsSection) {
+      this.lifeEventMarkerControlsSection.classList.toggle(
+        "life-events-marker-controls--disabled",
+        disabled,
+      );
+    }
+
+    if (this.lifeEventMarkerStatus) {
+      const statusEl = this.lifeEventMarkerStatus;
+
+      const normalizedLimit = Number.isFinite(this.lifeEventLimit)
+        ? Math.max(0, Math.round(this.lifeEventLimit))
+        : 0;
+
+      const normalizedFade = Number.isFinite(this.lifeEventFadeTicks)
+        ? Math.max(0, Math.round(this.lifeEventFadeTicks))
+        : 0;
+
+      const state = disabled ? "disabled" : "enabled";
+
+      if (statusEl && typeof statusEl === "object") {
+        if (statusEl.dataset && typeof statusEl.dataset === "object") {
+          statusEl.dataset.state = state;
+        } else if (typeof statusEl.setAttribute === "function") {
+          statusEl.setAttribute("data-state", state);
+        }
+
+        if ("textContent" in statusEl) {
+          statusEl.textContent = "";
+        } else if (typeof statusEl.replaceChildren === "function") {
+          statusEl.replaceChildren();
+        }
+      }
+
+      const leadText = disabled ? "Markers hidden." : "Markers visible.";
+      const detailText = disabled
+        ? " Enable to highlight recent births and deaths on the grid."
+        : (() => {
+            const limitFragment =
+              normalizedLimit <= 0
+                ? "an unlimited history of markers"
+                : `up to ${normalizedLimit} marker${normalizedLimit === 1 ? "" : "s"}`;
+            const fadeFragment =
+              normalizedFade <= 0
+                ? "fade immediately"
+                : `fade after ${normalizedFade} tick${normalizedFade === 1 ? "" : "s"}`;
+
+            return ` Showing ${limitFragment} that ${fadeFragment}.`;
+          })();
+
+      const doc =
+        statusEl && typeof statusEl === "object" && statusEl.ownerDocument
+          ? statusEl.ownerDocument
+          : typeof document !== "undefined"
+            ? document
+            : null;
+
+      const canAppendChildren =
+        statusEl &&
+        typeof statusEl.appendChild === "function" &&
+        doc &&
+        typeof doc.createElement === "function" &&
+        typeof doc.createTextNode === "function";
+
+      if (canAppendChildren) {
+        const lead = doc.createElement("strong");
+
+        lead.textContent = leadText;
+        statusEl.appendChild(lead);
+        statusEl.appendChild(doc.createTextNode(detailText));
+      } else if (statusEl && typeof statusEl === "object") {
+        const combined = `${leadText}${detailText}`;
+
+        if ("textContent" in statusEl) {
+          statusEl.textContent = combined;
+        } else if (typeof statusEl.innerText === "string") {
+          statusEl.innerText = combined;
+        } else if (typeof statusEl.setAttribute === "function") {
+          statusEl.setAttribute("data-message", combined);
+        }
+      }
+    }
   }
 
   #syncZoneToggleInputs() {
@@ -4506,56 +4632,13 @@ export default class UIManager {
         },
       );
 
-      if (this._overlayToggleInputs) {
-        this._overlayToggleInputs.set(key, checkbox);
-      }
+      this.#registerOverlayToggleInput(key, checkbox);
 
-      if (key === "showLifeEventMarkers") {
+      if (key === "showLifeEventMarkers" && !this.lifeEventMarkersToggle) {
         this.lifeEventMarkersToggle = checkbox;
       }
     });
 
-    const limitBounds = resolveSliderBounds("lifeEventLimit");
-    const limitMin = Number.isFinite(limitBounds.min) ? limitBounds.min : 0;
-    const limitMax = Number.isFinite(limitBounds.max) ? limitBounds.max : 60;
-    const limitStep =
-      Number.isFinite(limitBounds.step) && limitBounds.step > 0 ? limitBounds.step : 1;
-    const limitTitle = LIFE_EVENT_MARKER_LIMIT_DESCRIPTION;
-    const limitLabel = "Life Event Marker Limit";
-    const limitSlider = createSliderRow(overlayGrid, {
-      label: limitLabel,
-      min: limitMin,
-      max: limitMax,
-      step: limitStep,
-      value: this.lifeEventLimit,
-      title: limitTitle,
-      format: (value) => {
-        const rounded = Math.max(limitMin, Math.round(value));
-
-        if (rounded <= 0) {
-          return "Off";
-        }
-
-        return `${rounded} marker${rounded === 1 ? "" : "s"}`;
-      },
-      onInput: (value) => {
-        this.setLifeEventLimit(value);
-      },
-    });
-
-    this.lifeEventLimitSlider = limitSlider;
-    this.lifeEventLimitSliderTitle = limitTitle;
-
-    const limitRow =
-      typeof limitSlider?.closest === "function"
-        ? limitSlider.closest("label")
-        : (limitSlider?.parentElement?.parentElement ?? null);
-
-    if (limitRow instanceof HTMLElement) {
-      this.lifeEventLimitSliderRow = limitRow;
-    }
-
-    this.#registerSliderElement("lifeEventLimit", limitSlider);
     this.#updateLifeEventControlsState();
   }
 
@@ -5031,6 +5114,62 @@ export default class UIManager {
     markerControls.appendChild(markerTitle);
 
     const markerGrid = createControlGrid(markerControls, "control-grid--compact");
+    const markerToggle = this.#addCheckbox(
+      markerGrid,
+      "Show Life Event Markers",
+      {
+        title: LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION,
+        description: "Highlight births and deaths directly on the simulation grid.",
+      },
+      this.showLifeEventMarkers,
+      (checked) => {
+        this.setShowLifeEventMarkers(checked);
+      },
+    );
+
+    this.#registerOverlayToggleInput("showLifeEventMarkers", markerToggle);
+    this.lifeEventMarkersToggle = markerToggle;
+
+    const limitBounds = resolveSliderBounds("lifeEventLimit");
+    const limitMin = Number.isFinite(limitBounds.min) ? limitBounds.min : 0;
+    const limitMax = Number.isFinite(limitBounds.max) ? limitBounds.max : 60;
+    const limitStep =
+      Number.isFinite(limitBounds.step) && limitBounds.step > 0 ? limitBounds.step : 1;
+    const limitTitle = LIFE_EVENT_MARKER_LIMIT_DESCRIPTION;
+    const limitLabel = "Life Event Marker Limit";
+    const limitSlider = createSliderRow(markerGrid, {
+      label: limitLabel,
+      min: limitMin,
+      max: limitMax,
+      step: limitStep,
+      value: this.lifeEventLimit,
+      title: limitTitle,
+      format: (value) => {
+        const rounded = Math.max(limitMin, Math.round(value));
+
+        if (rounded <= 0) {
+          return "Off";
+        }
+
+        return `${rounded} marker${rounded === 1 ? "" : "s"}`;
+      },
+      onInput: (value) => {
+        this.setLifeEventLimit(value);
+      },
+    });
+
+    this.lifeEventLimitSlider = limitSlider;
+    this.lifeEventLimitSliderTitle = limitTitle;
+
+    const limitRow =
+      typeof limitSlider?.closest === "function"
+        ? limitSlider.closest("label")
+        : (limitSlider?.parentElement?.parentElement ?? null);
+
+    if (limitRow instanceof HTMLElement) {
+      this.lifeEventLimitSliderRow = limitRow;
+    }
+
     const fadeBounds = resolveSliderBounds("lifeEventFadeTicks");
     const fadeMin = Number.isFinite(fadeBounds.min) ? fadeBounds.min : 1;
     const fadeMax = Number.isFinite(fadeBounds.max) ? fadeBounds.max : 180;
@@ -5067,15 +5206,26 @@ export default class UIManager {
       this.lifeEventFadeSliderRow = fadeRow;
     }
 
+    this.lifeEventMarkerControlsSection = markerControls;
+
+    const markerStatus = document.createElement("p");
+
+    markerStatus.className = "life-events-marker-controls__status control-hint";
+    markerStatus.setAttribute("role", "status");
+    markerStatus.setAttribute("aria-live", "polite");
+    markerControls.appendChild(markerStatus);
+    this.lifeEventMarkerStatus = markerStatus;
+
     const markerHint = document.createElement("p");
 
     markerHint.className = "life-events-marker-controls__hint control-hint";
     markerHint.textContent =
-      "Adjust how long birth and death markers remain visible on the main grid. Toggle the overlay from Simulation Controls → Overlays.";
+      "Fine-tune how many birth and death markers remain visible on the grid and how quickly they fade to keep busy worlds readable.";
     markerControls.appendChild(markerHint);
 
     lifeBody.appendChild(markerControls);
 
+    this.#registerSliderElement("lifeEventLimit", limitSlider);
     this.#registerSliderElement("lifeEventFadeTicks", fadeSlider);
     this.#updateLifeEventControlsState();
 
