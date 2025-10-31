@@ -570,6 +570,7 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showAge: false,
   showFitness: false,
   showLifeEventMarkers: false,
+  showSelectionZones: false,
   showGridLines: false,
   lifeEventFadeTicks: 36,
   lifeEventLimit: 24,
@@ -600,6 +601,7 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showAge",
   "showFitness",
   "showLifeEventMarkers",
+  "showSelectionZones",
   "showGridLines",
   "autoPauseOnBlur",
 ]);
