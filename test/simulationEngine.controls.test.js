@@ -352,6 +352,46 @@ test("setMaxConcurrentEvents floors values and schedules slow UI work", async ()
   }
 });
 
+test("setMaxConcurrentEvents clears existing events when disabling concurrency", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.eventManager.activeEvents = [
+      {
+        eventType: "heatwave",
+        remaining: 12,
+        affectedArea: { x: 0, y: 0, width: 1, height: 1 },
+      },
+    ];
+    engine.eventManager.currentEvent = engine.eventManager.activeEvents[0];
+    engine.eventManager.cooldown = 8;
+
+    engine.setMaxConcurrentEvents(0);
+
+    assert.equal(
+      engine.eventManager.activeEvents,
+      [],
+      "disabling concurrency should clear active environmental events",
+    );
+    assert.is(
+      engine.eventManager.currentEvent,
+      null,
+      "current event should reset after disabling concurrency",
+    );
+    assert.is(
+      engine.eventManager.cooldown,
+      0,
+      "cooldown should reset when concurrency is disabled",
+    );
+    assert.is(engine.state.maxConcurrentEvents, 0);
+  } finally {
+    restore();
+  }
+});
+
 test("setLeaderboardInterval enforces minimum throttle", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
