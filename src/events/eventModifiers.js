@@ -1,4 +1,12 @@
+import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
+
 const EMPTY_APPLIED_EVENTS = Object.freeze([]);
+
+const WARNINGS = Object.freeze({
+  resolveEffect: "Custom event effect resolver threw; ignoring event effect.",
+  isEventAffecting:
+    "Custom event predicate threw; treating event as not affecting the tile.",
+});
 
 const NEUTRAL_EVENT_MODIFIER_VALUES = Object.freeze({
   regenMultiplier: 1,
@@ -57,21 +65,31 @@ function prepareEffectCache(resolveEffect, sharedEffectCache) {
 function lookupEventEffect(eventType, resolveEffect, effectCache) {
   if (!resolveEffect) return null;
 
-  if (!effectCache) {
-    return resolveEffect(eventType);
+  if (effectCache) {
+    const cached = effectCache.get(eventType);
+
+    if (cached !== undefined) {
+      return cached;
+    }
   }
 
-  const cached = effectCache.get(eventType);
+  let failed = false;
+  const resolved = invokeWithErrorBoundary(resolveEffect, [eventType], {
+    reporter: warnOnce,
+    once: true,
+    message: WARNINGS.resolveEffect,
+    onError: () => {
+      failed = true;
+    },
+  });
 
-  if (cached !== undefined) {
-    return cached;
+  const normalized = failed ? null : (resolved ?? null);
+
+  if (effectCache) {
+    effectCache.set(eventType, normalized);
   }
 
-  const resolved = resolveEffect(eventType) ?? null;
-
-  effectCache.set(eventType, resolved);
-
-  return resolved;
+  return normalized;
 }
 
 function applyEventEffectModifiers(target, effect, strength) {
@@ -183,7 +201,25 @@ export function accumulateEventModifiers({
 
   for (const eventInstance of providedEvents) {
     if (!eventInstance) continue;
-    if (eventApplies && !eventApplies(eventInstance, row, col)) continue;
+    if (eventApplies) {
+      let predicateFailed = false;
+      const applies = invokeWithErrorBoundary(eventApplies, [eventInstance, row, col], {
+        reporter: warnOnce,
+        once: true,
+        message: WARNINGS.isEventAffecting,
+        onError: () => {
+          predicateFailed = true;
+        },
+      });
+
+      if (predicateFailed) {
+        continue;
+      }
+
+      if (!applies) {
+        continue;
+      }
+    }
 
     const baseStrength = normalizeEventStrength(eventInstance?.strength);
 
