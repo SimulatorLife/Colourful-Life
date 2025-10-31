@@ -19,3 +19,9 @@ export async function loadSimulationModules() {
 export function createSimulationModuleAdapter() {
   return resolveSimulationModules();
 }
+
+export function createGridManagerFactory() {
+  const { GridManager: GridManagerCtor } = resolveSimulationModules();
+
+  return (rows, cols, options = {}) => new GridManagerCtor(rows, cols, options);
+}

@@ -1,8 +1,10 @@
-import GridManager from "../../src/grid/gridManager.js";
+import { createGridManagerFactory } from "#app/testing/simulation-modules";
+
+const createGridManager = createGridManagerFactory();
 
 const energy = Number(process.argv[2] ?? 12);
 
-const grid = new GridManager(3, 3, {
+const grid = createGridManager(3, 3, {
   maxTileEnergy: 100,
   autoSeedEnabled: false,
 });
