@@ -2,7 +2,7 @@ name: Codex 29 – Whimsical Enhancements
 
 on:
   schedule:
-    - cron: "5 6 */3 * *" # every 3 days at 06:05 UTC
+    - cron: "5 6 */6 * *" # every 6 days at 06:05 UTC
   workflow_dispatch:
 
 permissions:

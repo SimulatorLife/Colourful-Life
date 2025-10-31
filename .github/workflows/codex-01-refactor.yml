@@ -1,7 +1,7 @@
 name: Codex 01 – Refactor & DRY
 on:
   schedule:
-    - cron: "0 0,12 * * *" # twice daily at 00:00, 12:00 UTC
+    - cron: "0 0,12 * * *" # 12:00 UTC
     - cron: "40 20 * * *" # 20:40 UTC
   workflow_dispatch:
 

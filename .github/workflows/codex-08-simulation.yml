@@ -1,7 +1,7 @@
 name: Codex 08 – Evolutionary Feature Enhancement
 on:
   schedule:
-    - cron: "10 16 * * *" # once daily at 16:10 UTC
+    - cron: "10 16 */2 * *" # once every 2 days at 16:10 UTC
   workflow_dispatch:
 
 permissions:

@@ -1,7 +1,7 @@
 name: Codex 39 – Simulation Hot Path Profiling
 on:
   schedule:
-    - cron: "05 */9 * * *" # every 9 hours at five minutes past the hour UTC
+    - cron: "05 */11 * * *" # every 11 hours at five minutes past the hour UTC
   workflow_dispatch:
 
 permissions:

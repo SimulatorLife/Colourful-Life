@@ -1,7 +1,7 @@
 name: Codex 10 – Core Documentation Refresh
 on:
   schedule:
-    - cron: "50 17 * * *" # once daily at 17:50 UTC
+    - cron: "50 17 */4 * *" # once every 4 days at 17:50 UTC
   workflow_dispatch:
 
 permissions:

@@ -1,7 +1,7 @@
 name: Codex 23 – Config Improvement
 on:
   schedule:
-    - cron: "20 12 * * *" # once daily at 12:20 UTC
+    - cron: "20 12 */3 * *" # once every 3 days at 12:20 UTC
   workflow_dispatch:
 
 permissions:
