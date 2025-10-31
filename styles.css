@@ -180,31 +180,6 @@ canvas {
   max-width: 20ch;
 }
 
-.canvas-pause-indicator__autopause-control {
-  pointer-events: auto;
-  margin: var(--space-md) auto 0;
-  width: min(100%, 320px);
-  max-width: clamp(240px, 28vw, 320px);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(15, 15, 15, 0.72);
-  text-align: left;
-}
-
-.canvas-pause-indicator__autopause-control .control-line {
-  align-items: flex-start;
-  gap: var(--space-sm);
-}
-
-.canvas-pause-indicator__autopause-control .control-checkbox-label {
-  gap: 4px;
-}
-
-.canvas-pause-indicator__autopause-control input[type="checkbox"] {
-  margin-top: 4px;
-}
-
 /* Base panel styling */
 .panel {
   width: 100%;
