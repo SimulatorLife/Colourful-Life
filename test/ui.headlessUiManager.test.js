@@ -396,6 +396,7 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
     showAge: true,
     showFitness: false,
     showLifeEventMarkers: true,
+    showSelectionZones: false,
     showGridLines: true,
     onSettingChange: (key, value) => notifications.push([key, value]),
   });
@@ -406,6 +407,7 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
   assert.is(manager.getShowAge(), true);
   assert.is(manager.getShowFitness(), false);
   assert.is(manager.getShowLifeEventMarkers(), true);
+  assert.is(manager.getShowSelectionZones(), false);
   assert.is(manager.getShowGridLines(), true);
 
   manager.setShowObstacles("true");
@@ -427,6 +429,10 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
   manager.setShowGridLines(0);
   manager.setShowGridLines("yes");
 
+  manager.setShowSelectionZones("yes");
+  manager.setShowSelectionZones(true); // no change
+  manager.setShowSelectionZones("0");
+
   assert.equal(notifications, [
     ["showObstacles", true],
     ["showEnergy", false],
@@ -436,6 +442,8 @@ test("createHeadlessUiManager exposes overlay visibility toggles", () => {
     ["showLifeEventMarkers", false],
     ["showGridLines", false],
     ["showGridLines", true],
+    ["showSelectionZones", true],
+    ["showSelectionZones", false],
   ]);
 
   assert.is(manager.getShowObstacles(), true);

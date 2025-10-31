@@ -50,6 +50,7 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @param {boolean} [options.showAge] - Whether organism age overlays are shown.
  * @param {boolean} [options.showFitness] - Whether fitness overlays are shown.
  * @param {boolean} [options.showLifeEventMarkers] - Whether life event markers are shown.
+ * @param {boolean} [options.showSelectionZones] - Whether reproductive zone overlays are shown.
  * @param {boolean} [options.showGridLines] - Whether grid lines outlining each tile are shown.
  * @param {number} [options.lifeEventFadeTicks] - Number of ticks life event markers remain visible.
  * @param {number} [options.lifeEventLimit] - Maximum life event markers rendered at once.
@@ -348,6 +349,7 @@ export function createHeadlessUiManager(options = {}) {
     getShowAge: () => settings.showAge,
     getShowFitness: () => settings.showFitness,
     getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
+    getShowSelectionZones: () => settings.showSelectionZones,
     getShowGridLines: () => settings.showGridLines,
     getLifeEventFadeTicks: () => settings.lifeEventFadeTicks,
     getLifeEventLimit: () => settings.lifeEventLimit,
@@ -409,6 +411,16 @@ export function createHeadlessUiManager(options = {}) {
       settings.showLifeEventMarkers = normalized;
       if (shouldNotify) {
         notify("showLifeEventMarkers", settings.showLifeEventMarkers);
+      }
+    },
+    setShowSelectionZones: (value, { notify: shouldNotify = true } = {}) => {
+      const normalized = coerceBoolean(value, settings.showSelectionZones);
+
+      if (settings.showSelectionZones === normalized) return;
+
+      settings.showSelectionZones = normalized;
+      if (shouldNotify) {
+        notify("showSelectionZones", settings.showSelectionZones);
       }
     },
     setShowGridLines: (value, { notify: shouldNotify = true } = {}) => {

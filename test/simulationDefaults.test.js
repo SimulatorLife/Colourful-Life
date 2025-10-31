@@ -524,6 +524,7 @@ test("UIManager constructor seeds settings from resolveSimulationDefaults", asyn
   assert.is(uiManager.showAge, defaults.showAge);
   assert.is(uiManager.showFitness, defaults.showFitness);
   assert.is(uiManager.showLifeEventMarkers, defaults.showLifeEventMarkers);
+  assert.is(uiManager.showSelectionZones, defaults.showSelectionZones);
   assert.is(uiManager.showGridLines, defaults.showGridLines);
   assert.is(uiManager.autoPauseOnBlur, defaults.autoPauseOnBlur);
 
@@ -566,6 +567,7 @@ test("SimulationEngine state initialization mirrors resolveSimulationDefaults", 
     showAge: defaults.showAge,
     showFitness: defaults.showFitness,
     showLifeEventMarkers: defaults.showLifeEventMarkers,
+    showSelectionZones: defaults.showSelectionZones,
     showGridLines: defaults.showGridLines,
     lifeEventFadeTicks: defaults.lifeEventFadeTicks,
     lifeEventLimit: defaults.lifeEventLimit,
@@ -619,6 +621,7 @@ test("createHeadlessUiManager exposes resolveSimulationDefaults-derived values",
   assert.is(ui.getShowAge(), defaults.showAge);
   assert.is(ui.getShowFitness(), defaults.showFitness);
   assert.is(ui.getShowLifeEventMarkers(), defaults.showLifeEventMarkers);
+  assert.is(ui.getShowSelectionZones(), defaults.showSelectionZones);
   assert.is(ui.getShowGridLines(), defaults.showGridLines);
   assert.is(ui.getAutoPauseOnBlur(), defaults.autoPauseOnBlur);
   assert.ok(ui.shouldRenderSlowUi(0));

@@ -305,6 +305,7 @@ export default class SimulationEngine {
       showAge: defaults.showAge,
       showFitness: defaults.showFitness,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
+      showSelectionZones: defaults.showSelectionZones,
       showGridLines: defaults.showGridLines,
       lifeEventFadeTicks: initialLifeEventFadeTicks,
       lifeEventLimit: initialLifeEventLimit,
@@ -836,6 +837,7 @@ export default class SimulationEngine {
 
     const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
     const includeAgeOverlay = Boolean(this.state.showAge);
+    const includeSelectionZones = Boolean(this.state.showSelectionZones);
     const totalTicks =
       typeof this.stats?.getTotalTicks === "function"
         ? this.stats.getTotalTicks()
@@ -846,6 +848,11 @@ export default class SimulationEngine {
       includeLifeEventMarkers && typeof this.stats?.getRecentLifeEvents === "function"
         ? this.stats.getRecentLifeEvents()
         : null;
+    const selectionZoneRenderData =
+      includeSelectionZones &&
+      typeof this.selectionManager?.getActiveZoneRenderData === "function"
+        ? this.selectionManager.getActiveZoneRenderData()
+        : null;
 
     this.drawOverlays(this.grid, this.ctx, this.cellSize, {
       showEnergy: this.state.showEnergy ?? false,
@@ -854,6 +861,7 @@ export default class SimulationEngine {
       showFitness: this.state.showFitness ?? false,
       showObstacles: this.state.showObstacles ?? true,
       showLifeEventMarkers: includeLifeEventMarkers,
+      showSelectionZones: includeSelectionZones,
       showGridLines: this.state.showGridLines ?? false,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
@@ -866,6 +874,7 @@ export default class SimulationEngine {
       currentTick: totalTicks,
       lifeEventFadeTicks: this.stats?.lifeEventFadeTicks,
       lifeEventLimit: this.state.lifeEventLimit,
+      selectionZones: selectionZoneRenderData,
     });
 
     if (this.telemetry.hasPending()) {
@@ -1529,6 +1538,7 @@ export default class SimulationEngine {
     showAge,
     showFitness,
     showLifeEventMarkers,
+    showSelectionZones,
     showGridLines,
   }) {
     const entries = Object.entries({
@@ -1538,6 +1548,7 @@ export default class SimulationEngine {
       showAge,
       showFitness,
       showLifeEventMarkers,
+      showSelectionZones,
       showGridLines,
     })
       .filter(([, value]) => value !== undefined)
@@ -1649,6 +1660,7 @@ export default class SimulationEngine {
       case "showAge":
       case "showFitness":
       case "showLifeEventMarkers":
+      case "showSelectionZones":
       case "showGridLines":
         this.setOverlayVisibility({ [key]: value });
         break;

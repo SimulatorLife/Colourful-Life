@@ -162,6 +162,7 @@ export const OVERLAY_TOGGLE_SETTERS = Object.freeze({
   showAge: "setShowAge",
   showFitness: "setShowFitness",
   showLifeEventMarkers: "setShowLifeEventMarkers",
+  showSelectionZones: "setShowSelectionZones",
   showGridLines: "setShowGridLines",
 });
 
@@ -554,6 +555,7 @@ export default class UIManager {
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
+    this.showSelectionZones = defaults.showSelectionZones;
     this.lifeEventFadeTicks = Number.isFinite(defaults.lifeEventFadeTicks)
       ? defaults.lifeEventFadeTicks
       : SIMULATION_DEFAULTS.lifeEventFadeTicks;
@@ -4751,6 +4753,17 @@ export default class UIManager {
         initial: this.showLifeEventMarkers,
       },
       {
+        key: "showSelectionZones",
+        label: "Highlight Reproductive Zones",
+        options: {
+          title:
+            "Shade active reproductive zones and label them directly on the grid for quick reference.",
+          description:
+            "Shade active reproductive zones with translucent colour fills and on-canvas labels so curated mating areas stay visible while you experiment.",
+        },
+        initial: this.showSelectionZones,
+      },
+      {
         key: "showGridLines",
         label: "Show Grid Lines",
         title: "Outline each tile so the underlying grid stays visible",
@@ -5999,6 +6012,9 @@ export default class UIManager {
   getShowLifeEventMarkers() {
     return this.showLifeEventMarkers;
   }
+  getShowSelectionZones() {
+    return this.showSelectionZones;
+  }
   getShowGridLines() {
     return this.showGridLines;
   }
@@ -6045,6 +6061,10 @@ export default class UIManager {
         }
       },
     });
+  }
+
+  setShowSelectionZones(value, options) {
+    this.#applyOverlayToggle("showSelectionZones", value, options);
   }
 
   setShowGridLines(value, options) {
