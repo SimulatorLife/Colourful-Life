@@ -7,6 +7,58 @@ import { sanitizeNumber, applyIntervalFloor } from "../utils/math.js";
 import { coerceBoolean } from "../utils/primitives.js";
 import { invokeWithErrorBoundary } from "../utils/error.js";
 
+const BOOLEAN_SETTING_KEYS = Object.freeze([
+  "showObstacles",
+  "showEnergy",
+  "showDensity",
+  "showAge",
+  "showFitness",
+  "showLifeEventMarkers",
+  "showSelectionZones",
+  "showGridLines",
+]);
+
+function attachBooleanSettingAccessors(
+  target,
+  settings,
+  notify,
+  keys = BOOLEAN_SETTING_KEYS,
+) {
+  if (!target || typeof target !== "object") {
+    return target;
+  }
+
+  for (const key of keys) {
+    if (typeof key !== "string" || key.length === 0) {
+      continue;
+    }
+
+    const capitalized = key.charAt(0).toUpperCase() + key.slice(1);
+    const getterName = `get${capitalized}`;
+    const setterName = `set${capitalized}`;
+
+    if (typeof target[getterName] !== "function") {
+      target[getterName] = () => settings[key];
+    }
+
+    if (typeof target[setterName] !== "function") {
+      target[setterName] = (value, { notify: shouldNotify = true } = {}) => {
+        const normalized = coerceBoolean(value, settings[key]);
+
+        if (settings[key] === normalized) return;
+
+        settings[key] = normalized;
+
+        if (shouldNotify) {
+          notify(key, settings[key]);
+        }
+      };
+    }
+  }
+
+  return target;
+}
+
 /**
  * Creates a lightweight {@link UIManager}-compatible adapter for environments
  * where no DOM-backed UI is available (e.g. tests, server-side rendering, or
@@ -180,7 +232,7 @@ export function createHeadlessUiManager(options = {}) {
     });
   };
 
-  return {
+  const manager = {
     isPaused: () => settings.paused,
     setPaused: (value) => {
       const next = coerceBoolean(value, settings.paused);
@@ -343,96 +395,8 @@ export function createHeadlessUiManager(options = {}) {
         notify("maxConcurrentEvents", settings.maxConcurrentEvents);
       }
     },
-    getShowObstacles: () => settings.showObstacles,
-    getShowEnergy: () => settings.showEnergy,
-    getShowDensity: () => settings.showDensity,
-    getShowAge: () => settings.showAge,
-    getShowFitness: () => settings.showFitness,
-    getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
-    getShowSelectionZones: () => settings.showSelectionZones,
-    getShowGridLines: () => settings.showGridLines,
     getLifeEventFadeTicks: () => settings.lifeEventFadeTicks,
     getLifeEventLimit: () => settings.lifeEventLimit,
-    setShowObstacles: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showObstacles);
-
-      if (settings.showObstacles === normalized) return;
-
-      settings.showObstacles = normalized;
-      if (shouldNotify) {
-        notify("showObstacles", settings.showObstacles);
-      }
-    },
-    setShowEnergy: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showEnergy);
-
-      if (settings.showEnergy === normalized) return;
-
-      settings.showEnergy = normalized;
-      if (shouldNotify) {
-        notify("showEnergy", settings.showEnergy);
-      }
-    },
-    setShowDensity: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showDensity);
-
-      if (settings.showDensity === normalized) return;
-
-      settings.showDensity = normalized;
-      if (shouldNotify) {
-        notify("showDensity", settings.showDensity);
-      }
-    },
-    setShowAge: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showAge);
-
-      if (settings.showAge === normalized) return;
-
-      settings.showAge = normalized;
-      if (shouldNotify) {
-        notify("showAge", settings.showAge);
-      }
-    },
-    setShowFitness: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showFitness);
-
-      if (settings.showFitness === normalized) return;
-
-      settings.showFitness = normalized;
-      if (shouldNotify) {
-        notify("showFitness", settings.showFitness);
-      }
-    },
-    setShowLifeEventMarkers: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showLifeEventMarkers);
-
-      if (settings.showLifeEventMarkers === normalized) return;
-
-      settings.showLifeEventMarkers = normalized;
-      if (shouldNotify) {
-        notify("showLifeEventMarkers", settings.showLifeEventMarkers);
-      }
-    },
-    setShowSelectionZones: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showSelectionZones);
-
-      if (settings.showSelectionZones === normalized) return;
-
-      settings.showSelectionZones = normalized;
-      if (shouldNotify) {
-        notify("showSelectionZones", settings.showSelectionZones);
-      }
-    },
-    setShowGridLines: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showGridLines);
-
-      if (settings.showGridLines === normalized) return;
-
-      settings.showGridLines = normalized;
-      if (shouldNotify) {
-        notify("showGridLines", settings.showGridLines);
-      }
-    },
     setLifeEventFadeTicks: (value, { notify: shouldNotify = true } = {}) => {
       if (
         updateIfFinite("lifeEventFadeTicks", value, { min: 1, round: Math.round }) &&
@@ -524,6 +488,8 @@ export function createHeadlessUiManager(options = {}) {
     },
     selectionManager: selectionManager ?? null,
   };
+
+  return attachBooleanSettingAccessors(manager, settings, notify);
 }
 
 export default createHeadlessUiManager;
