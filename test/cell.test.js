@@ -3297,3 +3297,50 @@ test("decideRandomMove downranks crowded hostile directions", () => {
     "the open avenue should be selected when alternatives collapse",
   );
 });
+
+test("scorePotentialMates returns independent results per invocation", () => {
+  const dna = new DNA(0, 0, 0);
+  const parent = new Cell(5, 5, dna, window.GridManager.maxTileEnergy);
+  const mateDna = new DNA(0, 0, 0);
+  const mateA = new Cell(5, 6, mateDna, window.GridManager.maxTileEnergy);
+  const mateB = new Cell(5, 7, mateDna, window.GridManager.maxTileEnergy);
+
+  const candidateA = {
+    target: mateA,
+    row: mateA.row,
+    col: mateA.col,
+    selectionWeight: 0.5,
+    preferenceScore: 0.25,
+    similarity: 0.3,
+    diversity: 0.7,
+  };
+  const candidateB = {
+    target: mateB,
+    row: mateB.row,
+    col: mateB.col,
+    selectionWeight: 0.75,
+    preferenceScore: 0.6,
+    similarity: 0.2,
+    diversity: 0.8,
+  };
+
+  const first = parent.scorePotentialMates([candidateA]);
+
+  assert.is(first.length, 1);
+  assert.is(first[0], candidateA);
+
+  const second = parent.scorePotentialMates([candidateB]);
+
+  assert.is(second.length, 1);
+  assert.is(second[0], candidateB);
+  assert.is.not(
+    first,
+    second,
+    "mate scoring should not reuse the internal scratch array reference",
+  );
+  assert.is(
+    first[0],
+    candidateA,
+    "previous scoring results should remain intact after subsequent evaluations",
+  );
+});

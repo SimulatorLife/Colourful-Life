@@ -13,6 +13,7 @@ import {
 } from "./config.js";
 
 const EPSILON = 1e-9;
+const EMPTY_MATE_SCORE_RESULTS = Object.freeze([]);
 
 function softmax(logits = []) {
   if (!Array.isArray(logits) || logits.length === 0) return [];
@@ -772,7 +773,7 @@ export default class Cell {
     scored.length = 0;
 
     if (!Array.isArray(potentialMates) || potentialMates.length === 0) {
-      return scored;
+      return EMPTY_MATE_SCORE_RESULTS;
     }
 
     const parentRow = Number.isFinite(context?.parentRow)
@@ -906,7 +907,11 @@ export default class Cell {
       }
     }
 
-    return scored;
+    if (scored.length === 0) {
+      return EMPTY_MATE_SCORE_RESULTS;
+    }
+
+    return scored.slice();
   }
 
   selectMateWeighted(potentialMates = [], context = {}, scoredCandidates = null) {
