@@ -101,6 +101,67 @@ function sampleFromDistribution(probabilities = [], labels = [], rng = Math.rand
   return labels[fallbackIndex] ?? fallbackIndex;
 }
 
+function normalizeGroupOutputs(entries, logitsSource) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return null;
+  }
+
+  const sourceIsArray = Array.isArray(logitsSource);
+  const sourceIsFunction = typeof logitsSource === "function";
+  const sourceIsObject =
+    !sourceIsArray &&
+    !sourceIsFunction &&
+    logitsSource &&
+    typeof logitsSource === "object";
+
+  if (sourceIsArray) {
+    if (logitsSource.length === 0) {
+      return null;
+    }
+  } else if (sourceIsObject) {
+    if (Object.keys(logitsSource).length === 0) {
+      return null;
+    }
+  } else if (!sourceIsFunction) {
+    return null;
+  }
+
+  const logits = new Array(entries.length);
+
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i];
+    const key = entry?.key;
+    let raw;
+
+    if (sourceIsArray) {
+      raw = i < logitsSource.length ? logitsSource[i] : undefined;
+    } else if (sourceIsFunction) {
+      raw = logitsSource(key, i);
+    } else {
+      raw = logitsSource[key];
+    }
+
+    const numeric = Number(raw);
+
+    logits[i] = Number.isFinite(numeric) ? numeric : 0;
+  }
+
+  const probabilities = softmax(logits);
+  const logitsByKey = {};
+  const probabilitiesByKey = {};
+
+  for (let i = 0; i < entries.length; i += 1) {
+    const key = entries[i]?.key;
+
+    if (key == null) continue;
+
+    logitsByKey[key] = logits[i] ?? 0;
+    probabilitiesByKey[key] = probabilities[i] ?? 0;
+  }
+
+  return { logits, probabilities, logitsByKey, probabilitiesByKey };
+}
+
 function resolveEventContext(contextCandidate) {
   if (
     contextCandidate &&
@@ -5010,20 +5071,12 @@ export default class Cell {
           : null;
 
       if (!probabilities && movementOutcome.logits) {
-        const entries = OUTPUT_GROUPS.movement;
-        const logits = entries.map(({ key }) => {
-          const value = Number(movementOutcome.logits?.[key]);
+        const distribution = normalizeGroupOutputs(
+          OUTPUT_GROUPS.movement,
+          (key) => movementOutcome.logits?.[key],
+        );
 
-          return Number.isFinite(value) ? value : 0;
-        });
-        const labels = entries.map(({ key }) => key);
-        const normalized = softmax(logits);
-
-        probabilities = labels.reduce((acc, label, index) => {
-          acc[label] = normalized[index] ?? 0;
-
-          return acc;
-        }, {});
+        probabilities = distribution?.probabilitiesByKey ?? null;
       }
 
       if (probabilities) {
@@ -6041,20 +6094,23 @@ export default class Cell {
     }
 
     const entries = OUTPUT_GROUPS.movement;
-    const logits = entries.map(({ key }) => values[key] ?? 0);
+    const distribution = normalizeGroupOutputs(entries, (key) => values[key]);
+
+    if (!distribution) {
+      this._usedNeuralMovement = false;
+
+      return { action: null, usedBrain: false };
+    }
+
+    const {
+      probabilities: probs,
+      probabilitiesByKey,
+      logits,
+      logitsByKey,
+    } = distribution;
     const labels = entries.map(({ key }) => key);
-    const probs = softmax(logits);
     const decisionRng = this.resolveRng("movementDecision");
     const action = sampleFromDistribution(probs, labels, decisionRng);
-    const { probabilities: probabilitiesByKey, logits: logitsByKey } = labels.reduce(
-      (acc, key, index) => {
-        acc.probabilities[key] = probs[index] ?? 0;
-        acc.logits[key] = logits[index] ?? 0;
-
-        return acc;
-      },
-      { probabilities: {}, logits: {} },
-    );
 
     if (!action) {
       this._usedNeuralMovement = false;
@@ -8320,18 +8376,12 @@ export default class Cell {
     }
 
     if (outcome.logits && typeof outcome.logits === "object") {
-      const entries = OUTPUT_GROUPS.interaction;
-      const logits = entries.map(({ key }) => Number(outcome.logits[key]) || 0);
-      const normalized = softmax(logits);
-      const probabilities = {};
+      const distribution = normalizeGroupOutputs(
+        OUTPUT_GROUPS.interaction,
+        (key) => outcome.logits?.[key],
+      );
 
-      for (let i = 0; i < entries.length; i += 1) {
-        const { key } = entries[i];
-
-        probabilities[key] = normalized[i] ?? 0;
-      }
-
-      return probabilities;
+      return distribution?.probabilitiesByKey ?? null;
     }
 
     return null;
