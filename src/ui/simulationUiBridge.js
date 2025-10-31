@@ -430,7 +430,7 @@ function subscribeEngineToUi(engine, uiManager) {
  * adapter produced by {@link createHeadlessUiManager}.
  *
  * @param {Object} options
- * @param {import('../simulationEngine.js').default} options.engine - Active
+ * @param {import('../engine/simulationEngine.js').default} options.engine - Active
  *   simulation engine instance.
  * @param {Object} [options.uiOptions] - UI configuration overrides forwarded to
  *   either {@link UIManager} or the headless adapter.

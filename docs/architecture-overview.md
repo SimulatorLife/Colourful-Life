@@ -4,7 +4,7 @@ This document captures how the Colourful Life simulation composes its core syste
 
 ## High-level loop
 
-1. **SimulationEngine** (`src/simulationEngine.js`) owns the render loop. Each frame it:
+1. **SimulationEngine** (`src/engine/simulationEngine.js`) owns the render loop. Each frame it:
    - Requests the next animation frame (or uses injected timing hooks).
    - Prepares the grid for the upcoming tick via `grid.prepareTick`.
    - Advances the grid one step, which updates organism state, tile energy, events, and overlays.
