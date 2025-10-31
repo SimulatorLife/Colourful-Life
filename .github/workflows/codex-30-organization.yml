@@ -2,7 +2,7 @@ name: Codex 30 – Project Organization
 
 on:
   schedule:
-    - cron: "10 */4 * * *" # every four hours at 10 minutes past the hour UTC
+    - cron: "10 */10 * * *" # every 10 hours at 10 minutes past the hour UTC
   workflow_dispatch:
 
 permissions:

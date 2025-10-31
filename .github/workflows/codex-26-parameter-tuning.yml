@@ -2,7 +2,7 @@ name: Codex 26 – Parameter Tuning
 
 on:
   schedule:
-    - cron: "35 4,16 * * *" # 04:35 UTC and 16:35 UTC
+    - cron: "35 4 * * *" # 04:35 UTC
   workflow_dispatch:
 
 permissions:

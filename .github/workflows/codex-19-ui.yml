@@ -1,7 +1,7 @@
 name: Codex 19 – UI Polish
 on:
   schedule:
-    - cron: "25 10,22 * * *" # twice daily at 10:25, 22:25 UTC
+    - cron: "25 10 * * *" # once daily at 10:25 UTC
   workflow_dispatch:
 
 permissions:

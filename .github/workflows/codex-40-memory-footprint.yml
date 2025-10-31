@@ -1,7 +1,7 @@
 name: Codex 40 – Memory Footprint Control
 on:
   schedule:
-    - cron: "35 */6 * * *" # every eight hours at thirty-five minutes past the hour UTC
+    - cron: "35 */14 * * *" # every 14 hours at thirty-five minutes past the hour UTC
   workflow_dispatch:
 
 permissions:
