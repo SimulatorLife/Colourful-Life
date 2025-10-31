@@ -2233,10 +2233,15 @@ export default class UIManager {
       } else if (statusEl && typeof statusEl === "object") {
         const combined = `${leadText}${detailText}`;
 
+        // Prefer the modern DOM text setters—`innerText` is deprecated and omitted
+        // from headless environments, while textContent/data/nodeValue remain
+        // supported by browsers and lightweight mocks alike.
         if ("textContent" in statusEl) {
           statusEl.textContent = combined;
-        } else if (typeof statusEl.innerText === "string") {
-          statusEl.innerText = combined;
+        } else if ("data" in statusEl) {
+          statusEl.data = combined;
+        } else if ("nodeValue" in statusEl) {
+          statusEl.nodeValue = combined;
         } else if (typeof statusEl.setAttribute === "function") {
           statusEl.setAttribute("data-message", combined);
         }

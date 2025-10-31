@@ -244,6 +244,16 @@ export class MockElement {
     if (name === "id") this.id = value;
   }
 
+  removeAttribute(name) {
+    if (name === "id") {
+      this.id = "";
+    }
+
+    if (Object.prototype.hasOwnProperty.call(this.attributes, name)) {
+      delete this.attributes[name];
+    }
+  }
+
   getAttribute(name) {
     return this.attributes[name] ?? null;
   }
