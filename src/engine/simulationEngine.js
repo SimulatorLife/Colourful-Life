@@ -1318,6 +1318,10 @@ export default class SimulationEngine {
     );
 
     this.#updateStateAndFlag({ maxConcurrentEvents: sanitized });
+
+    if (!(sanitized > 0)) {
+      this.#resetEventManager({ startWithEvent: false });
+    }
   }
 
   setMutationMultiplier(value) {
