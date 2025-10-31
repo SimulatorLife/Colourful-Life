@@ -33,6 +33,7 @@ import {
   resolveCellColorRecord,
   supportsPackedColor,
 } from "./colorRecords.js";
+import { RenderStrategy, normalizeRenderStrategy } from "./renderStrategy.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -2750,8 +2751,10 @@ export default class GridManager {
     this.ctx = resolvedCtx;
     this.cellSize = resolvedCellSize;
     this.stats = resolvedStats;
-    this.renderStrategy =
-      typeof options?.renderStrategy === "string" ? options.renderStrategy : "auto";
+    this.renderStrategy = normalizeRenderStrategy(
+      options?.renderStrategy,
+      RenderStrategy.AUTO,
+    );
     this.renderStats = {
       frameCount: 0,
       lastFrameMs: 0,
@@ -2761,7 +2764,7 @@ export default class GridManager {
       lastObstacleLoopMs: 0,
       avgObstacleLoopMs: 0,
       fps: 0,
-      mode: "canvas",
+      mode: RenderStrategy.CANVAS,
       lastDirtyTileCount: 0,
       lastProcessedTiles: 0,
       lastPaintedCells: 0,
@@ -7453,7 +7456,7 @@ export default class GridManager {
         lastObstacleLoopMs: 0,
         avgObstacleLoopMs: 0,
         fps: 0,
-        mode: mode ?? "canvas",
+        mode: mode ?? RenderStrategy.CANVAS,
         lastDirtyTileCount: 0,
         lastProcessedTiles: 0,
         lastPaintedCells: 0,
@@ -7498,19 +7501,18 @@ export default class GridManager {
     const ctx = this.ctx;
     const cellSize = this.cellSize;
     const { showObstacles = true, renderStrategy } = options ?? {};
-    const preferredStrategy =
-      typeof renderStrategy === "string"
-        ? renderStrategy
-        : (this.renderStrategy ?? "auto");
+    const currentStrategy = normalizeRenderStrategy(
+      this.renderStrategy,
+      RenderStrategy.AUTO,
+    );
+    const preferredStrategy = normalizeRenderStrategy(renderStrategy, currentStrategy);
 
-    if (typeof renderStrategy === "string") {
-      this.renderStrategy = renderStrategy;
-    }
+    this.renderStrategy = preferredStrategy;
 
     const frameStart = TIMESTAMP_NOW();
     let obstacleLoopMs = 0;
     let cellLoopMs = 0;
-    let modeUsed = "canvas";
+    let modeUsed = RenderStrategy.CANVAS;
     let cellStats = {
       processedTiles: 0,
       paintedCells: this.activeCells?.size ?? 0,
@@ -7604,7 +7606,7 @@ export default class GridManager {
       this.obstacleRenderCache.lastBasePaint = null;
     }
 
-    const tryImageData = preferredStrategy !== "canvas";
+    const tryImageData = preferredStrategy !== RenderStrategy.CANVAS;
 
     if (tryImageData) {
       const imageStart = TIMESTAMP_NOW();
@@ -7613,21 +7615,21 @@ export default class GridManager {
       cellLoopMs += TIMESTAMP_NOW() - imageStart;
 
       if (imageStats) {
-        modeUsed = "image-data";
+        modeUsed = RenderStrategy.IMAGE_DATA;
         cellStats = imageStats;
       } else {
         const fallbackStart = TIMESTAMP_NOW();
 
         cellStats = this.#drawCellsWithCanvas(ctx, cellSize);
         cellLoopMs += TIMESTAMP_NOW() - fallbackStart;
-        modeUsed = "canvas";
+        modeUsed = RenderStrategy.CANVAS;
       }
     } else {
       const canvasStart = TIMESTAMP_NOW();
 
       cellStats = this.#drawCellsWithCanvas(ctx, cellSize);
       cellLoopMs = TIMESTAMP_NOW() - canvasStart;
-      modeUsed = "canvas";
+      modeUsed = RenderStrategy.CANVAS;
     }
 
     const total = TIMESTAMP_NOW() - frameStart;
