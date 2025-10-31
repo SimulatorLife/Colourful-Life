@@ -351,6 +351,7 @@ export class MockCanvas extends MockElement {
     this.height = height;
     this.boundingRect = { left: 0, top: 0, width, height };
     this._context = null;
+    this.lastToDataURLType = null;
   }
 
   getContext(type) {
@@ -361,6 +362,15 @@ export class MockCanvas extends MockElement {
     }
 
     return this._context;
+  }
+
+  toDataURL(type = "image/png") {
+    const resolvedType =
+      typeof type === "string" && type.length > 0 ? type : "image/png";
+
+    this.lastToDataURLType = resolvedType;
+
+    return `data:${resolvedType};base64,mock-canvas`;
   }
 }
 

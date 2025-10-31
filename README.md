@@ -96,6 +96,10 @@ Nudged a dozen sliders into a corner and want to get back to the canonical basel
 
 A collapsible **Keyboard Shortcuts** card now lives at the top of Simulation Controls. Expand it whenever you need a refresher on the current hotkeys—pause/resume, single-step, spawn bursts, and the speed controls all surface with the exact keys configured for your layout. Custom keymaps appear automatically, so you can lean on the cheat sheet without worrying about stale documentation.
 
+### Canvas snapshots
+
+Need to preserve a moment for later analysis? Click **Save Snapshot** (or tap the default **C** shortcut) to download the current canvas as a PNG. The helper tucks a timestamp into the filename so you can catalogue evolutionary highlights without leaving the simulation.
+
 ## Core systems
 
 The simulation runs on cooperating modules housed in `src/`:

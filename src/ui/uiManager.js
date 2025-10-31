@@ -148,6 +148,10 @@ const WARNINGS = Object.freeze({
   readGridDimensions: "Failed to read grid dimensions from actions.",
   updateWorldGeometry: "Failed to update world geometry.",
   resetWorld: "Reset world handler threw; finishing cleanup.",
+  snapshotUnavailable:
+    "Canvas snapshot unavailable; ensure a canvas is mounted before capturing.",
+  snapshotCapture: "Canvas snapshot capture failed.",
+  snapshotLink: "Failed to prepare download link for canvas snapshot.",
   panelToggle: (title) => `Panel toggle handler for "${title}" threw.`,
 });
 
@@ -419,6 +423,7 @@ export default class UIManager {
     this._checkboxIdSequence = 0;
     this.stepButton = null;
     this.burstButton = null;
+    this.snapshotButton = null;
     this.resetWorldButton = null;
     this.resetWorldBusy = false;
     this.resetWorldButtonRestoreFocus = false;
@@ -477,6 +482,7 @@ export default class UIManager {
     this.leaderBody = null;
     this.leaderEntriesContainer = null;
     this.stepHotkeySet = new Set();
+    this.snapshotHotkeySet = new Set();
     this.resetWorldHotkeySet = new Set();
     this.geometryControls = null;
     this.deathBreakdownMaxEntries = this.#resolveDeathBreakdownLimit(
@@ -606,6 +612,9 @@ export default class UIManager {
     this.resetWorldHotkeySet = this.#resolveHotkeySet(layoutConfig.resetWorldHotkeys, [
       "r",
     ]);
+    this.snapshotHotkeySet = this.#resolveHotkeySet(layoutConfig.snapshotHotkeys, [
+      "c",
+    ]);
 
     const canvasEl =
       layoutConfig.canvasElement || this.#resolveNode(layoutConfig.canvasSelector);
@@ -711,6 +720,13 @@ export default class UIManager {
       return;
     }
 
+    if (this.snapshotHotkeySet?.has(key)) {
+      event.preventDefault();
+      this.#saveCanvasSnapshot();
+
+      return;
+    }
+
     if (this.speedIncreaseHotkeySet.has(key)) {
       event.preventDefault();
       const steps = event.shiftKey ? 5 : 1;
@@ -780,6 +796,98 @@ export default class UIManager {
       this.#scheduleUpdate();
       this.#releaseResetWorldBusy({ randomizeObstacles });
     }
+  }
+
+  #saveCanvasSnapshot() {
+    const canvas = this.canvasElement;
+
+    if (!canvas || typeof canvas.toDataURL !== "function") {
+      warnOnce(WARNINGS.snapshotUnavailable);
+
+      return false;
+    }
+
+    let dataUrl;
+
+    try {
+      dataUrl = canvas.toDataURL("image/png");
+    } catch (error) {
+      warnOnce(WARNINGS.snapshotCapture, error);
+
+      return false;
+    }
+
+    if (typeof dataUrl !== "string" || dataUrl.length === 0) {
+      warnOnce(WARNINGS.snapshotCapture);
+
+      return false;
+    }
+
+    const doc =
+      typeof document !== "undefined" ? document : (globalThis?.document ?? null);
+    const body = doc?.body;
+    const createElement = doc?.createElement;
+
+    if (typeof createElement !== "function" || !body?.appendChild) {
+      warnOnce(WARNINGS.snapshotLink);
+
+      return false;
+    }
+
+    const link = createElement.call(doc, "a");
+    const elementCtor = typeof HTMLElement === "function" ? HTMLElement : null;
+
+    if (!link || (elementCtor && !(link instanceof elementCtor))) {
+      warnOnce(WARNINGS.snapshotLink);
+
+      return false;
+    }
+
+    const timestamp = new Date();
+    let fileStem = "colourful-life-snapshot";
+
+    if (Number.isFinite(timestamp?.getTime?.())) {
+      try {
+        const iso = timestamp.toISOString();
+
+        fileStem = `colourful-life-${iso.replace(/[:.]/g, "-")}`;
+      } catch {
+        // Fall back to the default stem when toISOString is unavailable.
+      }
+    }
+
+    link.href = dataUrl;
+    link.setAttribute("download", `${fileStem}.png`);
+    link.style.display = "none";
+
+    let triggered = false;
+
+    try {
+      body.appendChild(link);
+
+      if (typeof link.click === "function") {
+        link.click();
+        triggered = true;
+      } else if (typeof link.dispatchEvent === "function") {
+        link.dispatchEvent({ type: "click", target: link });
+        triggered = true;
+      } else if (typeof link.trigger === "function") {
+        link.trigger("click");
+        triggered = true;
+      } else {
+        warnOnce(WARNINGS.snapshotLink);
+      }
+    } catch (error) {
+      warnOnce(WARNINGS.snapshotLink, error);
+    } finally {
+      if (typeof link.remove === "function") {
+        link.remove();
+      } else if (link.parentElement?.removeChild) {
+        link.parentElement.removeChild(link);
+      }
+    }
+
+    return triggered;
   }
 
   #resolveHotkeySet(candidate, fallbackKeys = ["p"]) {
@@ -3839,6 +3947,32 @@ export default class UIManager {
       }
     }
 
+    const snapshotHotkeys = this.#formatHotkeyList(this.snapshotHotkeySet);
+    const snapshotTitleParts = [
+      "Download a PNG of the current canvas for quick sharing.",
+    ];
+
+    if (snapshotHotkeys.length > 0) {
+      snapshotTitleParts.push(`Shortcut: ${snapshotHotkeys}.`);
+    }
+
+    const snapshotTitle = snapshotTitleParts.join(" ");
+
+    this.snapshotButton = addControlButton({
+      id: "snapshotButton",
+      label: "Save Snapshot",
+      title: snapshotTitle,
+      onClick: () => {
+        this.#saveCanvasSnapshot();
+      },
+    });
+
+    this.#applyButtonHotkeys(this.snapshotButton, this.snapshotHotkeySet);
+
+    if (this.snapshotButton) {
+      this.snapshotButton.setAttribute("aria-label", snapshotTitle);
+    }
+
     const speedBounds = resolveSliderBounds("speedMultiplier", {
       min: 0.5,
       max: 100,
@@ -3949,6 +4083,11 @@ export default class UIManager {
         keys: this.#formatHotkeyList(this.resetWorldHotkeySet),
         description:
           "Clear the map for a fresh population. Hold Shift with the shortcut to randomize obstacle layouts.",
+      },
+      {
+        action: "Save Snapshot",
+        keys: this.#formatHotkeyList(this.snapshotHotkeySet),
+        description: "Download the current canvas as a PNG for sharing.",
       },
       {
         action: "Speed Up Playback",
