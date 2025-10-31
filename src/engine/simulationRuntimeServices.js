@@ -69,6 +69,13 @@ function defineTelemetryAccessors(target, telemetry) {
  *   computeLeaderboard?: typeof defaultComputeLeaderboard,
  *   leaderboardSize?: number,
  *   now?: () => number,
+ *   statsOptions?: {
+ *     historySize?: number,
+ *     traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>,
+ *     traitResampleInterval?: number,
+ *     diversitySampleInterval?: number,
+ *     lifeEventLogCapacity?: number,
+ *   },
  * }} [options] - Optional overrides injected by tests or host environments.
  *   When omitted, defaults mirror production behaviour so telemetry continues
  *   to reflect authoritative leaderboard calculations.

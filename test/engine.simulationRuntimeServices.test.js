@@ -102,6 +102,7 @@ test("createSimulationRuntimeServices respects overrides and publishes leaderboa
     statsOptions: {
       historySize: 12,
       traitResampleInterval: 5,
+      lifeEventLogCapacity: 32,
     },
   });
 
@@ -112,6 +113,8 @@ test("createSimulationRuntimeServices respects overrides and publishes leaderboa
   assert.is(telemetry.stats, stats);
   assert.is(stats.historySize, 12);
   assert.is(stats.traitResampleInterval, 5);
+  assert.is(stats.lifeEventLogCapacity, 32);
+  assert.is(stats.lifeEventLog?.capacity, 32);
 
   telemetry.setInitialSnapshot({ entries: [], population: 0 });
 
