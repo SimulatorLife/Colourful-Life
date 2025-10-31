@@ -2435,6 +2435,51 @@ export default class UIManager {
     }
   }
 
+  #applySliderSetting(key, value, options = {}) {
+    if (!key) return null;
+
+    const optionsAreObject = options && typeof options === "object";
+    const clampOverrides = optionsAreObject ? options.clampOverrides : undefined;
+    const hasExplicitFallback = optionsAreObject
+      ? Object.hasOwn(options, "fallback")
+      : false;
+    const explicitFallback = hasExplicitFallback ? options.fallback : undefined;
+    let notify = true;
+
+    if (optionsAreObject && Object.hasOwn(options, "notify")) {
+      notify = Boolean(options.notify);
+    }
+
+    const overrides =
+      clampOverrides && typeof clampOverrides === "object" ? { ...clampOverrides } : {};
+
+    if (!Object.hasOwn(overrides, "fallback")) {
+      if (hasExplicitFallback) {
+        overrides.fallback = explicitFallback;
+      } else if (this[key] !== undefined) {
+        overrides.fallback = this[key];
+      }
+    }
+
+    const { value: sanitized } = clampSliderValue(key, value, overrides);
+
+    if (!Number.isFinite(sanitized)) {
+      return null;
+    }
+
+    const previous = this[key];
+    const changed = previous !== sanitized;
+
+    this[key] = sanitized;
+    this.#syncSliderInput(key, sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange(key, sanitized);
+    }
+
+    return sanitized;
+  }
+
   #sanitizeSpeedMultiplier(value) {
     const { value: sanitized } = clampSliderValue("speedMultiplier", value, {
       floor: 0.1,
@@ -6157,221 +6202,53 @@ export default class UIManager {
   }
 
   setSocietySimilarity(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("societySimilarity", value, {
-      fallback: this.societySimilarity,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.societySimilarity !== sanitized;
-
-    this.societySimilarity = sanitized;
-    this.#syncSliderInput("societySimilarity", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("societySimilarity", sanitized);
-    }
+    this.#applySliderSetting("societySimilarity", value, { notify });
   }
 
   setEnemySimilarity(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("enemySimilarity", value, {
-      fallback: this.enemySimilarity,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.enemySimilarity !== sanitized;
-
-    this.enemySimilarity = sanitized;
-    this.#syncSliderInput("enemySimilarity", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("enemySimilarity", sanitized);
-    }
+    this.#applySliderSetting("enemySimilarity", value, { notify });
   }
 
   setEventStrengthMultiplier(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("eventStrengthMultiplier", value, {
-      fallback: this.eventStrengthMultiplier,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.eventStrengthMultiplier !== sanitized;
-
-    this.eventStrengthMultiplier = sanitized;
-    this.#syncSliderInput("eventStrengthMultiplier", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("eventStrengthMultiplier", sanitized);
-    }
+    this.#applySliderSetting("eventStrengthMultiplier", value, { notify });
   }
 
   setEventFrequencyMultiplier(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("eventFrequencyMultiplier", value, {
-      fallback: this.eventFrequencyMultiplier,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.eventFrequencyMultiplier !== sanitized;
-
-    this.eventFrequencyMultiplier = sanitized;
-    this.#syncSliderInput("eventFrequencyMultiplier", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("eventFrequencyMultiplier", sanitized);
-    }
+    this.#applySliderSetting("eventFrequencyMultiplier", value, { notify });
   }
 
   setDensityEffectMultiplier(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("densityEffectMultiplier", value, {
-      fallback: this.densityEffectMultiplier,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.densityEffectMultiplier !== sanitized;
-
-    this.densityEffectMultiplier = sanitized;
-    this.#syncSliderInput("densityEffectMultiplier", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("densityEffectMultiplier", sanitized);
-    }
+    this.#applySliderSetting("densityEffectMultiplier", value, { notify });
   }
 
   setEnergyRegenRate(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("energyRegenRate", value, {
-      fallback: this.energyRegenRate,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.energyRegenRate !== sanitized;
-
-    this.energyRegenRate = sanitized;
-    this.#syncSliderInput("energyRegenRate", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("energyRegenRate", sanitized);
-    }
+    this.#applySliderSetting("energyRegenRate", value, { notify });
   }
 
   setEnergyDiffusionRate(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("energyDiffusionRate", value, {
-      fallback: this.energyDiffusionRate,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.energyDiffusionRate !== sanitized;
-
-    this.energyDiffusionRate = sanitized;
-    this.#syncSliderInput("energyDiffusionRate", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("energyDiffusionRate", sanitized);
-    }
+    this.#applySliderSetting("energyDiffusionRate", value, { notify });
   }
 
   setMutationMultiplier(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("mutationMultiplier", value, {
-      fallback: this.mutationMultiplier,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.mutationMultiplier !== sanitized;
-
-    this.mutationMultiplier = sanitized;
-    this.#syncSliderInput("mutationMultiplier", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("mutationMultiplier", sanitized);
-    }
+    this.#applySliderSetting("mutationMultiplier", value, { notify });
   }
 
   setLeaderboardIntervalMs(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("leaderboardIntervalMs", value, {
-      fallback: this.leaderboardIntervalMs,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.leaderboardIntervalMs !== sanitized;
-
-    this.leaderboardIntervalMs = sanitized;
-    this.#syncSliderInput("leaderboardIntervalMs", sanitized);
-
-    if (this.dashboardCadenceSlider?.updateDisplay) {
-      this.dashboardCadenceSlider.updateDisplay(sanitized);
-    }
-
-    if (changed && notify) {
-      this.#notifySettingChange("leaderboardIntervalMs", sanitized);
-    }
+    this.#applySliderSetting("leaderboardIntervalMs", value, { notify });
   }
 
   setCombatEdgeSharpness(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("combatEdgeSharpness", value, {
-      fallback: this.combatEdgeSharpness,
-      min: 0.5,
-      max: 6,
-      floor: 0.1,
+    this.#applySliderSetting("combatEdgeSharpness", value, {
+      notify,
+      clampOverrides: { min: 0.5, max: 6, floor: 0.1 },
     });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.combatEdgeSharpness !== sanitized;
-
-    this.combatEdgeSharpness = sanitized;
-    this.#syncSliderInput("combatEdgeSharpness", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("combatEdgeSharpness", sanitized);
-    }
   }
 
   setCombatTerritoryEdgeFactor(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("combatTerritoryEdgeFactor", value, {
-      fallback: this.combatTerritoryEdgeFactor,
-      min: 0,
-      max: 1,
+    this.#applySliderSetting("combatTerritoryEdgeFactor", value, {
+      notify,
+      clampOverrides: { min: 0, max: 1 },
     });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.combatTerritoryEdgeFactor !== sanitized;
-
-    this.combatTerritoryEdgeFactor = sanitized;
-    this.#syncSliderInput("combatTerritoryEdgeFactor", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("combatTerritoryEdgeFactor", sanitized);
-    }
   }
 
   setLowDiversityReproMultiplier(value, { notify = true } = {}) {
