@@ -36,6 +36,18 @@ const DEFAULT_SELECTION_ZONE_LABEL_BACKGROUND = "rgba(12, 18, 28, 0.78)";
 const DEFAULT_SELECTION_ZONE_LABEL_PADDING = 4;
 const DEFAULT_SELECTION_ZONE_LABEL_MARGIN = 6;
 const DEFAULT_SELECTION_ZONE_LABEL_RADIUS = 6;
+const DEFAULT_SELECTION_ZONE_LEGEND_TITLE = "Reproductive zones";
+const DEFAULT_SELECTION_ZONE_LEGEND_TITLE_FONT = "bold 12px sans-serif";
+const DEFAULT_SELECTION_ZONE_LEGEND_FONT = "12px sans-serif";
+const DEFAULT_SELECTION_ZONE_LEGEND_BACKGROUND = "rgba(12, 18, 28, 0.78)";
+const DEFAULT_SELECTION_ZONE_LEGEND_TEXT_COLOR = "#ffffff";
+const DEFAULT_SELECTION_ZONE_LEGEND_META_COLOR = "rgba(210, 225, 255, 0.85)";
+const DEFAULT_SELECTION_ZONE_LEGEND_PADDING = 10;
+const DEFAULT_SELECTION_ZONE_LEGEND_MARGIN = 12;
+const DEFAULT_SELECTION_ZONE_LEGEND_LINE_HEIGHT = 16;
+const DEFAULT_SELECTION_ZONE_LEGEND_SWATCH_SIZE = 9;
+const DEFAULT_SELECTION_ZONE_LEGEND_SWATCH_GAP = 8;
+const SELECTION_ZONE_UNION_TILE_CAP = 64000;
 
 function fillRoundedRect(ctx, x, y, width, height, radius) {
   if (!ctx) return;
@@ -474,6 +486,415 @@ function resolveZoneLabel(zone) {
   return "";
 }
 
+function formatSelectionZonePercent(fraction) {
+  if (!Number.isFinite(fraction)) {
+    return null;
+  }
+
+  const percent = clamp01(fraction) * 100;
+  const precision = percent >= 10 ? 0 : 1;
+
+  return `${percent.toFixed(precision)}%`;
+}
+
+function formatSelectionZoneTileCount(count) {
+  if (!Number.isFinite(count)) {
+    return null;
+  }
+
+  const rounded = Math.round(count);
+
+  return `${rounded} tile${rounded === 1 ? "" : "s"}`;
+}
+
+function shouldComputeZoneUnion(rows, cols, override) {
+  if (override === false) {
+    return false;
+  }
+
+  if (!Number.isFinite(rows) || !Number.isFinite(cols)) {
+    return false;
+  }
+
+  return rows * cols <= SELECTION_ZONE_UNION_TILE_CAP;
+}
+
+function clampRectangleBounds(rect, rows, cols) {
+  if (!rect) return null;
+  if (!Number.isFinite(rows) || !Number.isFinite(cols)) {
+    return null;
+  }
+
+  const startRow = clamp(Math.floor(rect.row ?? 0), 0, Math.max(0, rows - 1));
+  const startCol = clamp(Math.floor(rect.col ?? 0), 0, Math.max(0, cols - 1));
+  const rowSpan = Math.max(0, Math.floor(rect.rowSpan ?? 0));
+  const colSpan = Math.max(0, Math.floor(rect.colSpan ?? 0));
+
+  if (!(rowSpan > 0) || !(colSpan > 0)) {
+    return null;
+  }
+
+  const endRowExclusive = clamp(startRow + rowSpan, startRow, rows);
+  const endColExclusive = clamp(startCol + colSpan, startCol, cols);
+
+  if (endRowExclusive <= startRow || endColExclusive <= startCol) {
+    return null;
+  }
+
+  return {
+    startRow,
+    endRow: endRowExclusive,
+    startCol,
+    endCol: endColExclusive,
+    rowSpan: endRowExclusive - startRow,
+    colSpan: endColExclusive - startCol,
+  };
+}
+
+function measureZoneTileCount(rects) {
+  if (!Array.isArray(rects) || rects.length === 0) {
+    return 0;
+  }
+
+  let total = 0;
+
+  for (const rect of rects) {
+    const rowSpan = Math.max(0, Math.floor(rect?.rowSpan ?? 0));
+    const colSpan = Math.max(0, Math.floor(rect?.colSpan ?? 0));
+
+    if (!(rowSpan > 0) || !(colSpan > 0)) continue;
+
+    total += rowSpan * colSpan;
+  }
+
+  return total;
+}
+
+function accumulateZoneUnion(rects, rows, cols, accumulator) {
+  if (!accumulator || !Number.isFinite(rows) || !Number.isFinite(cols)) {
+    return;
+  }
+
+  if (!Array.isArray(rects) || rects.length === 0) {
+    return;
+  }
+
+  for (const rect of rects) {
+    const clamped = clampRectangleBounds(rect, rows, cols);
+
+    if (!clamped) continue;
+
+    const { startRow, endRow, startCol, endCol } = clamped;
+
+    for (let row = startRow; row < endRow; row += 1) {
+      const rowOffset = row * cols;
+
+      for (let col = startCol; col < endCol; col += 1) {
+        accumulator.add(rowOffset + col);
+      }
+    }
+  }
+}
+
+function formatSelectionZoneLegendEntry({ label, tileCount, coverage }) {
+  const readableLabel =
+    typeof label === "string" && label.trim().length > 0 ? label.trim() : "Zone";
+  const tileText = formatSelectionZoneTileCount(tileCount);
+  const percentText = formatSelectionZonePercent(coverage);
+  const segments = [readableLabel];
+
+  if (tileText) {
+    segments.push("—", tileText);
+  }
+
+  if (percentText) {
+    segments.push(`(${percentText})`);
+  }
+
+  return segments.join(" ");
+}
+
+function formatSelectionZoneEligibility(summary) {
+  if (!summary || !Number.isFinite(summary.totalTiles) || summary.totalTiles <= 0) {
+    return null;
+  }
+
+  const { totalTiles, unionTileCount, totalTileCount } = summary;
+
+  if (Number.isFinite(unionTileCount)) {
+    const percentText = formatSelectionZonePercent(unionTileCount / totalTiles);
+    const tileText = formatSelectionZoneTileCount(unionTileCount);
+    const segments = ["Eligible tiles:"];
+
+    if (tileText) segments.push(tileText);
+    if (percentText) segments.push(`(${percentText})`);
+
+    return segments.join(" ");
+  }
+
+  if (Number.isFinite(totalTileCount) && totalTileCount > 0) {
+    const approxPercent = formatSelectionZonePercent(totalTileCount / totalTiles);
+    const tileText = formatSelectionZoneTileCount(totalTileCount);
+    const segments = ["Eligible tiles (sum):"];
+
+    if (tileText) segments.push(tileText);
+    if (approxPercent) segments.push(`(${approxPercent})`);
+
+    return segments.join(" ");
+  }
+
+  return null;
+}
+
+function drawSelectionZoneLegend(ctx, cellSize, summary, options = {}) {
+  if (!ctx || !summary) return;
+
+  const entries = Array.isArray(summary.entries) ? summary.entries : [];
+
+  if (entries.length === 0) return;
+
+  const config = toPlainObject(options);
+  const padding =
+    Number.isFinite(config.padding) && config.padding >= 0
+      ? config.padding
+      : DEFAULT_SELECTION_ZONE_LEGEND_PADDING;
+  const margin =
+    Number.isFinite(config.margin) && config.margin >= 0
+      ? config.margin
+      : DEFAULT_SELECTION_ZONE_LEGEND_MARGIN;
+  const lineHeight =
+    Number.isFinite(config.lineHeight) && config.lineHeight > 0
+      ? config.lineHeight
+      : DEFAULT_SELECTION_ZONE_LEGEND_LINE_HEIGHT;
+  const titleFont = resolveNonEmptyString(
+    config.titleFont,
+    DEFAULT_SELECTION_ZONE_LEGEND_TITLE_FONT,
+  );
+  const bodyFont = resolveNonEmptyString(
+    config.font,
+    DEFAULT_SELECTION_ZONE_LEGEND_FONT,
+  );
+  const title = resolveNonEmptyString(
+    config.title,
+    DEFAULT_SELECTION_ZONE_LEGEND_TITLE,
+  );
+  const background = resolveNonEmptyString(
+    config.background,
+    DEFAULT_SELECTION_ZONE_LEGEND_BACKGROUND,
+  );
+  const textColor = resolveNonEmptyString(
+    config.textColor,
+    DEFAULT_SELECTION_ZONE_LEGEND_TEXT_COLOR,
+  );
+  const metaColor = resolveNonEmptyString(
+    config.metaColor,
+    DEFAULT_SELECTION_ZONE_LEGEND_META_COLOR,
+  );
+  const swatchSize = clamp(
+    Number.isFinite(config.swatchSize) && config.swatchSize > 0
+      ? config.swatchSize
+      : Math.round(
+          Math.max(DEFAULT_SELECTION_ZONE_LEGEND_SWATCH_SIZE, cellSize * 0.45),
+        ),
+    6,
+    16,
+  );
+  const swatchGap =
+    Number.isFinite(config.swatchGap) && config.swatchGap >= 0
+      ? config.swatchGap
+      : DEFAULT_SELECTION_ZONE_LEGEND_SWATCH_GAP;
+  const swatchColumnWidth = swatchSize + swatchGap;
+  const anchor = resolveNonEmptyString(config.anchor, "bottomRight");
+  const canvasWidth =
+    Number.isFinite(config.canvasWidth) && config.canvasWidth > 0
+      ? config.canvasWidth
+      : Number.isFinite(ctx?.canvas?.width)
+        ? ctx.canvas.width
+        : null;
+  const canvasHeight =
+    Number.isFinite(config.canvasHeight) && config.canvasHeight > 0
+      ? config.canvasHeight
+      : Number.isFinite(ctx?.canvas?.height)
+        ? ctx.canvas.height
+        : null;
+
+  const eligibilityLine = formatSelectionZoneEligibility(summary);
+  const legendLines = entries.map((entry) => ({
+    type: "entry",
+    color: resolveNonEmptyString(entry.color, DEFAULT_SELECTION_ZONE_FILL),
+    text: formatSelectionZoneLegendEntry(entry),
+  }));
+
+  if (eligibilityLine) {
+    legendLines.push({ type: "meta", text: eligibilityLine });
+  }
+
+  const canMeasure = typeof ctx.measureText === "function";
+  const textMetrics = (text, font) => {
+    if (!canMeasure) {
+      return text.length * 7;
+    }
+
+    if (font) {
+      ctx.font = font;
+    }
+
+    return ctx.measureText(text).width;
+  };
+
+  let contentWidth = 0;
+
+  const titleWidth = textMetrics(title, titleFont);
+
+  if (titleWidth > contentWidth) {
+    contentWidth = titleWidth;
+  }
+
+  for (const line of legendLines) {
+    const width =
+      (line.type === "entry" ? swatchColumnWidth : 0) +
+      textMetrics(line.text, bodyFont);
+
+    if (width > contentWidth) {
+      contentWidth = width;
+    }
+  }
+
+  const blockWidth = padding * 2 + contentWidth;
+  const totalLines = legendLines.length;
+  const titleHeight = lineHeight;
+  const blockHeight = padding * 2 + titleHeight + lineHeight * totalLines;
+
+  let originX = margin;
+  let originY = margin;
+
+  switch (anchor) {
+    case "topRight":
+      if (canvasWidth != null) {
+        originX = Math.max(margin, canvasWidth - blockWidth - margin);
+      }
+      break;
+    case "bottomLeft":
+      if (canvasHeight != null) {
+        originY = Math.max(margin, canvasHeight - blockHeight - margin);
+      }
+      break;
+    case "bottomRight":
+      if (canvasWidth != null) {
+        originX = Math.max(margin, canvasWidth - blockWidth - margin);
+      }
+      if (canvasHeight != null) {
+        originY = Math.max(margin, canvasHeight - blockHeight - margin);
+      }
+      break;
+    case "topLeft":
+    default:
+      break;
+  }
+
+  ctx.save();
+  ctx.fillStyle = background;
+  fillRoundedRect(ctx, originX, originY, blockWidth, blockHeight, 6);
+
+  let cursorY = originY + padding;
+  const textX = originX + padding;
+
+  ctx.font = titleFont;
+  ctx.fillStyle = textColor;
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left";
+  ctx.fillText(title, textX, cursorY);
+  cursorY += titleHeight;
+
+  ctx.font = bodyFont;
+
+  for (const line of legendLines) {
+    const baselineY = cursorY;
+
+    if (line.type === "entry") {
+      const swatchX = textX;
+      const swatchY = baselineY + (lineHeight - swatchSize) / 2;
+
+      ctx.fillStyle = line.color;
+      ctx.fillRect(swatchX, swatchY, swatchSize, swatchSize);
+
+      if (typeof ctx.strokeRect === "function") {
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(swatchX, swatchY, swatchSize, swatchSize);
+      }
+
+      ctx.fillStyle = textColor;
+      ctx.fillText(line.text, textX + swatchColumnWidth, baselineY);
+    } else {
+      ctx.fillStyle = metaColor;
+      ctx.fillText(line.text, textX, baselineY);
+    }
+
+    cursorY += lineHeight;
+  }
+
+  ctx.restore();
+}
+
+export function summarizeSelectionZoneCoverage(zoneEntries, options = {}) {
+  const config = toPlainObject(options);
+  const rows = Number.isFinite(config.rows) ? config.rows : null;
+  const cols = Number.isFinite(config.cols) ? config.cols : null;
+  const defaultFillColor = resolveNonEmptyString(
+    config.defaultFillColor,
+    DEFAULT_SELECTION_ZONE_FILL,
+  );
+  const totalTiles =
+    Number.isFinite(config.totalTiles) && config.totalTiles > 0
+      ? Math.floor(config.totalTiles)
+      : Number.isFinite(rows) && Number.isFinite(cols)
+        ? rows * cols
+        : null;
+  const computeUnion = shouldComputeZoneUnion(rows, cols, config.computeUnion);
+  const unionAccumulator = computeUnion ? new Set() : null;
+  const entries = [];
+  let totalTileCount = 0;
+
+  const candidates = Array.isArray(zoneEntries) ? zoneEntries : [];
+
+  for (const entry of candidates) {
+    const rects = entry?.geometry?.rects;
+
+    if (!Array.isArray(rects) || rects.length === 0) {
+      continue;
+    }
+
+    const tileCount = measureZoneTileCount(rects);
+
+    if (!(tileCount > 0)) {
+      continue;
+    }
+
+    totalTileCount += tileCount;
+
+    if (unionAccumulator) {
+      accumulateZoneUnion(rects, rows, cols, unionAccumulator);
+    }
+
+    const coverage =
+      totalTiles && totalTiles > 0 ? clamp01(tileCount / totalTiles) : null;
+    const label =
+      resolveZoneLabel(entry?.zone) ||
+      (typeof entry?.zone?.id === "string" ? entry.zone.id : "");
+    const color = resolveNonEmptyString(entry?.zone?.color, defaultFillColor);
+
+    entries.push({ label, color, tileCount, coverage });
+  }
+
+  return {
+    entries,
+    totalTiles,
+    totalTileCount,
+    unionTileCount: unionAccumulator ? unionAccumulator.size : null,
+  };
+}
+
 export function drawSelectionZones(ctx, cellSize, zoneEntries, options = {}) {
   if (!ctx || !(cellSize > 0)) return;
   if (!Array.isArray(zoneEntries) || zoneEntries.length === 0) return;
@@ -548,6 +969,17 @@ export function drawSelectionZones(ctx, cellSize, zoneEntries, options = {}) {
   });
 
   if (zones.length === 0) return;
+
+  const summary = summarizeSelectionZoneCoverage(zones, {
+    rows,
+    cols,
+    defaultFillColor,
+    computeUnion: config.computeUnion,
+    totalTiles:
+      Number.isFinite(config.totalTiles) && config.totalTiles > 0
+        ? config.totalTiles
+        : null,
+  });
 
   ctx.save();
   const previousLineWidth = ctx.lineWidth;
@@ -644,6 +1076,26 @@ export function drawSelectionZones(ctx, cellSize, zoneEntries, options = {}) {
   if (Number.isFinite(previousLineWidth)) {
     ctx.lineWidth = previousLineWidth;
   }
+
+  if (config.showLegend !== false) {
+    drawSelectionZoneLegend(ctx, cellSize, summary, {
+      padding: config.legendPadding,
+      margin: config.legendMargin,
+      lineHeight: config.legendLineHeight,
+      titleFont: config.legendTitleFont,
+      font: config.legendFont,
+      title: config.legendTitle,
+      background: config.legendBackground ?? labelBackground,
+      textColor: config.legendTextColor ?? labelFill,
+      metaColor: config.legendMetaColor,
+      swatchSize: config.legendSwatchSize,
+      swatchGap: config.legendSwatchGap,
+      anchor: config.legendAnchor ?? config.legendPosition,
+      canvasWidth,
+      canvasHeight,
+    });
+  }
+
   ctx.restore();
 }
 

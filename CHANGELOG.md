@@ -27,6 +27,9 @@ where practical.
 - Changelog tracking ongoing project evolution.
 - Life event dashboard summary combining births, deaths, and net population cadence derived from a new stats helper so observers can spot surges or collapses without scanning individual log entries.
 - Reproductive zone overlay tinting active patterns directly on the grid with labelled badges so curated mating areas remain visible while other heatmaps are active.
+- Reproductive zone legend summarising active patterns with coverage and tile
+  counts so observers can gauge how much of the map supports reproduction
+  without toggling overlays on and off.
 - Simulation law formalising energy exclusivity along with code and tests that ensure tiles occupied by organisms never report stored energy.
 - README guidance for embedding and headless automation, plus repository layout notes covering the engine environment adapters and shared utilities.
 - Architecture overview coverage for the environment adapters and life event summaries to keep subsystem documentation aligned with the current UI.
