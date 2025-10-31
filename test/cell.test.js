@@ -14,6 +14,7 @@ let Brain;
 let OUTPUT_GROUPS;
 let OFFSPRING_VIABILITY_BUFFER;
 let REPRODUCTION_COOLDOWN_BASE;
+let MAX_TILE_ENERGY;
 
 function investmentFor(
   energy,
@@ -182,9 +183,8 @@ test.before(async () => {
   ));
   ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
   ({ default: Brain, OUTPUT_GROUPS } = await import("../src/brain.js"));
-  ({ OFFSPRING_VIABILITY_BUFFER, REPRODUCTION_COOLDOWN_BASE } = await import(
-    "../src/config.js"
-  ));
+  ({ OFFSPRING_VIABILITY_BUFFER, REPRODUCTION_COOLDOWN_BASE, MAX_TILE_ENERGY } =
+    await import("../src/config.js"));
   if (typeof global.window === "undefined") global.window = globalThis;
   if (!window.GridManager) window.GridManager = {};
   if (typeof window.GridManager.maxTileEnergy !== "number") {
@@ -275,6 +275,64 @@ test("startReproductionCooldown respects the environment baseline", () => {
     cell.getReproductionCooldown(),
     expectedHigh,
     "DNA values above the floor should persist after rounding",
+  );
+});
+
+test("startReproductionCooldown responds to reproduction strain", () => {
+  const dna = new DNA(0, 0, 0);
+  const cell = new Cell(0, 0, dna, MAX_TILE_ENERGY);
+  const baseline = Math.max(1, Math.round(REPRODUCTION_COOLDOWN_BASE));
+
+  cell._reproductionCooldown = 0;
+  cell.dna.reproductionCooldownTicks = () => baseline + 2;
+  cell.dna.recoveryRate = () => 0.15;
+  cell.lastEventPressure = 0.6;
+  cell._resourceSignal = -0.4;
+
+  cell.startReproductionCooldown({
+    investment: MAX_TILE_ENERGY * 0.6,
+    partnerInvestment: MAX_TILE_ENERGY * 0.2,
+    totalInvestment: MAX_TILE_ENERGY * 0.8,
+    energyBefore: MAX_TILE_ENERGY,
+    energyAfter: MAX_TILE_ENERGY * 0.2,
+    starvationThreshold: cell.starvationThreshold(MAX_TILE_ENERGY),
+    viabilityThreshold: MAX_TILE_ENERGY * 0.5,
+    offspringEnergy: MAX_TILE_ENERGY * 0.44,
+    maxTileEnergy: MAX_TILE_ENERGY,
+  });
+
+  const strained = cell.getReproductionCooldown();
+
+  cell._reproductionCooldown = 0;
+  cell.dna.recoveryRate = () => 0.9;
+  cell.lastEventPressure = 0;
+  cell._resourceSignal = 0.5;
+
+  cell.startReproductionCooldown({
+    investment: MAX_TILE_ENERGY * 0.18,
+    partnerInvestment: MAX_TILE_ENERGY * 0.18,
+    totalInvestment: MAX_TILE_ENERGY * 0.36,
+    energyBefore: MAX_TILE_ENERGY,
+    energyAfter: MAX_TILE_ENERGY * 0.74,
+    starvationThreshold: cell.starvationThreshold(MAX_TILE_ENERGY),
+    viabilityThreshold: MAX_TILE_ENERGY * 0.3,
+    offspringEnergy: MAX_TILE_ENERGY * 0.27,
+    maxTileEnergy: MAX_TILE_ENERGY,
+  });
+
+  const recovered = cell.getReproductionCooldown();
+
+  assert.ok(
+    strained > recovered,
+    "High investment with low recovery should enforce a longer cooldown than a balanced, resilient pairing.",
+  );
+  assert.ok(
+    strained >= baseline,
+    "Cooldown length should never drop below the environment baseline.",
+  );
+  assert.ok(
+    recovered >= baseline,
+    "Even resilient lineages honour the global cooldown floor.",
   );
 });
 

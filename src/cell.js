@@ -460,6 +460,8 @@ export default class Cell {
     };
     const starvationA = parentA.starvationThreshold(resolvedMaxTileEnergy);
     const starvationB = parentB.starvationThreshold(resolvedMaxTileEnergy);
+    const energyBeforeA = parentA.energy;
+    const energyBeforeB = parentB.energy;
     const investA = calculateInvestment(
       parentA,
       starvationA,
@@ -523,6 +525,8 @@ export default class Cell {
 
     parentA.energy = Math.max(0, parentA.energy - investA);
     parentB.energy = Math.max(0, parentB.energy - investB);
+    const energyAfterA = parentA.energy;
+    const energyAfterB = parentB.energy;
     const offspring = new Cell(row, col, childDNA, offspringEnergy);
 
     parentA.#recordReproductionEnergyOutcome({
@@ -563,11 +567,33 @@ export default class Cell {
     }
     parentA.offspring = (parentA.offspring || 0) + 1;
     parentB.offspring = (parentB.offspring || 0) + 1;
+    const cooldownShared = {
+      totalInvestment,
+      viabilityThreshold,
+      transferEfficiency,
+      offspringEnergy,
+      maxTileEnergy: resolvedMaxTileEnergy,
+    };
+
     if (typeof parentA.startReproductionCooldown === "function") {
-      parentA.startReproductionCooldown();
+      parentA.startReproductionCooldown({
+        ...cooldownShared,
+        investment: investA,
+        partnerInvestment: investB,
+        energyBefore: energyBeforeA,
+        energyAfter: energyAfterA,
+        starvationThreshold: starvationA,
+      });
     }
     if (typeof parentB.startReproductionCooldown === "function") {
-      parentB.startReproductionCooldown();
+      parentB.startReproductionCooldown({
+        ...cooldownShared,
+        investment: investB,
+        partnerInvestment: investA,
+        energyBefore: energyBeforeB,
+        energyAfter: energyAfterB,
+        starvationThreshold: starvationB,
+      });
     }
 
     return offspring;
@@ -587,7 +613,7 @@ export default class Cell {
     return this.getReproductionCooldown() > 0;
   }
 
-  startReproductionCooldown() {
+  startReproductionCooldown(context) {
     const baselineCandidate = Number.isFinite(REPRODUCTION_COOLDOWN_BASE)
       ? REPRODUCTION_COOLDOWN_BASE
       : 2;
@@ -600,9 +626,128 @@ export default class Cell {
       Number.isFinite(dnaCooldown) && dnaCooldown > 0
         ? Math.round(dnaCooldown)
         : baseline;
-    const duration = Math.max(baseline, normalized);
+    const dnaPreferred = Math.max(baseline, normalized);
+    const contextCandidate =
+      context && typeof context === "object" && !Array.isArray(context)
+        ? context
+        : null;
+    const hasContext = contextCandidate
+      ? [
+          contextCandidate.investment,
+          contextCandidate.partnerInvestment,
+          contextCandidate.totalInvestment,
+          contextCandidate.energyBefore,
+          contextCandidate.energyAfter,
+          contextCandidate.starvationThreshold,
+          contextCandidate.viabilityThreshold,
+          contextCandidate.offspringEnergy,
+          contextCandidate.transferEfficiency,
+        ].some((value) => Number.isFinite(value))
+      : false;
 
-    this._reproductionCooldown = Math.max(this.getReproductionCooldown(), duration);
+    if (!hasContext) {
+      this._reproductionCooldown = Math.max(
+        this.getReproductionCooldown(),
+        dnaPreferred,
+      );
+
+      return;
+    }
+
+    const capacity = Math.max(
+      1e-6,
+      Number.isFinite(contextCandidate.maxTileEnergy) &&
+        contextCandidate.maxTileEnergy > 0
+        ? contextCandidate.maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
+    );
+    const investment = Number.isFinite(contextCandidate.investment)
+      ? Math.max(0, contextCandidate.investment)
+      : 0;
+    const partnerInvestment = Number.isFinite(contextCandidate.partnerInvestment)
+      ? Math.max(0, contextCandidate.partnerInvestment)
+      : 0;
+    const totalInvestment =
+      Number.isFinite(contextCandidate.totalInvestment) &&
+      contextCandidate.totalInvestment > 0
+        ? Math.max(0, contextCandidate.totalInvestment)
+        : investment + partnerInvestment;
+    const energyBefore = Number.isFinite(contextCandidate.energyBefore)
+      ? Math.max(0, contextCandidate.energyBefore)
+      : null;
+    const energyAfter = Number.isFinite(contextCandidate.energyAfter)
+      ? Math.max(0, contextCandidate.energyAfter)
+      : energyBefore != null
+        ? Math.max(0, energyBefore - investment)
+        : null;
+    const starvationThreshold = Number.isFinite(contextCandidate.starvationThreshold)
+      ? Math.max(0, contextCandidate.starvationThreshold)
+      : this.starvationThreshold(capacity);
+    const viabilityFraction =
+      Number.isFinite(contextCandidate.viabilityThreshold) &&
+      contextCandidate.viabilityThreshold > 0
+        ? clamp(contextCandidate.viabilityThreshold / capacity, 0, 2)
+        : 0;
+    const offspringFraction =
+      Number.isFinite(contextCandidate.offspringEnergy) &&
+      contextCandidate.offspringEnergy > 0
+        ? clamp(contextCandidate.offspringEnergy / capacity, 0, 2)
+        : viabilityFraction;
+    const investmentFraction = clamp(investment / capacity, 0, 3);
+    const reserveFraction =
+      energyBefore && energyBefore > 0
+        ? clamp(investment / energyBefore, 0, 2)
+        : investmentFraction;
+    const totalLoad = clamp(totalInvestment / capacity, 0, 3);
+    const energyAfterFraction =
+      energyAfter != null ? clamp(energyAfter / capacity, 0, 1) : 0;
+    const starvationStrain =
+      energyAfter != null && starvationThreshold > 0
+        ? clamp(
+            Math.max(0, starvationThreshold - energyAfter) / starvationThreshold,
+            0,
+            2,
+          )
+        : 0;
+    const riskTolerance = clamp(this.#resolveRiskTolerance(), 0, 1);
+    const recovery = clamp(this.dna?.recoveryRate?.() ?? 0.35, 0, 1);
+    const eventPressure = clamp(this.lastEventPressure ?? 0, 0, 1);
+    const resourceSignal = clamp(this._resourceSignal ?? 0, -1, 1);
+    const balance =
+      totalInvestment > 0
+        ? clamp(Math.abs(investment - partnerInvestment) / totalInvestment, 0, 1)
+        : 0;
+    const balanceRelief = (1 - balance) * 0.12;
+    const investmentPressure =
+      reserveFraction * (0.75 + (1 - recovery) * 0.5) +
+      investmentFraction * (0.45 + riskTolerance * 0.2);
+    const deficitPressure =
+      starvationStrain * (0.85 + (1 - recovery) * 0.45 + eventPressure * 0.25);
+    const demandPressure =
+      (totalLoad * 0.35 + offspringFraction * 0.28 + viabilityFraction * 0.22) *
+      (1 + eventPressure * 0.3);
+    const scarcityPenalty =
+      Math.max(0, -resourceSignal) * (0.25 + (1 - recovery) * 0.2);
+    const abundanceRelief =
+      energyAfterFraction * (0.4 + recovery * 0.5) +
+      Math.max(0, resourceSignal) * 0.25 +
+      balanceRelief;
+    const rawStrain =
+      investmentPressure +
+      deficitPressure +
+      demandPressure +
+      scarcityPenalty -
+      abundanceRelief -
+      recovery * 0.3;
+    const strain = clamp(rawStrain, -0.6, 3);
+    const multiplier = clamp(1 + strain, 0.4, 4);
+    const dynamicDuration = Math.max(1, Math.round(dnaPreferred * multiplier));
+    const finalDuration = Math.max(baseline, dynamicDuration);
+
+    this._reproductionCooldown = Math.max(
+      this.getReproductionCooldown(),
+      finalDuration,
+    );
   }
 
   tickReproductionCooldown() {

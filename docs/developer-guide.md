@@ -156,10 +156,11 @@ change behaviour without touching source:
 - `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` scales how much surplus energy
   parents must stockpile beyond the strictest genome's demand before gestation
   begins.
-- `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` enforces a global floor on how
-  many ticks parents must rest between births when their genomes don't demand a
-  longer recovery, giving you a coarse lever for calming or accelerating
-  reproduction without code edits.
+- `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` establishes the global floor on
+  how many ticks parents must rest between births. The simulation now stretches
+  or relaxes the actual cooldown based on parental energy investment,
+  resilience genes, and environmental pressure, so this override bounds the
+  minimum while the emergent system still honours genome-preferred delays.
 
 Non-finite or out-of-range values are ignored and fall back to the defaults
 resolved in [`src/config.js`](../src/config.js). Overlays pull the sanitised
