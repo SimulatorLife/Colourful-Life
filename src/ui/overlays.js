@@ -613,8 +613,6 @@ function createFitnessPalette(steps, hue) {
  */
 const WARNINGS = Object.freeze({
   eventColor: "Failed to resolve event overlay color; using fallback.",
-  activeZones: "Selection manager failed during active zone check.",
-  zoneGeometry: "Selection manager failed while resolving zone geometry.",
 });
 
 export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
@@ -1332,107 +1330,9 @@ function drawDensityLegend(ctx, cellSize, cols, rows, stats = {}) {
   ctx.restore();
 }
 
-function hasActiveSelectionZones(selectionManager) {
-  if (!selectionManager || typeof selectionManager.hasActiveZones !== "function") {
-    return false;
-  }
-
-  const result = invokeWithErrorBoundary(selectionManager.hasActiveZones, [], {
-    message: WARNINGS.activeZones,
-    reporter: warnOnce,
-    once: true,
-    thisArg: selectionManager,
-  });
-
-  return Boolean(result);
-}
-
-function getSelectionZoneEntries(selectionManager) {
-  if (
-    !selectionManager ||
-    typeof selectionManager.getActiveZoneRenderData !== "function"
-  ) {
-    return [];
-  }
-
-  const entries = invokeWithErrorBoundary(
-    selectionManager.getActiveZoneRenderData,
-    [],
-    {
-      message: WARNINGS.zoneGeometry,
-      reporter: warnOnce,
-      once: true,
-      thisArg: selectionManager,
-    },
-  );
-
-  return Array.isArray(entries) ? entries : [];
-}
-
-function* iterateRenderableRects(rects) {
-  if (!Array.isArray(rects)) return;
-
-  for (const rect of rects) {
-    if (!rect) continue;
-
-    const { rowSpan = 1, colSpan = 1 } = rect;
-
-    if (rowSpan <= 0 || colSpan <= 0) continue;
-
-    yield rect;
-  }
-}
-
-/**
- * Outlines active reproduction zones supplied by the selection manager.
- *
- * @param {import('../grid/selectionManager.js').default} selectionManager
- *   - Selection manager instance controlling mating zones.
- * @param {CanvasRenderingContext2D} ctx - Rendering context.
- * @param {number} cellSize - Size of a single grid cell in pixels.
- */
-export function drawSelectionZones(selectionManager, ctx, cellSize) {
-  if (!hasActiveSelectionZones(selectionManager)) return;
-
-  const zoneEntries = getSelectionZoneEntries(selectionManager);
-
-  if (zoneEntries.length === 0) return;
-
-  ctx.save();
-  for (const entry of zoneEntries) {
-    const zone = entry?.zone;
-    const geometry = entry?.geometry;
-
-    if (!zone) continue;
-
-    const color = zone.color || "rgba(255, 255, 255, 0.2)";
-
-    if (!color) continue;
-
-    const rects = Array.isArray(geometry?.rects) ? geometry.rects : null;
-
-    if (!rects || rects.length === 0) {
-      continue;
-    }
-
-    ctx.fillStyle = color;
-    for (const rect of iterateRenderableRects(rects)) {
-      const { row, col, rowSpan = 1, colSpan = 1 } = rect;
-
-      ctx.fillRect(
-        col * cellSize,
-        row * cellSize,
-        colSpan * cellSize,
-        rowSpan * cellSize,
-      );
-    }
-  }
-  ctx.restore();
-}
-
 /**
  * High-level overlay renderer orchestrating density, energy, fitness, trait,
- * event, and selection layers.
+ * and event layers.
  *
  * @param {Object} grid - Grid snapshot from {@link GridManager}.
  * @param {CanvasRenderingContext2D} ctx - Rendering context.
@@ -1450,12 +1350,10 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showLifeEventMarkers,
     showGridLines,
     showObstacles = true,
-    showReproductiveZones = true,
     maxTileEnergy = MAX_TILE_ENERGY,
     activeEvents,
     getEventColor,
     snapshot: providedSnapshot,
-    selectionManager: explicitSelection,
     fitnessOverlayOptions,
     gridLineOptions,
     lifeEvents,
@@ -1464,7 +1362,6 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     lifeEventLimit,
   } = opts;
   let snapshot = providedSnapshot;
-  const selectionManager = explicitSelection || grid?.selectionManager;
   const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
   const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
 
@@ -1472,9 +1369,6 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     drawEventOverlays(ctx, cellSize, activeEvents, getEventColor);
   }
 
-  if (selectionManager && showReproductiveZones) {
-    drawSelectionZones(selectionManager, ctx, cellSize);
-  }
   if (showObstacles) drawObstacleMask(grid, ctx, cellSize);
 
   if (showEnergy) {

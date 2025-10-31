@@ -306,7 +306,6 @@ export default class SimulationEngine {
       showFitness: defaults.showFitness,
       showLifeEventMarkers: defaults.showLifeEventMarkers,
       showGridLines: defaults.showGridLines,
-      showReproductiveZones: defaults.showReproductiveZones,
       lifeEventFadeTicks: initialLifeEventFadeTicks,
       lifeEventLimit: initialLifeEventLimit,
       leaderboardIntervalMs: defaults.leaderboardIntervalMs,
@@ -843,10 +842,6 @@ export default class SimulationEngine {
       showObstacles: this.state.showObstacles ?? true,
       showLifeEventMarkers: includeLifeEventMarkers,
       showGridLines: this.state.showGridLines ?? false,
-      showReproductiveZones:
-        this.state.showReproductiveZones !== undefined
-          ? this.state.showReproductiveZones
-          : true,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
         : GridManager.maxTileEnergy,
@@ -854,7 +849,6 @@ export default class SimulationEngine {
       activeEvents: this.eventManager.activeEvents,
       getEventColor: this.eventManager.getColor?.bind(this.eventManager),
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
-      selectionManager: this.selectionManager,
       lifeEvents: recentLifeEvents,
       currentTick: totalTicks,
       lifeEventFadeTicks: this.stats?.lifeEventFadeTicks,
@@ -1523,7 +1517,6 @@ export default class SimulationEngine {
     showFitness,
     showLifeEventMarkers,
     showGridLines,
-    showReproductiveZones,
   }) {
     const entries = Object.entries({
       showObstacles,
@@ -1533,7 +1526,6 @@ export default class SimulationEngine {
       showFitness,
       showLifeEventMarkers,
       showGridLines,
-      showReproductiveZones,
     })
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => [key, coerceBoolean(value, Boolean(this.state?.[key]))]);
@@ -1645,7 +1637,6 @@ export default class SimulationEngine {
       case "showFitness":
       case "showLifeEventMarkers":
       case "showGridLines":
-      case "showReproductiveZones":
         this.setOverlayVisibility({ [key]: value });
         break;
       case "autoPauseOnBlur":
