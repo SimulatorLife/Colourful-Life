@@ -70,7 +70,7 @@ test("autopause toggle updates pause indicator and notifies listeners", async ()
     );
     assert.is(
       uiManager.pauseOverlayAutopause.textContent,
-      "Autopause is enabled. Toggle it from Simulation Controls → Playback.",
+      "Autopause is enabled. Toggle it from Simulation Controls → Pause When Hidden.",
     );
 
     uiManager.setAutoPausePending(true);
@@ -89,7 +89,7 @@ test("autopause toggle updates pause indicator and notifies listeners", async ()
     );
     assert.is(
       uiManager.pauseOverlayAutopause.textContent,
-      "Autopause is enabled. Toggle it from Simulation Controls → Playback.",
+      "Autopause is enabled. Toggle it from Simulation Controls → Pause When Hidden.",
     );
 
     toggle.checked = false;
@@ -160,7 +160,7 @@ test("setAutoPauseOnBlur sanitizes string inputs", async () => {
     assert.is(uiManager.pauseOverlayAutopause?.hidden, false);
     assert.is(
       uiManager.pauseOverlayAutopause?.textContent,
-      "Autopause is enabled. Toggle it from Simulation Controls → Playback.",
+      "Autopause is enabled. Toggle it from Simulation Controls → Pause When Hidden.",
     );
 
     uiManager.setAutoPausePending(true);
@@ -176,7 +176,7 @@ test("setAutoPauseOnBlur sanitizes string inputs", async () => {
     assert.is(uiManager.autoPauseOnBlur, true, "numeric string '1' enables auto pause");
     assert.is(
       uiManager.pauseOverlayAutopause?.textContent,
-      "Autopause is enabled. Toggle it from Simulation Controls → Playback.",
+      "Autopause is enabled. Toggle it from Simulation Controls → Pause When Hidden.",
     );
 
     uiManager.setAutoPauseOnBlur("0");

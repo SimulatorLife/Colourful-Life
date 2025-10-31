@@ -23,7 +23,7 @@ const AUTO_PAUSE_DESCRIPTION =
   "Automatically pause the simulation when the tab or window loses focus, resuming when you return.";
 
 const AUTO_PAUSE_LOCATION_HINT =
-  "Autopause is enabled. Toggle it from Simulation Controls → Playback.";
+  "Autopause is enabled. Toggle it from Simulation Controls → Pause When Hidden.";
 
 const LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION =
   "Pinpoint recent births and deaths directly on the grid with fading markers.";
