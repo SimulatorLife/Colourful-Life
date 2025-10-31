@@ -203,6 +203,10 @@ export default class Cell {
       typeof this.dna.reproductionEnergyAdaptationProfile === "function"
         ? this.dna.reproductionEnergyAdaptationProfile()
         : null;
+    this.exploreExploitProfile =
+      typeof this.dna.exploreExploitProfile === "function"
+        ? this.dna.exploreExploitProfile()
+        : null;
     this.mateAffinityPlasticity =
       typeof this.dna.mateAffinityPlasticityProfile === "function"
         ? this.dna.mateAffinityPlasticityProfile()
@@ -4754,14 +4758,55 @@ export default class Cell {
     const trend = clamp(tileEnergyDelta ?? 0, -1, 1);
     const fatigue = this.#currentNeuralFatigue();
     const riskTolerance = this.#resolveRiskTolerance();
-    let baseIntent =
-      0.45 +
-      scarcity * 0.35 +
-      (1 - density) * 0.1 +
-      Math.max(0, -trend) * 0.1 +
-      riskTolerance * 0.1 -
-      fatigue * 0.25;
+    const profile = this.exploreExploitProfile || {};
+    const baseBias = clamp(
+      Number.isFinite(profile.base) ? profile.base : 0.45,
+      0.05,
+      0.95,
+    );
+    const scarcityWeight = clamp(
+      Number.isFinite(profile.scarcityWeight) ? profile.scarcityWeight : 0.35,
+      0,
+      1,
+    );
+    const densityWeight = clamp(
+      Number.isFinite(profile.densityReliefWeight) ? profile.densityReliefWeight : 0.1,
+      -0.5,
+      0.5,
+    );
+    const declineWeight = clamp(
+      Number.isFinite(profile.declineWeight) ? profile.declineWeight : 0.1,
+      0,
+      0.6,
+    );
+    const riskWeight = clamp(
+      Number.isFinite(profile.riskWeight) ? profile.riskWeight : 0.1,
+      0,
+      0.6,
+    );
+    const fatiguePenalty = clamp(
+      Number.isFinite(profile.fatiguePenalty) ? profile.fatiguePenalty : 0.25,
+      0,
+      0.7,
+    );
+    const reserveWeight = clamp(
+      Number.isFinite(profile.reserveWeight) ? profile.reserveWeight : 0,
+      0,
+      0.6,
+    );
+    const scanUrgency = clamp(
+      Number.isFinite(profile.scanUrgency) ? profile.scanUrgency : 1,
+      0,
+      2,
+    );
+    let baseIntent = baseBias;
 
+    baseIntent += scarcity * scarcityWeight;
+    baseIntent += (1 - density) * densityWeight;
+    baseIntent += Math.max(0, -trend) * declineWeight;
+    baseIntent += riskTolerance * riskWeight;
+    baseIntent -= fatigue * fatiguePenalty;
+    baseIntent -= energyFrac * reserveWeight;
     baseIntent = clamp(baseIntent, 0.05, 0.95);
 
     let neuralSignal = null;
@@ -4817,7 +4862,9 @@ export default class Cell {
       neuralIntent != null ? clamp(0.5 + neuralAdvantage * 0.35, 0, 1) : 0;
     const finalIntent =
       neuralIntent != null ? lerp(baseIntent, neuralIntent, neuralWeight) : baseIntent;
-    const availableIntent = energyScanAvailable ? finalIntent : 0;
+    const availableIntent = energyScanAvailable
+      ? clamp(finalIntent * scanUrgency, 0, 1)
+      : 0;
     const rng = this.resolveRng("movementExploitIntent");
     const shouldAttempt = energyScanAvailable && rng() < availableIntent;
 
@@ -4827,6 +4874,7 @@ export default class Cell {
       exploreExploitNeural: neuralSignal,
       exploreExploitAdvantage: neuralAdvantage,
       exploreExploitScanAvailable: energyScanAvailable,
+      exploreExploitScanUrgency: scanUrgency,
       exploreExploitPlanned: shouldAttempt,
       exploreExploitExecuted: false,
       exploreExploitSucceeded: false,

@@ -133,6 +133,47 @@ function createInteractionBrainStub({ sequence = [] } = {}) {
   };
 }
 
+function createMovementBrainStub({ probabilities } = {}) {
+  const distribution = {
+    rest: 0.2,
+    pursue: 0.1,
+    avoid: 0.15,
+    cohere: 0.05,
+    explore: 0.5,
+    ...probabilities,
+  };
+  const entries = Object.entries(distribution);
+  const normalization = entries.reduce((sum, [, value]) => sum + value, 0) || 1;
+
+  return {
+    connectionCount: 1,
+    evaluateGroup(group, _sensors, options = {}) {
+      if (group !== "movement") {
+        return null;
+      }
+
+      const values = entries.reduce((acc, [key, value]) => {
+        const safe = Math.max(1e-6, value / normalization);
+
+        acc[key] = Math.log(safe);
+
+        return acc;
+      }, {});
+      const sensors = new Float32Array(Brain.SENSOR_COUNT);
+      const result = {
+        values,
+        activationCount: 3,
+        sensors,
+        trace: options.trace === false ? null : { nodes: [] },
+      };
+
+      this.lastEvaluation = { ...result, group, values };
+
+      return result;
+    },
+  };
+}
+
 test.before(async () => {
   ({ default: Cell } = await import("../src/cell.js"));
   ({ DNA, GENE_LOCI } = await import("../src/genome.js"));
@@ -450,6 +491,97 @@ test("harvest crowding penalty blends DNA tolerance and environment signals", ()
   assert.ok(
     reliefPenalty >= tightenedPenalty,
     "abundant, uncrowded tiles should restore harvesting capacity",
+  );
+});
+
+test("explore/exploit intent leans on DNA exploration profile", () => {
+  const rngOverrides = {
+    movementDecision: () => 0.95,
+    movementExploitIntent: () => 0.4,
+    default: () => 0.5,
+  };
+  const explorerDNA = new DNA(0, 0, 0);
+
+  explorerDNA.riskTolerance = () => 0.8;
+  explorerDNA.exploreExploitProfile = () => ({
+    base: 0.45,
+    scarcityWeight: 0.42,
+    densityReliefWeight: 0.18,
+    declineWeight: 0.18,
+    riskWeight: 0.16,
+    fatiguePenalty: 0.12,
+    reserveWeight: 0.05,
+    scanUrgency: 1.25,
+  });
+  explorerDNA.prngFor = (key) => rngOverrides[key] ?? rngOverrides.default;
+
+  const cautiousDNA = new DNA(0, 0, 0);
+
+  cautiousDNA.riskTolerance = () => 0.2;
+  cautiousDNA.exploreExploitProfile = () => ({
+    base: 0.32,
+    scarcityWeight: 0.18,
+    densityReliefWeight: -0.05,
+    declineWeight: 0.08,
+    riskWeight: 0.04,
+    fatiguePenalty: 0.32,
+    reserveWeight: 0.3,
+    scanUrgency: 0.55,
+  });
+  cautiousDNA.prngFor = (key) => rngOverrides[key] ?? rngOverrides.default;
+
+  const explorer = new Cell(0, 0, explorerDNA, 0.8);
+  const cautious = new Cell(0, 0, cautiousDNA, 0.8);
+
+  explorer._neuralFatigue = 0.3;
+  cautious._neuralFatigue = 0.3;
+
+  explorer.brain = createMovementBrainStub();
+  cautious.brain = createMovementBrainStub();
+
+  const grid = [[null]];
+  const movementContext = {
+    rows: 1,
+    cols: 1,
+    localDensity: 0.3,
+    densityEffectMultiplier: 1,
+    tileEnergy: 0.5,
+    tileEnergyDelta: -0.2,
+    maxTileEnergy: 1,
+    getEnergyAt: () => 0.6,
+    moveRandomly: () => {},
+  };
+
+  explorer.executeMovementStrategy(grid, 0, 0, [], [], [], movementContext);
+  cautious.executeMovementStrategy(grid, 0, 0, [], [], [], movementContext);
+
+  const explorerOutcome = explorer._decisionContextIndex?.get("movement")?.outcome;
+  const cautiousOutcome = cautious._decisionContextIndex?.get("movement")?.outcome;
+
+  assert.ok(explorerOutcome, "explorer outcome should be recorded");
+  assert.ok(cautiousOutcome, "cautious outcome should be recorded");
+  assert.ok(
+    explorerOutcome.exploreExploitBase > cautiousOutcome.exploreExploitBase,
+    "exploration-biased DNA should elevate the baseline exploit intent",
+  );
+  assert.ok(
+    explorerOutcome.exploreExploitIntent > cautiousOutcome.exploreExploitIntent,
+    "exploration-biased DNA should sustain a higher combined intent",
+  );
+  assert.is(
+    explorerOutcome.exploreExploitPlanned,
+    true,
+    "explorer should attempt energy exploitation when the scan is available",
+  );
+  assert.is(
+    cautiousOutcome.exploreExploitPlanned,
+    false,
+    "cautious genomes should decline exploit scans under the same conditions",
+  );
+  assert.ok(
+    explorerOutcome.exploreExploitScanUrgency >
+      cautiousOutcome.exploreExploitScanUrgency,
+    "exploration profile should surface a stronger scan urgency",
   );
 });
 

@@ -1062,6 +1062,62 @@ export class DNA {
     return { baseline, taper, curvature };
   }
 
+  exploreExploitProfile() {
+    const exploration = this.geneFraction(GENE_LOCI.EXPLORATION);
+    const foraging = this.geneFraction(GENE_LOCI.FORAGING);
+    const movement = this.geneFraction(GENE_LOCI.MOVEMENT);
+    const sense = this.geneFraction(GENE_LOCI.SENSE);
+    const strategy = this.geneFraction(GENE_LOCI.STRATEGY);
+    const risk = this.geneFraction(GENE_LOCI.RISK);
+    const recovery = this.geneFraction(GENE_LOCI.RECOVERY);
+    const efficiency = this.geneFraction(GENE_LOCI.ENERGY_EFFICIENCY);
+    const parental = this.geneFraction(GENE_LOCI.PARENTAL);
+    const density = this.geneFraction(GENE_LOCI.DENSITY);
+
+    const curiosity =
+      0.22 + exploration * 0.4 + foraging * 0.25 + movement * 0.15 + strategy * 0.12;
+    const restraint = 0.1 + parental * 0.22 + (1 - efficiency) * 0.16;
+    const base = clamp(curiosity - restraint, 0.12, 0.88);
+    const scarcityWeight = clamp(
+      0.16 + exploration * 0.35 + foraging * 0.28,
+      0.05,
+      0.7,
+    );
+    const densityReliefWeight = clamp(
+      0.05 + (1 - density) * 0.22 + movement * 0.1 - parental * 0.08,
+      -0.15,
+      0.35,
+    );
+    const declineWeight = clamp(0.06 + sense * 0.2 + strategy * 0.16, 0.02, 0.45);
+    const riskWeight = clamp(0.04 + risk * 0.28 + exploration * 0.12, 0.02, 0.4);
+    const fatiguePenalty = clamp(
+      0.18 + (1 - recovery) * 0.25 + parental * 0.12 - risk * 0.08,
+      0.12,
+      0.45,
+    );
+    const reserveWeight = clamp(
+      0.04 + (1 - efficiency) * 0.24 + parental * 0.22 - risk * 0.1,
+      0,
+      0.42,
+    );
+    const scanUrgency = clamp(
+      0.45 + foraging * 0.35 + sense * 0.2 + exploration * 0.12 - parental * 0.25,
+      0.2,
+      1.35,
+    );
+
+    return {
+      base,
+      scarcityWeight,
+      densityReliefWeight,
+      declineWeight,
+      riskWeight,
+      fatiguePenalty,
+      reserveWeight,
+      scanUrgency,
+    };
+  }
+
   energyScarcityRelief(energyFraction = 0, profile = null) {
     const resolvedEnergy = clamp(
       Number.isFinite(energyFraction) ? energyFraction : 0,
