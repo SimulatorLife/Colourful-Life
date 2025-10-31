@@ -839,6 +839,49 @@ export default class Cell {
       mate.noveltyPressure = noveltyPressure;
     }
 
+    const opportunityMomentum = clamp(
+      Number.isFinite(this._mateOpportunityMomentum)
+        ? this._mateOpportunityMomentum
+        : 0,
+      0,
+      1,
+    );
+    const suppressionSignal = clamp(
+      Number.isFinite(this._mateDiversitySuppression)
+        ? this._mateDiversitySuppression
+        : 0,
+      0,
+      1,
+    );
+
+    if (opportunityMomentum > 0.001 || suppressionSignal > 0.001) {
+      const appetiteLift = Math.max(0, appetite);
+      const diversityLift =
+        diversity *
+        (opportunityMomentum * (0.45 + appetiteLift * 0.35) +
+          suppressionSignal * (0.25 + appetiteLift * 0.25));
+      const similarityDrag = clamp(
+        similarity *
+          (suppressionSignal * (0.3 + opportunityMomentum * 0.2) +
+            opportunityMomentum * 0.1),
+        0,
+        1,
+      );
+      const penaltyFactor = clamp(
+        similarityDrag * (0.5 + suppressionSignal * 0.4),
+        0,
+        0.7,
+      );
+      const boostedWeight =
+        Math.max(0.0001, selectionWeight) +
+        diversityLift * (0.55 + appetiteLift * 0.35);
+
+      preferenceScore += diversityLift - similarityDrag * (0.6 + appetiteLift * 0.2);
+      selectionWeight = Math.max(0.0001, boostedWeight * (1 - penaltyFactor));
+      mate.opportunityMomentum = opportunityMomentum;
+      mate.diversitySuppression = suppressionSignal;
+    }
+
     mate.similarity = similarity;
     mate.diversity = diversity;
     mate.appetite = appetite;
