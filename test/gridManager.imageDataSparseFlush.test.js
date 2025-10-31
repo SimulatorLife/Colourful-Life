@@ -1,4 +1,5 @@
 import { assert, test } from "#tests/harness";
+import { RenderStrategy } from "../src/grid/renderStrategy.js";
 
 class StubImageDataContext {
   constructor(canvas, sink) {
@@ -67,7 +68,7 @@ test("GridManager batches sparse dirty tiles into row segments", async () => {
   });
 
   try {
-    gm.draw({ renderStrategy: "image-data", showObstacles: false });
+    gm.draw({ renderStrategy: RenderStrategy.IMAGE_DATA, showObstacles: false });
     assert.is(calls.length, 1, "initial draw should write the full buffer once");
 
     calls.length = 0;
@@ -75,7 +76,7 @@ test("GridManager batches sparse dirty tiles into row segments", async () => {
     gm.placeCell(0, 0, { color: "#ff0000" });
     gm.placeCell(11, 11, { color: "#00ff00" });
 
-    gm.draw({ renderStrategy: "image-data", showObstacles: false });
+    gm.draw({ renderStrategy: RenderStrategy.IMAGE_DATA, showObstacles: false });
 
     assert.is(calls.length, 2, "sparse tiles should flush per affected row");
 
