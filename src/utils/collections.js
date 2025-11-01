@@ -217,30 +217,31 @@ export function takeTopBy(array, count, scoreAccessor = (value) => value) {
   quickselectInPlace(array, limit - 1, compare);
 
   const thresholdScore = resolveScore(array[limit - 1]);
-  let greaterCount = 0;
+  const partitions = array.reduce(
+    (acc, entry) => {
+      const score = resolveScore(entry);
 
-  for (let i = 0; i < array.length; i += 1) {
-    if (resolveScore(array[i]) > thresholdScore) {
-      greaterCount += 1;
-    }
-  }
+      if (score > thresholdScore) {
+        acc.selected.push(entry);
+      } else if (score === thresholdScore) {
+        acc.ties.push(entry);
+      } else {
+        acc.remainder.push(entry);
+      }
 
-  let thresholdSlots = Math.max(0, limit - greaterCount);
-  const selected = [];
-  const remainder = [];
+      return acc;
+    },
+    { selected: [], ties: [], remainder: [] },
+  );
 
-  for (let i = 0; i < array.length; i += 1) {
-    const entry = array[i];
-    const score = resolveScore(entry);
+  const { selected, ties, remainder } = partitions;
+  const thresholdSlots = Math.max(0, limit - selected.length);
 
-    if (score > thresholdScore) {
-      selected.push(entry);
-    } else if (score === thresholdScore && thresholdSlots > 0) {
-      selected.push(entry);
-      thresholdSlots -= 1;
-    } else {
-      remainder.push(entry);
-    }
+  if (thresholdSlots > 0) {
+    selected.push(...ties.slice(0, thresholdSlots));
+    remainder.push(...ties.slice(thresholdSlots));
+  } else if (ties.length > 0) {
+    remainder.push(...ties);
   }
 
   while (selected.length > limit) {
@@ -248,10 +249,7 @@ export function takeTopBy(array, count, scoreAccessor = (value) => value) {
   }
 
   array.length = 0;
-
-  for (let i = 0; i < remainder.length; i += 1) {
-    array.push(remainder[i]);
-  }
+  array.push(...remainder);
 
   return selected;
 }
