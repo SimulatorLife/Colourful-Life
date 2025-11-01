@@ -110,7 +110,7 @@ The simulation runs on cooperating modules housed in `src/`:
 - **Energy system** (`src/energySystem.js`) — Computes tile-level regeneration, diffusion, and drain while blending in environmental events and density penalties.
 - **Cell model** (`src/cell.js`) — Maintains per-organism state, applies DNA-driven preferences, and records telemetry consumed by fitness calculations and overlays.
 - **Genetics and brains** (`src/genome.js`, `src/brain.js`) — DNA factories encode traits ranging from combat appetite to neural wiring. Brains interpret sensor inputs, adapt gains over time, and emit movement/interaction intents.
-- **Interaction system** (`src/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
+- **Interaction system** (`src/grid/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
 - **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and color overlays.
 - **Stats & leaderboard** (`src/stats/index.js`, `src/stats/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface environmental summaries, select the top-performing organisms, and share trait aggregation helpers with [`src/stats/traitAggregation.js`](src/stats/traitAggregation.js) for telemetry.
 - **Fitness scoring** (`src/stats/fitness.js`) — Computes composite organism fitness used by the leaderboard, overlays, and telemetry.
