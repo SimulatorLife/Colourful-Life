@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { readdir, stat } from "node:fs/promises";
+import { constants as osConstants } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
@@ -16,6 +17,22 @@ const RUN_IN_BAND_ASSIGNABLE_FLAGS = new Set(["--runInBand", "--run-in-band"]);
 const RUN_IN_BAND_FLAG = "--test-concurrency=1";
 const RUN_TESTS_BY_PATH_FLAGS = new Set(["--runTestsByPath", "--run-tests-by-path"]);
 const TEST_FILE_PATTERN = /\.test\.(?:[cm]?js)$/i;
+
+function resolveSignalExitCode(signal) {
+  if (typeof signal === "number" && Number.isFinite(signal)) {
+    return 128 + signal;
+  }
+
+  if (typeof signal === "string") {
+    const signalNumber = osConstants?.signals?.[signal];
+
+    if (Number.isFinite(signalNumber)) {
+      return 128 + signalNumber;
+    }
+  }
+
+  return 128;
+}
 
 export function normalizeTestRunnerArgs(rawArgs = []) {
   const flags = [];
@@ -287,9 +304,7 @@ function run(command, args) {
 
     child.on("close", (code, signal) => {
       if (signal) {
-        const signalCode = typeof signal === "string" ? 128 + signal.charCodeAt(0) : 1;
-
-        resolve(signalCode);
+        resolve(resolveSignalExitCode(signal));
 
         return;
       }
@@ -323,6 +338,8 @@ export async function runNodeTests(rawArgs = []) {
 
   return run(process.execPath, testArgs);
 }
+
+export const __test__ = { resolveSignalExitCode };
 
 async function cli() {
   const exitCode = await runNodeTests(process.argv.slice(2));

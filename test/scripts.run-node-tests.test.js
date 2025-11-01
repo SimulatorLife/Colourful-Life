@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   expandTestTargets,
   normalizeTestRunnerArgs,
+  __test__,
 } from "../scripts/run-node-tests.mjs";
 
 test("normalizeTestRunnerArgs filters falsey watch flags", () => {
@@ -184,4 +185,16 @@ test("expandTestTargets resolves directory arguments to contained test files", a
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test("resolveSignalExitCode maps signals to POSIX exit codes", () => {
+  const { resolveSignalExitCode } = __test__;
+
+  assert.equal(resolveSignalExitCode("SIGINT"), 130, "SIGINT should map to 130");
+  assert.equal(resolveSignalExitCode(15), 143, "numeric signals should add 128");
+  assert.equal(
+    resolveSignalExitCode("UNKNOWN"),
+    128,
+    "unknown signals fall back to 128",
+  );
 });
