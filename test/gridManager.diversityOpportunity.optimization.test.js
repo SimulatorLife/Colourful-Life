@@ -1,4 +1,3 @@
-import { performance } from "node:perf_hooks";
 import { test, assert } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
 import { summarizeMateDiversityOpportunity } from "../src/grid/diversityOpportunity.js";
@@ -142,31 +141,47 @@ test("optimized diversity opportunity summary avoids repeated sorts", () => {
     chosenDiversity: 0.45,
     diversityThreshold: 0.55,
   };
-  const iterations = 200;
+  const iterations = 50;
 
-  // Warm-up both implementations to reduce one-off initialization cost.
-  legacySummarize(options);
-  summarizeMateDiversityOpportunity(options);
+  const originalSort = Array.prototype.sort;
+  let sortCallCount = 0;
 
-  const legacyStart = performance.now();
+  Array.prototype.sort = function patchedSort(...args) {
+    sortCallCount += 1;
 
-  for (let i = 0; i < iterations; i += 1) {
+    return originalSort.apply(this, args);
+  };
+
+  try {
     legacySummarize(options);
-  }
-
-  const legacyElapsed = performance.now() - legacyStart;
-  const optimizedStart = performance.now();
-
-  for (let i = 0; i < iterations; i += 1) {
     summarizeMateDiversityOpportunity(options);
+
+    for (let i = 0; i < iterations; i += 1) {
+      legacySummarize(options);
+    }
+
+    const legacySorts = sortCallCount;
+
+    sortCallCount = 0;
+
+    for (let i = 0; i < iterations; i += 1) {
+      summarizeMateDiversityOpportunity(options);
+    }
+
+    const optimizedSorts = sortCallCount;
+
+    assert.ok(
+      legacySorts >= iterations,
+      "legacy implementation should rely on Array.prototype.sort",
+    );
+    assert.is(
+      optimizedSorts,
+      0,
+      "optimized implementation should avoid Array.prototype.sort",
+    );
+  } finally {
+    Array.prototype.sort = originalSort;
   }
-
-  const optimizedElapsed = performance.now() - optimizedStart;
-
-  assert.ok(
-    optimizedElapsed <= legacyElapsed * 0.6,
-    `Expected optimized path (${optimizedElapsed.toFixed(3)}ms) to be at least 40% faster than legacy (${legacyElapsed.toFixed(3)}ms)`,
-  );
 });
 
 test("summarizeMateDiversityOpportunity rewards complementary pairings", () => {
