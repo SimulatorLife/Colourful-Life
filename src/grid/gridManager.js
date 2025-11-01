@@ -51,6 +51,7 @@ import {
   DECAY_RELEASE_RATE,
   INITIAL_TILE_ENERGY_FRACTION_DEFAULT,
 } from "../config.js";
+import TileIndexTracker from "../utils/tileIndexTracker.js";
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const EMPTY_EVENT_LIST = Object.freeze([]);
 const EMPTY_TARGET_LIST = Object.freeze([]);
@@ -2772,7 +2773,7 @@ export default class GridManager {
       timestamp: 0,
     };
     this.#resetImageDataBuffer();
-    this.energyDirtyTiles = new Set();
+    this.energyDirtyTiles = new TileIndexTracker(rows, cols);
     this.energyTimerNow =
       typeof options?.performanceNow === "function"
         ? options.performanceNow
@@ -2826,7 +2827,7 @@ export default class GridManager {
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
     this.densityLiveGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.densityGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
-    this.densityDirtyTiles = new Set();
+    this.densityDirtyTiles = new TileIndexTracker(rows, cols);
     this.lastSnapshot = null;
     this.minPopulation = GridManager.#computeMinPopulation(rows, cols);
     this.currentObstaclePreset = "none";
@@ -3518,7 +3519,7 @@ export default class GridManager {
     }
 
     if (!this.energyDirtyTiles) {
-      this.energyDirtyTiles = new Set();
+      this.energyDirtyTiles = new TileIndexTracker(this.rows, this.cols);
     }
 
     for (let row = 0; row < this.rows; row++) {
@@ -4308,6 +4309,16 @@ export default class GridManager {
     this.#initializeRenderDirtyTracking(rowsInt, colsInt);
     this.#initializeOccupancy(this.rows, this.cols);
     this.#resetDensityIntegral();
+    if (this.energyDirtyTiles instanceof TileIndexTracker) {
+      this.energyDirtyTiles.resize(rowsInt, colsInt);
+    } else {
+      this.energyDirtyTiles = new TileIndexTracker(rowsInt, colsInt);
+    }
+    if (this.densityDirtyTiles instanceof TileIndexTracker) {
+      this.densityDirtyTiles.resize(rowsInt, colsInt);
+    } else {
+      this.densityDirtyTiles = new TileIndexTracker(rowsInt, colsInt);
+    }
     this.energyGrid = Array.from({ length: rowsInt }, () => {
       const row = new Float64Array(colsInt);
 
@@ -6327,7 +6338,9 @@ export default class GridManager {
   }
 
   #markDensityDirty(row, col) {
-    if (!this.densityDirtyTiles) this.densityDirtyTiles = new Set();
+    if (!this.densityDirtyTiles) {
+      this.densityDirtyTiles = new TileIndexTracker(this.rows, this.cols);
+    }
 
     this.densityDirtyTiles.add(row * this.cols + col);
   }
@@ -6373,7 +6386,7 @@ export default class GridManager {
 
   markEnergyDirty(row, col, options = {}) {
     if (!this.energyDirtyTiles) {
-      this.energyDirtyTiles = new Set();
+      this.energyDirtyTiles = new TileIndexTracker(this.rows, this.cols);
     }
 
     this.#markEnergyDirty(row, col, options);
@@ -6509,7 +6522,7 @@ export default class GridManager {
     }
 
     if (!this.densityDirtyTiles) {
-      this.densityDirtyTiles = new Set();
+      this.densityDirtyTiles = new TileIndexTracker(this.rows, this.cols);
     }
 
     if (targetRadius !== this.densityRadius) {
