@@ -109,6 +109,10 @@ scripts/profile-energy.mjs`) lifted post-warmup survivors from 83 → 92 while
 
 ### Removed
 
+- Life Event Timeline card from the Life Event Log panel. The summary tiles and
+  recent event list already surface births, deaths, net change, and cadence, so
+  the extra canvas duplicated insights while expanding our maintenance and
+  accessibility surface.
 - Retired the unused `scripts/profile-render-dirty-delete.mjs` profiling probe
   since newer render benchmarking harnesses superseded it and nothing references
   the script anymore.
