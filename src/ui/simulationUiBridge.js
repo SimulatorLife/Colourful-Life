@@ -184,15 +184,8 @@ function invokeUiManagerMethod(
  * @param {import('./uiManager.js').default | HeadlessUiBridgeSurface} uiManager
  * @returns {Array<() => void>} Engine listener unsubscribe callbacks.
  */
-function subscribeEngineToUi(engine, uiManager) {
-  if (!engine || !uiManager) {
-    return [];
-  }
-
-  const callUi = (methodName, args = [], context = UI_WARNING_CONTEXTS.state) =>
-    invokeUiManagerMethod(uiManager, methodName, args, context);
-
-  const syncUpdatesPerSecond = (changes) => {
+function createUpdatesPerSecondSynchronizer(engine, callUi) {
+  return (changes) => {
     const nextValue = changes?.updatesPerSecond;
 
     if (nextValue !== undefined) {
@@ -223,214 +216,209 @@ function subscribeEngineToUi(engine, uiManager) {
       UI_WARNING_CONTEXTS.speed,
     );
   };
+}
+
+function createMetricsHandler(callUi) {
+  return ({ stats, metrics, environment }) =>
+    callUi("renderMetrics", [stats, metrics, environment], UI_WARNING_CONTEXTS.metrics);
+}
+
+function createLeaderboardHandler(callUi) {
+  return ({ entries }) =>
+    callUi("renderLeaderboard", [entries], UI_WARNING_CONTEXTS.leaderboard);
+}
+
+function propagateOverlayChanges(changes, callUi) {
+  if (!changes) {
+    return;
+  }
+
+  for (const [overlayKey, setterName] of Object.entries(OVERLAY_TOGGLE_SETTERS)) {
+    if (changes[overlayKey] === undefined) {
+      continue;
+    }
+
+    callUi(
+      setterName,
+      [changes[overlayKey], { notify: false }],
+      UI_WARNING_CONTEXTS.overlay,
+    );
+  }
+}
+
+function propagateGeometryChange({ changes, engine, callUi }) {
+  const geometryChanged =
+    changes &&
+    (Object.hasOwn(changes, "gridRows") ||
+      Object.hasOwn(changes, "gridCols") ||
+      Object.hasOwn(changes, "cellSize"));
+
+  if (!geometryChanged) {
+    return;
+  }
+
+  const geometry = {
+    rows: Object.hasOwn(changes, "gridRows")
+      ? changes.gridRows
+      : Number.isFinite(engine?.rows)
+        ? engine.rows
+        : undefined,
+    cols: Object.hasOwn(changes, "gridCols")
+      ? changes.gridCols
+      : Number.isFinite(engine?.cols)
+        ? engine.cols
+        : undefined,
+    cellSize: Object.hasOwn(changes, "cellSize")
+      ? changes.cellSize
+      : Number.isFinite(engine?.cellSize)
+        ? engine.cellSize
+        : undefined,
+  };
+
+  callUi("setGridGeometry", [geometry], UI_WARNING_CONTEXTS.geometry);
+}
+
+function propagateStateChanges({ changes, engine, callUi, syncUpdatesPerSecond }) {
+  if (!changes || typeof changes !== "object") {
+    return;
+  }
+
+  for (const { key, method, args = passThroughArgs } of STATE_CHANGE_HANDLERS) {
+    if (changes[key] === undefined) {
+      continue;
+    }
+
+    const methodArgs = typeof args === "function" ? args(changes[key]) : args;
+
+    callUi(method, methodArgs, UI_WARNING_CONTEXTS.state);
+  }
+
+  syncUpdatesPerSecond(changes);
+  propagateOverlayChanges(changes, callUi);
+  propagateGeometryChange({ changes, engine, callUi });
+}
+
+function createStateChangeHandler({ engine, callUi, syncUpdatesPerSecond }) {
+  return ({ changes }) =>
+    propagateStateChanges({ changes, engine, callUi, syncUpdatesPerSecond });
+}
+
+function subscribeEngineToUi(engine, uiManager) {
+  if (!engine || !uiManager) {
+    return [];
+  }
+
+  const callUi = (methodName, args = [], context = UI_WARNING_CONTEXTS.state) =>
+    invokeUiManagerMethod(uiManager, methodName, args, context);
+  const syncUpdatesPerSecond = createUpdatesPerSecondSynchronizer(engine, callUi);
+  const handleMetrics = createMetricsHandler(callUi);
+  const handleLeaderboard = createLeaderboardHandler(callUi);
+  const handleStateChange = createStateChangeHandler({
+    engine,
+    callUi,
+    syncUpdatesPerSecond,
+  });
 
   return [
-    engine.on?.("metrics", ({ stats, metrics, environment }) => {
-      callUi(
-        "renderMetrics",
-        [stats, metrics, environment],
-        UI_WARNING_CONTEXTS.metrics,
-      );
-    }),
-    engine.on?.("leaderboard", ({ entries }) => {
-      callUi("renderLeaderboard", [entries], UI_WARNING_CONTEXTS.leaderboard);
-    }),
-    engine.on?.("state", ({ changes }) => {
-      if (changes?.paused !== undefined) {
-        callUi("setPauseState", [changes.paused], UI_WARNING_CONTEXTS.state);
-      }
-
-      if (changes?.autoPauseOnBlur !== undefined) {
-        callUi(
-          "setAutoPauseOnBlur",
-          [changes.autoPauseOnBlur, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.autoPausePending !== undefined) {
-        callUi(
-          "setAutoPausePending",
-          [changes.autoPausePending],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.societySimilarity !== undefined) {
-        callUi(
-          "setSocietySimilarity",
-          [changes.societySimilarity, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.enemySimilarity !== undefined) {
-        callUi(
-          "setEnemySimilarity",
-          [changes.enemySimilarity, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.eventStrengthMultiplier !== undefined) {
-        callUi(
-          "setEventStrengthMultiplier",
-          [changes.eventStrengthMultiplier, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.eventFrequencyMultiplier !== undefined) {
-        callUi(
-          "setEventFrequencyMultiplier",
-          [changes.eventFrequencyMultiplier, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.densityEffectMultiplier !== undefined) {
-        callUi(
-          "setDensityEffectMultiplier",
-          [changes.densityEffectMultiplier, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.energyRegenRate !== undefined) {
-        callUi(
-          "setEnergyRegenRate",
-          [changes.energyRegenRate, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.energyDiffusionRate !== undefined) {
-        callUi(
-          "setEnergyDiffusionRate",
-          [changes.energyDiffusionRate, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.mutationMultiplier !== undefined) {
-        callUi(
-          "setMutationMultiplier",
-          [changes.mutationMultiplier, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.maxConcurrentEvents !== undefined) {
-        callUi(
-          "setMaxConcurrentEvents",
-          [changes.maxConcurrentEvents, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.leaderboardIntervalMs !== undefined) {
-        callUi(
-          "setLeaderboardIntervalMs",
-          [changes.leaderboardIntervalMs, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.lifeEventFadeTicks !== undefined) {
-        callUi(
-          "setLifeEventFadeTicks",
-          [changes.lifeEventFadeTicks, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.lifeEventLimit !== undefined) {
-        callUi(
-          "setLifeEventLimit",
-          [changes.lifeEventLimit, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      syncUpdatesPerSecond(changes);
-
-      if (changes?.lowDiversityReproMultiplier !== undefined) {
-        callUi(
-          "setLowDiversityReproMultiplier",
-          [changes.lowDiversityReproMultiplier, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.combatEdgeSharpness !== undefined) {
-        callUi(
-          "setCombatEdgeSharpness",
-          [changes.combatEdgeSharpness, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.combatTerritoryEdgeFactor !== undefined) {
-        callUi(
-          "setCombatTerritoryEdgeFactor",
-          [changes.combatTerritoryEdgeFactor, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.initialTileEnergyFraction !== undefined) {
-        callUi(
-          "setInitialTileEnergyFraction",
-          [changes.initialTileEnergyFraction, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes) {
-        for (const [overlayKey, setterName] of Object.entries(OVERLAY_TOGGLE_SETTERS)) {
-          if (changes[overlayKey] !== undefined) {
-            callUi(
-              setterName,
-              [changes[overlayKey], { notify: false }],
-              UI_WARNING_CONTEXTS.overlay,
-            );
-          }
-        }
-      }
-
-      const geometryChanged =
-        changes &&
-        (Object.hasOwn(changes, "gridRows") ||
-          Object.hasOwn(changes, "gridCols") ||
-          Object.hasOwn(changes, "cellSize"));
-
-      if (geometryChanged) {
-        const geometry = {
-          rows: Object.hasOwn(changes, "gridRows")
-            ? changes.gridRows
-            : Number.isFinite(engine?.rows)
-              ? engine.rows
-              : undefined,
-          cols: Object.hasOwn(changes, "gridCols")
-            ? changes.gridCols
-            : Number.isFinite(engine?.cols)
-              ? engine.cols
-              : undefined,
-          cellSize: Object.hasOwn(changes, "cellSize")
-            ? changes.cellSize
-            : Number.isFinite(engine?.cellSize)
-              ? engine.cellSize
-              : undefined,
-        };
-
-        callUi("setGridGeometry", [geometry], UI_WARNING_CONTEXTS.geometry);
-      }
-    }),
+    engine.on?.("metrics", handleMetrics),
+    engine.on?.("leaderboard", handleLeaderboard),
+    engine.on?.("state", handleStateChange),
   ].filter(Boolean);
 }
 
 const isNumber = (value) => typeof value === "number";
 const withNotifyFalse = (value) => [value, { notify: false }];
+const passThroughArgs = (value) => [value];
+
+const STATE_CHANGE_HANDLERS = [
+  { key: "paused", method: "setPauseState", args: passThroughArgs },
+  {
+    key: "autoPauseOnBlur",
+    method: "setAutoPauseOnBlur",
+    args: withNotifyFalse,
+  },
+  { key: "autoPausePending", method: "setAutoPausePending", args: passThroughArgs },
+  {
+    key: "societySimilarity",
+    method: "setSocietySimilarity",
+    args: withNotifyFalse,
+  },
+  {
+    key: "enemySimilarity",
+    method: "setEnemySimilarity",
+    args: withNotifyFalse,
+  },
+  {
+    key: "eventStrengthMultiplier",
+    method: "setEventStrengthMultiplier",
+    args: withNotifyFalse,
+  },
+  {
+    key: "eventFrequencyMultiplier",
+    method: "setEventFrequencyMultiplier",
+    args: withNotifyFalse,
+  },
+  {
+    key: "densityEffectMultiplier",
+    method: "setDensityEffectMultiplier",
+    args: withNotifyFalse,
+  },
+  {
+    key: "energyRegenRate",
+    method: "setEnergyRegenRate",
+    args: withNotifyFalse,
+  },
+  {
+    key: "energyDiffusionRate",
+    method: "setEnergyDiffusionRate",
+    args: withNotifyFalse,
+  },
+  {
+    key: "mutationMultiplier",
+    method: "setMutationMultiplier",
+    args: withNotifyFalse,
+  },
+  {
+    key: "maxConcurrentEvents",
+    method: "setMaxConcurrentEvents",
+    args: withNotifyFalse,
+  },
+  {
+    key: "leaderboardIntervalMs",
+    method: "setLeaderboardIntervalMs",
+    args: withNotifyFalse,
+  },
+  {
+    key: "lifeEventFadeTicks",
+    method: "setLifeEventFadeTicks",
+    args: withNotifyFalse,
+  },
+  {
+    key: "lifeEventLimit",
+    method: "setLifeEventLimit",
+    args: withNotifyFalse,
+  },
+  {
+    key: "lowDiversityReproMultiplier",
+    method: "setLowDiversityReproMultiplier",
+    args: withNotifyFalse,
+  },
+  {
+    key: "combatEdgeSharpness",
+    method: "setCombatEdgeSharpness",
+    args: withNotifyFalse,
+  },
+  {
+    key: "combatTerritoryEdgeFactor",
+    method: "setCombatTerritoryEdgeFactor",
+    args: withNotifyFalse,
+  },
+  {
+    key: "initialTileEnergyFraction",
+    method: "setInitialTileEnergyFraction",
+    args: withNotifyFalse,
+  },
+];
 
 const INITIAL_STATE_SYNCERS = [
   {
