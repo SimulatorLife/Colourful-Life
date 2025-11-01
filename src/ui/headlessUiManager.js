@@ -195,8 +195,11 @@ function attachBooleanSettingAccessors(
  */
 
 /**
- * @typedef {HeadlessPlaybackControls &
- *   HeadlessEventCadenceControls &
+ * @typedef {HeadlessPlaybackControls & HeadlessAutoPauseControls} HeadlessPauseControls
+ */
+
+/**
+ * @typedef {HeadlessEventCadenceControls &
  *   HeadlessMutationControls &
  *   HeadlessDensityControls &
  *   HeadlessSimilarityControls &
@@ -204,34 +207,29 @@ function attachBooleanSettingAccessors(
  *   HeadlessEnergyControls &
  *   HeadlessCombatControls &
  *   HeadlessLifeEventControls &
- *   HeadlessLeaderboardControls &
- *   HeadlessTelemetryCallbacks &
- *   HeadlessOverlayToggleControls &
- *   HeadlessAutoPauseControls &
- *   HeadlessSelectionAccess} HeadlessUiAdapter
+ *   HeadlessLeaderboardControls} HeadlessSimulationTuningControls
  */
 
 /**
- * @typedef {HeadlessPlaybackControls &
- *   HeadlessEventCadenceControls &
- *   HeadlessMutationControls &
- *   HeadlessDensityControls &
- *   HeadlessSimilarityControls &
- *   HeadlessReproductionControls &
- *   HeadlessEnergyControls &
- *   HeadlessCombatControls &
- *   HeadlessLifeEventControls &
- *   HeadlessLeaderboardControls &
- *   HeadlessOverlayToggleControls &
- *   HeadlessAutoPauseControls} HeadlessUiStateControls
+ * @typedef {HeadlessPauseControls &
+ *   HeadlessSimulationTuningControls &
+ *   HeadlessOverlayToggleControls} HeadlessStateSynchronizationSurface
  */
 
 /**
- * @typedef {HeadlessLeaderboardControls & HeadlessTelemetryCallbacks} HeadlessUiTelemetryBridge
+ * @typedef {HeadlessTelemetryCallbacks} HeadlessTelemetryPublisher
  */
 
 /**
- * @typedef {HeadlessUiStateControls & HeadlessUiTelemetryBridge & HeadlessSelectionAccess} HeadlessUiBridgeSurface
+ * @typedef {HeadlessStateSynchronizationSurface & HeadlessTelemetryPublisher} HeadlessUiControlSurface
+ */
+
+/**
+ * @typedef {HeadlessUiControlSurface & HeadlessSelectionAccess} HeadlessUiBridgeSurface
+ */
+
+/**
+ * @typedef {HeadlessUiBridgeSurface} HeadlessUiAdapter
  */
 
 /**
