@@ -53,6 +53,10 @@ import {
 } from "../config.js";
 import TileIndexTracker from "../utils/tileIndexTracker.js";
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
+const hasTileTrackerContract = (candidate) =>
+  candidate != null &&
+  typeof candidate.resize === "function" &&
+  typeof candidate.clear === "function";
 const EMPTY_EVENT_LIST = Object.freeze([]);
 const EMPTY_TARGET_LIST = Object.freeze([]);
 const EMPTY_FLOAT64_ARRAY = Object.freeze(new Float64Array(0));
@@ -4323,12 +4327,12 @@ export default class GridManager {
     this.#initializeRenderDirtyTracking(rowsInt, colsInt);
     this.#initializeOccupancy(this.rows, this.cols);
     this.#resetDensityIntegral();
-    if (this.energyDirtyTiles instanceof TileIndexTracker) {
+    if (hasTileTrackerContract(this.energyDirtyTiles)) {
       this.energyDirtyTiles.resize(rowsInt, colsInt);
     } else {
       this.energyDirtyTiles = new TileIndexTracker(rowsInt, colsInt);
     }
-    if (this.densityDirtyTiles instanceof TileIndexTracker) {
+    if (hasTileTrackerContract(this.densityDirtyTiles)) {
       this.densityDirtyTiles.resize(rowsInt, colsInt);
     } else {
       this.densityDirtyTiles = new TileIndexTracker(rowsInt, colsInt);
