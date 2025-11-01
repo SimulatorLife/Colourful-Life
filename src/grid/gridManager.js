@@ -630,6 +630,7 @@ export default class GridManager {
   #renderDirtyPositions = null;
   #renderDirtyRevision = 1;
   #renderDirtyView = null;
+  #obstacleCount = 0;
 
   #initializeRenderDirtyTracking(rows, cols) {
     const total = Math.max(0, Math.floor(rows) * Math.floor(cols));
@@ -2744,6 +2745,7 @@ export default class GridManager {
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
     this.obstacleRowCounts = new Uint32Array(rows);
+    this.#obstacleCount = 0;
     this.#resetObstacleRenderCache();
     this.eventManager = resolvedEventManager;
     this.eventContext = createEventContext(eventContext);
@@ -3881,6 +3883,11 @@ export default class GridManager {
       this.obstacleRowCounts.fill(0);
     }
 
+    if (changed) {
+      this.#obstacleCount = 0;
+      this.#handleObstacleGridEmptied();
+    }
+
     this.currentObstaclePreset = "none";
   }
 
@@ -3897,6 +3904,12 @@ export default class GridManager {
           if (counts[row] > 0) counts[row] -= 1;
         }
         this.#markObstacleRenderDirty();
+        if (this.#obstacleCount > 0) {
+          this.#obstacleCount -= 1;
+        }
+        if (this.#obstacleCount === 0) {
+          this.#handleObstacleGridEmptied();
+        }
       } else {
         this.obstacles[row][col] = false;
       }
@@ -3910,6 +3923,7 @@ export default class GridManager {
       if (this.obstacleRowCounts) {
         this.obstacleRowCounts[row] += 1;
       }
+      this.#obstacleCount += 1;
       const occupant = this.grid[row][col];
 
       if (occupant && evict) {
@@ -4329,6 +4343,7 @@ export default class GridManager {
     this.#initializeDecayBuffers(rowsInt, colsInt);
     this.obstacles = Array.from({ length: rowsInt }, () => Array(colsInt).fill(false));
     this.obstacleRowCounts = new Uint32Array(rowsInt);
+    this.#obstacleCount = 0;
     this.#resetObstacleRenderCache();
     this.#resetImageDataBuffer();
     this.densityCounts = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
@@ -7134,6 +7149,12 @@ export default class GridManager {
 
     for (const cache of this.obstacleRenderCache.caches.values()) {
       cache.dirty = true;
+    }
+  }
+
+  #handleObstacleGridEmptied() {
+    if (this.#obstacleCount === 0 && this.obstacleRenderCache) {
+      this.#resetObstacleRenderCache();
     }
   }
 
