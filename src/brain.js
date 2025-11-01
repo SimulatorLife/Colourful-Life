@@ -1229,9 +1229,7 @@ export default class Brain {
 
       if (!incoming) continue;
 
-      for (let i = 0; i < incoming.length; i++) {
-        const { source } = incoming[i];
-
+      for (const { source } of incoming) {
         if (!Number.isFinite(source) || this.#isSensor(source)) continue;
         if (reachable.has(source)) continue;
 
