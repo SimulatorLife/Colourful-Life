@@ -72,6 +72,31 @@ const LIFE_EVENT_TIMELINE_CANVAS = Object.freeze({
 const LIFE_EVENT_TIMELINE_EMPTY_MESSAGE =
   "Run the simulation to chart birth and death cadence.";
 
+const isNodeLike = (value) => {
+  if (value == null) return false;
+
+  const type = typeof value;
+
+  if (type !== "object" && type !== "function") {
+    return false;
+  }
+
+  if (Number.isFinite(value.nodeType)) return true;
+  if (typeof value.nodeName === "string" && value.nodeName.length > 0) return true;
+  if (typeof value.appendChild === "function") return true;
+  if (typeof value.textContent === "string") return true;
+
+  return false;
+};
+
+const isElementLike = (value) =>
+  isNodeLike(value) &&
+  typeof value.tagName === "string" &&
+  value.tagName.length > 0 &&
+  typeof value.appendChild === "function" &&
+  typeof value.setAttribute === "function" &&
+  typeof value.getAttribute === "function";
+
 const DEFAULT_BURST_OPTIONS = Object.freeze({
   primary: Object.freeze({
     count: 200,
@@ -837,9 +862,8 @@ export default class UIManager {
     }
 
     const link = createElement.call(doc, "a");
-    const elementCtor = typeof HTMLElement === "function" ? HTMLElement : null;
 
-    if (!link || (elementCtor && !(link instanceof elementCtor))) {
+    if (!isElementLike(link)) {
       warnOnce(WARNINGS.snapshotLink);
 
       return false;
@@ -1733,7 +1757,7 @@ export default class UIManager {
   attachCanvas(canvasElement, options = {}) {
     const targetCanvas = this.#resolveNode(canvasElement);
 
-    if (!(targetCanvas instanceof HTMLElement)) return;
+    if (!isElementLike(targetCanvas)) return;
     this.canvasElement = targetCanvas;
     const anchor =
       this.#resolveNode(options.before) ||
@@ -2007,7 +2031,7 @@ export default class UIManager {
 
   #resolveNode(candidate) {
     if (!candidate) return null;
-    if (candidate instanceof Node) return candidate;
+    if (isNodeLike(candidate)) return candidate;
     if (typeof candidate === "string") {
       return this.root.querySelector(candidate) || document.querySelector(candidate);
     }
@@ -2734,7 +2758,7 @@ export default class UIManager {
 
     valueEl.className = valueClass ? `control-value ${valueClass}` : "control-value";
 
-    if (value instanceof Node) {
+    if (isNodeLike(value)) {
       valueEl.appendChild(value);
     } else if (value !== undefined && value !== null) {
       valueEl.textContent = value;
@@ -2833,7 +2857,7 @@ export default class UIManager {
   }
 
   #appendLifeEventDetail(container, { label, value, colors }) {
-    if (!(container instanceof HTMLElement)) return null;
+    if (!isElementLike(container)) return null;
 
     const term = document.createElement("dt");
 
@@ -2869,7 +2893,7 @@ export default class UIManager {
       }
     }
 
-    if (value instanceof Node) {
+    if (isNodeLike(value)) {
       valueEl.appendChild(value);
       hasContent = true;
       hasTextContent = true;
@@ -5352,7 +5376,7 @@ export default class UIManager {
         ? limitSlider.closest("label")
         : (limitSlider?.parentElement?.parentElement ?? null);
 
-    if (limitRow instanceof HTMLElement) {
+    if (isElementLike(limitRow)) {
       this.lifeEventLimitSliderRow = limitRow;
     }
 
@@ -5388,7 +5412,7 @@ export default class UIManager {
         ? fadeSlider.closest("label")
         : (fadeSlider?.parentElement?.parentElement ?? null);
 
-    if (fadeRow instanceof HTMLElement) {
+    if (isElementLike(fadeRow)) {
       this.lifeEventFadeSliderRow = fadeRow;
     }
 
@@ -6624,7 +6648,7 @@ export default class UIManager {
       }
 
       let displayValue = "—";
-      const isDomNode = typeof Node !== "undefined" && value instanceof Node;
+      const isDomNode = isNodeLike(value);
 
       if (isDomNode) {
         displayValue = value.textContent?.trim() || "—";
