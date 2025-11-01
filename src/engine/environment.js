@@ -194,26 +194,23 @@ export function resolveCanvas(canvas, documentRef, options = {}) {
       ? documentRef
       : null;
 
-  if (typeof canvas === "string" && canvas.trim().length > 0) {
+  if (typeof canvas === "string") {
     const lookup = canvas.trim();
 
-    if (doc) {
-      const byId = doc.getElementById(lookup);
+    if (lookup.length > 0) {
+      const byId = doc?.getElementById?.(lookup);
 
       if (byId) {
         return byId;
       }
-    }
 
-    const queryDoc =
-      doc && typeof doc.querySelector === "function"
+      const queryDoc = doc?.querySelector
         ? doc
         : typeof documentRef?.querySelector === "function"
           ? documentRef
           : null;
 
-    if (queryDoc) {
-      const bySelector = queryDoc.querySelector(lookup);
+      const bySelector = queryDoc?.querySelector?.(lookup);
 
       if (bySelector) {
         return bySelector;
