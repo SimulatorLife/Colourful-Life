@@ -7,6 +7,9 @@ import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 /**
  * @typedef {import("./headlessUiManager.js").HeadlessUiAdapter} HeadlessUiAdapter
  * @typedef {import("./headlessUiManager.js").HeadlessUiBridgeSurface} HeadlessUiBridgeSurface
+ * @typedef {import("./headlessUiManager.js").HeadlessStateSynchronizationSurface} HeadlessStateSynchronizationSurface
+ * @typedef {import("./headlessUiManager.js").HeadlessTelemetryPublisher} HeadlessTelemetryPublisher
+ * @typedef {import("./headlessUiManager.js").HeadlessSelectionAccess} HeadlessSelectionAccess
  */
 
 function mergeLayoutInitialSettings({ sanitizedDefaults, layoutInitialSettings }) {
@@ -177,13 +180,6 @@ function invokeUiManagerMethod(
   });
 }
 
-/**
- * Wires simulation engine events to the provided UI surface.
- *
- * @param {import('../engine/simulationEngine.js').default} engine
- * @param {import('./uiManager.js').default | HeadlessUiBridgeSurface} uiManager
- * @returns {Array<() => void>} Engine listener unsubscribe callbacks.
- */
 function createUpdatesPerSecondSynchronizer(engine, callUi) {
   return (changes) => {
     const nextValue = changes?.updatesPerSecond;
@@ -303,6 +299,13 @@ function createStateChangeHandler({ engine, callUi, syncUpdatesPerSecond }) {
     propagateStateChanges({ changes, engine, callUi, syncUpdatesPerSecond });
 }
 
+/**
+ * Wires simulation engine events to the provided UI surface.
+ *
+ * @param {import('../engine/simulationEngine.js').default} engine
+ * @param {import('./uiManager.js').default | (HeadlessStateSynchronizationSurface & HeadlessTelemetryPublisher)} uiManager
+ * @returns {Array<() => void>} Engine listener unsubscribe callbacks.
+ */
 function subscribeEngineToUi(engine, uiManager) {
   if (!engine || !uiManager) {
     return [];
@@ -512,7 +515,7 @@ const INITIAL_STATE_SYNCERS = [
  * toggles reflect the latest configuration before live updates resume.
  *
  * @param {import('../engine/simulationEngine.js').default} engine
- * @param {import('./uiManager.js').default | HeadlessUiBridgeSurface} uiManager
+ * @param {import('./uiManager.js').default | HeadlessStateSynchronizationSurface} uiManager
  */
 function syncInitialStateToUi(engine, uiManager) {
   if (!uiManager || !engine?.state) {
@@ -571,7 +574,9 @@ function syncInitialStateToUi(engine, uiManager) {
  * @param {boolean} [options.headless=false] - When true, return a headless
  *   control surface rather than mounting {@link UIManager}.
  * @returns {{
- *   uiManager: import('./uiManager.js').default | HeadlessUiBridgeSurface,
+ *   uiManager: import('./uiManager.js').default |
+ *     (HeadlessStateSynchronizationSurface & HeadlessTelemetryPublisher &
+ *       HeadlessSelectionAccess),
  *   unsubscribers: Array<() => void>,
  *   headlessOptions: Object|null,
  *   layout: Object,
