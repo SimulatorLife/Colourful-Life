@@ -60,6 +60,9 @@ scripts/profile-energy.mjs`) lifted post-warmup survivors from 83 → 92 while
 - Clarified the supported Node.js range (>= 18.18.0 with 25.0.0 pinned via `.nvmrc`) and refreshed the README and developer guide quick-start loops so onboarding matches the tooling used in CI and profiling.
 - Tightened the primary documentation (README, developer guide, architecture notes) to streamline quick-start guidance, highlight subsystem profiling harnesses, and document the shared trait aggregation helpers used by Stats.
 - Relocated the "Pause When Hidden" toggle into the Simulation Controls playback block so autopause is discoverable without pausing; the pause overlay now simply points explorers back to its new home.
+- Moved the shared "Dashboard Refresh Interval" slider into Simulation Controls →
+  Dashboard Refresh so cadence tuning sits beside other global knobs while the
+  analytics panels reference the same control.
 - Refreshed the README, developer guide, and architecture overview to streamline
   the quick-start flow, trim stale metrics, and clarify where configuration
   overrides live so primary docs mirror the current architecture.

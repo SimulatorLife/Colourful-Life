@@ -141,7 +141,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - `ReproductionZonePolicy` (`src/grid/reproductionZonePolicy.js`) keeps `GridManager`'s reproduction flow decoupled from the selection implementation by translating zone checks into simple allow/deny results.
 - `config.js` consolidates slider bounds, simulation defaults, and runtime-tunable constants such as diffusion and regeneration rates so UI and headless contexts remain in sync.
 - The `src/utils/` directory houses deterministic helpers (`createRNG`, `createRankedBuffer`, `cloneTracePayload`, etc.) reused across the simulation, UI, and tests.
-- The **Evolution Insights** panel hosts cadence controls shared with the leaderboard, including the "Dashboard Refresh Interval" slider exposed via `leaderboardIntervalMs` so observers can slow or accelerate telemetry updates without hunting through multiple panels.
+- Simulation Controls hosts the shared "Dashboard Refresh Interval" slider exposed via `leaderboardIntervalMs`, keeping cadence tuning beside the other global knobs while still driving Evolution Insights and the leaderboard updates from one place.
 
 - The overlay pipeline is orchestrated by `drawOverlays`, which delegates to granular helpers (`drawEventOverlays`,
   `drawEnergyHeatmap`, `drawDensityHeatmap`, `drawFitnessHeatmap`) and reuses color ramps such as `densityToRgba`. Each helper

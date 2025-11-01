@@ -23,10 +23,9 @@ the dev server, then return here for the deeper workflow.
   it from the Simulation Controls panel beneath the playback controls; the pause
   overlay now simply reminds you where to find the toggle when autopause kicks
   in.
-- Adjust the "Dashboard Refresh Interval" slider within the Evolution Insights
-  panel's **Refresh Cadence** section to tune how often the leaderboard and
-  analytics dashboard request fresh data without digging through individual
-  metric panes.
+- Adjust the "Dashboard Refresh Interval" slider under Simulation Controls →
+  **Dashboard Refresh** to tune how often the leaderboard and analytics
+  dashboard request fresh data without digging through individual metric panes.
 - The Evolution Insights dashboard surfaces a Simulation Clock at the top of
   the metrics feed, reporting both simulated time and the aggregate tick count
   for easy pacing comparisons.
