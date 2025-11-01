@@ -109,6 +109,9 @@ scripts/profile-energy.mjs`) lifted post-warmup survivors from 83 → 92 while
 - Retired the unused `scripts/profile-render-dirty-delete.mjs` profiling probe
   since newer render benchmarking harnesses superseded it and nothing references
   the script anymore.
+- Removed the long-retired `scripts/profile-find-targets.mjs` benchmarking
+  harness so the scripts directory only contains maintained profiling entry
+  points.
 - Retired the unused `scripts/measure-reproduction-memory.mjs` helper; ongoing
   reproduction health is covered by the regression suite, letting us trim the
   bespoke memory probe without losing safeguards.
