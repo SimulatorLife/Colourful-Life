@@ -1342,7 +1342,9 @@ function computeEnergyStats(grid, maxTileEnergy = MAX_TILE_ENERGY) {
   let count = 0;
 
   for (let r = 0; r < rows; r++) {
-    const energyRow = Array.isArray(energyGrid[r]) ? energyGrid[r] : [];
+    const energyRow = energyGrid[r];
+
+    if (!energyRow) continue;
 
     for (let c = 0; c < cols; c++) {
       const rawEnergy = energyRow[c];
