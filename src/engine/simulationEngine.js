@@ -1,6 +1,6 @@
 import EventManager from "../events/eventManager.js";
 import GridManager from "../grid/gridManager.js";
-import InteractionSystem from "../interactionSystem.js";
+import InteractionSystem from "../grid/interactionSystem.js";
 import createSelectionManagerStub from "../grid/selectionManagerStub.js";
 import createSimulationRuntimeServices from "./simulationRuntimeServices.js";
 import {

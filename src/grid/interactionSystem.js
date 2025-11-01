@@ -1,10 +1,10 @@
-import { clamp, clamp01 } from "./utils/math.js";
-import { resolveCellColor } from "./utils/cell.js";
-import { createInteractionAdapter } from "./grid/interactionAdapterRegistry.js";
+import { clamp, clamp01 } from "../utils/math.js";
+import { resolveCellColor } from "../utils/cell.js";
+import { createInteractionAdapter } from "./interactionAdapterRegistry.js";
 import {
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   COMBAT_TERRITORY_EDGE_FACTOR,
-} from "./config.js";
+} from "../config.js";
 
 function asFiniteCoordinate(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;

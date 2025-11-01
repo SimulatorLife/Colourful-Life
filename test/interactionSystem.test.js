@@ -119,7 +119,7 @@ function withFixedRandom(value, fn) {
 }
 
 test.before(async () => {
-  ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
+  ({ default: InteractionSystem } = await import("../src/grid/interactionSystem.js"));
 });
 
 test("constructor uses registered adapter factory when only a grid manager is provided", () => {

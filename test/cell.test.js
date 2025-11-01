@@ -181,7 +181,7 @@ test.before(async () => {
   ({ clamp, clampFinite, lerp, randomRange, createRNG } = await import(
     "../src/utils/math.js"
   ));
-  ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
+  ({ default: InteractionSystem } = await import("../src/grid/interactionSystem.js"));
   ({ default: Brain, OUTPUT_GROUPS } = await import("../src/brain.js"));
   ({ OFFSPRING_VIABILITY_BUFFER, REPRODUCTION_COOLDOWN_BASE, MAX_TILE_ENERGY } =
     await import("../src/config.js"));
