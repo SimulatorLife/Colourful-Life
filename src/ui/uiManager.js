@@ -4721,6 +4721,22 @@ export default class UIManager {
         renderSlider(cfg, generalGroup);
       });
 
+    if (this.leaderboardCadenceConfig) {
+      createSectionHeading(body, "Dashboard Refresh");
+
+      const cadenceGrid = createControlGrid(body, "control-grid--compact");
+      const cadenceSlider = renderSlider(this.leaderboardCadenceConfig, cadenceGrid);
+
+      this.dashboardCadenceSlider = cadenceSlider;
+
+      const cadenceHint = document.createElement("p");
+
+      cadenceHint.className = "control-hint";
+      cadenceHint.textContent =
+        "Controls how often Evolution Insights and the leaderboard request fresh data.";
+      body.appendChild(cadenceHint);
+    }
+
     const resetRow = createControlButtonRow(body);
     const resetButton = document.createElement("button");
 
@@ -5046,47 +5062,15 @@ export default class UIManager {
 
     intro.className = "metrics-intro";
     intro.textContent =
-      "Track population health, energy, and behavioral trends as the simulation unfolds. Use the refresh cadence controls below to slow down or speed up the shared update interval for Evolution Insights and the leaderboard.";
+      "Track population health, energy, and behavioral trends as the simulation unfolds. Adjust the shared Dashboard Refresh Interval from Simulation Controls → Dashboard Refresh whenever you need to slow down or accelerate updates for Evolution Insights and the leaderboard.";
     body.appendChild(intro);
 
-    const cadenceConfig = this.leaderboardCadenceConfig;
+    const cadenceReminder = document.createElement("p");
 
-    if (cadenceConfig) {
-      const cadenceSection = document.createElement("section");
-
-      cadenceSection.className = "metrics-controls";
-      cadenceSection.setAttribute(
-        "aria-label",
-        "Refresh cadence controls shared with the leaderboard",
-      );
-
-      createSectionHeading(cadenceSection, "Refresh Cadence");
-
-      const cadenceGrid = createControlGrid(cadenceSection, "control-grid--compact");
-
-      const slider = createSliderRow(cadenceGrid, {
-        label: cadenceConfig.label,
-        min: cadenceConfig.min,
-        max: cadenceConfig.max,
-        step: cadenceConfig.step,
-        value: cadenceConfig.getValue(),
-        title: cadenceConfig.title,
-        format: cadenceConfig.format,
-        onInput: cadenceConfig.setValue,
-      });
-
-      this.dashboardCadenceSlider = slider;
-      this.#registerSliderElement("leaderboardIntervalMs", slider);
-
-      const cadenceHint = document.createElement("p");
-
-      cadenceHint.className = "control-hint";
-      cadenceHint.textContent =
-        "Controls how often Evolution Insights and the leaderboard request fresh data.";
-      cadenceSection.appendChild(cadenceHint);
-
-      body.appendChild(cadenceSection);
-    }
+    cadenceReminder.className = "control-hint";
+    cadenceReminder.textContent =
+      "Find the Dashboard Refresh Interval slider in Simulation Controls → Dashboard Refresh to change how often Evolution Insights and the leaderboard request fresh data.";
+    body.appendChild(cadenceReminder);
 
     this.metricsBox = document.createElement("div");
     this.metricsBox.className = "metrics-box";

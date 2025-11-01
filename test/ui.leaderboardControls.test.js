@@ -4,7 +4,7 @@ import { findSliderByLabel } from "./helpers/controlQueries.js";
 
 const test = suite("ui leaderboard cadence controls");
 
-test("evolution insights panel hosts the dashboard cadence slider", async () => {
+test("simulation controls panel hosts the dashboard cadence slider", async () => {
   const restore = setupDom();
 
   try {
@@ -25,36 +25,36 @@ test("evolution insights panel hosts the dashboard cadence slider", async () => 
 
     uiManager.renderLeaderboard([]);
 
+    const controlsSlider = findSliderByLabel(
+      uiManager.controlsPanel,
+      "Dashboard Refresh Interval",
+    );
+
+    assert.ok(
+      controlsSlider,
+      "simulation controls should surface the dashboard cadence slider",
+    );
+    assert.is(
+      controlsSlider.value,
+      String(uiManager.leaderboardIntervalMs),
+      "slider should reflect current cadence",
+    );
+
     const insightsSlider = findSliderByLabel(
       uiManager.insightsPanel,
       "Dashboard Refresh Interval",
     );
 
-    assert.ok(
+    assert.is(
       insightsSlider,
-      "evolution insights should surface the dashboard cadence slider",
-    );
-    assert.is(
-      insightsSlider.value,
-      String(uiManager.leaderboardIntervalMs),
-      "slider should reflect current cadence",
-    );
-
-    const leaderboardSlider = findSliderByLabel(
-      uiManager.leaderPanel,
-      "Dashboard Refresh Interval",
-    );
-
-    assert.is(
-      leaderboardSlider,
       null,
-      "leaderboard panel should no longer host the cadence slider",
+      "evolution insights panel should no longer host the cadence slider",
     );
 
     const nextValue = uiManager.leaderboardIntervalMs + 250;
 
-    insightsSlider.value = String(nextValue);
-    insightsSlider.trigger("input");
+    controlsSlider.value = String(nextValue);
+    controlsSlider.trigger("input");
 
     assert.is(
       uiManager.leaderboardIntervalMs,
