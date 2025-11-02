@@ -762,71 +762,146 @@ export default class SimulationEngine {
     if (!this.running && !force) return false;
 
     const effectiveTimestamp = typeof timestamp === "number" ? timestamp : this.now();
-    let tickOccurred = false;
-
     const paused = Boolean(this.state.paused);
     const idle = !this.running;
     const interval = 1000 / Math.max(1, this.state.updatesPerSecond);
     const elapsed = effectiveTimestamp - this.lastUpdateTime;
-    const shouldAdvance =
-      (force && (!paused || allowPausedTick || idle)) ||
-      (!paused && elapsed >= interval) ||
-      (allowPausedTick && paused);
 
-    if (shouldAdvance && !renderOnly) {
-      this.lastUpdateTime = effectiveTimestamp;
-      tickOccurred = true;
-      this.stats.resetTick();
-      this.eventManager.updateEvent?.(
-        this.state.eventFrequencyMultiplier ?? 1,
-        this.state.maxConcurrentEvents ?? MAX_CONCURRENT_EVENTS_FALLBACK,
-      );
-      const snapshot = this.grid.update({
-        densityEffectMultiplier: this.state.densityEffectMultiplier ?? 1,
-        societySimilarity:
-          this.state.societySimilarity ?? SIMULATION_DEFAULTS.societySimilarity,
-        enemySimilarity:
-          this.state.enemySimilarity ?? SIMULATION_DEFAULTS.enemySimilarity,
-        eventStrengthMultiplier: this.state.eventStrengthMultiplier ?? 1,
-        energyRegenRate: this.state.energyRegenRate ?? ENERGY_REGEN_RATE_DEFAULT,
-        energyDiffusionRate:
-          this.state.energyDiffusionRate ?? ENERGY_DIFFUSION_RATE_DEFAULT,
-        mutationMultiplier: this.state.mutationMultiplier ?? 1,
-        matingDiversityThreshold:
-          this.state.matingDiversityThreshold ??
-          SIMULATION_DEFAULTS.matingDiversityThreshold,
-        lowDiversityReproMultiplier:
-          this.state.lowDiversityReproMultiplier ??
-          SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
-        combatEdgeSharpness:
-          this.state.combatEdgeSharpness ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
-        combatTerritoryEdgeFactor:
-          this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
-      });
+    const tickOccurred = this.#maybeAdvanceSimulation({
+      effectiveTimestamp,
+      paused,
+      idle,
+      elapsed,
+      interval,
+      force,
+      allowPausedTick,
+      renderOnly,
+    });
 
-      this.stats.logEvent?.(
-        this.eventManager.currentEvent,
-        this.state.eventStrengthMultiplier ?? 1,
-      );
-      this.stats.setMutationMultiplier?.(this.state.mutationMultiplier ?? 1);
+    this.#renderFrameLayers({
+      includeLifeEventMarkers: Boolean(this.state.showLifeEventMarkers),
+      includeAgeOverlay: Boolean(this.state.showAge),
+      includeSelectionZones: Boolean(this.state.showSelectionZones),
+    });
 
-      const metrics = this.telemetry.ingestSnapshot(snapshot);
-      // Flag telemetry as pending instead of emitting immediately so
-      // TelemetryController.publishIfDue can honor the user-configured cadence
-      // (`leaderboardIntervalMs`). Clearing this mark or emitting eagerly would
-      // cause ticks that arrive inside the throttle window to skip leaderboard
-      // refreshes altogether, regressing both the browser UI and headless
-      // automation flows documented in docs/architecture-overview.md.
+    this.#publishTelemetryIfPending(effectiveTimestamp);
 
-      this.telemetry.markPending();
-
-      this.emit("tick", {
-        snapshot,
-        metrics,
-        timestamp: effectiveTimestamp,
-      });
+    if (scheduleNext) {
+      this.#scheduleContinuation({ paused });
     }
 
+    return tickOccurred;
+  }
+
+  #maybeAdvanceSimulation({
+    effectiveTimestamp,
+    paused,
+    idle,
+    elapsed,
+    interval,
+    force,
+    allowPausedTick,
+    renderOnly,
+  }) {
+    const shouldAdvance = this.#shouldAdvanceSimulation({
+      paused,
+      idle,
+      elapsed,
+      interval,
+      force,
+      allowPausedTick,
+    });
+
+    if (!shouldAdvance || renderOnly) {
+      return false;
+    }
+
+    this.lastUpdateTime = effectiveTimestamp;
+    this.stats.resetTick();
+    this.#updateEventManagerForFrame();
+    const snapshot = this.grid.update(this.#buildGridUpdateOptions());
+
+    this.#syncStatsAfterUpdate();
+
+    const metrics = this.telemetry.ingestSnapshot(snapshot);
+
+    // Flag telemetry as pending instead of emitting immediately so
+    // TelemetryController.publishIfDue can honor the user-configured cadence
+    // (`leaderboardIntervalMs`). Clearing this mark or emitting eagerly would
+    // cause ticks that arrive inside the throttle window to skip leaderboard
+    // refreshes altogether, regressing both the browser UI and headless
+    // automation flows documented in docs/architecture-overview.md.
+    this.telemetry.markPending();
+
+    this.emit("tick", {
+      snapshot,
+      metrics,
+      timestamp: effectiveTimestamp,
+    });
+
+    return true;
+  }
+
+  #shouldAdvanceSimulation({
+    paused,
+    idle,
+    elapsed,
+    interval,
+    force,
+    allowPausedTick,
+  }) {
+    return (
+      (force && (!paused || allowPausedTick || idle)) ||
+      (!paused && elapsed >= interval) ||
+      (allowPausedTick && paused)
+    );
+  }
+
+  #buildGridUpdateOptions() {
+    return {
+      densityEffectMultiplier: this.state.densityEffectMultiplier ?? 1,
+      societySimilarity:
+        this.state.societySimilarity ?? SIMULATION_DEFAULTS.societySimilarity,
+      enemySimilarity:
+        this.state.enemySimilarity ?? SIMULATION_DEFAULTS.enemySimilarity,
+      eventStrengthMultiplier: this.state.eventStrengthMultiplier ?? 1,
+      energyRegenRate: this.state.energyRegenRate ?? ENERGY_REGEN_RATE_DEFAULT,
+      energyDiffusionRate:
+        this.state.energyDiffusionRate ?? ENERGY_DIFFUSION_RATE_DEFAULT,
+      mutationMultiplier: this.state.mutationMultiplier ?? 1,
+      matingDiversityThreshold:
+        this.state.matingDiversityThreshold ??
+        SIMULATION_DEFAULTS.matingDiversityThreshold,
+      lowDiversityReproMultiplier:
+        this.state.lowDiversityReproMultiplier ??
+        SIMULATION_DEFAULTS.lowDiversityReproMultiplier,
+      combatEdgeSharpness:
+        this.state.combatEdgeSharpness ?? COMBAT_EDGE_SHARPNESS_DEFAULT,
+      combatTerritoryEdgeFactor:
+        this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
+    };
+  }
+
+  #updateEventManagerForFrame() {
+    this.eventManager.updateEvent?.(
+      this.state.eventFrequencyMultiplier ?? 1,
+      this.state.maxConcurrentEvents ?? MAX_CONCURRENT_EVENTS_FALLBACK,
+    );
+  }
+
+  #syncStatsAfterUpdate() {
+    this.stats.logEvent?.(
+      this.eventManager.currentEvent,
+      this.state.eventStrengthMultiplier ?? 1,
+    );
+    this.stats.setMutationMultiplier?.(this.state.mutationMultiplier ?? 1);
+  }
+
+  #renderFrameLayers({
+    includeLifeEventMarkers,
+    includeAgeOverlay,
+    includeSelectionZones,
+  }) {
     const renderSnapshot = this.grid.draw({
       showObstacles: this.state.showObstacles ?? true,
     });
@@ -835,9 +910,20 @@ export default class SimulationEngine {
       this.telemetry.includeRenderStats(renderSnapshot);
     }
 
-    const includeLifeEventMarkers = Boolean(this.state.showLifeEventMarkers);
-    const includeAgeOverlay = Boolean(this.state.showAge);
-    const includeSelectionZones = Boolean(this.state.showSelectionZones);
+    const overlayOptions = this.#resolveOverlayContext({
+      includeLifeEventMarkers,
+      includeAgeOverlay,
+      includeSelectionZones,
+    });
+
+    this.drawOverlays(this.grid, this.ctx, this.cellSize, overlayOptions);
+  }
+
+  #resolveOverlayContext({
+    includeLifeEventMarkers,
+    includeAgeOverlay,
+    includeSelectionZones,
+  }) {
     const totalTicks =
       typeof this.stats?.getTotalTicks === "function"
         ? this.stats.getTotalTicks()
@@ -854,7 +940,7 @@ export default class SimulationEngine {
         ? this.selectionManager.getActiveZoneRenderData()
         : null;
 
-    this.drawOverlays(this.grid, this.ctx, this.cellSize, {
+    return {
       showEnergy: this.state.showEnergy ?? false,
       showDensity: this.state.showDensity ?? false,
       showAge: includeAgeOverlay,
@@ -875,35 +961,37 @@ export default class SimulationEngine {
       lifeEventFadeTicks: this.stats?.lifeEventFadeTicks,
       lifeEventLimit: this.state.lifeEventLimit,
       selectionZones: selectionZoneRenderData,
+    };
+  }
+
+  #publishTelemetryIfPending(effectiveTimestamp) {
+    if (!this.telemetry.hasPending()) {
+      return;
+    }
+
+    this.telemetry.publishIfDue({
+      timestamp: effectiveTimestamp,
+      interval: this.state.leaderboardIntervalMs,
+      getEnvironment: () => ({
+        activeEvents: this.#summarizeActiveEvents(),
+        updatesPerSecond: Math.max(1, Math.round(this.state.updatesPerSecond ?? 60)),
+        eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
+          ? this.state.eventStrengthMultiplier
+          : 1,
+        combatTerritoryEdgeFactor:
+          this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
+      }),
+      emitMetrics: (payload) => this.emit("metrics", payload),
+      emitLeaderboard: (payload) => this.emit("leaderboard", payload),
     });
+  }
 
-    if (this.telemetry.hasPending()) {
-      this.telemetry.publishIfDue({
-        timestamp: effectiveTimestamp,
-        interval: this.state.leaderboardIntervalMs,
-        getEnvironment: () => ({
-          activeEvents: this.#summarizeActiveEvents(),
-          updatesPerSecond: Math.max(1, Math.round(this.state.updatesPerSecond ?? 60)),
-          eventStrengthMultiplier: Number.isFinite(this.state.eventStrengthMultiplier)
-            ? this.state.eventStrengthMultiplier
-            : 1,
-          combatTerritoryEdgeFactor:
-            this.state.combatTerritoryEdgeFactor ?? COMBAT_TERRITORY_EDGE_FACTOR,
-        }),
-        emitMetrics: (payload) => this.emit("metrics", payload),
-        emitLeaderboard: (payload) => this.emit("leaderboard", payload),
-      });
+  #scheduleContinuation({ paused }) {
+    const shouldContinue = !paused || this.telemetry.hasPending();
+
+    if (shouldContinue) {
+      this.#scheduleNextFrame();
     }
-
-    if (scheduleNext) {
-      const shouldContinue = !paused || this.telemetry.hasPending();
-
-      if (shouldContinue) {
-        this.#scheduleNextFrame();
-      }
-    }
-
-    return tickOccurred;
   }
 
   start() {
