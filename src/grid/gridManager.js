@@ -589,7 +589,6 @@ export default class GridManager {
   #eventModifierScratch = null;
   #sparseDirtyColumnsScratch = null;
   #sparseDirtyRowsScratch = null;
-  #densityPrefixScratch = null;
   #densityRowTopScratch = null;
   #densityRowBottomScratch = null;
   #densityColLeftScratch = null;
@@ -1482,43 +1481,6 @@ export default class GridManager {
     this.#occupantRegenRevision = nextRevision;
 
     return nextRevision;
-  }
-
-  #ensureDensityPrefix(rowCount, colCount) {
-    const { rows, cols } = normalizeDimensions(rowCount, colCount);
-    const requiredRows = rows + 1;
-    const requiredCols = cols + 1;
-
-    if (
-      !this.#densityPrefixScratch ||
-      this.#densityPrefixScratch.length !== requiredRows
-    ) {
-      this.#densityPrefixScratch = Array.from(
-        { length: requiredRows },
-        () => new Uint32Array(requiredCols),
-      );
-    } else {
-      const scratch = this.#densityPrefixScratch;
-      const firstRow = scratch[0];
-
-      if (!firstRow || firstRow.length !== requiredCols) {
-        scratch[0] = new Uint32Array(requiredCols);
-      } else {
-        firstRow.fill(0);
-      }
-
-      for (let r = 1; r < requiredRows; r++) {
-        const existing = scratch[r];
-
-        if (!existing || existing.length !== requiredCols) {
-          scratch[r] = new Uint32Array(requiredCols);
-        } else {
-          existing[0] = 0;
-        }
-      }
-    }
-
-    return this.#densityPrefixScratch;
   }
 
   #ensureDensityBounds(rowCount, colCount, radius = 0) {
@@ -6553,22 +6515,6 @@ export default class GridManager {
 
     const rows = this.rows;
     const cols = this.cols;
-    const prefix = this.#ensureDensityPrefix(rows, cols);
-
-    for (let r = 1; r <= rows; r++) {
-      const prefixRow = prefix[r];
-      const prevRow = prefix[r - 1];
-      const gridRow = this.grid[r - 1];
-      let rowSum = 0;
-
-      for (let c = 1; c <= cols; c++) {
-        const occupied = gridRow?.[c - 1] ? 1 : 0;
-
-        rowSum += occupied;
-        prefixRow[c] = prevRow[c] + rowSum;
-      }
-    }
-
     const activeRadius = this.densityRadius;
     const { rowTop, rowBottom, colLeft, colRight } = this.#ensureDensityBounds(
       rows,
@@ -6578,6 +6524,22 @@ export default class GridManager {
     const counts = this.densityCounts;
     const live = this.densityLiveGrid;
     const totals = this.densityTotals;
+    const integral = this.#resolveDensityIntegral();
+
+    if (!integral) {
+      for (let r = 0; r < rows; r++) {
+        counts[r]?.fill?.(0);
+
+        if (live) {
+          live[r]?.fill?.(0);
+        }
+      }
+
+      this.densityDirtyTiles.clear();
+      this.#syncDensitySnapshot(true);
+
+      return;
+    }
 
     for (let r = 0; r < rows; r++) {
       const countsRow = counts[r];
@@ -6586,18 +6548,18 @@ export default class GridManager {
       const gridRow = this.grid[r];
       const topIndex = rowTop[r];
       const bottomIndex = rowBottom[r];
-      const prefixTopRow = prefix[topIndex];
-      const prefixBottomRow = prefix[bottomIndex];
+      const topRow = integral[topIndex];
+      const bottomRow = integral[bottomIndex];
 
       for (let c = 0; c < cols; c++) {
         const leftIndex = colLeft[c];
         const rightIndex = colRight[c];
 
         const regionSum =
-          prefixBottomRow[rightIndex] -
-          prefixTopRow[rightIndex] -
-          prefixBottomRow[leftIndex] +
-          prefixTopRow[leftIndex];
+          bottomRow[rightIndex] -
+          topRow[rightIndex] -
+          bottomRow[leftIndex] +
+          topRow[leftIndex];
 
         const occupied = gridRow?.[c] ? 1 : 0;
         const neighborCount = regionSum - occupied;
@@ -6777,25 +6739,15 @@ export default class GridManager {
       return Array.from({ length: rows }, () => Array(cols).fill(0));
     }
 
-    const prefix = this.#ensureDensityPrefix(rows, cols);
     const { rowTop, rowBottom, colLeft, colRight } = this.#ensureDensityBounds(
       rows,
       cols,
       normalizedRadius,
     );
+    const integral = this.#resolveDensityIntegral();
 
-    for (let r = 1; r <= rows; r++) {
-      const prefixRow = prefix[r];
-      const prevRow = prefix[r - 1];
-      const gridRow = this.grid[r - 1];
-      let rowSum = 0;
-
-      for (let c = 1; c <= cols; c++) {
-        const occupied = gridRow?.[c - 1] ? 1 : 0;
-
-        rowSum += occupied;
-        prefixRow[c] = prevRow[c] + rowSum;
-      }
+    if (!integral) {
+      return Array.from({ length: rows }, () => Array(cols).fill(0));
     }
 
     const totals =
@@ -6810,17 +6762,17 @@ export default class GridManager {
       const gridRow = this.grid[r];
       const topIndex = rowTop[r];
       const bottomIndex = rowBottom[r];
-      const prefixTopRow = prefix[topIndex];
-      const prefixBottomRow = prefix[bottomIndex];
+      const topRow = integral[topIndex];
+      const bottomRow = integral[bottomIndex];
 
       for (let c = 0; c < cols; c++) {
         const leftIndex = colLeft[c];
         const rightIndex = colRight[c];
         const regionSum =
-          prefixBottomRow[rightIndex] -
-          prefixTopRow[rightIndex] -
-          prefixBottomRow[leftIndex] +
-          prefixTopRow[leftIndex];
+          bottomRow[rightIndex] -
+          topRow[rightIndex] -
+          bottomRow[leftIndex] +
+          topRow[leftIndex];
         const occupied = gridRow?.[c] ? 1 : 0;
         const neighborCount = regionSum - occupied;
         const totalNeighbors = totalsRow?.[c] ?? 0;
