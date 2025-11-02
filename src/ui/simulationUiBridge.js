@@ -4,6 +4,14 @@ import { resolveSimulationDefaults } from "../config.js";
 import { toPlainObject } from "../utils/object.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 
+/**
+ * @typedef {import("./headlessUiManager.js").HeadlessUiAdapter} HeadlessUiAdapter
+ * @typedef {import("./headlessUiManager.js").HeadlessUiBridgeSurface} HeadlessUiBridgeSurface
+ * @typedef {import("./headlessUiManager.js").HeadlessStateSynchronizationSurface} HeadlessStateSynchronizationSurface
+ * @typedef {import("./headlessUiManager.js").HeadlessTelemetryPublisher} HeadlessTelemetryPublisher
+ * @typedef {import("./headlessUiManager.js").HeadlessSelectionAccess} HeadlessSelectionAccess
+ */
+
 function mergeLayoutInitialSettings({ sanitizedDefaults, layoutInitialSettings }) {
   const overrideKeys = Object.keys(layoutInitialSettings);
 
@@ -172,15 +180,8 @@ function invokeUiManagerMethod(
   });
 }
 
-function subscribeEngineToUi(engine, uiManager) {
-  if (!engine || !uiManager) {
-    return [];
-  }
-
-  const callUi = (methodName, args = [], context = UI_WARNING_CONTEXTS.state) =>
-    invokeUiManagerMethod(uiManager, methodName, args, context);
-
-  const syncUpdatesPerSecond = (changes) => {
+function createUpdatesPerSecondSynchronizer(engine, callUi) {
+  return (changes) => {
     const nextValue = changes?.updatesPerSecond;
 
     if (nextValue !== undefined) {
@@ -211,210 +212,340 @@ function subscribeEngineToUi(engine, uiManager) {
       UI_WARNING_CONTEXTS.speed,
     );
   };
+}
+
+function createMetricsHandler(callUi) {
+  return ({ stats, metrics, environment }) =>
+    callUi("renderMetrics", [stats, metrics, environment], UI_WARNING_CONTEXTS.metrics);
+}
+
+function createLeaderboardHandler(callUi) {
+  return ({ entries }) =>
+    callUi("renderLeaderboard", [entries], UI_WARNING_CONTEXTS.leaderboard);
+}
+
+function propagateOverlayChanges(changes, callUi) {
+  if (!changes) {
+    return;
+  }
+
+  for (const [overlayKey, setterName] of Object.entries(OVERLAY_TOGGLE_SETTERS)) {
+    if (changes[overlayKey] === undefined) {
+      continue;
+    }
+
+    callUi(
+      setterName,
+      [changes[overlayKey], { notify: false }],
+      UI_WARNING_CONTEXTS.overlay,
+    );
+  }
+}
+
+function propagateGeometryChange({ changes, engine, callUi }) {
+  const geometryChanged =
+    changes &&
+    (Object.hasOwn(changes, "gridRows") ||
+      Object.hasOwn(changes, "gridCols") ||
+      Object.hasOwn(changes, "cellSize"));
+
+  if (!geometryChanged) {
+    return;
+  }
+
+  const geometry = {
+    rows: Object.hasOwn(changes, "gridRows")
+      ? changes.gridRows
+      : Number.isFinite(engine?.rows)
+        ? engine.rows
+        : undefined,
+    cols: Object.hasOwn(changes, "gridCols")
+      ? changes.gridCols
+      : Number.isFinite(engine?.cols)
+        ? engine.cols
+        : undefined,
+    cellSize: Object.hasOwn(changes, "cellSize")
+      ? changes.cellSize
+      : Number.isFinite(engine?.cellSize)
+        ? engine.cellSize
+        : undefined,
+  };
+
+  callUi("setGridGeometry", [geometry], UI_WARNING_CONTEXTS.geometry);
+}
+
+function propagateStateChanges({ changes, engine, callUi, syncUpdatesPerSecond }) {
+  if (!changes || typeof changes !== "object") {
+    return;
+  }
+
+  for (const { key, method, args = passThroughArgs } of STATE_CHANGE_HANDLERS) {
+    if (changes[key] === undefined) {
+      continue;
+    }
+
+    const methodArgs = typeof args === "function" ? args(changes[key]) : args;
+
+    callUi(method, methodArgs, UI_WARNING_CONTEXTS.state);
+  }
+
+  syncUpdatesPerSecond(changes);
+  propagateOverlayChanges(changes, callUi);
+  propagateGeometryChange({ changes, engine, callUi });
+}
+
+function createStateChangeHandler({ engine, callUi, syncUpdatesPerSecond }) {
+  return ({ changes }) =>
+    propagateStateChanges({ changes, engine, callUi, syncUpdatesPerSecond });
+}
+
+/**
+ * Wires simulation engine events to the provided UI surface.
+ *
+ * @param {import('../engine/simulationEngine.js').default} engine
+ * @param {import('./uiManager.js').default | (HeadlessStateSynchronizationSurface & HeadlessTelemetryPublisher)} uiManager
+ * @returns {Array<() => void>} Engine listener unsubscribe callbacks.
+ */
+function subscribeEngineToUi(engine, uiManager) {
+  if (!engine || !uiManager) {
+    return [];
+  }
+
+  const callUi = (methodName, args = [], context = UI_WARNING_CONTEXTS.state) =>
+    invokeUiManagerMethod(uiManager, methodName, args, context);
+  const syncUpdatesPerSecond = createUpdatesPerSecondSynchronizer(engine, callUi);
+  const handleMetrics = createMetricsHandler(callUi);
+  const handleLeaderboard = createLeaderboardHandler(callUi);
+  const handleStateChange = createStateChangeHandler({
+    engine,
+    callUi,
+    syncUpdatesPerSecond,
+  });
 
   return [
-    engine.on?.("metrics", ({ stats, metrics, environment }) => {
-      callUi(
-        "renderMetrics",
-        [stats, metrics, environment],
-        UI_WARNING_CONTEXTS.metrics,
-      );
-    }),
-    engine.on?.("leaderboard", ({ entries }) => {
-      callUi("renderLeaderboard", [entries], UI_WARNING_CONTEXTS.leaderboard);
-    }),
-    engine.on?.("state", ({ changes }) => {
-      if (changes?.paused !== undefined) {
-        callUi("setPauseState", [changes.paused], UI_WARNING_CONTEXTS.state);
-      }
-
-      if (changes?.autoPauseOnBlur !== undefined) {
-        callUi(
-          "setAutoPauseOnBlur",
-          [changes.autoPauseOnBlur, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.autoPausePending !== undefined) {
-        callUi(
-          "setAutoPausePending",
-          [changes.autoPausePending],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.societySimilarity !== undefined) {
-        callUi(
-          "setSocietySimilarity",
-          [changes.societySimilarity, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.enemySimilarity !== undefined) {
-        callUi(
-          "setEnemySimilarity",
-          [changes.enemySimilarity, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.eventStrengthMultiplier !== undefined) {
-        callUi(
-          "setEventStrengthMultiplier",
-          [changes.eventStrengthMultiplier, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.eventFrequencyMultiplier !== undefined) {
-        callUi(
-          "setEventFrequencyMultiplier",
-          [changes.eventFrequencyMultiplier, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.densityEffectMultiplier !== undefined) {
-        callUi(
-          "setDensityEffectMultiplier",
-          [changes.densityEffectMultiplier, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.energyRegenRate !== undefined) {
-        callUi(
-          "setEnergyRegenRate",
-          [changes.energyRegenRate, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.energyDiffusionRate !== undefined) {
-        callUi(
-          "setEnergyDiffusionRate",
-          [changes.energyDiffusionRate, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.mutationMultiplier !== undefined) {
-        callUi(
-          "setMutationMultiplier",
-          [changes.mutationMultiplier, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.maxConcurrentEvents !== undefined) {
-        callUi(
-          "setMaxConcurrentEvents",
-          [changes.maxConcurrentEvents, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.leaderboardIntervalMs !== undefined) {
-        callUi(
-          "setLeaderboardIntervalMs",
-          [changes.leaderboardIntervalMs, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.lifeEventFadeTicks !== undefined) {
-        callUi(
-          "setLifeEventFadeTicks",
-          [changes.lifeEventFadeTicks, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.lifeEventLimit !== undefined) {
-        callUi(
-          "setLifeEventLimit",
-          [changes.lifeEventLimit, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      syncUpdatesPerSecond(changes);
-
-      if (changes?.lowDiversityReproMultiplier !== undefined) {
-        callUi(
-          "setLowDiversityReproMultiplier",
-          [changes.lowDiversityReproMultiplier, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.combatEdgeSharpness !== undefined) {
-        callUi(
-          "setCombatEdgeSharpness",
-          [changes.combatEdgeSharpness, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.combatTerritoryEdgeFactor !== undefined) {
-        callUi(
-          "setCombatTerritoryEdgeFactor",
-          [changes.combatTerritoryEdgeFactor, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes?.initialTileEnergyFraction !== undefined) {
-        callUi(
-          "setInitialTileEnergyFraction",
-          [changes.initialTileEnergyFraction, { notify: false }],
-          UI_WARNING_CONTEXTS.state,
-        );
-      }
-
-      if (changes) {
-        for (const [overlayKey, setterName] of Object.entries(OVERLAY_TOGGLE_SETTERS)) {
-          if (changes[overlayKey] !== undefined) {
-            callUi(
-              setterName,
-              [changes[overlayKey], { notify: false }],
-              UI_WARNING_CONTEXTS.overlay,
-            );
-          }
-        }
-      }
-
-      const geometryChanged =
-        changes &&
-        (Object.hasOwn(changes, "gridRows") ||
-          Object.hasOwn(changes, "gridCols") ||
-          Object.hasOwn(changes, "cellSize"));
-
-      if (geometryChanged) {
-        const geometry = {
-          rows: Object.hasOwn(changes, "gridRows")
-            ? changes.gridRows
-            : Number.isFinite(engine?.rows)
-              ? engine.rows
-              : undefined,
-          cols: Object.hasOwn(changes, "gridCols")
-            ? changes.gridCols
-            : Number.isFinite(engine?.cols)
-              ? engine.cols
-              : undefined,
-          cellSize: Object.hasOwn(changes, "cellSize")
-            ? changes.cellSize
-            : Number.isFinite(engine?.cellSize)
-              ? engine.cellSize
-              : undefined,
-        };
-
-        callUi("setGridGeometry", [geometry], UI_WARNING_CONTEXTS.geometry);
-      }
-    }),
+    engine.on?.("metrics", handleMetrics),
+    engine.on?.("leaderboard", handleLeaderboard),
+    engine.on?.("state", handleStateChange),
   ].filter(Boolean);
+}
+
+const isNumber = (value) => typeof value === "number";
+const withNotifyFalse = (value) => [value, { notify: false }];
+const passThroughArgs = (value) => [value];
+
+const STATE_CHANGE_HANDLERS = [
+  { key: "paused", method: "setPauseState", args: passThroughArgs },
+  {
+    key: "autoPauseOnBlur",
+    method: "setAutoPauseOnBlur",
+    args: withNotifyFalse,
+  },
+  { key: "autoPausePending", method: "setAutoPausePending", args: passThroughArgs },
+  {
+    key: "societySimilarity",
+    method: "setSocietySimilarity",
+    args: withNotifyFalse,
+  },
+  {
+    key: "enemySimilarity",
+    method: "setEnemySimilarity",
+    args: withNotifyFalse,
+  },
+  {
+    key: "eventStrengthMultiplier",
+    method: "setEventStrengthMultiplier",
+    args: withNotifyFalse,
+  },
+  {
+    key: "eventFrequencyMultiplier",
+    method: "setEventFrequencyMultiplier",
+    args: withNotifyFalse,
+  },
+  {
+    key: "densityEffectMultiplier",
+    method: "setDensityEffectMultiplier",
+    args: withNotifyFalse,
+  },
+  {
+    key: "energyRegenRate",
+    method: "setEnergyRegenRate",
+    args: withNotifyFalse,
+  },
+  {
+    key: "energyDiffusionRate",
+    method: "setEnergyDiffusionRate",
+    args: withNotifyFalse,
+  },
+  {
+    key: "mutationMultiplier",
+    method: "setMutationMultiplier",
+    args: withNotifyFalse,
+  },
+  {
+    key: "maxConcurrentEvents",
+    method: "setMaxConcurrentEvents",
+    args: withNotifyFalse,
+  },
+  {
+    key: "leaderboardIntervalMs",
+    method: "setLeaderboardIntervalMs",
+    args: withNotifyFalse,
+  },
+  {
+    key: "lifeEventFadeTicks",
+    method: "setLifeEventFadeTicks",
+    args: withNotifyFalse,
+  },
+  {
+    key: "lifeEventLimit",
+    method: "setLifeEventLimit",
+    args: withNotifyFalse,
+  },
+  {
+    key: "lowDiversityReproMultiplier",
+    method: "setLowDiversityReproMultiplier",
+    args: withNotifyFalse,
+  },
+  {
+    key: "combatEdgeSharpness",
+    method: "setCombatEdgeSharpness",
+    args: withNotifyFalse,
+  },
+  {
+    key: "combatTerritoryEdgeFactor",
+    method: "setCombatTerritoryEdgeFactor",
+    args: withNotifyFalse,
+  },
+  {
+    key: "initialTileEnergyFraction",
+    method: "setInitialTileEnergyFraction",
+    args: withNotifyFalse,
+  },
+];
+
+const INITIAL_STATE_SYNCERS = [
+  {
+    key: "lowDiversityReproMultiplier",
+    method: "setLowDiversityReproMultiplier",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "combatEdgeSharpness",
+    method: "setCombatEdgeSharpness",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "combatTerritoryEdgeFactor",
+    method: "setCombatTerritoryEdgeFactor",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "autoPausePending",
+    method: "setAutoPausePending",
+    guard: (value) => value !== undefined,
+    args: (value) => [Boolean(value)],
+  },
+  {
+    key: "societySimilarity",
+    method: "setSocietySimilarity",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "enemySimilarity",
+    method: "setEnemySimilarity",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "eventStrengthMultiplier",
+    method: "setEventStrengthMultiplier",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "eventFrequencyMultiplier",
+    method: "setEventFrequencyMultiplier",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "densityEffectMultiplier",
+    method: "setDensityEffectMultiplier",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "energyRegenRate",
+    method: "setEnergyRegenRate",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "energyDiffusionRate",
+    method: "setEnergyDiffusionRate",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "mutationMultiplier",
+    method: "setMutationMultiplier",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "maxConcurrentEvents",
+    method: "setMaxConcurrentEvents",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+  {
+    key: "leaderboardIntervalMs",
+    method: "setLeaderboardIntervalMs",
+    guard: isNumber,
+    args: withNotifyFalse,
+  },
+];
+
+/**
+ * Replays the engine's persisted state into the UI surface so sliders and
+ * toggles reflect the latest configuration before live updates resume.
+ *
+ * @param {import('../engine/simulationEngine.js').default} engine
+ * @param {import('./uiManager.js').default | HeadlessStateSynchronizationSurface} uiManager
+ */
+function syncInitialStateToUi(engine, uiManager) {
+  if (!uiManager || !engine?.state) {
+    return;
+  }
+
+  for (const { key, method, guard, args } of INITIAL_STATE_SYNCERS) {
+    const value = engine.state[key];
+
+    if (!guard(value)) {
+      continue;
+    }
+
+    const methodArgs = typeof args === "function" ? args(value) : [value];
+
+    invokeUiManagerMethod(uiManager, method, methodArgs, UI_WARNING_CONTEXTS.initial);
+  }
+
+  for (const [overlayKey, setterName] of Object.entries(OVERLAY_TOGGLE_SETTERS)) {
+    if (engine.state[overlayKey] === undefined) {
+      continue;
+    }
+
+    invokeUiManagerMethod(
+      uiManager,
+      setterName,
+      [engine.state[overlayKey], { notify: false }],
+      UI_WARNING_CONTEXTS.initial,
+    );
+  }
 }
 
 /**
@@ -430,7 +561,7 @@ function subscribeEngineToUi(engine, uiManager) {
  * adapter produced by {@link createHeadlessUiManager}.
  *
  * @param {Object} options
- * @param {import('../simulationEngine.js').default} options.engine - Active
+ * @param {import('../engine/simulationEngine.js').default} options.engine - Active
  *   simulation engine instance.
  * @param {Object} [options.uiOptions] - UI configuration overrides forwarded to
  *   either {@link UIManager} or the headless adapter.
@@ -443,7 +574,9 @@ function subscribeEngineToUi(engine, uiManager) {
  * @param {boolean} [options.headless=false] - When true, return a headless
  *   control surface rather than mounting {@link UIManager}.
  * @returns {{
- *   uiManager: import('./uiManager.js').default | ReturnType<typeof createHeadlessUiManager>,
+ *   uiManager: import('./uiManager.js').default |
+ *     (HeadlessStateSynchronizationSurface & HeadlessTelemetryPublisher &
+ *       HeadlessSelectionAccess),
  *   unsubscribers: Array<() => void>,
  *   headlessOptions: Object|null,
  *   layout: Object,
@@ -490,200 +623,7 @@ export function bindSimulationToUi({
     );
   }
 
-  if (uiManager) {
-    const lowDiversity = engine?.state?.lowDiversityReproMultiplier;
-
-    if (typeof lowDiversity === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setLowDiversityReproMultiplier",
-        [lowDiversity, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const sharpness = engine?.state?.combatEdgeSharpness;
-
-    if (typeof sharpness === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setCombatEdgeSharpness",
-        [sharpness, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const factor = engine?.state?.combatTerritoryEdgeFactor;
-
-    if (typeof factor === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setCombatTerritoryEdgeFactor",
-        [factor, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const pending = engine?.state?.autoPausePending;
-
-    if (pending !== undefined) {
-      invokeUiManagerMethod(
-        uiManager,
-        "setAutoPausePending",
-        [Boolean(pending)],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const societySimilarity = engine?.state?.societySimilarity;
-
-    if (typeof societySimilarity === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setSocietySimilarity",
-        [societySimilarity, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const enemySimilarity = engine?.state?.enemySimilarity;
-
-    if (typeof enemySimilarity === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setEnemySimilarity",
-        [enemySimilarity, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const eventStrength = engine?.state?.eventStrengthMultiplier;
-
-    if (typeof eventStrength === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setEventStrengthMultiplier",
-        [eventStrength, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const eventFrequency = engine?.state?.eventFrequencyMultiplier;
-
-    if (typeof eventFrequency === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setEventFrequencyMultiplier",
-        [eventFrequency, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const densityMultiplier = engine?.state?.densityEffectMultiplier;
-
-    if (typeof densityMultiplier === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setDensityEffectMultiplier",
-        [densityMultiplier, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const energyRegen = engine?.state?.energyRegenRate;
-
-    if (typeof energyRegen === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setEnergyRegenRate",
-        [energyRegen, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const energyDiffusion = engine?.state?.energyDiffusionRate;
-
-    if (typeof energyDiffusion === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setEnergyDiffusionRate",
-        [energyDiffusion, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const mutationMultiplier = engine?.state?.mutationMultiplier;
-
-    if (typeof mutationMultiplier === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setMutationMultiplier",
-        [mutationMultiplier, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const maxConcurrentEvents = engine?.state?.maxConcurrentEvents;
-
-    if (typeof maxConcurrentEvents === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setMaxConcurrentEvents",
-        [maxConcurrentEvents, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    const leaderboardInterval = engine?.state?.leaderboardIntervalMs;
-
-    if (typeof leaderboardInterval === "number") {
-      invokeUiManagerMethod(
-        uiManager,
-        "setLeaderboardIntervalMs",
-        [leaderboardInterval, { notify: false }],
-        UI_WARNING_CONTEXTS.initial,
-      );
-    }
-  }
-
-  if (uiManager) {
-    for (const [overlayKey, setterName] of Object.entries(OVERLAY_TOGGLE_SETTERS)) {
-      if (engine?.state?.[overlayKey] !== undefined) {
-        invokeUiManagerMethod(
-          uiManager,
-          setterName,
-          [engine.state[overlayKey], { notify: false }],
-          UI_WARNING_CONTEXTS.initial,
-        );
-      }
-    }
-  }
+  syncInitialStateToUi(engine, uiManager);
 
   const unsubscribers = subscribeEngineToUi(engine, uiManager);
 

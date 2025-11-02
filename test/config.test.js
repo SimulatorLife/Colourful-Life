@@ -130,6 +130,48 @@ test("resolveInitialTileEnergyFraction clamps invalid overrides", async () => {
   );
 });
 
+test("ENERGY_SPARSE_SCAN_RATIO exposes the environment-aware default", async () => {
+  const { ENERGY_SPARSE_SCAN_RATIO } = await configModulePromise;
+
+  assert.is(ENERGY_SPARSE_SCAN_RATIO, 0.2);
+});
+
+test("resolveEnergySparseScanRatio respects overrides", async () => {
+  const { resolveEnergySparseScanRatio } = await configModulePromise;
+
+  assert.is(
+    resolveEnergySparseScanRatio({
+      COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO: "0.12",
+    }),
+    0.12,
+  );
+});
+
+test("resolveEnergySparseScanRatio clamps invalid overrides", async () => {
+  const { resolveEnergySparseScanRatio } = await configModulePromise;
+
+  assert.is(
+    resolveEnergySparseScanRatio({
+      COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO: "-0.4",
+    }),
+    0,
+  );
+
+  assert.is(
+    resolveEnergySparseScanRatio({
+      COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO: "1.6",
+    }),
+    1,
+  );
+
+  assert.is(
+    resolveEnergySparseScanRatio({
+      COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO: "NaN",
+    }),
+    0.2,
+  );
+});
+
 test("TRAIT_ACTIVATION_THRESHOLD exposes the environment-aware default", async () => {
   const { TRAIT_ACTIVATION_THRESHOLD } = await configModulePromise;
 
@@ -435,7 +477,7 @@ test("resolveMateDiversitySampleLimit clamps invalid overrides", async () => {
 test("OFFSPRING_VIABILITY_BUFFER exposes the environment-aware default", async () => {
   const { OFFSPRING_VIABILITY_BUFFER } = await configModulePromise;
 
-  assert.is(OFFSPRING_VIABILITY_BUFFER, 1.11);
+  assert.is(OFFSPRING_VIABILITY_BUFFER, 1.09);
 });
 
 test("resolveOffspringViabilityBuffer respects overrides", async () => {
@@ -470,6 +512,6 @@ test("resolveOffspringViabilityBuffer clamps invalid overrides", async () => {
     resolveOffspringViabilityBuffer({
       COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER: "NaN",
     }),
-    1.11,
+    1.09,
   );
 });

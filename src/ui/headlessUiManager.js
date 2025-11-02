@@ -7,6 +7,231 @@ import { sanitizeNumber, applyIntervalFloor } from "../utils/math.js";
 import { coerceBoolean } from "../utils/primitives.js";
 import { invokeWithErrorBoundary } from "../utils/error.js";
 
+const BOOLEAN_SETTING_KEYS = Object.freeze([
+  "showObstacles",
+  "showEnergy",
+  "showDensity",
+  "showAge",
+  "showFitness",
+  "showLifeEventMarkers",
+  "showSelectionZones",
+  "showGridLines",
+]);
+
+function attachBooleanSettingAccessors(
+  target,
+  settings,
+  notify,
+  keys = BOOLEAN_SETTING_KEYS,
+) {
+  if (!target || typeof target !== "object") {
+    return target;
+  }
+
+  for (const key of keys) {
+    if (typeof key !== "string" || key.length === 0) {
+      continue;
+    }
+
+    const capitalized = key.charAt(0).toUpperCase() + key.slice(1);
+    const getterName = `get${capitalized}`;
+    const setterName = `set${capitalized}`;
+
+    if (typeof target[getterName] !== "function") {
+      target[getterName] = () => settings[key];
+    }
+
+    if (typeof target[setterName] !== "function") {
+      target[setterName] = (value, { notify: shouldNotify = true } = {}) => {
+        const normalized = coerceBoolean(value, settings[key]);
+
+        if (settings[key] === normalized) return;
+
+        settings[key] = normalized;
+
+        if (shouldNotify) {
+          notify(key, settings[key]);
+        }
+      };
+    }
+  }
+
+  return target;
+}
+
+// Headless UI consumers historically depended on a single, monolithic manager
+// contract. To keep responsibilities cohesive and encourage interface
+// segregation we now describe the surface as a collection of role-focused
+// slices. Downstream modules can reference only the facets they require instead
+// of inheriting the entire manager shape.
+
+/**
+ * @typedef {(value: number, options?: { notify?: boolean }) => void} HeadlessNumberSetter
+ */
+
+/**
+ * @typedef {(value: boolean, options?: { notify?: boolean }) => void} HeadlessBooleanSetter
+ */
+
+/**
+ * @typedef {object} HeadlessPlaybackControls
+ * @property {() => boolean} isPaused
+ * @property {(value: boolean) => void} setPaused
+ * @property {(value: boolean) => void} setPauseState
+ * @property {() => boolean} togglePause
+ * @property {() => number} getUpdatesPerSecond
+ * @property {HeadlessNumberSetter} setUpdatesPerSecond
+ */
+
+/**
+ * @typedef {object} HeadlessEventCadenceControls
+ * @property {() => number} getEventFrequencyMultiplier
+ * @property {HeadlessNumberSetter} setEventFrequencyMultiplier
+ * @property {HeadlessNumberSetter} setEventStrengthMultiplier
+ * @property {() => number} getMaxConcurrentEvents
+ * @property {HeadlessNumberSetter} setMaxConcurrentEvents
+ */
+
+/**
+ * @typedef {object} HeadlessMutationControls
+ * @property {() => number} getMutationMultiplier
+ * @property {HeadlessNumberSetter} setMutationMultiplier
+ */
+
+/**
+ * @typedef {object} HeadlessDensityControls
+ * @property {() => number} getDensityEffectMultiplier
+ * @property {HeadlessNumberSetter} setDensityEffectMultiplier
+ */
+
+/**
+ * @typedef {object} HeadlessSimilarityControls
+ * @property {() => number} getSocietySimilarity
+ * @property {HeadlessNumberSetter} setSocietySimilarity
+ * @property {() => number} getEnemySimilarity
+ * @property {HeadlessNumberSetter} setEnemySimilarity
+ */
+
+/**
+ * @typedef {object} HeadlessReproductionControls
+ * @property {() => number} getLowDiversityReproMultiplier
+ * @property {HeadlessNumberSetter} setLowDiversityReproMultiplier
+ * @property {() => number} getMatingDiversityThreshold
+ * @property {HeadlessNumberSetter} setMatingDiversityThreshold
+ */
+
+/**
+ * @typedef {object} HeadlessEnergyControls
+ * @property {() => number} getEnergyRegenRate
+ * @property {HeadlessNumberSetter} setEnergyRegenRate
+ * @property {() => number} getEnergyDiffusionRate
+ * @property {HeadlessNumberSetter} setEnergyDiffusionRate
+ * @property {() => number} getInitialTileEnergyFraction
+ * @property {HeadlessNumberSetter} setInitialTileEnergyFraction
+ */
+
+/**
+ * @typedef {object} HeadlessCombatControls
+ * @property {() => number} getCombatEdgeSharpness
+ * @property {HeadlessNumberSetter} setCombatEdgeSharpness
+ * @property {() => number} getCombatTerritoryEdgeFactor
+ * @property {HeadlessNumberSetter} setCombatTerritoryEdgeFactor
+ */
+
+/**
+ * @typedef {object} HeadlessLifeEventControls
+ * @property {() => number} getLifeEventFadeTicks
+ * @property {HeadlessNumberSetter} setLifeEventFadeTicks
+ * @property {() => number} getLifeEventLimit
+ * @property {HeadlessNumberSetter} setLifeEventLimit
+ */
+
+/**
+ * @typedef {object} HeadlessLeaderboardControls
+ * @property {() => number} getLeaderboardIntervalMs
+ * @property {HeadlessNumberSetter} setLeaderboardIntervalMs
+ * @property {() => number} getLeaderboardSize
+ * @property {HeadlessNumberSetter} setLeaderboardSize
+ * @property {(timestamp: number) => boolean} shouldRenderSlowUi
+ */
+
+/**
+ * @typedef {object} HeadlessTelemetryCallbacks
+ * @property {(stats: any, metrics: any, environment: any) => void} renderMetrics
+ * @property {(entries: any[]) => void} renderLeaderboard
+ */
+
+/**
+ * @typedef {object} HeadlessOverlayToggleControls
+ * @property {() => boolean} getShowObstacles
+ * @property {HeadlessBooleanSetter} setShowObstacles
+ * @property {() => boolean} getShowEnergy
+ * @property {HeadlessBooleanSetter} setShowEnergy
+ * @property {() => boolean} getShowDensity
+ * @property {HeadlessBooleanSetter} setShowDensity
+ * @property {() => boolean} getShowAge
+ * @property {HeadlessBooleanSetter} setShowAge
+ * @property {() => boolean} getShowFitness
+ * @property {HeadlessBooleanSetter} setShowFitness
+ * @property {() => boolean} getShowLifeEventMarkers
+ * @property {HeadlessBooleanSetter} setShowLifeEventMarkers
+ * @property {() => boolean} getShowSelectionZones
+ * @property {HeadlessBooleanSetter} setShowSelectionZones
+ * @property {() => boolean} getShowGridLines
+ * @property {HeadlessBooleanSetter} setShowGridLines
+ */
+
+/**
+ * @typedef {object} HeadlessAutoPauseControls
+ * @property {() => boolean} getAutoPauseOnBlur
+ * @property {HeadlessBooleanSetter} setAutoPauseOnBlur
+ * @property {() => boolean} getAutoPausePending
+ * @property {(value: boolean) => void} setAutoPausePending
+ */
+
+/**
+ * @typedef {object} HeadlessSelectionAccess
+ * @property {object|null} selectionManager
+ */
+
+/**
+ * @typedef {HeadlessPlaybackControls & HeadlessAutoPauseControls} HeadlessPauseControls
+ */
+
+/**
+ * @typedef {HeadlessEventCadenceControls &
+ *   HeadlessMutationControls &
+ *   HeadlessDensityControls &
+ *   HeadlessSimilarityControls &
+ *   HeadlessReproductionControls &
+ *   HeadlessEnergyControls &
+ *   HeadlessCombatControls &
+ *   HeadlessLifeEventControls &
+ *   HeadlessLeaderboardControls} HeadlessSimulationTuningControls
+ */
+
+/**
+ * @typedef {HeadlessPauseControls &
+ *   HeadlessSimulationTuningControls &
+ *   HeadlessOverlayToggleControls} HeadlessStateSynchronizationSurface
+ */
+
+/**
+ * @typedef {HeadlessTelemetryCallbacks} HeadlessTelemetryPublisher
+ */
+
+/**
+ * @typedef {HeadlessStateSynchronizationSurface & HeadlessTelemetryPublisher} HeadlessUiControlSurface
+ */
+
+/**
+ * @typedef {HeadlessUiControlSurface & HeadlessSelectionAccess} HeadlessUiBridgeSurface
+ */
+
+/**
+ * @typedef {HeadlessUiBridgeSurface} HeadlessUiAdapter
+ */
+
 /**
  * Creates a lightweight {@link UIManager}-compatible adapter for environments
  * where no DOM-backed UI is available (e.g. tests, server-side rendering, or
@@ -50,49 +275,13 @@ import { invokeWithErrorBoundary } from "../utils/error.js";
  * @param {boolean} [options.showAge] - Whether organism age overlays are shown.
  * @param {boolean} [options.showFitness] - Whether fitness overlays are shown.
  * @param {boolean} [options.showLifeEventMarkers] - Whether life event markers are shown.
+ * @param {boolean} [options.showSelectionZones] - Whether reproductive zone overlays are shown.
  * @param {boolean} [options.showGridLines] - Whether grid lines outlining each tile are shown.
- * @param {boolean} [options.showReproductiveZones] - Whether reproductive zone shading is shown.
  * @param {number} [options.lifeEventFadeTicks] - Number of ticks life event markers remain visible.
  * @param {number} [options.lifeEventLimit] - Maximum life event markers rendered at once.
  * @param {number} [options.leaderboardIntervalMs] - Minimum time between leaderboard updates.
  * @param {Object} [options.selectionManager=null] - Shared selection manager instance.
- * @returns {{
- *   isPaused: () => boolean,
- *   setPaused: (value: boolean) => void,
- *   setPauseState: (value: boolean) => void,
- *   togglePause: () => boolean,
- *   getUpdatesPerSecond: () => number,
- *   setUpdatesPerSecond: (value: number) => void,
- *   getEventFrequencyMultiplier: () => number,
- *   getMutationMultiplier: () => number,
- *   getDensityEffectMultiplier: () => number,
- *   getSocietySimilarity: () => number,
- *   getEnemySimilarity: () => number,
- *   getEventStrengthMultiplier: () => number,
- *   getEnergyRegenRate: () => number,
- *   setEnergyRegenRate: (value: number) => void,
- *   getEnergyDiffusionRate: () => number,
- *   setEnergyDiffusionRate: (value: number) => void,
- *   getInitialTileEnergyFraction: () => number,
- *   setInitialTileEnergyFraction: (value: number) => void,
- *   getMatingDiversityThreshold: () => number,
- *   setMatingDiversityThreshold: (value: number) => void,
- *   getLowDiversityReproMultiplier: () => number,
- *   setLowDiversityReproMultiplier: (value: number) => void,
- *   getShowObstacles: () => boolean,
- *   getShowEnergy: () => boolean,
- *   getShowDensity: () => boolean,
- *   getShowAge: () => boolean,
- *   getShowFitness: () => boolean,
- *   getShowLifeEventMarkers: () => boolean,
- *   getShowGridLines: () => boolean,
- *   shouldRenderSlowUi: (timestamp: number) => boolean,
- *   renderMetrics: Function,
- *   renderLeaderboard: Function,
- *   getAutoPauseOnBlur: () => boolean,
- *   setAutoPauseOnBlur: (value: boolean) => void,
- *   selectionManager: Object|null,
- * }} - Headless UI facade that keeps simulation code agnostic to environment.
+ * @returns {HeadlessUiAdapter} Headless UI facade that keeps simulation code agnostic to environment.
  */
 export function createHeadlessUiManager(options = {}) {
   const {
@@ -180,7 +369,7 @@ export function createHeadlessUiManager(options = {}) {
     });
   };
 
-  return {
+  const manager = {
     isPaused: () => settings.paused,
     setPaused: (value) => {
       const next = coerceBoolean(value, settings.paused);
@@ -343,96 +532,8 @@ export function createHeadlessUiManager(options = {}) {
         notify("maxConcurrentEvents", settings.maxConcurrentEvents);
       }
     },
-    getShowObstacles: () => settings.showObstacles,
-    getShowEnergy: () => settings.showEnergy,
-    getShowDensity: () => settings.showDensity,
-    getShowAge: () => settings.showAge,
-    getShowFitness: () => settings.showFitness,
-    getShowLifeEventMarkers: () => settings.showLifeEventMarkers,
-    getShowGridLines: () => settings.showGridLines,
-    getShowReproductiveZones: () => settings.showReproductiveZones,
     getLifeEventFadeTicks: () => settings.lifeEventFadeTicks,
     getLifeEventLimit: () => settings.lifeEventLimit,
-    setShowObstacles: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showObstacles);
-
-      if (settings.showObstacles === normalized) return;
-
-      settings.showObstacles = normalized;
-      if (shouldNotify) {
-        notify("showObstacles", settings.showObstacles);
-      }
-    },
-    setShowEnergy: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showEnergy);
-
-      if (settings.showEnergy === normalized) return;
-
-      settings.showEnergy = normalized;
-      if (shouldNotify) {
-        notify("showEnergy", settings.showEnergy);
-      }
-    },
-    setShowDensity: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showDensity);
-
-      if (settings.showDensity === normalized) return;
-
-      settings.showDensity = normalized;
-      if (shouldNotify) {
-        notify("showDensity", settings.showDensity);
-      }
-    },
-    setShowAge: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showAge);
-
-      if (settings.showAge === normalized) return;
-
-      settings.showAge = normalized;
-      if (shouldNotify) {
-        notify("showAge", settings.showAge);
-      }
-    },
-    setShowFitness: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showFitness);
-
-      if (settings.showFitness === normalized) return;
-
-      settings.showFitness = normalized;
-      if (shouldNotify) {
-        notify("showFitness", settings.showFitness);
-      }
-    },
-    setShowLifeEventMarkers: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showLifeEventMarkers);
-
-      if (settings.showLifeEventMarkers === normalized) return;
-
-      settings.showLifeEventMarkers = normalized;
-      if (shouldNotify) {
-        notify("showLifeEventMarkers", settings.showLifeEventMarkers);
-      }
-    },
-    setShowGridLines: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showGridLines);
-
-      if (settings.showGridLines === normalized) return;
-
-      settings.showGridLines = normalized;
-      if (shouldNotify) {
-        notify("showGridLines", settings.showGridLines);
-      }
-    },
-    setShowReproductiveZones: (value, { notify: shouldNotify = true } = {}) => {
-      const normalized = coerceBoolean(value, settings.showReproductiveZones);
-
-      if (settings.showReproductiveZones === normalized) return;
-
-      settings.showReproductiveZones = normalized;
-      if (shouldNotify) {
-        notify("showReproductiveZones", settings.showReproductiveZones);
-      }
-    },
     setLifeEventFadeTicks: (value, { notify: shouldNotify = true } = {}) => {
       if (
         updateIfFinite("lifeEventFadeTicks", value, { min: 1, round: Math.round }) &&
@@ -524,6 +625,8 @@ export function createHeadlessUiManager(options = {}) {
     },
     selectionManager: selectionManager ?? null,
   };
+
+  return attachBooleanSettingAccessors(manager, settings, notify);
 }
 
 export default createHeadlessUiManager;

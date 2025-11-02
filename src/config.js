@@ -68,15 +68,16 @@ const DEFAULT_REPRODUCTION_COOLDOWN_BASE = 2;
 const DEFAULT_ENERGY_REGEN_RATE = 0.0117;
 const DEFAULT_INITIAL_TILE_ENERGY_FRACTION = 0.5;
 const DEFAULT_ENERGY_DIFFUSION_RATE = 0.05; // smoothing between tiles (per tick)
-// Softened from 1.13 after a 30×30 headless probe
-// (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=30 PERF_SIM_COLS=30 PERF_SIM_WARMUP=10`
-// `PERF_SIM_ITERATIONS=60 PERF_SIM_DENSITY=0.62 node scripts/profile-energy.mjs`)
-// nudged the post-warmup survivors from 83 → 92 while raw ms-per-tick held
-// comfortably under the 125 ms watchdog (76.8 → 82.1). The gentler reserve
-// demand lets recovering colonies resume births sooner, smoothing out
-// population dips without reviving the feast/famine loop we saw with leaner
-// buffers.
-const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.11;
+const DEFAULT_ENERGY_SPARSE_SCAN_RATIO = 0.2;
+// Relaxed from 1.11 after rerunning the 40×40 headless probe
+// (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40 PERF_SIM_COLS=40 PERF_SIM_WARMUP=10`
+// `PERF_SIM_ITERATIONS=50 PERF_SIM_DENSITY=0.65 node scripts/profile-energy.mjs`)
+// bumped the post-warmup survivors from 206 → 209 while trimming the raw
+// ms-per-tick from ~405.13 → ~385.57. The lighter reserve requirement lets
+// crowded parents restart gestation a tick earlier once they bank safety
+// margins, easing population dips without letting low-energy lineages spam
+// births.
+const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.09;
 const DEFAULT_MATE_DIVERSITY_SAMPLE_LIMIT = 5;
 // Telemetry defaults to highlighting the top five lineages. Expose the size so
 // headless consumers and UI presets can extend the leaderboard without touching
@@ -151,6 +152,29 @@ export function resolveEnergyDiffusionRate(env = RUNTIME_ENV) {
 }
 
 export const ENERGY_DIFFUSION_RATE_DEFAULT = resolveEnergyDiffusionRate();
+
+/**
+ * Resolves the threshold where the grid regeneration loop prefers the sparse
+ * dirty-tile path over scanning every tile. Allowing overrides keeps the
+ * energy preparation pass tunable for dense or light workloads without
+ * touching simulation code, while the sanitizer constrains the ratio to the
+ * stable 0..1 interval so headless tests remain deterministic.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Dirty-tile ratio threshold clamped to the 0..1 interval.
+ */
+export function resolveEnergySparseScanRatio(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO", {
+    fallback: DEFAULT_ENERGY_SPARSE_SCAN_RATIO,
+    min: 0,
+    max: 1,
+    clampResult: true,
+  });
+}
+
+export const ENERGY_SPARSE_SCAN_RATIO = resolveEnergySparseScanRatio();
 
 /**
  * Resolves the fraction of the tile's maximum energy used to seed newly created
@@ -570,8 +594,8 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   showAge: false,
   showFitness: false,
   showLifeEventMarkers: false,
+  showSelectionZones: false,
   showGridLines: false,
-  showReproductiveZones: true,
   lifeEventFadeTicks: 36,
   lifeEventLimit: 24,
   leaderboardIntervalMs: 750,
@@ -601,8 +625,8 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showAge",
   "showFitness",
   "showLifeEventMarkers",
+  "showSelectionZones",
   "showGridLines",
-  "showReproductiveZones",
   "autoPauseOnBlur",
 ]);
 

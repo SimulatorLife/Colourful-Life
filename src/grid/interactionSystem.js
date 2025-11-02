@@ -1,10 +1,10 @@
-import { clamp, clamp01 } from "./utils/math.js";
-import { resolveCellColor } from "./utils/cell.js";
-import { createInteractionAdapter } from "./grid/interactionAdapterRegistry.js";
+import { clamp, clamp01 } from "../utils/math.js";
+import { resolveCellColor } from "../utils/cell.js";
+import { createInteractionAdapter } from "./interactionAdapterRegistry.js";
 import {
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   COMBAT_TERRITORY_EDGE_FACTOR,
-} from "./config.js";
+} from "../config.js";
 
 function asFiniteCoordinate(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -432,9 +432,10 @@ export default class InteractionSystem {
     combatEdgeSharpness,
     combatTerritoryEdgeFactor,
   } = {}) {
-    const intents = this.pendingIntents.splice(0);
+    const intents = this.pendingIntents;
+    const originalLength = intents.length;
 
-    if (intents.length === 0) {
+    if (originalLength === 0) {
       return false;
     }
 
@@ -446,10 +447,26 @@ export default class InteractionSystem {
       combatTerritoryEdgeFactor,
     };
 
-    return intents.reduce(
-      (processed, intent) => this.resolveIntent(intent, options) || processed,
-      false,
-    );
+    let processedAny = false;
+
+    for (let i = 0; i < originalLength; i += 1) {
+      const intent = intents[i];
+
+      if (this.resolveIntent(intent, options)) {
+        processedAny = true;
+      }
+
+      intents[i] = null;
+    }
+
+    if (intents.length > originalLength) {
+      intents.copyWithin(0, originalLength);
+      intents.length -= originalLength;
+    } else {
+      intents.length = 0;
+    }
+
+    return processedAny;
   }
 
   resolveIntent(

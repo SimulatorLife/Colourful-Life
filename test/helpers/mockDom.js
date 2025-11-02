@@ -244,6 +244,16 @@ export class MockElement {
     if (name === "id") this.id = value;
   }
 
+  removeAttribute(name) {
+    if (name === "id") {
+      this.id = "";
+    }
+
+    if (Object.prototype.hasOwnProperty.call(this.attributes, name)) {
+      delete this.attributes[name];
+    }
+  }
+
   getAttribute(name) {
     return this.attributes[name] ?? null;
   }
@@ -341,6 +351,7 @@ export class MockCanvas extends MockElement {
     this.height = height;
     this.boundingRect = { left: 0, top: 0, width, height };
     this._context = null;
+    this.lastToDataURLType = null;
   }
 
   getContext(type) {
@@ -351,6 +362,15 @@ export class MockCanvas extends MockElement {
     }
 
     return this._context;
+  }
+
+  toDataURL(type = "image/png") {
+    const resolvedType =
+      typeof type === "string" && type.length > 0 ? type : "image/png";
+
+    this.lastToDataURLType = resolvedType;
+
+    return `data:${resolvedType};base64,mock-canvas`;
   }
 }
 
@@ -403,11 +423,98 @@ export class MockDocument {
   }
 }
 
+function captureGlobal(key) {
+  const exists = Object.prototype.hasOwnProperty.call(global, key);
+
+  return { exists, value: exists ? global[key] : undefined };
+}
+
+function applyGlobal(key, snapshot) {
+  if (snapshot?.exists) {
+    global[key] = snapshot.value;
+
+    return;
+  }
+
+  delete global[key];
+}
+
+const DOM_ENVIRONMENT_STACK = [];
+
+function applyEnvironment(snapshot) {
+  applyGlobal("document", snapshot.document);
+  applyGlobal("Node", snapshot.Node);
+  applyGlobal("HTMLElement", snapshot.HTMLElement);
+  applyGlobal("window", snapshot.window);
+}
+
+const EMPTY_ENVIRONMENT = Object.freeze({
+  document: { exists: false, value: undefined },
+  Node: { exists: false, value: undefined },
+  HTMLElement: { exists: false, value: undefined },
+  window: { exists: false, value: undefined },
+});
+
+function resolveFallbackEnvironment(entry) {
+  let cursor = entry;
+
+  while (cursor) {
+    const owner = cursor.previousOwner;
+
+    if (owner) {
+      if (owner.active) {
+        return owner.assigned;
+      }
+
+      cursor = owner;
+
+      continue;
+    }
+
+    if (cursor.baseline) {
+      return cursor.baseline;
+    }
+
+    break;
+  }
+
+  return EMPTY_ENVIRONMENT;
+}
+
+function restoreDomEntry(entry) {
+  if (!entry || !entry.active) {
+    return;
+  }
+
+  entry.active = false;
+
+  const index = DOM_ENVIRONMENT_STACK.lastIndexOf(entry);
+
+  if (index !== -1) {
+    DOM_ENVIRONMENT_STACK.splice(index, 1);
+  }
+
+  const nextActive = DOM_ENVIRONMENT_STACK.at(-1);
+
+  if (nextActive) {
+    applyEnvironment(nextActive.assigned);
+
+    return;
+  }
+
+  applyEnvironment(resolveFallbackEnvironment(entry));
+}
+
 export function setupDom() {
-  const originalDocument = global.document;
-  const originalNode = global.Node;
-  const originalHTMLElement = global.HTMLElement;
-  const originalWindow = global.window;
+  const previousEntry = DOM_ENVIRONMENT_STACK.at(-1) ?? null;
+  const baseline = previousEntry
+    ? null
+    : {
+        document: captureGlobal("document"),
+        Node: captureGlobal("Node"),
+        HTMLElement: captureGlobal("HTMLElement"),
+        window: captureGlobal("window"),
+      };
 
   const document = new MockDocument();
   const appRoot = new MockElement("div");
@@ -416,10 +523,7 @@ export function setupDom() {
   document.registerElement(appRoot);
   document.body.appendChild(appRoot);
 
-  global.document = document;
-  global.Node = MockElement;
-  global.HTMLElement = MockElement;
-  global.window = {
+  const windowStub = {
     grid: null,
     requestAnimationFrame(callback) {
       if (typeof callback === "function") {
@@ -432,15 +536,26 @@ export function setupDom() {
     removeEventListener() {},
   };
 
+  const assigned = {
+    document: { exists: true, value: document },
+    Node: { exists: true, value: MockElement },
+    HTMLElement: { exists: true, value: MockElement },
+    window: { exists: true, value: windowStub },
+  };
+
+  applyEnvironment(assigned);
+
+  const entry = {
+    assigned,
+    baseline,
+    previousOwner: previousEntry,
+    active: true,
+  };
+
+  DOM_ENVIRONMENT_STACK.push(entry);
+
   return () => {
-    if (originalDocument === undefined) delete global.document;
-    else global.document = originalDocument;
-    if (originalNode === undefined) delete global.Node;
-    else global.Node = originalNode;
-    if (originalHTMLElement === undefined) delete global.HTMLElement;
-    else global.HTMLElement = originalHTMLElement;
-    if (originalWindow === undefined) delete global.window;
-    else global.window = originalWindow;
+    restoreDomEntry(entry);
   };
 }
 

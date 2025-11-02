@@ -18,6 +18,7 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       showAge: true,
       showFitness: true,
       showLifeEventMarkers: true,
+      showSelectionZones: true,
       showGridLines: true,
     };
 
@@ -35,6 +36,7 @@ test("createSimulation aligns UI controls with config defaults", async () => {
     assert.is(uiManager.showAge, true);
     assert.is(uiManager.showFitness, true);
     assert.is(uiManager.showLifeEventMarkers, true);
+    assert.is(uiManager.showSelectionZones, true);
     assert.is(uiManager.showGridLines, true);
     assert.is(uiManager.autoPauseOnBlur, false);
 
@@ -59,6 +61,10 @@ test("createSimulation aligns UI controls with config defaults", async () => {
       uiManager.controlsPanel,
       "Life Event Markers",
     );
+    const zoneInput = findCheckboxByLabel(
+      uiManager.controlsPanel,
+      "Highlight Reproductive Zones",
+    );
     const gridInput = findCheckboxByLabel(uiManager.controlsPanel, "Show Grid Lines");
 
     assert.ok(obstaclesInput, "obstacle toggle should exist");
@@ -67,6 +73,7 @@ test("createSimulation aligns UI controls with config defaults", async () => {
     assert.ok(ageInput, "age toggle should exist");
     assert.ok(fitnessInput, "fitness toggle should exist");
     assert.ok(lifeEventInput, "life event marker toggle should exist");
+    assert.ok(zoneInput, "selection zone toggle should exist");
     assert.ok(gridInput, "grid line toggle should exist");
 
     assert.is(obstaclesInput.checked, false);
@@ -75,10 +82,12 @@ test("createSimulation aligns UI controls with config defaults", async () => {
     assert.is(ageInput.checked, true);
     assert.is(fitnessInput.checked, true);
     assert.is(lifeEventInput.checked, true);
+    assert.is(zoneInput.checked, true);
     assert.is(gridInput.checked, true);
 
     assert.is(simulation.engine.state.showGridLines, true);
     assert.is(simulation.engine.state.showAge, true);
+    assert.is(simulation.engine.state.showSelectionZones, true);
 
     const playbackSlider = findSliderByLabel(
       uiManager.controlsPanel,
@@ -159,6 +168,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
               showAge: true,
               showFitness: true,
               showLifeEventMarkers: true,
+              showSelectionZones: true,
               showGridLines: true,
               autoPauseOnBlur: true,
               updatesPerSecond: 48,
@@ -178,6 +188,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.is(uiManager.showAge, true);
     assert.is(uiManager.showFitness, true);
     assert.is(uiManager.showLifeEventMarkers, true);
+    assert.is(uiManager.showSelectionZones, true);
     assert.is(uiManager.showGridLines, true);
     assert.is(uiManager.autoPauseOnBlur, true);
 
@@ -198,6 +209,10 @@ test("createSimulation honours layout initial settings overrides", async () => {
       uiManager.controlsPanel,
       "Life Event Markers",
     );
+    const selectionZoneToggle = findCheckboxByLabel(
+      uiManager.controlsPanel,
+      "Highlight Reproductive Zones",
+    );
     const gridToggle = findCheckboxByLabel(uiManager.controlsPanel, "Show Grid Lines");
     const autoPauseToggle = findCheckboxByLabel(
       uiManager.controlsPanel,
@@ -209,6 +224,7 @@ test("createSimulation honours layout initial settings overrides", async () => {
     assert.ok(ageToggle, "age toggle should render");
     assert.ok(fitnessToggle, "fitness toggle should render");
     assert.ok(lifeEventToggle, "life event toggle should render");
+    assert.ok(selectionZoneToggle, "selection zone toggle should render");
     assert.ok(gridToggle, "grid toggle should render");
     assert.ok(autoPauseToggle, "auto-pause toggle should render");
     const fadeSlider = findSliderByLabel(

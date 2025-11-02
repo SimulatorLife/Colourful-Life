@@ -75,3 +75,20 @@ test("resolveBootstrapOptions preserves explicit defaultCanvasId", () => {
   assert.equal(options.config, { cellSize: 9 });
   assert.is(options.canvas, null);
 });
+
+test("resolveBootstrapOptions filters prototype pollution keys from config overrides", () => {
+  const maliciousOverrides = {
+    config: {
+      cellSize: 7,
+      __proto__: { polluted: true },
+      constructor: { polluted: true },
+      prototype: { polluted: true },
+    },
+  };
+
+  const options = resolveBootstrapOptions({ globalOptions: maliciousOverrides });
+
+  assert.equal(options.config, { cellSize: 7 });
+  assert.is(Object.getPrototypeOf(options.config), Object.prototype);
+  assert.not.ok("polluted" in options.config, "config should not expose polluted keys");
+});

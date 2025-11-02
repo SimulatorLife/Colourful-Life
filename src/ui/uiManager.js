@@ -72,6 +72,31 @@ const LIFE_EVENT_TIMELINE_CANVAS = Object.freeze({
 const LIFE_EVENT_TIMELINE_EMPTY_MESSAGE =
   "Run the simulation to chart birth and death cadence.";
 
+const isNodeLike = (value) => {
+  if (value == null) return false;
+
+  const type = typeof value;
+
+  if (type !== "object" && type !== "function") {
+    return false;
+  }
+
+  if (Number.isFinite(value.nodeType)) return true;
+  if (typeof value.nodeName === "string" && value.nodeName.length > 0) return true;
+  if (typeof value.appendChild === "function") return true;
+  if (typeof value.textContent === "string") return true;
+
+  return false;
+};
+
+const isElementLike = (value) =>
+  isNodeLike(value) &&
+  typeof value.tagName === "string" &&
+  value.tagName.length > 0 &&
+  typeof value.appendChild === "function" &&
+  typeof value.setAttribute === "function" &&
+  typeof value.getAttribute === "function";
+
 const DEFAULT_BURST_OPTIONS = Object.freeze({
   primary: Object.freeze({
     count: 200,
@@ -148,6 +173,10 @@ const WARNINGS = Object.freeze({
   readGridDimensions: "Failed to read grid dimensions from actions.",
   updateWorldGeometry: "Failed to update world geometry.",
   resetWorld: "Reset world handler threw; finishing cleanup.",
+  snapshotUnavailable:
+    "Canvas snapshot unavailable; ensure a canvas is mounted before capturing.",
+  snapshotCapture: "Canvas snapshot capture failed.",
+  snapshotLink: "Failed to prepare download link for canvas snapshot.",
   panelToggle: (title) => `Panel toggle handler for "${title}" threw.`,
 });
 
@@ -158,8 +187,8 @@ export const OVERLAY_TOGGLE_SETTERS = Object.freeze({
   showAge: "setShowAge",
   showFitness: "setShowFitness",
   showLifeEventMarkers: "setShowLifeEventMarkers",
+  showSelectionZones: "setShowSelectionZones",
   showGridLines: "setShowGridLines",
-  showReproductiveZones: "setShowReproductiveZones",
 });
 
 function toPascalCase(value) {
@@ -420,6 +449,7 @@ export default class UIManager {
     this._checkboxIdSequence = 0;
     this.stepButton = null;
     this.burstButton = null;
+    this.snapshotButton = null;
     this.resetWorldButton = null;
     this.resetWorldBusy = false;
     this.resetWorldButtonRestoreFocus = false;
@@ -441,6 +471,8 @@ export default class UIManager {
     this.lifeEventsSummaryTotalCount = null;
     this.lifeEventsSummaryEmptyMessage = null;
     this.lifeEventMarkersToggle = null;
+    this.lifeEventMarkerControlsSection = null;
+    this.lifeEventMarkerStatus = null;
     this._overlayToggleInputs = new Map();
     this._zoneToggleInputs = new Map();
     this.lifeEventsSummaryTrend = null;
@@ -476,6 +508,7 @@ export default class UIManager {
     this.leaderBody = null;
     this.leaderEntriesContainer = null;
     this.stepHotkeySet = new Set();
+    this.snapshotHotkeySet = new Set();
     this.resetWorldHotkeySet = new Set();
     this.geometryControls = null;
     this.deathBreakdownMaxEntries = this.#resolveDeathBreakdownLimit(
@@ -547,6 +580,7 @@ export default class UIManager {
     this.showFitness = defaults.showFitness;
     this.showObstacles = defaults.showObstacles;
     this.showLifeEventMarkers = defaults.showLifeEventMarkers;
+    this.showSelectionZones = defaults.showSelectionZones;
     this.lifeEventFadeTicks = Number.isFinite(defaults.lifeEventFadeTicks)
       ? defaults.lifeEventFadeTicks
       : SIMULATION_DEFAULTS.lifeEventFadeTicks;
@@ -555,10 +589,6 @@ export default class UIManager {
         ? defaults.lifeEventLimit
         : (SIMULATION_DEFAULTS.lifeEventLimit ?? 24);
     this.showGridLines = defaults.showGridLines;
-    this.showReproductiveZones =
-      defaults.showReproductiveZones !== undefined
-        ? defaults.showReproductiveZones
-        : true;
     this.lifeEventFadeSlider = null;
     this.lifeEventFadeSliderRow = null;
     this.lifeEventFadeSliderTitle = LIFE_EVENT_FADE_WINDOW_DESCRIPTION;
@@ -608,6 +638,9 @@ export default class UIManager {
     this.burstHotkeySet = this.#resolveHotkeySet(layoutConfig.burstHotkeys, ["b"]);
     this.resetWorldHotkeySet = this.#resolveHotkeySet(layoutConfig.resetWorldHotkeys, [
       "r",
+    ]);
+    this.snapshotHotkeySet = this.#resolveHotkeySet(layoutConfig.snapshotHotkeys, [
+      "c",
     ]);
 
     const canvasEl =
@@ -714,6 +747,13 @@ export default class UIManager {
       return;
     }
 
+    if (this.snapshotHotkeySet?.has(key)) {
+      event.preventDefault();
+      this.#saveCanvasSnapshot();
+
+      return;
+    }
+
     if (this.speedIncreaseHotkeySet.has(key)) {
       event.preventDefault();
       const steps = event.shiftKey ? 5 : 1;
@@ -783,6 +823,97 @@ export default class UIManager {
       this.#scheduleUpdate();
       this.#releaseResetWorldBusy({ randomizeObstacles });
     }
+  }
+
+  #saveCanvasSnapshot() {
+    const canvas = this.canvasElement;
+
+    if (!canvas || typeof canvas.toDataURL !== "function") {
+      warnOnce(WARNINGS.snapshotUnavailable);
+
+      return false;
+    }
+
+    let dataUrl;
+
+    try {
+      dataUrl = canvas.toDataURL("image/png");
+    } catch (error) {
+      warnOnce(WARNINGS.snapshotCapture, error);
+
+      return false;
+    }
+
+    if (typeof dataUrl !== "string" || dataUrl.length === 0) {
+      warnOnce(WARNINGS.snapshotCapture);
+
+      return false;
+    }
+
+    const doc =
+      typeof document !== "undefined" ? document : (globalThis?.document ?? null);
+    const body = doc?.body;
+    const createElement = doc?.createElement;
+
+    if (typeof createElement !== "function" || !body?.appendChild) {
+      warnOnce(WARNINGS.snapshotLink);
+
+      return false;
+    }
+
+    const link = createElement.call(doc, "a");
+
+    if (!isElementLike(link)) {
+      warnOnce(WARNINGS.snapshotLink);
+
+      return false;
+    }
+
+    const timestamp = new Date();
+    let fileStem = "colourful-life-snapshot";
+
+    if (Number.isFinite(timestamp?.getTime?.())) {
+      try {
+        const iso = timestamp.toISOString();
+
+        fileStem = `colourful-life-${iso.replace(/[:.]/g, "-")}`;
+      } catch {
+        // Fall back to the default stem when toISOString is unavailable.
+      }
+    }
+
+    link.href = dataUrl;
+    link.setAttribute("download", `${fileStem}.png`);
+    link.style.display = "none";
+
+    let triggered = false;
+
+    try {
+      body.appendChild(link);
+
+      if (typeof link.click === "function") {
+        link.click();
+        triggered = true;
+      } else if (typeof link.dispatchEvent === "function") {
+        link.dispatchEvent({ type: "click", target: link });
+        triggered = true;
+      } else if (typeof link.trigger === "function") {
+        link.trigger("click");
+        triggered = true;
+      } else {
+        warnOnce(WARNINGS.snapshotLink);
+      }
+    } catch (error) {
+      warnOnce(WARNINGS.snapshotLink, error);
+    } finally {
+      if (typeof link.remove === "function") {
+        link.remove();
+      } else if (link.parentElement?.removeChild) {
+        link.parentElement.removeChild(link);
+      }
+    }
+
+    return triggered;
   }
 
   #resolveHotkeySet(candidate, fallbackKeys = ["p"]) {
@@ -1626,7 +1757,7 @@ export default class UIManager {
   attachCanvas(canvasElement, options = {}) {
     const targetCanvas = this.#resolveNode(canvasElement);
 
-    if (!(targetCanvas instanceof HTMLElement)) return;
+    if (!isElementLike(targetCanvas)) return;
     this.canvasElement = targetCanvas;
     const anchor =
       this.#resolveNode(options.before) ||
@@ -1900,7 +2031,7 @@ export default class UIManager {
 
   #resolveNode(candidate) {
     if (!candidate) return null;
-    if (candidate instanceof Node) return candidate;
+    if (isNodeLike(candidate)) return candidate;
     if (typeof candidate === "string") {
       return this.root.querySelector(candidate) || document.querySelector(candidate);
     }
@@ -2053,17 +2184,58 @@ export default class UIManager {
     }
   }
 
+  #registerOverlayToggleInput(key, input) {
+    if (!key || !input) {
+      return;
+    }
+
+    const existing = this._overlayToggleInputs.get(key);
+
+    if (!existing) {
+      this._overlayToggleInputs.set(key, [input]);
+
+      return;
+    }
+
+    if (Array.isArray(existing)) {
+      if (!existing.includes(input)) {
+        existing.push(input);
+      }
+
+      return;
+    }
+
+    if (existing !== input) {
+      this._overlayToggleInputs.set(key, [existing, input]);
+    }
+  }
+
   #syncOverlayToggleInput(key, value) {
     if (!this._overlayToggleInputs) return;
 
-    const checkbox = this._overlayToggleInputs.get(key);
+    const registered = this._overlayToggleInputs.get(key);
+    const inputs = Array.isArray(registered)
+      ? registered
+      : registered
+        ? [registered]
+        : [];
 
-    if (checkbox) {
-      checkbox.checked = Boolean(value);
-    }
+    inputs.forEach((checkbox) => {
+      if (checkbox) {
+        checkbox.checked = Boolean(value);
+      }
+    });
 
     if (key === "showLifeEventMarkers" && this.lifeEventMarkersToggle) {
-      this.lifeEventMarkersToggle.checked = Boolean(value);
+      const toggles = Array.isArray(this.lifeEventMarkersToggle)
+        ? this.lifeEventMarkersToggle
+        : [this.lifeEventMarkersToggle];
+
+      toggles.forEach((toggle) => {
+        if (toggle) {
+          toggle.checked = Boolean(value);
+        }
+      });
     }
   }
 
@@ -2121,6 +2293,94 @@ export default class UIManager {
       this.lifeEventLimitSliderTitle,
       "Enable Life Event Markers to adjust this limit.",
     );
+
+    if (this.lifeEventMarkerControlsSection) {
+      this.lifeEventMarkerControlsSection.classList.toggle(
+        "life-events-marker-controls--disabled",
+        disabled,
+      );
+    }
+
+    if (this.lifeEventMarkerStatus) {
+      const statusEl = this.lifeEventMarkerStatus;
+
+      const normalizedLimit = Number.isFinite(this.lifeEventLimit)
+        ? Math.max(0, Math.round(this.lifeEventLimit))
+        : 0;
+
+      const normalizedFade = Number.isFinite(this.lifeEventFadeTicks)
+        ? Math.max(0, Math.round(this.lifeEventFadeTicks))
+        : 0;
+
+      const state = disabled ? "disabled" : "enabled";
+
+      if (statusEl && typeof statusEl === "object") {
+        if (statusEl.dataset && typeof statusEl.dataset === "object") {
+          statusEl.dataset.state = state;
+        } else if (typeof statusEl.setAttribute === "function") {
+          statusEl.setAttribute("data-state", state);
+        }
+
+        if ("textContent" in statusEl) {
+          statusEl.textContent = "";
+        } else if (typeof statusEl.replaceChildren === "function") {
+          statusEl.replaceChildren();
+        }
+      }
+
+      const leadText = disabled ? "Markers hidden." : "Markers visible.";
+      const detailText = disabled
+        ? " Enable to highlight recent births and deaths on the grid."
+        : (() => {
+            const limitFragment =
+              normalizedLimit <= 0
+                ? "an unlimited history of markers"
+                : `up to ${normalizedLimit} marker${normalizedLimit === 1 ? "" : "s"}`;
+            const fadeFragment =
+              normalizedFade <= 0
+                ? "fade immediately"
+                : `fade after ${normalizedFade} tick${normalizedFade === 1 ? "" : "s"}`;
+
+            return ` Showing ${limitFragment} that ${fadeFragment}.`;
+          })();
+
+      const doc =
+        statusEl && typeof statusEl === "object" && statusEl.ownerDocument
+          ? statusEl.ownerDocument
+          : typeof document !== "undefined"
+            ? document
+            : null;
+
+      const canAppendChildren =
+        statusEl &&
+        typeof statusEl.appendChild === "function" &&
+        doc &&
+        typeof doc.createElement === "function" &&
+        typeof doc.createTextNode === "function";
+
+      if (canAppendChildren) {
+        const lead = doc.createElement("strong");
+
+        lead.textContent = leadText;
+        statusEl.appendChild(lead);
+        statusEl.appendChild(doc.createTextNode(detailText));
+      } else if (statusEl && typeof statusEl === "object") {
+        const combined = `${leadText}${detailText}`;
+
+        // Prefer the modern DOM text setters—`innerText` is deprecated and omitted
+        // from headless environments, while textContent/data/nodeValue remain
+        // supported by browsers and lightweight mocks alike.
+        if ("textContent" in statusEl) {
+          statusEl.textContent = combined;
+        } else if ("data" in statusEl) {
+          statusEl.data = combined;
+        } else if ("nodeValue" in statusEl) {
+          statusEl.nodeValue = combined;
+        } else if (typeof statusEl.setAttribute === "function") {
+          statusEl.setAttribute("data-message", combined);
+        }
+      }
+    }
   }
 
   #syncZoneToggleInputs() {
@@ -2197,6 +2457,51 @@ export default class UIManager {
     ) {
       this.dashboardCadenceSlider.updateDisplay(value);
     }
+  }
+
+  #applySliderSetting(key, value, options = {}) {
+    if (!key) return null;
+
+    const optionsAreObject = options && typeof options === "object";
+    const clampOverrides = optionsAreObject ? options.clampOverrides : undefined;
+    const hasExplicitFallback = optionsAreObject
+      ? Object.hasOwn(options, "fallback")
+      : false;
+    const explicitFallback = hasExplicitFallback ? options.fallback : undefined;
+    let notify = true;
+
+    if (optionsAreObject && Object.hasOwn(options, "notify")) {
+      notify = Boolean(options.notify);
+    }
+
+    const overrides =
+      clampOverrides && typeof clampOverrides === "object" ? { ...clampOverrides } : {};
+
+    if (!Object.hasOwn(overrides, "fallback")) {
+      if (hasExplicitFallback) {
+        overrides.fallback = explicitFallback;
+      } else if (this[key] !== undefined) {
+        overrides.fallback = this[key];
+      }
+    }
+
+    const { value: sanitized } = clampSliderValue(key, value, overrides);
+
+    if (!Number.isFinite(sanitized)) {
+      return null;
+    }
+
+    const previous = this[key];
+    const changed = previous !== sanitized;
+
+    this[key] = sanitized;
+    this.#syncSliderInput(key, sanitized);
+
+    if (changed && notify) {
+      this.#notifySettingChange(key, sanitized);
+    }
+
+    return sanitized;
   }
 
   #sanitizeSpeedMultiplier(value) {
@@ -2453,7 +2758,7 @@ export default class UIManager {
 
     valueEl.className = valueClass ? `control-value ${valueClass}` : "control-value";
 
-    if (value instanceof Node) {
+    if (isNodeLike(value)) {
       valueEl.appendChild(value);
     } else if (value !== undefined && value !== null) {
       valueEl.textContent = value;
@@ -2552,7 +2857,7 @@ export default class UIManager {
   }
 
   #appendLifeEventDetail(container, { label, value, colors }) {
-    if (!(container instanceof HTMLElement)) return null;
+    if (!isElementLike(container)) return null;
 
     const term = document.createElement("dt");
 
@@ -2588,7 +2893,7 @@ export default class UIManager {
       }
     }
 
-    if (value instanceof Node) {
+    if (isNodeLike(value)) {
       valueEl.appendChild(value);
       hasContent = true;
       hasTextContent = true;
@@ -3713,6 +4018,32 @@ export default class UIManager {
       }
     }
 
+    const snapshotHotkeys = this.#formatHotkeyList(this.snapshotHotkeySet);
+    const snapshotTitleParts = [
+      "Download a PNG of the current canvas for quick sharing.",
+    ];
+
+    if (snapshotHotkeys.length > 0) {
+      snapshotTitleParts.push(`Shortcut: ${snapshotHotkeys}.`);
+    }
+
+    const snapshotTitle = snapshotTitleParts.join(" ");
+
+    this.snapshotButton = addControlButton({
+      id: "snapshotButton",
+      label: "Save Snapshot",
+      title: snapshotTitle,
+      onClick: () => {
+        this.#saveCanvasSnapshot();
+      },
+    });
+
+    this.#applyButtonHotkeys(this.snapshotButton, this.snapshotHotkeySet);
+
+    if (this.snapshotButton) {
+      this.snapshotButton.setAttribute("aria-label", snapshotTitle);
+    }
+
     const speedBounds = resolveSliderBounds("speedMultiplier", {
       min: 0.5,
       max: 100,
@@ -3823,6 +4154,11 @@ export default class UIManager {
         keys: this.#formatHotkeyList(this.resetWorldHotkeySet),
         description:
           "Clear the map for a fresh population. Hold Shift with the shortcut to randomize obstacle layouts.",
+      },
+      {
+        action: "Save Snapshot",
+        keys: this.#formatHotkeyList(this.snapshotHotkeySet),
+        description: "Download the current canvas as a PNG for sharing.",
       },
       {
         action: "Speed Up Playback",
@@ -4409,6 +4745,22 @@ export default class UIManager {
         renderSlider(cfg, generalGroup);
       });
 
+    if (this.leaderboardCadenceConfig) {
+      createSectionHeading(body, "Dashboard Refresh");
+
+      const cadenceGrid = createControlGrid(body, "control-grid--compact");
+      const cadenceSlider = renderSlider(this.leaderboardCadenceConfig, cadenceGrid);
+
+      this.dashboardCadenceSlider = cadenceSlider;
+
+      const cadenceHint = document.createElement("p");
+
+      cadenceHint.className = "control-hint";
+      cadenceHint.textContent =
+        "Controls how often Evolution Insights and the leaderboard request fresh data.";
+      body.appendChild(cadenceHint);
+    }
+
     const resetRow = createControlButtonRow(body);
     const resetButton = document.createElement("button");
 
@@ -4486,11 +4838,15 @@ export default class UIManager {
         initial: this.showLifeEventMarkers,
       },
       {
-        key: "showReproductiveZones",
+        key: "showSelectionZones",
         label: "Highlight Reproductive Zones",
-        title:
-          "Shade active reproductive zones so you can see which tiles permit mating",
-        initial: this.showReproductiveZones,
+        options: {
+          title:
+            "Shade active reproductive zones and label them directly on the grid for quick reference.",
+          description:
+            "Shade active reproductive zones with translucent colour fills and on-canvas labels so curated mating areas stay visible while you experiment.",
+        },
+        initial: this.showSelectionZones,
       },
       {
         key: "showGridLines",
@@ -4518,56 +4874,13 @@ export default class UIManager {
         },
       );
 
-      if (this._overlayToggleInputs) {
-        this._overlayToggleInputs.set(key, checkbox);
-      }
+      this.#registerOverlayToggleInput(key, checkbox);
 
-      if (key === "showLifeEventMarkers") {
+      if (key === "showLifeEventMarkers" && !this.lifeEventMarkersToggle) {
         this.lifeEventMarkersToggle = checkbox;
       }
     });
 
-    const limitBounds = resolveSliderBounds("lifeEventLimit");
-    const limitMin = Number.isFinite(limitBounds.min) ? limitBounds.min : 0;
-    const limitMax = Number.isFinite(limitBounds.max) ? limitBounds.max : 60;
-    const limitStep =
-      Number.isFinite(limitBounds.step) && limitBounds.step > 0 ? limitBounds.step : 1;
-    const limitTitle = LIFE_EVENT_MARKER_LIMIT_DESCRIPTION;
-    const limitLabel = "Life Event Marker Limit";
-    const limitSlider = createSliderRow(overlayGrid, {
-      label: limitLabel,
-      min: limitMin,
-      max: limitMax,
-      step: limitStep,
-      value: this.lifeEventLimit,
-      title: limitTitle,
-      format: (value) => {
-        const rounded = Math.max(limitMin, Math.round(value));
-
-        if (rounded <= 0) {
-          return "Off";
-        }
-
-        return `${rounded} marker${rounded === 1 ? "" : "s"}`;
-      },
-      onInput: (value) => {
-        this.setLifeEventLimit(value);
-      },
-    });
-
-    this.lifeEventLimitSlider = limitSlider;
-    this.lifeEventLimitSliderTitle = limitTitle;
-
-    const limitRow =
-      typeof limitSlider?.closest === "function"
-        ? limitSlider.closest("label")
-        : (limitSlider?.parentElement?.parentElement ?? null);
-
-    if (limitRow instanceof HTMLElement) {
-      this.lifeEventLimitSliderRow = limitRow;
-    }
-
-    this.#registerSliderElement("lifeEventLimit", limitSlider);
     this.#updateLifeEventControlsState();
   }
 
@@ -4773,47 +5086,15 @@ export default class UIManager {
 
     intro.className = "metrics-intro";
     intro.textContent =
-      "Track population health, energy, and behavioral trends as the simulation unfolds. Use the refresh cadence controls below to slow down or speed up the shared update interval for Evolution Insights and the leaderboard.";
+      "Track population health, energy, and behavioral trends as the simulation unfolds. Adjust the shared Dashboard Refresh Interval from Simulation Controls → Dashboard Refresh whenever you need to slow down or accelerate updates for Evolution Insights and the leaderboard.";
     body.appendChild(intro);
 
-    const cadenceConfig = this.leaderboardCadenceConfig;
+    const cadenceReminder = document.createElement("p");
 
-    if (cadenceConfig) {
-      const cadenceSection = document.createElement("section");
-
-      cadenceSection.className = "metrics-controls";
-      cadenceSection.setAttribute(
-        "aria-label",
-        "Refresh cadence controls shared with the leaderboard",
-      );
-
-      createSectionHeading(cadenceSection, "Refresh Cadence");
-
-      const cadenceGrid = createControlGrid(cadenceSection, "control-grid--compact");
-
-      const slider = createSliderRow(cadenceGrid, {
-        label: cadenceConfig.label,
-        min: cadenceConfig.min,
-        max: cadenceConfig.max,
-        step: cadenceConfig.step,
-        value: cadenceConfig.getValue(),
-        title: cadenceConfig.title,
-        format: cadenceConfig.format,
-        onInput: cadenceConfig.setValue,
-      });
-
-      this.dashboardCadenceSlider = slider;
-      this.#registerSliderElement("leaderboardIntervalMs", slider);
-
-      const cadenceHint = document.createElement("p");
-
-      cadenceHint.className = "control-hint";
-      cadenceHint.textContent =
-        "Controls how often Evolution Insights and the leaderboard request fresh data.";
-      cadenceSection.appendChild(cadenceHint);
-
-      body.appendChild(cadenceSection);
-    }
+    cadenceReminder.className = "control-hint";
+    cadenceReminder.textContent =
+      "Find the Dashboard Refresh Interval slider in Simulation Controls → Dashboard Refresh to change how often Evolution Insights and the leaderboard request fresh data.";
+    body.appendChild(cadenceReminder);
 
     this.metricsBox = document.createElement("div");
     this.metricsBox.className = "metrics-box";
@@ -5043,6 +5324,62 @@ export default class UIManager {
     markerControls.appendChild(markerTitle);
 
     const markerGrid = createControlGrid(markerControls, "control-grid--compact");
+    const markerToggle = this.#addCheckbox(
+      markerGrid,
+      "Show Life Event Markers",
+      {
+        title: LIFE_EVENT_MARKER_OVERLAY_DESCRIPTION,
+        description: "Highlight births and deaths directly on the simulation grid.",
+      },
+      this.showLifeEventMarkers,
+      (checked) => {
+        this.setShowLifeEventMarkers(checked);
+      },
+    );
+
+    this.#registerOverlayToggleInput("showLifeEventMarkers", markerToggle);
+    this.lifeEventMarkersToggle = markerToggle;
+
+    const limitBounds = resolveSliderBounds("lifeEventLimit");
+    const limitMin = Number.isFinite(limitBounds.min) ? limitBounds.min : 0;
+    const limitMax = Number.isFinite(limitBounds.max) ? limitBounds.max : 60;
+    const limitStep =
+      Number.isFinite(limitBounds.step) && limitBounds.step > 0 ? limitBounds.step : 1;
+    const limitTitle = LIFE_EVENT_MARKER_LIMIT_DESCRIPTION;
+    const limitLabel = "Life Event Marker Limit";
+    const limitSlider = createSliderRow(markerGrid, {
+      label: limitLabel,
+      min: limitMin,
+      max: limitMax,
+      step: limitStep,
+      value: this.lifeEventLimit,
+      title: limitTitle,
+      format: (value) => {
+        const rounded = Math.max(limitMin, Math.round(value));
+
+        if (rounded <= 0) {
+          return "Off";
+        }
+
+        return `${rounded} marker${rounded === 1 ? "" : "s"}`;
+      },
+      onInput: (value) => {
+        this.setLifeEventLimit(value);
+      },
+    });
+
+    this.lifeEventLimitSlider = limitSlider;
+    this.lifeEventLimitSliderTitle = limitTitle;
+
+    const limitRow =
+      typeof limitSlider?.closest === "function"
+        ? limitSlider.closest("label")
+        : (limitSlider?.parentElement?.parentElement ?? null);
+
+    if (isElementLike(limitRow)) {
+      this.lifeEventLimitSliderRow = limitRow;
+    }
+
     const fadeBounds = resolveSliderBounds("lifeEventFadeTicks");
     const fadeMin = Number.isFinite(fadeBounds.min) ? fadeBounds.min : 1;
     const fadeMax = Number.isFinite(fadeBounds.max) ? fadeBounds.max : 180;
@@ -5075,19 +5412,30 @@ export default class UIManager {
         ? fadeSlider.closest("label")
         : (fadeSlider?.parentElement?.parentElement ?? null);
 
-    if (fadeRow instanceof HTMLElement) {
+    if (isElementLike(fadeRow)) {
       this.lifeEventFadeSliderRow = fadeRow;
     }
+
+    this.lifeEventMarkerControlsSection = markerControls;
+
+    const markerStatus = document.createElement("p");
+
+    markerStatus.className = "life-events-marker-controls__status control-hint";
+    markerStatus.setAttribute("role", "status");
+    markerStatus.setAttribute("aria-live", "polite");
+    markerControls.appendChild(markerStatus);
+    this.lifeEventMarkerStatus = markerStatus;
 
     const markerHint = document.createElement("p");
 
     markerHint.className = "life-events-marker-controls__hint control-hint";
     markerHint.textContent =
-      "Adjust how long birth and death markers remain visible on the main grid. Toggle the overlay from Simulation Controls → Overlays.";
+      "Fine-tune how many birth and death markers remain visible on the grid and how quickly they fade to keep busy worlds readable.";
     markerControls.appendChild(markerHint);
 
     lifeBody.appendChild(markerControls);
 
+    this.#registerSliderElement("lifeEventLimit", limitSlider);
     this.#registerSliderElement("lifeEventFadeTicks", fadeSlider);
     this.#updateLifeEventControlsState();
 
@@ -5717,11 +6065,11 @@ export default class UIManager {
   getShowLifeEventMarkers() {
     return this.showLifeEventMarkers;
   }
+  getShowSelectionZones() {
+    return this.showSelectionZones;
+  }
   getShowGridLines() {
     return this.showGridLines;
-  }
-  getShowReproductiveZones() {
-    return this.showReproductiveZones;
   }
 
   getLifeEventFadeTicks() {
@@ -5768,12 +6116,12 @@ export default class UIManager {
     });
   }
 
-  setShowGridLines(value, options) {
-    this.#applyOverlayToggle("showGridLines", value, options);
+  setShowSelectionZones(value, options) {
+    this.#applyOverlayToggle("showSelectionZones", value, options);
   }
 
-  setShowReproductiveZones(value, options) {
-    this.#applyOverlayToggle("showReproductiveZones", value, options);
+  setShowGridLines(value, options) {
+    this.#applyOverlayToggle("showGridLines", value, options);
   }
 
   setLifeEventFadeTicks(value, { notify = true } = {}) {
@@ -5862,221 +6210,53 @@ export default class UIManager {
   }
 
   setSocietySimilarity(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("societySimilarity", value, {
-      fallback: this.societySimilarity,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.societySimilarity !== sanitized;
-
-    this.societySimilarity = sanitized;
-    this.#syncSliderInput("societySimilarity", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("societySimilarity", sanitized);
-    }
+    this.#applySliderSetting("societySimilarity", value, { notify });
   }
 
   setEnemySimilarity(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("enemySimilarity", value, {
-      fallback: this.enemySimilarity,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.enemySimilarity !== sanitized;
-
-    this.enemySimilarity = sanitized;
-    this.#syncSliderInput("enemySimilarity", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("enemySimilarity", sanitized);
-    }
+    this.#applySliderSetting("enemySimilarity", value, { notify });
   }
 
   setEventStrengthMultiplier(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("eventStrengthMultiplier", value, {
-      fallback: this.eventStrengthMultiplier,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.eventStrengthMultiplier !== sanitized;
-
-    this.eventStrengthMultiplier = sanitized;
-    this.#syncSliderInput("eventStrengthMultiplier", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("eventStrengthMultiplier", sanitized);
-    }
+    this.#applySliderSetting("eventStrengthMultiplier", value, { notify });
   }
 
   setEventFrequencyMultiplier(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("eventFrequencyMultiplier", value, {
-      fallback: this.eventFrequencyMultiplier,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.eventFrequencyMultiplier !== sanitized;
-
-    this.eventFrequencyMultiplier = sanitized;
-    this.#syncSliderInput("eventFrequencyMultiplier", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("eventFrequencyMultiplier", sanitized);
-    }
+    this.#applySliderSetting("eventFrequencyMultiplier", value, { notify });
   }
 
   setDensityEffectMultiplier(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("densityEffectMultiplier", value, {
-      fallback: this.densityEffectMultiplier,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.densityEffectMultiplier !== sanitized;
-
-    this.densityEffectMultiplier = sanitized;
-    this.#syncSliderInput("densityEffectMultiplier", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("densityEffectMultiplier", sanitized);
-    }
+    this.#applySliderSetting("densityEffectMultiplier", value, { notify });
   }
 
   setEnergyRegenRate(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("energyRegenRate", value, {
-      fallback: this.energyRegenRate,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.energyRegenRate !== sanitized;
-
-    this.energyRegenRate = sanitized;
-    this.#syncSliderInput("energyRegenRate", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("energyRegenRate", sanitized);
-    }
+    this.#applySliderSetting("energyRegenRate", value, { notify });
   }
 
   setEnergyDiffusionRate(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("energyDiffusionRate", value, {
-      fallback: this.energyDiffusionRate,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.energyDiffusionRate !== sanitized;
-
-    this.energyDiffusionRate = sanitized;
-    this.#syncSliderInput("energyDiffusionRate", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("energyDiffusionRate", sanitized);
-    }
+    this.#applySliderSetting("energyDiffusionRate", value, { notify });
   }
 
   setMutationMultiplier(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("mutationMultiplier", value, {
-      fallback: this.mutationMultiplier,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.mutationMultiplier !== sanitized;
-
-    this.mutationMultiplier = sanitized;
-    this.#syncSliderInput("mutationMultiplier", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("mutationMultiplier", sanitized);
-    }
+    this.#applySliderSetting("mutationMultiplier", value, { notify });
   }
 
   setLeaderboardIntervalMs(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("leaderboardIntervalMs", value, {
-      fallback: this.leaderboardIntervalMs,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.leaderboardIntervalMs !== sanitized;
-
-    this.leaderboardIntervalMs = sanitized;
-    this.#syncSliderInput("leaderboardIntervalMs", sanitized);
-
-    if (this.dashboardCadenceSlider?.updateDisplay) {
-      this.dashboardCadenceSlider.updateDisplay(sanitized);
-    }
-
-    if (changed && notify) {
-      this.#notifySettingChange("leaderboardIntervalMs", sanitized);
-    }
+    this.#applySliderSetting("leaderboardIntervalMs", value, { notify });
   }
 
   setCombatEdgeSharpness(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("combatEdgeSharpness", value, {
-      fallback: this.combatEdgeSharpness,
-      min: 0.5,
-      max: 6,
-      floor: 0.1,
+    this.#applySliderSetting("combatEdgeSharpness", value, {
+      notify,
+      clampOverrides: { min: 0.5, max: 6, floor: 0.1 },
     });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.combatEdgeSharpness !== sanitized;
-
-    this.combatEdgeSharpness = sanitized;
-    this.#syncSliderInput("combatEdgeSharpness", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("combatEdgeSharpness", sanitized);
-    }
   }
 
   setCombatTerritoryEdgeFactor(value, { notify = true } = {}) {
-    const { value: sanitized } = clampSliderValue("combatTerritoryEdgeFactor", value, {
-      fallback: this.combatTerritoryEdgeFactor,
-      min: 0,
-      max: 1,
+    this.#applySliderSetting("combatTerritoryEdgeFactor", value, {
+      notify,
+      clampOverrides: { min: 0, max: 1 },
     });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const changed = this.combatTerritoryEdgeFactor !== sanitized;
-
-    this.combatTerritoryEdgeFactor = sanitized;
-    this.#syncSliderInput("combatTerritoryEdgeFactor", sanitized);
-
-    if (changed && notify) {
-      this.#notifySettingChange("combatTerritoryEdgeFactor", sanitized);
-    }
   }
 
   setLowDiversityReproMultiplier(value, { notify = true } = {}) {
@@ -6468,7 +6648,7 @@ export default class UIManager {
       }
 
       let displayValue = "—";
-      const isDomNode = typeof Node !== "undefined" && value instanceof Node;
+      const isDomNode = isNodeLike(value);
 
       if (isDomNode) {
         displayValue = value.textContent?.trim() || "—";

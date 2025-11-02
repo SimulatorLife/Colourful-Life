@@ -352,6 +352,46 @@ test("setMaxConcurrentEvents floors values and schedules slow UI work", async ()
   }
 });
 
+test("setMaxConcurrentEvents clears existing events when disabling concurrency", async () => {
+  const modules = await loadSimulationModules();
+  const { restore } = patchSimulationPrototypes(modules);
+
+  try {
+    const engine = createEngine(modules);
+
+    engine.eventManager.activeEvents = [
+      {
+        eventType: "heatwave",
+        remaining: 12,
+        affectedArea: { x: 0, y: 0, width: 1, height: 1 },
+      },
+    ];
+    engine.eventManager.currentEvent = engine.eventManager.activeEvents[0];
+    engine.eventManager.cooldown = 8;
+
+    engine.setMaxConcurrentEvents(0);
+
+    assert.equal(
+      engine.eventManager.activeEvents,
+      [],
+      "disabling concurrency should clear active environmental events",
+    );
+    assert.is(
+      engine.eventManager.currentEvent,
+      null,
+      "current event should reset after disabling concurrency",
+    );
+    assert.is(
+      engine.eventManager.cooldown,
+      0,
+      "cooldown should reset when concurrency is disabled",
+    );
+    assert.is(engine.state.maxConcurrentEvents, 0);
+  } finally {
+    restore();
+  }
+});
+
 test("setLeaderboardInterval enforces minimum throttle", async () => {
   const modules = await loadSimulationModules();
   const { restore } = patchSimulationPrototypes(modules);
@@ -885,6 +925,7 @@ test("overlay visibility coercion handles string inputs", async () => {
       showAge: "yes",
       showFitness: "0",
       showLifeEventMarkers: "on",
+      showSelectionZones: "true",
       showGridLines: "true",
     });
 
@@ -898,6 +939,7 @@ test("overlay visibility coercion handles string inputs", async () => {
     assert.is(engine.state.showAge, true);
     assert.is(engine.state.showFitness, false);
     assert.is(engine.state.showLifeEventMarkers, true);
+    assert.is(engine.state.showSelectionZones, true);
     assert.is(engine.state.showGridLines, true);
   } finally {
     restore();
@@ -1177,6 +1219,7 @@ test("tick forwards overlay visibility flags to the renderer", async () => {
       showAge: true,
       showFitness: true,
       showLifeEventMarkers: true,
+      showSelectionZones: true,
     });
 
     engine.tick(0);
@@ -1193,6 +1236,7 @@ test("tick forwards overlay visibility flags to the renderer", async () => {
     assert.is(options.showFitness, true);
     assert.is(options.showObstacles, true, "obstacles stay enabled by default");
     assert.is(options.showLifeEventMarkers, true);
+    assert.is(options.showSelectionZones, true);
   } finally {
     restore();
   }

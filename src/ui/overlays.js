@@ -28,6 +28,48 @@ const GRID_LINE_COLOR = "rgba(255, 255, 255, 0.1)";
 const GRID_LINE_EMPHASIS_COLOR = "rgba(255, 255, 255, 0.2)";
 const GRID_LINE_EMPHASIS_STEP = 5;
 const GRID_LINE_CACHE_LIMIT = 6;
+const DEFAULT_SELECTION_ZONE_FILL = "rgba(120, 190, 255, 0.2)";
+const DEFAULT_SELECTION_ZONE_STROKE = "rgba(255, 255, 255, 0.32)";
+const DEFAULT_SELECTION_ZONE_LABEL_FONT = "12px/1.4 sans-serif";
+const DEFAULT_SELECTION_ZONE_LABEL_FILL = "#ffffff";
+const DEFAULT_SELECTION_ZONE_LABEL_BACKGROUND = "rgba(12, 18, 28, 0.78)";
+const DEFAULT_SELECTION_ZONE_LABEL_PADDING = 4;
+const DEFAULT_SELECTION_ZONE_LABEL_MARGIN = 6;
+const DEFAULT_SELECTION_ZONE_LABEL_RADIUS = 6;
+
+function fillRoundedRect(ctx, x, y, width, height, radius) {
+  if (!ctx) return;
+  if (!(width > 0) || !(height > 0)) return;
+
+  const effectiveRadius = Math.max(
+    0,
+    Math.min(radius ?? 0, Math.min(width, height) / 2),
+  );
+
+  if (
+    typeof ctx.beginPath !== "function" ||
+    typeof ctx.moveTo !== "function" ||
+    typeof ctx.lineTo !== "function" ||
+    typeof ctx.quadraticCurveTo !== "function"
+  ) {
+    ctx.fillRect(x, y, width, height);
+
+    return;
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(x + effectiveRadius, y);
+  ctx.lineTo(x + width - effectiveRadius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + effectiveRadius);
+  ctx.lineTo(x + width, y + height - effectiveRadius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - effectiveRadius, y + height);
+  ctx.lineTo(x + effectiveRadius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - effectiveRadius);
+  ctx.lineTo(x, y + effectiveRadius);
+  ctx.quadraticCurveTo(x, y, x + effectiveRadius, y);
+  ctx.closePath();
+  ctx.fill();
+}
 
 const gridLineCache = new Map();
 const gridLineCacheOrder = [];
@@ -416,6 +458,195 @@ function normalizeLegendColor(candidate, fallback) {
   return resolveNonEmptyString(candidate, fallback);
 }
 
+function resolveZoneLabel(zone) {
+  if (!zone || typeof zone !== "object") {
+    return "";
+  }
+
+  if (typeof zone.name === "string" && zone.name.trim().length > 0) {
+    return zone.name.trim();
+  }
+
+  if (typeof zone.id === "string" && zone.id.trim().length > 0) {
+    return zone.id.trim();
+  }
+
+  return "";
+}
+
+export function drawSelectionZones(ctx, cellSize, zoneEntries, options = {}) {
+  if (!ctx || !(cellSize > 0)) return;
+  if (!Array.isArray(zoneEntries) || zoneEntries.length === 0) return;
+
+  const config = toPlainObject(options);
+  const rows = Number.isFinite(config.rows) ? config.rows : null;
+  const cols = Number.isFinite(config.cols) ? config.cols : null;
+  const canvasWidth = Number.isFinite(config.canvasWidth)
+    ? config.canvasWidth
+    : cols != null
+      ? cols * cellSize
+      : Number.isFinite(ctx?.canvas?.width)
+        ? ctx.canvas.width
+        : null;
+  const canvasHeight = Number.isFinite(config.canvasHeight)
+    ? config.canvasHeight
+    : rows != null
+      ? rows * cellSize
+      : Number.isFinite(ctx?.canvas?.height)
+        ? ctx.canvas.height
+        : null;
+  const labelFont = resolveNonEmptyString(
+    config.labelFont,
+    DEFAULT_SELECTION_ZONE_LABEL_FONT,
+  );
+  const labelFill = resolveNonEmptyString(
+    config.labelFill,
+    DEFAULT_SELECTION_ZONE_LABEL_FILL,
+  );
+  const labelBackground = resolveNonEmptyString(
+    config.labelBackground,
+    DEFAULT_SELECTION_ZONE_LABEL_BACKGROUND,
+  );
+  const labelPadding =
+    Number.isFinite(config.labelPadding) && config.labelPadding >= 0
+      ? config.labelPadding
+      : DEFAULT_SELECTION_ZONE_LABEL_PADDING;
+  const labelMargin =
+    Number.isFinite(config.labelMargin) && config.labelMargin >= 0
+      ? config.labelMargin
+      : DEFAULT_SELECTION_ZONE_LABEL_MARGIN;
+  const labelRadius =
+    Number.isFinite(config.labelRadius) && config.labelRadius >= 0
+      ? config.labelRadius
+      : DEFAULT_SELECTION_ZONE_LABEL_RADIUS;
+  const fontSizeMatch = /([0-9]+(?:\.[0-9]+)?)px/.exec(labelFont);
+  const fontSize = fontSizeMatch ? Number(fontSizeMatch[1]) : 12;
+  const baseLineHeight = Math.max(fontSize + labelPadding * 2, fontSize * 1.2);
+  const labelLineHeight =
+    Number.isFinite(config.labelLineHeight) && config.labelLineHeight > 0
+      ? config.labelLineHeight
+      : baseLineHeight;
+  const defaultFillColor = resolveNonEmptyString(
+    config.defaultFillColor,
+    DEFAULT_SELECTION_ZONE_FILL,
+  );
+  const defaultStrokeColor = resolveNonEmptyString(
+    config.defaultStrokeColor,
+    DEFAULT_SELECTION_ZONE_STROKE,
+  );
+  const outlineWidth =
+    Number.isFinite(config.outlineWidth) && config.outlineWidth > 0
+      ? config.outlineWidth
+      : Math.max(1, cellSize * 0.12);
+  const strokeOverride =
+    config.strokeColor === null ? "" : resolveNonEmptyString(config.strokeColor, "");
+
+  const zones = zoneEntries.filter((entry) => {
+    const rects = entry?.geometry?.rects;
+
+    return Array.isArray(rects) && rects.length > 0;
+  });
+
+  if (zones.length === 0) return;
+
+  ctx.save();
+  const previousLineWidth = ctx.lineWidth;
+  const offset = outlineWidth % 2 === 0 ? 0 : 0.5;
+
+  ctx.lineWidth = outlineWidth;
+
+  for (const entry of zones) {
+    const rects = entry.geometry?.rects;
+
+    if (!rects) continue;
+
+    const fillColor = resolveNonEmptyString(entry.zone?.color, defaultFillColor);
+    const strokeColor = strokeOverride !== "" ? strokeOverride : defaultStrokeColor;
+
+    ctx.fillStyle = fillColor;
+
+    for (const rect of rects) {
+      if (!rect) continue;
+
+      const width = rect.colSpan * cellSize;
+      const height = rect.rowSpan * cellSize;
+
+      if (!(width > 0) || !(height > 0)) continue;
+
+      const x = rect.col * cellSize;
+      const y = rect.row * cellSize;
+
+      ctx.fillRect(x, y, width, height);
+
+      if (strokeColor) {
+        ctx.strokeStyle = strokeColor;
+        ctx.strokeRect(
+          x + offset,
+          y + offset,
+          Math.max(0, width - offset * 2),
+          Math.max(0, height - offset * 2),
+        );
+      }
+    }
+  }
+
+  for (const entry of zones) {
+    const label = resolveZoneLabel(entry.zone);
+    const bounds = entry.geometry?.bounds;
+
+    if (!label || !bounds) continue;
+
+    const originX = bounds.startCol * cellSize + labelMargin;
+    const originY = bounds.startRow * cellSize + labelMargin;
+    const availableWidth =
+      Number.isFinite(config.labelCanvasWidth) && config.labelCanvasWidth > 0
+        ? config.labelCanvasWidth
+        : canvasWidth;
+    const availableHeight =
+      Number.isFinite(config.labelCanvasHeight) && config.labelCanvasHeight > 0
+        ? config.labelCanvasHeight
+        : canvasHeight;
+
+    ctx.save();
+    ctx.font = labelFont;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+
+    const measured =
+      typeof ctx.measureText === "function" ? ctx.measureText(label) : null;
+    const textWidth = measured ? measured.width : label.length * 7;
+    const boxWidth = textWidth + labelPadding * 2;
+    const boxHeight = labelLineHeight;
+    const clampedX =
+      availableWidth != null
+        ? clamp(
+            originX,
+            labelMargin,
+            Math.max(labelMargin, availableWidth - boxWidth - labelMargin),
+          )
+        : originX;
+    const clampedY =
+      availableHeight != null
+        ? clamp(
+            originY,
+            labelMargin,
+            Math.max(labelMargin, availableHeight - boxHeight - labelMargin),
+          )
+        : originY;
+
+    ctx.fillStyle = labelBackground;
+    fillRoundedRect(ctx, clampedX, clampedY, boxWidth, boxHeight, labelRadius);
+    ctx.fillStyle = labelFill;
+    ctx.fillText(label, clampedX + labelPadding, clampedY + labelPadding);
+    ctx.restore();
+  }
+
+  if (Number.isFinite(previousLineWidth)) {
+    ctx.lineWidth = previousLineWidth;
+  }
+  ctx.restore();
+}
+
 function drawLegendBirthBadge(ctx, centerX, centerY, radius, color) {
   ctx.save();
   ctx.strokeStyle = color;
@@ -613,8 +844,6 @@ function createFitnessPalette(steps, hue) {
  */
 const WARNINGS = Object.freeze({
   eventColor: "Failed to resolve event overlay color; using fallback.",
-  activeZones: "Selection manager failed during active zone check.",
-  zoneGeometry: "Selection manager failed while resolving zone geometry.",
 });
 
 export function drawEventOverlays(ctx, cellSize, activeEvents, getColor) {
@@ -1113,7 +1342,9 @@ function computeEnergyStats(grid, maxTileEnergy = MAX_TILE_ENERGY) {
   let count = 0;
 
   for (let r = 0; r < rows; r++) {
-    const energyRow = Array.isArray(energyGrid[r]) ? energyGrid[r] : [];
+    const energyRow = energyGrid[r];
+
+    if (!energyRow) continue;
 
     for (let c = 0; c < cols; c++) {
       const rawEnergy = energyRow[c];
@@ -1332,107 +1563,9 @@ function drawDensityLegend(ctx, cellSize, cols, rows, stats = {}) {
   ctx.restore();
 }
 
-function hasActiveSelectionZones(selectionManager) {
-  if (!selectionManager || typeof selectionManager.hasActiveZones !== "function") {
-    return false;
-  }
-
-  const result = invokeWithErrorBoundary(selectionManager.hasActiveZones, [], {
-    message: WARNINGS.activeZones,
-    reporter: warnOnce,
-    once: true,
-    thisArg: selectionManager,
-  });
-
-  return Boolean(result);
-}
-
-function getSelectionZoneEntries(selectionManager) {
-  if (
-    !selectionManager ||
-    typeof selectionManager.getActiveZoneRenderData !== "function"
-  ) {
-    return [];
-  }
-
-  const entries = invokeWithErrorBoundary(
-    selectionManager.getActiveZoneRenderData,
-    [],
-    {
-      message: WARNINGS.zoneGeometry,
-      reporter: warnOnce,
-      once: true,
-      thisArg: selectionManager,
-    },
-  );
-
-  return Array.isArray(entries) ? entries : [];
-}
-
-function* iterateRenderableRects(rects) {
-  if (!Array.isArray(rects)) return;
-
-  for (const rect of rects) {
-    if (!rect) continue;
-
-    const { rowSpan = 1, colSpan = 1 } = rect;
-
-    if (rowSpan <= 0 || colSpan <= 0) continue;
-
-    yield rect;
-  }
-}
-
-/**
- * Outlines active reproduction zones supplied by the selection manager.
- *
- * @param {import('../grid/selectionManager.js').default} selectionManager
- *   - Selection manager instance controlling mating zones.
- * @param {CanvasRenderingContext2D} ctx - Rendering context.
- * @param {number} cellSize - Size of a single grid cell in pixels.
- */
-export function drawSelectionZones(selectionManager, ctx, cellSize) {
-  if (!hasActiveSelectionZones(selectionManager)) return;
-
-  const zoneEntries = getSelectionZoneEntries(selectionManager);
-
-  if (zoneEntries.length === 0) return;
-
-  ctx.save();
-  for (const entry of zoneEntries) {
-    const zone = entry?.zone;
-    const geometry = entry?.geometry;
-
-    if (!zone) continue;
-
-    const color = zone.color || "rgba(255, 255, 255, 0.2)";
-
-    if (!color) continue;
-
-    const rects = Array.isArray(geometry?.rects) ? geometry.rects : null;
-
-    if (!rects || rects.length === 0) {
-      continue;
-    }
-
-    ctx.fillStyle = color;
-    for (const rect of iterateRenderableRects(rects)) {
-      const { row, col, rowSpan = 1, colSpan = 1 } = rect;
-
-      ctx.fillRect(
-        col * cellSize,
-        row * cellSize,
-        colSpan * cellSize,
-        rowSpan * cellSize,
-      );
-    }
-  }
-  ctx.restore();
-}
-
 /**
  * High-level overlay renderer orchestrating density, energy, fitness, trait,
- * event, and selection layers.
+ * and event layers.
  *
  * @param {Object} grid - Grid snapshot from {@link GridManager}.
  * @param {CanvasRenderingContext2D} ctx - Rendering context.
@@ -1448,23 +1581,23 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     showAge,
     showFitness,
     showLifeEventMarkers,
+    showSelectionZones,
     showGridLines,
     showObstacles = true,
-    showReproductiveZones = true,
     maxTileEnergy = MAX_TILE_ENERGY,
     activeEvents,
     getEventColor,
     snapshot: providedSnapshot,
-    selectionManager: explicitSelection,
     fitnessOverlayOptions,
     gridLineOptions,
     lifeEvents,
     currentTick: lifeEventCurrentTick,
     lifeEventFadeTicks,
     lifeEventLimit,
+    selectionZones,
+    selectionZoneOptions,
   } = opts;
   let snapshot = providedSnapshot;
-  const selectionManager = explicitSelection || grid?.selectionManager;
   const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
   const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
 
@@ -1472,9 +1605,6 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     drawEventOverlays(ctx, cellSize, activeEvents, getEventColor);
   }
 
-  if (selectionManager && showReproductiveZones) {
-    drawSelectionZones(selectionManager, ctx, cellSize);
-  }
   if (showObstacles) drawObstacleMask(grid, ctx, cellSize);
 
   if (showEnergy) {
@@ -1491,6 +1621,17 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   }
   if (showFitness) {
     drawFitnessHeatmap(snapshot, ctx, cellSize, fitnessOverlayOptions);
+  }
+  if (
+    showSelectionZones &&
+    Array.isArray(selectionZones) &&
+    selectionZones.length > 0
+  ) {
+    drawSelectionZones(ctx, cellSize, selectionZones, {
+      rows,
+      cols,
+      ...toPlainObject(selectionZoneOptions),
+    });
   }
   if (showGridLines) {
     drawGridLines(ctx, cellSize, rows, cols, gridLineOptions);
@@ -1952,15 +2093,13 @@ export function selectTopFitnessEntries(entries, keepCount) {
 
   const buffer = createRankedBuffer(limit, compareFitnessEntries);
 
-  for (let index = 0; index < list.length; index += 1) {
-    const entry = list[index];
-
+  list.forEach((entry) => {
     if (!entry || typeof entry !== "object") {
-      continue;
+      return;
     }
 
     buffer.add(entry);
-  }
+  });
 
   return buffer.getItems();
 }

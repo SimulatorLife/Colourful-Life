@@ -5,6 +5,7 @@ import {
   accumulateEventModifiers,
   EMPTY_APPLIED_EVENTS,
 } from "../src/events/eventModifiers.js";
+import { __dangerousResetWarnOnce } from "../src/utils/error.js";
 
 function neutralContribution() {
   return { regenMultiplier: 1, regenAdd: 0, drainAdd: 0 };
@@ -177,4 +178,76 @@ test("accumulateEventModifiers can skip applied event collection while sanitizin
     EMPTY_APPLIED_EVENTS,
     "applied events should be replaced by immutable empty array",
   );
+});
+
+test("resolveEventContribution tolerates effect resolvers that throw", () => {
+  __dangerousResetWarnOnce();
+
+  const effectCache = new Map();
+  let calls = 0;
+
+  const options = {
+    event: { eventType: "volatile", strength: 0.8 },
+    getEventEffect: () => {
+      calls += 1;
+
+      throw new Error("kaboom");
+    },
+    effectCache,
+  };
+
+  const first = resolveEventContribution(options);
+
+  assert.equal(first, neutralContribution());
+  assert.is(calls, 1);
+  assert.ok(effectCache.has("volatile"));
+  assert.is(effectCache.get("volatile"), null);
+
+  const second = resolveEventContribution(options);
+
+  assert.equal(second, neutralContribution());
+  assert.is(calls, 1, "cached failure should avoid repeated resolver calls");
+});
+
+test("accumulateEventModifiers ignores events whose predicate throws", () => {
+  __dangerousResetWarnOnce();
+
+  const events = [
+    { eventType: "alpha", strength: 0.6 },
+    { eventType: "beta", strength: 0.5 },
+  ];
+  const effects = {
+    beta: { regenAdd: 0.2, drainAdd: -0.4 },
+  };
+  let predicateCalls = 0;
+  let effectCalls = 0;
+
+  const output = accumulateEventModifiers({
+    events,
+    row: 4,
+    col: 7,
+    isEventAffecting: (event) => {
+      predicateCalls += 1;
+
+      if (event.eventType === "alpha") {
+        throw new Error("predicate failure");
+      }
+
+      return true;
+    },
+    getEventEffect: (type) => {
+      effectCalls += 1;
+
+      return effects[type] ?? null;
+    },
+  });
+
+  assert.is(predicateCalls, 2);
+  assert.is(effectCalls, 1);
+  approxEqual(output.regenMultiplier, 1, 1e-12);
+  approxEqual(output.regenAdd, 0.1, 1e-12);
+  approxEqual(output.drainAdd, -0.2, 1e-12);
+  assert.is(output.appliedEvents.length, 1);
+  assert.is(output.appliedEvents[0].event, events[1]);
+  assert.is(output.appliedEvents[0].effect, effects.beta);
 });

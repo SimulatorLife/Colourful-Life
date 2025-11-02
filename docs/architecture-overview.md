@@ -4,7 +4,7 @@ This document captures how the Colourful Life simulation composes its core syste
 
 ## High-level loop
 
-1. **SimulationEngine** (`src/simulationEngine.js`) owns the render loop. Each frame it:
+1. **SimulationEngine** (`src/engine/simulationEngine.js`) owns the render loop. Each frame it:
    - Requests the next animation frame (or uses injected timing hooks).
    - Prepares the grid for the upcoming tick via `grid.prepareTick`.
    - Advances the grid one step, which updates organism state, tile energy, events, and overlays.
@@ -63,6 +63,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - Environment overrides such as `COLOURFUL_LIFE_MAX_TILE_ENERGY`,
   `COLOURFUL_LIFE_ENERGY_REGEN_RATE`,
   `COLOURFUL_LIFE_ENERGY_DIFFUSION_RATE`,
+  `COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO`,
   `COLOURFUL_LIFE_DENSITY_RADIUS`,
   `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY`,
   `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY`,
@@ -101,11 +102,12 @@ This document captures how the Colourful Life simulation composes its core syste
 - Risk memories now actively imprint back into neural sensor gains via DNA-tuned assimilation, so prolonged scarcity, recurring disasters, or confidence streaks reshape the brain's perception instead of remaining passive telemetry. Brains gradually lean harder on the `resourceTrend`, `eventPressure`, and `riskTolerance` channels the genome cares about, tightening the loop between lived experience and future instincts.
 - Neural reinforcement now tracks a DNA-tuned opportunity memory that blends recent neural rewards with energy swings, surfacing the rolling outcome through an `opportunitySignal` sensor. Brains can lean into strategies that are genuinely paying off—or cool off costly loops—without bolting on bespoke behaviour flags.
 - DNA exposes a `metabolicProfile` translating activity, efficiency, and crowding genes into baseline maintenance drain and a density-driven crowding tax, so genomes comfortable in throngs waste less energy than solitary specialists when packed together.
+- DNA now emits an `exploreExploitProfile` that blends exploration, foraging, movement, and restraint loci into baseline scouting bias, scarcity weighting, and scan urgency. Movement planners lean on that profile so curious lineages actively probe neighbouring tiles while conservation-minded genomes hold energy in reserve.
 - DNA now exposes an `eventEnergyLossMultiplier(eventType, context)` trait that blends density, efficiency, recovery, and resistance loci into disaster susceptibility, so flood-hardened cooperators shrug off storms while reckless drifters hemorrhage energy without relying on hard-coded event penalties.
 - DNA encodes an `offspringEnergyDemandFrac` that establishes a DNA-driven viability floor for reproduction. Parents refuse to spawn unless their combined energy investment clears the pickier genome's expectation, allowing nurturing lineages to favour fewer, well-funded offspring while opportunists tolerate lean births.
 - `parentalInvestmentFrac` now blends parental, fertility, cooperation, recovery, gestation, efficiency, and risk loci, so supportive lineages willingly commit more energy while daring opportunists keep reserves for survival gambles.
 - The environment-level `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` scales how much surplus energy above that DNA floor parents must stockpile before gestation begins, letting deployments tune scarcity without touching genome accessors.
-- The environment-level `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` raises or lowers the minimum downtime parents observe after a successful birth, keeping reproduction cadence tunable without modifying genome accessors while still letting longer DNA-driven cooldowns win when lineages evolve them.
+- The environment-level `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` raises or lowers the minimum downtime parents observe after a successful birth. The actual cooldown now scales with each parent's energy investment, resilience genes, recent event pressure, and how evenly partners shared the gestation cost, so exhausted lineages recover slowly while well-fed cooperators bounce back quickly—yet the global floor and DNA-preferred delays still win when lineages evolve them.
 - DNA's gestation locus now feeds `offspringEnergyTransferEfficiency`, blending metabolic, parental, and fertility traits with a heritable gestation efficiency gene. Offspring inherit only the delivered share of the parental investment, so lineages evolve toward thrifty or wasteful reproduction instead of assuming perfect energy transfer.
 - Neural mate selection blends brain forecasts with DNA courtship heuristics. Each cell now previews reproduction sensors for every visible partner, folds the brain's acceptance probability into the mate's weight, and scales the influence using DNA-programmed reinforcement and sampling profiles. Populations that evolve richer neural wiring can therefore favour mates their brains predict will reciprocate, while simpler genomes continue to lean on legacy similarity heuristics.
 - Successful or penalized matings imprint DNA-tuned mate affinity plasticity back into neural sensors, nudging `partnerSimilarity`, `mateSimilarity`, and `opportunitySignal` toward strategies that prove rewarding instead of freezing mate choice to static similarity heuristics.
@@ -139,13 +141,11 @@ This document captures how the Colourful Life simulation composes its core syste
 - `ReproductionZonePolicy` (`src/grid/reproductionZonePolicy.js`) keeps `GridManager`'s reproduction flow decoupled from the selection implementation by translating zone checks into simple allow/deny results.
 - `config.js` consolidates slider bounds, simulation defaults, and runtime-tunable constants such as diffusion and regeneration rates so UI and headless contexts remain in sync.
 - The `src/utils/` directory houses deterministic helpers (`createRNG`, `createRankedBuffer`, `cloneTracePayload`, etc.) reused across the simulation, UI, and tests.
-- The **Evolution Insights** panel hosts cadence controls shared with the leaderboard, including the "Dashboard Refresh Interval" slider exposed via `leaderboardIntervalMs` so observers can slow or accelerate telemetry updates without hunting through multiple panels.
+- Simulation Controls hosts the shared "Dashboard Refresh Interval" slider exposed via `leaderboardIntervalMs`, keeping cadence tuning beside the other global knobs while still driving Evolution Insights and the leaderboard updates from one place.
 
 - The overlay pipeline is orchestrated by `drawOverlays`, which delegates to granular helpers (`drawEventOverlays`,
   `drawEnergyHeatmap`, `drawDensityHeatmap`, `drawFitnessHeatmap`) and reuses color ramps such as `densityToRgba`. Each helper
   exposes legends or palette selection so UI extensions can stay consistent without reimplementing scaling logic.
-- `drawSelectionZones` renders active reproduction zones using cached geometry from the selection manager, ensuring the mating UI
-  and reproduction policy share exactly the same coordinates.
 
 ## Headless and scripted usage
 

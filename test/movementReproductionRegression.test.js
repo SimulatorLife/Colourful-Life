@@ -387,8 +387,16 @@ test("handleReproduction enforces reproduction energy thresholds", async () => {
 
   dnaA.reproductionThresholdFrac = () => 0.6;
   dnaB.reproductionThresholdFrac = () => 0.3;
-  dnaA.parentalInvestmentFrac = () => 0.5;
-  dnaB.parentalInvestmentFrac = () => 0.5;
+  dnaA.parentalInvestmentFrac = () => 0.35;
+  dnaB.parentalInvestmentFrac = () => 0.35;
+  dnaA.starvationThresholdFrac = () => 0.05;
+  dnaB.starvationThresholdFrac = () => 0.05;
+  dnaA.offspringEnergyDemandFrac = () => 0.05;
+  dnaB.offspringEnergyDemandFrac = () => 0.05;
+  dnaA.offspringEnergyTransferEfficiency = () => 1;
+  dnaB.offspringEnergyTransferEfficiency = () => 1;
+  dnaA.offspringViabilityBuffer = () => 1;
+  dnaB.offspringViabilityBuffer = () => 1;
   dnaA.starvationThresholdFrac = () => 0.05;
   dnaB.starvationThresholdFrac = () => 0.05;
 
@@ -463,6 +471,276 @@ test("handleReproduction enforces reproduction energy thresholds", async () => {
     Math.abs(mate.energy - mateEnergyBefore) <= energyTolerance,
     "mate energy should stay near the pre-check level",
   );
+});
+
+test("handleReproduction honors neural energy threshold relaxation", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  let births = 0;
+  let blockedReason = null;
+  const stats = {
+    onBirth() {
+      births += 1;
+    },
+    onDeath() {},
+    recordMateChoice() {},
+    recordReproductionBlocked(info) {
+      blockedReason = info;
+    },
+  };
+
+  const gm = new TestGridManager(2, 3, {
+    eventManager: { activeEvents: [] },
+    stats,
+  });
+
+  gm.rebuildActiveCells();
+
+  gm.energyGrid = Array.from({ length: 2 }, () =>
+    Array.from({ length: 3 }, () => MAX_TILE_ENERGY),
+  );
+
+  const densityGrid = Array.from({ length: 2 }, () =>
+    Array.from({ length: 3 }, () => 0),
+  );
+
+  const dnaA = new DNA(0, 0, 0);
+  const dnaB = new DNA(0, 0, 0);
+
+  dnaA.reproductionThresholdFrac = () => 0.6;
+  dnaB.reproductionThresholdFrac = () => 0.6;
+  dnaA.parentalInvestmentFrac = () => 0.5;
+  dnaB.parentalInvestmentFrac = () => 0.5;
+
+  const parent = new Cell(0, 1, dnaA, MAX_TILE_ENERGY * 0.45);
+  const mate = new Cell(0, 2, dnaB, MAX_TILE_ENERGY * 0.42);
+
+  parent.computeReproductionProbability = () => 1;
+  parent.decideReproduction = () => ({ probability: 1, usedNetwork: true });
+  mate.computeReproductionProbability = () => 1;
+  mate.decideReproduction = () => ({ probability: 1, usedNetwork: true });
+
+  let parentThresholdCalls = 0;
+  let mateThresholdCalls = 0;
+
+  parent.resolveReproductionEnergyThreshold = () => {
+    parentThresholdCalls += 1;
+
+    return MAX_TILE_ENERGY * 0.3;
+  };
+
+  mate.resolveReproductionEnergyThreshold = () => {
+    mateThresholdCalls += 1;
+
+    return MAX_TILE_ENERGY * 0.3;
+  };
+
+  const mateEntry = parent.evaluateMateCandidate({
+    row: mate.row,
+    col: mate.col,
+    target: mate,
+  }) || {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 1,
+    diversity: 0,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  parent.selectMateWeighted = () => ({
+    chosen: mateEntry,
+    evaluated: [mateEntry],
+    mode: "preference",
+  });
+  parent.findBestMate = () => mateEntry;
+
+  gm.setCell(0, 1, parent);
+  gm.setCell(0, 2, mate);
+
+  const originalRandom = Math.random;
+  const originalBreed = Cell.breed;
+
+  Math.random = () => 0;
+  Cell.breed = (parentA, parentB, mutationMultiplier, options) => {
+    const result = originalBreed.call(
+      Cell,
+      parentA,
+      parentB,
+      mutationMultiplier,
+      options,
+    );
+
+    if (result) {
+      return result;
+    }
+
+    const fallbackEnergy = Math.max(
+      0.01 * MAX_TILE_ENERGY,
+      Math.min(parentA.energy, parentB.energy) * 0.1,
+    );
+    const offspring = new Cell(parentA.row, parentA.col, parentA.dna, fallbackEnergy);
+
+    parentA.energy = Math.max(0, parentA.energy - fallbackEnergy * 0.5);
+    parentB.energy = Math.max(0, parentB.energy - fallbackEnergy * 0.5);
+
+    return offspring;
+  };
+
+  try {
+    const reproduced = gm.handleReproduction(
+      0,
+      1,
+      parent,
+      {
+        mates: [mateEntry],
+        society: [],
+      },
+      {
+        stats,
+        densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 1,
+      },
+    );
+
+    if (!reproduced) {
+      assert.fail(
+        `expected reproduction to succeed, blocked: ${blockedReason?.reason ?? "unknown"}`,
+      );
+    }
+
+    assert.is(
+      reproduced,
+      true,
+      "neural threshold relaxation should permit reproduction",
+    );
+    assert.is(births, 1, "relaxed threshold should allow offspring creation");
+  } finally {
+    Math.random = originalRandom;
+    Cell.breed = originalBreed;
+  }
+
+  assert.is(
+    parentThresholdCalls,
+    1,
+    "parent neural threshold should be consulted once",
+  );
+  assert.is(mateThresholdCalls, 1, "mate neural threshold should be consulted once");
+});
+
+test("handleReproduction blocks when neural thresholds demand more energy", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  let births = 0;
+  const stats = {
+    onBirth() {
+      births += 1;
+    },
+    onDeath() {},
+    recordMateChoice() {},
+    recordReproductionBlocked() {},
+  };
+
+  const gm = new TestGridManager(2, 3, {
+    eventManager: { activeEvents: [] },
+    stats,
+  });
+
+  gm.rebuildActiveCells();
+
+  gm.energyGrid = Array.from({ length: 2 }, () =>
+    Array.from({ length: 3 }, () => MAX_TILE_ENERGY),
+  );
+
+  const densityGrid = Array.from({ length: 2 }, () =>
+    Array.from({ length: 3 }, () => 0),
+  );
+
+  const dnaA = new DNA(0, 0, 0);
+  const dnaB = new DNA(0, 0, 0);
+
+  dnaA.reproductionThresholdFrac = () => 0.3;
+  dnaB.reproductionThresholdFrac = () => 0.3;
+  dnaA.parentalInvestmentFrac = () => 0.5;
+  dnaB.parentalInvestmentFrac = () => 0.5;
+
+  const parent = new Cell(0, 1, dnaA, MAX_TILE_ENERGY * 0.5);
+  const mate = new Cell(0, 2, dnaB, MAX_TILE_ENERGY * 0.55);
+
+  parent.computeReproductionProbability = () => 1;
+  parent.decideReproduction = () => ({ probability: 1, usedNetwork: true });
+  mate.computeReproductionProbability = () => 1;
+  mate.decideReproduction = () => ({ probability: 1, usedNetwork: true });
+
+  parent.resolveReproductionEnergyThreshold = () => MAX_TILE_ENERGY * 0.9;
+  mate.resolveReproductionEnergyThreshold = () => MAX_TILE_ENERGY * 0.9;
+
+  const mateEntry = parent.evaluateMateCandidate({
+    row: mate.row,
+    col: mate.col,
+    target: mate,
+  }) || {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 1,
+    diversity: 0,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  parent.selectMateWeighted = () => ({
+    chosen: mateEntry,
+    evaluated: [mateEntry],
+    mode: "preference",
+  });
+  parent.findBestMate = () => mateEntry;
+
+  gm.setCell(0, 1, parent);
+  gm.setCell(0, 2, mate);
+
+  const originalRandom = Math.random;
+
+  Math.random = () => 0;
+
+  try {
+    const reproduced = gm.handleReproduction(
+      0,
+      1,
+      parent,
+      {
+        mates: [mateEntry],
+        society: [],
+      },
+      {
+        stats,
+        densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 1,
+      },
+    );
+
+    assert.is(reproduced, false, "neural threshold increase should block reproduction");
+    assert.is(births, 0, "offspring should not be created when thresholds increase");
+  } finally {
+    Math.random = originalRandom;
+  }
 });
 
 test("handleReproduction allows reproduction when reach extends beyond adjacency", async () => {

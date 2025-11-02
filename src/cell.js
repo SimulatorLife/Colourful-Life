@@ -13,6 +13,7 @@ import {
 } from "./config.js";
 
 const EPSILON = 1e-9;
+const EMPTY_MATE_SCORE_RESULTS = Object.freeze([]);
 
 function softmax(logits = []) {
   if (!Array.isArray(logits) || logits.length === 0) return [];
@@ -98,6 +99,67 @@ function sampleFromDistribution(probabilities = [], labels = [], rng = Math.rand
   const fallbackIndex = length - 1;
 
   return labels[fallbackIndex] ?? fallbackIndex;
+}
+
+function normalizeGroupOutputs(entries, logitsSource) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return null;
+  }
+
+  const sourceIsArray = Array.isArray(logitsSource);
+  const sourceIsFunction = typeof logitsSource === "function";
+  const sourceIsObject =
+    !sourceIsArray &&
+    !sourceIsFunction &&
+    logitsSource &&
+    typeof logitsSource === "object";
+
+  if (sourceIsArray) {
+    if (logitsSource.length === 0) {
+      return null;
+    }
+  } else if (sourceIsObject) {
+    if (Object.keys(logitsSource).length === 0) {
+      return null;
+    }
+  } else if (!sourceIsFunction) {
+    return null;
+  }
+
+  const logits = new Array(entries.length);
+
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i];
+    const key = entry?.key;
+    let raw;
+
+    if (sourceIsArray) {
+      raw = i < logitsSource.length ? logitsSource[i] : undefined;
+    } else if (sourceIsFunction) {
+      raw = logitsSource(key, i);
+    } else {
+      raw = logitsSource[key];
+    }
+
+    const numeric = Number(raw);
+
+    logits[i] = Number.isFinite(numeric) ? numeric : 0;
+  }
+
+  const probabilities = softmax(logits);
+  const logitsByKey = {};
+  const probabilitiesByKey = {};
+
+  for (let i = 0; i < entries.length; i += 1) {
+    const key = entries[i]?.key;
+
+    if (key == null) continue;
+
+    logitsByKey[key] = logits[i] ?? 0;
+    probabilitiesByKey[key] = probabilities[i] ?? 0;
+  }
+
+  return { logits, probabilities, logitsByKey, probabilitiesByKey };
 }
 
 function resolveEventContext(contextCandidate) {
@@ -201,6 +263,10 @@ export default class Cell {
     this.reproductionEnergyAdaptationProfile =
       typeof this.dna.reproductionEnergyAdaptationProfile === "function"
         ? this.dna.reproductionEnergyAdaptationProfile()
+        : null;
+    this.exploreExploitProfile =
+      typeof this.dna.exploreExploitProfile === "function"
+        ? this.dna.exploreExploitProfile()
         : null;
     this.mateAffinityPlasticity =
       typeof this.dna.mateAffinityPlasticityProfile === "function"
@@ -455,6 +521,8 @@ export default class Cell {
     };
     const starvationA = parentA.starvationThreshold(resolvedMaxTileEnergy);
     const starvationB = parentB.starvationThreshold(resolvedMaxTileEnergy);
+    const energyBeforeA = parentA.energy;
+    const energyBeforeB = parentB.energy;
     const investA = calculateInvestment(
       parentA,
       starvationA,
@@ -518,6 +586,8 @@ export default class Cell {
 
     parentA.energy = Math.max(0, parentA.energy - investA);
     parentB.energy = Math.max(0, parentB.energy - investB);
+    const energyAfterA = parentA.energy;
+    const energyAfterB = parentB.energy;
     const offspring = new Cell(row, col, childDNA, offspringEnergy);
 
     parentA.#recordReproductionEnergyOutcome({
@@ -558,11 +628,33 @@ export default class Cell {
     }
     parentA.offspring = (parentA.offspring || 0) + 1;
     parentB.offspring = (parentB.offspring || 0) + 1;
+    const cooldownShared = {
+      totalInvestment,
+      viabilityThreshold,
+      transferEfficiency,
+      offspringEnergy,
+      maxTileEnergy: resolvedMaxTileEnergy,
+    };
+
     if (typeof parentA.startReproductionCooldown === "function") {
-      parentA.startReproductionCooldown();
+      parentA.startReproductionCooldown({
+        ...cooldownShared,
+        investment: investA,
+        partnerInvestment: investB,
+        energyBefore: energyBeforeA,
+        energyAfter: energyAfterA,
+        starvationThreshold: starvationA,
+      });
     }
     if (typeof parentB.startReproductionCooldown === "function") {
-      parentB.startReproductionCooldown();
+      parentB.startReproductionCooldown({
+        ...cooldownShared,
+        investment: investB,
+        partnerInvestment: investA,
+        energyBefore: energyBeforeB,
+        energyAfter: energyAfterB,
+        starvationThreshold: starvationB,
+      });
     }
 
     return offspring;
@@ -582,7 +674,7 @@ export default class Cell {
     return this.getReproductionCooldown() > 0;
   }
 
-  startReproductionCooldown() {
+  startReproductionCooldown(context) {
     const baselineCandidate = Number.isFinite(REPRODUCTION_COOLDOWN_BASE)
       ? REPRODUCTION_COOLDOWN_BASE
       : 2;
@@ -595,9 +687,128 @@ export default class Cell {
       Number.isFinite(dnaCooldown) && dnaCooldown > 0
         ? Math.round(dnaCooldown)
         : baseline;
-    const duration = Math.max(baseline, normalized);
+    const dnaPreferred = Math.max(baseline, normalized);
+    const contextCandidate =
+      context && typeof context === "object" && !Array.isArray(context)
+        ? context
+        : null;
+    const hasContext = contextCandidate
+      ? [
+          contextCandidate.investment,
+          contextCandidate.partnerInvestment,
+          contextCandidate.totalInvestment,
+          contextCandidate.energyBefore,
+          contextCandidate.energyAfter,
+          contextCandidate.starvationThreshold,
+          contextCandidate.viabilityThreshold,
+          contextCandidate.offspringEnergy,
+          contextCandidate.transferEfficiency,
+        ].some((value) => Number.isFinite(value))
+      : false;
 
-    this._reproductionCooldown = Math.max(this.getReproductionCooldown(), duration);
+    if (!hasContext) {
+      this._reproductionCooldown = Math.max(
+        this.getReproductionCooldown(),
+        dnaPreferred,
+      );
+
+      return;
+    }
+
+    const capacity = Math.max(
+      1e-6,
+      Number.isFinite(contextCandidate.maxTileEnergy) &&
+        contextCandidate.maxTileEnergy > 0
+        ? contextCandidate.maxTileEnergy
+        : MAX_TILE_ENERGY || 1,
+    );
+    const investment = Number.isFinite(contextCandidate.investment)
+      ? Math.max(0, contextCandidate.investment)
+      : 0;
+    const partnerInvestment = Number.isFinite(contextCandidate.partnerInvestment)
+      ? Math.max(0, contextCandidate.partnerInvestment)
+      : 0;
+    const totalInvestment =
+      Number.isFinite(contextCandidate.totalInvestment) &&
+      contextCandidate.totalInvestment > 0
+        ? Math.max(0, contextCandidate.totalInvestment)
+        : investment + partnerInvestment;
+    const energyBefore = Number.isFinite(contextCandidate.energyBefore)
+      ? Math.max(0, contextCandidate.energyBefore)
+      : null;
+    const energyAfter = Number.isFinite(contextCandidate.energyAfter)
+      ? Math.max(0, contextCandidate.energyAfter)
+      : energyBefore != null
+        ? Math.max(0, energyBefore - investment)
+        : null;
+    const starvationThreshold = Number.isFinite(contextCandidate.starvationThreshold)
+      ? Math.max(0, contextCandidate.starvationThreshold)
+      : this.starvationThreshold(capacity);
+    const viabilityFraction =
+      Number.isFinite(contextCandidate.viabilityThreshold) &&
+      contextCandidate.viabilityThreshold > 0
+        ? clamp(contextCandidate.viabilityThreshold / capacity, 0, 2)
+        : 0;
+    const offspringFraction =
+      Number.isFinite(contextCandidate.offspringEnergy) &&
+      contextCandidate.offspringEnergy > 0
+        ? clamp(contextCandidate.offspringEnergy / capacity, 0, 2)
+        : viabilityFraction;
+    const investmentFraction = clamp(investment / capacity, 0, 3);
+    const reserveFraction =
+      energyBefore && energyBefore > 0
+        ? clamp(investment / energyBefore, 0, 2)
+        : investmentFraction;
+    const totalLoad = clamp(totalInvestment / capacity, 0, 3);
+    const energyAfterFraction =
+      energyAfter != null ? clamp(energyAfter / capacity, 0, 1) : 0;
+    const starvationStrain =
+      energyAfter != null && starvationThreshold > 0
+        ? clamp(
+            Math.max(0, starvationThreshold - energyAfter) / starvationThreshold,
+            0,
+            2,
+          )
+        : 0;
+    const riskTolerance = clamp(this.#resolveRiskTolerance(), 0, 1);
+    const recovery = clamp(this.dna?.recoveryRate?.() ?? 0.35, 0, 1);
+    const eventPressure = clamp(this.lastEventPressure ?? 0, 0, 1);
+    const resourceSignal = clamp(this._resourceSignal ?? 0, -1, 1);
+    const balance =
+      totalInvestment > 0
+        ? clamp(Math.abs(investment - partnerInvestment) / totalInvestment, 0, 1)
+        : 0;
+    const balanceRelief = (1 - balance) * 0.12;
+    const investmentPressure =
+      reserveFraction * (0.75 + (1 - recovery) * 0.5) +
+      investmentFraction * (0.45 + riskTolerance * 0.2);
+    const deficitPressure =
+      starvationStrain * (0.85 + (1 - recovery) * 0.45 + eventPressure * 0.25);
+    const demandPressure =
+      (totalLoad * 0.35 + offspringFraction * 0.28 + viabilityFraction * 0.22) *
+      (1 + eventPressure * 0.3);
+    const scarcityPenalty =
+      Math.max(0, -resourceSignal) * (0.25 + (1 - recovery) * 0.2);
+    const abundanceRelief =
+      energyAfterFraction * (0.4 + recovery * 0.5) +
+      Math.max(0, resourceSignal) * 0.25 +
+      balanceRelief;
+    const rawStrain =
+      investmentPressure +
+      deficitPressure +
+      demandPressure +
+      scarcityPenalty -
+      abundanceRelief -
+      recovery * 0.3;
+    const strain = clamp(rawStrain, -0.6, 3);
+    const multiplier = clamp(1 + strain, 0.4, 4);
+    const dynamicDuration = Math.max(1, Math.round(dnaPreferred * multiplier));
+    const finalDuration = Math.max(baseline, dynamicDuration);
+
+    this._reproductionCooldown = Math.max(
+      this.getReproductionCooldown(),
+      finalDuration,
+    );
   }
 
   tickReproductionCooldown() {
@@ -689,6 +900,49 @@ export default class Cell {
       mate.noveltyPressure = noveltyPressure;
     }
 
+    const opportunityMomentum = clamp(
+      Number.isFinite(this._mateOpportunityMomentum)
+        ? this._mateOpportunityMomentum
+        : 0,
+      0,
+      1,
+    );
+    const suppressionSignal = clamp(
+      Number.isFinite(this._mateDiversitySuppression)
+        ? this._mateDiversitySuppression
+        : 0,
+      0,
+      1,
+    );
+
+    if (opportunityMomentum > 0.001 || suppressionSignal > 0.001) {
+      const appetiteLift = Math.max(0, appetite);
+      const diversityLift =
+        diversity *
+        (opportunityMomentum * (0.45 + appetiteLift * 0.35) +
+          suppressionSignal * (0.25 + appetiteLift * 0.25));
+      const similarityDrag = clamp(
+        similarity *
+          (suppressionSignal * (0.3 + opportunityMomentum * 0.2) +
+            opportunityMomentum * 0.1),
+        0,
+        1,
+      );
+      const penaltyFactor = clamp(
+        similarityDrag * (0.5 + suppressionSignal * 0.4),
+        0,
+        0.7,
+      );
+      const boostedWeight =
+        Math.max(0.0001, selectionWeight) +
+        diversityLift * (0.55 + appetiteLift * 0.35);
+
+      preferenceScore += diversityLift - similarityDrag * (0.6 + appetiteLift * 0.2);
+      selectionWeight = Math.max(0.0001, boostedWeight * (1 - penaltyFactor));
+      mate.opportunityMomentum = opportunityMomentum;
+      mate.diversitySuppression = suppressionSignal;
+    }
+
     mate.similarity = similarity;
     mate.diversity = diversity;
     mate.appetite = appetite;
@@ -772,7 +1026,7 @@ export default class Cell {
     scored.length = 0;
 
     if (!Array.isArray(potentialMates) || potentialMates.length === 0) {
-      return scored;
+      return EMPTY_MATE_SCORE_RESULTS;
     }
 
     const parentRow = Number.isFinite(context?.parentRow)
@@ -906,7 +1160,11 @@ export default class Cell {
       }
     }
 
-    return scored;
+    if (scored.length === 0) {
+      return EMPTY_MATE_SCORE_RESULTS;
+    }
+
+    return scored.slice();
   }
 
   selectMateWeighted(potentialMates = [], context = {}, scoredCandidates = null) {
@@ -4749,14 +5007,55 @@ export default class Cell {
     const trend = clamp(tileEnergyDelta ?? 0, -1, 1);
     const fatigue = this.#currentNeuralFatigue();
     const riskTolerance = this.#resolveRiskTolerance();
-    let baseIntent =
-      0.45 +
-      scarcity * 0.35 +
-      (1 - density) * 0.1 +
-      Math.max(0, -trend) * 0.1 +
-      riskTolerance * 0.1 -
-      fatigue * 0.25;
+    const profile = this.exploreExploitProfile || {};
+    const baseBias = clamp(
+      Number.isFinite(profile.base) ? profile.base : 0.45,
+      0.05,
+      0.95,
+    );
+    const scarcityWeight = clamp(
+      Number.isFinite(profile.scarcityWeight) ? profile.scarcityWeight : 0.35,
+      0,
+      1,
+    );
+    const densityWeight = clamp(
+      Number.isFinite(profile.densityReliefWeight) ? profile.densityReliefWeight : 0.1,
+      -0.5,
+      0.5,
+    );
+    const declineWeight = clamp(
+      Number.isFinite(profile.declineWeight) ? profile.declineWeight : 0.1,
+      0,
+      0.6,
+    );
+    const riskWeight = clamp(
+      Number.isFinite(profile.riskWeight) ? profile.riskWeight : 0.1,
+      0,
+      0.6,
+    );
+    const fatiguePenalty = clamp(
+      Number.isFinite(profile.fatiguePenalty) ? profile.fatiguePenalty : 0.25,
+      0,
+      0.7,
+    );
+    const reserveWeight = clamp(
+      Number.isFinite(profile.reserveWeight) ? profile.reserveWeight : 0,
+      0,
+      0.6,
+    );
+    const scanUrgency = clamp(
+      Number.isFinite(profile.scanUrgency) ? profile.scanUrgency : 1,
+      0,
+      2,
+    );
+    let baseIntent = baseBias;
 
+    baseIntent += scarcity * scarcityWeight;
+    baseIntent += (1 - density) * densityWeight;
+    baseIntent += Math.max(0, -trend) * declineWeight;
+    baseIntent += riskTolerance * riskWeight;
+    baseIntent -= fatigue * fatiguePenalty;
+    baseIntent -= energyFrac * reserveWeight;
     baseIntent = clamp(baseIntent, 0.05, 0.95);
 
     let neuralSignal = null;
@@ -4772,20 +5071,12 @@ export default class Cell {
           : null;
 
       if (!probabilities && movementOutcome.logits) {
-        const entries = OUTPUT_GROUPS.movement;
-        const logits = entries.map(({ key }) => {
-          const value = Number(movementOutcome.logits?.[key]);
+        const distribution = normalizeGroupOutputs(
+          OUTPUT_GROUPS.movement,
+          (key) => movementOutcome.logits?.[key],
+        );
 
-          return Number.isFinite(value) ? value : 0;
-        });
-        const labels = entries.map(({ key }) => key);
-        const normalized = softmax(logits);
-
-        probabilities = labels.reduce((acc, label, index) => {
-          acc[label] = normalized[index] ?? 0;
-
-          return acc;
-        }, {});
+        probabilities = distribution?.probabilitiesByKey ?? null;
       }
 
       if (probabilities) {
@@ -4812,7 +5103,9 @@ export default class Cell {
       neuralIntent != null ? clamp(0.5 + neuralAdvantage * 0.35, 0, 1) : 0;
     const finalIntent =
       neuralIntent != null ? lerp(baseIntent, neuralIntent, neuralWeight) : baseIntent;
-    const availableIntent = energyScanAvailable ? finalIntent : 0;
+    const availableIntent = energyScanAvailable
+      ? clamp(finalIntent * scanUrgency, 0, 1)
+      : 0;
     const rng = this.resolveRng("movementExploitIntent");
     const shouldAttempt = energyScanAvailable && rng() < availableIntent;
 
@@ -4822,6 +5115,7 @@ export default class Cell {
       exploreExploitNeural: neuralSignal,
       exploreExploitAdvantage: neuralAdvantage,
       exploreExploitScanAvailable: energyScanAvailable,
+      exploreExploitScanUrgency: scanUrgency,
       exploreExploitPlanned: shouldAttempt,
       exploreExploitExecuted: false,
       exploreExploitSucceeded: false,
@@ -5800,20 +6094,23 @@ export default class Cell {
     }
 
     const entries = OUTPUT_GROUPS.movement;
-    const logits = entries.map(({ key }) => values[key] ?? 0);
+    const distribution = normalizeGroupOutputs(entries, (key) => values[key]);
+
+    if (!distribution) {
+      this._usedNeuralMovement = false;
+
+      return { action: null, usedBrain: false };
+    }
+
+    const {
+      probabilities: probs,
+      probabilitiesByKey,
+      logits,
+      logitsByKey,
+    } = distribution;
     const labels = entries.map(({ key }) => key);
-    const probs = softmax(logits);
     const decisionRng = this.resolveRng("movementDecision");
     const action = sampleFromDistribution(probs, labels, decisionRng);
-    const { probabilities: probabilitiesByKey, logits: logitsByKey } = labels.reduce(
-      (acc, key, index) => {
-        acc.probabilities[key] = probs[index] ?? 0;
-        acc.logits[key] = logits[index] ?? 0;
-
-        return acc;
-      },
-      { probabilities: {}, logits: {} },
-    );
 
     if (!action) {
       this._usedNeuralMovement = false;
@@ -8079,18 +8376,12 @@ export default class Cell {
     }
 
     if (outcome.logits && typeof outcome.logits === "object") {
-      const entries = OUTPUT_GROUPS.interaction;
-      const logits = entries.map(({ key }) => Number(outcome.logits[key]) || 0);
-      const normalized = softmax(logits);
-      const probabilities = {};
+      const distribution = normalizeGroupOutputs(
+        OUTPUT_GROUPS.interaction,
+        (key) => outcome.logits?.[key],
+      );
 
-      for (let i = 0; i < entries.length; i += 1) {
-        const { key } = entries[i];
-
-        probabilities[key] = normalized[i] ?? 0;
-      }
-
-      return probabilities;
+      return distribution?.probabilitiesByKey ?? null;
     }
 
     return null;

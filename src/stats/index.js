@@ -44,6 +44,7 @@ const DIVERSITY_TARGET_DEFAULT = 0.35;
 const DIVERSITY_PRESSURE_SMOOTHING = 0.85;
 const STRATEGY_PRESSURE_SMOOTHING = 0.82;
 
+// Default number of life events retained before older entries roll off.
 const LIFE_EVENT_LOG_CAPACITY = 240;
 const LIFE_EVENT_RATE_DEFAULT_WINDOW = 200;
 const LIFE_EVENT_FADE_DEFAULT = 36;
@@ -272,19 +273,22 @@ class FixedSizeRingBuffer {
       return [];
     }
 
-    const numericLimit = Math.floor(Number(limit));
-    const normalizedLimit = Number.isFinite(numericLimit)
-      ? Math.max(0, Math.min(length, numericLimit))
-      : length;
+    const normalizedLimit = sanitizeNumber(limit, {
+      fallback: length,
+      min: 0,
+      max: length,
+      round: Math.floor,
+    });
 
-    if (normalizedLimit === 0) {
+    if (!Number.isFinite(normalizedLimit) || normalizedLimit <= 0) {
       return [];
     }
 
     const buffer = this.buffer;
     const baseIndex = (this.start + length - 1) % capacity;
+    const count = Math.floor(normalizedLimit);
 
-    return Array.from({ length: normalizedLimit }, (_, offset) => {
+    return Array.from({ length: count }, (_, offset) => {
       const index = baseIndex - offset;
 
       return buffer[index >= 0 ? index : index + capacity];
@@ -495,8 +499,10 @@ export default class Stats {
    *   traitResampleInterval?: number,
    *   diversitySampleInterval?: number,
    *   rng?: () => number,
+   *   lifeEventLogCapacity?: number,
    * }} [options]
-   *   Optional configuration allowing callers to extend or override tracked trait metrics and randomness.
+   *   Optional configuration allowing callers to extend or override tracked trait metrics, randomness,
+   *   and life event retention.
    */
   constructor(historySize = 10000, options = {}) {
     const normalizedHistorySize = sanitizePositiveInteger(historySize, {
@@ -505,8 +511,13 @@ export default class Stats {
     });
 
     this.historySize = normalizedHistorySize;
-    const { traitDefinitions, traitResampleInterval, diversitySampleInterval, rng } =
-      options ?? {};
+    const {
+      traitDefinitions,
+      traitResampleInterval,
+      diversitySampleInterval,
+      rng,
+      lifeEventLogCapacity,
+    } = options ?? {};
 
     this.traitDefinitions = resolveTraitDefinitions(traitDefinitions);
     this.traitPresence = createEmptyTraitPresence(this.traitDefinitions);
@@ -529,6 +540,14 @@ export default class Stats {
     this.#traitSums = new Float64Array(this.traitDefinitions.length);
     this.#traitActiveCounts = new Float64Array(this.traitDefinitions.length);
     this.#rng = typeof rng === "function" ? rng : DEFAULT_RANDOM;
+    const resolvedLifeEventCapacity = sanitizePositiveInteger(lifeEventLogCapacity, {
+      fallback: LIFE_EVENT_LOG_CAPACITY,
+      min: 0,
+    });
+
+    this.lifeEventLogCapacity = Number.isFinite(resolvedLifeEventCapacity)
+      ? resolvedLifeEventCapacity
+      : LIFE_EVENT_LOG_CAPACITY;
     this.traitResampleInterval = sanitizePositiveInteger(traitResampleInterval, {
       fallback: 120,
       min: 1,
@@ -569,7 +588,7 @@ export default class Stats {
     this.complementOpportunityAlignment = 0;
     this.complementOpportunityMultiplier = 1;
     this.neuralSummary = createEmptyNeuralSummary();
-    this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
+    this.lifeEventLog = createHistoryRing(this.lifeEventLogCapacity);
     this.lifeEventSequence = 0;
     this.lifeEventFadeTicks = LIFE_EVENT_FADE_DEFAULT;
     this.deathCauseTotals = Object.create(null);
@@ -663,7 +682,7 @@ export default class Stats {
     this.strategyPressure = 0;
     this.meanBehaviorComplementarity = 0;
     this.successfulBehaviorComplementarity = 0;
-    this.lifeEventLog = createHistoryRing(LIFE_EVENT_LOG_CAPACITY);
+    this.lifeEventLog = createHistoryRing(this.lifeEventLogCapacity);
     this.lifeEventSequence = 0;
     this.lastMatingDebug = null;
     this.lastBlockedReproduction = null;
@@ -2387,6 +2406,23 @@ export default class Stats {
     const s = event ? (event.strength || 0) * multiplier : 0;
 
     this.pushHistory("eventStrength", s);
+  }
+
+  /**
+   * Returns the total number of ticks recorded by the simulation.
+   *
+   * This accessor protects callers from depending on nested state like
+   * `stats.totals.ticks`, ensuring consumers collaborate with the Stats
+   * facade instead of reaching through it.
+   *
+   * @returns {number|null}
+   *   The current tick count when finite, otherwise `null` to signal that the
+   *   total is unavailable.
+   */
+  getTotalTicks() {
+    const ticks = this.totals?.ticks;
+
+    return Number.isFinite(ticks) ? ticks : null;
   }
 
   getRecentLifeEvents(limit = 12) {

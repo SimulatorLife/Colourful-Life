@@ -26,6 +26,7 @@ where practical.
 - Developer guide call-out pointing contributors to the overlay JSDoc style so future canvas helpers stay self-documenting.
 - Changelog tracking ongoing project evolution.
 - Life event dashboard summary combining births, deaths, and net population cadence derived from a new stats helper so observers can spot surges or collapses without scanning individual log entries.
+- Reproductive zone overlay tinting active patterns directly on the grid with labelled badges so curated mating areas remain visible while other heatmaps are active.
 - Simulation law formalising energy exclusivity along with code and tests that ensure tiles occupied by organisms never report stored energy.
 - README guidance for embedding and headless automation, plus repository layout notes covering the engine environment adapters and shared utilities.
 - Architecture overview coverage for the environment adapters and life event summaries to keep subsystem documentation aligned with the current UI.
@@ -33,6 +34,12 @@ where practical.
 
 ### Changed
 
+- Relaxed the default offspring viability buffer to `1.09` after rerunning the
+  40×40 headless probe (`PERF_INCLUDE_SIM=1 PERF_SIM_ROWS=40 PERF_SIM_COLS=40`
+  `PERF_SIM_WARMUP=10 PERF_SIM_ITERATIONS=50 PERF_SIM_DENSITY=0.65 node`
+  `scripts/profile-energy.mjs`). Survivors climbed from 206 → 209 while raw
+  ms-per-tick eased from ~405.13 ms → ~385.57 ms, signalling that parents can
+  restart gestation sooner without unleashing runaway low-energy births.
 - Tightened the README and developer guide quick-start guidance, adding cross-links to profiling helpers, publishing instructions, and the life event marker profiling notes so onboarding flows stay accurate.
 - Streamlined the README quick start, key command reference, and documentation map, and aligned the developer guide's environment setup guidance with the refreshed onboarding flow.
 - Raised the default decay immediate share to `0.27` after rerunning the dense
@@ -53,6 +60,9 @@ scripts/profile-energy.mjs`) lifted post-warmup survivors from 83 → 92 while
 - Clarified the supported Node.js range (>= 18.18.0 with 25.0.0 pinned via `.nvmrc`) and refreshed the README and developer guide quick-start loops so onboarding matches the tooling used in CI and profiling.
 - Tightened the primary documentation (README, developer guide, architecture notes) to streamline quick-start guidance, highlight subsystem profiling harnesses, and document the shared trait aggregation helpers used by Stats.
 - Relocated the "Pause When Hidden" toggle into the Simulation Controls playback block so autopause is discoverable without pausing; the pause overlay now simply points explorers back to its new home.
+- Moved the shared "Dashboard Refresh Interval" slider into Simulation Controls →
+  Dashboard Refresh so cadence tuning sits beside other global knobs while the
+  analytics panels reference the same control.
 - Refreshed the README, developer guide, and architecture overview to streamline
   the quick-start flow, trim stale metrics, and clarify where configuration
   overrides live so primary docs mirror the current architecture.
@@ -102,6 +112,9 @@ scripts/profile-energy.mjs`) lifted post-warmup survivors from 83 → 92 while
 - Retired the unused `scripts/profile-render-dirty-delete.mjs` profiling probe
   since newer render benchmarking harnesses superseded it and nothing references
   the script anymore.
+- Removed the long-retired `scripts/profile-find-targets.mjs` benchmarking
+  harness so the scripts directory only contains maintained profiling entry
+  points.
 - Retired the unused `scripts/measure-reproduction-memory.mjs` helper; ongoing
   reproduction health is covered by the regression suite, letting us trim the
   bespoke memory probe without losing safeguards.
@@ -254,7 +267,7 @@ scripts/profile-energy.mjs`) lifted survivors from 135 → 137 and trimmed the
   - Grid management with energy diffusion, reproduction, combat, and genetic
     diversity systems (`src/grid/gridManager.js`).
   - Neural genome, brain, and interaction systems powering emergent behaviour
-    (`src/genome.js`, `src/brain.js`, `src/interactionSystem.js`).
+    (`src/genome.js`, `src/brain.js`, `src/grid/interactionSystem.js`).
   - Environmental events, overlays, and statistics modules to visualise the
     world (`src/events/eventManager.js`, `src/ui/overlays.js`, `src/stats/index.js`).
   - Browser UI controls and a headless adapter exposed via `createSimulation`

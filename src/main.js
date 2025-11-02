@@ -1,10 +1,14 @@
-import SimulationEngine from "./simulationEngine.js";
+import SimulationEngine from "./engine/simulationEngine.js";
 import SelectionManager from "./grid/selectionManager.js";
 import { drawOverlays as defaultDrawOverlays } from "./ui/overlays.js";
 import { bindSimulationToUi } from "./ui/simulationUiBridge.js";
 import { resolveSimulationDefaults } from "./config.js";
 import { toPlainObject } from "./utils/object.js";
 import { warnOnce, invokeWithErrorBoundary } from "./utils/error.js";
+
+/**
+ * @typedef {import('./ui/headlessUiManager.js').HeadlessUiBridgeSurface} HeadlessUiBridgeSurface
+ */
 
 const DESTROY_WARNINGS = Object.freeze({
   uiDestroy: "UI manager destroy handler threw; continuing cleanup.",
@@ -17,6 +21,7 @@ const DESTROY_WARNINGS = Object.freeze({
 import {
   buildHeadlessCanvasOverrides,
   createHeadlessCanvas,
+  resolveCanvas,
   resolveHeadlessCanvasSize,
 } from "./engine/environment.js";
 
@@ -91,7 +96,7 @@ import {
  * @returns {{
  *   engine: SimulationEngine,
  *   grid: import('./grid/gridManager.js').default,
- *   uiManager: ReturnType<typeof UIManager> | ReturnType<typeof createHeadlessUiManager>,
+ *   uiManager: ReturnType<typeof UIManager> | HeadlessUiBridgeSurface,
  *   eventManager: import('./events/eventManager.js').default,
  *   stats: import('./stats/index.js').default,
  *   selectionManager: import('./grid/selectionManager.js').default,
@@ -120,6 +125,8 @@ export function createSimulation({
   defaultCanvasId,
 } = {}) {
   const win = injectedWindow ?? (typeof window !== "undefined" ? window : undefined);
+  const doc =
+    injectedDocument ?? (typeof document !== "undefined" ? document : undefined);
 
   config = toPlainObject(config);
   const layoutInitialSettings = toPlainObject(config?.ui?.layout?.initialSettings);
@@ -127,6 +134,12 @@ export function createSimulation({
   let configWithLayoutDefaults = { ...config, ...layoutInitialSettings };
 
   let resolvedCanvas = canvas;
+
+  if (resolvedCanvas && typeof resolvedCanvas !== "object") {
+    resolvedCanvas = resolveCanvas(resolvedCanvas, doc, {
+      fallbackId: defaultCanvasId,
+    });
+  }
   const headlessCanvasSize = headless
     ? resolveHeadlessCanvasSize(configWithLayoutDefaults)
     : null;

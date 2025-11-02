@@ -23,10 +23,9 @@ the dev server, then return here for the deeper workflow.
   it from the Simulation Controls panel beneath the playback controls; the pause
   overlay now simply reminds you where to find the toggle when autopause kicks
   in.
-- Adjust the "Dashboard Refresh Interval" slider within the Evolution Insights
-  panel's **Refresh Cadence** section to tune how often the leaderboard and
-  analytics dashboard request fresh data without digging through individual
-  metric panes.
+- Adjust the "Dashboard Refresh Interval" slider under Simulation Controls →
+  **Dashboard Refresh** to tune how often the leaderboard and analytics
+  dashboard request fresh data without digging through individual metric panes.
 - The Evolution Insights dashboard surfaces a Simulation Clock at the top of
   the metrics feed, reporting both simulated time and the aggregate tick count
   for easy pacing comparisons.
@@ -109,7 +108,13 @@ change behaviour without touching source:
 - `COLOURFUL_LIFE_ENERGY_REGEN_RATE` overrides the baseline regeneration rate
   applied to each tile before density penalties and events apply.
 - `COLOURFUL_LIFE_ENERGY_DIFFUSION_RATE` controls how much energy diffuses to
-  neighbouring tiles every tick (values are clamped to the 0–1 range).
+  neighbouring tiles every tick. Non-finite or out-of-range values fall back to
+  the default resolved in `src/config.js` so browser and headless runs stay in
+  sync.
+- `COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO` flips the energy preparation loop to
+  the sparse dirty-tile path once the fraction of dirty tiles drops below the
+  configured ratio, letting you bias runs toward lighter or fuller scans without
+  editing source.
 - `COLOURFUL_LIFE_DENSITY_RADIUS` widens or narrows the neighbourhood sampled
   when computing local crowding. Larger radii make density feedback smoother at
   the cost of extra per-tick work.
@@ -156,10 +161,11 @@ change behaviour without touching source:
 - `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` scales how much surplus energy
   parents must stockpile beyond the strictest genome's demand before gestation
   begins.
-- `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` enforces a global floor on how
-  many ticks parents must rest between births when their genomes don't demand a
-  longer recovery, giving you a coarse lever for calming or accelerating
-  reproduction without code edits.
+- `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` establishes the global floor on
+  how many ticks parents must rest between births. The simulation now stretches
+  or relaxes the actual cooldown based on parental energy investment,
+  resilience genes, and environmental pressure, so this override bounds the
+  minimum while the emergent system still honours genome-preferred delays.
 
 Non-finite or out-of-range values are ignored and fall back to the defaults
 resolved in [`src/config.js`](../src/config.js). Overlays pull the sanitised

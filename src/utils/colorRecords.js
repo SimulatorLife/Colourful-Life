@@ -1,6 +1,13 @@
-import { clamp } from "../utils/math.js";
-import { warnOnce } from "../utils/error.js";
-import { isCellLike } from "../utils/cell.js";
+import { clamp } from "./math.js";
+import { warnOnce } from "./error.js";
+import { isCellLike } from "./cell.js";
+
+/**
+ * Shared color normalization helpers used by rendering and analytics layers.
+ * Centralising the logic under `src/utils/` keeps grid and UI modules from
+ * owning duplicated parsing or cache management when they need consistent RGBA
+ * data for cells and arbitrary colour strings.
+ */
 
 const COLOR_CACHE_LIMIT = 4096;
 const COLOR_CACHE = new Map();

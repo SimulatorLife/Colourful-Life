@@ -14,6 +14,7 @@ let Brain;
 let OUTPUT_GROUPS;
 let OFFSPRING_VIABILITY_BUFFER;
 let REPRODUCTION_COOLDOWN_BASE;
+let MAX_TILE_ENERGY;
 
 function investmentFor(
   energy,
@@ -133,17 +134,57 @@ function createInteractionBrainStub({ sequence = [] } = {}) {
   };
 }
 
+function createMovementBrainStub({ probabilities } = {}) {
+  const distribution = {
+    rest: 0.2,
+    pursue: 0.1,
+    avoid: 0.15,
+    cohere: 0.05,
+    explore: 0.5,
+    ...probabilities,
+  };
+  const entries = Object.entries(distribution);
+  const normalization = entries.reduce((sum, [, value]) => sum + value, 0) || 1;
+
+  return {
+    connectionCount: 1,
+    evaluateGroup(group, _sensors, options = {}) {
+      if (group !== "movement") {
+        return null;
+      }
+
+      const values = entries.reduce((acc, [key, value]) => {
+        const safe = Math.max(1e-6, value / normalization);
+
+        acc[key] = Math.log(safe);
+
+        return acc;
+      }, {});
+      const sensors = new Float32Array(Brain.SENSOR_COUNT);
+      const result = {
+        values,
+        activationCount: 3,
+        sensors,
+        trace: options.trace === false ? null : { nodes: [] },
+      };
+
+      this.lastEvaluation = { ...result, group, values };
+
+      return result;
+    },
+  };
+}
+
 test.before(async () => {
   ({ default: Cell } = await import("../src/cell.js"));
   ({ DNA, GENE_LOCI } = await import("../src/genome.js"));
   ({ clamp, clampFinite, lerp, randomRange, createRNG } = await import(
     "../src/utils/math.js"
   ));
-  ({ default: InteractionSystem } = await import("../src/interactionSystem.js"));
+  ({ default: InteractionSystem } = await import("../src/grid/interactionSystem.js"));
   ({ default: Brain, OUTPUT_GROUPS } = await import("../src/brain.js"));
-  ({ OFFSPRING_VIABILITY_BUFFER, REPRODUCTION_COOLDOWN_BASE } = await import(
-    "../src/config.js"
-  ));
+  ({ OFFSPRING_VIABILITY_BUFFER, REPRODUCTION_COOLDOWN_BASE, MAX_TILE_ENERGY } =
+    await import("../src/config.js"));
   if (typeof global.window === "undefined") global.window = globalThis;
   if (!window.GridManager) window.GridManager = {};
   if (typeof window.GridManager.maxTileEnergy !== "number") {
@@ -234,6 +275,64 @@ test("startReproductionCooldown respects the environment baseline", () => {
     cell.getReproductionCooldown(),
     expectedHigh,
     "DNA values above the floor should persist after rounding",
+  );
+});
+
+test("startReproductionCooldown responds to reproduction strain", () => {
+  const dna = new DNA(0, 0, 0);
+  const cell = new Cell(0, 0, dna, MAX_TILE_ENERGY);
+  const baseline = Math.max(1, Math.round(REPRODUCTION_COOLDOWN_BASE));
+
+  cell._reproductionCooldown = 0;
+  cell.dna.reproductionCooldownTicks = () => baseline + 2;
+  cell.dna.recoveryRate = () => 0.15;
+  cell.lastEventPressure = 0.6;
+  cell._resourceSignal = -0.4;
+
+  cell.startReproductionCooldown({
+    investment: MAX_TILE_ENERGY * 0.6,
+    partnerInvestment: MAX_TILE_ENERGY * 0.2,
+    totalInvestment: MAX_TILE_ENERGY * 0.8,
+    energyBefore: MAX_TILE_ENERGY,
+    energyAfter: MAX_TILE_ENERGY * 0.2,
+    starvationThreshold: cell.starvationThreshold(MAX_TILE_ENERGY),
+    viabilityThreshold: MAX_TILE_ENERGY * 0.5,
+    offspringEnergy: MAX_TILE_ENERGY * 0.44,
+    maxTileEnergy: MAX_TILE_ENERGY,
+  });
+
+  const strained = cell.getReproductionCooldown();
+
+  cell._reproductionCooldown = 0;
+  cell.dna.recoveryRate = () => 0.9;
+  cell.lastEventPressure = 0;
+  cell._resourceSignal = 0.5;
+
+  cell.startReproductionCooldown({
+    investment: MAX_TILE_ENERGY * 0.18,
+    partnerInvestment: MAX_TILE_ENERGY * 0.18,
+    totalInvestment: MAX_TILE_ENERGY * 0.36,
+    energyBefore: MAX_TILE_ENERGY,
+    energyAfter: MAX_TILE_ENERGY * 0.74,
+    starvationThreshold: cell.starvationThreshold(MAX_TILE_ENERGY),
+    viabilityThreshold: MAX_TILE_ENERGY * 0.3,
+    offspringEnergy: MAX_TILE_ENERGY * 0.27,
+    maxTileEnergy: MAX_TILE_ENERGY,
+  });
+
+  const recovered = cell.getReproductionCooldown();
+
+  assert.ok(
+    strained > recovered,
+    "High investment with low recovery should enforce a longer cooldown than a balanced, resilient pairing.",
+  );
+  assert.ok(
+    strained >= baseline,
+    "Cooldown length should never drop below the environment baseline.",
+  );
+  assert.ok(
+    recovered >= baseline,
+    "Even resilient lineages honour the global cooldown floor.",
   );
 });
 
@@ -450,6 +549,97 @@ test("harvest crowding penalty blends DNA tolerance and environment signals", ()
   assert.ok(
     reliefPenalty >= tightenedPenalty,
     "abundant, uncrowded tiles should restore harvesting capacity",
+  );
+});
+
+test("explore/exploit intent leans on DNA exploration profile", () => {
+  const rngOverrides = {
+    movementDecision: () => 0.95,
+    movementExploitIntent: () => 0.4,
+    default: () => 0.5,
+  };
+  const explorerDNA = new DNA(0, 0, 0);
+
+  explorerDNA.riskTolerance = () => 0.8;
+  explorerDNA.exploreExploitProfile = () => ({
+    base: 0.45,
+    scarcityWeight: 0.42,
+    densityReliefWeight: 0.18,
+    declineWeight: 0.18,
+    riskWeight: 0.16,
+    fatiguePenalty: 0.12,
+    reserveWeight: 0.05,
+    scanUrgency: 1.25,
+  });
+  explorerDNA.prngFor = (key) => rngOverrides[key] ?? rngOverrides.default;
+
+  const cautiousDNA = new DNA(0, 0, 0);
+
+  cautiousDNA.riskTolerance = () => 0.2;
+  cautiousDNA.exploreExploitProfile = () => ({
+    base: 0.32,
+    scarcityWeight: 0.18,
+    densityReliefWeight: -0.05,
+    declineWeight: 0.08,
+    riskWeight: 0.04,
+    fatiguePenalty: 0.32,
+    reserveWeight: 0.3,
+    scanUrgency: 0.55,
+  });
+  cautiousDNA.prngFor = (key) => rngOverrides[key] ?? rngOverrides.default;
+
+  const explorer = new Cell(0, 0, explorerDNA, 0.8);
+  const cautious = new Cell(0, 0, cautiousDNA, 0.8);
+
+  explorer._neuralFatigue = 0.3;
+  cautious._neuralFatigue = 0.3;
+
+  explorer.brain = createMovementBrainStub();
+  cautious.brain = createMovementBrainStub();
+
+  const grid = [[null]];
+  const movementContext = {
+    rows: 1,
+    cols: 1,
+    localDensity: 0.3,
+    densityEffectMultiplier: 1,
+    tileEnergy: 0.5,
+    tileEnergyDelta: -0.2,
+    maxTileEnergy: 1,
+    getEnergyAt: () => 0.6,
+    moveRandomly: () => {},
+  };
+
+  explorer.executeMovementStrategy(grid, 0, 0, [], [], [], movementContext);
+  cautious.executeMovementStrategy(grid, 0, 0, [], [], [], movementContext);
+
+  const explorerOutcome = explorer._decisionContextIndex?.get("movement")?.outcome;
+  const cautiousOutcome = cautious._decisionContextIndex?.get("movement")?.outcome;
+
+  assert.ok(explorerOutcome, "explorer outcome should be recorded");
+  assert.ok(cautiousOutcome, "cautious outcome should be recorded");
+  assert.ok(
+    explorerOutcome.exploreExploitBase > cautiousOutcome.exploreExploitBase,
+    "exploration-biased DNA should elevate the baseline exploit intent",
+  );
+  assert.ok(
+    explorerOutcome.exploreExploitIntent > cautiousOutcome.exploreExploitIntent,
+    "exploration-biased DNA should sustain a higher combined intent",
+  );
+  assert.is(
+    explorerOutcome.exploreExploitPlanned,
+    true,
+    "explorer should attempt energy exploitation when the scan is available",
+  );
+  assert.is(
+    cautiousOutcome.exploreExploitPlanned,
+    false,
+    "cautious genomes should decline exploit scans under the same conditions",
+  );
+  assert.ok(
+    explorerOutcome.exploreExploitScanUrgency >
+      cautiousOutcome.exploreExploitScanUrgency,
+    "exploration profile should surface a stronger scan urgency",
   );
 });
 
@@ -2630,6 +2820,55 @@ test("diverse matings relieve accumulated novelty pressure penalties", () => {
   );
 });
 
+test("opportunity momentum amplifies preference for diverse mates", () => {
+  const dna = new DNA(90, 110, 70);
+  const cell = new Cell(0, 0, dna, 5);
+  const similarTarget = new Cell(0, 1, new DNA(92, 108, 72), 5);
+  const diverseTarget = new Cell(0, 2, new DNA(180, 30, 60), 5);
+
+  cell.matePreferenceBias = 0.2;
+  cell.diversityAppetite = 0.35;
+  cell._mateSelectionNoiseRng = () => 0.5;
+
+  const baselineSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.88,
+  });
+  const baselineDiverse = cell.evaluateMateCandidate({
+    target: diverseTarget,
+    precomputedSimilarity: 0.25,
+  });
+
+  cell._mateOpportunityMomentum = 0.82;
+  cell._mateDiversitySuppression = 0.55;
+
+  const pressuredSimilar = cell.evaluateMateCandidate({
+    target: similarTarget,
+    precomputedSimilarity: 0.88,
+  });
+  const pressuredDiverse = cell.evaluateMateCandidate({
+    target: diverseTarget,
+    precomputedSimilarity: 0.25,
+  });
+
+  assert.ok(
+    pressuredSimilar.selectionWeight < baselineSimilar.selectionWeight,
+    "suppression should shrink weight for repetitive mates when opportunity builds",
+  );
+  assert.ok(
+    pressuredSimilar.preferenceScore < baselineSimilar.preferenceScore,
+    "suppression should dampen preference for repetitive mates under opportunity momentum",
+  );
+  assert.ok(
+    pressuredDiverse.selectionWeight > baselineDiverse.selectionWeight,
+    "opportunity momentum should amplify weight for diverse mates",
+  );
+  assert.ok(
+    pressuredDiverse.preferenceScore > baselineDiverse.preferenceScore,
+    "opportunity momentum should raise preference for diverse mates",
+  );
+});
+
 test("mate diversity suppression builds from repetition and eases with exploration", () => {
   const dna = new DNA(85, 95, 105);
   const cell = new Cell(0, 0, dna, 6);
@@ -3295,5 +3534,52 @@ test("decideRandomMove downranks crowded hostile directions", () => {
     decision.dc,
     1,
     "the open avenue should be selected when alternatives collapse",
+  );
+});
+
+test("scorePotentialMates returns independent results per invocation", () => {
+  const dna = new DNA(0, 0, 0);
+  const parent = new Cell(5, 5, dna, window.GridManager.maxTileEnergy);
+  const mateDna = new DNA(0, 0, 0);
+  const mateA = new Cell(5, 6, mateDna, window.GridManager.maxTileEnergy);
+  const mateB = new Cell(5, 7, mateDna, window.GridManager.maxTileEnergy);
+
+  const candidateA = {
+    target: mateA,
+    row: mateA.row,
+    col: mateA.col,
+    selectionWeight: 0.5,
+    preferenceScore: 0.25,
+    similarity: 0.3,
+    diversity: 0.7,
+  };
+  const candidateB = {
+    target: mateB,
+    row: mateB.row,
+    col: mateB.col,
+    selectionWeight: 0.75,
+    preferenceScore: 0.6,
+    similarity: 0.2,
+    diversity: 0.8,
+  };
+
+  const first = parent.scorePotentialMates([candidateA]);
+
+  assert.is(first.length, 1);
+  assert.is(first[0], candidateA);
+
+  const second = parent.scorePotentialMates([candidateB]);
+
+  assert.is(second.length, 1);
+  assert.is(second[0], candidateB);
+  assert.is.not(
+    first,
+    second,
+    "mate scoring should not reuse the internal scratch array reference",
+  );
+  assert.is(
+    first[0],
+    candidateA,
+    "previous scoring results should remain intact after subsequent evaluations",
   );
 });

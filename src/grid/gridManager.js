@@ -32,11 +32,13 @@ import {
   EMPTY_COLOR_RECORD,
   resolveCellColorRecord,
   supportsPackedColor,
-} from "./colorRecords.js";
+} from "../utils/colorRecords.js";
+import { RenderStrategy, normalizeRenderStrategy } from "./renderStrategy.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
   ENERGY_DIFFUSION_RATE_DEFAULT,
+  ENERGY_SPARSE_SCAN_RATIO,
   DENSITY_RADIUS,
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   COMBAT_TERRITORY_EDGE_FACTOR,
@@ -49,7 +51,12 @@ import {
   DECAY_RELEASE_RATE,
   INITIAL_TILE_ENERGY_FRACTION_DEFAULT,
 } from "../config.js";
+import TileIndexTracker from "../utils/tileIndexTracker.js";
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
+const hasTileTrackerContract = (candidate) =>
+  candidate != null &&
+  typeof candidate.resize === "function" &&
+  typeof candidate.clear === "function";
 const EMPTY_EVENT_LIST = Object.freeze([]);
 const EMPTY_TARGET_LIST = Object.freeze([]);
 const EMPTY_FLOAT64_ARRAY = Object.freeze(new Float64Array(0));
@@ -445,7 +452,6 @@ function computeCrowdingFeedback({
 }
 
 const DECAY_EPSILON = 1e-4;
-const ENERGY_SPARSE_SCAN_RATIO = 0.2;
 const TARGET_DESCRIPTOR_POOL_DECAY = 0.82;
 const TARGET_DESCRIPTOR_POOL_MIN = 256;
 
@@ -583,7 +589,6 @@ export default class GridManager {
   #eventModifierScratch = null;
   #sparseDirtyColumnsScratch = null;
   #sparseDirtyRowsScratch = null;
-  #densityPrefixScratch = null;
   #densityRowTopScratch = null;
   #densityRowBottomScratch = null;
   #densityColLeftScratch = null;
@@ -629,6 +634,7 @@ export default class GridManager {
   #renderDirtyPositions = null;
   #renderDirtyRevision = 1;
   #renderDirtyView = null;
+  #obstacleCount = 0;
 
   #initializeRenderDirtyTracking(rows, cols) {
     const total = Math.max(0, Math.floor(rows) * Math.floor(cols));
@@ -1475,43 +1481,6 @@ export default class GridManager {
     this.#occupantRegenRevision = nextRevision;
 
     return nextRevision;
-  }
-
-  #ensureDensityPrefix(rowCount, colCount) {
-    const { rows, cols } = normalizeDimensions(rowCount, colCount);
-    const requiredRows = rows + 1;
-    const requiredCols = cols + 1;
-
-    if (
-      !this.#densityPrefixScratch ||
-      this.#densityPrefixScratch.length !== requiredRows
-    ) {
-      this.#densityPrefixScratch = Array.from(
-        { length: requiredRows },
-        () => new Uint32Array(requiredCols),
-      );
-    } else {
-      const scratch = this.#densityPrefixScratch;
-      const firstRow = scratch[0];
-
-      if (!firstRow || firstRow.length !== requiredCols) {
-        scratch[0] = new Uint32Array(requiredCols);
-      } else {
-        firstRow.fill(0);
-      }
-
-      for (let r = 1; r < requiredRows; r++) {
-        const existing = scratch[r];
-
-        if (!existing || existing.length !== requiredCols) {
-          scratch[r] = new Uint32Array(requiredCols);
-        } else {
-          existing[0] = 0;
-        }
-      }
-    }
-
-    return this.#densityPrefixScratch;
   }
 
   #ensureDensityBounds(rowCount, colCount, radius = 0) {
@@ -2743,6 +2712,7 @@ export default class GridManager {
     this.#initializeDecayBuffers(rows, cols);
     this.obstacles = Array.from({ length: rows }, () => Array(cols).fill(false));
     this.obstacleRowCounts = new Uint32Array(rows);
+    this.#obstacleCount = 0;
     this.#resetObstacleRenderCache();
     this.eventManager = resolvedEventManager;
     this.eventContext = createEventContext(eventContext);
@@ -2750,8 +2720,10 @@ export default class GridManager {
     this.ctx = resolvedCtx;
     this.cellSize = resolvedCellSize;
     this.stats = resolvedStats;
-    this.renderStrategy =
-      typeof options?.renderStrategy === "string" ? options.renderStrategy : "auto";
+    this.renderStrategy = normalizeRenderStrategy(
+      options?.renderStrategy,
+      RenderStrategy.AUTO,
+    );
     this.renderStats = {
       frameCount: 0,
       lastFrameMs: 0,
@@ -2761,7 +2733,7 @@ export default class GridManager {
       lastObstacleLoopMs: 0,
       avgObstacleLoopMs: 0,
       fps: 0,
-      mode: "canvas",
+      mode: RenderStrategy.CANVAS,
       lastDirtyTileCount: 0,
       lastProcessedTiles: 0,
       lastPaintedCells: 0,
@@ -2769,7 +2741,7 @@ export default class GridManager {
       timestamp: 0,
     };
     this.#resetImageDataBuffer();
-    this.energyDirtyTiles = new Set();
+    this.energyDirtyTiles = new TileIndexTracker(rows, cols);
     this.energyTimerNow =
       typeof options?.performanceNow === "function"
         ? options.performanceNow
@@ -2823,7 +2795,7 @@ export default class GridManager {
     this.densityTotals = this.#buildDensityTotals(this.densityRadius);
     this.densityLiveGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
     this.densityGrid = Array.from({ length: rows }, () => Array(cols).fill(0));
-    this.densityDirtyTiles = new Set();
+    this.densityDirtyTiles = new TileIndexTracker(rows, cols);
     this.lastSnapshot = null;
     this.minPopulation = GridManager.#computeMinPopulation(rows, cols);
     this.currentObstaclePreset = "none";
@@ -3515,7 +3487,7 @@ export default class GridManager {
     }
 
     if (!this.energyDirtyTiles) {
-      this.energyDirtyTiles = new Set();
+      this.energyDirtyTiles = new TileIndexTracker(this.rows, this.cols);
     }
 
     for (let row = 0; row < this.rows; row++) {
@@ -3878,6 +3850,11 @@ export default class GridManager {
       this.obstacleRowCounts.fill(0);
     }
 
+    if (changed) {
+      this.#obstacleCount = 0;
+      this.#handleObstacleGridEmptied();
+    }
+
     this.currentObstaclePreset = "none";
   }
 
@@ -3894,6 +3871,12 @@ export default class GridManager {
           if (counts[row] > 0) counts[row] -= 1;
         }
         this.#markObstacleRenderDirty();
+        if (this.#obstacleCount > 0) {
+          this.#obstacleCount -= 1;
+        }
+        if (this.#obstacleCount === 0) {
+          this.#handleObstacleGridEmptied();
+        }
       } else {
         this.obstacles[row][col] = false;
       }
@@ -3907,6 +3890,7 @@ export default class GridManager {
       if (this.obstacleRowCounts) {
         this.obstacleRowCounts[row] += 1;
       }
+      this.#obstacleCount += 1;
       const occupant = this.grid[row][col];
 
       if (occupant && evict) {
@@ -4305,6 +4289,16 @@ export default class GridManager {
     this.#initializeRenderDirtyTracking(rowsInt, colsInt);
     this.#initializeOccupancy(this.rows, this.cols);
     this.#resetDensityIntegral();
+    if (hasTileTrackerContract(this.energyDirtyTiles)) {
+      this.energyDirtyTiles.resize(rowsInt, colsInt);
+    } else {
+      this.energyDirtyTiles = new TileIndexTracker(rowsInt, colsInt);
+    }
+    if (hasTileTrackerContract(this.densityDirtyTiles)) {
+      this.densityDirtyTiles.resize(rowsInt, colsInt);
+    } else {
+      this.densityDirtyTiles = new TileIndexTracker(rowsInt, colsInt);
+    }
     this.energyGrid = Array.from({ length: rowsInt }, () => {
       const row = new Float64Array(colsInt);
 
@@ -4326,6 +4320,7 @@ export default class GridManager {
     this.#initializeDecayBuffers(rowsInt, colsInt);
     this.obstacles = Array.from({ length: rowsInt }, () => Array(colsInt).fill(false));
     this.obstacleRowCounts = new Uint32Array(rowsInt);
+    this.#obstacleCount = 0;
     this.#resetObstacleRenderCache();
     this.#resetImageDataBuffer();
     this.densityCounts = Array.from({ length: rowsInt }, () => Array(colsInt).fill(0));
@@ -6324,7 +6319,9 @@ export default class GridManager {
   }
 
   #markDensityDirty(row, col) {
-    if (!this.densityDirtyTiles) this.densityDirtyTiles = new Set();
+    if (!this.densityDirtyTiles) {
+      this.densityDirtyTiles = new TileIndexTracker(this.rows, this.cols);
+    }
 
     this.densityDirtyTiles.add(row * this.cols + col);
   }
@@ -6333,8 +6330,13 @@ export default class GridManager {
     if (!Number.isInteger(row) || !Number.isInteger(col)) return;
     if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return;
 
+    const targetSetCandidate = options?.targetSet;
     const targetSet =
-      options?.targetSet instanceof Set ? options.targetSet : this.energyDirtyTiles;
+      targetSetCandidate &&
+      typeof targetSetCandidate.add === "function" &&
+      typeof targetSetCandidate.has === "function"
+        ? targetSetCandidate
+        : this.energyDirtyTiles;
 
     if (!targetSet) return;
 
@@ -6365,7 +6367,7 @@ export default class GridManager {
 
   markEnergyDirty(row, col, options = {}) {
     if (!this.energyDirtyTiles) {
-      this.energyDirtyTiles = new Set();
+      this.energyDirtyTiles = new TileIndexTracker(this.rows, this.cols);
     }
 
     this.#markEnergyDirty(row, col, options);
@@ -6501,7 +6503,7 @@ export default class GridManager {
     }
 
     if (!this.densityDirtyTiles) {
-      this.densityDirtyTiles = new Set();
+      this.densityDirtyTiles = new TileIndexTracker(this.rows, this.cols);
     }
 
     if (targetRadius !== this.densityRadius) {
@@ -6513,22 +6515,6 @@ export default class GridManager {
 
     const rows = this.rows;
     const cols = this.cols;
-    const prefix = this.#ensureDensityPrefix(rows, cols);
-
-    for (let r = 1; r <= rows; r++) {
-      const prefixRow = prefix[r];
-      const prevRow = prefix[r - 1];
-      const gridRow = this.grid[r - 1];
-      let rowSum = 0;
-
-      for (let c = 1; c <= cols; c++) {
-        const occupied = gridRow?.[c - 1] ? 1 : 0;
-
-        rowSum += occupied;
-        prefixRow[c] = prevRow[c] + rowSum;
-      }
-    }
-
     const activeRadius = this.densityRadius;
     const { rowTop, rowBottom, colLeft, colRight } = this.#ensureDensityBounds(
       rows,
@@ -6538,6 +6524,22 @@ export default class GridManager {
     const counts = this.densityCounts;
     const live = this.densityLiveGrid;
     const totals = this.densityTotals;
+    const integral = this.#resolveDensityIntegral();
+
+    if (!integral) {
+      for (let r = 0; r < rows; r++) {
+        counts[r]?.fill?.(0);
+
+        if (live) {
+          live[r]?.fill?.(0);
+        }
+      }
+
+      this.densityDirtyTiles.clear();
+      this.#syncDensitySnapshot(true);
+
+      return;
+    }
 
     for (let r = 0; r < rows; r++) {
       const countsRow = counts[r];
@@ -6546,18 +6548,18 @@ export default class GridManager {
       const gridRow = this.grid[r];
       const topIndex = rowTop[r];
       const bottomIndex = rowBottom[r];
-      const prefixTopRow = prefix[topIndex];
-      const prefixBottomRow = prefix[bottomIndex];
+      const topRow = integral[topIndex];
+      const bottomRow = integral[bottomIndex];
 
       for (let c = 0; c < cols; c++) {
         const leftIndex = colLeft[c];
         const rightIndex = colRight[c];
 
         const regionSum =
-          prefixBottomRow[rightIndex] -
-          prefixTopRow[rightIndex] -
-          prefixBottomRow[leftIndex] +
-          prefixTopRow[leftIndex];
+          bottomRow[rightIndex] -
+          topRow[rightIndex] -
+          bottomRow[leftIndex] +
+          topRow[leftIndex];
 
         const occupied = gridRow?.[c] ? 1 : 0;
         const neighborCount = regionSum - occupied;
@@ -6737,25 +6739,15 @@ export default class GridManager {
       return Array.from({ length: rows }, () => Array(cols).fill(0));
     }
 
-    const prefix = this.#ensureDensityPrefix(rows, cols);
     const { rowTop, rowBottom, colLeft, colRight } = this.#ensureDensityBounds(
       rows,
       cols,
       normalizedRadius,
     );
+    const integral = this.#resolveDensityIntegral();
 
-    for (let r = 1; r <= rows; r++) {
-      const prefixRow = prefix[r];
-      const prevRow = prefix[r - 1];
-      const gridRow = this.grid[r - 1];
-      let rowSum = 0;
-
-      for (let c = 1; c <= cols; c++) {
-        const occupied = gridRow?.[c - 1] ? 1 : 0;
-
-        rowSum += occupied;
-        prefixRow[c] = prevRow[c] + rowSum;
-      }
+    if (!integral) {
+      return Array.from({ length: rows }, () => Array(cols).fill(0));
     }
 
     const totals =
@@ -6770,17 +6762,17 @@ export default class GridManager {
       const gridRow = this.grid[r];
       const topIndex = rowTop[r];
       const bottomIndex = rowBottom[r];
-      const prefixTopRow = prefix[topIndex];
-      const prefixBottomRow = prefix[bottomIndex];
+      const topRow = integral[topIndex];
+      const bottomRow = integral[bottomIndex];
 
       for (let c = 0; c < cols; c++) {
         const leftIndex = colLeft[c];
         const rightIndex = colRight[c];
         const regionSum =
-          prefixBottomRow[rightIndex] -
-          prefixTopRow[rightIndex] -
-          prefixBottomRow[leftIndex] +
-          prefixTopRow[leftIndex];
+          bottomRow[rightIndex] -
+          topRow[rightIndex] -
+          bottomRow[leftIndex] +
+          topRow[leftIndex];
         const occupied = gridRow?.[c] ? 1 : 0;
         const neighborCount = regionSum - occupied;
         const totalNeighbors = totalsRow?.[c] ?? 0;
@@ -6801,7 +6793,7 @@ export default class GridManager {
 
       const count = this.densityCounts[row]?.[col] ?? 0;
 
-      return Math.max(0, Math.min(1, count / total));
+      return clamp(count / total, 0, 1);
     }
 
     const { count, total } = this.#countNeighbors(row, col, radius);
@@ -7129,6 +7121,12 @@ export default class GridManager {
     }
   }
 
+  #handleObstacleGridEmptied() {
+    if (this.#obstacleCount === 0 && this.obstacleRenderCache) {
+      this.#resetObstacleRenderCache();
+    }
+  }
+
   #createObstacleSurface(width, height) {
     let canvas = null;
 
@@ -7448,7 +7446,7 @@ export default class GridManager {
         lastObstacleLoopMs: 0,
         avgObstacleLoopMs: 0,
         fps: 0,
-        mode: mode ?? "canvas",
+        mode: mode ?? RenderStrategy.CANVAS,
         lastDirtyTileCount: 0,
         lastProcessedTiles: 0,
         lastPaintedCells: 0,
@@ -7493,19 +7491,18 @@ export default class GridManager {
     const ctx = this.ctx;
     const cellSize = this.cellSize;
     const { showObstacles = true, renderStrategy } = options ?? {};
-    const preferredStrategy =
-      typeof renderStrategy === "string"
-        ? renderStrategy
-        : (this.renderStrategy ?? "auto");
+    const currentStrategy = normalizeRenderStrategy(
+      this.renderStrategy,
+      RenderStrategy.AUTO,
+    );
+    const preferredStrategy = normalizeRenderStrategy(renderStrategy, currentStrategy);
 
-    if (typeof renderStrategy === "string") {
-      this.renderStrategy = renderStrategy;
-    }
+    this.renderStrategy = preferredStrategy;
 
     const frameStart = TIMESTAMP_NOW();
     let obstacleLoopMs = 0;
     let cellLoopMs = 0;
-    let modeUsed = "canvas";
+    let modeUsed = RenderStrategy.CANVAS;
     let cellStats = {
       processedTiles: 0,
       paintedCells: this.activeCells?.size ?? 0,
@@ -7599,7 +7596,7 @@ export default class GridManager {
       this.obstacleRenderCache.lastBasePaint = null;
     }
 
-    const tryImageData = preferredStrategy !== "canvas";
+    const tryImageData = preferredStrategy !== RenderStrategy.CANVAS;
 
     if (tryImageData) {
       const imageStart = TIMESTAMP_NOW();
@@ -7608,21 +7605,21 @@ export default class GridManager {
       cellLoopMs += TIMESTAMP_NOW() - imageStart;
 
       if (imageStats) {
-        modeUsed = "image-data";
+        modeUsed = RenderStrategy.IMAGE_DATA;
         cellStats = imageStats;
       } else {
         const fallbackStart = TIMESTAMP_NOW();
 
         cellStats = this.#drawCellsWithCanvas(ctx, cellSize);
         cellLoopMs += TIMESTAMP_NOW() - fallbackStart;
-        modeUsed = "canvas";
+        modeUsed = RenderStrategy.CANVAS;
       }
     } else {
       const canvasStart = TIMESTAMP_NOW();
 
       cellStats = this.#drawCellsWithCanvas(ctx, cellSize);
       cellLoopMs = TIMESTAMP_NOW() - canvasStart;
-      modeUsed = "canvas";
+      modeUsed = RenderStrategy.CANVAS;
     }
 
     const total = TIMESTAMP_NOW() - frameStart;
@@ -8785,16 +8782,6 @@ export default class GridManager {
       }
     }
 
-    const thrFracA =
-      typeof cell.dna.reproductionThresholdFrac === "function"
-        ? cell.dna.reproductionThresholdFrac()
-        : 0.4;
-    const thrFracB =
-      typeof bestMate.target.dna.reproductionThresholdFrac === "function"
-        ? bestMate.target.dna.reproductionThresholdFrac()
-        : 0.4;
-    let thrA = thrFracA * this.maxTileEnergy;
-    let thrB = thrFracB * this.maxTileEnergy;
     const appetite = cell.diversityAppetite ?? 0;
     const bias = cell.matePreferenceBias ?? 0;
     const evaluatedPoolSize = evaluated.length > 0 ? evaluated.length : matePool.length;
@@ -8826,6 +8813,72 @@ export default class GridManager {
     const mateEnergyRaw = this.energyGrid?.[mateRow]?.[mateCol] ?? 0;
     const mateTileEnergy = mateEnergyRaw / energyDenominator;
     const mateTileEnergyDelta = this.energyDeltaGrid?.[mateRow]?.[mateCol] ?? 0;
+    const thrFracA =
+      typeof cell.dna.reproductionThresholdFrac === "function"
+        ? cell.dna.reproductionThresholdFrac()
+        : 0.4;
+    const thrFracB =
+      typeof bestMate.target.dna.reproductionThresholdFrac === "function"
+        ? bestMate.target.dna.reproductionThresholdFrac()
+        : 0.4;
+    const resolveEnergyThreshold = (individual, partner, options) => {
+      if (
+        !individual ||
+        typeof individual.resolveReproductionEnergyThreshold !== "function"
+      ) {
+        return null;
+      }
+
+      try {
+        const threshold = individual.resolveReproductionEnergyThreshold(
+          partner,
+          options,
+        );
+
+        return Number.isFinite(threshold) ? threshold : null;
+      } catch (error) {
+        if (process?.env?.NODE_ENV !== "production") {
+          console.warn("Failed to resolve neural reproduction energy threshold", {
+            error,
+            individual,
+          });
+        }
+
+        return null;
+      }
+    };
+    const parentEnergyThreshold = resolveEnergyThreshold(cell, bestMate.target, {
+      densityEffectMultiplier,
+      maxTileEnergy: this.maxTileEnergy,
+      tileEnergy,
+      tileEnergyDelta,
+      localDensity,
+      baseProbability: baseProb,
+    });
+    const mateBaseProbability =
+      typeof bestMate.target.computeReproductionProbability === "function"
+        ? bestMate.target.computeReproductionProbability(cell, {
+            localDensity: mateLocalDensity,
+            densityEffectMultiplier,
+            maxTileEnergy: this.maxTileEnergy,
+            tileEnergy: mateTileEnergy,
+            tileEnergyDelta: mateTileEnergyDelta,
+          })
+        : null;
+    const mateEnergyThreshold = resolveEnergyThreshold(bestMate.target, cell, {
+      densityEffectMultiplier,
+      maxTileEnergy: this.maxTileEnergy,
+      tileEnergy: mateTileEnergy,
+      tileEnergyDelta: mateTileEnergyDelta,
+      localDensity: mateLocalDensity,
+      baseProbability: mateBaseProbability,
+    });
+    let thrA =
+      parentEnergyThreshold != null
+        ? parentEnergyThreshold
+        : thrFracA * this.maxTileEnergy;
+    let thrB =
+      mateEnergyThreshold != null ? mateEnergyThreshold : thrFracB * this.maxTileEnergy;
     const rowDelta = Math.abs(parentRow - mateRow);
     const colDelta = Math.abs(parentCol - mateCol);
     const separation = Math.max(rowDelta, colDelta);

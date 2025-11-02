@@ -90,6 +90,26 @@ test("createSimulation headless mode infers a canvas when omitted", async () => 
   simulation.destroy();
 });
 
+test("headless mode ignores string canvas selectors without a document", async () => {
+  const { createSimulation } = await simulationModulePromise;
+
+  const simulation = createSimulation({
+    headless: true,
+    canvas: "#gameCanvas",
+    autoStart: false,
+    config: { rows: 4, cols: 5, cellSize: 6 },
+  });
+
+  assert.ok(
+    simulation.engine.canvas,
+    "headless simulation creates a fallback canvas when selector is unresolved",
+  );
+  assert.is(simulation.engine.canvas.width, 30);
+  assert.is(simulation.engine.canvas.height, 24);
+
+  simulation.destroy();
+});
+
 test("headless simulation clamps leaderboard cadence like the engine", async () => {
   const [{ createSimulation }, { LEADERBOARD_INTERVAL_MIN_MS }] = await Promise.all([
     simulationModulePromise,

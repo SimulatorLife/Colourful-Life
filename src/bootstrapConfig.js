@@ -1,19 +1,12 @@
 import { toPlainObject } from "./utils/object.js";
+import { resolveNonEmptyString } from "./utils/primitives.js";
 
 const DEFAULT_CANVAS_ID = "gameCanvas";
 const DEFAULT_BOOT_CONFIG = Object.freeze({
   cellSize: 5,
 });
 
-function toNonEmptyString(value) {
-  if (typeof value !== "string") {
-    return "";
-  }
-
-  const trimmed = value.trim();
-
-  return trimmed.length > 0 ? trimmed : "";
-}
+const PROTOTYPE_POLLUTION_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 function resolveCanvas({ canvas, canvasId }, documentRef) {
   if (canvas && typeof canvas === "object") {
@@ -26,7 +19,7 @@ function resolveCanvas({ canvas, canvasId }, documentRef) {
       : null;
 
   if (typeof canvas === "string" && doc) {
-    const directMatch = toNonEmptyString(canvas);
+    const directMatch = resolveNonEmptyString(canvas, "");
 
     if (directMatch) {
       const byId = doc.getElementById(directMatch);
@@ -49,7 +42,7 @@ function resolveCanvas({ canvas, canvasId }, documentRef) {
     return null;
   }
 
-  const fallbackId = toNonEmptyString(canvasId) || DEFAULT_CANVAS_ID;
+  const fallbackId = resolveNonEmptyString(canvasId, "") || DEFAULT_CANVAS_ID;
 
   return doc.getElementById(fallbackId);
 }
@@ -59,6 +52,10 @@ function mergeConfig(defaults, overrides) {
   const source = toPlainObject(overrides);
 
   for (const [key, value] of Object.entries(source)) {
+    if (PROTOTYPE_POLLUTION_KEYS.has(key)) {
+      continue;
+    }
+
     base[key] = value;
   }
 
@@ -78,7 +75,7 @@ function mergeConfig(defaults, overrides) {
  */
 export function resolveBootstrapOptions({ globalOptions, documentRef } = {}) {
   const overrides = toPlainObject(globalOptions);
-  const canvasId = toNonEmptyString(overrides.canvasId);
+  const canvasId = resolveNonEmptyString(overrides.canvasId, "");
   const canvas = resolveCanvas({ canvas: overrides.canvas, canvasId }, documentRef);
   const config = mergeConfig(DEFAULT_BOOT_CONFIG, overrides.config);
   const result = { ...overrides, canvas, config };

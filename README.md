@@ -43,6 +43,7 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 - `COLOURFUL_LIFE_MAX_TILE_ENERGY` — Raises or lowers the per-tile energy cap shown in the energy overlay and consumed during regeneration.
 - `COLOURFUL_LIFE_ENERGY_REGEN_RATE` — Overrides the baseline tile regeneration rate before density penalties and events apply.
 - `COLOURFUL_LIFE_ENERGY_DIFFUSION_RATE` — Controls how much energy diffuses to neighbouring tiles each tick.
+- `COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO` — Sets the dirty-tile ratio where the grid prefers the sparse energy refresh path over scanning every tile.
 - `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` — Controls how strongly crowding suppresses regeneration (`0` disables the penalty, `1` mirrors the default coefficient).
 - `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` — Adjusts the harvesting tax organisms pay on packed tiles so you can model cooperative or cut-throat ecosystems.
 
@@ -61,7 +62,7 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 - `COLOURFUL_LIFE_MUTATION_CHANCE` — Sets the default mutation probability applied when genomes reproduce without their own override.
 - `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Tunes the normalized cutoff the stats system uses when counting organisms as "active" for a trait.
 - `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` — Scales how much surplus energy parents must bank beyond the strictest genome's demand before gestation begins.
-- `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` — Establishes the minimum number of ticks parents must rest between births unless their genomes demand a longer recovery, letting you globally relax or tighten reproductive pacing.
+- `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` — Establishes the minimum number of ticks parents must rest between births. The emergent cooldown stretches or relaxes from that floor based on parental energy investment, resilience, and recent environmental pressure, so you can bound recovery pacing without scripting it.
 
 Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/config.js) so overlays remain aligned with the active configuration. The [developer guide](docs/developer-guide.md#configuration-overrides) walks through how these knobs interact during longer experiments, and the [architecture overview](docs/architecture-overview.md#energysystem) explains how the energy system consumes them during each tick.
 
@@ -84,10 +85,6 @@ Need precise spatial context while you tune density or energy flows? Flip on **S
 Select a **Layout Preset** in the Obstacles panel to immediately swap the grid's obstacle mask. The dropdown now applies changes as soon as you choose a preset, streamlining the workflow when experimenting with layouts. Use **Clear Obstacles** to reset the field if you need a blank slate again.
 Hit **Shuffle Layout** to roll a random preset from the catalog without reaching for the dropdown—perfect for sparking new map ideas mid-run.
 
-### Reproductive zone overlays
-
-Focus reproduction by enabling preset regions—from hemispheres to central sanctuaries—and combining patterns to guide evolution. Toggle **Highlight Reproductive Zones** whenever you want to keep those rules active without shading the canvas, making it easier to watch emergent behaviour in crowded worlds.
-
 ### Empty tile energy slider
 
 Find **Empty Tile Energy** in the Energy Dynamics panel to instantly rebalance how much resource sits on empty terrain. Drag the slider to rehydrate barren ground up to the shown percentage of the tile cap, or dial it down to create harsher survival conditions. Adjustments apply immediately to vacant tiles and set the baseline used for future world regenerations, so you can experiment with lush gardens or austere wastelands without restarting the app.
@@ -100,6 +97,10 @@ Nudged a dozen sliders into a corner and want to get back to the canonical basel
 
 A collapsible **Keyboard Shortcuts** card now lives at the top of Simulation Controls. Expand it whenever you need a refresher on the current hotkeys—pause/resume, single-step, spawn bursts, and the speed controls all surface with the exact keys configured for your layout. Custom keymaps appear automatically, so you can lean on the cheat sheet without worrying about stale documentation.
 
+### Canvas snapshots
+
+Need to preserve a moment for later analysis? Click **Save Snapshot** (or tap the default **C** shortcut) to download the current canvas as a PNG. The helper tucks a timestamp into the filename so you can catalogue evolutionary highlights without leaving the simulation.
+
 ## Core systems
 
 The simulation runs on cooperating modules housed in `src/`:
@@ -109,7 +110,7 @@ The simulation runs on cooperating modules housed in `src/`:
 - **Energy system** (`src/energySystem.js`) — Computes tile-level regeneration, diffusion, and drain while blending in environmental events and density penalties.
 - **Cell model** (`src/cell.js`) — Maintains per-organism state, applies DNA-driven preferences, and records telemetry consumed by fitness calculations and overlays.
 - **Genetics and brains** (`src/genome.js`, `src/brain.js`) — DNA factories encode traits ranging from combat appetite to neural wiring. Brains interpret sensor inputs, adapt gains over time, and emit movement/interaction intents.
-- **Interaction system** (`src/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
+- **Interaction system** (`src/grid/interactionSystem.js`) — Resolves cooperation, combat, and mating by blending neural intent with density, kinship, and configurable DNA traits.
 - **Events & overlays** (`src/events/eventManager.js`, `src/events/eventEffects.js`, `src/events/eventContext.js`, `src/ui/overlays.js`) — Spawns floods, droughts, coldwaves, and heatwaves that shape resources and color overlays.
 - **Stats & leaderboard** (`src/stats/index.js`, `src/stats/leaderboard.js`) — Aggregate per-tick metrics, maintain rolling history for UI charts, surface environmental summaries, select the top-performing organisms, and share trait aggregation helpers with [`src/stats/traitAggregation.js`](src/stats/traitAggregation.js) for telemetry.
 - **Fitness scoring** (`src/stats/fitness.js`) — Computes composite organism fitness used by the leaderboard, overlays, and telemetry.
@@ -157,7 +158,7 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 - **Linting** — `npm run lint` enforces the ESLint + Prettier ruleset across JavaScript and inline HTML. Use `npm run lint:fix` to auto-resolve minor issues.
 - **Testing** — `npm test` runs the energy benchmark in [`scripts/profile-energy.mjs`](scripts/profile-energy.mjs) before executing the Node.js test suites. Pass file paths or directories to narrow the run, or append `-- --watch` for continuous execution while you iterate. Add cases when behaviours change.
 - **Profiling** — `node scripts/profile-energy.mjs` benchmarks the energy preparation loop. Adjust rows/cols via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and the stub `cellSize` with `PERF_CELL_SIZE` environment variables. Enable the heavier SimulationEngine benchmark with `PERF_INCLUDE_SIM=1` when you specifically need tick timings.
-- **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap. Use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures, `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` to retune telemetry cutoffs, `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` to calm or emphasise territorial combat bias, `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` and `COLOURFUL_LIFE_DECAY_MAX_AGE` to shape post-mortem energy recycling, `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` to globally energise or relax genomes, `COLOURFUL_LIFE_MUTATION_CHANCE` to adjust baseline evolutionary churn, `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` to raise or lower the minimum post-birth recovery, and `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` to demand more or less surplus energy before births without modifying source defaults.
+- **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap. Use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures, `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` to retune telemetry cutoffs, `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` to calm or emphasise territorial combat bias, `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` and `COLOURFUL_LIFE_DECAY_MAX_AGE` to shape post-mortem energy recycling, `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` to globally energise or relax genomes, `COLOURFUL_LIFE_MUTATION_CHANCE` to adjust baseline evolutionary churn, `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` to bound the minimum post-birth recovery while the emergent cooldown still reacts to parental strain, `COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO` to control when the grid swaps between sparse and full energy passes, and `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` to demand more or less surplus energy before births without modifying source defaults.
 - **Headless usage** — `createSimulation` accepts `{ headless: true }` to return a controller without mounting DOM controls. Inject `requestAnimationFrame`, `performanceNow`, or RNG hooks for deterministic automation.
 - **Documentation** — Follow the conventions in [`docs/developer-guide.md`](docs/developer-guide.md) when updating code comments, tests, or user-facing docs.
 
