@@ -1,7 +1,7 @@
 name: Codex 75 – Racey Test Isolation
 on:
   schedule:
-    - cron: "57 12 * * *" # once a day at 12:57
+  - cron: "57 12 */2 * *" # every other day at 12:57
   workflow_dispatch:
 
 permissions:

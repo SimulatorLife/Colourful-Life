@@ -1,7 +1,7 @@
 name: Codex 07 – Targeted Feature Improvement
 on:
   schedule:
-    - cron: "20 15 * * *" # once daily at 15:20 UTC
+  - cron: "20 15 */2 * *" # every other day at 15:20 UTC
   workflow_dispatch:
 
 permissions:

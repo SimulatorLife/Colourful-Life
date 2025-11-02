@@ -2,7 +2,7 @@ name: Codex 32 – Contextual Layout
 
 on:
   schedule:
-    - cron: "37 0 * * *" # once daily at 00:37 UTC
+  - cron: "37 0 */2 * *" # every other day at 00:37 UTC
   workflow_dispatch:
 
 permissions:

@@ -1,7 +1,7 @@
 name: Codex 71 – Loop Mutability Hazards
 on:
   schedule:
-    - cron: "27 4 * * *" # once a day at 04:27
+  - cron: "27 4 */2 * *" # every other day at 04:27
   workflow_dispatch:
 
 permissions:

@@ -9,7 +9,7 @@ on:
       - codex/**
       - chore/auto-lint-format
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 * * * *" # hourly sweep (reduced from every 30 minutes)
   workflow_dispatch:
     inputs:
       confirm:

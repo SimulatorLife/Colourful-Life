@@ -1,7 +1,7 @@
 name: Codex 11 – Evolutionary Pressure Tuning
 on:
   schedule:
-    - cron: "15 18 * * *" # once daily at 18:15 UTC
+  - cron: "15 18 */2 * *" # every other day at 18:15 UTC
   workflow_dispatch:
 
 permissions:

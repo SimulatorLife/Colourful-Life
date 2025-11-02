@@ -2,7 +2,7 @@ name: Codex 25 – UI Interactivity Boost
 
 on:
   schedule:
-    - cron: "50 3 * * *" # once daily at 03:50
+  - cron: "50 3 */2 * *" # every other day at 03:50
   workflow_dispatch:
 
 permissions:

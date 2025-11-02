@@ -2,7 +2,7 @@ name: Codex 80 – Favor Composition Over Inheritance
 
 on:
   schedule:
-    - cron: "45 4 * * *" # daily at 04:45 UTC
+  - cron: "45 4 */2 * *" # every other day at 04:45 UTC
   workflow_dispatch:
 
 permissions:

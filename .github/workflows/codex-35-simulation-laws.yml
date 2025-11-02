@@ -2,7 +2,7 @@ name: Codex 35 – Core Law Validation
 
 on:
   schedule:
-    - cron: "29 5,17 * * *" # twice daily at 05:29 and 17:29 UTC
+  - cron: "29 5,17 */2 * *" # 05:29 and 17:29 UTC on alternating days (~half the prior cadence)
   workflow_dispatch:
 
 permissions:

@@ -1,7 +1,7 @@
 name: Codex 18 – Control-Flow Clarity
 on:
   schedule:
-    - cron: "10 1,13 * * *" # once daily at 01:10 UTC
+  - cron: "10 1,13 */2 * *" # 01:10 and 13:10 UTC on alternating days (~half the prior cadence)
   workflow_dispatch:
 
 permissions:

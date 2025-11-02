@@ -1,7 +1,7 @@
 name: Codex 13 – Neural System Expansion
 on:
   schedule:
-    - cron: "30 19 * * *" # once daily at 19:30 UTC
+  - cron: "30 19 */2 * *" # every other day at 19:30 UTC
   workflow_dispatch:
 
 permissions:

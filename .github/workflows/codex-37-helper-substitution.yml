@@ -1,7 +1,7 @@
 name: Codex 37 – Helper Substitution
 on:
   schedule:
-    - cron: "30 */8 * * *" # every 8 hours at 30 minutes past the hour UTC
+  - cron: "30 */8 */2 * *" # every 8 hours at 30 minutes past the hour on alternating days (~half cadence)
   workflow_dispatch:
 
 permissions:

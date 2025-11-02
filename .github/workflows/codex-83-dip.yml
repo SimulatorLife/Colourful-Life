@@ -2,7 +2,7 @@ name: Codex 83 – Dependency Inversion Patrol (DIP)
 
 on:
   schedule:
-    - cron: "15 1 * * *" # daily at 01:15 UTC
+  - cron: "15 1 */2 * *" # every other day at 01:15 UTC
   workflow_dispatch:
 
 permissions:

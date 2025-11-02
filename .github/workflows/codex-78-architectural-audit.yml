@@ -2,7 +2,7 @@ name: Codex 78 – Architectural Audit
 
 on:
   schedule:
-    - cron: "40 3 * * *" # daily at 03:40 UTC
+  - cron: "40 3 */2 * *" # every other day at 03:40 UTC
   workflow_dispatch:
 
 permissions:

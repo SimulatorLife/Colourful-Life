@@ -2,7 +2,7 @@ name: Codex 28 – Feature Prune
 
 on:
   schedule:
-    - cron: "20 4 * * *" # daily at 04:20 UTC
+  - cron: "20 4 */2 * *" # every other day at 04:20 UTC
   workflow_dispatch:
 
 permissions:
