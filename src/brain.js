@@ -1187,20 +1187,15 @@ export default class Brain {
   }
 
   #pruneUnreachableNeurons() {
-    const outputs = [];
-
-    for (const group of Object.values(OUTPUT_GROUPS)) {
-      if (!Array.isArray(group)) continue;
-
-      for (let i = 0; i < group.length; i++) {
-        const id = group[i]?.id;
-
-        if (!Number.isFinite(id)) continue;
-        if (!this.incoming.has(id)) continue;
-
-        outputs.push(id);
+    const outputs = Object.values(OUTPUT_GROUPS).flatMap((group) => {
+      if (!Array.isArray(group)) {
+        return [];
       }
-    }
+
+      return group
+        .map((entry) => entry?.id)
+        .filter((id) => Number.isFinite(id) && this.incoming.has(id));
+    });
 
     if (outputs.length === 0) {
       this.neuronSet = new Set();
