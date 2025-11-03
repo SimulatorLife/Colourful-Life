@@ -1,7 +1,7 @@
 name: Codex 76 – Legacy API Usage
 on:
   schedule:
-  - cron: "39 14 */2 * *" # every other day at 14:39
+    - cron: "39 14 */3 * *" # every three days at 14:39
   workflow_dispatch:
 
 permissions:

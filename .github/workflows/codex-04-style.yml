@@ -1,7 +1,7 @@
 name: Codex 04 – Style Consistency Pass
 on:
   schedule:
-  - cron: "20 5 */2 * *" # every other day at 05:20 UTC
+    - cron: "20 5 2-31/2 * *" # every other day on even dates at 05:20 UTC
   workflow_dispatch:
 
 permissions:

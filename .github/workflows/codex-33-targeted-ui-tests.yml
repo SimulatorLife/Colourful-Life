@@ -2,7 +2,7 @@ name: Codex 33 – Targeted UI Tests
 
 on:
   schedule:
-  - cron: "11 6 */2 * *" # every other day at 06:11 UTC
+    - cron: "11 6 2-31/2 * *" # every other day on even dates at 06:11 UTC
   workflow_dispatch:
 
 permissions:

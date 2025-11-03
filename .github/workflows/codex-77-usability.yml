@@ -1,7 +1,7 @@
 name: Codex 77 – Usability Exerciser
 on:
   schedule:
-  - cron: "0 */22 */2 * *" # every twenty-two hours on alternating days (~half cadence)
+    - cron: "0 */22 */2 * *" # every twenty-two hours on alternating days
   workflow_dispatch:
 
 permissions:

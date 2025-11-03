@@ -1,7 +1,7 @@
 name: Codex 22 – Bug Fix
 on:
   schedule:
-  - cron: "0 */21 */2 * *" # every 21 hours at minute 0 UTC on alternating days (~half the prior cadence)
+    - cron: "0 */23 */2 * *" # every 23 hours at minute 0 UTC on alternating days
   workflow_dispatch:
 
 permissions:

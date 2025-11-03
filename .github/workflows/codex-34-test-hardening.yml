@@ -2,7 +2,7 @@ name: Codex 34 – Test Hardening
 
 on:
   schedule:
-  - cron: "29 0,8 */2 * *" # 00:29 and 08:29 UTC on alternating days (~half the prior cadence)
+    - cron: "29 0,8 */2 * *" # 00:29 and 08:29 UTC on alternating days
   workflow_dispatch:
 
 permissions:

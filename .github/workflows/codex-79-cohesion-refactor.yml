@@ -2,7 +2,7 @@ name: Codex 79 – Cohesion Refactor
 
 on:
   schedule:
-  - cron: "25 */15 */2 * *" # every 15 hours at minute 25 on alternating days (~half cadence)
+    - cron: "25 */15 2-31/2 * *" # every 15 hours at minute 25 on even-numbered days
   workflow_dispatch:
 
 permissions:

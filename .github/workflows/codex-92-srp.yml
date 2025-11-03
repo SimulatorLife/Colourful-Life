@@ -2,7 +2,7 @@ name: Codex 92 – Single Responsibility Guardrail
 
 on:
   schedule:
-  - cron: "0 5 */14 * *" # every 14 days at 05:00 UTC (~half as often)
+    - cron: "0 5 */14 * *" # every 14 days at 05:00 UTC
   workflow_dispatch:
 
 permissions:

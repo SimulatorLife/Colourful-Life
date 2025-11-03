@@ -1,7 +1,7 @@
 name: Codex 72 – Resource Leak Patrol
 on:
   schedule:
-  - cron: "20 12 */2 * *" # every other day at 12:20 UTC
+    - cron: "20 12 2-31/2 * *" # every other day on even dates at 12:20 UTC
   workflow_dispatch:
 
 permissions:

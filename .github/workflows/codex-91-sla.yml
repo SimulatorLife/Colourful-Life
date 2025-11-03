@@ -2,7 +2,7 @@ name: Codex 91 – Abstraction Layer Stewardship (SLA)
 
 on:
   schedule:
-  - cron: "0 */13 */2 * *" # every 13 hours on alternating days (~half cadence)
+    - cron: "0 */13 2-31/2 * *" # every 13 hours on even-numbered days
   workflow_dispatch:
 
 permissions:

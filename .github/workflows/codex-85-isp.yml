@@ -2,7 +2,7 @@ name: Codex 85 – Interface Segregation
 
 on:
   schedule:
-  - cron: "15 */23 */2 * *" # every 23 hours at :15 on alternating days (~half cadence)
+    - cron: "15 */23 */2 * *" # every 23 hours at :15 on alternating days
   workflow_dispatch:
 
 permissions:

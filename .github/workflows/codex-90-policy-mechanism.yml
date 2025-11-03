@@ -1,7 +1,7 @@
 name: Codex 90 – Policy Mechanism Separation
 on:
   schedule:
-  - cron: "20 1 */14 * *" # every 14 days at 01:20 UTC (~half as often)
+    - cron: "20 1 */14 * *" # every 14 days at 01:20 UTC
   workflow_dispatch:
 
 permissions:

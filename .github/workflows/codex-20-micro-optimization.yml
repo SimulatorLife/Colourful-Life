@@ -1,7 +1,7 @@
 name: Codex 20 – Targeted Micro-Optimization
 on:
   schedule:
-  - cron: "50 */9 */2 * *" # every 9 hours at 50 minutes past the hour on alternating days (~half the prior frequency)
+    - cron: "50 */10 */2 * *" # every 10 hours at 50 minutes past the hour on alternating days
   workflow_dispatch:
 
 permissions:
