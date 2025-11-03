@@ -110,4 +110,40 @@ test("speed multiplier overrides keep derived cadence in sync", async () => {
     "derived updates-per-second should follow the speed override",
   );
 });
+
+test("partial layout overrides preserve other sanitized defaults", async () => {
+  const { bindSimulationToUi } = await import("../src/ui/simulationUiBridge.js");
+  const { resolveSimulationDefaults } = await import("../src/config.js");
+
+  const sanitizedDefaults = resolveSimulationDefaults({
+    eventFrequencyMultiplier: 0.8,
+    leaderboardIntervalMs: 900,
+  });
+
+  const overrideSettings = { updatesPerSecond: 48 };
+
+  const { layout } = bindSimulationToUi({
+    engine: { canvas: {}, selectionManager: null },
+    uiOptions: { layout: { initialSettings: overrideSettings } },
+    sanitizedDefaults,
+    simulationCallbacks: {},
+    headless: true,
+  });
+
+  assert.is(
+    layout.initialSettings.eventFrequencyMultiplier,
+    sanitizedDefaults.eventFrequencyMultiplier,
+    "custom event cadence should survive unrelated layout overrides",
+  );
+  assert.is(
+    layout.initialSettings.leaderboardIntervalMs,
+    sanitizedDefaults.leaderboardIntervalMs,
+    "leaderboard cadence from defaults should remain intact",
+  );
+  assert.is(
+    layout.initialSettings.updatesPerSecond,
+    resolveSimulationDefaults(overrideSettings).updatesPerSecond,
+    "updates-per-second override should still apply",
+  );
+});
 test.run();

@@ -12,6 +12,11 @@ import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
  * @typedef {import("./headlessUiManager.js").HeadlessSelectionAccess} HeadlessSelectionAccess
  */
 
+const DERIVED_LAYOUT_KEYS = Object.freeze({
+  updatesPerSecond: ["speedMultiplier"],
+  speedMultiplier: ["updatesPerSecond"],
+});
+
 function mergeLayoutInitialSettings({ sanitizedDefaults, layoutInitialSettings }) {
   const overrideKeys = Object.keys(layoutInitialSettings);
 
@@ -32,13 +37,21 @@ function mergeLayoutInitialSettings({ sanitizedDefaults, layoutInitialSettings }
     initialSettings[key] = layoutInitialSettings[key];
   }
 
-  for (const [key, value] of Object.entries(sanitizedLayoutOverrides)) {
-    if (overrideKeySet.has(key)) {
+  for (const key of overrideKeys) {
+    const derivedKeys = DERIVED_LAYOUT_KEYS[key];
+
+    if (!derivedKeys) {
       continue;
     }
 
-    if (!Object.is(value, sanitizedDefaults[key])) {
-      initialSettings[key] = value;
+    for (const derivedKey of derivedKeys) {
+      if (overrideKeySet.has(derivedKey)) {
+        continue;
+      }
+
+      if (Object.hasOwn(sanitizedLayoutOverrides, derivedKey)) {
+        initialSettings[derivedKey] = sanitizedLayoutOverrides[derivedKey];
+      }
     }
   }
 
