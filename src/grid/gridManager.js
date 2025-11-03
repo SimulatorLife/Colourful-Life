@@ -51,7 +51,7 @@ import {
   DECAY_RELEASE_RATE,
   INITIAL_TILE_ENERGY_FRACTION_DEFAULT,
 } from "../config.js";
-import TileIndexTracker from "../utils/tileIndexTracker.js";
+import TileIndexTracker from "./tileIndexTracker.js";
 const GLOBAL = typeof globalThis !== "undefined" ? globalThis : {};
 const hasTileTrackerContract = (candidate) =>
   candidate != null &&
