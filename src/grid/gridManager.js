@@ -78,6 +78,8 @@ const NEIGHBOR_OFFSETS = [
   [1, 0],
   [1, 1],
 ];
+const NEIGHBOR_ROW_OFFSETS = new Int8Array([-1, -1, -1, 0, 0, 1, 1, 1]);
+const NEIGHBOR_COL_OFFSETS = new Int8Array([-1, 0, 1, -1, 1, -1, 0, 1]);
 const CROWDING_INV_NEIGHBOR_COUNT = Object.freeze([
   0,
   1,
@@ -97,6 +99,101 @@ const DEFAULT_CROWDING_SUMMARY = Object.freeze({
 });
 const CROWDING_REVISION_LIMIT = 0xffffffff;
 const SEGMENTED_EVENT_CONTRIBUTION_KEY = Symbol("grid.segmentedContribution");
+
+function resolveCrowdingSample(
+  occupant,
+  defaultTolerance = 0.5,
+  maxTileEnergy = 0,
+  invMaxTileEnergy,
+  allowPreference = true,
+) {
+  if (!occupant) {
+    return {
+      tolerance: defaultTolerance,
+      scarcityContribution: 0,
+      toleranceSource: defaultTolerance,
+      energy: 0,
+      maxTileEnergy: 0,
+    };
+  }
+
+  const baselineCandidate = occupant.baseCrowdingTolerance;
+  const baseline = Number.isFinite(baselineCandidate)
+    ? baselineCandidate
+    : defaultTolerance;
+  let toleranceSource = occupant._crowdingTolerance;
+
+  if (!Number.isFinite(toleranceSource)) {
+    if (allowPreference) {
+      const getPreference = occupant.getCrowdingPreference;
+
+      if (typeof getPreference === "function") {
+        const resolved = getPreference.call(occupant, { fallback: baseline });
+
+        toleranceSource = Number.isFinite(resolved) ? resolved : baseline;
+      } else {
+        toleranceSource = baseline;
+      }
+    } else {
+      toleranceSource = baseline;
+    }
+  }
+
+  const energy = Number.isFinite(occupant.energy) ? occupant.energy : 0;
+  const cacheKey = occupant[CROWDING_SAMPLE_CACHE_KEY];
+  const targetMaxTileEnergy = maxTileEnergy > 0 ? maxTileEnergy : 0;
+
+  if (
+    cacheKey &&
+    cacheKey.toleranceSource === toleranceSource &&
+    cacheKey.energy === energy &&
+    cacheKey.maxTileEnergy === targetMaxTileEnergy
+  ) {
+    return cacheKey;
+  }
+
+  let tolerance = toleranceSource;
+
+  if (tolerance <= 0) {
+    tolerance = 0;
+  } else if (tolerance >= 1) {
+    tolerance = 1;
+  }
+
+  let scarcityContribution = 0;
+
+  if (targetMaxTileEnergy > 0) {
+    let norm = invMaxTileEnergy;
+
+    if (!Number.isFinite(norm) || norm <= 0) {
+      norm = 1 / targetMaxTileEnergy;
+    }
+
+    let normalizedEnergy = energy * norm;
+
+    if (normalizedEnergy <= 0) {
+      normalizedEnergy = 0;
+    } else if (normalizedEnergy >= 1) {
+      normalizedEnergy = 1;
+    }
+
+    scarcityContribution = 1 - normalizedEnergy;
+  }
+
+  const cache =
+    cacheKey && typeof cacheKey === "object"
+      ? cacheKey
+      : (occupant[CROWDING_SAMPLE_CACHE_KEY] = {});
+
+  cache.tolerance = tolerance;
+  cache.toleranceSource = toleranceSource;
+  cache.energy = energy;
+  cache.scarcityContribution = scarcityContribution;
+  cache.maxTileEnergy = targetMaxTileEnergy;
+  cache.dynamicPreference = allowPreference;
+
+  return cache;
+}
 
 const NOOP_INTERACTION_SYSTEM = Object.freeze({
   resolveIntent() {
@@ -270,86 +367,19 @@ function computeCrowdingFeedback({
       return;
     }
 
-    const baselineCandidate = occupant.baseCrowdingTolerance;
-    const baseline = Number.isFinite(baselineCandidate)
-      ? baselineCandidate
-      : defaultTolerance;
-    let toleranceSource = occupant._crowdingTolerance;
+    const sample = resolveCrowdingSample(
+      occupant,
+      defaultTolerance,
+      maxEnergyForCache,
+      norm,
+    );
 
-    if (!Number.isFinite(toleranceSource)) {
-      const getPreference = occupant.getCrowdingPreference;
-
-      if (typeof getPreference === "function") {
-        const resolved = getPreference.call(occupant, { fallback: baseline });
-
-        toleranceSource = Number.isFinite(resolved) ? resolved : baseline;
-      } else {
-        toleranceSource = baseline;
-      }
-    }
-    const energy = Number.isFinite(occupant.energy) ? occupant.energy : 0;
-    let cached = occupant[CROWDING_SAMPLE_CACHE_KEY];
-
-    if (
-      cached &&
-      cached.toleranceSource === toleranceSource &&
-      cached.energy === energy &&
-      cached.maxTileEnergy === maxEnergyForCache
-    ) {
-      toleranceSum += cached.tolerance;
-
-      if (useScarcity) {
-        scarcitySum += cached.scarcityContribution;
-      }
-
-      count += 1;
-
-      return;
-    }
-
-    let tolerance = toleranceSource;
-
-    if (tolerance <= 0) {
-      tolerance = 0;
-    } else if (tolerance >= 1) {
-      tolerance = 1;
-    }
-
-    let scarcityContribution = 0;
-
-    if (useScarcity) {
-      let normalizedEnergy = energy * norm;
-
-      if (normalizedEnergy <= 0) {
-        normalizedEnergy = 0;
-      } else if (normalizedEnergy >= 1) {
-        normalizedEnergy = 1;
-      }
-
-      scarcityContribution = 1 - normalizedEnergy;
-      scarcitySum += scarcityContribution;
-    }
-
-    toleranceSum += tolerance;
+    toleranceSum += sample.tolerance;
     count += 1;
 
-    if (!cached || typeof cached !== "object") {
-      cached = occupant[CROWDING_SAMPLE_CACHE_KEY] = {
-        tolerance,
-        toleranceSource,
-        energy,
-        scarcityContribution,
-        maxTileEnergy: maxEnergyForCache,
-      };
-
-      return;
+    if (useScarcity) {
+      scarcitySum += sample.scarcityContribution;
     }
-
-    cached.tolerance = tolerance;
-    cached.toleranceSource = toleranceSource;
-    cached.energy = energy;
-    cached.scarcityContribution = scarcityContribution;
-    cached.maxTileEnergy = maxEnergyForCache;
   };
 
   if (useCustomOffsets) {
@@ -1230,41 +1260,67 @@ export default class GridManager {
     const applyCrowdingContribution = (occupant, r, c) => {
       if (!occupant) return false;
 
-      let tolerance = Number.isFinite(occupant._crowdingTolerance)
-        ? occupant._crowdingTolerance
-        : Number.isFinite(occupant.baseCrowdingTolerance)
-          ? occupant.baseCrowdingTolerance
-          : 0.5;
+      const targetMaxTileEnergy = useScarcity ? maxTileEnergy : 0;
+      const energy = Number.isFinite(occupant.energy) ? occupant.energy : 0;
+      let cached = occupant[CROWDING_SAMPLE_CACHE_KEY];
+      let tolerance;
+      let scarcityContribution;
 
-      if (tolerance <= 0) {
-        tolerance = 0;
-      } else if (tolerance >= 1) {
-        tolerance = 1;
-      }
+      if (
+        cached &&
+        cached.energy === energy &&
+        cached.maxTileEnergy === targetMaxTileEnergy
+      ) {
+        tolerance = cached.tolerance;
+        scarcityContribution = useScarcity ? cached.scarcityContribution : 0;
+      } else {
+        const rawToleranceSource = Number.isFinite(occupant._crowdingTolerance)
+          ? occupant._crowdingTolerance
+          : Number.isFinite(occupant.baseCrowdingTolerance)
+            ? occupant.baseCrowdingTolerance
+            : 0.5;
 
-      let scarcityContribution = 0;
-
-      if (useScarcity) {
-        let normalizedEnergy = Number.isFinite(occupant.energy)
-          ? occupant.energy * invMaxTileEnergy
-          : 0;
-
-        if (normalizedEnergy <= 0) {
-          normalizedEnergy = 0;
-        } else if (normalizedEnergy >= 1) {
-          normalizedEnergy = 1;
+        if (rawToleranceSource <= 0) {
+          tolerance = 0;
+        } else if (rawToleranceSource >= 1) {
+          tolerance = 1;
+        } else {
+          tolerance = rawToleranceSource;
         }
 
-        scarcityContribution = 1 - normalizedEnergy;
+        if (useScarcity) {
+          let normalizedEnergy = energy * invMaxTileEnergy;
+
+          if (normalizedEnergy <= 0) {
+            normalizedEnergy = 0;
+          } else if (normalizedEnergy >= 1) {
+            normalizedEnergy = 1;
+          }
+
+          scarcityContribution = 1 - normalizedEnergy;
+        } else {
+          scarcityContribution = 0;
+        }
+
+        cached =
+          cached && typeof cached === "object"
+            ? cached
+            : (occupant[CROWDING_SAMPLE_CACHE_KEY] = {});
+
+        cached.tolerance = tolerance;
+        cached.toleranceSource = rawToleranceSource;
+        cached.energy = energy;
+        cached.scarcityContribution = scarcityContribution;
+        cached.maxTileEnergy = targetMaxTileEnergy;
+        cached.dynamicPreference = false;
       }
 
-      for (let i = 0; i < NEIGHBOR_OFFSETS.length; i++) {
-        const offset = NEIGHBOR_OFFSETS[i];
+      const neighborRowOffsets = NEIGHBOR_ROW_OFFSETS;
+      const neighborColOffsets = NEIGHBOR_COL_OFFSETS;
 
-        if (!offset) continue;
-
-        const nr = r + offset[0];
-        const nc = c + offset[1];
+      for (let i = 0; i < neighborRowOffsets.length; i++) {
+        const nr = r + neighborRowOffsets[i];
+        const nc = c + neighborColOffsets[i];
 
         if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
 
