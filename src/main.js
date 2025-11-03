@@ -18,6 +18,65 @@ const DESTROY_WARNINGS = Object.freeze({
   engineStop: "Simulation engine stop handler threw; shutdown may be incomplete.",
 });
 
+function destroyUiManagerSafely(uiManager) {
+  if (!uiManager || typeof uiManager.destroy !== "function") {
+    return;
+  }
+
+  invokeWithErrorBoundary(uiManager.destroy, [], {
+    thisArg: uiManager,
+    reporter: warnOnce,
+    once: true,
+    message: DESTROY_WARNINGS.uiDestroy,
+  });
+}
+
+function drainUnsubscribers(unsubscribers) {
+  if (!Array.isArray(unsubscribers) || unsubscribers.length === 0) {
+    return;
+  }
+
+  const unsubscribeFns = unsubscribers.splice(0).reverse();
+
+  for (const unsubscribe of unsubscribeFns) {
+    if (typeof unsubscribe !== "function") {
+      continue;
+    }
+
+    invokeWithErrorBoundary(unsubscribe, [], {
+      reporter: warnOnce,
+      once: true,
+      message: DESTROY_WARNINGS.unsubscribe,
+    });
+  }
+}
+
+function destroyEngineSafely(engine) {
+  if (!engine) {
+    return;
+  }
+
+  if (typeof engine.destroy === "function") {
+    invokeWithErrorBoundary(engine.destroy, [], {
+      thisArg: engine,
+      reporter: warnOnce,
+      once: true,
+      message: DESTROY_WARNINGS.engineDestroy,
+    });
+
+    return;
+  }
+
+  if (typeof engine.stop === "function") {
+    invokeWithErrorBoundary(engine.stop, [], {
+      thisArg: engine,
+      reporter: warnOnce,
+      once: true,
+      message: DESTROY_WARNINGS.engineStop,
+    });
+  }
+}
+
 import {
   buildHeadlessCanvasOverrides,
   createHeadlessCanvas,
@@ -281,42 +340,9 @@ export function createSimulation({
     resume: () => engine.resume(),
     resetWorld: (options) => engine.resetWorld(options),
     destroy: () => {
-      if (uiManager && typeof uiManager.destroy === "function") {
-        invokeWithErrorBoundary(uiManager.destroy, [], {
-          thisArg: uiManager,
-          reporter: warnOnce,
-          once: true,
-          message: DESTROY_WARNINGS.uiDestroy,
-        });
-      }
-      const unsubscribeFns = unsubscribers.splice(0).reverse();
-
-      unsubscribeFns.forEach((unsubscribe) => {
-        if (typeof unsubscribe !== "function") {
-          return;
-        }
-
-        invokeWithErrorBoundary(unsubscribe, [], {
-          reporter: warnOnce,
-          once: true,
-          message: DESTROY_WARNINGS.unsubscribe,
-        });
-      });
-      if (typeof engine.destroy === "function") {
-        invokeWithErrorBoundary(engine.destroy, [], {
-          thisArg: engine,
-          reporter: warnOnce,
-          once: true,
-          message: DESTROY_WARNINGS.engineDestroy,
-        });
-      } else if (typeof engine.stop === "function") {
-        invokeWithErrorBoundary(engine.stop, [], {
-          thisArg: engine,
-          reporter: warnOnce,
-          once: true,
-          message: DESTROY_WARNINGS.engineStop,
-        });
-      }
+      destroyUiManagerSafely(uiManager);
+      drainUnsubscribers(unsubscribers);
+      destroyEngineSafely(engine);
     },
   };
 }
