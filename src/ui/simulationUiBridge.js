@@ -7,9 +7,9 @@ import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 /**
  * @typedef {import("./headlessUiManager.js").HeadlessUiAdapter} HeadlessUiAdapter
  * @typedef {import("./headlessUiManager.js").HeadlessUiBridgeSurface} HeadlessUiBridgeSurface
- * @typedef {import("./headlessUiManager.js").HeadlessStateSynchronizationSurface} HeadlessStateSynchronizationSurface
- * @typedef {import("./headlessUiManager.js").HeadlessTelemetryPublisher} HeadlessTelemetryPublisher
- * @typedef {import("./headlessUiManager.js").HeadlessSelectionAccess} HeadlessSelectionAccess
+ * @typedef {import("./headlessUiManager.js").HeadlessStateControlSurface} HeadlessStateControlSurface
+ * @typedef {import("./headlessUiManager.js").HeadlessTelemetrySurface} HeadlessTelemetrySurface
+ * @typedef {import("./headlessUiManager.js").HeadlessSelectionSurface} HeadlessSelectionSurface
  */
 
 const DERIVED_LAYOUT_KEYS = Object.freeze({
@@ -193,12 +193,12 @@ function invokeUiManagerMethod(
   });
 }
 
-function createUpdatesPerSecondSynchronizer(engine, callUi) {
+function createUpdatesPerSecondSynchronizer(engine, callControls) {
   return (changes) => {
     const nextValue = changes?.updatesPerSecond;
 
     if (nextValue !== undefined) {
-      callUi(
+      callControls(
         "setUpdatesPerSecond",
         [nextValue, { notify: false }],
         UI_WARNING_CONTEXTS.speed,
@@ -219,7 +219,7 @@ function createUpdatesPerSecondSynchronizer(engine, callUi) {
       return;
     }
 
-    callUi(
+    callControls(
       "setUpdatesPerSecond",
       [currentValue, { notify: false }],
       UI_WARNING_CONTEXTS.speed,
@@ -227,17 +227,21 @@ function createUpdatesPerSecondSynchronizer(engine, callUi) {
   };
 }
 
-function createMetricsHandler(callUi) {
+function createMetricsHandler(callTelemetry) {
   return ({ stats, metrics, environment }) =>
-    callUi("renderMetrics", [stats, metrics, environment], UI_WARNING_CONTEXTS.metrics);
+    callTelemetry(
+      "renderMetrics",
+      [stats, metrics, environment],
+      UI_WARNING_CONTEXTS.metrics,
+    );
 }
 
-function createLeaderboardHandler(callUi) {
+function createLeaderboardHandler(callTelemetry) {
   return ({ entries }) =>
-    callUi("renderLeaderboard", [entries], UI_WARNING_CONTEXTS.leaderboard);
+    callTelemetry("renderLeaderboard", [entries], UI_WARNING_CONTEXTS.leaderboard);
 }
 
-function propagateOverlayChanges(changes, callUi) {
+function propagateOverlayChanges(changes, callControls) {
   if (!changes) {
     return;
   }
@@ -247,7 +251,7 @@ function propagateOverlayChanges(changes, callUi) {
       continue;
     }
 
-    callUi(
+    callControls(
       setterName,
       [changes[overlayKey], { notify: false }],
       UI_WARNING_CONTEXTS.overlay,
@@ -255,7 +259,7 @@ function propagateOverlayChanges(changes, callUi) {
   }
 }
 
-function propagateGeometryChange({ changes, engine, callUi }) {
+function propagateGeometryChange({ changes, engine, callControls }) {
   const geometryChanged =
     changes &&
     (Object.hasOwn(changes, "gridRows") ||
@@ -284,10 +288,15 @@ function propagateGeometryChange({ changes, engine, callUi }) {
         : undefined,
   };
 
-  callUi("setGridGeometry", [geometry], UI_WARNING_CONTEXTS.geometry);
+  callControls("setGridGeometry", [geometry], UI_WARNING_CONTEXTS.geometry);
 }
 
-function propagateStateChanges({ changes, engine, callUi, syncUpdatesPerSecond }) {
+function propagateStateChanges({
+  changes,
+  engine,
+  callControls,
+  syncUpdatesPerSecond,
+}) {
   if (!changes || typeof changes !== "object") {
     return;
   }
@@ -299,39 +308,54 @@ function propagateStateChanges({ changes, engine, callUi, syncUpdatesPerSecond }
 
     const methodArgs = typeof args === "function" ? args(changes[key]) : args;
 
-    callUi(method, methodArgs, UI_WARNING_CONTEXTS.state);
+    callControls(method, methodArgs, UI_WARNING_CONTEXTS.state);
   }
 
   syncUpdatesPerSecond(changes);
-  propagateOverlayChanges(changes, callUi);
-  propagateGeometryChange({ changes, engine, callUi });
+  propagateOverlayChanges(changes, callControls);
+  propagateGeometryChange({ changes, engine, callControls });
 }
 
-function createStateChangeHandler({ engine, callUi, syncUpdatesPerSecond }) {
+function createStateChangeHandler({ engine, callControls, syncUpdatesPerSecond }) {
   return ({ changes }) =>
-    propagateStateChanges({ changes, engine, callUi, syncUpdatesPerSecond });
+    propagateStateChanges({
+      changes,
+      engine,
+      callControls,
+      syncUpdatesPerSecond,
+    });
 }
 
 /**
- * Wires simulation engine events to the provided UI surface.
+ * Wires simulation engine events to the provided UI surfaces.
  *
  * @param {import('../engine/simulationEngine.js').default} engine
- * @param {import('./uiManager.js').default | (HeadlessStateSynchronizationSurface & HeadlessTelemetryPublisher)} uiManager
+ * @param {Object} surfaces
+ * @param {import('./uiManager.js').default | HeadlessStateControlSurface} surfaces.controlSurface
+ * @param {import('./uiManager.js').default | HeadlessTelemetrySurface} [surfaces.telemetrySurface]
  * @returns {Array<() => void>} Engine listener unsubscribe callbacks.
  */
-function subscribeEngineToUi(engine, uiManager) {
-  if (!engine || !uiManager) {
+function subscribeEngineToUi(
+  engine,
+  { controlSurface, telemetrySurface = controlSurface } = {},
+) {
+  if (!engine || !controlSurface) {
     return [];
   }
 
-  const callUi = (methodName, args = [], context = UI_WARNING_CONTEXTS.state) =>
-    invokeUiManagerMethod(uiManager, methodName, args, context);
-  const syncUpdatesPerSecond = createUpdatesPerSecondSynchronizer(engine, callUi);
-  const handleMetrics = createMetricsHandler(callUi);
-  const handleLeaderboard = createLeaderboardHandler(callUi);
+  const callControls = (methodName, args = [], context = UI_WARNING_CONTEXTS.state) =>
+    invokeUiManagerMethod(controlSurface, methodName, args, context);
+  const callTelemetry = (
+    methodName,
+    args = [],
+    context = UI_WARNING_CONTEXTS.metrics,
+  ) => invokeUiManagerMethod(telemetrySurface, methodName, args, context);
+  const syncUpdatesPerSecond = createUpdatesPerSecondSynchronizer(engine, callControls);
+  const handleMetrics = createMetricsHandler(callTelemetry);
+  const handleLeaderboard = createLeaderboardHandler(callTelemetry);
   const handleStateChange = createStateChangeHandler({
     engine,
-    callUi,
+    callControls,
     syncUpdatesPerSecond,
   });
 
@@ -528,7 +552,7 @@ const INITIAL_STATE_SYNCERS = [
  * toggles reflect the latest configuration before live updates resume.
  *
  * @param {import('../engine/simulationEngine.js').default} engine
- * @param {import('./uiManager.js').default | HeadlessStateSynchronizationSurface} uiManager
+ * @param {import('./uiManager.js').default | HeadlessStateControlSurface} uiManager
  */
 function syncInitialStateToUi(engine, uiManager) {
   if (!uiManager || !engine?.state) {
@@ -588,8 +612,7 @@ function syncInitialStateToUi(engine, uiManager) {
  *   control surface rather than mounting {@link UIManager}.
  * @returns {{
  *   uiManager: import('./uiManager.js').default |
- *     (HeadlessStateSynchronizationSurface & HeadlessTelemetryPublisher &
- *       HeadlessSelectionAccess),
+ *     (HeadlessStateControlSurface & HeadlessTelemetrySurface & HeadlessSelectionSurface),
  *   unsubscribers: Array<() => void>,
  *   headlessOptions: Object|null,
  *   layout: Object,
@@ -638,7 +661,10 @@ export function bindSimulationToUi({
 
   syncInitialStateToUi(engine, uiManager);
 
-  const unsubscribers = subscribeEngineToUi(engine, uiManager);
+  const unsubscribers = subscribeEngineToUi(engine, {
+    controlSurface: uiManager,
+    telemetrySurface: uiManager,
+  });
 
   return {
     uiManager,
