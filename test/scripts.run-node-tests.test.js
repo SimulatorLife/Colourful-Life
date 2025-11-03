@@ -9,6 +9,8 @@ import {
   __test__,
 } from "../scripts/run-node-tests.mjs";
 
+const { resolveSignalExitCode, hasReporterFlag } = __test__;
+
 test("normalizeTestRunnerArgs filters falsey watch flags", () => {
   const { flags, paths } = normalizeTestRunnerArgs([
     "--watch=false",
@@ -188,8 +190,6 @@ test("expandTestTargets resolves directory arguments to contained test files", a
 });
 
 test("resolveSignalExitCode maps signals to POSIX exit codes", () => {
-  const { resolveSignalExitCode } = __test__;
-
   assert.equal(resolveSignalExitCode("SIGINT"), 130, "SIGINT should map to 130");
   assert.equal(resolveSignalExitCode(15), 143, "numeric signals should add 128");
   assert.equal(
@@ -197,4 +197,17 @@ test("resolveSignalExitCode maps signals to POSIX exit codes", () => {
     128,
     "unknown signals fall back to 128",
   );
+});
+
+test("hasReporterFlag detects explicit reporter flags", () => {
+  assert.equal(hasReporterFlag(["--test-reporter=spec"]), true);
+  assert.equal(hasReporterFlag(["--test-reporter", "--watch"]), true);
+  assert.equal(hasReporterFlag(["--test-reporter", "spec"]), true);
+  assert.equal(hasReporterFlag(["--test-reporter-destination=summary.txt"]), true);
+});
+
+test("hasReporterFlag ignores unrelated flags", () => {
+  assert.equal(hasReporterFlag(["--watch", "--test-name-pattern=brain"]), false);
+  assert.equal(hasReporterFlag(["--watch", "targets.test.js"]), false);
+  assert.equal(hasReporterFlag(), false);
 });
