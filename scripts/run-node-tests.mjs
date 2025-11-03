@@ -17,6 +17,29 @@ const RUN_IN_BAND_ASSIGNABLE_FLAGS = new Set(["--runInBand", "--run-in-band"]);
 const RUN_IN_BAND_FLAG = "--test-concurrency=1";
 const RUN_TESTS_BY_PATH_FLAGS = new Set(["--runTestsByPath", "--run-tests-by-path"]);
 const TEST_FILE_PATTERN = /\.test\.(?:[cm]?js)$/i;
+const REPORTER_FLAG_PREFIXES = ["--test-reporter", "--test-reporter-destination"];
+
+function hasReporterFlag(flags = []) {
+  if (!Array.isArray(flags) || flags.length === 0) {
+    return false;
+  }
+
+  for (let index = 0; index < flags.length; index += 1) {
+    const flag = flags[index];
+
+    if (typeof flag !== "string" || flag.length === 0) {
+      continue;
+    }
+
+    for (const prefix of REPORTER_FLAG_PREFIXES) {
+      if (flag === prefix || flag.startsWith(`${prefix}=`)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 function resolveSignalExitCode(signal) {
   if (typeof signal === "number" && Number.isFinite(signal)) {
@@ -334,17 +357,32 @@ export async function runNodeTests(rawArgs = []) {
     return 1;
   }
 
-  const testArgs = ["--test", ...flags, ...targets];
+  const reporterFlags = hasReporterFlag(flags) ? [] : ["--test-reporter=dot"];
+  const testArgs = ["--test", ...reporterFlags, ...flags, ...targets];
 
-  return run(process.execPath, testArgs);
+  const exitCode = await run(process.execPath, testArgs);
+
+  if (exitCode === 0 && reporterFlags.length > 0) {
+    await new Promise((resolve, reject) => {
+      process.stdout.write("✓ Node.js tests passed (dot reporter).\n", (error) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  return exitCode;
 }
 
-export const __test__ = { resolveSignalExitCode };
+export const __test__ = { resolveSignalExitCode, hasReporterFlag };
 
 async function cli() {
   const exitCode = await runNodeTests(process.argv.slice(2));
 
-  process.exit(exitCode);
+  process.exitCode = exitCode;
 }
 
 const isExecutedDirectly = (() => {

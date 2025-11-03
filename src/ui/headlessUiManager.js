@@ -62,8 +62,9 @@ function attachBooleanSettingAccessors(
 // Headless UI consumers historically depended on a single, monolithic manager
 // contract. To keep responsibilities cohesive and encourage interface
 // segregation we now describe the surface as a collection of role-focused
-// slices. Downstream modules can reference only the facets they require instead
-// of inheriting the entire manager shape.
+// slices (playback/autopause, tuning sliders, overlay toggles, telemetry, and
+// selection plumbing). Downstream modules can reference only the facets they
+// require instead of inheriting the entire manager shape.
 
 /**
  * @typedef {(value: number, options?: { notify?: boolean }) => void} HeadlessNumberSetter
@@ -195,7 +196,7 @@ function attachBooleanSettingAccessors(
  */
 
 /**
- * @typedef {HeadlessPlaybackControls & HeadlessAutoPauseControls} HeadlessPauseControls
+ * @typedef {HeadlessPlaybackControls & HeadlessAutoPauseControls} HeadlessPlaybackSurface
  */
 
 /**
@@ -207,25 +208,35 @@ function attachBooleanSettingAccessors(
  *   HeadlessEnergyControls &
  *   HeadlessCombatControls &
  *   HeadlessLifeEventControls &
- *   HeadlessLeaderboardControls} HeadlessSimulationTuningControls
+ *   HeadlessLeaderboardControls} HeadlessTuningSurface
  */
 
 /**
- * @typedef {HeadlessPauseControls &
- *   HeadlessSimulationTuningControls &
- *   HeadlessOverlayToggleControls} HeadlessStateSynchronizationSurface
+ * @typedef {HeadlessOverlayToggleControls} HeadlessOverlaySurface
  */
 
 /**
- * @typedef {HeadlessTelemetryCallbacks} HeadlessTelemetryPublisher
+ * @typedef {HeadlessPlaybackSurface &
+ *   HeadlessTuningSurface &
+ *   HeadlessOverlaySurface} HeadlessStateControlSurface
  */
 
 /**
- * @typedef {HeadlessStateSynchronizationSurface & HeadlessTelemetryPublisher} HeadlessUiControlSurface
+ * @typedef {HeadlessTelemetryCallbacks} HeadlessTelemetrySurface
  */
 
 /**
- * @typedef {HeadlessUiControlSurface & HeadlessSelectionAccess} HeadlessUiBridgeSurface
+ * @typedef {HeadlessSelectionAccess} HeadlessSelectionSurface
+ */
+
+/**
+ * @typedef {HeadlessStateControlSurface & HeadlessTelemetrySurface} HeadlessUiControlSurface
+ */
+
+/**
+ * @typedef {HeadlessStateControlSurface &
+ *   HeadlessTelemetrySurface &
+ *   HeadlessSelectionSurface} HeadlessUiBridgeSurface
  */
 
 /**
