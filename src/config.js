@@ -175,6 +175,7 @@ export function resolveEnergySparseScanRatio(env = RUNTIME_ENV) {
 }
 
 export const ENERGY_SPARSE_SCAN_RATIO = resolveEnergySparseScanRatio();
+export const ENERGY_SPARSE_SCAN_RATIO_DEFAULT = ENERGY_SPARSE_SCAN_RATIO;
 
 /**
  * Resolves the fraction of the tile's maximum energy used to seed newly created
