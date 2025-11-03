@@ -75,13 +75,14 @@ function logWithOptionalError(method, message, error) {
 }
 
 /**
- * Emits a warning-level log the first time a distinct message/error pair is
- * observed. Useful for cautionary telemetry where repeated warnings would flood
- * the console without providing new information.
+ * Normalizes optional error payloads into a deterministic suffix used when
+ * deduping warning emissions. Stable suffixes ensure distinct stack traces or
+ * messages log independently while still collapsing noisy duplicates.
  *
- * @param {string} message - Description of the warning condition.
- * @param {unknown} [error] - Optional contextual error payload.
- * @returns {void}
+ * @param {unknown} error - Arbitrary error-like payload captured alongside the
+ *   warning message.
+ * @returns {string} Canonical suffix appended to the warning key. Empty when no
+ *   meaningful metadata is present.
  */
 function normalizeWarningKeySuffix(error) {
   if (error && typeof error === "object") {
@@ -120,6 +121,18 @@ function normalizeWarningKeySuffix(error) {
   }
 }
 
+/**
+ * Emits a warning-level log the first time a distinct message/error pair is
+ * observed. Repeated invocations reuse a bounded ring buffer to limit memory
+ * overhead, so callers may safely use the helper in hot code paths without
+ * flooding the console or leaking keys when the buffer reaches capacity.
+ *
+ * @param {string} message - Description of the warning condition. Empty
+ *   messages are ignored to avoid ambiguous log entries.
+ * @param {unknown} [error] - Optional contextual error payload. Participates in
+ *   deduplication via {@link normalizeWarningKeySuffix}.
+ * @returns {void}
+ */
 export function warnOnce(message, error) {
   if (typeof message !== "string" || message.length === 0) return;
 
