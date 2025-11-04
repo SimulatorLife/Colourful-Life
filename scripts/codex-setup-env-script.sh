@@ -199,11 +199,55 @@ fi
 git config --global push.autoSetupRemote true
 git config --global push.default current
 
-# --- Autosave on exit (unchanged)
-_auto_commit_on_exit() { # ... (your existing function body stays the same) ; }
-# NOTE: keep your existing _auto_commit_on_exit implementation here
-# (omitted for brevity since it’s unchanged)
-# trap _auto_commit_on_exit EXIT HUP INT TERM
+# --- Autosave on exit
+_auto_commit_on_exit() {
+  [ "${AUTO_COMMIT_ON_EXIT}" = "1" ] || return 0
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  cd "${repo_root}" || return 0
+
+  # skip during merges or rebases
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 || [ -d .git/rebase-apply ] || [ -d .git/rebase-merge ]; then
+    return 0
+  fi
+
+  # only commit if there are changes
+  if git status --porcelain 2>/dev/null | grep -q .; then
+    git add -A
+    git diff --cached --quiet && return 0
+
+    ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    host="${HOSTNAME:-unknown}"
+    msg="chore(autosave): session shutdown ${ts} on ${host}"
+
+    # merge recent commits if very recent
+    if git log -1 --since="2 minutes ago" --pretty=%H >/dev/null 2>&1; then
+      git commit --amend --no-edit >/dev/null 2>&1 || git commit -m "${msg}" >/dev/null 2>&1
+    else
+      git commit -m "${msg}" >/dev/null 2>&1 || return 0
+    fi
+
+    # push via appropriate transport
+    if [ "${GIT_TRANSPORT:-api}" = "api" ]; then
+      /usr/local/bin/commit-via-api.sh "$(git rev-parse --abbrev-ref HEAD)" || {
+        git diff HEAD~1..HEAD > ".autosave-$(date -u +%Y%m%dT%H%M%SZ).patch"
+      }
+    else
+      if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+        git push >/dev/null 2>&1 || git diff HEAD~1..HEAD > ".autosave-$(date -u +%Y%m%dT%H%M%SZ).patch"
+      else
+        remote="origin"
+        git remote get-url "${remote}" >/dev/null 2>&1 || remote="$(git remote | head -n1 || true)"
+        if [ -n "${remote}" ]; then
+          git push -u "${remote}" "$(git rev-parse --abbrev-ref HEAD)" >/dev/null 2>&1 || \
+          git diff HEAD~1..HEAD > ".autosave-$(date -u +%Y%m%dT%H%M%SZ).patch"
+        else
+          git diff HEAD~1..HEAD > ".autosave-$(date -u +%Y%m%dT%H%M%SZ).patch"
+        fi
+      fi
+    fi
+  fi
+}
+trap _auto_commit_on_exit EXIT HUP INT TERM
 
 # --- Fetch refs (skip in api)
 if [ "${GIT_TRANSPORT}" != "api" ]; then
@@ -224,16 +268,18 @@ if [ "${REAL_GIT_PATH}" = "/usr/local/bin/git" ] && [ -x /usr/bin/git ]; then
   REAL_GIT_PATH="/usr/bin/git"
 fi
 
-sudo tee /usr/local/bin/git >/dev/null <<SHIM
+sudo tee /usr/local/bin/git >/dev/null <<'SHIM'
 #!/usr/bin/env bash
 set -euo pipefail
-REAL_GIT="${REAL_GIT_PATH}"
-# Allow escape hatch: GIT_DIFF_OVERRIDE=0 git diff ...
-if [ "\${1-}" = "diff" ] && [ "\${GIT_DIFF_OVERRIDE:-1}" = "1" ] && [ "\$#" -eq 1 ]; then
+REAL_GIT="${REAL_GIT_PATH:-/usr/bin/git}"
+
+# Allow escape hatch: GIT_DIFF_OVERRIDE=0 git diff
+if [ "${1-}" = "diff" ] && [ "${GIT_DIFF_OVERRIDE:-1}" = "1" ] && [ "$#" -eq 1 ]; then
   mkdir -p /tmp/empty
-  exec "\${REAL_GIT}" diff --no-index /tmp/empty .
+  exec "${REAL_GIT}" diff --no-index /tmp/empty .
 fi
-exec "\${REAL_GIT}" "\$@"
+
+exec "${REAL_GIT}" "$@"
 SHIM
 sudo chmod +x /usr/local/bin/git
 
@@ -269,13 +315,15 @@ fi
 if [ -n "${GITHUB_TOKEN:-}" ]; then
   echo "Configuring repo-local credential store..."
   git config --local credential.helper 'store --file .git/codex-cred'
-  git -c credential.helper= -c 'credential.helper=store --file .git/codex-cred' credential approve <<EOF
+git -c credential.helper= \
+  -c 'credential.helper=store --file .git/codex-cred' \
+  credential approve <<EOF
 protocol=https
 host=github.com
 username=codex-bot
 password=${GITHUB_TOKEN}
 EOF
-  chmod 600 .git/codex-cred
+chmod 600 .git/codex-cred
 fi
 
 echo "Final Git remote configuration:"
