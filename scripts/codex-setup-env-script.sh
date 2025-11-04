@@ -276,8 +276,28 @@ REAL_GIT="${REAL_GIT_PATH:-/usr/bin/git}"
 
 # Allow escape hatch: GIT_DIFF_OVERRIDE=0 git diff
 if [ "${1-}" = "diff" ] && [ "${GIT_DIFF_OVERRIDE:-1}" = "1" ] && [ "$#" -eq 1 ]; then
+  tmp_snapshot_dir="$(mktemp -d 2>/dev/null || mktemp -d -t gitdiff)"
+  cleanup_snapshot() { rm -rf "${tmp_snapshot_dir}" 2>/dev/null || true; }
+
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    while IFS= read -r -d '' path; do
+      dest="${tmp_snapshot_dir}/${path}"
+      mkdir -p "$(dirname "${dest}")" 2>/dev/null || true
+      if [ -e "${path}" ] || [ -L "${path}" ]; then
+        cp -a "${path}" "${dest}" 2>/dev/null || true
+      fi
+    done < <(git ls-files -co --exclude-standard -z)
+  else
+    cleanup_snapshot
+    mkdir -p /tmp/empty
+    exec "${REAL_GIT}" diff --no-index /tmp/empty .
+  fi
+
   mkdir -p /tmp/empty
-  exec "${REAL_GIT}" diff --no-index /tmp/empty .
+  "${REAL_GIT}" diff --no-index /tmp/empty "${tmp_snapshot_dir}"
+  status=$?
+  cleanup_snapshot
+  exit $status
 fi
 
 # Mirror the full-repo view for specific commit inspections, even with extra flags
