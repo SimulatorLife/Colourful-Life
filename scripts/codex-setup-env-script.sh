@@ -1,4 +1,11 @@
 # Set up a development environment in Codex with GitHub authentication.
+# Pre-requisites:
+# Set the following environment variables as needed:
+#   REPO_OWNER        - GitHub repo owner (default: SimulatorLife)
+#   REPO_NAME         - GitHub repo name (default: current directory name)
+#   GIT_TRANSPORT     - git transport method: api (default), ssh443, https
+# Set the following environment secrets:
+#   GITHUB_TOKEN      - GitHub token with repo access (optional, but needed for API pushes)
 
 set -euo pipefail
 
@@ -8,7 +15,7 @@ REPO_NAME="${REPO_NAME:-$(basename "$(pwd)")}"
 URL_443="ssh://git@ssh.github.com:443/${REPO_OWNER}/${REPO_NAME}.git"
 export AUTO_COMMIT_ON_EXIT=${AUTO_COMMIT_ON_EXIT:-1}
 # Transport: api (REST commits), ssh443, or https
-GIT_TRANSPORT="${GIT_TRANSPORT:-api}"
+export GIT_TRANSPORT="${GIT_TRANSPORT:-api}"
 echo "Repo resolved as: ${REPO_OWNER}/${REPO_NAME} (transport=${GIT_TRANSPORT})"
 
 # --- Git identity & safe config
@@ -96,7 +103,7 @@ if ! command -v jq >/dev/null 2>&1; then
   sudo apt-get update && sudo apt-get install -y jq
 fi
 
-# --- API Push helper (option 2)
+# --- API Push helper
 cat > /usr/local/bin/commit-via-api.sh <<'APISCRIPT'
 #!/usr/bin/env bash
 # commit-via-api.sh <branch>
@@ -106,10 +113,25 @@ set -euo pipefail
 owner="${REPO_OWNER:?REPO_OWNER unset}"
 repo="${REPO_NAME:?REPO_NAME unset}"
 branch="${1:?usage: commit-via-api.sh <branch>}"
+
+# --- Token resolution (priority: env > repo-local credential store)
 token="${GITHUB_TOKEN:-}"
 
 if [ -z "${token}" ]; then
-  echo "[api-push] GITHUB_TOKEN is required." >&2
+  # If repo has a configured store helper with a custom file, use it; else default
+  helper="$(git config --local --get credential.helper || true)"
+  case "${helper}" in
+    *'store --file '*) cred_file="${helper##*--file }" ;;
+    *)                  cred_file=".git/codex-cred"   ;;
+  esac
+  if [ -f "${cred_file}" ]; then
+    # Extract token from URL form: https://USER:TOKEN@github.com
+    token="$(sed -n 's#^https\?://[^:]*:\([^@]*\)@github\.com.*#\1#p' "${cred_file}" | tail -n1 || true)"
+  fi
+fi
+
+if [ -z "${token}" ]; then
+  echo "[api-push] GITHUB_TOKEN is required (env or .git/codex-cred)." >&2
   exit 1
 fi
 
@@ -120,11 +142,12 @@ git add -A
 
 # Determine base commit for the branch (existing head or default branch head)
 default_branch="$(api "https://api.github.com/repos/${owner}/${repo}" | jq -r .default_branch)"
-ref_json="$(api "https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${branch}" 2>/dev/null || true)"
+ref_json="$(api "https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}" 2>/dev/null || true)"
+
 if [ -n "${ref_json}" ]; then
   base_sha="$(echo "${ref_json}" | jq -r .object.sha)"
 else
-  base_sha="$(api "https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${default_branch}" | jq -r .object.sha)"
+  base_sha="$(api "https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${default_branch}" | jq -r .object.sha)"
 fi
 
 # Build tree based on base commit's tree, replacing changed files
@@ -176,22 +199,42 @@ chmod +x /usr/local/bin/commit-via-api.sh
 # --- Global hooks (autopush + post-rewrite)
 GIT_GLOBAL_HOOKS="${HOME}/.githooks"
 mkdir -p "${GIT_GLOBAL_HOOKS}"
-git config --global core.hooksPath "${GIT_GLOBAL_HOOKS}"
-git config --global push.autoSetupRemote true
-git config --global push.default current
 
 cat > "${GIT_GLOBAL_HOOKS}/post-commit" <<'HOOK'
 #!/usr/bin/env bash
 set -euo pipefail
+
+# Bail if not in a repo or detached
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
 [ -n "${branch}" ] || exit 0
+
+# Helper to write a last-resort patch so work is preserved
+_write_patch_fallback() {
+  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+  git diff HEAD~1..HEAD > ".autosave-${ts}.patch" || true
+}
+
+# If explicitly in API mode, use the REST path
 if [ "${GIT_TRANSPORT:-api}" = "api" ]; then
-  /usr/local/bin/commit-via-api.sh "${branch}" || true
+  /usr/local/bin/commit-via-api.sh "${branch}" || _write_patch_fallback
+  exit 0
+fi
+
+# Otherwise, try normal git push first (ssh/https depending on your remote)
+remote="origin"
+git remote get-url "${remote}" >/dev/null 2>&1 || remote="$(git remote | head -n1 || true)"
+[ -n "${remote}" ] || exit 0
+
+if git push -u "${remote}" "${branch}" >/dev/null 2>&1; then
+  exit 0
+fi
+
+# If git push failed (proxy/ssh blocked), auto-fallback to API
+if command -v /usr/local/bin/commit-via-api.sh >/dev/null 2>&1; then
+  /usr/local/bin/commit-via-api.sh "${branch}" || _write_patch_fallback
 else
-  remote="origin"; git remote get-url "${remote}" >/dev/null 2>&1 || remote="$(git remote | head -n1 || true)"
-  [ -n "${remote}" ] || exit 0
-  git push -u "${remote}" "${branch}" >/dev/null 2>&1 || true
+  _write_patch_fallback
 fi
 HOOK
 chmod +x "${GIT_GLOBAL_HOOKS}/post-commit"
@@ -211,6 +254,15 @@ else
 fi
 HOOK
 chmod +x "${GIT_GLOBAL_HOOKS}/post-rewrite"
+
+# Configure global hooks path if not already set
+if ! git config --global --get core.hooksPath >/dev/null 2>&1; then
+  git config --global core.hooksPath "${GIT_GLOBAL_HOOKS}"
+fi
+
+# -- Additional git config
+git config --global push.autoSetupRemote true
+git config --global push.default current
 
 # --- Autosave on exit
 _auto_commit_on_exit() {
@@ -296,6 +348,23 @@ if [ -f package-lock.json ]; then
   npm ci --no-fund --no-audit --loglevel=error
 else
   npm install --no-fund --no-audit --loglevel=error
+fi
+
+# --- Repo-local credential store for HTTPS pushes (if token provided)
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  echo "Configuring repo-local credential store..."
+  git config --local credential.helper 'store --file .git/codex-cred'
+
+  git -c credential.helper= \
+      -c 'credential.helper=store --file .git/codex-cred' \
+      credential approve <<EOF
+protocol=https
+host=github.com
+username=codex-bot
+password=${GITHUB_TOKEN}
+EOF
+
+  chmod 600 .git/codex-cred
 fi
 
 echo "Final Git remote configuration:"
