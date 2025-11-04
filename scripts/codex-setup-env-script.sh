@@ -106,81 +106,82 @@ fi
 # --- API Push helper
 cat > /usr/local/bin/commit-via-api.sh <<'APISCRIPT'
 #!/usr/bin/env bash
-# commit-via-api.sh <branch>
-# Creates a commit from current index/working tree and updates/creates <branch> using GitHub REST API.
+# commit-via-api.sh <branch> [last-commit]
+# Mirrors the most recent local commit (HEAD) to GitHub via the Git Data API.
 set -euo pipefail
 
 owner="${REPO_OWNER:?REPO_OWNER unset}"
 repo="${REPO_NAME:?REPO_NAME unset}"
-branch="${1:?usage: commit-via-api.sh <branch>}"
+branch="${1:?usage: commit-via-api.sh <branch> [last-commit]}"
+mode="${2:-last-commit}"   # default to last-commit
 
-# --- Token resolution (priority: env > repo-local credential store)
+# --- Token resolution (env > repo-local credential store)
 token="${GITHUB_TOKEN:-}"
-
 if [ -z "${token}" ]; then
-  # If repo has a configured store helper with a custom file, use it; else default
   helper="$(git config --local --get credential.helper || true)"
-  case "${helper}" in
-    *'store --file '*) cred_file="${helper##*--file }" ;;
-    *)                  cred_file=".git/codex-cred"   ;;
-  esac
+  case "${helper}" in *'store --file '*) cred_file="${helper##*--file }" ;; *) cred_file=".git/codex-cred" ;; esac
   if [ -f "${cred_file}" ]; then
-    # Extract token from URL form: https://USER:TOKEN@github.com
     token="$(sed -n 's#^https\?://[^:]*:\([^@]*\)@github\.com.*#\1#p' "${cred_file}" | tail -n1 || true)"
   fi
 fi
-
-if [ -z "${token}" ]; then
-  echo "[api-push] GITHUB_TOKEN is required (env or .git/codex-cred)." >&2
-  exit 1
-fi
+[ -n "${token}" ] || { echo "[api-push] GITHUB_TOKEN is required (env or .git/codex-cred)." >&2; exit 1; }
 
 api() { curl -fsS -H "Authorization: token ${token}" -H "Accept: application/vnd.github+json" "$@"; }
 
-# Stage everything that's changed
-git add -A
-
-# Determine base commit for the branch (existing head or default branch head)
+# --- Resolve remote base ref (existing branch tip or default branch)
 default_branch="$(api "https://api.github.com/repos/${owner}/${repo}" | jq -r .default_branch)"
 ref_json="$(api "https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}" 2>/dev/null || true)"
-
 if [ -n "${ref_json}" ]; then
   base_sha="$(echo "${ref_json}" | jq -r .object.sha)"
 else
   base_sha="$(api "https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${default_branch}" | jq -r .object.sha)"
 fi
-
-# Build tree based on base commit's tree, replacing changed files
 base_tree="$(api "https://api.github.com/repos/${owner}/${repo}/git/commits/${base_sha}" | jq -r .tree.sha)"
 
-# List staged files; if none, exit gracefully
-mapfile -t files < <(git diff --cached --name-only)
-if [ "${#files[@]}" -eq 0 ]; then
-  echo "[api-push] No staged changes; nothing to commit."
+# --- Collect HEAD changes (files + commit message)
+declare -a add_paths del_paths
+commit_msg="$(git log -1 --pretty=%B)"
+
+# Handle first commit vs subsequent
+if git rev-parse -q --verify HEAD^ >/dev/null 2>&1; then
+  # List name-status for HEAD commit
+  while IFS=$'\t' read -r status path; do
+    case "${status}" in
+      D) del_paths+=("${path}") ;;
+      *) add_paths+=("${path}") ;;
+    esac
+  done < <(git diff-tree --no-commit-id --name-status -r HEAD)
+else
+  # First commit: mirror all tracked files
+  mapfile -t add_paths < <(git ls-files)
+fi
+
+# Nothing to push?
+if [ "${#add_paths[@]:-0}" -eq 0 ] && [ "${#del_paths[@]:-0}" -eq 0 ]; then
+  echo "[api-push] Nothing changed in HEAD; nothing to push."
   exit 0
 fi
 
+# --- Create blobs for added/modified files
 blobs_json="[]"
-for f in "${files[@]}"; do
-  # Handle deletion vs modification vs new
-  if git diff --cached --diff-filter=D --name-only | grep -qx "${f}"; then
-    # Deletion: tree entry with null sha by omission; record marker to remove later
-    blobs_json=$(jq --arg path "$f" '. + [{"path":$path,"mode":"100644","type":"blob","sha":null}]' <<<"${blobs_json}")
-  else
-    if [ -f "${f}" ]; then
-      content_b64="$(base64 -w0 < "${f}")"
-      blob_sha="$(api -X POST "https://api.github.com/repos/${owner}/${repo}/git/blobs" \
-        -d "{\"content\":\"${content_b64}\",\"encoding\":\"base64\"}" | jq -r .sha)"
-      blobs_json=$(jq --arg path "$f" --arg sha "$blob_sha" \
-        '. + [{"path":$path,"mode":"100644","type":"blob","sha":$sha}]' <<<"${blobs_json}")
-    fi
-  fi
+for f in "${add_paths[@]}"; do
+  [ -f "${f}" ] || continue
+  content_b64="$(base64 -w0 < "${f}")"
+  blob_sha="$(api -X POST "https://api.github.com/repos/${owner}/${repo}/git/blobs" \
+    -d "{\"content\":\"${content_b64}\",\"encoding\":\"base64\"}" | jq -r .sha)"
+  blobs_json=$(jq --arg path "$f" --arg sha "$blob_sha" \
+    '. + [{"path":$path,"mode":"100644","type":"blob","sha":$sha}]' <<<"${blobs_json}")
 done
 
+# --- Mark deletions (sha=null in tree)
+for f in "${del_paths[@]:-}"; do
+  blobs_json=$(jq --arg path "$f" '. + [{"path":$path,"mode":"100644","type":"blob","sha":null}]' <<<"${blobs_json}")
+done
+
+# --- Build new tree & commit on remote (fast-forward)
 new_tree="$(api -X POST "https://api.github.com/repos/${owner}/${repo}/git/trees" \
   -d "{\"base_tree\":\"${base_tree}\",\"tree\":${blobs_json}}" | jq -r .sha)"
 
-commit_msg="${COMMIT_MSG:-chore(api-push): commit via REST $(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 new_commit="$(api -X POST "https://api.github.com/repos/${owner}/${repo}/git/commits" \
   -d "{\"message\":$(jq -aRs . <<<\"$commit_msg\"),\"tree\":\"${new_tree}\",\"parents\":[\"${base_sha}\"]}" | jq -r .sha)"
 
@@ -192,7 +193,7 @@ else
     -d "{\"ref\":\"refs/heads/${branch}\",\"sha\":\"${new_commit}\"}" >/dev/null
 fi
 
-echo "[api-push] ${owner}/${repo}@${branch} -> ${new_commit}"
+echo "[api-push] ${owner}/${repo}@${branch} -> ${new_commit} (last-commit)"
 APISCRIPT
 chmod +x /usr/local/bin/commit-via-api.sh
 
