@@ -4,6 +4,7 @@
 #   REPO_OWNER        - GitHub repo owner (default: SimulatorLife)
 #   REPO_NAME         - GitHub repo name (default: current directory name)
 #   GIT_TRANSPORT     - git transport method: api (default), ssh443, https
+#   GIT_DIFF_OVERRIDE - set to 0 to disable custom git diff behavior (default: 1)
 # Set the following environment secrets:
 #   GITHUB_TOKEN      - GitHub token with repo access (optional, but needed for API pushes)
 
@@ -279,20 +280,64 @@ if [ "${1-}" = "diff" ] && [ "${GIT_DIFF_OVERRIDE:-1}" = "1" ] && [ "$#" -eq 1 ]
   exec "${REAL_GIT}" diff --no-index /tmp/empty .
 fi
 
-# Mirror the full-repo view for specific commit inspections
-if [ "${1-}" = "show" ] && [ "${GIT_DIFF_OVERRIDE:-1}" = "1" ] && [ "$#" -eq 2 ]; then
-  commit="$2"
-  if "${REAL_GIT}" cat-file -e "${commit}^{tree}" >/dev/null 2>&1; then
-    tmpdir="$(mktemp -d 2>/dev/null || mktemp -d -t gitshow)"
-    if "${REAL_GIT}" archive "${commit}" 2>/dev/null | tar -xf - -C "${tmpdir}" 2>/dev/null; then
-      mkdir -p /tmp/empty
-      "${REAL_GIT}" diff --no-index /tmp/empty "${tmpdir}"
-      status=$?
-      rm -rf "${tmpdir}"
-      exit $status
-    fi
-    rm -rf "${tmpdir}"
+# Mirror the full-repo view for specific commit inspections, even with extra flags
+if [ "${1-}" = "show" ] && [ "${GIT_DIFF_OVERRIDE:-1}" = "1" ]; then
+  orig_show_args=("$@")
+  shift
+
+  commit=""
+  options=()
+  paths=()
+  extras=()
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --help|-h)
+        exec "${REAL_GIT}" show "${orig_show_args[@]}"
+        ;;
+      --)
+        shift
+        while [ "$#" -gt 0 ]; do
+          paths+=("$1")
+          shift
+        done
+        break
+        ;;
+      -* )
+        options+=("$1")
+        shift
+        ;;
+      * )
+        if [ -z "${commit}" ]; then
+          commit="$1"
+        else
+          extras+=("$1")
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  # default to HEAD when no explicit commit is supplied
+  commit="${commit:-HEAD}"
+
+  # bail out to the real implementation on complex forms
+  if [ "${#extras[@]}" -gt 0 ]; then
+    exec "${REAL_GIT}" show "${orig_show_args[@]}"
   fi
+
+  # ensure the commit exists
+  if ! "${REAL_GIT}" cat-file -e "${commit}^{tree}" >/dev/null 2>&1; then
+    exec "${REAL_GIT}" show "${orig_show_args[@]}"
+  fi
+
+  empty_tree="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+  if [ "${#paths[@]}" -gt 0 ]; then
+    "${REAL_GIT}" diff "${options[@]}" "${empty_tree}" "${commit}" -- "${paths[@]}"
+  else
+    "${REAL_GIT}" diff "${options[@]}" "${empty_tree}" "${commit}"
+  fi
+  exit $?
 fi
 
 exec "${REAL_GIT}" "$@"
