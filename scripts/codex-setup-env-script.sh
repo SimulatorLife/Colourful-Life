@@ -7,7 +7,9 @@ REPO_OWNER="${REPO_OWNER:-SimulatorLife}"
 REPO_NAME="${REPO_NAME:-$(basename "$(pwd)")}"
 URL_443="ssh://git@ssh.github.com:443/${REPO_OWNER}/${REPO_NAME}.git"
 export AUTO_COMMIT_ON_EXIT=${AUTO_COMMIT_ON_EXIT:-1}
-echo "Repo resolved as: ${REPO_OWNER}/${REPO_NAME}"
+# Transport: api (REST commits), ssh443, or https
+GIT_TRANSPORT="${GIT_TRANSPORT:-api}"
+echo "Repo resolved as: ${REPO_OWNER}/${REPO_NAME} (transport=${GIT_TRANSPORT})"
 
 # --- Git identity & safe config
 git config --global user.name  "codex-bot"
@@ -30,7 +32,7 @@ fi
 # --- Token visibility
 [ -n "${GITHUB_TOKEN:-}" ] && echo "GITHUB_TOKEN present (length hidden)." || echo "GITHUB_TOKEN not provided."
 
-# --- Route SSH via 443 and ensure key
+# --- Route SSH via 443 and ensure key (only used in ssh443 mode)
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
 if ! grep -q "^Host github.com$" ~/.ssh/config 2>/dev/null; then
   cat >> ~/.ssh/config <<'EOF'
@@ -58,13 +60,118 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
     >/dev/null 2>&1 || echo "NOTE: deploy-key add failed (proxy/perms)."
 fi
 
-# --- Add/update origin to SSH:443 and force HTTPS->SSH rewrite (belt & suspenders)
-if git remote get-url origin >/dev/null 2>&1; then
-  git remote set-url origin "$URL_443"
-else
-  git remote add origin "$URL_443"
+# --- Transport selection
+case "${GIT_TRANSPORT}" in
+  api)
+    # no origin needed; all pushes via REST API
+    git remote remove origin 2>/dev/null || true
+    ;;
+  ssh443)
+    if git remote get-url origin >/dev/null 2>&1; then
+      git remote set-url origin "$URL_443"
+    else
+      git remote add origin "$URL_443"
+    fi
+    git config --global url."ssh://git@ssh.github.com:443/".insteadOf https://github.com/
+    ;;
+  https)
+    if git remote get-url origin >/dev/null 2>&1; then
+      git remote set-url origin "https://github.com/${REPO_OWNER}/${REPO_NAME}.git"
+    else
+      git remote add origin "https://github.com/${REPO_OWNER}/${REPO_NAME}.git"
+    fi
+    git config --global --unset-all url.ssh://git@ssh.github.com:443/.insteadOf || true
+    # Ensure proxy is used if present and CA is trusted
+    [ -n "${HTTPS_PROXY:-}" ] && git config --global https.proxy "${HTTPS_PROXY}"
+    [ -n "${HTTP_PROXY:-}" ] && git config --global http.proxy "${HTTP_PROXY}"
+    [ -n "${SSL_CERT_FILE:-}" ] && git config --global http.sslCAInfo "${SSL_CERT_FILE}"
+    ;;
+  *)
+    echo "Unknown GIT_TRANSPORT='${GIT_TRANSPORT}' (use api|ssh443|https)"; exit 2
+    ;;
+esac
+
+# --- Install jq for API helper
+if ! command -v jq >/dev/null 2>&1; then
+  sudo apt-get update && sudo apt-get install -y jq
 fi
-git config --global url."ssh://git@ssh.github.com:443/".insteadOf https://github.com/
+
+# --- API Push helper (option 2)
+cat > /usr/local/bin/commit-via-api.sh <<'APISCRIPT'
+#!/usr/bin/env bash
+# commit-via-api.sh <branch>
+# Creates a commit from current index/working tree and updates/creates <branch> using GitHub REST API.
+set -euo pipefail
+
+owner="${REPO_OWNER:?REPO_OWNER unset}"
+repo="${REPO_NAME:?REPO_NAME unset}"
+branch="${1:?usage: commit-via-api.sh <branch>}"
+token="${GITHUB_TOKEN:-}"
+
+if [ -z "${token}" ]; then
+  echo "[api-push] GITHUB_TOKEN is required." >&2
+  exit 1
+fi
+
+api() { curl -fsS -H "Authorization: token ${token}" -H "Accept: application/vnd.github+json" "$@"; }
+
+# Stage everything that's changed
+git add -A
+
+# Determine base commit for the branch (existing head or default branch head)
+default_branch="$(api "https://api.github.com/repos/${owner}/${repo}" | jq -r .default_branch)"
+ref_json="$(api "https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${branch}" 2>/dev/null || true)"
+if [ -n "${ref_json}" ]; then
+  base_sha="$(echo "${ref_json}" | jq -r .object.sha)"
+else
+  base_sha="$(api "https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${default_branch}" | jq -r .object.sha)"
+fi
+
+# Build tree based on base commit's tree, replacing changed files
+base_tree="$(api "https://api.github.com/repos/${owner}/${repo}/git/commits/${base_sha}" | jq -r .tree.sha)"
+
+# List staged files; if none, exit gracefully
+mapfile -t files < <(git diff --cached --name-only)
+if [ "${#files[@]}" -eq 0 ]; then
+  echo "[api-push] No staged changes; nothing to commit."
+  exit 0
+fi
+
+blobs_json="[]"
+for f in "${files[@]}"; do
+  # Handle deletion vs modification vs new
+  if git diff --cached --diff-filter=D --name-only | grep -qx "${f}"; then
+    # Deletion: tree entry with null sha by omission; record marker to remove later
+    blobs_json=$(jq --arg path "$f" '. + [{"path":$path,"mode":"100644","type":"blob","sha":null}]' <<<"${blobs_json}")
+  else
+    if [ -f "${f}" ]; then
+      content_b64="$(base64 -w0 < "${f}")"
+      blob_sha="$(api -X POST "https://api.github.com/repos/${owner}/${repo}/git/blobs" \
+        -d "{\"content\":\"${content_b64}\",\"encoding\":\"base64\"}" | jq -r .sha)"
+      blobs_json=$(jq --arg path "$f" --arg sha "$blob_sha" \
+        '. + [{"path":$path,"mode":"100644","type":"blob","sha":$sha}]' <<<"${blobs_json}")
+    fi
+  fi
+done
+
+new_tree="$(api -X POST "https://api.github.com/repos/${owner}/${repo}/git/trees" \
+  -d "{\"base_tree\":\"${base_tree}\",\"tree\":${blobs_json}}" | jq -r .sha)"
+
+commit_msg="${COMMIT_MSG:-chore(api-push): commit via REST $(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+new_commit="$(api -X POST "https://api.github.com/repos/${owner}/${repo}/git/commits" \
+  -d "{\"message\":$(jq -aRs . <<<\"$commit_msg\"),\"tree\":\"${new_tree}\",\"parents\":[\"${base_sha}\"]}" | jq -r .sha)"
+
+if [ -n "${ref_json}" ]; then
+  api -X PATCH "https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}" \
+    -d "{\"sha\":\"${new_commit}\",\"force\":false}" >/dev/null
+else
+  api -X POST "https://api.github.com/repos/${owner}/${repo}/git/refs" \
+    -d "{\"ref\":\"refs/heads/${branch}\",\"sha\":\"${new_commit}\"}" >/dev/null
+fi
+
+echo "[api-push] ${owner}/${repo}@${branch} -> ${new_commit}"
+APISCRIPT
+chmod +x /usr/local/bin/commit-via-api.sh
 
 # --- Global hooks (autopush + post-rewrite)
 GIT_GLOBAL_HOOKS="${HOME}/.githooks"
@@ -79,9 +186,13 @@ set -euo pipefail
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
 [ -n "${branch}" ] || exit 0
-remote="origin"; git remote get-url "${remote}" >/dev/null 2>&1 || remote="$(git remote | head -n1 || true)"
-[ -n "${remote}" ] || exit 0
-git push -u "${remote}" "${branch}" >/dev/null 2>&1 || true
+if [ "${GIT_TRANSPORT:-api}" = "api" ]; then
+  /usr/local/bin/commit-via-api.sh "${branch}" || true
+else
+  remote="origin"; git remote get-url "${remote}" >/dev/null 2>&1 || remote="$(git remote | head -n1 || true)"
+  [ -n "${remote}" ] || exit 0
+  git push -u "${remote}" "${branch}" >/dev/null 2>&1 || true
+fi
 HOOK
 chmod +x "${GIT_GLOBAL_HOOKS}/post-commit"
 
@@ -91,9 +202,13 @@ set -euo pipefail
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
 [ -n "${branch}" ] || exit 0
-remote="origin"; git remote get-url "${remote}" >/dev/null 2>&1 || remote="$(git remote | head -n1 || true)"
-[ -n "${remote}" ] || exit 0
-git push --force-with-lease -u "${remote}" "${branch}" >/dev/null 2>&1 || true
+if [ "${GIT_TRANSPORT:-api}" = "api" ]; then
+  /usr/local/bin/commit-via-api.sh "${branch}" || true
+else
+  remote="origin"; git remote get-url "${remote}" >/dev/null 2>&1 || remote="$(git remote | head -n1 || true)"
+  [ -n "${remote}" ] || exit 0
+  git push --force-with-lease -u "${remote}" "${branch}" >/dev/null 2>&1 || true
+fi
 HOOK
 chmod +x "${GIT_GLOBAL_HOOKS}/post-rewrite"
 
@@ -115,22 +230,30 @@ _auto_commit_on_exit() {
     else
       git commit -m "${msg}" >/dev/null 2>&1 || return 0
     fi
-    if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
-      git push >/dev/null 2>&1 || git diff HEAD~1..HEAD > ".autosave-$(date -u +%Y%m%dT%H%M%SZ).patch"
-    else
-      remote="origin"; git remote get-url "${remote}" >/dev/null 2>&1 || remote="$(git remote | head -n1 || true)"
-      if [ -n "${remote}" ]; then
-        git push -u "${remote}" "$(git rev-parse --abbrev-ref HEAD)" >/dev/null 2>&1 || git diff HEAD~1..HEAD > ".autosave-$(date -u +%Y%m%dT%H%M%SZ).patch"
-      else
+    if [ "${GIT_TRANSPORT:-api}" = "api" ]; then
+      /usr/local/bin/commit-via-api.sh "$(git rev-parse --abbrev-ref HEAD)" || {
         git diff HEAD~1..HEAD > ".autosave-$(date -u +%Y%m%dT%H%M%SZ).patch"
+      }
+    else
+      if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+        git push >/dev/null 2>&1 || git diff HEAD~1..HEAD > ".autosave-$(date -u +%Y%m%dT%H%M%SZ).patch"
+      else
+        remote="origin"; git remote get-url "${remote}" >/dev/null 2>&1 || remote="$(git remote | head -n1 || true)"
+        if [ -n "${remote}" ]; then
+          git push -u "${remote}" "$(git rev-parse --abbrev-ref HEAD)" >/dev/null 2>&1 || git diff HEAD~1..HEAD > ".autosave-$(date -u +%Y%m%dT%H%M%SZ).patch"
+        else
+          git diff HEAD~1..HEAD > ".autosave-$(date -u +%Y%m%dT%H%M%SZ).patch"
+        fi
       fi
     fi
   fi
 }
 trap _auto_commit_on_exit EXIT HUP INT TERM
 
-# --- Fetch refs (don’t assume master)
-git fetch --prune --no-tags origin '+refs/heads/*:refs/remotes/origin/*' || true
+# --- Fetch refs (don’t assume master) — skip in api mode since no git transport
+if [ "${GIT_TRANSPORT}" != "api" ]; then
+  git fetch --prune --no-tags origin '+refs/heads/*:refs/remotes/origin/*' || true
+fi
 
 # --- Optional: proxy debug + bypass for GitHub HTTPS (harmless even if unused)
 env | grep -i proxy || true
@@ -176,6 +299,6 @@ else
 fi
 
 echo "Final Git remote configuration:"
-git remote -v
+git remote -v || true
 
 echo "Custom environment setup script complete."
