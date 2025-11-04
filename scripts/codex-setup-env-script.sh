@@ -279,6 +279,22 @@ if [ "${1-}" = "diff" ] && [ "${GIT_DIFF_OVERRIDE:-1}" = "1" ] && [ "$#" -eq 1 ]
   exec "${REAL_GIT}" diff --no-index /tmp/empty .
 fi
 
+# Mirror the full-repo view for specific commit inspections
+if [ "${1-}" = "show" ] && [ "${GIT_DIFF_OVERRIDE:-1}" = "1" ] && [ "$#" -eq 2 ]; then
+  commit="$2"
+  if "${REAL_GIT}" cat-file -e "${commit}^{tree}" >/dev/null 2>&1; then
+    tmpdir="$(mktemp -d 2>/dev/null || mktemp -d -t gitshow)"
+    if "${REAL_GIT}" archive "${commit}" 2>/dev/null | tar -xf - -C "${tmpdir}" 2>/dev/null; then
+      mkdir -p /tmp/empty
+      "${REAL_GIT}" diff --no-index /tmp/empty "${tmpdir}"
+      status=$?
+      rm -rf "${tmpdir}"
+      exit $status
+    fi
+    rm -rf "${tmpdir}"
+  fi
+fi
+
 exec "${REAL_GIT}" "$@"
 SHIM
 sudo chmod +x /usr/local/bin/git
