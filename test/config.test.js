@@ -515,3 +515,45 @@ test("resolveOffspringViabilityBuffer clamps invalid overrides", async () => {
     1.09,
   );
 });
+
+test("OFFSPRING_ENERGY_DEMAND_FRACTION_BASELINE exposes the environment-aware default", async () => {
+  const { OFFSPRING_ENERGY_DEMAND_FRACTION_BASELINE } = await configModulePromise;
+
+  assert.is(OFFSPRING_ENERGY_DEMAND_FRACTION_BASELINE, 0.22);
+});
+
+test("resolveOffspringEnergyDemandFraction respects overrides", async () => {
+  const { resolveOffspringEnergyDemandFraction } = await configModulePromise;
+
+  assert.is(
+    resolveOffspringEnergyDemandFraction({
+      COLOURFUL_LIFE_OFFSPRING_ENERGY_DEMAND_FRACTION: "0.34",
+    }),
+    0.34,
+  );
+});
+
+test("resolveOffspringEnergyDemandFraction clamps invalid overrides", async () => {
+  const { resolveOffspringEnergyDemandFraction } = await configModulePromise;
+
+  assert.is(
+    resolveOffspringEnergyDemandFraction({
+      COLOURFUL_LIFE_OFFSPRING_ENERGY_DEMAND_FRACTION: "0.01",
+    }),
+    0.05,
+  );
+
+  assert.is(
+    resolveOffspringEnergyDemandFraction({
+      COLOURFUL_LIFE_OFFSPRING_ENERGY_DEMAND_FRACTION: "0.93",
+    }),
+    0.85,
+  );
+
+  assert.is(
+    resolveOffspringEnergyDemandFraction({
+      COLOURFUL_LIFE_OFFSPRING_ENERGY_DEMAND_FRACTION: "NaN",
+    }),
+    0.22,
+  );
+});

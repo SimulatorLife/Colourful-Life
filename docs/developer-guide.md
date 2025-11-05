@@ -161,6 +161,9 @@ change behaviour without touching source:
 - `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` scales how much surplus energy
   parents must stockpile beyond the strictest genome's demand before gestation
   begins.
+- `COLOURFUL_LIFE_OFFSPRING_ENERGY_DEMAND_FRACTION` sets the fallback minimum
+  energy fraction parents expect to invest when their DNA omits a dedicated
+  accessor, keeping gestation pressure tunable without rewriting genome logic.
 - `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` establishes the global floor on
   how many ticks parents must rest between births. The simulation now stretches
   or relaxes the actual cooldown based on parental energy investment,

@@ -13,6 +13,7 @@ let InteractionSystem;
 let Brain;
 let OUTPUT_GROUPS;
 let OFFSPRING_VIABILITY_BUFFER;
+let OFFSPRING_ENERGY_DEMAND_FRACTION_BASELINE;
 let REPRODUCTION_COOLDOWN_BASE;
 let MAX_TILE_ENERGY;
 
@@ -24,10 +25,13 @@ function investmentFor(
   maxTileEnergy,
   requiredShare = 0,
 ) {
+  const baselineDemand = Number.isFinite(OFFSPRING_ENERGY_DEMAND_FRACTION_BASELINE)
+    ? OFFSPRING_ENERGY_DEMAND_FRACTION_BASELINE
+    : 0.22;
   const safeMax = Number.isFinite(maxTileEnergy)
     ? maxTileEnergy
     : (window.GridManager?.maxTileEnergy ?? 12);
-  const targetEnergy = safeMax * clampFinite(demandFrac, 0, 1, 0.22);
+  const targetEnergy = safeMax * clampFinite(demandFrac, 0, 1, baselineDemand);
   const desiredBase = Math.max(0, Math.min(energy, energy * investFrac));
   const desired = Math.max(desiredBase, targetEnergy, requiredShare);
   const maxSpend = Math.max(0, energy - starvation);
@@ -183,8 +187,12 @@ test.before(async () => {
   ));
   ({ default: InteractionSystem } = await import("../src/grid/interactionSystem.js"));
   ({ default: Brain, OUTPUT_GROUPS } = await import("../src/brain.js"));
-  ({ OFFSPRING_VIABILITY_BUFFER, REPRODUCTION_COOLDOWN_BASE, MAX_TILE_ENERGY } =
-    await import("../src/config.js"));
+  ({
+    OFFSPRING_VIABILITY_BUFFER,
+    OFFSPRING_ENERGY_DEMAND_FRACTION_BASELINE,
+    REPRODUCTION_COOLDOWN_BASE,
+    MAX_TILE_ENERGY,
+  } = await import("../src/config.js"));
   if (typeof global.window === "undefined") global.window = globalThis;
   if (!window.GridManager) window.GridManager = {};
   if (typeof window.GridManager.maxTileEnergy !== "number") {
