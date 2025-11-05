@@ -210,6 +210,34 @@ test("clampSliderValue normalizes slider inputs", async () => {
   assert.equal(nullFallback.value, null);
 });
 
+test("normalizeSliderStepValue snaps slider values to configured steps", async () => {
+  const { clampSliderValue, normalizeSliderStepValue } =
+    await sliderConfigModulePromise;
+  const { value: speedValue, bounds: speedBounds } = clampSliderValue(
+    "speedMultiplier",
+    7.43,
+  );
+
+  assert.equal(normalizeSliderStepValue(speedValue, speedBounds), 7.5);
+
+  const { value: limitValue, bounds: limitBounds } = clampSliderValue(
+    "lifeEventLimit",
+    0.4,
+    { fallback: 0.4 },
+  );
+
+  assert.equal(normalizeSliderStepValue(limitValue, limitBounds, { defaultMin: 0 }), 0);
+
+  assert.equal(
+    normalizeSliderStepValue(
+      5.1,
+      { min: 0, max: 10 },
+      { defaultMin: 0, defaultStep: 2 },
+    ),
+    6,
+  );
+});
+
 test("simulation defaults keep environmental events dormant by default", async () => {
   const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
   const { UI_SLIDER_CONFIG } = await sliderConfigModulePromise;
