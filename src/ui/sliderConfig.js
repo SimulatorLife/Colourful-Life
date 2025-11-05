@@ -211,3 +211,59 @@ export function clampSliderValue(key, value, overrides = {}) {
 
   return { value: normalized, bounds };
 }
+
+/**
+ * Rounds a sanitized slider candidate to the configured step and clamps the
+ * result to the resolved bounds. Centralizing the snapping logic keeps UI
+ * modules from reimplementing nearly identical rounding, minimum, and maximum
+ * guards when synchronizing slider inputs.
+ *
+ * @param {number} value - Sanitized value returned by {@link clampSliderValue}.
+ * @param {{
+ *   min?: number,
+ *   max?: number,
+ *   step?: number,
+ *   floor?: number,
+ * }} [bounds] - Canonical slider configuration used to constrain the value.
+ * @param {{
+ *   defaultMin?: number,
+ *   defaultStep?: number,
+ * }} [options] - Optional fallbacks used when the bounds omit a minimum or
+ *   provide an invalid step size.
+ * @returns {number} The snapped, clamped slider value.
+ */
+export function normalizeSliderStepValue(value, bounds = {}, options = {}) {
+  if (!Number.isFinite(value)) {
+    return value;
+  }
+
+  const { defaultMin, defaultStep = 1 } = options;
+  const stepCandidate = bounds?.step;
+  const resolvedStep =
+    Number.isFinite(stepCandidate) && stepCandidate > 0
+      ? stepCandidate
+      : Number.isFinite(defaultStep) && defaultStep > 0
+        ? defaultStep
+        : 1;
+  const floorCandidate = bounds?.floor;
+  const minCandidate = bounds?.min;
+  const fallbackMin = Number.isFinite(defaultMin) ? defaultMin : undefined;
+  const min = Number.isFinite(minCandidate) ? minCandidate : fallbackMin;
+  const floor = Number.isFinite(floorCandidate) ? floorCandidate : undefined;
+  const lowerBound = floor ?? min;
+  const upperCandidate = bounds?.max;
+  const upperBound = Number.isFinite(upperCandidate) ? upperCandidate : value;
+  const snapped =
+    resolvedStep > 0 ? Math.round(value / resolvedStep) * resolvedStep : value;
+  const normalized = clamp(
+    snapped,
+    Number.isFinite(lowerBound) ? lowerBound : Number.NEGATIVE_INFINITY,
+    Number.isFinite(upperBound) ? upperBound : Number.POSITIVE_INFINITY,
+  );
+
+  if (Number.isFinite(lowerBound) && normalized < lowerBound) {
+    return lowerBound;
+  }
+
+  return normalized;
+}

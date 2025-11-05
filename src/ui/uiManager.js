@@ -1,5 +1,9 @@
 import { resolveSimulationDefaults, SIMULATION_DEFAULTS } from "../config.js";
-import { clampSliderValue, resolveSliderBounds } from "./sliderConfig.js";
+import {
+  clampSliderValue,
+  normalizeSliderStepValue,
+  resolveSliderBounds,
+} from "./sliderConfig.js";
 import {
   createControlButtonRow,
   createControlGrid,
@@ -6133,11 +6137,10 @@ export default class UIManager {
       return;
     }
 
-    const step = Number.isFinite(bounds?.step) && bounds.step > 0 ? bounds.step : 1;
-    const min = Number.isFinite(bounds?.min) ? bounds.min : 1;
-    const max = Number.isFinite(bounds?.max) ? bounds.max : sanitized;
-    const rounded = Math.round(sanitized / step) * step;
-    const normalized = clamp(rounded, min, max);
+    const normalized = normalizeSliderStepValue(sanitized, bounds, {
+      defaultMin: 1,
+      defaultStep: 1,
+    });
     const changed = this.lifeEventFadeTicks !== normalized;
 
     this.lifeEventFadeTicks = normalized;
@@ -6167,12 +6170,10 @@ export default class UIManager {
       return;
     }
 
-    const step = Number.isFinite(bounds?.step) && bounds.step > 0 ? bounds.step : 1;
-    const min = Number.isFinite(bounds?.min) ? bounds.min : 0;
-    const max = Number.isFinite(bounds?.max) ? bounds.max : sanitized;
-    const rounded = Math.round(sanitized / step) * step;
-    const clamped = clamp(rounded, min, max);
-    const normalized = clamped < min ? min : clamped;
+    const normalized = normalizeSliderStepValue(sanitized, bounds, {
+      defaultMin: 0,
+      defaultStep: 1,
+    });
     const changed = this.lifeEventLimit !== normalized;
 
     this.lifeEventLimit = normalized;
