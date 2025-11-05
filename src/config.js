@@ -78,6 +78,7 @@ const DEFAULT_ENERGY_SPARSE_SCAN_RATIO = 0.2;
 // margins, easing population dips without letting low-energy lineages spam
 // births.
 const DEFAULT_OFFSPRING_VIABILITY_BUFFER = 1.09;
+const DEFAULT_OFFSPRING_ENERGY_DEMAND_FRACTION = 0.22;
 const DEFAULT_MATE_DIVERSITY_SAMPLE_LIMIT = 5;
 // Telemetry defaults to highlighting the top five lineages. Expose the size so
 // headless consumers and UI presets can extend the leaderboard without touching
@@ -197,7 +198,31 @@ export function resolveInitialTileEnergyFraction(env = RUNTIME_ENV) {
   });
 }
 
+/**
+ * Resolves the baseline minimum fraction of a tile's maximum energy that each
+ * parent expects to invest when genome accessors decline to override the
+ * requirement. Environment overrides keep gestation pressure tunable across
+ * deployments without source edits while the sanitizer bounds the value within
+ * the biologically meaningful 0.05..0.85 interval referenced in reproduction
+ * logic.
+ *
+ * @param {Record<string, string | undefined>} [env=RUNTIME_ENV]
+ *   Environment-like object to inspect. Defaults to `process.env` when
+ *   available so browser builds can safely skip the lookup.
+ * @returns {number} Sanitized demand fraction between 0.05 and 0.85.
+ */
+export function resolveOffspringEnergyDemandFraction(env = RUNTIME_ENV) {
+  return resolveEnvNumber(env, "COLOURFUL_LIFE_OFFSPRING_ENERGY_DEMAND_FRACTION", {
+    fallback: DEFAULT_OFFSPRING_ENERGY_DEMAND_FRACTION,
+    min: 0.05,
+    max: 0.85,
+    clampResult: true,
+  });
+}
+
 export const INITIAL_TILE_ENERGY_FRACTION_DEFAULT = resolveInitialTileEnergyFraction();
+export const OFFSPRING_ENERGY_DEMAND_FRACTION_BASELINE =
+  resolveOffspringEnergyDemandFraction();
 export const DENSITY_RADIUS_DEFAULT = 1;
 
 /**

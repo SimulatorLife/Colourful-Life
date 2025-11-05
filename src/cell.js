@@ -9,6 +9,7 @@ import {
   MAX_TILE_ENERGY,
   MUTATION_CHANCE_BASELINE,
   OFFSPRING_VIABILITY_BUFFER,
+  OFFSPRING_ENERGY_DEMAND_FRACTION_BASELINE,
   REPRODUCTION_COOLDOWN_BASE,
 } from "./config.js";
 
@@ -444,17 +445,18 @@ export default class Cell {
         : typeof window !== "undefined" && window.GridManager?.maxTileEnergy != null
           ? window.GridManager.maxTileEnergy
           : MAX_TILE_ENERGY;
+    const defaultDemandFrac = OFFSPRING_ENERGY_DEMAND_FRACTION_BASELINE;
     const demandFracA = clamp(
       typeof parentA.dna?.offspringEnergyDemandFrac === "function"
         ? parentA.dna.offspringEnergyDemandFrac()
-        : 0.22,
+        : defaultDemandFrac,
       0.05,
       0.85,
     );
     const demandFracB = clamp(
       typeof parentB.dna?.offspringEnergyDemandFrac === "function"
         ? parentB.dna.offspringEnergyDemandFrac()
-        : 0.22,
+        : defaultDemandFrac,
       0.05,
       0.85,
     );
@@ -513,7 +515,8 @@ export default class Cell {
         0,
         Math.min(parent.energy, parent.energy * investFrac),
       );
-      const targetEnergy = resolvedMaxTileEnergy * clampFinite(demandFrac, 0, 1, 0.22);
+      const targetEnergy =
+        resolvedMaxTileEnergy * clampFinite(demandFrac, 0, 1, defaultDemandFrac);
       const desired = Math.max(desiredBase, targetEnergy, requiredShare);
       const maxSpend = Math.max(0, parent.energy - starvation);
 

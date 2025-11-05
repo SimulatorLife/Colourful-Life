@@ -73,6 +73,7 @@ This document captures how the Colourful Life simulation composes its core syste
   `COLOURFUL_LIFE_DECAY_RELEASE_RATE`,
   `COLOURFUL_LIFE_DECAY_MAX_AGE`,
   `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER`,
+  `COLOURFUL_LIFE_OFFSPRING_ENERGY_DEMAND_FRACTION`,
   `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE`, and
   `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` flow through
   [`src/config.js`](../src/config.js), letting experiments tweak caps, regeneration
@@ -107,6 +108,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - DNA encodes an `offspringEnergyDemandFrac` that establishes a DNA-driven viability floor for reproduction. Parents refuse to spawn unless their combined energy investment clears the pickier genome's expectation, allowing nurturing lineages to favour fewer, well-funded offspring while opportunists tolerate lean births.
 - `parentalInvestmentFrac` now blends parental, fertility, cooperation, recovery, gestation, efficiency, and risk loci, so supportive lineages willingly commit more energy while daring opportunists keep reserves for survival gambles.
 - The environment-level `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` scales how much surplus energy above that DNA floor parents must stockpile before gestation begins, letting deployments tune scarcity without touching genome accessors.
+- The environment-level `COLOURFUL_LIFE_OFFSPRING_ENERGY_DEMAND_FRACTION` sets the fallback viability floor when a genome omits an explicit demand accessor, keeping reproduction expectations tunable for legacy or minimalist DNA implementations while preserving per-genome nuance when available.
 - The environment-level `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` raises or lowers the minimum downtime parents observe after a successful birth. The actual cooldown now scales with each parent's energy investment, resilience genes, recent event pressure, and how evenly partners shared the gestation cost, so exhausted lineages recover slowly while well-fed cooperators bounce back quickly—yet the global floor and DNA-preferred delays still win when lineages evolve them.
 - DNA's gestation locus now feeds `offspringEnergyTransferEfficiency`, blending metabolic, parental, and fertility traits with a heritable gestation efficiency gene. Offspring inherit only the delivered share of the parental investment, so lineages evolve toward thrifty or wasteful reproduction instead of assuming perfect energy transfer.
 - Neural mate selection blends brain forecasts with DNA courtship heuristics. Each cell now previews reproduction sensors for every visible partner, folds the brain's acceptance probability into the mate's weight, and scales the influence using DNA-programmed reinforcement and sampling profiles. Populations that evolve richer neural wiring can therefore favour mates their brains predict will reciprocate, while simpler genomes continue to lean on legacy similarity heuristics.

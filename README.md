@@ -62,6 +62,7 @@ Important: Do not open `index.html` directly via `file://`. ES module imports ar
 - `COLOURFUL_LIFE_MUTATION_CHANCE` — Sets the default mutation probability applied when genomes reproduce without their own override.
 - `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` — Tunes the normalized cutoff the stats system uses when counting organisms as "active" for a trait.
 - `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` — Scales how much surplus energy parents must bank beyond the strictest genome's demand before gestation begins.
+- `COLOURFUL_LIFE_OFFSPRING_ENERGY_DEMAND_FRACTION` — Sets the fallback minimum energy fraction parents expect to invest when their DNA doesn't encode a preference, keeping gestation pressure tunable without editing genomes.
 - `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` — Establishes the minimum number of ticks parents must rest between births. The emergent cooldown stretches or relaxes from that floor based on parental energy investment, resilience, and recent environmental pressure, so you can bound recovery pacing without scripting it.
 
 Out-of-range values fall back to the defaults resolved in [`src/config.js`](src/config.js) so overlays remain aligned with the active configuration. The [developer guide](docs/developer-guide.md#configuration-overrides) walks through how these knobs interact during longer experiments, and the [architecture overview](docs/architecture-overview.md#energysystem) explains how the energy system consumes them during each tick.
