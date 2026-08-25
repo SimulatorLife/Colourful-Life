@@ -1,0 +1,5 @@
+# Feature pruning
+
+Identify one feature, option, or UI element in the simulation/codebase that now delivers minimal value, causes confusion, or duplicates clearer functionality. Before making any change, articulate both (a) the feature you plan to retire and (b) concrete evidence for its low value (e.g. overlapping behaviour, stale code, maintenance burden, complicated UX). If you cannot assemble a convincing case, stop and report that outcome with actionable recommendations instead of touching code.
+When you do proceed, remove the feature comprehensively: delete unused code, UI, configuration flags, and documentation references; adjust tests; and ensure builds and linting pass. Highlight migration implications or behaviour changes in the commit message. Preserve system integrity—do not remove essential flows, safety checks, or anything referenced by other modules. Keep the change focused on a single feature so it is easy to review and revert if needed.
+Respect the modular architecture, avoid introducing dependencies, and ensure the simulation remains runnable with headless and UI entry points.

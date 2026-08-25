@@ -1,0 +1,3 @@
+# Simulation hot-path profiling
+
+Use CPU profiling or instrumentation to analyze the simulation flow (grid manager sweeps, entity updates, energy accounting) and surface the tightest hot path that stretches tick time. Optimize that exact hotspot while respecting every Simulation Law: avoid changing behavior for occupancy limits, reproduction, energy costs, or genome-driven actions. Focus on algorithmic and structural improvements—shorter loops, reduced branching, hoisted invariants, reuse of buffers—rather than feature tweaks. Capture and include before/after timing in the PR body so reviewers can verify the win.

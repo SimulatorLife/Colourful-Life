@@ -1,0 +1,4 @@
+# Simulation observability
+
+Improve simulation 'observability' by delivering at least one tangible change/feature. Focus on one area (e.g. overlays, metrics, logs, dashboards, brain inspectors, or feedback cues) and make it easier for players to understand what organisms, genes, and events are doing. Possible directions include adding new visualizations (logs, markers, graphs, timelines), upgrading signals in existing tools (color, legends, thresholds, summaries), introducing diagnostic hooks (event history, brain snapshots, filterable stats), or making smaller wins like clearer labels, icons, or animations. You may also consolidate or remove elements if they are noisy, duplicative, or detract from clarity.
+Do not skip changes—always ship something. Keep scope focused, avoid architectural churn, ensure performance and accessibility, and add no heavyweight dependencies. Provide sensible defaults for any new options and update docs/tests as needed.
