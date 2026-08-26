@@ -308,53 +308,6 @@ function hashDensityGrid(grid) {
   });
 }
 
-// Cache-aware painter. When the fingerprint + surface match, blits the cached
-// canvas onto targetCtx. Otherwise renders via renderToCache, stores the new
-// fingerprint, then blits. When no usable surface is available, falls back to
-// rendering directly on targetCtx via renderToTarget.
-function paintTilesWithCache({
-  slot,
-  fingerprint,
-  width,
-  height,
-  targetCtx,
-  renderToCache,
-  renderToTarget,
-}) {
-  const drawCtx =
-    targetCtx && typeof targetCtx.drawImage === "function" ? targetCtx : null;
-
-  if (!drawCtx) return "noop";
-
-  if (
-    slot &&
-    slot.fingerprint === fingerprint &&
-    slot.surface &&
-    slot.width === width &&
-    slot.height === height &&
-    slot.ctx
-  ) {
-    drawCtx.drawImage(slot.surface, 0, 0);
-
-    return "hit";
-  }
-
-  const cacheCtx = slot ? ensureOverlayCacheSurface(slot, width, height) : null;
-
-  if (cacheCtx) {
-    cacheCtx.clearRect(0, 0, width, height);
-    renderToCache(cacheCtx);
-    slot.fingerprint = fingerprint;
-    drawCtx.drawImage(slot.surface, 0, 0);
-
-    return "miss";
-  }
-
-  renderToTarget(drawCtx);
-
-  return "fallback";
-}
-
 export function resetOverlayCaches() {
   for (const slot of Object.values(overlayCacheSlots)) {
     slot.surface = null;

@@ -34,7 +34,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - Drives reproduction, mutation, movement, combat, cooperation, and death each tick.
 - Enforces energy exclusivity by immediately draining or redistributing tile reserves when a cell occupies a coordinate so no tile reports a resident and stored energy simultaneously.
 - Delegates complex social interactions to **InteractionSystem** and neural decision making to **Brain** instances.
-- Collects leaderboard entries by combining `computeFitness` with per-cell telemetry.
+- Produces a lightweight scalar snapshot each tick; leaderboard/fitness entries are materialized only when telemetry or a fitness overlay requests them, avoiding population-sized allocations on every update.
 - Applies obstacle presets resolved via `resolveObstaclePresetCatalog` and exposes helpers such as
   `burstRandomCells` and `applyObstaclePreset` that the UI surfaces. Embedding contexts can pass
   `config.obstaclePresets` to extend or replace the catalog without touching core code.
@@ -127,7 +127,7 @@ This document captures how the Colourful Life simulation composes its core syste
 
 ### Stats and telemetry
 
-- **Stats** (`src/stats/index.js`) accumulates per-tick metrics, maintains rolling history for charts, reports aggregate counters (births, deaths, fights, cooperations), and shares trait aggregation helpers with [`src/stats/traitAggregation.js`](../src/stats/traitAggregation.js) so dashboards and overlays reuse the same pipeline. Age-related telemetry is expressed in simulation ticks so downstream tools can map it to seconds using their chosen tick cadence.
+- **Stats** (`src/stats/index.js`) accumulates per-tick metrics, maintains rolling history for charts, reports aggregate counters (births, deaths, fights, cooperations), and shares trait aggregation helpers with [`src/stats/traitAggregation.js`](../src/stats/traitAggregation.js) so dashboards and overlays reuse the same pipeline. It consumes the lightweight population-cell source without forcing detailed leaderboard entry materialization. Age-related telemetry is expressed in simulation ticks so downstream tools can map it to seconds using their chosen tick cadence.
 - **Fitness** (`src/stats/fitness.js`) computes composite organism scores that blend survival, energy trends, and reproduction cadence. The leaderboard and overlays consume these scores to highlight thriving lineages.
 - Life event summaries combine rolling birth/death counts with a net population delta and cadence indicator surfaced through the UI's "Life Event Log" panel, keeping the trend accessible to keyboard and assistive technology users. The Life Event Markers toggle now lives alongside the other map overlays in the Simulation Controls panel so observers can enable grid markers while dialing in canvas layers from a single location.
 - Headless sampling over 300 ticks on a 60×60 grid (seed 12345) showed the prior `0.45` mating diversity threshold averaging ~0.27 diversity with five successes across 241 mate choices, while the gentler `0.42` baseline lifted diversity to ~0.30 with six successes in 269 attempts, so the default now reflects the less restrictive gate to avoid reproduction stalls in homogenised periods.
@@ -138,7 +138,8 @@ This document captures how the Colourful Life simulation composes its core syste
 - `UIManager` uses builders in `src/ui/controlBuilders.js` to generate consistent control rows and slider behaviour.
 - Overlays (`src/ui/overlays.js`) render density, energy, fitness, life-event markers, and obstacle layers on top of the main
   canvas, including contextual legends such as the energy overlay's min/mean/max summary so observers can quickly gauge resource
-  availability.
+  availability. Energy, density, and age heatmaps reuse offscreen tile surfaces between unchanged frames and invalidate from the
+  simulation tick revision; environments without a blit-capable canvas retain the direct renderer.
 - Selection tooling (`src/grid/selectionManager.js`) exposes reusable mating zones that gate reproduction.
 - `ReproductionZonePolicy` (`src/grid/reproductionZonePolicy.js`) keeps `GridManager`'s reproduction flow decoupled from the selection implementation by translating zone checks into simple allow/deny results.
 - `config.js` consolidates slider bounds, simulation defaults, and runtime-tunable constants such as diffusion and regeneration rates so UI and headless contexts remain in sync.

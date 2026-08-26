@@ -1032,6 +1032,11 @@ export default class Cell {
       return EMPTY_MATE_SCORE_RESULTS;
     }
 
+    // Internal opt-in only: GridManager.handleReproduction consumes the returned
+    // buffer synchronously before the next mutation, so it is safe to hand back
+    // the scratch reference. External callers always receive an independent copy.
+    const reuseScratch = context?.__reuseMateScratch === true;
+
     const parentRow = Number.isFinite(context?.parentRow)
       ? context.parentRow
       : Number.isFinite(this.row)
@@ -1171,14 +1176,34 @@ export default class Cell {
       return EMPTY_MATE_SCORE_RESULTS;
     }
 
-    return scored.slice();
+    return reuseScratch ? scored : scored.slice();
   }
 
   selectMateWeighted(potentialMates = [], context = {}, scoredCandidates = null) {
     const scored = Array.isArray(scoredCandidates)
       ? scoredCandidates
       : this.scorePotentialMates(potentialMates, context);
-    const evaluated = scored.filter((m) => m && m.selectionWeight > 0 && m.target);
+    // Internal opt-in only: reuse the per-cell evaluated scratch buffer in the
+    // same synchronous handleReproduction path. External callers keep the
+    // historical independent-array contract.
+    const reuseScratch = context?.__reuseMateScratch === true;
+    let evaluated;
+
+    if (reuseScratch) {
+      evaluated = Array.isArray(this._mateEvaluatedScratch)
+        ? this._mateEvaluatedScratch
+        : (this._mateEvaluatedScratch = []);
+      evaluated.length = 0;
+      for (let i = 0; i < scored.length; i += 1) {
+        const m = scored[i];
+
+        if (m && m.selectionWeight > 0 && m.target) {
+          evaluated.push(m);
+        }
+      }
+    } else {
+      evaluated = scored.filter((m) => m && m.selectionWeight > 0 && m.target);
+    }
 
     if (evaluated.length === 0) return { chosen: null, evaluated: [], mode: "none" };
 

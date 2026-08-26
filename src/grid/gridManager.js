@@ -63,6 +63,12 @@ const EMPTY_FLOAT64_ARRAY = Object.freeze(new Float64Array(0));
 const EMPTY_UINT8_ARRAY = Object.freeze(new Uint8Array(0));
 
 const TARGET_SCAN_REVISION_KEY = Symbol("grid.targetScanRevision");
+// Per-tick revision marker stamped onto each cell record by processCell so the
+// per-tick update loop can suppress duplicate processing without allocating a
+// fresh WeakSet every tick. A Symbol key avoids collisions with cell-defined
+// fields and mirrors the TARGET_SCAN_REVISION_KEY pattern already used by
+// findTargets for target deduplication.
+const PROCESS_TICK_REVISION_KEY = Symbol("grid.processTickRevision");
 // Cache crowding metrics directly on occupants to avoid repeated preference and
 // energy normalization work when tiles share neighbors across regeneration
 // passes. A `Symbol` key prevents collisions with consumer-defined fields while
@@ -99,6 +105,7 @@ const DEFAULT_CROWDING_SUMMARY = Object.freeze({
 });
 const CROWDING_REVISION_LIMIT = 0xffffffff;
 const SEGMENTED_EVENT_CONTRIBUTION_KEY = Symbol("grid.segmentedContribution");
+const EMPTY_MOVE_OPTIONS = Object.freeze({});
 
 function resolveCrowdingSample(
   occupant,
@@ -555,6 +562,9 @@ export default class GridManager {
   #segmentWindowScratch = null;
   #columnEventScratch = null;
   #eventRowsScratch = null;
+  #mateCandidateScratchSelected = null;
+  #mateCandidateScratchSeparations = null;
+  #movementOptionsCache = null;
   #crowdingComfortGrid = null;
   #crowdingScarcityGrid = null;
   #crowdingCountGrid = null;
@@ -589,6 +599,10 @@ export default class GridManager {
   #targetDescriptorUsageAverage = 0;
   #targetUsageAccumulator = 0;
   #targetScanRevision = 0;
+  // Monotonic revision counter incremented once per update() call and stamped
+  // onto each cell via PROCESS_TICK_REVISION_KEY so processCell can detect
+  // duplicate work without allocating a WeakSet per tick.
+  #processTickRevision = 0;
   #rowOccupancy = [];
   #columnOccupancy = [];
   #rowOccupancySorted = [];
@@ -825,26 +839,6 @@ export default class GridManager {
         positions.fill(-1);
       }
     }
-  }
-
-  static #normalizeMoveOptions(options = {}) {
-    const {
-      obstacles = null,
-      onBlocked = null,
-      onMove = null,
-      activeCells = null,
-      onCellMoved = null,
-      clearDestinationEnergy = null,
-    } = options || {};
-
-    return {
-      obstacles,
-      onBlocked,
-      onMove,
-      activeCells,
-      onCellMoved,
-      clearDestinationEnergy,
-    };
   }
 
   static #isOutOfBounds(row, col, rows, cols) {
@@ -1835,17 +1829,18 @@ export default class GridManager {
     cell.energy = Math.max(0, cell.energy - cost);
   }
 
-  static #completeMove({
+  static #completeMove(
     gridArr,
     moving,
-    attempt,
+    fromRow,
+    fromCol,
+    toRow,
+    toCol,
     onMove,
     onCellMoved,
     activeCells,
     clearDestinationEnergy,
-  }) {
-    const { fromRow, fromCol, toRow, toCol } = attempt;
-
+  ) {
     gridArr[toRow][toCol] = moving;
     gridArr[fromRow][fromCol] = null;
 
@@ -1878,27 +1873,26 @@ export default class GridManager {
     deltaCol,
     rowCount,
     colCount,
-    options = {},
+    options = EMPTY_MOVE_OPTIONS,
   ) {
-    const normalizedOptions = GridManager.#normalizeMoveOptions(options);
+    const normalizedOptions =
+      options && (typeof options === "object" || typeof options === "function")
+        ? options
+        : EMPTY_MOVE_OPTIONS;
     const moving = gridArr[sourceRow]?.[sourceCol] ?? null;
 
     if (!moving) return false;
 
-    const attempt = {
-      fromRow: sourceRow,
-      fromCol: sourceCol,
-      toRow: sourceRow + deltaRow,
-      toCol: sourceCol + deltaCol,
-    };
+    const toRow = sourceRow + deltaRow;
+    const toCol = sourceCol + deltaCol;
 
     if (!Number.isInteger(deltaRow) || !Number.isInteger(deltaCol)) {
       GridManager.#notify(normalizedOptions.onBlocked, {
         reason: "range",
         row: sourceRow,
         col: sourceCol,
-        nextRow: attempt.toRow,
-        nextCol: attempt.toCol,
+        nextRow: toRow,
+        nextCol: toCol,
         mover: moving,
       });
 
@@ -1913,53 +1907,54 @@ export default class GridManager {
         reason: "range",
         row: sourceRow,
         col: sourceCol,
-        nextRow: attempt.toRow,
-        nextCol: attempt.toCol,
+        nextRow: toRow,
+        nextCol: toCol,
         mover: moving,
       });
 
       return false;
     }
 
-    if (GridManager.#isOutOfBounds(attempt.toRow, attempt.toCol, rowCount, colCount)) {
+    if (GridManager.#isOutOfBounds(toRow, toCol, rowCount, colCount)) {
       GridManager.#notify(normalizedOptions.onBlocked, {
         reason: "bounds",
         row: sourceRow,
         col: sourceCol,
-        nextRow: attempt.toRow,
-        nextCol: attempt.toCol,
+        nextRow: toRow,
+        nextCol: toCol,
         mover: moving,
       });
 
       return false;
     }
 
-    if (
-      GridManager.#isObstacle(normalizedOptions.obstacles, attempt.toRow, attempt.toCol)
-    ) {
+    if (GridManager.#isObstacle(normalizedOptions.obstacles, toRow, toCol)) {
       GridManager.#notify(normalizedOptions.onBlocked, {
         reason: "obstacle",
         row: sourceRow,
         col: sourceCol,
-        nextRow: attempt.toRow,
-        nextCol: attempt.toCol,
+        nextRow: toRow,
+        nextCol: toCol,
         mover: moving,
       });
 
       return false;
     }
 
-    if (gridArr[attempt.toRow][attempt.toCol]) return false;
+    if (gridArr[toRow][toCol]) return false;
 
-    GridManager.#completeMove({
+    GridManager.#completeMove(
       gridArr,
       moving,
-      attempt,
-      onMove: normalizedOptions.onMove,
-      onCellMoved: normalizedOptions.onCellMoved,
-      activeCells: normalizedOptions.activeCells,
-      clearDestinationEnergy: normalizedOptions.clearDestinationEnergy,
-    });
+      sourceRow,
+      sourceCol,
+      toRow,
+      toCol,
+      normalizedOptions.onMove,
+      normalizedOptions.onCellMoved,
+      normalizedOptions.activeCells,
+      normalizedOptions.clearDestinationEnergy,
+    );
 
     return true;
   }
@@ -1972,7 +1967,7 @@ export default class GridManager {
     targetCol,
     rows,
     cols,
-    options = {},
+    options = EMPTY_MOVE_OPTIONS,
   ) {
     const best = GridManager.#chooseDirectionalStep({
       mode: "approach",
@@ -2027,7 +2022,7 @@ export default class GridManager {
     targetCol,
     rows,
     cols,
-    options = {},
+    options = EMPTY_MOVE_OPTIONS,
   ) {
     const best = GridManager.#chooseDirectionalStep({
       mode: "avoid",
@@ -2252,7 +2247,7 @@ export default class GridManager {
     cell,
     rows,
     cols,
-    options = {},
+    options = EMPTY_MOVE_OPTIONS,
     movementContext = null,
   ) {
     const { dr, dc } = cell.decideRandomMove(movementContext);
@@ -2898,22 +2893,35 @@ export default class GridManager {
   }
 
   #movementOptions() {
-    return {
-      obstacles: this.obstacles,
-      onMove: this.onMoveCallback,
-      activeCells: this.activeCells,
-      onCellMoved: (cell, fromRow, fromCol, toRow, toCol) => {
-        if (!cell) return;
+    let options = this.#movementOptionsCache;
 
-        this.#shiftOccupancy(fromRow, fromCol, toRow, toCol);
-        this.activeCells.add(cell);
-        this.#trackCellPosition(cell, toRow, toCol);
-      },
-      densityAt: (r, c) => this.densityGrid?.[r]?.[c] ?? this.getDensityAt(r, c),
-      energyAt: (r, c) => this.energyGrid?.[r]?.[c] ?? 0,
-      maxTileEnergy: this.maxTileEnergy,
-      clearDestinationEnergy: (r, c) => clearTileEnergyBuffers(this, r, c),
-    };
+    if (!options) {
+      options = {
+        obstacles: this.obstacles,
+        onMove: this.onMoveCallback,
+        activeCells: this.activeCells,
+        onCellMoved: (cell, fromRow, fromCol, toRow, toCol) => {
+          if (!cell) return;
+
+          this.#shiftOccupancy(fromRow, fromCol, toRow, toCol);
+          this.activeCells.add(cell);
+          this.#trackCellPosition(cell, toRow, toCol);
+        },
+        densityAt: (r, c) => this.densityGrid?.[r]?.[c] ?? this.getDensityAt(r, c),
+        energyAt: (r, c) => this.energyGrid?.[r]?.[c] ?? 0,
+        maxTileEnergy: this.maxTileEnergy,
+        clearDestinationEnergy: (r, c) => clearTileEnergyBuffers(this, r, c),
+      };
+      this.#movementOptionsCache = options;
+    }
+
+    // These references can be replaced by world-reset/resize paths; refresh
+    // the shared object before each movement call without allocating it.
+    options.obstacles = this.obstacles;
+    options.activeCells = this.activeCells;
+    options.maxTileEnergy = this.maxTileEnergy;
+
+    return options;
   }
 
   #initializeOccupancy(rowCount, colCount = this.cols) {
@@ -3339,7 +3347,9 @@ export default class GridManager {
     const tracked = this.cellPositions.get(cell);
 
     if (tracked && this.#isValidLocation(tracked.row, tracked.col, cell)) {
-      return { row: tracked.row, col: tracked.col };
+      // Position records are private and only read by the update loop; return
+      // the existing record instead of allocating a coordinate object per cell.
+      return tracked;
     }
 
     if (tracked) {
@@ -3352,7 +3362,7 @@ export default class GridManager {
     if (this.#isValidLocation(directRow, directCol, cell)) {
       this.#trackCellPosition(cell, directRow, directCol);
 
-      return { row: directRow, col: directCol };
+      return this.cellPositions.get(cell) ?? null;
     }
 
     if (directRow != null || directCol != null) {
@@ -3368,7 +3378,7 @@ export default class GridManager {
     }
     this.#trackCellPosition(cell, located.row, located.col);
 
-    return located;
+    return this.cellPositions.get(cell) ?? located;
   }
 
   #random() {
@@ -7739,8 +7749,24 @@ export default class GridManager {
   ) {
     const cell = this.grid[row][col];
 
-    if (!cell || processed.has(cell)) return;
-    processed.add(cell);
+    if (!cell) return;
+
+    // processCell accepts either a WeakSet (legacy / direct test invocation)
+    // or a per-tick tracker object carrying a monotonic revision number. The
+    // tracker path stamps the cell record with the tick's revision via a
+    // module-private Symbol so duplicate suppression no longer requires a
+    // per-tick WeakSet allocation. Both branches preserve the original
+    // duplicate-suppression semantics; the tracker path additionally tolerates
+    // ordinary cell stubs that do not expose WeakSet-like helpers.
+    if (processed instanceof WeakSet) {
+      if (processed.has(cell)) return;
+      processed.add(cell);
+    } else {
+      const tickRevision = processed.processTickRevision;
+
+      if (cell[PROCESS_TICK_REVISION_KEY] === tickRevision) return;
+      cell[PROCESS_TICK_REVISION_KEY] = tickRevision;
+    }
     cell.age++;
     if (typeof cell.tickReproductionCooldown === "function") {
       cell.tickReproductionCooldown();
@@ -8173,8 +8199,31 @@ export default class GridManager {
 
     const maxCandidates = normalizedLimit;
 
-    const selected = new Array(maxCandidates);
-    const separations = new Array(maxCandidates);
+    // Reuse per-instance scratch buffers for the insertion sort to avoid
+    // allocating two fresh arrays and a final sliced copy on every
+    // reproduction. Safe under the current synchronous call path:
+    // handleReproduction consumes the returned matePool fully before any
+    // re-entrant call could overwrite the buffer, so growing it back to
+    // maxCandidates at the top of each call does not corrupt a live
+    // caller's view.
+    let selected = this.#mateCandidateScratchSelected;
+
+    if (!selected) {
+      selected = new Array(maxCandidates);
+      this.#mateCandidateScratchSelected = selected;
+    } else if (selected.length !== maxCandidates) {
+      selected.length = maxCandidates;
+    }
+
+    let separations = this.#mateCandidateScratchSeparations;
+
+    if (!separations) {
+      separations = new Array(maxCandidates);
+      this.#mateCandidateScratchSeparations = separations;
+    } else if (separations.length !== maxCandidates) {
+      separations.length = maxCandidates;
+    }
+
     let size = 0;
 
     for (let i = 0; i < candidates.length; i += 1) {
@@ -8230,7 +8279,9 @@ export default class GridManager {
       separations[insertAt] = normalizedSeparation;
     }
 
-    return selected.slice(0, size);
+    selected.length = size;
+
+    return selected;
   }
 
   handleReproduction(
@@ -8300,6 +8351,10 @@ export default class GridManager {
       tileEnergyDelta: parentTileEnergyDelta,
       parentRow: row,
       parentCol: col,
+      // Internal scratch reuse for the synchronous reproduction path only;
+      // scorePotentialMates/selectMateWeighted honour this to avoid per-tick
+      // .slice()/.filter() allocations. External callers never set this flag.
+      __reuseMateScratch: true,
     };
 
     const scoredCandidates =
@@ -9460,18 +9515,27 @@ export default class GridManager {
     });
 
     this.densityGrid = densityGrid;
-    const processed = new WeakSet();
+    // Stamp each processed cell with this tick's revision so processCell can
+    // suppress duplicate work without allocating a fresh WeakSet. Incrementing
+    // the GridManager-owned counter (and wrapping at 2^32 with a safety hop
+    // away from zero) mirrors the per-instance counter used by findTargets.
+    this.#processTickRevision = (this.#processTickRevision + 1) >>> 0;
+    if (this.#processTickRevision === 0) this.#processTickRevision = 1;
+    const processedTickRevision = this.#processTickRevision;
     const activeSnapshot = this.#acquireActiveCellSnapshot();
 
     // Allocate one context per tick (and pre-build the helper sub-contexts)
     // so the per-cell loop avoids rebuilding the same options object for every
-    // active cell. The WeakSet and per-tick scalars live for the duration of
-    // the tick; helper sub-contexts are read-only across cells.
+    // active cell. The revision tracker and per-tick scalars live for the
+    // duration of the tick; helper sub-contexts are read-only across cells.
+    // Direct callers (including the existing test stubs) that still pass a
+    // WeakSet as `processed` continue to take the legacy duplicate-detection
+    // branch inside processCell.
     const tickContext = {
       stats,
       eventManager,
       densityGrid,
-      processed,
+      processed: { processTickRevision: processedTickRevision },
       densityEffectMultiplier,
       societySimilarity,
       enemySimilarity,
@@ -9606,6 +9670,7 @@ export default class GridManager {
         materializedEntries = materialized.entries;
         snapshot.entries = materializedEntries;
         snapshot.maxFitness = materialized.maxFitness;
+        snapshot.materializeEntries = null;
 
         return materializedEntries;
       };

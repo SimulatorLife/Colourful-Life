@@ -3612,3 +3612,77 @@ test("scorePotentialMates returns independent results per invocation", () => {
     "previous scoring results should remain intact after subsequent evaluations",
   );
 });
+
+test("scorePotentialMates reuses the scratch array only when __reuseMateScratch is opted in", () => {
+  const dna = new DNA(0, 0, 0);
+  const parent = new Cell(5, 5, dna, window.GridManager.maxTileEnergy);
+  const mateDna = new DNA(0, 0, 0);
+  const mateA = new Cell(5, 6, mateDna, window.GridManager.maxTileEnergy);
+  const mateB = new Cell(5, 7, mateDna, window.GridManager.maxTileEnergy);
+
+  const candidateA = {
+    target: mateA,
+    row: mateA.row,
+    col: mateA.col,
+    selectionWeight: 0.5,
+    preferenceScore: 0.25,
+    similarity: 0.3,
+    diversity: 0.7,
+  };
+  const candidateB = {
+    target: mateB,
+    row: mateB.row,
+    col: mateB.col,
+    selectionWeight: 0.75,
+    preferenceScore: 0.6,
+    similarity: 0.2,
+    diversity: 0.8,
+  };
+
+  const reusedFirst = parent.scorePotentialMates([candidateA], {
+    __reuseMateScratch: true,
+  });
+
+  assert.is(
+    reusedFirst,
+    parent._mateScoreScratch,
+    "opt-in flag should hand back the internal scratch reference",
+  );
+
+  const reusedSecond = parent.scorePotentialMates([candidateB], {
+    __reuseMateScratch: true,
+  });
+
+  assert.is(
+    reusedSecond,
+    reusedFirst,
+    "opt-in calls should reuse the same scratch reference",
+  );
+  assert.is(reusedSecond.length, 1);
+  assert.is(
+    reusedSecond[0],
+    candidateB,
+    "scratch should hold the latest evaluation only after reuse",
+  );
+  const isolatedA = parent.scorePotentialMates([candidateA]);
+  const isolatedB = parent.scorePotentialMates([candidateB]);
+
+  assert.is.not(
+    isolatedA,
+    isolatedB,
+    "default callers must still receive independent arrays",
+  );
+  assert.is(isolatedA[0], candidateA, "previous default result must remain intact");
+  assert.is(isolatedB[0], candidateB, "new default result must remain intact");
+
+  const { chosen, evaluated } = parent.selectMateWeighted([candidateA], {
+    __reuseMateScratch: true,
+  });
+
+  assert.ok(chosen, "opt-in selectMateWeighted should still pick a mate");
+  assert.is(
+    evaluated,
+    parent._mateEvaluatedScratch,
+    "opt-in selectMateWeighted should reuse the evaluated scratch reference",
+  );
+});

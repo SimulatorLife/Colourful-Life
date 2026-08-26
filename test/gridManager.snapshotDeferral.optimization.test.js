@@ -35,7 +35,10 @@ test("lightweight snapshots defer detailed entry allocation until requested", as
   const first = createCell(0, 0, 4, 2);
   const second = createCell(1, 1, 3, 5);
 
-  gm.grid = [[first, null], [null, second]];
+  gm.grid = [
+    [first, null],
+    [null, second],
+  ];
   gm.rebuildActiveCells();
 
   const snapshot = gm.buildSnapshot(undefined, { includeEntries: false });
@@ -50,10 +53,10 @@ test("lightweight snapshots defer detailed entry allocation until requested", as
 
   assert.is(snapshot.entries.length, 2);
   assert.ok(snapshot.maxFitness > 0);
-  assert.equal(
-    snapshot.entries.map(({ row, col }) => `${row},${col}`).sort(),
-    ["0,0", "1,1"],
-  );
+  assert.equal(snapshot.entries.map(({ row, col }) => `${row},${col}`).sort(), [
+    "0,0",
+    "1,1",
+  ]);
 });
 
 test("normal snapshots retain detailed entries by default", async () => {
@@ -64,6 +67,7 @@ test("normal snapshots retain detailed entries by default", async () => {
   }
 
   const gm = new TestGridManager(1, 1, baseOptions);
+
   gm.grid = [[createCell(0, 0, 4, 2)]];
   gm.rebuildActiveCells();
 
