@@ -870,6 +870,72 @@ test("trait presence rebuild honors resample interval when events are absent", a
   approxEqual(stats.traitPresence.averages.cooperation, 0.15, 1e-9);
 });
 
+test("population churn does not bypass configured sampling cadence", async () => {
+  const { default: Stats } = await statsModulePromise;
+  let diversityCalls = 0;
+  let traitComputes = 0;
+
+  class CountingStats extends Stats {
+    constructor() {
+      super(8, {
+        traitResampleInterval: 100,
+        diversitySampleInterval: 100,
+        traitDefinitions: [
+          {
+            key: "sampled",
+            compute: () => {
+              traitComputes += 1;
+
+              return 0.5;
+            },
+            threshold: 0.2,
+          },
+        ],
+      });
+    }
+
+    estimateDiversity(cells) {
+      diversityCalls += 1;
+
+      return super.estimateDiversity(cells);
+    }
+  }
+
+  const stats = new CountingStats();
+  const population = Array.from({ length: 100 }, (_, index) =>
+    createCell({ row: Math.floor(index / 10), col: index % 10 }),
+  );
+  const churnedPopulation = population.slice(0, 99);
+  const makeSnapshot = (cells) => ({
+    population: cells.length,
+    totalEnergy: cells.length,
+    totalAge: 0,
+    entries: toEntries(cells),
+    populationCells: cells.slice(),
+  });
+
+  stats.updateFromSnapshot(makeSnapshot(population));
+  assert.is(diversityCalls, 1);
+  assert.is(traitComputes, 100);
+
+  stats.updateFromSnapshot(makeSnapshot(churnedPopulation));
+  assert.is(diversityCalls, 1);
+  assert.is(traitComputes, 100);
+
+  for (let tick = 0; tick < 98; tick += 1) {
+    stats.resetTick();
+    stats.updateFromSnapshot(makeSnapshot(churnedPopulation));
+  }
+
+  assert.is(diversityCalls, 1);
+  assert.is(traitComputes, 100);
+
+  stats.resetTick();
+  stats.updateFromSnapshot(makeSnapshot(churnedPopulation));
+  assert.is(diversityCalls, 2);
+  assert.is(traitComputes, 199);
+});
+
 test("life event ticks align with the active simulation tick", async () => {
   const { default: Stats } = await statsModulePromise;
   const stats = new Stats();

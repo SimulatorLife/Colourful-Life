@@ -8240,18 +8240,16 @@ export default class GridManager {
     // to the allied list so strongly kin-seeking genomes still have options.
     const baseMatePool = mates.length > 0 ? mates : society;
     const totalMateCandidates = Array.isArray(baseMatePool) ? baseMatePool.length : 0;
-    const matePool = this.#prioritizeMateCandidates(baseMatePool, row, col);
-
-    if (matePool.length === 0) return false;
-
     const earlyParentCooldownRemaining =
       typeof cell.getReproductionCooldown === "function"
         ? cell.getReproductionCooldown()
         : Math.max(0, cell.reproductionCooldown || 0);
 
+    // Cooldown is authoritative: do not rank or allocate candidate buffers for
+    // a parent that cannot reproduce this tick.
     if (earlyParentCooldownRemaining > 0) {
       if (stats?.recordReproductionBlocked) {
-        const firstMate = matePool[0];
+        const firstMate = baseMatePool[0];
         const mateTarget = firstMate?.target ?? null;
         const mateRow = Number.isFinite(firstMate?.row)
           ? firstMate.row
@@ -8273,6 +8271,10 @@ export default class GridManager {
 
       return false;
     }
+
+    const matePool = this.#prioritizeMateCandidates(baseMatePool, row, col);
+
+    if (matePool.length === 0) return false;
 
     const energyRow = this.energyGrid?.[row];
     const energyValue = energyRow ? energyRow[col] : 0;
@@ -8390,13 +8392,17 @@ export default class GridManager {
     const energyDenominator = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
     const tileEnergy = this.energyGrid[parentRow][parentCol] / energyDenominator;
     const tileEnergyDelta = this.energyDeltaGrid?.[parentRow]?.[parentCol] ?? 0;
-    const baseProb = cell.computeReproductionProbability(bestMate.target, {
-      localDensity,
-      densityEffectMultiplier,
-      maxTileEnergy: this.maxTileEnergy,
-      tileEnergy,
-      tileEnergyDelta,
-    });
+    const baseProb = cell.computeReproductionProbability(
+      bestMate.target,
+      {
+        localDensity,
+        densityEffectMultiplier,
+        maxTileEnergy: this.maxTileEnergy,
+        tileEnergy,
+        tileEnergyDelta,
+      },
+      similarity,
+    );
     const { probability: reproProb } = cell.decideReproduction(bestMate.target, {
       localDensity,
       densityEffectMultiplier,

@@ -1086,7 +1086,11 @@ export default class Cell {
           baseProbability = cachedBase;
 
           if (!Number.isFinite(baseProbability)) {
-            const resolvedBase = this.computeReproductionProbability(target, context);
+            const resolvedBase = this.computeReproductionProbability(
+              target,
+              context,
+              evaluated.similarity,
+            );
 
             if (Number.isFinite(resolvedBase)) {
               baseProbability = clamp(resolvedBase, 0, 1);
@@ -5783,7 +5787,10 @@ export default class Cell {
   #previewBrainGroup(group, sensors) {
     if (!this.#canUseNeuralPolicies()) return null;
 
-    const result = this.brain.evaluateGroup(group, sensors, { trace: false });
+    const result = this.brain.evaluateGroup(group, sensors, {
+      trace: false,
+      persist: false,
+    });
 
     if (!result || !result.values) return null;
 
@@ -8602,6 +8609,7 @@ export default class Cell {
       tileEnergy = null,
       tileEnergyDelta = 0,
     } = {},
+    partnerSimilarityOverride = null,
   ) {
     const baseReproProb =
       (this.dna.reproductionProb() + partner.dna.reproductionProb()) / 2;
@@ -8665,16 +8673,15 @@ export default class Cell {
         : 0.5;
     const fertilityDrive = clamp((fertilityA + fertilityB) / 2, 0, 1);
     const parentalDrive = clamp((parentalA + parentalB) / 2, 0, 1);
-    const partnerSimilarity = clamp(
-      this.#safeSimilarityTo(partner, {
-        context: "reproduction probability similarity",
-        fallback: 0.5,
-      }),
-      0,
-      1,
-    );
+    const partnerSimilarityValue = Number.isFinite(partnerSimilarityOverride)
+      ? partnerSimilarityOverride
+      : this.#safeSimilarityTo(partner, {
+          context: "reproduction probability similarity",
+          fallback: 0.5,
+        });
+    const resolvedPartnerSimilarity = clamp(partnerSimilarityValue, 0, 1);
     const diversityDrive = this.#resolveDiversityDrive({
-      availableDiversity: clamp(1 - partnerSimilarity, 0, 1),
+      availableDiversity: clamp(1 - resolvedPartnerSimilarity, 0, 1),
     });
     const survivalInstinct = clamp(
       this.neuralReinforcementProfile?.survivalInstinct ?? 0.5,

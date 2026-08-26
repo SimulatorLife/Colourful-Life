@@ -1928,14 +1928,23 @@ export default class Stats {
     const meanAge = pop > 0 ? totalAge / pop : 0;
     const tick = this.totals.ticks;
     const populationChanged = this.#traitPopulation !== pop;
+    const traitPopulationDelta = Math.abs(pop - this.#traitPopulation);
+    const traitPopulationShift =
+      traitPopulationDelta / Math.max(1, this.#traitPopulation);
+    const significantTraitPopulationChange =
+      populationChanged && traitPopulationShift >= 0.1;
 
     if (populationChanged) {
       this.#traitPresenceDirty = true;
     }
 
+    // Population churn is normal in a dense ecosystem. Rebuilding every trait
+    // aggregate for a one-cell birth/death defeats the configured cadence and
+    // makes this O(population) pass run on every tick. A meaningful population
+    // shift still refreshes immediately; ordinary churn waits for the interval.
     const shouldRebuildTraits =
       this.#needsTraitRebuild ||
-      populationChanged ||
+      significantTraitPopulationChange ||
       tick >= this.#nextTraitResampleTick;
 
     if (shouldRebuildTraits) {
@@ -1953,9 +1962,13 @@ export default class Stats {
       traitPresence = this.traitPresence;
     }
 
+    const diversityPopulationDelta = Math.abs(pop - this.#diversityPopulationBaseline);
+    const diversityPopulationShift =
+      diversityPopulationDelta / Math.max(1, this.#diversityPopulationBaseline);
+    const significantDiversityPopulationChange =
+      this.#diversityPopulationBaseline !== pop && diversityPopulationShift >= 0.1;
     const shouldSampleDiversity =
-      tick >= this.#nextDiversitySampleTick ||
-      this.#diversityPopulationBaseline !== pop;
+      tick >= this.#nextDiversitySampleTick || significantDiversityPopulationChange;
 
     if (shouldSampleDiversity) {
       this.lastDiversitySample = this.estimateDiversity(populationSources);

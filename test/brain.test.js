@@ -65,6 +65,23 @@ test("Brain.evaluateGroup applies sensor modulation and produces trace snapshots
   );
 });
 
+test("Brain preview evaluations return values without replacing telemetry", () => {
+  const energyIndex = Brain.sensorIndex("energy");
+  const brain = new Brain({
+    genes: [{ sourceId: energyIndex, targetId: 192, weight: 1, activationType: 0 }],
+  });
+
+  const persisted = brain.evaluateGroup("movement", { energy: 0.2 });
+  const previousEvaluation = brain.lastEvaluation;
+  const previousActivationCount = brain.lastActivationCount;
+  const preview = brain.evaluateGroup("movement", { energy: 0.9 }, { persist: false });
+
+  assert.ok(preview.values);
+  assert.is(brain.lastEvaluation, previousEvaluation);
+  assert.is(brain.lastActivationCount, previousActivationCount);
+  assert.is.not(persisted, preview);
+});
+
 test("Brain.applySensorFeedback adjusts experience targets and gains for positive and negative signals", () => {
   const energyIndex = Brain.sensorIndex("energy");
   const densityIndex = Brain.sensorIndex("effectiveDensity");

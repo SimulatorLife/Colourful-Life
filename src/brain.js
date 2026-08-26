@@ -366,6 +366,7 @@ export default class Brain {
 
   evaluateGroup(groupName, sensorObject = {}, options = {}) {
     const traceEnabled = Boolean(options?.trace);
+    const persistEvaluation = options?.persist !== false;
     const group = OUTPUT_GROUPS[groupName];
 
     if (!group || group.length === 0) {
@@ -381,18 +382,20 @@ export default class Brain {
         emptyEvaluation.trace = { sensors: [], nodes: [] };
       }
 
-      this.lastEvaluation = {
-        group: groupName,
-        sensors: this.#copySensorsInto(
-          this.#lastEvaluationSensorsScratch,
-          emptySensors,
-        ),
-        activationCount: 0,
-        outputs: null,
-        trace: traceEnabled ? emptyEvaluation.trace : null,
-      };
-      this.#lastEvaluationSensorsScratch = this.lastEvaluation.sensors;
-      this.lastActivationCount = 0;
+      if (persistEvaluation) {
+        this.lastEvaluation = {
+          group: groupName,
+          sensors: this.#copySensorsInto(
+            this.#lastEvaluationSensorsScratch,
+            emptySensors,
+          ),
+          activationCount: 0,
+          outputs: null,
+          trace: traceEnabled ? emptyEvaluation.trace : null,
+        };
+        this.#lastEvaluationSensorsScratch = this.lastEvaluation.sensors;
+        this.lastActivationCount = 0;
+      }
 
       return emptyEvaluation;
     }
@@ -414,9 +417,15 @@ export default class Brain {
 
     this.#applySensorModulation(sensors);
 
-    const sensorVector = this.#cloneSensors(sensors);
+    // Preview callers consume the result synchronously and do not retain the
+    // sensor vector, so returning the scratch buffer avoids one array clone per
+    // candidate evaluation. Persisted evaluations still receive an isolated
+    // vector for telemetry and feedback consumers.
+    const sensorVector = persistEvaluation ? this.#cloneSensors(sensors) : sensors;
 
-    this.lastSensors = sensorVector;
+    if (persistEvaluation) {
+      this.lastSensors = sensorVector;
+    }
     const cache = this.#acquireEvaluationCache();
     const visiting = this.#acquireEvaluationVisiting();
     let activationCount = 0;
@@ -542,21 +551,27 @@ export default class Brain {
       }
     }
 
+    // Preview evaluations still contribute to the brain's dynamic load and
+    // output state, because the next metabolic feedback pass consumes these
+    // values. They do not need a retained telemetry snapshot.
     this.lastActivationCount = activationCount;
-    const lastEvaluationSensors = this.#copySensorsInto(
-      this.#lastEvaluationSensorsScratch,
-      sensorVector,
-    );
 
-    this.#lastEvaluationSensorsScratch = lastEvaluationSensors;
+    if (persistEvaluation) {
+      const lastEvaluationSensors = this.#copySensorsInto(
+        this.#lastEvaluationSensorsScratch,
+        sensorVector,
+      );
 
-    this.lastEvaluation = {
-      group: groupName,
-      sensors: lastEvaluationSensors,
-      activationCount,
-      outputs: hasActivations ? { ...values } : null,
-      trace: traceEnabled && tracePayload ? cloneTracePayload(tracePayload) : null,
-    };
+      this.#lastEvaluationSensorsScratch = lastEvaluationSensors;
+
+      this.lastEvaluation = {
+        group: groupName,
+        sensors: lastEvaluationSensors,
+        activationCount,
+        outputs: hasActivations ? { ...values } : null,
+        trace: traceEnabled && tracePayload ? cloneTracePayload(tracePayload) : null,
+      };
+    }
 
     cache.clear();
     visiting.clear();

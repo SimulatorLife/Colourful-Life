@@ -1915,6 +1915,28 @@ test("reproduction energy memory responds to shortage and surplus outcomes", () 
   );
 });
 
+test("reproduction probability reuses a precomputed partner similarity", () => {
+  const parent = new Cell(2, 2, new DNA(80, 120, 160), 4);
+  const partner = new Cell(2, 3, new DNA(150, 110, 70), 4);
+  const context = {
+    localDensity: 0.2,
+    densityEffectMultiplier: 1,
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+    tileEnergy: 0.5,
+    tileEnergyDelta: 0,
+  };
+  const similarity = parent.similarityTo(partner);
+  const direct = parent.computeReproductionProbability(partner, context);
+  const reused = parent.computeReproductionProbability(partner, context, similarity);
+
+  approxEqual(
+    reused,
+    direct,
+    1e-12,
+    "the similarity fast path should preserve reproduction probability",
+  );
+});
+
 test("gestation efficiency genes modulate delivered offspring energy", () => {
   const configureGenome = (geneValue) => {
     const dna = new DNA(90, 140, 210);
