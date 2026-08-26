@@ -402,11 +402,13 @@ export default class Brain {
     sensors[0] = 1; // bias constant
 
     if (sensorObject && typeof sensorObject === "object") {
-      for (const [key, value] of Object.entries(sensorObject)) {
+      for (const key in sensorObject) {
+        if (!Object.hasOwn(sensorObject, key)) continue;
+
         const idx = SENSOR_LOOKUP.get(key);
 
         if (idx === undefined) continue;
-        sensors[idx] = clampSensorValue(value);
+        sensors[idx] = clampSensorValue(sensorObject[key]);
       }
     }
 
@@ -465,7 +467,10 @@ export default class Brain {
       }
 
       const nodeInputs = traceEnabled ? [] : null;
-      const sum = incoming.reduce((total, connection) => {
+      let sum = 0;
+
+      for (let index = 0; index < incoming.length; index += 1) {
+        const connection = incoming[index];
         const { source, weight } = connection;
         const sourceValue = computeNode(source);
 
@@ -477,8 +482,8 @@ export default class Brain {
           });
         }
 
-        return total + weight * sourceValue;
-      }, 0);
+        sum += weight * sourceValue;
+      }
 
       visiting.delete(nodeId);
       activationCount++;

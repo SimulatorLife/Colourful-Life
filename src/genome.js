@@ -2785,7 +2785,28 @@ export class DNA {
 
     let distSq = 0;
 
-    if (directGenes) {
+    if (directGenes && isByteView(directGenes)) {
+      const otherLen = toNonNegativeInteger(directGenes.length, 0);
+      const sharedLength = selfLength < otherLen ? selfLength : otherLen;
+
+      for (let i = 0; i < sharedLength; i++) {
+        const delta = selfGenes[i] - directGenes[i];
+
+        distSq += delta * delta;
+      }
+
+      for (let index = sharedLength; index < selfLength; index++) {
+        const value = selfGenes[index];
+
+        distSq += value * value;
+      }
+
+      for (let index = sharedLength; index < otherLen; index++) {
+        const value = directGenes[index];
+
+        distSq += value * value;
+      }
+    } else if (directGenes) {
       const otherLen = toNonNegativeInteger(directGenes.length, 0);
       const sharedLength = selfLength < otherLen ? selfLength : otherLen;
       const selfData = selfGenes;

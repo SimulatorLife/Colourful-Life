@@ -8298,6 +8298,36 @@ export default class GridManager {
 
     if (matePool.length === 0) return false;
 
+    const earlyParentCooldownRemaining =
+      typeof cell.getReproductionCooldown === "function"
+        ? cell.getReproductionCooldown()
+        : Math.max(0, cell.reproductionCooldown || 0);
+
+    if (earlyParentCooldownRemaining > 0) {
+      if (stats?.recordReproductionBlocked) {
+        const firstMate = matePool[0];
+        const mateTarget = firstMate?.target ?? null;
+        const mateRow = Number.isFinite(firstMate?.row)
+          ? firstMate.row
+          : mateTarget?.row;
+        const mateCol = Number.isFinite(firstMate?.col)
+          ? firstMate.col
+          : mateTarget?.col;
+        const mateCooldownRemaining =
+          typeof mateTarget?.getReproductionCooldown === "function"
+            ? mateTarget.getReproductionCooldown()
+            : Math.max(0, mateTarget?.reproductionCooldown || 0);
+
+        stats.recordReproductionBlocked({
+          reason: "Reproduction cooldown active",
+          parentA: { row, col, cooldown: earlyParentCooldownRemaining },
+          parentB: { row: mateRow, col: mateCol, cooldown: mateCooldownRemaining },
+        });
+      }
+
+      return false;
+    }
+
     const energyRow = this.energyGrid?.[row];
     const energyValue = energyRow ? energyRow[col] : 0;
     const parentEnergyCap = this.maxTileEnergy > 0 ? this.maxTileEnergy : 1;
