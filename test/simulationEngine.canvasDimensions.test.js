@@ -107,6 +107,9 @@ test("SimulationEngine scales the canvas for high-DPI displays", async () => {
     });
     assert.ok(typeof listeners.resize === "function");
 
+    engine.on("tick", () => {});
+    assert.equal(engine.listeners.size, 1);
+
     fakeWindow.devicePixelRatio = 1.5;
     listeners.resize();
 
@@ -128,6 +131,11 @@ test("SimulationEngine scales the canvas for high-DPI displays", async () => {
         (entry) => entry.event === "resize" && entry.handler === listeners.resize,
       ),
       "resize listener should be cleaned up",
+    );
+    assert.equal(
+      engine.listeners.size,
+      0,
+      "engine listeners should be released on destroy",
     );
   } finally {
     restore();

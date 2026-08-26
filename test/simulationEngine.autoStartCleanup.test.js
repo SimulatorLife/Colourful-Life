@@ -49,9 +49,8 @@ function createEventRecorder(additionalProps = {}) {
 }
 
 test("SimulationEngine cleans up global listeners when autoStart fails", async () => {
-  const { default: SimulationEngine } = await import(
-    "../src/engine/simulationEngine.js"
-  );
+  const { default: SimulationEngine } =
+    await import("../src/engine/simulationEngine.js");
 
   const windowRecorder = createEventRecorder({ devicePixelRatio: 1 });
   const documentRecorder = createEventRecorder({

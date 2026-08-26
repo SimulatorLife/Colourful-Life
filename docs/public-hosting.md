@@ -32,16 +32,16 @@ You can pick any remote name. If you choose a name other than `public`, export
 Run the helper script added to `scripts/`:
 
 ```bash
-npm ci
-npm run deploy:public
+pnpm install --frozen-lockfile
+pnpm run deploy:public
 ```
 
-The npm script invokes `./scripts/publish-public-build.sh`; run it directly if
+The pnpm script invokes `./scripts/publish-public-build.sh`; run it directly if
 you prefer to call the shell script yourself.
 
 The script performs the following steps:
 
-1. Runs `npm run build` (override with `BUILD_COMMAND` if needed).
+1. Runs `pnpm run build` (override with `BUILD_COMMAND` if needed).
 2. Creates a temporary Git worktree for the target publishing branch.
 3. Copies the Parcel build output (`dist/` by default) into the worktree.
 4. Commits the updated assets with a message referencing the source commit.
@@ -55,12 +55,12 @@ copies so you do not need to install extra tooling before publishing.
 Environment variables let you customise the behaviour without editing the
 script:
 
-| Variable             | Default         | Purpose                                                   |
-| -------------------- | --------------- | --------------------------------------------------------- |
-| `PUBLIC_REMOTE_NAME` | `public`        | Name of the Git remote pointing to the public repository. |
-| `PUBLIC_BRANCH`      | `gh-pages`      | Branch that stores the compiled assets.                   |
-| `BUILD_COMMAND`      | `npm run build` | Command used to create the production build.              |
-| `BUILD_DIR`          | `dist`          | Directory containing the build output to publish.         |
+| Variable             | Default          | Purpose                                                   |
+| -------------------- | ---------------- | --------------------------------------------------------- |
+| `PUBLIC_REMOTE_NAME` | `public`         | Name of the Git remote pointing to the public repository. |
+| `PUBLIC_BRANCH`      | `gh-pages`       | Branch that stores the compiled assets.                   |
+| `BUILD_COMMAND`      | `pnpm run build` | Command used to create the production build.              |
+| `BUILD_DIR`          | `dist`           | Directory containing the build output to publish.         |
 
 Example:
 

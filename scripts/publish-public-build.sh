@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # Requirements:
 #   * Run from the root of the private/source repository.
-#   * "npm install" must have already been executed.
+#   * "pnpm install" must have already been executed.
 #   * A git remote pointing at the public repo must exist (defaults to "public").
 #   * The public repository must have a branch dedicated to the build output
 #     (defaults to "gh-pages").
@@ -18,7 +18,7 @@ set -euo pipefail
 
 PUBLIC_REMOTE_NAME=${PUBLIC_REMOTE_NAME:-public}
 PUBLIC_BRANCH=${PUBLIC_BRANCH:-gh-pages}
-BUILD_COMMAND=${BUILD_COMMAND:-"npm run build"}
+BUILD_COMMAND=${BUILD_COMMAND:-"pnpm run build"}
 BUILD_DIR=${BUILD_DIR:-dist}
 
 ROOT_DIR=$(git rev-parse --show-toplevel)

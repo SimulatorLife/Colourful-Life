@@ -1286,7 +1286,14 @@ function resolveHeatmapFillStyle(color, alpha) {
   return fillStyle;
 }
 
-function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = "0,0,0") {
+function drawScalarHeatmap(
+  grid,
+  ctx,
+  cellSize,
+  alphaAt,
+  color = "0,0,0",
+  alphaContext,
+) {
   const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
   const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
 
@@ -1300,7 +1307,7 @@ function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = "0,0,0") {
     const y = r * cellSize;
 
     for (let c = 0; c < cols; c++) {
-      const fillStyle = resolveHeatmapFillStyle(color, alphaAt(r, c));
+      const fillStyle = resolveHeatmapFillStyle(color, alphaAt(r, c, alphaContext));
 
       if (!fillStyle) continue;
 
@@ -1312,6 +1319,10 @@ function drawScalarHeatmap(grid, ctx, cellSize, alphaAt, color = "0,0,0") {
       ctx.fillRect(c * cellSize, y, cellSize, cellSize);
     }
   }
+}
+
+function energyHeatmapAlphaAt(r, c, { energyGrid, maxTileEnergy, scale }) {
+  return (energyGrid[r][c] / maxTileEnergy) * scale;
 }
 
 function formatEnergyLegendValue(value, maxTileEnergy) {
@@ -1668,13 +1679,11 @@ export function drawEnergyHeatmap(
   const scale = 0.99;
   const stats = statsOverride ?? computeEnergyStats(grid, maxTileEnergy);
 
-  drawScalarHeatmap(
-    grid,
-    ctx,
-    cellSize,
-    (r, c) => (grid.energyGrid[r][c] / maxTileEnergy) * scale,
-    "0,255,0",
-  );
+  drawScalarHeatmap(grid, ctx, cellSize, energyHeatmapAlphaAt, "0,255,0", {
+    energyGrid: grid.energyGrid,
+    maxTileEnergy,
+    scale,
+  });
 
   if (stats) {
     drawEnergyLegend(ctx, cellSize, grid.cols, grid.rows, stats, maxTileEnergy);
@@ -1763,13 +1772,20 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
   }
 
   scratchIndex = 0;
+  let lastFillStyle = null;
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const density = scratch[scratchIndex++];
       const normalized = (density - minDensity) / range;
 
-      ctx.fillStyle = densityToRgba(normalized);
+      const fillStyle = densityToRgba(normalized);
+
+      if (fillStyle !== lastFillStyle) {
+        ctx.fillStyle = fillStyle;
+        lastFillStyle = fillStyle;
+      }
+
       ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
     }
   }

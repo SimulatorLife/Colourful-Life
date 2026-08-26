@@ -32,14 +32,14 @@ This document captures the guardrails and shared context for any automation or A
 
 ## Code Style & Tooling
 
-- Run Prettier (`npm run format`) before committing; verify with `npm run format:check` when needed.
-- Use ESLint via `npm run lint` (or `npm run lint:fix`). Resolve issues at the source rather than suppressing rules.
+- Run Prettier (`pnpm run format`) before committing; verify with `pnpm run format:check` when needed.
+- Use ESLint via `pnpm run lint` (or `pnpm run lint:fix`). Resolve issues at the source rather than suppressing rules.
 - Prefer modern ES modules, literal imports, and descriptive variable/function names. Keep functions focused and pure where practical.
 - Be mindful of Canvas rendering performance: avoid per-frame allocations inside tight loops and reuse buffers/objects.
 
 ## Testing Expectations
 
-- Execute `npm test` after logic changes touching simulation behavior, utilities, or shared helpers.
+- Execute `pnpm test` after logic changes touching simulation behavior, utilities, or shared helpers.
 - Extend the Node.js test suites in `test/` when new functionality or bug fixes introduce edge cases.
 - For UI changes, add lightweight integration checks or storybook-style demos when possible.
 
@@ -52,7 +52,7 @@ This document captures the guardrails and shared context for any automation or A
 
 ## Safeguards & Operational Notes
 
-- Treat configuration files (`config.toml`, `package.json`, `package-lock.json`) with caution. Update only when intentional and validated.
+- Treat configuration files (`config.toml`, `package.json`, `pnpm-lock.yaml`) with caution. Update only when intentional and validated.
 - When editing long-form docs like `README.md`, keep the tone consistent and update relevant sections together.
 - For performance-sensitive code in `grid/gridManager.js` or rendering loops, measure impacts when feasible before merging.
 - Maintain accessibility and usability when adjusting UI components: preserve keyboard navigation, color contrast, and responsive layouts.

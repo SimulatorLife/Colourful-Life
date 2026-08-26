@@ -19,20 +19,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.5
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: "npm"
+          cache: "pnpm"
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run ESLint autofix
-        run: npm run lint:fix
+        run: pnpm run lint:fix
 
       - name: Run Prettier format
-        run: npm run format
+        run: pnpm run format
 
       - name: Create pull request with fixes
         uses: peter-evans/create-pull-request@v7
@@ -42,7 +47,7 @@ jobs:
           commit-message: "chore: apply lint and format fixes"
           title: "chore: apply lint and format fixes"
           body: |
-            Automated run of `npm run lint:fix` and `npm run format`.
+            Automated run of `pnpm run lint:fix` and `pnpm run format`.
             This pull request was created because the workflow detected uncommitted
             formatting or lint fixes.
           delete-branch: true

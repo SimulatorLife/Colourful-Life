@@ -17,7 +17,7 @@ where practical.
 - Regression tests ensuring the insights, life events, and leaderboard panels
   queue updates while collapsed so performance optimisations remain covered.
 - Documentation audit covering the README, developer guide, architecture overview, and changelog to highlight headless usage, cache-reset tooling, supporting modules such as the cell model, and the overlay rendering pipeline.
-- Regression guard for the `npm run clean` workflow: the clean script now supports `--dry-run` and is verified by automated tests so agentic changes cannot regress cache cleanup.
+- Regression guard for the `pnpm run clean` workflow: the clean script now supports `--dry-run` and is verified by automated tests so agentic changes cannot regress cache cleanup.
 - DNA-tuned opportunity memory that feeds a new `opportunitySignal` sensor, letting neural policies lean on real reward history and energy swings instead of scripted behaviour knobs.
   - DNA-driven combat learning profile that imprints fight outcomes into neural targeting and risk sensors, encouraging organisms to adapt their strategy dynamically instead of relying on fixed aggression presets.
   - DNA-shaped foraging imprint that records harvest outcomes into neural sensor gains so scarcity, crowding, and energy reserve cues emerge from lived resource history instead of static gathering heuristics.
@@ -66,7 +66,7 @@ scripts/profile-energy.mjs`) lifted post-warmup survivors from 83 → 92 while
 - Refreshed the README, developer guide, and architecture overview to streamline
   the quick-start flow, trim stale metrics, and clarify where configuration
   overrides live so primary docs mirror the current architecture.
-- Clarified quick-start guidance and contributor workflow docs to call out `npm run check`, the built-in energy benchmark that precedes `npm test`, and focused watch/file-path options for faster feedback while developing.
+- Clarified quick-start guidance and contributor workflow docs to call out `pnpm run check`, the benchmark-free `pnpm test` command and opt-in energy profiling, and focused watch/file-path options for faster feedback while developing.
 - Amplified the low-diversity reproduction penalty when parents accumulate mate novelty pressure so lineages stuck in repetitive pairings feel stronger pressure to diversify.
 - Relocated the "Life Event Markers" toggle into the Simulation Controls overlay
   stack so the grid markers live beside the other canvas layers they
@@ -90,8 +90,8 @@ scripts/profile-energy.mjs`) lifted post-warmup survivors from 83 → 92 while
   rendering work, cutting 50 closed-panel metrics refreshes from ~73.9 ms to
   ~0.84 ms by queueing the latest payload until the panel is reopened.
 - README, architecture overview, and developer guide now cross-link workflow
-  basics and highlight quick verification commands (`npm test`, `npm run lint`,
-  `npm run format:check`) so contributors land on accurate setup guidance
+  basics and highlight quick verification commands (`pnpm test`, `pnpm run lint`,
+  `pnpm run format:check`) so contributors land on accurate setup guidance
   without bouncing between documents.
 - Automatic reseeding has been removed from decay pools, grid resets, and
   geometry changes; the world now stays empty unless `reseed: true` is
@@ -123,10 +123,10 @@ scripts/profile-energy.mjs`) lifted post-warmup survivors from 83 → 92 while
   feedback while imposing extra rendering and testing surface area.
 - Grouped configuration override guidance across the README, developer guide,
   and architecture overview while tightening the quick-start flow to call out
-  `npm run prepare`, cache resets, and the supporting documentation map.
+  `pnpm run prepare`, cache resets, and the supporting documentation map.
 - Streamlined the README quick start, developer guide, and public hosting
-  instructions to surface npm script aliases (including `npm run benchmark` and
-  `npm run deploy:public`), clarify publishing steps, and reduce duplicated
+  instructions to surface pnpm script aliases (including `pnpm run benchmark` and
+  `pnpm run deploy:public`), clarify publishing steps, and reduce duplicated
   onboarding guidance.
 - Reproduction acceptance now blends neural policy intent with the genome's
   baseline instincts using DNA-tuned weights that react to opportunity,

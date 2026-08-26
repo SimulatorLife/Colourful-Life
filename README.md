@@ -17,20 +17,20 @@ Colourful Life is a browser-based ecosystem sandbox where emergent behaviour ari
 Colourful Life runs on Node.js **18.18.0 or newer** (CI and profiling use **25.0.0**, pinned in `.nvmrc`). After cloning:
 
 1. Run `nvm use` (or `nvm install`) so your shell adopts the pinned toolchain. Any Node 18+ install works as long as `node --version` reports ≥ 18.18.0.
-2. Install dependencies with `npm ci`. Run `npm run prepare` after each fresh clone or `.husky/` update so Git hooks are restored.
-3. Start the Parcel dev server with `npm run start`, then open `http://localhost:1234`.
-4. Before committing, run `npm run check` to execute ESLint, Prettier verification, the energy benchmark, and the Node.js test suites in one pass.
+2. Install dependencies with `pnpm install --frozen-lockfile`. Run `pnpm run prepare` after each fresh clone or `.husky/` update so Git hooks are restored.
+3. Start the Parcel dev server with `pnpm run start`, then open `http://localhost:1234`.
+4. Before committing, run `pnpm run check` to execute ESLint, Prettier verification, the Node.js test suites, and the opt-in energy benchmark in one pass.
 
 During day-to-day work, lean on the focused feedback loops that match your change:
 
-- `npm run lint` / `npm run lint:fix` — Shared ESLint rules (with optional autofixes).
-- `npm run format:check` — Confirm Prettier formatting without writing changes.
-- `npm run test:watch` — Watch mode for the Node.js suites. Each run executes `scripts/profile-energy.mjs` before the tests so performance regressions surface early.
-- `npm test -- path/to/file.test.js` — Run a single suite once (any extra flags pass straight to the Node test runner).
+- `pnpm run lint` / `pnpm run lint:fix` — Shared ESLint rules (with optional autofixes).
+- `pnpm run format:check` — Confirm Prettier formatting without writing changes.
+- `pnpm run test:watch` — Watch mode for the Node.js suites without benchmark overhead; run `pnpm run benchmark` separately when checking performance regressions.
+- `pnpm test -- path/to/file.test.js` — Run a single suite once (any extra flags pass straight to the Node test runner).
 
-If Parcel's hot module reload misbehaves, inspect the cleanup targets with `npm run clean -- --dry-run`, then rerun without `--dry-run` to clear stale artifacts.
+If Parcel's hot module reload misbehaves, inspect the cleanup targets with `pnpm run clean -- --dry-run`, then rerun without `--dry-run` to clear stale artifacts.
 
-Parcel handles hot module replacement during development. Reach for `npm run build` to produce an optimized bundle in `dist/`, and consult [Key scripts and commands](#key-scripts-and-commands) for profiling or publishing helpers. Once the basics are familiar, dive into the [developer guide](docs/developer-guide.md) for branching strategy, tooling deep-dives, and extended testing expectations.
+Parcel handles hot module replacement during development. Reach for `pnpm run build` to produce an optimized bundle in `dist/`, and consult [Key scripts and commands](#key-scripts-and-commands) for profiling or publishing helpers. Once the basics are familiar, dive into the [developer guide](docs/developer-guide.md) for branching strategy, tooling deep-dives, and extended testing expectations.
 
 Important: Do not open `index.html` directly via `file://`. ES module imports are blocked by browsers for `file://` origins. Always use an `http://` URL (e.g., the Parcel dev server or any static server you run against the `dist/` build output).
 
@@ -155,9 +155,9 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 ## Developer workflow
 
-- **Formatting** — Run `npm run format` before committing or rely on the included Prettier integration. `npm run format:check` verifies without writing.
-- **Linting** — `npm run lint` enforces the ESLint + Prettier ruleset across JavaScript and inline HTML. Use `npm run lint:fix` to auto-resolve minor issues.
-- **Testing** — `npm test` runs the energy benchmark in [`scripts/profile-energy.mjs`](scripts/profile-energy.mjs) before executing the Node.js test suites. Pass file paths or directories to narrow the run, or append `-- --watch` for continuous execution while you iterate. The command defaults to the dot reporter for a concise summary; append `-- --test-reporter=spec` if you prefer the full per-test log. Add cases when behaviours change.
+- **Formatting** — Run `pnpm run format` before committing or rely on the included Prettier integration. `pnpm run format:check` verifies without writing.
+- **Linting** — `pnpm run lint` enforces the ESLint + Prettier ruleset across JavaScript and inline HTML. Use `pnpm run lint:fix` to auto-resolve minor issues.
+- **Testing** — `pnpm test` executes the Node.js test suites without profiling overhead. Run [`scripts/profile-energy.mjs`](scripts/profile-energy.mjs) through `pnpm run benchmark` (or `pnpm test -- --benchmark`) when you need performance measurements. Pass file paths or directories to narrow the run, or append `-- --watch` for continuous execution while you iterate. The command defaults to the dot reporter for a concise summary; append `-- --test-reporter=spec` if you prefer the full per-test log. Add cases when behaviours change.
 - **Profiling** — `node scripts/profile-energy.mjs` benchmarks the energy preparation loop. Adjust rows/cols via `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and the stub `cellSize` with `PERF_CELL_SIZE` environment variables. Enable the heavier SimulationEngine benchmark with `PERF_INCLUDE_SIM=1` when you specifically need tick timings.
 - **Environment tuning** — Set `COLOURFUL_LIFE_MAX_TILE_ENERGY` to raise or lower the tile energy cap. Use `COLOURFUL_LIFE_REGEN_DENSITY_PENALTY` / `COLOURFUL_LIFE_CONSUMPTION_DENSITY_PENALTY` to explore alternative density pressures, `COLOURFUL_LIFE_TRAIT_ACTIVATION_THRESHOLD` to retune telemetry cutoffs, `COLOURFUL_LIFE_COMBAT_TERRITORY_EDGE_FACTOR` to calm or emphasise territorial combat bias, `COLOURFUL_LIFE_DECAY_RETURN_FRACTION` and `COLOURFUL_LIFE_DECAY_MAX_AGE` to shape post-mortem energy recycling, `COLOURFUL_LIFE_ACTIVITY_BASE_RATE` to globally energise or relax genomes, `COLOURFUL_LIFE_MUTATION_CHANCE` to adjust baseline evolutionary churn, `COLOURFUL_LIFE_REPRODUCTION_COOLDOWN_BASE` to bound the minimum post-birth recovery while the emergent cooldown still reacts to parental strain, `COLOURFUL_LIFE_ENERGY_SPARSE_SCAN_RATIO` to control when the grid swaps between sparse and full energy passes, and `COLOURFUL_LIFE_OFFSPRING_VIABILITY_BUFFER` to demand more or less surplus energy before births without modifying source defaults.
 - **Headless usage** — `createSimulation` accepts `{ headless: true }` to return a controller without mounting DOM controls. Inject `requestAnimationFrame`, `performanceNow`, or RNG hooks for deterministic automation.
@@ -171,7 +171,7 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
   - `src/grid/` — Grid orchestration, obstacle presets, and selection tooling exposed to other systems.
   - `src/ui/` — UI manager, control builders, overlays, the UI bridge, and debugging helpers.
 - `scripts/` — Node scripts (e.g., performance profiling) that exercise the engine headlessly.
-- `test/` — Node.js test suites executed via `npm test` plus shared harness utilities accessed through the `#tests/*` import aliases in `package.json`.
+- `test/` — Node.js test suites executed via `pnpm test` plus shared harness utilities accessed through the `#tests/*` import aliases in `package.json`.
 - `docs/` — Architecture notes, developer guides, and background reading.
 - `index.html`, `styles.css` — Browser entry point and shared styles.
 - `eslint.config.mjs`, `package.json` — Tooling and dependency configuration.
@@ -181,20 +181,20 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 | Command/Script                               | Purpose                                                                       |
 | -------------------------------------------- | ----------------------------------------------------------------------------- |
-| `npm run start`                              | Launch the Parcel development server at `http://localhost:1234`.              |
-| `npm run build`                              | Produce an optimized production bundle in `dist/`.                            |
-| `npm run check`                              | Chain linting, formatting verification, the energy benchmark, and tests       |
-| `npm run clean [-- --dry-run]`               | Clear `dist/` and `.parcel-cache/` (preview targets first with `--dry-run`).  |
-| `npm run lint` / `npm run lint:fix`          | Run ESLint across the codebase, optionally applying autofixes.                |
-| `npm run format` / `npm run format:check`    | Apply or verify Prettier formatting for source, docs, configs, and workflows. |
-| `npm test`                                   | Run the energy benchmark, then execute the Node.js test suites.               |
-| `npm run test:watch`                         | Re-run the benchmark and suites whenever watched files change.                |
-| `npm run benchmark`                          | Profile the energy preparation loop (combine with `PERF_*` variables).        |
+| `pnpm run start`                             | Launch the Parcel development server at `http://localhost:1234`.              |
+| `pnpm run build`                             | Produce an optimized production bundle in `dist/`.                            |
+| `pnpm run check`                             | Chain linting, formatting verification, the energy benchmark, and tests       |
+| `pnpm run clean [-- --dry-run]`              | Clear `dist/` and `.parcel-cache/` (preview targets first with `--dry-run`).  |
+| `pnpm run lint` / `pnpm run lint:fix`        | Run ESLint across the codebase, optionally applying autofixes.                |
+| `pnpm run format` / `pnpm run format:check`  | Apply or verify Prettier formatting for source, docs, configs, and workflows. |
+| `pnpm test`                                  | Execute the Node.js test suites without benchmark overhead.                   |
+| `pnpm run test:watch`                        | Re-run the Node.js suites whenever watched files change.                      |
+| `pnpm run benchmark`                         | Profile the energy preparation loop (combine with `PERF_*` variables).        |
 | `node scripts/profile-density-cache.mjs`     | Benchmark cached density lookups in `GridManager`.                            |
 | `node scripts/profile-trait-aggregation.mjs` | Measure the Stats trait aggregation pipeline.                                 |
 | `node scripts/profile-zone-filter.mjs`       | Benchmark the reproduction zone candidate filter.                             |
-| `npm run deploy:public`                      | Publish the production bundle via `scripts/publish-public-build.sh`.          |
-| `npm run prepare`                            | Reinstall Husky hooks after cloning or `.husky/` changes.                     |
+| `pnpm run deploy:public`                     | Publish the production bundle via `scripts/publish-public-build.sh`.          |
+| `pnpm run prepare`                           | Reinstall Husky hooks after cloning or `.husky/` changes.                     |
 
 ## Documentation map
 

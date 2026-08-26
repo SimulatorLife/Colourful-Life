@@ -20,7 +20,7 @@ test("package.json clean script points to clean-parcel.mjs", () => {
   assert.equal(
     packageJson?.scripts?.clean,
     EXPECTED_SCRIPT,
-    "`npm run clean` must invoke scripts/clean-parcel.mjs",
+    "`pnpm run clean` must invoke scripts/clean-parcel.mjs",
   );
 });
 

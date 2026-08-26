@@ -196,6 +196,10 @@ export default class SimulationEngine {
       startWithEvent:
         (defaults.eventFrequencyMultiplier ?? 1) > 0 && maxConcurrentEvents > 0,
     });
+    this.getEventColor =
+      typeof this.eventManager.getColor === "function"
+        ? this.eventManager.getColor.bind(this.eventManager)
+        : undefined;
     const runtimeServices = createSimulationRuntimeServices({
       rng,
       leaderboardSize: defaults.leaderboardSize,
@@ -954,7 +958,7 @@ export default class SimulationEngine {
         : GridManager.maxTileEnergy,
       snapshot: this.telemetry.snapshot,
       activeEvents: this.eventManager.activeEvents,
-      getEventColor: this.eventManager.getColor?.bind(this.eventManager),
+      getEventColor: this.getEventColor,
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
       lifeEvents: recentLifeEvents,
       currentTick: totalTicks,
@@ -1287,7 +1291,7 @@ export default class SimulationEngine {
         : GridManager.maxTileEnergy,
       snapshot: this.telemetry.snapshot,
       activeEvents: this.eventManager?.activeEvents,
-      getEventColor: this.eventManager?.getColor?.bind(this.eventManager),
+      getEventColor: this.getEventColor,
       mutationMultiplier: this.state.mutationMultiplier ?? 1,
       selectionManager: this.selectionManager,
       lifeEvents: recentLifeEvents,
@@ -1333,6 +1337,7 @@ export default class SimulationEngine {
     }
 
     this.stop();
+    this.listeners.clear();
   }
 
   /**

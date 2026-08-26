@@ -18,6 +18,7 @@ const RUN_IN_BAND_FLAG = "--test-concurrency=1";
 const RUN_TESTS_BY_PATH_FLAGS = new Set(["--runTestsByPath", "--run-tests-by-path"]);
 const TEST_FILE_PATTERN = /\.test\.(?:[cm]?js)$/i;
 const REPORTER_FLAG_PREFIXES = ["--test-reporter", "--test-reporter-destination"];
+const BENCHMARK_FLAG = "--benchmark";
 
 function hasReporterFlag(flags = []) {
   if (!Array.isArray(flags) || flags.length === 0) {
@@ -61,6 +62,7 @@ export function normalizeTestRunnerArgs(rawArgs = []) {
   const flags = [];
   const paths = [];
   let runInBandNormalized = false;
+  let benchmark = false;
 
   const args = Array.isArray(rawArgs) ? rawArgs : [];
 
@@ -70,6 +72,11 @@ export function normalizeTestRunnerArgs(rawArgs = []) {
     if (arg === "--") {
       paths.push(...args.slice(index + 1));
       break;
+    }
+
+    if (arg === BENCHMARK_FLAG) {
+      benchmark = true;
+      continue;
     }
 
     if (typeof arg === "string" && RUN_TESTS_BY_PATH_FLAGS.has(arg)) {
@@ -228,7 +235,7 @@ export function normalizeTestRunnerArgs(rawArgs = []) {
     paths.push(arg);
   }
 
-  return { flags, paths };
+  return { benchmark, flags, paths };
 }
 
 function normalizeRunnerPath(filePath) {
@@ -338,13 +345,15 @@ function run(command, args) {
 }
 
 export async function runNodeTests(rawArgs = []) {
-  const benchmarkCode = await run(process.execPath, ["scripts/profile-energy.mjs"]);
+  const { benchmark, flags, paths } = normalizeTestRunnerArgs(rawArgs);
 
-  if (benchmarkCode !== 0) {
-    return benchmarkCode;
+  if (benchmark) {
+    const benchmarkCode = await run(process.execPath, ["scripts/profile-energy.mjs"]);
+
+    if (benchmarkCode !== 0) {
+      return benchmarkCode;
+    }
   }
-
-  const { flags, paths } = normalizeTestRunnerArgs(rawArgs);
   const targets = await expandTestTargets(paths);
 
   if (targets.length === 0) {

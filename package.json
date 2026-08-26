@@ -15,7 +15,7 @@
     "benchmark": "node scripts/profile-energy.mjs",
     "test": "node scripts/run-node-tests.mjs",
     "test:watch": "node scripts/run-node-tests.mjs --watch",
-    "check": "npm run lint && npm run format:check && npm test",
+    "check": "pnpm run lint && pnpm run format:check && pnpm test && pnpm run benchmark",
     "format": "prettier --cache --cache-location .cache/prettier --write .",
     "format:check": "prettier --cache --cache-location .cache/prettier --check .",
     "format:workflows": "prettier --ignore-path .gitignore --write \".github/workflows/**/*.yml\"",
@@ -32,20 +32,20 @@
   "author": "",
   "license": "ISC",
   "engines": {
-    "node": ">=18.18.0"
+    "node": ">=18.18.0",
+    "pnpm": ">=9.0.0 <10.0.0"
   },
+  "packageManager": "pnpm@9.15.5",
   "bugs": {
     "url": "https://github.com/henrylkirk/Colourful-Life/issues"
   },
   "homepage": "https://github.com/henrylkirk/Colourful-Life#readme",
-  "overrides": {
-    "@swc/core": "1.14.0",
-    "node-gyp-build-optional-packages": "5.2.2",
-    "@eslint/eslintrc": {
-      "globals": "16.4.0"
-    },
-    "@parcel/packager-js": {
-      "globals": "16.4.0"
+  "pnpm": {
+    "overrides": {
+      "@swc/core": "1.14.0",
+      "node-gyp-build-optional-packages": "5.2.2",
+      "@eslint/eslintrc>globals": "16.5.0",
+      "@parcel/packager-js>globals": "16.5.0"
     }
   },
   "lint-staged": {
@@ -61,13 +61,13 @@
     ]
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.0",
-    "eslint": "^9.39.1",
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^16.5.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
-    "parcel": "^2.16.0",
-    "prettier": "^3.6.2"
+    "lint-staged": "^16.4.0",
+    "parcel": "^2.16.4",
+    "prettier": "^3.9.6"
   }
 }

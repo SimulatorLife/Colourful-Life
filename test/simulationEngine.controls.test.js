@@ -1428,9 +1428,8 @@ test("engine.resetWorld clears custom selection zones when requested", async () 
 
   try {
     const { SimulationEngine } = modules;
-    const { default: SelectionManager } = await import(
-      "../src/grid/selectionManager.js"
-    );
+    const { default: SelectionManager } =
+      await import("../src/grid/selectionManager.js");
     const engine = new SimulationEngine({
       canvas: new MockCanvas(20, 20),
       autoStart: false,

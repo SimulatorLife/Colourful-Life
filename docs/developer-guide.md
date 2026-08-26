@@ -11,10 +11,10 @@ the dev server, then return here for the deeper workflow.
 ## Environment setup
 
 1. Install Node.js 18.18.0 or newer. The included `.nvmrc` pins to 25.0.0—the version used in CI and profiling. Run `nvm use` (or `nvm install`) after cloning, or make sure your preferred Node 18+ runtime reports ≥ 18.18.0 via `node --version`.
-2. Install dependencies with `npm ci`, then run `npm run prepare` once so Husky reinstalls Git hooks after a fresh clone or `.husky/` update.
-3. Launch the Parcel dev server with `npm run start` and open `http://localhost:1234`.
-4. Keep a second terminal for feedback loops while you iterate. Reach for `npm run lint`, `npm run format:check`, `npm run test:watch`, or `npm test -- path/to/file.test.js` as needed, then finish with `npm run check` before committing. The command chains linting, formatting verification, the energy benchmark, and the Node.js test suites—mirroring the loop described in the [README quick start](../README.md#quick-start).
-5. If Parcel stalls, inspect the cleanup plan with `npm run clean -- --dry-run`, then rerun `npm run clean` to clear `dist/` and `.parcel-cache/` before restarting the dev server.
+2. Install dependencies with `pnpm install --frozen-lockfile`, then run `pnpm run prepare` once so Husky reinstalls Git hooks after a fresh clone or `.husky/` update.
+3. Launch the Parcel dev server with `pnpm run start` and open `http://localhost:1234`.
+4. Keep a second terminal for feedback loops while you iterate. Reach for `pnpm run lint`, `pnpm run format:check`, `pnpm run test:watch`, or `pnpm test -- path/to/file.test.js` as needed, then finish with `pnpm run check` before committing. The command chains linting, formatting verification, the energy benchmark, and the Node.js test suites—mirroring the loop described in the [README quick start](../README.md#quick-start).
+5. If Parcel stalls, inspect the cleanup plan with `pnpm run clean -- --dry-run`, then rerun `pnpm run clean` to clear `dist/` and `.parcel-cache/` before restarting the dev server.
 
 ### Quality-of-life tips
 
@@ -30,7 +30,7 @@ the dev server, then return here for the deeper workflow.
   the metrics feed, reporting both simulated time and the aggregate tick count
   for easy pacing comparisons.
 - Parcel performs hot module replacement during development. Use
-  `npm run build` when you need a fresh production bundle in `dist/` for manual
+  `pnpm run build` when you need a fresh production bundle in `dist/` for manual
   verification or publishing. Refer back to the
   [README quick start](../README.md#quick-start) whenever you onboard a new environment, and skim the [Key scripts and commands table](../README.md#key-scripts-and-commands) for a refresher on profiling and publishing helpers.
 
@@ -60,26 +60,26 @@ the dev server, then return here for the deeper workflow.
 
 ## Tooling
 
-- **Format** — Run `npm run format`, `npm run format:check`, or `npm run format:workflows` to apply Prettier across source, documentation, configuration files, and GitHub workflows.
-- **Lint** — Use `npm run lint` / `npm run lint:fix` to enforce the ESLint ruleset and apply safe autofixes.
-- **Check** — Use `npm run check` before committing to chain linting, formatting verification, and tests.
-- **Tests** — Execute `npm test` to run the energy benchmark in [`scripts/profile-energy.mjs`](../scripts/profile-energy.mjs) before the Node.js test suites. Focused suites live beside their target modules under `test/`, and the runner accepts paths, directories, and flags such as `-- --watch`, `--watch`, `--watchAll`, or `--runTestsByPath` (append them after `--` when calling through npm scripts).
-- **Profiling** — Run `npm run benchmark` (alias for `node scripts/profile-energy.mjs`) with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations. For subsystem-specific profiling, `node scripts/profile-density-cache.mjs` measures the cached density grid lookups in `GridManager`, and `node scripts/profile-trait-aggregation.mjs` reports average timings for the stats trait aggregation pipeline so telemetry changes stay lightweight.
-- **Cache reset** — Use `npm run clean` to clear `dist/` and `.parcel-cache/` when Parcel hot reloads become inconsistent.
-- **Hooks** — Run `npm run prepare` to reinstall Husky hooks after cloning or whenever `.husky/` contents change.
+- **Format** — Run `pnpm run format`, `pnpm run format:check`, or `pnpm run format:workflows` to apply Prettier across source, documentation, configuration files, and GitHub workflows.
+- **Lint** — Use `pnpm run lint` / `pnpm run lint:fix` to enforce the ESLint ruleset and apply safe autofixes.
+- **Check** — Use `pnpm run check` before committing to chain linting, formatting verification, and tests.
+- **Tests** — Execute `pnpm test` to run the Node.js test suites without profiling overhead. Run `pnpm run benchmark` when performance measurements are needed. Focused suites live beside their target modules under `test/`, and the runner accepts paths, directories, and flags such as `-- --watch`, `--watch`, `--watchAll`, or `--runTestsByPath` (append them after `--` when calling through pnpm scripts).
+- **Profiling** — Run `pnpm run benchmark` (alias for `node scripts/profile-energy.mjs`) with `PERF_ROWS`, `PERF_COLS`, `PERF_WARMUP`, `PERF_ITERATIONS`, and `PERF_CELL_SIZE` to benchmark the energy preparation loop. The script also seeds a high-density `SimulationEngine` and reports a `simulationBenchmark` block you can tune via `PERF_SIM_ROWS`, `PERF_SIM_COLS`, `PERF_SIM_WARMUP`, `PERF_SIM_ITERATIONS`, `PERF_SIM_UPS`, `PERF_SIM_CELL_SIZE`, `PERF_SIM_DENSITY`, and `PERF_SIM_SEED` to reproduce CI runs or stress-test new optimizations. For subsystem-specific profiling, `node scripts/profile-density-cache.mjs` measures the cached density grid lookups in `GridManager`, and `node scripts/profile-trait-aggregation.mjs` reports average timings for the stats trait aggregation pipeline so telemetry changes stay lightweight.
+- **Cache reset** — Use `pnpm run clean` to clear `dist/` and `.parcel-cache/` when Parcel hot reloads become inconsistent.
+- **Hooks** — Run `pnpm run prepare` to reinstall Husky hooks after cloning or whenever `.husky/` contents change.
 
-Always run the formatter and linter before committing. Execute `npm test` when
+Always run the formatter and linter before committing. Execute `pnpm test` when
 changing simulation logic, utilities, UI behaviour, or configuration that can
-affect runtime outcomes, and finish with `npm run check` to ensure nothing was
+affect runtime outcomes, and finish with `pnpm run check` to ensure nothing was
 missed.
 
 ## Publishing builds
 
-When you want to share a playable build without exposing the private source, follow the [`docs/public-hosting.md`](public-hosting.md) workflow. It walks through creating a public repository, wiring a publishing remote, and invoking `npm run deploy:public`/`./scripts/publish-public-build.sh` so GitHub Pages (or any static host) receives the latest compiled assets.
+When you want to share a playable build without exposing the private source, follow the [`docs/public-hosting.md`](public-hosting.md) workflow. It walks through creating a public repository, wiring a publishing remote, and invoking `pnpm run deploy:public`/`./scripts/publish-public-build.sh` so GitHub Pages (or any static host) receives the latest compiled assets.
 
 ### Performance budgets
 
-- `npm test` exercises `test/performance.profile-energy.test.js`, which parses
+- `pnpm test` exercises `test/performance.profile-energy.test.js`, which parses
   `scripts/profile-energy.mjs` output. The suite fails if energy preparation
   exceeds roughly **5 ms per tick** or if the seeded `SimulationEngine`
   surpasses **140 ms per tick** under the standard CI configuration
@@ -230,8 +230,8 @@ variables for quick reference during onboarding.
 
 ## Helpful scripts
 
-- `npm run clean` — Clear Parcel caches when dev servers behave strangely.
-- `npm run benchmark` — Profile the energy preparation loop with configurable
+- `pnpm run clean` — Clear Parcel caches when dev servers behave strangely.
+- `pnpm run benchmark` — Profile the energy preparation loop with configurable
   grid sizes and SimulationEngine samples; combine with `PERF_*` variables to
   reproduce CI runs.
 - `node scripts/profile-density-cache.mjs` — Sample cached density lookups across
@@ -239,7 +239,7 @@ variables for quick reference during onboarding.
 - `node scripts/profile-trait-aggregation.mjs` — Benchmark the Stats trait
   aggregation helpers so dashboard updates remain lightweight after changes.
 - `node scripts/profile-zone-filter.mjs` — Measure the optimised reproduction zone candidate filter used by `ReproductionZonePolicy.filterSpawnCandidates`.
-- `npm run deploy:public` — Publish the latest production build to a public
+- `pnpm run deploy:public` — Publish the latest production build to a public
   repository. See [`docs/public-hosting.md`](public-hosting.md) for setup
   details.
 

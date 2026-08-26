@@ -11,6 +11,14 @@ import {
 
 const { resolveSignalExitCode, hasReporterFlag } = __test__;
 
+test("normalizeTestRunnerArgs enables the opt-in benchmark", () => {
+  const result = normalizeTestRunnerArgs(["--benchmark", "test/utils.test.js"]);
+
+  assert.equal(result.benchmark, true);
+  assert.deepEqual(result.flags, []);
+  assert.deepEqual(result.paths, ["test/utils.test.js"]);
+});
+
 test("normalizeTestRunnerArgs filters falsey watch flags", () => {
   const { flags, paths } = normalizeTestRunnerArgs([
     "--watch=false",
