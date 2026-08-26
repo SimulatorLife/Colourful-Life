@@ -266,6 +266,14 @@ export class DNA {
     return index >= 0 && index < genes.length ? genes[index] : 0;
   }
 
+  // Internal accessor that exposes the underlying Uint8Array for the
+  // similarity fast path. Private fields are class-scoped, so similarity
+  // can resolve the target on any DNA instance without going through
+  // the public Proxy or the generic adapter used for non-DNA genomes.
+  #directGeneTarget() {
+    return this.#genesTarget;
+  }
+
   geneFraction(index) {
     const genes = this.#genesTarget;
 
@@ -2791,8 +2799,33 @@ export class DNA {
 
     const selfGenes = this.#genesTarget;
     const selfLength = selfGenes.length;
-    const adapter = createGeneAdapter(other);
-    const otherLength = adapter ? toNonNegativeInteger(adapter.length, 0) : 0;
+
+    // Fast path for ordinary DNA-to-DNA comparisons: skip the generic
+    // adapter (which allocates an object, extracts a sequence, and bounds
+    // `geneAt`) and resolve the other genome's typed array directly so the
+    // byte-view branch below runs without per-byte proxy or adapter hops.
+    const isOtherDna = other instanceof DNA;
+    let adapter = null;
+    let otherLength;
+    let adapterSequence = null;
+    let adapterGeneAt = null;
+    let directGenes;
+    let fallbackGenes;
+
+    if (isOtherDna) {
+      const otherTarget = other.#directGeneTarget();
+
+      otherLength = otherTarget.length;
+      directGenes = otherTarget;
+      fallbackGenes = null;
+    } else {
+      adapter = createGeneAdapter(other);
+      otherLength = adapter ? toNonNegativeInteger(adapter.length, 0) : 0;
+      adapterSequence = adapter?.sequence ?? null;
+      adapterGeneAt = adapter?.geneAt ?? null;
+      directGenes = adapterSequence && !adapterGeneAt ? adapterSequence : null;
+      fallbackGenes = adapterGeneAt ? adapterSequence : null;
+    }
     const geneCount = Math.max(selfLength, otherLength);
 
     if (geneCount === 0) {
@@ -2813,10 +2846,6 @@ export class DNA {
 
       return 1;
     }
-
-    const { sequence: adapterSequence, geneAt: adapterGeneAt } = adapter ?? {};
-    const directGenes = adapterSequence && !adapterGeneAt ? adapterSequence : null;
-    const fallbackGenes = adapterGeneAt ? adapterSequence : null;
 
     let distSq = 0;
 

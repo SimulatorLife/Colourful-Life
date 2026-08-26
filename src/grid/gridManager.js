@@ -62,7 +62,7 @@ const EMPTY_TARGET_LIST = Object.freeze([]);
 const EMPTY_FLOAT64_ARRAY = Object.freeze(new Float64Array(0));
 const EMPTY_UINT8_ARRAY = Object.freeze(new Uint8Array(0));
 
-const similarityCache = new WeakMap();
+const TARGET_SCAN_REVISION_KEY = Symbol("grid.targetScanRevision");
 // Cache crowding metrics directly on occupants to avoid repeated preference and
 // energy normalization work when tiles share neighbors across regeneration
 // passes. A `Symbol` key prevents collisions with consumer-defined fields while
@@ -523,27 +523,6 @@ function lowerBound(sortedArray, target) {
   return low;
 }
 
-const TARGET_DESCRIPTOR_BASE_KEYS = Object.freeze([
-  "row",
-  "col",
-  "target",
-  "classification",
-  "precomputedSimilarity",
-  "similarity",
-]);
-const TARGET_DESCRIPTOR_BASE_KEY_SET = new Set(TARGET_DESCRIPTOR_BASE_KEYS);
-const TARGET_DESCRIPTOR_DYNAMIC_KEYS = new Set([
-  "noveltyPressure",
-  "diversity",
-  "appetite",
-  "mateBias",
-  "curiosityBonus",
-  "preferenceScore",
-  "selectionWeight",
-  "baseReproductionProbability",
-  "neuralAffinity",
-]);
-
 const TIMESTAMP_NOW =
   typeof performance !== "undefined" && typeof performance.now === "function"
     ? () => performance.now()
@@ -551,36 +530,6 @@ const TIMESTAMP_NOW =
 
 const IMAGE_DATA_SPARSE_AREA_RATIO = 12;
 const IMAGE_DATA_SPARSE_MIN_TILES = 1;
-
-function getPairSimilarity(cellA, cellB) {
-  if (!cellA || !cellB) return 0;
-
-  let cacheA = similarityCache.get(cellA);
-
-  if (!cacheA) {
-    cacheA = new WeakMap();
-    similarityCache.set(cellA, cacheA);
-  }
-
-  if (cacheA.has(cellB)) {
-    return cacheA.get(cellB);
-  }
-
-  const value = cellA.similarityTo(cellB);
-
-  cacheA.set(cellB, value);
-
-  let cacheB = similarityCache.get(cellB);
-
-  if (!cacheB) {
-    cacheB = new WeakMap();
-    similarityCache.set(cellB, cacheB);
-  }
-
-  cacheB.set(cellA, value);
-
-  return value;
-}
 
 /**
  * Primary orchestrator for cell lifecycle, energy management, and spatial
@@ -639,14 +588,11 @@ export default class GridManager {
   #targetDescriptorPool = [];
   #targetDescriptorUsageAverage = 0;
   #targetUsageAccumulator = 0;
+  #targetScanRevision = 0;
   #rowOccupancy = [];
   #columnOccupancy = [];
   #rowOccupancySorted = [];
   #columnOccupancySorted = [];
-  #tickSimilarityCache = new WeakMap();
-  #tickSimilarityRowsInUse = [];
-  #tickSimilarityRowPool = [];
-  #tickSimilarityVersion = -1;
   #populationCellsScratch = null;
   #energyDeltaDirtyTiles = null;
   #energyDeltaLastSparse = false;
@@ -9493,8 +9439,6 @@ export default class GridManager {
 
     this.lastSnapshot = null;
     this.tickCount += 1;
-    this.#resetTickSimilarityCache();
-
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
 
     const { densityGrid } = this.prepareTick({
@@ -9649,6 +9593,15 @@ export default class GridManager {
       classification: "",
       precomputedSimilarity: 0,
       similarity: 0,
+      noveltyPressure: undefined,
+      diversity: undefined,
+      appetite: undefined,
+      mateBias: undefined,
+      curiosityBonus: undefined,
+      preferenceScore: undefined,
+      selectionWeight: undefined,
+      baseReproductionProbability: undefined,
+      neuralAffinity: undefined,
     };
   }
 
@@ -9663,39 +9616,25 @@ export default class GridManager {
   }
 
   #resetTargetDescriptor(descriptor) {
+    // Hot path: assign each canonical field directly to avoid per-call
+    // Object.keys/Object.hasOwn reflection. Dynamic fields are pre-populated
+    // by #createTargetDescriptor so the unconditional assignment below
+    // preserves the previous "reset to undefined" behavior.
     descriptor.row = 0;
     descriptor.col = 0;
     descriptor.target = null;
     descriptor.classification = "";
     descriptor.precomputedSimilarity = 0;
     descriptor.similarity = 0;
-
-    for (const key of TARGET_DESCRIPTOR_DYNAMIC_KEYS) {
-      if (Object.hasOwn(descriptor, key)) {
-        descriptor[key] = undefined;
-      }
-    }
-
-    const keys = Object.keys(descriptor);
-
-    if (
-      keys.length >
-      TARGET_DESCRIPTOR_BASE_KEY_SET.size + TARGET_DESCRIPTOR_DYNAMIC_KEYS.size
-    ) {
-      for (let i = 0; i < keys.length; i++) {
-        const key = keys[i];
-
-        if (
-          TARGET_DESCRIPTOR_BASE_KEY_SET.has(key) ||
-          TARGET_DESCRIPTOR_DYNAMIC_KEYS.has(key)
-        ) {
-          continue;
-        }
-
-        descriptor[key] = undefined;
-        TARGET_DESCRIPTOR_DYNAMIC_KEYS.add(key);
-      }
-    }
+    descriptor.noveltyPressure = undefined;
+    descriptor.diversity = undefined;
+    descriptor.appetite = undefined;
+    descriptor.mateBias = undefined;
+    descriptor.curiosityBonus = undefined;
+    descriptor.preferenceScore = undefined;
+    descriptor.selectionWeight = undefined;
+    descriptor.baseReproductionProbability = undefined;
+    descriptor.neuralAffinity = undefined;
 
     return descriptor;
   }
@@ -9863,124 +9802,10 @@ export default class GridManager {
     return record;
   }
 
-  #resetTickSimilarityCache() {
-    if (!this.#tickSimilarityCache) {
-      this.#tickSimilarityCache = new WeakMap();
-    }
-
-    const rowsInUse = this.#tickSimilarityRowsInUse;
-
-    if (Array.isArray(rowsInUse) && rowsInUse.length > 0) {
-      for (let i = 0; i < rowsInUse.length; i += 1) {
-        const record = rowsInUse[i];
-
-        if (!record) continue;
-
-        const { map, keys, cell } = record;
-
-        if (map && Array.isArray(keys)) {
-          for (let j = 0; j < keys.length; j += 1) {
-            map.delete(keys[j]);
-          }
-
-          keys.length = 0;
-        }
-
-        if (cell) {
-          this.#tickSimilarityCache.delete(cell);
-        }
-
-        record.cell = null;
-        this.#tickSimilarityRowPool.push(record);
-      }
-
-      rowsInUse.length = 0;
-    }
-
-    this.#tickSimilarityVersion = this.tickCount;
-  }
-
-  #ensureTickSimilarityCache() {
-    if (!this.#tickSimilarityCache) {
-      this.#tickSimilarityCache = new WeakMap();
-      this.#tickSimilarityVersion = this.tickCount;
-    } else if (this.#tickSimilarityVersion !== this.tickCount) {
-      this.#resetTickSimilarityCache();
-    }
-
-    return this.#tickSimilarityCache;
-  }
-
-  #acquireTickSimilarityRow(cell) {
-    let record = this.#tickSimilarityCache.get(cell);
-
-    if (record) {
-      return record;
-    }
-
-    record = this.#tickSimilarityRowPool.pop();
-
-    if (!record) {
-      record = { map: new WeakMap(), keys: [], cell: null };
-    } else {
-      if (!record.map) {
-        record.map = new WeakMap();
-      }
-
-      record.keys.length = 0;
-    }
-
-    record.cell = cell;
-    this.#tickSimilarityCache.set(cell, record);
-    this.#tickSimilarityRowsInUse.push(record);
-
-    return record;
-  }
-
   #resolveTargetSimilarity(cellA, cellB) {
-    if (!cellA || !cellB) return 0;
+    if (!cellA || !cellB || typeof cellA.similarityTo !== "function") return 0;
 
-    const cache = this.#ensureTickSimilarityCache();
-    let recordA = cache.get(cellA);
-    let mapForA = recordA?.map;
-
-    if (!recordA) {
-      recordA = this.#acquireTickSimilarityRow(cellA);
-      mapForA = recordA.map;
-    }
-
-    if (mapForA.has(cellB)) {
-      return mapForA.get(cellB);
-    }
-
-    let recordB = cache.get(cellB);
-    let mapForB = recordB?.map;
-
-    if (mapForB && mapForB.has(cellA)) {
-      const value = mapForB.get(cellA);
-
-      mapForA.set(cellB, value);
-      recordA.keys.push(cellB);
-
-      return value;
-    }
-
-    if (!recordB) {
-      recordB = this.#acquireTickSimilarityRow(cellB);
-      mapForB = recordB.map;
-    }
-
-    const value = getPairSimilarity(cellA, cellB);
-
-    mapForA.set(cellB, value);
-    recordA.keys.push(cellB);
-
-    if (cellA !== cellB) {
-      mapForB.set(cellA, value);
-      recordB.keys.push(cellA);
-    }
-
-    return value;
+    return cellA.similarityTo(cellB);
   }
 
   findTargets(
@@ -9990,7 +9815,13 @@ export default class GridManager {
     { densityEffectMultiplier = 1, societySimilarity = 1, enemySimilarity = 0 } = {},
   ) {
     const { mates, enemies, society } = this.#beginTargetScan();
-    const seenTargets = new WeakSet();
+    // Target scans are repeated for every active cell. A per-cell revision
+    // avoids allocating one WeakSet per scan while retaining duplicate-target
+    // protection when occupancy fallback paths overlap.
+
+    this.#targetScanRevision = (this.#targetScanRevision + 1) >>> 0;
+    if (this.#targetScanRevision === 0) this.#targetScanRevision = 1;
+    const scanRevision = this.#targetScanRevision;
     const d =
       this.densityGrid?.[row]?.[col] ??
       this.localDensity(row, col, GridManager.DENSITY_RADIUS);
@@ -10045,11 +9876,11 @@ export default class GridManager {
         return false;
       }
 
-      if (seenTargets.has(target)) {
+      if (target[TARGET_SCAN_REVISION_KEY] === scanRevision) {
         return false;
       }
 
-      seenTargets.add(target);
+      target[TARGET_SCAN_REVISION_KEY] = scanRevision;
 
       const similarity = this.#resolveTargetSimilarity(cell, target);
 

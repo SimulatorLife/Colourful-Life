@@ -209,3 +209,32 @@ test("filterSpawnCandidates respects active zones and preserves fallbacks", () =
     "errors during zone membership checks preserve original candidates",
   );
 });
+
+test("filterSpawnCandidates catches mid-filter throws via a single boundary", () => {
+  const calls = { count: 0 };
+  const manager = {
+    hasActiveZones: () => true,
+    isInActiveZone() {
+      calls.count += 1;
+      if (calls.count === 2) {
+        throw new Error("late boom");
+      }
+
+      return true;
+    },
+  };
+
+  const policy = new ReproductionZonePolicy({ selectionManager: manager });
+  const candidates = [
+    { r: 0, c: 0 },
+    { r: 1, c: 1 },
+    { r: 2, c: 2 },
+    { r: 3, c: 3 },
+  ];
+
+  assert.is(
+    policy.filterSpawnCandidates(candidates),
+    candidates,
+    "a throw raised after the first candidate still preserves the original list",
+  );
+});

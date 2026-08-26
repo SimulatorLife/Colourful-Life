@@ -106,36 +106,19 @@ export default class ReproductionZonePolicy {
       return candidates;
     }
 
-    let encounteredError = false;
-    const boundaryArgs = [0, 0];
-    const boundaryOptions = {
-      thisArg: manager,
-      message: WARNINGS.membership,
-      reporter: warnOnce,
-      once: true,
-      onError: () => {
-        encounteredError = true;
-      },
-    };
+    let filtered;
 
-    const filtered = candidates.filter((candidate) => {
-      if (!candidate) {
-        return false;
-      }
+    try {
+      filtered = candidates.filter((candidate) => {
+        if (!candidate) {
+          return false;
+        }
 
-      if (encounteredError) {
-        return true;
-      }
+        return Boolean(tester.call(manager, candidate.r, candidate.c));
+      });
+    } catch (error) {
+      warnOnce(WARNINGS.membership, error);
 
-      boundaryArgs[0] = candidate.r;
-      boundaryArgs[1] = candidate.c;
-
-      const result = invokeWithErrorBoundary(tester, boundaryArgs, boundaryOptions);
-
-      return Boolean(result);
-    });
-
-    if (encounteredError) {
       return candidates;
     }
 
