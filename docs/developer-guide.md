@@ -12,7 +12,7 @@ the dev server, then return here for the deeper workflow.
 
 1. Install Node.js 18.18.0 or newer. The included `.nvmrc` pins to 25.0.0—the version used in CI and profiling. Run `nvm use` (or `nvm install`) after cloning, or make sure your preferred Node 18+ runtime reports ≥ 18.18.0 via `node --version`.
 2. Install dependencies with `pnpm install --frozen-lockfile`, then run `pnpm run prepare` once so Husky reinstalls Git hooks after a fresh clone or `.husky/` update.
-3. Launch the Parcel dev server with `pnpm run start` and open `http://localhost:1234`.
+3. Launch the Parcel dev server with `pnpm run dev` and open `http://localhost:1234`.
 4. Keep a second terminal for feedback loops while you iterate. Reach for `pnpm run lint`, `pnpm run format:check`, `pnpm run test:watch`, or `pnpm test -- path/to/file.test.js` as needed, then finish with `pnpm run check` before committing. The command chains linting, formatting verification, the energy benchmark, and the Node.js test suites—mirroring the loop described in the [README quick start](../README.md#quick-start).
 5. If Parcel stalls, inspect the cleanup plan with `pnpm run clean -- --dry-run`, then rerun `pnpm run clean` to clear `dist/` and `.parcel-cache/` before restarting the dev server.
 

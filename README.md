@@ -18,7 +18,7 @@ Colourful Life runs on Node.js **18.18.0 or newer** (CI and profiling use **25.0
 
 1. Run `nvm use` (or `nvm install`) so your shell adopts the pinned toolchain. Any Node 18+ install works as long as `node --version` reports ≥ 18.18.0.
 2. Install dependencies with `pnpm install --frozen-lockfile`. Run `pnpm run prepare` after each fresh clone or `.husky/` update so Git hooks are restored.
-3. Start the Parcel dev server with `pnpm run start`, then open `http://localhost:1234`.
+3. Start the Parcel dev server with `pnpm run dev`, then open `http://localhost:1234`.
 4. Before committing, run `pnpm run check` to execute ESLint, Prettier verification, the Node.js test suites, and the opt-in energy benchmark in one pass.
 
 During day-to-day work, lean on the focused feedback loops that match your change:
@@ -181,7 +181,7 @@ Headless consumers can call `controller.tick()` to advance the simulation one st
 
 | Command/Script                               | Purpose                                                                       |
 | -------------------------------------------- | ----------------------------------------------------------------------------- |
-| `pnpm run start`                             | Launch the Parcel development server at `http://localhost:1234`.              |
+| `pnpm run dev`                               | Launch the Parcel development server at `http://localhost:1234`.              |
 | `pnpm run build`                             | Produce an optimized production bundle in `dist/`.                            |
 | `pnpm run check`                             | Chain linting, formatting verification, the energy benchmark, and tests       |
 | `pnpm run clean [-- --dry-run]`              | Clear `dist/` and `.parcel-cache/` (preview targets first with `--dry-run`).  |

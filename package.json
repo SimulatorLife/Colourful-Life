@@ -9,7 +9,7 @@
     "#tests/harness": "./test/testHarness.js"
   },
   "scripts": {
-    "start": "parcel ./index.html",
+    "dev": "parcel ./index.html",
     "clean": "node ./scripts/clean-parcel.mjs",
     "build": "parcel build ./index.html",
     "benchmark": "node scripts/profile-energy.mjs",
