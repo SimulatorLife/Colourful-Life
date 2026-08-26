@@ -73,3 +73,20 @@ test("DNA similarity falls back to iterable genes when geneAt returns invalid da
     "similarity should reuse fallback genes when direct samples are invalid",
   );
 });
+
+test("DNA similarity cache invalidates when a genome changes", () => {
+  const first = new DNA({ genes: new Uint8Array([0, 0, 0, 0]), geneCount: 4 });
+  const second = new DNA({ genes: new Uint8Array([0, 0, 0, 0]), geneCount: 4 });
+
+  assert.is(first.similarity(second), 1);
+
+  second.genes[0] = 255;
+  const changedSimilarity = first.similarity(second);
+
+  assert.ok(changedSimilarity < 1, "gene changes should invalidate cached similarity");
+  assert.is(
+    first.similarity(second),
+    changedSimilarity,
+    "repeated unchanged comparisons should reuse the cached result",
+  );
+});

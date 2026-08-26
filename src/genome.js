@@ -204,6 +204,8 @@ export class DNA {
     this._rngCache = new Map();
     this._sharedRngCache = new Map();
     this._inverseMaxDistanceCache = new Map();
+    this._similarityCache = new WeakMap();
+    this._similarityRevision = 0;
 
     if (genesInput) {
       const limit = Math.min(genesInput.length ?? 0, geneCount);
@@ -356,6 +358,8 @@ export class DNA {
 
   #invalidateCaches() {
     this._seed = null;
+    this._similarityRevision = (this._similarityRevision + 1) >>> 0;
+    this._similarityCache = new WeakMap();
     if (this._rngCache) this._rngCache.clear();
     if (this._sharedRngCache) this._sharedRngCache.clear();
     if (this._inverseMaxDistanceCache) this._inverseMaxDistanceCache.clear();
@@ -2769,6 +2773,22 @@ export class DNA {
     if (!other) return 0;
 
     const { squared = false, inverseMaxDistance } = options ?? {};
+    const otherRevision = Number.isInteger(other?._similarityRevision)
+      ? other._similarityRevision
+      : null;
+    const useSimilarityCache =
+      !squared && inverseMaxDistance == null && otherRevision != null;
+    const similarityCacheForSelf = useSimilarityCache ? this._similarityCache : null;
+    const cachedSimilarity = similarityCacheForSelf?.get(other);
+
+    if (
+      cachedSimilarity &&
+      cachedSimilarity.selfRevision === this._similarityRevision &&
+      cachedSimilarity.otherRevision === otherRevision
+    ) {
+      return cachedSimilarity.value;
+    }
+
     const selfGenes = this.#genesTarget;
     const selfLength = selfGenes.length;
     const adapter = createGeneAdapter(other);
@@ -2776,6 +2796,21 @@ export class DNA {
     const geneCount = Math.max(selfLength, otherLength);
 
     if (geneCount === 0) {
+      if (useSimilarityCache) {
+        const record = {
+          selfRevision: this._similarityRevision,
+          otherRevision,
+          value: 1,
+        };
+
+        this._similarityCache.set(other, record);
+        other._similarityCache?.set(this, {
+          selfRevision: otherRevision,
+          otherRevision: this._similarityRevision,
+          value: 1,
+        });
+      }
+
       return 1;
     }
 
@@ -2789,7 +2824,29 @@ export class DNA {
       const otherLen = toNonNegativeInteger(directGenes.length, 0);
       const sharedLength = selfLength < otherLen ? selfLength : otherLen;
 
-      for (let i = 0; i < sharedLength; i++) {
+      const blockLength = sharedLength & ~7;
+
+      for (let i = 0; i < blockLength; i += 8) {
+        let delta = selfGenes[i] - directGenes[i];
+
+        distSq += delta * delta;
+        delta = selfGenes[i + 1] - directGenes[i + 1];
+        distSq += delta * delta;
+        delta = selfGenes[i + 2] - directGenes[i + 2];
+        distSq += delta * delta;
+        delta = selfGenes[i + 3] - directGenes[i + 3];
+        distSq += delta * delta;
+        delta = selfGenes[i + 4] - directGenes[i + 4];
+        distSq += delta * delta;
+        delta = selfGenes[i + 5] - directGenes[i + 5];
+        distSq += delta * delta;
+        delta = selfGenes[i + 6] - directGenes[i + 6];
+        distSq += delta * delta;
+        delta = selfGenes[i + 7] - directGenes[i + 7];
+        distSq += delta * delta;
+      }
+
+      for (let i = blockLength; i < sharedLength; i++) {
         const delta = selfGenes[i] - directGenes[i];
 
         distSq += delta * delta;
@@ -2897,6 +2954,21 @@ export class DNA {
         : this.#resolveInverseMaxDistance(geneCount);
 
     if (distSq === 0) {
+      if (useSimilarityCache) {
+        const record = {
+          selfRevision: this._similarityRevision,
+          otherRevision,
+          value: 1,
+        };
+
+        this._similarityCache.set(other, record);
+        other._similarityCache?.set(this, {
+          selfRevision: otherRevision,
+          otherRevision: this._similarityRevision,
+          value: 1,
+        });
+      }
+
       return 1;
     }
 
@@ -2907,8 +2979,24 @@ export class DNA {
     }
 
     const dist = Math.sqrt(distSq);
+    const value = 1 - dist * invMax;
 
-    return 1 - dist * invMax;
+    if (useSimilarityCache) {
+      const record = {
+        selfRevision: this._similarityRevision,
+        otherRevision,
+        value,
+      };
+
+      this._similarityCache.set(other, record);
+      other._similarityCache?.set(this, {
+        selfRevision: otherRevision,
+        otherRevision: this._similarityRevision,
+        value,
+      });
+    }
+
+    return value;
   }
 }
 
