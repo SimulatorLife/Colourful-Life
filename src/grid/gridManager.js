@@ -84,6 +84,12 @@ const NEIGHBOR_OFFSETS = [
   [1, 0],
   [1, 1],
 ];
+const CARDINAL_DIRECTIONS = Object.freeze([
+  Object.freeze({ dr: -1, dc: 0 }),
+  Object.freeze({ dr: 1, dc: 0 }),
+  Object.freeze({ dr: 0, dc: -1 }),
+  Object.freeze({ dr: 0, dc: 1 }),
+]);
 const NEIGHBOR_ROW_OFFSETS = new Int8Array([-1, -1, -1, 0, 0, 1, 1, 1]);
 const NEIGHBOR_COL_OFFSETS = new Int8Array([-1, 0, 1, -1, 1, -1, 0, 1]);
 const CROWDING_INV_NEIGHBOR_COUNT = Object.freeze([
@@ -2089,12 +2095,7 @@ export default class GridManager {
     if (!moving) return null;
 
     const distBefore = Math.max(Math.abs(targetRow - row), Math.abs(targetCol - col));
-    const candidates = [
-      { dr: -1, dc: 0 },
-      { dr: 1, dc: 0 },
-      { dr: 0, dc: -1 },
-      { dr: 0, dc: 1 },
-    ];
+    const candidates = CARDINAL_DIRECTIONS;
 
     let bestDirection = null;
     let bestScore = Number.NEGATIVE_INFINITY;
