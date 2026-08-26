@@ -65,6 +65,7 @@ const NEURAL_PLASTICITY_WARNING =
   "Failed to resolve neural plasticity profile from DNA.";
 
 const UNRESOLVED_SEED = Symbol("stats.unresolvedSeed");
+const EMPTY_SNAPSHOT_ENTRIES = Object.freeze([]);
 
 function clampWindowToSpan(requestedWindow, observedSpan) {
   const normalizedWindow = sanitizePositiveInteger(requestedWindow);
@@ -1915,7 +1916,13 @@ export default class Stats {
     const pop = Number.isFinite(rawPopulation)
       ? Math.max(0, Math.floor(rawPopulation))
       : 0;
-    const entries = toArray(snapshot?.entries);
+    // Lightweight simulation snapshots expose a deferred materializer so the
+    // per-cell leaderboard entries do not get built on every tick. Stats only
+    // needs the retained population-cell source for its aggregates.
+    const hasDeferredEntries = typeof snapshot?.materializeEntries === "function";
+    const entries = hasDeferredEntries
+      ? EMPTY_SNAPSHOT_ENTRIES
+      : toArray(snapshot?.entries);
     const populationSources = toArray(snapshot?.populationCells, {
       fallback: entries,
     });

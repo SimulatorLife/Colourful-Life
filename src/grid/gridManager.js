@@ -7709,6 +7709,32 @@ export default class GridManager {
       mutationMultiplier,
       combatEdgeSharpness,
       combatTerritoryEdgeFactor,
+      // Optional helper sub-contexts pre-allocated once per tick by `update`.
+      // When omitted (e.g. direct test invocation that doesn't pre-populate
+      // them) the defaults recreate fresh objects so behaviour matches the
+      // pre-optimization per-cell allocation path.
+      tickTargetsCtx: targetsCtx = {
+        densityEffectMultiplier,
+        societySimilarity,
+        enemySimilarity,
+      },
+      tickReproductionCtx: reproductionCtx = {
+        stats,
+        densityGrid,
+        densityEffectMultiplier,
+        mutationMultiplier,
+      },
+      tickCombatCtx: combatCtx = {
+        stats,
+        densityEffectMultiplier,
+        densityGrid,
+        combatEdgeSharpness,
+        combatTerritoryEdgeFactor,
+      },
+      tickMovementCtx: movementCtx = {
+        densityGrid,
+        densityEffectMultiplier,
+      },
     },
   ) {
     const cell = this.grid[row][col];
@@ -7899,21 +7925,10 @@ export default class GridManager {
       return;
     }
 
-    const targets = this.findTargets(row, col, cell, {
-      densityEffectMultiplier,
-      societySimilarity,
-      enemySimilarity,
-    });
+    const targets = this.findTargets(row, col, cell, targetsCtx);
 
     try {
-      if (
-        this.handleReproduction(row, col, cell, targets, {
-          stats,
-          densityGrid,
-          densityEffectMultiplier,
-          mutationMultiplier,
-        })
-      ) {
+      if (this.handleReproduction(row, col, cell, targets, reproductionCtx)) {
         return;
       }
 
@@ -7921,22 +7936,11 @@ export default class GridManager {
         return;
       }
 
-      if (
-        this.handleCombat(row, col, cell, targets, {
-          stats,
-          densityEffectMultiplier,
-          densityGrid,
-          combatEdgeSharpness,
-          combatTerritoryEdgeFactor,
-        })
-      ) {
+      if (this.handleCombat(row, col, cell, targets, combatCtx)) {
         return;
       }
 
-      this.handleMovement(row, col, cell, targets, {
-        densityGrid,
-        densityEffectMultiplier,
-      });
+      this.handleMovement(row, col, cell, targets, movementCtx);
     } finally {
       this.#endTargetScan();
     }
@@ -9459,6 +9463,46 @@ export default class GridManager {
     const processed = new WeakSet();
     const activeSnapshot = this.#acquireActiveCellSnapshot();
 
+    // Allocate one context per tick (and pre-build the helper sub-contexts)
+    // so the per-cell loop avoids rebuilding the same options object for every
+    // active cell. The WeakSet and per-tick scalars live for the duration of
+    // the tick; helper sub-contexts are read-only across cells.
+    const tickContext = {
+      stats,
+      eventManager,
+      densityGrid,
+      processed,
+      densityEffectMultiplier,
+      societySimilarity,
+      enemySimilarity,
+      eventStrengthMultiplier,
+      mutationMultiplier,
+      combatEdgeSharpness: combatSharpness,
+      combatTerritoryEdgeFactor: territoryFactor,
+      tickTargetsCtx: {
+        densityEffectMultiplier,
+        societySimilarity,
+        enemySimilarity,
+      },
+      tickReproductionCtx: {
+        stats,
+        densityGrid,
+        densityEffectMultiplier,
+        mutationMultiplier,
+      },
+      tickCombatCtx: {
+        stats,
+        densityEffectMultiplier,
+        densityGrid,
+        combatEdgeSharpness: combatSharpness,
+        combatTerritoryEdgeFactor: territoryFactor,
+      },
+      tickMovementCtx: {
+        densityGrid,
+        densityEffectMultiplier,
+      },
+    };
+
     try {
       for (let index = 0; index < activeSnapshot.length; index += 1) {
         const cell = activeSnapshot[index];
@@ -9470,19 +9514,7 @@ export default class GridManager {
 
         const { row, col } = location;
 
-        this.processCell(row, col, {
-          stats,
-          eventManager,
-          densityGrid,
-          processed,
-          densityEffectMultiplier,
-          societySimilarity,
-          enemySimilarity,
-          eventStrengthMultiplier,
-          mutationMultiplier,
-          combatEdgeSharpness: combatSharpness,
-          combatTerritoryEdgeFactor: territoryFactor,
-        });
+        this.processCell(row, col, tickContext);
       }
     } finally {
       this.#releaseActiveCellSnapshot();
@@ -9490,14 +9522,16 @@ export default class GridManager {
 
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
     this.#enforceEnergyExclusivity();
-    this.lastSnapshot = this.buildSnapshot();
+    // Simulation metrics only need scalar aggregates and the active-cell source.
+    // Detailed leaderboard entries are materialized on demand by telemetry/UI.
+    this.lastSnapshot = this.buildSnapshot(undefined, { includeEntries: false });
 
     return this.lastSnapshot;
   }
 
-  buildSnapshot(maxTileEnergy) {
+  buildSnapshot(maxTileEnergy, { includeEntries = true } = {}) {
     const cap = typeof maxTileEnergy === "number" ? maxTileEnergy : this.maxTileEnergy;
-    const entries = [];
+    const entries = includeEntries ? [] : EMPTY_TARGET_LIST;
     const populationCells = this.#acquirePopulationCellScratch();
     const snapshot = {
       rows: this.rows,
@@ -9523,36 +9557,62 @@ export default class GridManager {
 
         const energy = Number.isFinite(cell.energy) ? cell.energy : 0;
         const age = Number.isFinite(cell.age) ? cell.age : 0;
-        const fitness = computeFitness(cell, cap);
+        const fitness = includeEntries ? computeFitness(cell, cap) : 0;
         const fightsWon = Number.isFinite(cell.fightsWon) ? cell.fightsWon : 0;
         const offspring = Number.isFinite(cell.offspring) ? cell.offspring : 0;
-        const colorCandidate = resolveCellColor(cell);
-        const entry = {
-          row,
-          col,
-          fitness,
-          age,
-          fightsWon,
-          offspring,
-        };
-
-        if (colorCandidate) {
-          entry.color = colorCandidate;
-        }
 
         snapshot.population += 1;
         snapshot.totalEnergy += energy;
         snapshot.totalAge += age;
-        entries.push(entry);
         populationCells.push(cell);
 
-        if (Number.isFinite(entry.fitness) && entry.fitness > snapshot.maxFitness) {
-          snapshot.maxFitness = entry.fitness;
+        if (includeEntries) {
+          const colorCandidate = resolveCellColor(cell);
+          const entry = {
+            row,
+            col,
+            fitness,
+            age,
+            fightsWon,
+            offspring,
+          };
+
+          if (colorCandidate) {
+            entry.color = colorCandidate;
+          }
+
+          entries.push(entry);
+        }
+
+        if (
+          includeEntries &&
+          Number.isFinite(fitness) &&
+          fitness > snapshot.maxFitness
+        ) {
+          snapshot.maxFitness = fitness;
         }
       }
     }
 
     snapshot.populationCells = populationCells;
+
+    if (!includeEntries) {
+      let materializedEntries = null;
+      const materializeEntries = () => {
+        if (materializedEntries) return materializedEntries;
+
+        const materialized = this.#buildSnapshotEntries(cap);
+
+        materializedEntries = materialized.entries;
+        snapshot.entries = materializedEntries;
+        snapshot.maxFitness = materialized.maxFitness;
+
+        return materializedEntries;
+      };
+
+      snapshot.materializeEntries = materializeEntries;
+    }
+
     snapshot.populationScarcity = clamp(
       Number.isFinite(this.populationScarcitySignal)
         ? this.populationScarcitySignal
@@ -9564,9 +9624,56 @@ export default class GridManager {
     return snapshot;
   }
 
-  getLastSnapshot() {
+  #buildSnapshotEntries(cap) {
+    const entries = [];
+    let maxFitness = 0;
+    const activeCells = this.activeCells;
+
+    if (!activeCells || activeCells.size === 0) {
+      return { entries, maxFitness };
+    }
+
+    for (const cell of activeCells) {
+      if (!cell || !this.#ensureTrackedCell(cell)) continue;
+
+      const tracked = this.cellPositions.get(cell);
+
+      if (!tracked) continue;
+
+      const { row, col } = tracked;
+      const fitness = computeFitness(cell, cap);
+      const entry = {
+        row,
+        col,
+        fitness,
+        age: Number.isFinite(cell.age) ? cell.age : 0,
+        fightsWon: Number.isFinite(cell.fightsWon) ? cell.fightsWon : 0,
+        offspring: Number.isFinite(cell.offspring) ? cell.offspring : 0,
+      };
+      const colorCandidate = resolveCellColor(cell);
+
+      if (colorCandidate) {
+        entry.color = colorCandidate;
+      }
+
+      entries.push(entry);
+
+      if (Number.isFinite(fitness) && fitness > maxFitness) {
+        maxFitness = fitness;
+      }
+    }
+
+    return { entries, maxFitness };
+  }
+
+  getLastSnapshot({ includeEntries = true } = {}) {
     if (!this.lastSnapshot) {
-      this.lastSnapshot = this.buildSnapshot();
+      this.lastSnapshot = this.buildSnapshot(undefined, { includeEntries });
+    } else if (
+      includeEntries &&
+      typeof this.lastSnapshot.materializeEntries === "function"
+    ) {
+      this.lastSnapshot.materializeEntries();
     }
 
     return this.lastSnapshot;

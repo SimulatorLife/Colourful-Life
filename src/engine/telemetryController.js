@@ -234,6 +234,10 @@ export default class TelemetryController {
   #emitLeaderboard(emitLeaderboard) {
     if (typeof emitLeaderboard !== "function") return;
 
+    if (typeof this.#lastSnapshot?.materializeEntries === "function") {
+      this.#lastSnapshot.materializeEntries();
+    }
+
     const rawEntries = this.#lastSnapshot
       ? invokeWithErrorBoundary(
           this.#computeLeaderboard,
@@ -286,7 +290,12 @@ export default class TelemetryController {
       return null;
     }
 
-    const entries = Array.isArray(snapshot.entries) ? snapshot.entries : null;
+    const hasDeferredEntries = typeof snapshot.materializeEntries === "function";
+    const entries = hasDeferredEntries
+      ? null
+      : Array.isArray(snapshot.entries)
+        ? snapshot.entries
+        : null;
     const ensureStat = (value, fallback = 0) =>
       Number.isFinite(value) ? value : fallback;
 
@@ -315,12 +324,14 @@ export default class TelemetryController {
       }
     });
 
-    if (Array.isArray(snapshot.populationCells)) {
-      snapshot.populationCells.length = 0;
-    }
+    if (!hasDeferredEntries) {
+      if (Array.isArray(snapshot.populationCells)) {
+        snapshot.populationCells.length = 0;
+      }
 
-    if (Object.hasOwn(snapshot, "populationCells")) {
-      delete snapshot.populationCells;
+      if (Object.hasOwn(snapshot, "populationCells")) {
+        delete snapshot.populationCells;
+      }
     }
 
     return snapshot;

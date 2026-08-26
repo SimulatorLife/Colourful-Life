@@ -114,6 +114,260 @@ const DENSITY_COLOR_CACHE_SIZE = 512;
 const densityColorCache = new Array(DENSITY_COLOR_CACHE_SIZE);
 const densityColorCacheOpaque = new Array(DENSITY_COLOR_CACHE_SIZE);
 
+// ============================================================================
+// Reusable overlay tile cache. Stores an OffscreenCanvas (when available) or
+// a detached <canvas> element keyed by a fingerprint that captures the
+// dimensions, options, and underlying grid data. Unchanged frames blit the
+// cached surface to the target context via drawImage, avoiding the per-tile
+// fillRect + fillStyle churn of the scalar heatmap painter.
+// ============================================================================
+
+function createOverlayCacheSlot() {
+  return {
+    surface: null,
+    ctx: null,
+    width: 0,
+    height: 0,
+    fingerprint: null,
+    // Structural fingerprint (rows + cols + cellSize + options + colour scale).
+    // Cached alongside the full fingerprint so cache-hit detection can short
+    // circuit the expensive data hash when the caller supplies a stable
+    // `dataRevision` (e.g. `tickCount`). Cleared whenever the surface
+    // dimensions change so the next render forces a full rebuild.
+    structuralFingerprint: null,
+    // Revision supplied by the caller (typically `tickCount`). When it matches
+    // the cached value and the structural fingerprint matches, the cache
+    // treats the frame as a hit without re-scanning the underlying grid.
+    dataRevision: null,
+    // Overlay-specific metadata captured on the cache miss so subsequent hits
+    // can reuse it for the legend without recomputing it. Each overlay stores
+    // its own shape (energy: stats, density: samples, age: summary).
+    cachedMetadata: null,
+    surfaceFactory: null,
+  };
+}
+
+function defaultOverlaySurfaceFactory(width, height) {
+  if (!(width > 0) || !(height > 0)) return null;
+  if (typeof OffscreenCanvas === "function") {
+    try {
+      const surface = new OffscreenCanvas(width, height);
+      const ctx =
+        typeof surface.getContext === "function" ? surface.getContext("2d") : null;
+
+      if (ctx) return { surface, ctx };
+    } catch (_) {
+      /* fall through to DOM canvas */
+    }
+  }
+  if (typeof document !== "undefined" && typeof document.createElement === "function") {
+    const surface = document.createElement("canvas");
+
+    if (surface && typeof surface.getContext === "function") {
+      surface.width = width;
+      surface.height = height;
+      const ctx = surface.getContext("2d");
+
+      if (ctx) return { surface, ctx };
+    }
+  }
+
+  return null;
+}
+
+const overlayCacheSlots = Object.freeze({
+  energy: createOverlayCacheSlot(),
+  density: createOverlayCacheSlot(),
+  age: createOverlayCacheSlot(),
+});
+
+function resolveOverlayCacheSlot(candidate) {
+  if (!candidate) return null;
+  if (typeof candidate === "string") {
+    return overlayCacheSlots[candidate] ?? null;
+  }
+  if (typeof candidate === "object" && "ctx" in candidate) {
+    return candidate;
+  }
+
+  return null;
+}
+
+function ensureOverlayCacheSurface(slot, width, height) {
+  if (!slot) return null;
+  if (slot.surface && slot.width === width && slot.height === height) {
+    return slot.ctx ?? null;
+  }
+  const factory = slot.surfaceFactory ?? defaultOverlaySurfaceFactory;
+  const produced = factory(width, height);
+
+  if (!produced) return null;
+  const { surface, ctx } = produced;
+
+  if (!surface || !ctx) return null;
+  if (ctx.imageSmoothingEnabled != null) {
+    ctx.imageSmoothingEnabled = false;
+  }
+  slot.surface = surface;
+  slot.ctx = ctx;
+  slot.width = width;
+  slot.height = height;
+  slot.fingerprint = null;
+  slot.structuralFingerprint = null;
+  slot.dataRevision = null;
+  slot.cachedMetadata = null;
+
+  return ctx;
+}
+
+function buildOverlayCacheFingerprint(parts) {
+  // Stable, order-sensitive key. Cheap to compare via string equality.
+  return [
+    parts.rows,
+    parts.cols,
+    parts.cellSize,
+    Number.isFinite(parts.maxTileEnergy) ? parts.maxTileEnergy : "",
+    Number.isFinite(parts.scale) ? parts.scale : "",
+    parts.color ?? "",
+    Number.isFinite(parts.dataRevision) ? parts.dataRevision : "",
+    Number.isFinite(parts.dataFingerprint) ? parts.dataFingerprint : "",
+  ].join("|");
+}
+
+// FNV-1a style hash of a finite-number grid. Quantized to integer 1e-3
+// precision so floating-point noise in the underlying arrays does not bust
+// the cache for visually identical frames.
+function hashNumberGrid(rows, cols, getter) {
+  let h = (Math.imul(rows | 0, 73856093) ^ Math.imul(cols | 0, 19349663)) | 0;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const v = getter(r, c);
+
+      if (Number.isFinite(v)) {
+        const q = (v * 1000) | 0;
+
+        h = Math.imul(h ^ q, 16777619);
+      } else {
+        h = Math.imul(h ^ 0x7f7f7f7f, 16777619);
+      }
+    }
+  }
+
+  return h | 0;
+}
+
+function hashEnergyGrid(grid) {
+  const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
+  const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
+
+  if (!rows || !cols) return null;
+  const energyGrid = Array.isArray(grid?.energyGrid) ? grid.energyGrid : null;
+
+  if (!energyGrid) return null;
+
+  return hashNumberGrid(rows, cols, (r, c) => energyGrid[r]?.[c]);
+}
+
+function hashAgeGridData(grid) {
+  const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
+  const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
+
+  if (!rows || !cols) return null;
+  const gridRows = Array.isArray(grid?.grid) ? grid.grid : null;
+
+  if (!gridRows) return null;
+
+  return hashNumberGrid(rows, cols, (r, c) => {
+    const cell = gridRows[r]?.[c];
+
+    if (!cell) return 0;
+    const age = Number.isFinite(cell.age) ? cell.age : 0;
+    const lifespan = Number.isFinite(cell.lifespan) ? cell.lifespan : 0;
+
+    return age * 1000 + lifespan;
+  });
+}
+
+function hashDensityGrid(grid) {
+  const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
+  const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
+
+  if (!rows || !cols) return null;
+  const densityGrid = Array.isArray(grid?.densityGrid) ? grid.densityGrid : null;
+
+  if (densityGrid) {
+    return hashNumberGrid(rows, cols, (r, c) => densityGrid[r]?.[c]);
+  }
+  if (typeof grid?.getDensityAt !== "function") return null;
+
+  return hashNumberGrid(rows, cols, (r, c) => {
+    const raw = grid.getDensityAt(r, c);
+
+    return Number.isFinite(raw) ? raw : 0;
+  });
+}
+
+// Cache-aware painter. When the fingerprint + surface match, blits the cached
+// canvas onto targetCtx. Otherwise renders via renderToCache, stores the new
+// fingerprint, then blits. When no usable surface is available, falls back to
+// rendering directly on targetCtx via renderToTarget.
+function paintTilesWithCache({
+  slot,
+  fingerprint,
+  width,
+  height,
+  targetCtx,
+  renderToCache,
+  renderToTarget,
+}) {
+  const drawCtx =
+    targetCtx && typeof targetCtx.drawImage === "function" ? targetCtx : null;
+
+  if (!drawCtx) return "noop";
+
+  if (
+    slot &&
+    slot.fingerprint === fingerprint &&
+    slot.surface &&
+    slot.width === width &&
+    slot.height === height &&
+    slot.ctx
+  ) {
+    drawCtx.drawImage(slot.surface, 0, 0);
+
+    return "hit";
+  }
+
+  const cacheCtx = slot ? ensureOverlayCacheSurface(slot, width, height) : null;
+
+  if (cacheCtx) {
+    cacheCtx.clearRect(0, 0, width, height);
+    renderToCache(cacheCtx);
+    slot.fingerprint = fingerprint;
+    drawCtx.drawImage(slot.surface, 0, 0);
+
+    return "miss";
+  }
+
+  renderToTarget(drawCtx);
+
+  return "fallback";
+}
+
+export function resetOverlayCaches() {
+  for (const slot of Object.values(overlayCacheSlots)) {
+    slot.surface = null;
+    slot.ctx = null;
+    slot.width = 0;
+    slot.height = 0;
+    slot.fingerprint = null;
+    slot.structuralFingerprint = null;
+    slot.dataRevision = null;
+    slot.cachedMetadata = null;
+  }
+}
+
 function computeLifeEventAlpha(
   ageTicks,
   { maxAge = LIFE_EVENT_MARKER_FADE_TICKS } = {},
@@ -1602,7 +1856,8 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
     fitnessOverlayOptions,
     gridLineOptions,
     lifeEvents,
-    currentTick: lifeEventCurrentTick,
+    currentTick,
+    lifeEventCurrentTick = currentTick,
     lifeEventFadeTicks,
     lifeEventLimit,
     selectionZones,
@@ -1611,6 +1866,11 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   let snapshot = providedSnapshot;
   const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
   const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
+  // Stable grid revision (typically `tickCount`) supplied by the engine so
+  // each per-tile overlay can reuse the cached surface until the simulation
+  // actually advances. Falls back to `null` when the caller omits it, in
+  // which case the overlay helpers fall back to their data-hash fingerprint.
+  const overlayDataRevision = Number.isFinite(currentTick) ? currentTick : null;
 
   if (Array.isArray(activeEvents) && activeEvents.length > 0) {
     drawEventOverlays(ctx, cellSize, activeEvents, getEventColor);
@@ -1619,15 +1879,28 @@ export function drawOverlays(grid, ctx, cellSize, opts = {}) {
   if (showObstacles) drawObstacleMask(grid, ctx, cellSize);
 
   if (showEnergy) {
-    const stats = computeEnergyStats(grid, maxTileEnergy);
-
-    drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy, stats);
+    drawEnergyHeatmap(grid, ctx, cellSize, maxTileEnergy, null, {
+      cache: true,
+      dataRevision: overlayDataRevision,
+    });
   }
-  if (showDensity) drawDensityHeatmap(grid, ctx, cellSize);
-  if (showAge) drawAgeHeatmap(grid, ctx, cellSize);
+  if (showDensity) {
+    drawDensityHeatmap(grid, ctx, cellSize, {
+      cache: true,
+      dataRevision: overlayDataRevision,
+    });
+  }
+  if (showAge) {
+    drawAgeHeatmap(grid, ctx, cellSize, {
+      cache: true,
+      dataRevision: overlayDataRevision,
+    });
+  }
   if (showFitness) {
-    if (!snapshot && typeof grid?.getLastSnapshot === "function") {
-      snapshot = grid.getLastSnapshot();
+    if (typeof snapshot?.materializeEntries === "function") {
+      snapshot.materializeEntries();
+    } else if (!snapshot && typeof grid?.getLastSnapshot === "function") {
+      snapshot = grid.getLastSnapshot({ includeEntries: true });
     }
   }
   if (showFitness) {
@@ -1673,20 +1946,125 @@ export function drawEnergyHeatmap(
   cellSize,
   maxTileEnergy = MAX_TILE_ENERGY,
   statsOverride = null,
+  options = {},
 ) {
   if (!grid || !Array.isArray(grid.energyGrid) || !grid.rows || !grid.cols) return;
 
   const scale = 0.99;
-  const stats = statsOverride ?? computeEnergyStats(grid, maxTileEnergy);
+  const color = "0,255,0";
+  const rows = grid.rows;
+  const cols = grid.cols;
+  const width = cols * cellSize;
+  const height = rows * cellSize;
 
-  drawScalarHeatmap(grid, ctx, cellSize, energyHeatmapAlphaAt, "0,255,0", {
-    energyGrid: grid.energyGrid,
-    maxTileEnergy,
-    scale,
-  });
+  const useCache =
+    options && options.cache === true && typeof ctx?.drawImage === "function";
+  const slot = useCache ? resolveOverlayCacheSlot(options.cacheSlot ?? "energy") : null;
+  const dataRevision =
+    useCache && Number.isFinite(options?.dataRevision) ? options.dataRevision : null;
+  const structuralKey = `${rows}|${cols}|${cellSize}|${maxTileEnergy}|${scale}|${color}`;
+
+  let stats = statsOverride;
+  let fingerprint = null;
+  let isHit = false;
+
+  // Quick hit: structural params + caller-supplied revision both match, so
+  // the frame is unchanged and we can skip the data scan entirely.
+  if (
+    useCache &&
+    slot &&
+    slot.surface &&
+    slot.width === width &&
+    slot.height === height &&
+    slot.ctx &&
+    slot.structuralFingerprint === structuralKey &&
+    dataRevision != null &&
+    slot.dataRevision === dataRevision
+  ) {
+    isHit = true;
+    if (!stats && slot.cachedMetadata) stats = slot.cachedMetadata;
+    if (typeof ctx?.drawImage === "function") ctx.drawImage(slot.surface, 0, 0);
+  }
+
+  // Full hit: dataFingerprint matches (or no revision was supplied).
+  if (
+    !isHit &&
+    useCache &&
+    slot &&
+    slot.surface &&
+    slot.width === width &&
+    slot.height === height &&
+    slot.ctx
+  ) {
+    const dataFingerprint = hashEnergyGrid(grid);
+
+    fingerprint = buildOverlayCacheFingerprint({
+      rows,
+      cols,
+      cellSize,
+      maxTileEnergy,
+      scale,
+      color,
+      dataRevision,
+      dataFingerprint,
+    });
+    if (slot.fingerprint === fingerprint) {
+      isHit = true;
+      if (!stats && slot.cachedMetadata) stats = slot.cachedMetadata;
+      if (typeof ctx?.drawImage === "function") ctx.drawImage(slot.surface, 0, 0);
+    }
+  }
+
+  if (!isHit) {
+    // MISS path: stats only need to be computed when we actually need them.
+    if (!stats) stats = computeEnergyStats(grid, maxTileEnergy);
+
+    if (fingerprint == null) {
+      const dataFingerprint = hashEnergyGrid(grid);
+
+      fingerprint = buildOverlayCacheFingerprint({
+        rows,
+        cols,
+        cellSize,
+        maxTileEnergy,
+        scale,
+        color,
+        dataRevision,
+        dataFingerprint,
+      });
+    }
+
+    const renderToCtx = (targetCtx) => {
+      drawScalarHeatmap(grid, targetCtx, cellSize, energyHeatmapAlphaAt, color, {
+        energyGrid: grid.energyGrid,
+        maxTileEnergy,
+        scale,
+      });
+    };
+
+    if (useCache && slot) {
+      const cacheCtx = ensureOverlayCacheSurface(slot, width, height);
+
+      if (cacheCtx) {
+        cacheCtx.clearRect(0, 0, width, height);
+        renderToCtx(cacheCtx);
+        slot.fingerprint = fingerprint;
+        slot.structuralFingerprint = structuralKey;
+        slot.dataRevision = dataRevision;
+        slot.cachedMetadata = stats;
+        if (typeof ctx?.drawImage === "function") ctx.drawImage(slot.surface, 0, 0);
+      } else {
+        // No usable cache surface — fall back to a direct render and leave
+        // the slot untouched so the next call can try again.
+        renderToCtx(ctx);
+      }
+    } else {
+      renderToCtx(ctx);
+    }
+  }
 
   if (stats) {
-    drawEnergyLegend(ctx, cellSize, grid.cols, grid.rows, stats, maxTileEnergy);
+    drawEnergyLegend(ctx, cellSize, cols, rows, stats, maxTileEnergy);
   }
 }
 
@@ -1709,12 +2087,7 @@ function ensureDensityScratchSize(size) {
  * @param {CanvasRenderingContext2D} ctx - Rendering context.
  * @param {number} cellSize - Size of a single grid cell in pixels.
  */
-export function drawDensityHeatmap(grid, ctx, cellSize) {
-  const rows = grid.rows;
-  const cols = grid.cols;
-
-  if (!rows || !cols) return;
-
+function collectDensitySamples(grid, rows, cols) {
   const totalCells = rows * cols;
   const scratch = ensureDensityScratchSize(totalCells);
   let scratchIndex = 0;
@@ -1739,7 +2112,6 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
 
       scratch[scratchIndex++] = density;
       sumDensity += density;
-
       if (density < minDensity) {
         minDensity = density;
         minRow = r;
@@ -1753,7 +2125,9 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
     }
   }
 
-  if (!Number.isFinite(minDensity) || !Number.isFinite(maxDensity)) return;
+  if (!Number.isFinite(minDensity) || !Number.isFinite(maxDensity)) {
+    return null;
+  }
 
   const originalMin = minDensity;
   const originalMax = maxDensity;
@@ -1771,32 +2145,187 @@ export function drawDensityHeatmap(grid, ctx, cellSize) {
     range = maxDensity - minDensity;
   }
 
-  scratchIndex = 0;
+  return {
+    scratch,
+    originalMin,
+    originalMax,
+    minLocation,
+    maxLocation,
+    averageDensity,
+    adjustedMin: minDensity,
+    adjustedMax: maxDensity,
+    range,
+  };
+}
+
+function paintDensityTiles(ctx, cellSize, samples, rows, cols) {
+  if (!samples) return;
+  const { scratch, adjustedMin, range } = samples;
+  let scratchIndex = 0;
   let lastFillStyle = null;
 
   for (let r = 0; r < rows; r++) {
+    const y = r * cellSize;
+
     for (let c = 0; c < cols; c++) {
       const density = scratch[scratchIndex++];
-      const normalized = (density - minDensity) / range;
-
+      const normalized = (density - adjustedMin) / range;
       const fillStyle = densityToRgba(normalized);
 
       if (fillStyle !== lastFillStyle) {
         ctx.fillStyle = fillStyle;
         lastFillStyle = fillStyle;
       }
+      ctx.fillRect(c * cellSize, y, cellSize, cellSize);
+    }
+  }
+}
 
-      ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+export function drawDensityHeatmap(grid, ctx, cellSize, options = {}) {
+  const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
+  const cols = Number.isFinite(grid?.cols) ? grid.cols : 0;
+
+  if (!rows || !cols) return;
+
+  const width = cols * cellSize;
+  const height = rows * cellSize;
+  const color = "density";
+
+  const useCache =
+    options && options.cache === true && typeof ctx?.drawImage === "function";
+  const slot = useCache
+    ? resolveOverlayCacheSlot(options.cacheSlot ?? "density")
+    : null;
+  const dataRevision =
+    useCache && Number.isFinite(options?.dataRevision) ? options.dataRevision : null;
+  const structuralKey = `${rows}|${cols}|${cellSize}|${color}`;
+
+  let samples = null;
+  let fingerprint = null;
+  let isHit = false;
+
+  // Quick hit: structural + caller revision match → reuse cached samples.
+  if (
+    useCache &&
+    slot &&
+    slot.surface &&
+    slot.width === width &&
+    slot.height === height &&
+    slot.ctx &&
+    slot.structuralFingerprint === structuralKey &&
+    dataRevision != null &&
+    slot.dataRevision === dataRevision
+  ) {
+    isHit = true;
+    samples = slot.cachedMetadata ?? null;
+    if (typeof ctx?.drawImage === "function") ctx.drawImage(slot.surface, 0, 0);
+  }
+
+  // Full hit: dataFingerprint matches (covers callers without a revision).
+  if (
+    !isHit &&
+    useCache &&
+    slot &&
+    slot.surface &&
+    slot.width === width &&
+    slot.height === height &&
+    slot.ctx
+  ) {
+    const dataFingerprint = hashDensityGrid(grid);
+
+    fingerprint = buildOverlayCacheFingerprint({
+      rows,
+      cols,
+      cellSize,
+      maxTileEnergy: null,
+      scale: null,
+      color,
+      dataRevision,
+      dataFingerprint,
+    });
+    if (slot.fingerprint === fingerprint) {
+      isHit = true;
+      samples = slot.cachedMetadata ?? null;
+      if (typeof ctx?.drawImage === "function") ctx.drawImage(slot.surface, 0, 0);
     }
   }
 
-  drawDensityLegend(ctx, cellSize, cols, rows, {
-    min: originalMin,
-    max: originalMax,
-    average: averageDensity,
-    minLocation,
-    maxLocation,
-  });
+  if (!isHit) {
+    // MISS path: collect samples once and stash them on the slot so future
+    // hits skip the per-cell scan.
+    samples = collectDensitySamples(grid, rows, cols);
+
+    if (samples) {
+      if (fingerprint == null) {
+        const dataFingerprint = hashDensityGrid(grid);
+
+        fingerprint = buildOverlayCacheFingerprint({
+          rows,
+          cols,
+          cellSize,
+          maxTileEnergy: null,
+          scale: null,
+          color,
+          dataRevision,
+          dataFingerprint,
+        });
+      }
+
+      const renderToCtx = (targetCtx) => {
+        paintDensityTiles(targetCtx, cellSize, samples, rows, cols);
+      };
+
+      if (useCache && slot) {
+        const cacheCtx = ensureOverlayCacheSurface(slot, width, height);
+
+        if (cacheCtx) {
+          cacheCtx.clearRect(0, 0, width, height);
+          renderToCtx(cacheCtx);
+          slot.fingerprint = fingerprint;
+          slot.structuralFingerprint = structuralKey;
+          slot.dataRevision = dataRevision;
+          slot.cachedMetadata = samples;
+          if (typeof ctx?.drawImage === "function") ctx.drawImage(slot.surface, 0, 0);
+        } else {
+          // No cache surface — direct render, leave slot untouched.
+          renderToCtx(ctx);
+        }
+      } else {
+        renderToCtx(ctx);
+      }
+    } else if (useCache && slot) {
+      // No samples to draw — still update the cache key so subsequent calls
+      // with the same fingerprint short-circuit without rescanning.
+      if (fingerprint == null) {
+        const dataFingerprint = hashDensityGrid(grid);
+
+        fingerprint = buildOverlayCacheFingerprint({
+          rows,
+          cols,
+          cellSize,
+          maxTileEnergy: null,
+          scale: null,
+          color,
+          dataRevision,
+          dataFingerprint,
+        });
+      }
+      slot.fingerprint = fingerprint;
+      slot.structuralFingerprint = structuralKey;
+      slot.dataRevision = dataRevision;
+      slot.cachedMetadata = null;
+    }
+  }
+
+  if (samples) {
+    drawDensityLegend(ctx, cellSize, cols, rows, {
+      min: samples.originalMin,
+      max: samples.originalMax,
+      average: samples.averageDensity,
+      minLocation: samples.minLocation,
+      maxLocation: samples.maxLocation,
+    });
+  }
 }
 
 let ageFractionScratch = null;
@@ -2006,7 +2535,7 @@ function drawAgeLegend(ctx, cellSize, cols, rows, stats) {
   ctx.restore();
 }
 
-export function drawAgeHeatmap(grid, ctx, cellSize) {
+export function drawAgeHeatmap(grid, ctx, cellSize, options = {}) {
   if (!grid || !ctx) return;
 
   const rows = Number.isFinite(grid?.rows) ? grid.rows : 0;
@@ -2016,24 +2545,133 @@ export function drawAgeHeatmap(grid, ctx, cellSize) {
     return;
   }
 
-  const totalTiles = rows * cols;
-  const scratch = ensureAgeScratchSize(totalTiles);
-  const stats = summarizeAgeOverlay(grid, scratch, rows, cols);
+  const width = cols * cellSize;
+  const height = rows * cellSize;
+  const color = AGE_HEATMAP_COLOR;
 
-  const alphaAt = (r, c) => {
-    const fraction = scratch[r * cols + c];
+  const useCache =
+    options && options.cache === true && typeof ctx?.drawImage === "function";
+  const slot = useCache ? resolveOverlayCacheSlot(options.cacheSlot ?? "age") : null;
+  const dataRevision =
+    useCache && Number.isFinite(options?.dataRevision) ? options.dataRevision : null;
+  const structuralKey = `${rows}|${cols}|${cellSize}|${color}`;
 
-    if (!(fraction > 0)) {
-      return 0;
+  let stats = null;
+  let scratch = null;
+  let fingerprint = null;
+  let isHit = false;
+
+  // Quick hit: structural + caller revision match → reuse cached summary.
+  if (
+    useCache &&
+    slot &&
+    slot.surface &&
+    slot.width === width &&
+    slot.height === height &&
+    slot.ctx &&
+    slot.structuralFingerprint === structuralKey &&
+    dataRevision != null &&
+    slot.dataRevision === dataRevision
+  ) {
+    isHit = true;
+    stats = slot.cachedMetadata?.stats ?? null;
+    scratch = slot.cachedMetadata?.scratch ?? null;
+    if (typeof ctx?.drawImage === "function") ctx.drawImage(slot.surface, 0, 0);
+  }
+
+  // Full hit: dataFingerprint matches.
+  if (
+    !isHit &&
+    useCache &&
+    slot &&
+    slot.surface &&
+    slot.width === width &&
+    slot.height === height &&
+    slot.ctx
+  ) {
+    const dataFingerprint = hashAgeGridData(grid);
+
+    fingerprint = buildOverlayCacheFingerprint({
+      rows,
+      cols,
+      cellSize,
+      maxTileEnergy: null,
+      scale: null,
+      color,
+      dataRevision,
+      dataFingerprint,
+    });
+    if (slot.fingerprint === fingerprint) {
+      isHit = true;
+      stats = slot.cachedMetadata?.stats ?? null;
+      scratch = slot.cachedMetadata?.scratch ?? null;
+      if (typeof ctx?.drawImage === "function") ctx.drawImage(slot.surface, 0, 0);
+    }
+  }
+
+  if (!isHit) {
+    // MISS path: summarize once, reuse scratch + stats for the render.
+    const totalTiles = rows * cols;
+
+    scratch = ensureAgeScratchSize(totalTiles);
+    stats = summarizeAgeOverlay(grid, scratch, rows, cols);
+
+    if (fingerprint == null) {
+      const dataFingerprint = hashAgeGridData(grid);
+
+      fingerprint = buildOverlayCacheFingerprint({
+        rows,
+        cols,
+        cellSize,
+        maxTileEnergy: null,
+        scale: null,
+        color,
+        dataRevision,
+        dataFingerprint,
+      });
     }
 
-    const normalized = clamp01(fraction);
-    const blended = AGE_HEATMAP_BASE_ALPHA + (1 - AGE_HEATMAP_BASE_ALPHA) * normalized;
+    if (stats) {
+      const alphaAt = (r, c) => {
+        const fraction = scratch[r * cols + c];
 
-    return clamp01(blended);
-  };
+        if (!(fraction > 0)) return 0;
+        const normalized = clamp01(fraction);
+        const blended =
+          AGE_HEATMAP_BASE_ALPHA + (1 - AGE_HEATMAP_BASE_ALPHA) * normalized;
 
-  drawScalarHeatmap(grid, ctx, cellSize, alphaAt, AGE_HEATMAP_COLOR);
+        return clamp01(blended);
+      };
+
+      const renderToCtx = (targetCtx) => {
+        drawScalarHeatmap(grid, targetCtx, cellSize, alphaAt, AGE_HEATMAP_COLOR);
+      };
+
+      if (useCache && slot) {
+        const cacheCtx = ensureOverlayCacheSurface(slot, width, height);
+
+        if (cacheCtx) {
+          cacheCtx.clearRect(0, 0, width, height);
+          renderToCtx(cacheCtx);
+          slot.fingerprint = fingerprint;
+          slot.structuralFingerprint = structuralKey;
+          slot.dataRevision = dataRevision;
+          slot.cachedMetadata = { stats, scratch };
+          if (typeof ctx?.drawImage === "function") ctx.drawImage(slot.surface, 0, 0);
+        } else {
+          renderToCtx(ctx);
+        }
+      } else {
+        renderToCtx(ctx);
+      }
+    } else if (useCache && slot) {
+      // Nothing to draw but record the fingerprint so identical frames skip work.
+      slot.fingerprint = fingerprint;
+      slot.structuralFingerprint = structuralKey;
+      slot.dataRevision = dataRevision;
+      slot.cachedMetadata = null;
+    }
+  }
 
   if (stats) {
     drawAgeLegend(ctx, cellSize, cols, rows, stats);
