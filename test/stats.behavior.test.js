@@ -1539,3 +1539,50 @@ test("starvation rate smoothing blends instant and cumulative signals", async ()
   approxEqual(secondRate, expectedSecond, 1e-9);
   assert.ok(secondRate < firstRate);
 });
+
+test("neural summaries refresh on their diagnostic cadence", async () => {
+  const { default: Stats } = await statsModulePromise;
+  const stats = new Stats(10, {
+    neuralSummaryInterval: 3,
+    traitResampleInterval: 1000,
+    diversitySampleInterval: 1000,
+  });
+  const makeCell = (neuronCount) =>
+    createCell({
+      brain: { neuronCount, connectionCount: neuronCount * 2, lastActivationCount: 4 },
+    });
+  const first = makeCell(8);
+  const second = makeCell(20);
+
+  stats.updateFromSnapshot({
+    population: 1,
+    totalEnergy: 3,
+    totalAge: 1,
+    entries: toEntries([first]),
+  });
+  assert.is(stats.neuralSummary.meanNeuronCount, 8);
+
+  stats.updateFromSnapshot({
+    population: 1,
+    totalEnergy: 3,
+    totalAge: 2,
+    entries: toEntries([second]),
+  });
+  assert.is(stats.neuralSummary.meanNeuronCount, 8);
+
+  stats.updateFromSnapshot({
+    population: 1,
+    totalEnergy: 3,
+    totalAge: 3,
+    entries: toEntries([second]),
+  });
+  assert.is(stats.neuralSummary.meanNeuronCount, 8);
+
+  stats.updateFromSnapshot({
+    population: 1,
+    totalEnergy: 3,
+    totalAge: 4,
+    entries: toEntries([second]),
+  });
+  assert.is(stats.neuralSummary.meanNeuronCount, 20);
+});

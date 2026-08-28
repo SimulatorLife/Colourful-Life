@@ -211,6 +211,23 @@ export default class Cell {
     this.strategy = this.dna.strategy();
     this.movementGenes = this.dna.movementGenes();
     this.interactionGenes = this.dna.interactionGenes();
+    // Interaction genes are immutable for a cell's lifetime. Keep their three
+    // normalized values alongside the cell so repeated complementarity checks
+    // do not re-read, coerce, and clamp the same properties for every mate
+    // candidate.
+    this._interactionGeneVector = Float64Array.from(
+      ["cooperate", "fight", "avoid"],
+      (key) => {
+        const raw = this.interactionGenes?.[key];
+
+        if (raw == null) return Number.NaN;
+
+        const value = Number(raw);
+
+        return Number.isFinite(value) ? clamp(value, 0, 1) : Number.NaN;
+      },
+    );
+    this._interactionGeneVectorSource = this.interactionGenes;
     this.density = this.dna.densityResponses();
     this.baseCrowdingTolerance = clamp(
       typeof this.dna.forageCrowdingTolerance === "function"

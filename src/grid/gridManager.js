@@ -112,6 +112,8 @@ const DEFAULT_CROWDING_SUMMARY = Object.freeze({
 const CROWDING_REVISION_LIMIT = 0xffffffff;
 const SEGMENTED_EVENT_CONTRIBUTION_KEY = Symbol("grid.segmentedContribution");
 const EMPTY_MOVE_OPTIONS = Object.freeze({});
+const DENSE_TARGET_SCAN_MIN_OCCUPANCY = 0.65;
+const DENSE_TARGET_SCAN_BUDGET = 24;
 
 function resolveCrowdingSample(
   occupant,
@@ -10044,12 +10046,28 @@ export default class GridManager {
     const shouldSampleEnemyBias = enemyBias > 0;
     const occupancyRows = this.#rowOccupancy;
     const occupancyColumns = this.#columnOccupancy;
+    const area = this.rows * this.cols;
+    const population = this.activeCells?.size ?? 0;
+    const useBoundedDenseScan =
+      area > 0 && population / area >= DENSE_TARGET_SCAN_MIN_OCCUPANCY;
+    let scannedTargets = 0;
 
     if (sight <= 0) {
       return this.#targetGroupsView;
     }
 
     const handleCandidate = (targetRow, targetCol, target, bucket) => {
+      // Dense perception windows can contain most of the population. Bound the
+      // number of candidates entering similarity and neural decision work;
+      // sparse worlds retain complete indexed visibility.
+      if (
+        useBoundedDenseScan &&
+        target &&
+        scannedTargets++ >= DENSE_TARGET_SCAN_BUDGET
+      ) {
+        return false;
+      }
+
       if (!target || (targetRow === row && targetCol === col)) {
         if (!target && bucket?.delete?.(targetCol)) {
           const columnBucket = occupancyColumns?.[targetCol];
@@ -10115,6 +10133,8 @@ export default class GridManager {
     };
 
     for (let targetRow = minRow; targetRow <= maxRow; targetRow++) {
+      if (useBoundedDenseScan && scannedTargets >= DENSE_TARGET_SCAN_BUDGET) break;
+
       const gridRow = grid[targetRow];
 
       if (!gridRow) {
@@ -10189,6 +10209,9 @@ export default class GridManager {
             if (handleCandidate(targetRow, targetCol, target, bucket)) {
               processed += 1;
             }
+
+            if (useBoundedDenseScan && scannedTargets >= DENSE_TARGET_SCAN_BUDGET)
+              break;
 
             index += 1;
           }
@@ -10265,6 +10288,10 @@ export default class GridManager {
                 columnProcessed += 1;
               }
 
+              if (useBoundedDenseScan && scannedTargets >= DENSE_TARGET_SCAN_BUDGET) {
+                break;
+              }
+
               rowIndex += 1;
             }
 
@@ -10308,6 +10335,8 @@ export default class GridManager {
             this.#recordOccupancy(targetRow, targetCol);
             processed += 1;
           }
+
+          if (useBoundedDenseScan && scannedTargets >= DENSE_TARGET_SCAN_BUDGET) break;
         }
 
         if (!encounteredUntracked) {

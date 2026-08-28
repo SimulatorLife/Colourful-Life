@@ -101,3 +101,46 @@ test("GridManager.findTargets classifies sparse distant cells without scanning e
   assert.is(targets.mates[0].row, mate.row, "mate row should be recorded");
   assert.is(targets.mates[0].col, mate.col, "mate column should be recorded");
 });
+
+test("GridManager bounds dense perception candidates", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+    consumeEnergy() {}
+  }
+
+  const gm = new TestGridManager(20, 20, baseOptions);
+  const createDenseCell = (id, sight = 5) => ({
+    id,
+    sight,
+    density: { enemyBias: { min: 0, max: 0 } },
+    dna: {
+      allyThreshold: () => 0.8,
+      enemyThreshold: () => 0.2,
+    },
+    similarityTo: () => 0.5,
+  });
+  const origin = createDenseCell("origin");
+  let placed = 0;
+
+  for (let row = 0; row < gm.rows && placed < 250; row += 1) {
+    for (let col = 0; col < gm.cols && placed < 250; col += 1) {
+      if (row === 10 && col === 10) continue;
+
+      gm.placeCell(row, col, createDenseCell(`${row}:${col}`));
+      placed += 1;
+    }
+  }
+
+  gm.placeCell(10, 10, origin);
+  const targets = gm.findTargets(10, 10, origin);
+  const visibleTargetCount =
+    targets.mates.length + targets.enemies.length + targets.society.length;
+
+  assert.ok(placed >= 250, "dense fixture should populate the world");
+  assert.ok(
+    visibleTargetCount <= 24,
+    "dense scans should use a fixed candidate budget",
+  );
+});

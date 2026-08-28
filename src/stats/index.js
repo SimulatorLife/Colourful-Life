@@ -475,6 +475,7 @@ export default class Stats {
   #traitPresenceDirty;
   #nextTraitResampleTick;
   #nextDiversitySampleTick;
+  #nextNeuralSummaryTick;
   #diversityPopulationBaseline;
   #traitKeys;
   #traitComputes;
@@ -499,6 +500,7 @@ export default class Stats {
    *   traitDefinitions?: Array<{key: string, compute?: Function, threshold?: number}>,
    *   traitResampleInterval?: number,
    *   diversitySampleInterval?: number,
+   *   neuralSummaryInterval?: number,
    *   rng?: () => number,
    *   lifeEventLogCapacity?: number,
    * }} [options]
@@ -516,6 +518,7 @@ export default class Stats {
       traitDefinitions,
       traitResampleInterval,
       diversitySampleInterval,
+      neuralSummaryInterval,
       rng,
       lifeEventLogCapacity,
     } = options ?? {};
@@ -557,9 +560,17 @@ export default class Stats {
       fallback: 4,
       min: 1,
     });
+    // Neural summary is diagnostic telemetry, not simulation state. Refreshing
+    // it on every tick adds a second O(population) traversal to dense worlds,
+    // so sample it on a bounded cadence just like the other expensive metrics.
+    this.neuralSummaryInterval = sanitizePositiveInteger(neuralSummaryInterval, {
+      fallback: 30,
+      min: 1,
+    });
     this.lastDiversitySample = 0;
     this.#nextTraitResampleTick = 0;
     this.#nextDiversitySampleTick = 0;
+    this.#nextNeuralSummaryTick = 0;
     this.#diversityPopulationBaseline = 0;
     this.#resetTraitAggregates();
     this.resetTick();
@@ -677,6 +688,7 @@ export default class Stats {
     this.lastDiversitySample = 0;
     this.#nextTraitResampleTick = this.totals.ticks;
     this.#nextDiversitySampleTick = this.totals.ticks;
+    this.#nextNeuralSummaryTick = this.totals.ticks;
     this.#diversityPopulationBaseline = 0;
     this.diversityPressure = 0;
     this.behavioralEvenness = 0;
@@ -2054,9 +2066,17 @@ export default class Stats {
     this.complementOpportunityAlignment = complementOpportunityAlignment;
     this.complementOpportunityMultiplier = complementOpportunityMultiplier;
 
-    const neuralSummary = this.#computeNeuralSummary(populationSources, pop);
+    const shouldRefreshNeuralSummary =
+      tick >= this.#nextNeuralSummaryTick ||
+      shouldRebuildTraits ||
+      significantTraitPopulationChange;
 
-    this.neuralSummary = neuralSummary;
+    if (shouldRefreshNeuralSummary) {
+      this.neuralSummary = this.#computeNeuralSummary(populationSources, pop);
+      this.#nextNeuralSummaryTick = tick + this.neuralSummaryInterval;
+    }
+
+    const neuralSummary = this.neuralSummary;
 
     this.pushHistory("population", pop);
     this.pushHistory("diversity", diversity);

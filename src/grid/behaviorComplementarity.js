@@ -46,6 +46,37 @@ function resolveInteractionGenes(candidate) {
 export function computeBehaviorComplementarity(organismA, organismB) {
   if (!organismA || !organismB) return 0;
 
+  const vectorA =
+    organismA?._interactionGeneVectorSource === organismA?.interactionGenes
+      ? organismA._interactionGeneVector
+      : null;
+  const vectorB =
+    organismB?._interactionGeneVectorSource === organismB?.interactionGenes
+      ? organismB._interactionGeneVector
+      : null;
+
+  if (
+    vectorA &&
+    vectorB &&
+    vectorA.length >= INTERACTION_KEY_COUNT &&
+    vectorB.length >= INTERACTION_KEY_COUNT
+  ) {
+    let sum = 0;
+    let count = 0;
+
+    for (let index = 0; index < INTERACTION_KEY_COUNT; index += 1) {
+      const valueA = vectorA[index];
+      const valueB = vectorB[index];
+
+      if (!Number.isFinite(valueA) || !Number.isFinite(valueB)) continue;
+
+      sum += Math.abs(valueA - valueB);
+      count += 1;
+    }
+
+    return count === 0 ? 0 : clamp(sum / count, 0, 1);
+  }
+
   const genesA = resolveInteractionGenes(organismA);
   const genesB = resolveInteractionGenes(organismB);
 
