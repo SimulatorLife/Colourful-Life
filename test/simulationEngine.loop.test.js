@@ -112,6 +112,62 @@ test("start schedules a frame and ticking through RAF uses sanitized defaults", 
   }
 });
 
+test("animation frames without ticks skip drawing while requested and paused frames redraw", async () => {
+  const modules = await loadSimulationModules();
+  const { SimulationEngine } = modules;
+  const { restore, calls } = patchSimulationPrototypes(modules);
+
+  let engine;
+
+  try {
+    const raf = createRafController();
+    const overlayInvocations = [];
+
+    engine = new SimulationEngine({
+      canvas: new MockCanvas(20, 20),
+      autoStart: false,
+      performanceNow: () => raf.now(),
+      requestAnimationFrame: (cb) => raf.raf(cb),
+      cancelAnimationFrame: () => raf.caf(),
+      drawOverlays: (...args) => overlayInvocations.push(args),
+    });
+
+    engine.start();
+    raf.flush(0);
+
+    assert.is(calls.grid.update.length, 0, "early animation frame does not tick");
+    assert.is(calls.grid.draw.length, 1, "startup requests one initial grid render");
+    assert.is(
+      overlayInvocations.length,
+      1,
+      "startup requests one initial overlay render",
+    );
+
+    raf.flush(1);
+
+    assert.is(calls.grid.update.length, 0, "cadence-skipped frame still does not tick");
+    assert.is(calls.grid.draw.length, 1, "cadence-skipped frame skips grid drawing");
+    assert.is(overlayInvocations.length, 1, "cadence-skipped frame skips overlays");
+
+    engine.requestFrame();
+    raf.flush(2);
+
+    assert.is(calls.grid.update.length, 0, "requested frame still precedes the tick");
+    assert.is(calls.grid.draw.length, 2, "requested frame redraws the grid");
+    assert.is(overlayInvocations.length, 2, "requested frame redraws the overlays");
+
+    engine.pause();
+    raf.flush(3);
+
+    assert.is(calls.grid.update.length, 0, "paused frame does not tick");
+    assert.is(calls.grid.draw.length, 3, "paused frame redraws the grid");
+    assert.is(overlayInvocations.length, 3, "paused frame redraws the overlays");
+  } finally {
+    engine?.destroy();
+    restore();
+  }
+});
+
 test("tick emits events and clears pending slow UI updates after throttle interval", async () => {
   const modules = await loadSimulationModules();
   const { SimulationEngine } = modules;

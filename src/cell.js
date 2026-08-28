@@ -1051,8 +1051,17 @@ export default class Cell {
     const neuralInfluence = this.#resolveNeuralMateInfluence();
     const applyNeuralLift = neuralInfluence > 0;
     const safeMinWeight = 0.0001;
-    const shouldComputeBaseProbability =
-      applyNeuralLift || Boolean(context?.precomputeBaseProbability);
+    const shouldPrecomputeBaseProbability = Boolean(context?.precomputeBaseProbability);
+    // Neural affinity is the most expensive part of mate scoring: it evaluates
+    // a complete reproduction network for every candidate. The broad-phase
+    // target query already limits the pool, but a dense world can still hand
+    // twelve candidates to every cell. Score the whole pool with the cheap,
+    // genome-derived preference first and spend the neural budget only on the
+    // nearest candidates. This keeps neural behaviour active while making its
+    // cost bounded by a constant instead of population density.
+    const neuralEvaluationBudget = applyNeuralLift
+      ? Math.min(4, potentialMates.length)
+      : 0;
 
     for (let i = 0; i < potentialMates.length; i++) {
       const mate = potentialMates[i];
@@ -1072,6 +1081,11 @@ export default class Cell {
       if (evaluated) {
         const target = evaluated.target;
         let baseProbability = null;
+
+        const evaluateNeuralCandidate = i < neuralEvaluationBudget;
+        const shouldComputeBaseProbability =
+          shouldPrecomputeBaseProbability ||
+          (applyNeuralLift && evaluateNeuralCandidate);
 
         if (!shouldComputeBaseProbability) {
           if (Object.hasOwn(evaluated, "baseReproductionProbability")) {
@@ -1106,7 +1120,7 @@ export default class Cell {
             }
           }
 
-          if (applyNeuralLift) {
+          if (applyNeuralLift && evaluateNeuralCandidate) {
             const neuralAffinity = this.#estimateNeuralMateAffinity(target, {
               ...context,
               baseProbability,
@@ -1120,7 +1134,11 @@ export default class Cell {
           }
         }
 
-        if (applyNeuralLift && Number.isFinite(evaluated?.neuralAffinity)) {
+        if (
+          applyNeuralLift &&
+          evaluateNeuralCandidate &&
+          Number.isFinite(evaluated?.neuralAffinity)
+        ) {
           const baseWeight = evaluated.selectionWeight;
           const normalizedBase = Number.isFinite(baseWeight)
             ? Math.max(safeMinWeight, baseWeight)

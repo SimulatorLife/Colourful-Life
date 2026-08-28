@@ -3613,6 +3613,51 @@ test("scorePotentialMates returns independent results per invocation", () => {
   );
 });
 
+test("scorePotentialMates bounds neural previews for dense mate pools", () => {
+  const parent = new Cell(5, 5, new DNA(0, 0, 0), window.GridManager.maxTileEnergy);
+  let neuralEvaluations = 0;
+
+  parent.brain = {
+    connectionCount: 1,
+    evaluateGroup(group) {
+      if (group !== "reproduction") return null;
+
+      neuralEvaluations += 1;
+
+      return {
+        values: { accept: 1, decline: 0 },
+        activationCount: 1,
+        sensors: new Float32Array(Brain.SENSOR_COUNT),
+      };
+    },
+  };
+
+  const candidates = Array.from({ length: 12 }, (_, index) => {
+    const target = new Cell(
+      5,
+      6 + index,
+      new DNA(0, 0, 0),
+      window.GridManager.maxTileEnergy,
+    );
+
+    return { target, row: target.row, col: target.col };
+  });
+
+  const scored = parent.scorePotentialMates(candidates, {
+    __reuseMateScratch: true,
+    parentRow: parent.row,
+    parentCol: parent.col,
+    precomputeBaseProbability: true,
+  });
+
+  assert.is(scored.length, candidates.length);
+  assert.ok(neuralEvaluations > 0, "neural mate scoring should remain active");
+  assert.ok(
+    neuralEvaluations <= 8,
+    "a dense pool should receive neural previews only within the four-candidate budget",
+  );
+});
+
 test("scorePotentialMates reuses the scratch array only when __reuseMateScratch is opted in", () => {
   const dna = new DNA(0, 0, 0);
   const parent = new Cell(5, 5, dna, window.GridManager.maxTileEnergy);

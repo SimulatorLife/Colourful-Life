@@ -349,6 +349,7 @@ export default class SimulationEngine {
     this.lastUpdateTime = 0;
     this.running = false;
     this.frameHandle = null;
+    this._renderRequestPending = false;
 
     this.listeners = new Map();
 
@@ -703,20 +704,26 @@ export default class SimulationEngine {
     });
   }
 
-  #scheduleNextFrame() {
+  #scheduleNextFrame({ renderRequested = false } = {}) {
+    if (renderRequested) {
+      this._renderRequestPending = true;
+    }
+
     if (!this.running || this.frameHandle != null) return;
 
     this.frameHandle = this.raf((timestamp) => {
       this.frameHandle = null;
       const ts = typeof timestamp === "number" ? timestamp : this.now();
+      const shouldRender = this._renderRequestPending;
 
-      this.#frame(ts, { scheduleNext: true });
+      this._renderRequestPending = false;
+      this.#frame(ts, { scheduleNext: true, renderRequested: shouldRender });
     });
   }
 
   requestFrame() {
     if (this.running) {
-      this.#scheduleNextFrame();
+      this.#scheduleNextFrame({ renderRequested: true });
 
       return;
     }
@@ -726,6 +733,7 @@ export default class SimulationEngine {
       force: true,
       allowPausedTick: true,
       renderOnly: true,
+      renderRequested: true,
     });
   }
 
@@ -761,6 +769,7 @@ export default class SimulationEngine {
       force = false,
       allowPausedTick = false,
       renderOnly = false,
+      renderRequested = false,
     } = {},
   ) {
     if (!this.running && !force) return false;
@@ -782,11 +791,13 @@ export default class SimulationEngine {
       renderOnly,
     });
 
-    this.#renderFrameLayers({
-      includeLifeEventMarkers: Boolean(this.state.showLifeEventMarkers),
-      includeAgeOverlay: Boolean(this.state.showAge),
-      includeSelectionZones: Boolean(this.state.showSelectionZones),
-    });
+    if (tickOccurred || !scheduleNext || paused || renderRequested) {
+      this.#renderFrameLayers({
+        includeLifeEventMarkers: Boolean(this.state.showLifeEventMarkers),
+        includeAgeOverlay: Boolean(this.state.showAge),
+        includeSelectionZones: Boolean(this.state.showSelectionZones),
+      });
+    }
 
     this.#publishTelemetryIfPending(effectiveTimestamp);
 
@@ -1001,7 +1012,7 @@ export default class SimulationEngine {
   start() {
     if (this.running) {
       this.setPaused(false);
-      this.#scheduleNextFrame();
+      this.#scheduleNextFrame({ renderRequested: true });
 
       return;
     }
@@ -1009,7 +1020,7 @@ export default class SimulationEngine {
     this.running = true;
     this.lastUpdateTime = 0;
     this.setPaused(false);
-    this.#scheduleNextFrame();
+    this.#scheduleNextFrame({ renderRequested: true });
   }
 
   setPaused(value) {
@@ -1021,7 +1032,7 @@ export default class SimulationEngine {
     }
 
     if (!paused && this.running) {
-      this.#scheduleNextFrame();
+      this.#scheduleNextFrame({ renderRequested: true });
     }
 
     return changed;
@@ -1317,6 +1328,7 @@ export default class SimulationEngine {
 
   stop() {
     this.running = false;
+    this._renderRequestPending = false;
     if (this.frameHandle != null) {
       this.caf(this.frameHandle);
       this.frameHandle = null;
