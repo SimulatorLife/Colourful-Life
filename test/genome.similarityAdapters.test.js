@@ -90,3 +90,18 @@ test("DNA similarity cache invalidates when a genome changes", () => {
     "repeated unchanged comparisons should reuse the cached result",
   );
 });
+
+test("DNA similarity cache invalidates reciprocal primitive entries", () => {
+  const first = new DNA({ genes: new Uint8Array([0, 0, 0, 0]), geneCount: 4 });
+  const second = new DNA({ genes: new Uint8Array([0, 0, 0, 0]), geneCount: 4 });
+
+  assert.is(first.similarity(second), 1);
+  assert.is(second.similarity(first), 1);
+
+  first.genes[1] = 128;
+
+  const changedFromSecond = second.similarity(first);
+
+  assert.ok(changedFromSecond < 1, "the reverse lookup must observe first's mutation");
+  assert.is(second.similarity(first), changedFromSecond);
+});

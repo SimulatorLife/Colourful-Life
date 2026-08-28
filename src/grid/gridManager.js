@@ -582,7 +582,12 @@ export default class GridManager {
   #crowdingPreparedUseScarcity = false;
   #crowdingTouchedRows = [];
   #crowdingTouchedCols = [];
-  #activeCellSnapshotScratch = null;
+  // Dense active-cell storage keeps the update loop indexable and mutation-safe.
+  // Removed cells become tombstones until the phase ends; births append beyond
+  // the captured count so they cannot be processed twice in the same tick.
+  #activeCellList = [];
+  #activeCellIndexes = new WeakMap();
+  #activeCellListNeedsCompaction = false;
   #eventModifierScratch = null;
   #sparseDirtyColumnsScratch = null;
   #sparseDirtyRowsScratch = null;
@@ -944,28 +949,95 @@ export default class GridManager {
     return this.#columnEventScratch;
   }
 
-  #acquireActiveCellSnapshot() {
-    if (!this.#activeCellSnapshotScratch) {
-      this.#activeCellSnapshotScratch = [];
+  #addActiveCell(cell) {
+    if (!GridManager.#isCellRecord(cell)) return;
+
+    const existingIndex = this.#activeCellIndexes.get(cell);
+
+    if (
+      Number.isInteger(existingIndex) &&
+      existingIndex >= 0 &&
+      this.#activeCellList[existingIndex] === cell
+    ) {
+      return;
     }
 
-    const scratch = this.#activeCellSnapshotScratch;
+    this.#activeCellIndexes.set(cell, this.#activeCellList.length);
+    this.#activeCellList.push(cell);
+  }
 
-    scratch.length = 0;
+  #removeActiveCell(cell) {
+    if (!cell) return;
 
-    if (this.activeCells && this.activeCells.size > 0) {
-      for (const cell of this.activeCells) {
-        if (!this.#ensureTrackedCell(cell)) {
-          this.activeCells.delete(cell);
+    const index = this.#activeCellIndexes.get(cell);
 
-          continue;
-        }
+    if (
+      Number.isInteger(index) &&
+      index >= 0 &&
+      index < this.#activeCellList.length &&
+      this.#activeCellList[index] === cell
+    ) {
+      this.#activeCellList[index] = null;
+      this.#activeCellIndexes.delete(cell);
+      this.#activeCellListNeedsCompaction = true;
+    }
+  }
 
-        scratch.push(cell);
+  #synchronizeActiveCellList() {
+    if (this.#activeCellList.length === (this.activeCells?.size ?? 0)) {
+      return;
+    }
+
+    this.#activeCellList.length = 0;
+    this.#activeCellIndexes = new WeakMap();
+    this.#activeCellListNeedsCompaction = false;
+
+    if (!this.activeCells || this.activeCells.size === 0) return;
+
+    for (const cell of this.activeCells) {
+      if (!this.#ensureTrackedCell(cell)) {
+        this.activeCells.delete(cell);
+        continue;
       }
+
+      this.#addActiveCell(cell);
+    }
+  }
+
+  #compactActiveCellList() {
+    if (!this.#activeCellListNeedsCompaction) return;
+
+    const list = this.#activeCellList;
+    let writeIndex = 0;
+
+    for (let readIndex = 0; readIndex < list.length; readIndex += 1) {
+      const cell = list[readIndex];
+
+      const tracked = cell ? this.cellPositions.get(cell) : null;
+      const isCurrent =
+        Boolean(cell) &&
+        this.activeCells.has(cell) &&
+        tracked &&
+        this.grid?.[tracked.row]?.[tracked.col] === cell;
+
+      if (!isCurrent) {
+        if (cell) this.#activeCellIndexes.delete(cell);
+        continue;
+      }
+
+      list[writeIndex] = cell;
+      this.#activeCellIndexes.set(cell, writeIndex);
+      writeIndex += 1;
     }
 
-    return scratch;
+    list.length = writeIndex;
+    this.#activeCellListNeedsCompaction = false;
+  }
+
+  #getActiveCellList() {
+    this.#synchronizeActiveCellList();
+
+    return this.#activeCellList;
   }
 
   #acquirePopulationCellScratch() {
@@ -1037,12 +1109,6 @@ export default class GridManager {
     this.#trackCellPosition(cell, located.row, located.col);
 
     return true;
-  }
-
-  #releaseActiveCellSnapshot() {
-    if (this.#activeCellSnapshotScratch) {
-      this.#activeCellSnapshotScratch.length = 0;
-    }
   }
 
   #getEventModifierScratch() {
@@ -2910,6 +2976,7 @@ export default class GridManager {
 
           this.#shiftOccupancy(fromRow, fromCol, toRow, toCol);
           this.activeCells.add(cell);
+          this.#addActiveCell(cell);
           this.#trackCellPosition(cell, toRow, toCol);
         },
         densityAt: (r, c) => this.densityGrid?.[r]?.[c] ?? this.getDensityAt(r, c),
@@ -3734,13 +3801,17 @@ export default class GridManager {
 
   #enforceEnergyExclusivity({ previousEnergyGrid = null } = {}) {
     if (!this.grid || !this.energyGrid) return;
+    this.#synchronizeActiveCellList();
     const activeCells = this.activeCells;
-    const hasActiveCells = Boolean(activeCells && activeCells.size > 0);
+    const activeCellList = this.#activeCellList;
+    const hasActiveCells = activeCellList.length > 0;
 
     if (hasActiveCells) {
       let fallbackScanNeeded = false;
 
-      for (const cell of activeCells) {
+      for (let index = 0; index < activeCellList.length; index += 1) {
+        const cell = activeCellList[index];
+
         if (!cell) continue;
 
         let location = null;
@@ -6076,6 +6147,7 @@ export default class GridManager {
     clearTileEnergyBuffers(this, row, col);
     this.#trackCellPosition(cell, row, col);
     this.activeCells.add(cell);
+    this.#addActiveCell(cell);
     this.#applyDensityDelta(row, col, 1);
 
     const absorbTileEnergy = Boolean(options?.absorbTileEnergy);
@@ -6098,6 +6170,7 @@ export default class GridManager {
     this.#releaseOccupancy(row, col);
     this.#markTileDirty(row, col);
     this.activeCells.delete(current);
+    this.#removeActiveCell(current);
     this.#untrackCell(current);
     this.#applyDensityDelta(row, col, -1);
     this.markEnergyDirty(row, col, { radius: 1 });
@@ -6599,6 +6672,9 @@ export default class GridManager {
 
   rebuildActiveCells() {
     this.activeCells.clear();
+    this.#activeCellList.length = 0;
+    this.#activeCellIndexes = new WeakMap();
+    this.#activeCellListNeedsCompaction = false;
     this.#clearTrackedPositions();
     this.#resetOccupancyTracking();
     for (let row = 0; row < this.rows; row++) {
@@ -6608,6 +6684,7 @@ export default class GridManager {
         if (!cell) continue;
 
         this.activeCells.add(cell);
+        this.#addActiveCell(cell);
         this.#trackCellPosition(cell, row, col);
         this.#recordOccupancy(row, col);
       }
@@ -9535,7 +9612,8 @@ export default class GridManager {
     this.#processTickRevision = (this.#processTickRevision + 1) >>> 0;
     if (this.#processTickRevision === 0) this.#processTickRevision = 1;
     const processedTickRevision = this.#processTickRevision;
-    const activeSnapshot = this.#acquireActiveCellSnapshot();
+    const activeSnapshot = this.#getActiveCellList();
+    const activeCellCount = activeSnapshot.length;
 
     // Allocate one context per tick (and pre-build the helper sub-contexts)
     // so the per-cell loop avoids rebuilding the same options object for every
@@ -9580,22 +9658,22 @@ export default class GridManager {
       },
     };
 
-    try {
-      for (let index = 0; index < activeSnapshot.length; index += 1) {
-        const cell = activeSnapshot[index];
+    for (let index = 0; index < activeCellCount; index += 1) {
+      const cell = activeSnapshot[index];
 
-        if (!cell) continue;
-        const location = this.#resolveCellCoordinates(cell);
+      if (!cell) continue;
+      const location = this.#resolveCellCoordinates(cell);
 
-        if (!location) continue;
+      if (!location) continue;
 
-        const { row, col } = location;
+      const { row, col } = location;
 
-        this.processCell(row, col, tickContext);
-      }
-    } finally {
-      this.#releaseActiveCellSnapshot();
+      this.processCell(row, col, tickContext);
     }
+
+    // Deaths leave tombstones and births append after activeCellCount. Compact
+    // once after all decisions so the next tick has a dense, stable list.
+    this.#compactActiveCellList();
 
     this.populationScarcitySignal = this.#computePopulationScarcitySignal();
     this.#enforceEnergyExclusivity();
@@ -9619,10 +9697,14 @@ export default class GridManager {
       maxFitness: 0,
       entries,
     };
-    const activeCells = this.activeCells;
 
-    if (activeCells && activeCells.size > 0) {
-      for (const cell of activeCells) {
+    this.#synchronizeActiveCellList();
+    const activeCellList = this.#activeCellList;
+
+    if (activeCellList.length > 0) {
+      for (let index = 0; index < activeCellList.length; index += 1) {
+        const cell = activeCellList[index];
+
         if (!cell) continue;
         if (!this.#ensureTrackedCell(cell)) continue;
 
@@ -9705,13 +9787,17 @@ export default class GridManager {
   #buildSnapshotEntries(cap) {
     const entries = [];
     let maxFitness = 0;
-    const activeCells = this.activeCells;
 
-    if (!activeCells || activeCells.size === 0) {
+    this.#synchronizeActiveCellList();
+    const activeCellList = this.#activeCellList;
+
+    if (activeCellList.length === 0) {
       return { entries, maxFitness };
     }
 
-    for (const cell of activeCells) {
+    for (let index = 0; index < activeCellList.length; index += 1) {
+      const cell = activeCellList[index];
+
       if (!cell || !this.#ensureTrackedCell(cell)) continue;
 
       const tracked = this.cellPositions.get(cell);

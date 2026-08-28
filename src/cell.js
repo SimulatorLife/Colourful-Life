@@ -4290,10 +4290,15 @@ export default class Cell {
 
       if (!target) continue;
 
-      const similarity = this.#safeSimilarityTo(target, {
-        context: "similarity summary aggregation",
-        fallback: Number.NaN,
-      });
+      const similarityCandidate = Number.isFinite(entry?.similarity)
+        ? entry.similarity
+        : entry?.precomputedSimilarity;
+      const similarity = Number.isFinite(similarityCandidate)
+        ? similarityCandidate
+        : this.#safeSimilarityTo(target, {
+            context: "similarity summary aggregation",
+            fallback: Number.NaN,
+          });
 
       if (!Number.isFinite(similarity)) continue;
 
@@ -5856,11 +5861,16 @@ export default class Cell {
 
       attritionSum += attrition;
 
+      const similarityCandidate = Number.isFinite(entry?.similarity)
+        ? entry.similarity
+        : entry?.precomputedSimilarity;
       const similarity = clamp(
-        this.#safeSimilarityTo(target, {
-          context: "targeting sensor similarity accumulation",
-          fallback: 0,
-        }),
+        Number.isFinite(similarityCandidate)
+          ? similarityCandidate
+          : this.#safeSimilarityTo(target, {
+              context: "targeting sensor similarity accumulation",
+              fallback: 0,
+            }),
         0,
         1,
       );
@@ -7666,11 +7676,16 @@ export default class Cell {
         2,
       );
       const energyDelta = clamp(normalizedEnergy - selfEnergy, -1, 1);
+      const similarityCandidate = Number.isFinite(entry?.similarity)
+        ? entry.similarity
+        : entry?.precomputedSimilarity;
       const similarity = clamp(
-        this.#safeSimilarityTo(target, {
-          context: `movement avoid focus similarity (${type})`,
-          fallback: type === "enemy" ? 0 : 0.6,
-        }),
+        Number.isFinite(similarityCandidate)
+          ? similarityCandidate
+          : this.#safeSimilarityTo(target, {
+              context: `movement avoid focus similarity (${type})`,
+              fallback: type === "enemy" ? 0 : 0.6,
+            }),
         0,
         1,
       );
@@ -8118,10 +8133,15 @@ export default class Cell {
         summary.energy = targetCell.energy;
       }
 
-      const similarity = this.#safeSimilarityTo(targetCell, {
-        context: "movement pursue target similarity",
-        fallback: null,
-      });
+      const similarityCandidate = Number.isFinite(targetEntry?.similarity)
+        ? targetEntry.similarity
+        : targetEntry?.precomputedSimilarity;
+      const similarity = Number.isFinite(similarityCandidate)
+        ? similarityCandidate
+        : this.#safeSimilarityTo(targetCell, {
+            context: "movement pursue target similarity",
+            fallback: null,
+          });
 
       if (Number.isFinite(similarity)) {
         summary.similarity = clamp(similarity, 0, 1);
@@ -9223,8 +9243,11 @@ export default class Cell {
           Math.abs(enemyCol - currentCol),
         );
         const proximity = distance <= 0 ? 1 : 1 / Math.max(1, distance);
-        const similarity = Number.isFinite(descriptor?.precomputedSimilarity)
-          ? descriptor.precomputedSimilarity
+        const similarityCandidate = Number.isFinite(descriptor?.similarity)
+          ? descriptor.similarity
+          : descriptor?.precomputedSimilarity;
+        const similarity = Number.isFinite(similarityCandidate)
+          ? similarityCandidate
           : this.#safeSimilarityTo(target, {
               context: "interaction fallback threat similarity",
               fallback: 0,
@@ -9540,11 +9563,16 @@ export default class Cell {
           return bestAcc;
         }
 
+        const similarityCandidate = Number.isFinite(enemy?.similarity)
+          ? enemy.similarity
+          : enemy?.precomputedSimilarity;
         const similarity = clamp(
-          this.#safeSimilarityTo(enemy.target, {
-            context: "targeting decision similarity ranking",
-            fallback: 0,
-          }),
+          Number.isFinite(similarityCandidate)
+            ? similarityCandidate
+            : this.#safeSimilarityTo(enemy.target, {
+                context: "targeting decision similarity ranking",
+                fallback: 0,
+              }),
           0,
           1,
         );
@@ -9577,11 +9605,16 @@ export default class Cell {
         const row = best.row ?? best.target.row ?? this.row;
         const col = best.col ?? best.target.col ?? this.col;
         const dist = Math.max(Math.abs(row - this.row), Math.abs(col - this.col));
+        const similarityCandidate = Number.isFinite(best?.similarity)
+          ? best.similarity
+          : best?.precomputedSimilarity;
         const similarity = clamp(
-          this.#safeSimilarityTo(best.target, {
-            context: "targeting fallback similarity",
-            fallback: 0,
-          }),
+          Number.isFinite(similarityCandidate)
+            ? similarityCandidate
+            : this.#safeSimilarityTo(best.target, {
+                context: "targeting fallback similarity",
+                fallback: 0,
+              }),
           0,
           1,
         );

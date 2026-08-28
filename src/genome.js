@@ -2781,6 +2781,7 @@ export class DNA {
     if (!other) return 0;
 
     const { squared = false, inverseMaxDistance } = options ?? {};
+    const isOtherDna = other instanceof DNA;
     const otherRevision = Number.isInteger(other?._similarityRevision)
       ? other._similarityRevision
       : null;
@@ -2789,7 +2790,14 @@ export class DNA {
     const similarityCacheForSelf = useSimilarityCache ? this._similarityCache : null;
     const cachedSimilarity = similarityCacheForSelf?.get(other);
 
-    if (
+    if (useSimilarityCache && isOtherDna) {
+      if (
+        Number.isFinite(cachedSimilarity) &&
+        other._similarityCache?.get(this) === cachedSimilarity
+      ) {
+        return cachedSimilarity;
+      }
+    } else if (
       cachedSimilarity &&
       cachedSimilarity.selfRevision === this._similarityRevision &&
       cachedSimilarity.otherRevision === otherRevision
@@ -2804,7 +2812,6 @@ export class DNA {
     // adapter (which allocates an object, extracts a sequence, and bounds
     // `geneAt`) and resolve the other genome's typed array directly so the
     // byte-view branch below runs without per-byte proxy or adapter hops.
-    const isOtherDna = other instanceof DNA;
     let adapter = null;
     let otherLength;
     let adapterSequence = null;
@@ -2830,18 +2837,26 @@ export class DNA {
 
     if (geneCount === 0) {
       if (useSimilarityCache) {
-        const record = {
-          selfRevision: this._similarityRevision,
-          otherRevision,
-          value: 1,
-        };
+        if (isOtherDna) {
+          // Both DNA instances invalidate their own cache when their genes
+          // change. Primitive symmetric entries avoid allocating revision
+          // records for the common DNA-to-DNA path.
+          this._similarityCache.set(other, 1);
+          other._similarityCache?.set(this, 1);
+        } else {
+          const record = {
+            selfRevision: this._similarityRevision,
+            otherRevision,
+            value: 1,
+          };
 
-        this._similarityCache.set(other, record);
-        other._similarityCache?.set(this, {
-          selfRevision: otherRevision,
-          otherRevision: this._similarityRevision,
-          value: 1,
-        });
+          this._similarityCache.set(other, record);
+          other._similarityCache?.set(this, {
+            selfRevision: otherRevision,
+            otherRevision: this._similarityRevision,
+            value: 1,
+          });
+        }
       }
 
       return 1;
@@ -2984,18 +2999,26 @@ export class DNA {
 
     if (distSq === 0) {
       if (useSimilarityCache) {
-        const record = {
-          selfRevision: this._similarityRevision,
-          otherRevision,
-          value: 1,
-        };
+        if (isOtherDna) {
+          // Both DNA instances invalidate their own cache when their genes
+          // change. Primitive symmetric entries avoid allocating revision
+          // records for the common DNA-to-DNA path.
+          this._similarityCache.set(other, 1);
+          other._similarityCache?.set(this, 1);
+        } else {
+          const record = {
+            selfRevision: this._similarityRevision,
+            otherRevision,
+            value: 1,
+          };
 
-        this._similarityCache.set(other, record);
-        other._similarityCache?.set(this, {
-          selfRevision: otherRevision,
-          otherRevision: this._similarityRevision,
-          value: 1,
-        });
+          this._similarityCache.set(other, record);
+          other._similarityCache?.set(this, {
+            selfRevision: otherRevision,
+            otherRevision: this._similarityRevision,
+            value: 1,
+          });
+        }
       }
 
       return 1;
@@ -3011,18 +3034,23 @@ export class DNA {
     const value = 1 - dist * invMax;
 
     if (useSimilarityCache) {
-      const record = {
-        selfRevision: this._similarityRevision,
-        otherRevision,
-        value,
-      };
+      if (isOtherDna) {
+        this._similarityCache.set(other, value);
+        other._similarityCache?.set(this, value);
+      } else {
+        const record = {
+          selfRevision: this._similarityRevision,
+          otherRevision,
+          value,
+        };
 
-      this._similarityCache.set(other, record);
-      other._similarityCache?.set(this, {
-        selfRevision: otherRevision,
-        otherRevision: this._similarityRevision,
-        value,
-      });
+        this._similarityCache.set(other, record);
+        other._similarityCache?.set(this, {
+          selfRevision: otherRevision,
+          otherRevision: this._similarityRevision,
+          value,
+        });
+      }
     }
 
     return value;

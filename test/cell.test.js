@@ -1548,6 +1548,56 @@ test("emergent fallback keeps cooperation share at baseline", () => {
   );
 });
 
+test("target similarity aggregation reuses cached descriptors and falls back for external targets", () => {
+  const dna = new DNA(40, 200, 60);
+  const cell = new Cell(1, 1, dna, 4);
+  const cachedTargets = [
+    { target: { dna: {} }, similarity: 0.8 },
+    { target: { dna: {} }, precomputedSimilarity: 0.6 },
+  ];
+  const externalTarget = { target: { dna: {} } };
+  let similarityCalls = 0;
+  let observedSensors = null;
+
+  cell.similarityTo = () => {
+    similarityCalls += 1;
+
+    return 0.2;
+  };
+  cell.brain = {
+    connectionCount: 1,
+    evaluateGroup(_group, sensors) {
+      observedSensors = sensors;
+
+      return null;
+    },
+  };
+  cell.interactionGenes = { avoid: 0, fight: 0, cooperate: 1 };
+  cell._rngCache = new Map([
+    ["interactionFallback", () => 0.99],
+    ["legacyInteractionChoice", () => 0.99],
+  ]);
+
+  cell.chooseInteractionAction({
+    enemies: [],
+    allies: [...cachedTargets, externalTarget],
+    maxTileEnergy: window.GridManager.maxTileEnergy,
+  });
+
+  assert.ok(observedSensors, "interaction sensors should be evaluated");
+  approxEqual(
+    observedSensors.allySimilarity,
+    (0.8 + 0.6 + 0.2) / 3,
+    1e-12,
+    "cached descriptor similarities should be aggregated before DNA fallback",
+  );
+  assert.is(
+    similarityCalls,
+    2,
+    "only the uncached external target should use DNA similarity fallback",
+  );
+});
+
 test("interaction fallback shifts with environmental pressures", () => {
   const dna = new DNA(120, 40, 60);
   const cell = new Cell(4, 4, dna, 6);

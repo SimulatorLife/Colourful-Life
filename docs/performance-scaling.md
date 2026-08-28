@@ -94,6 +94,40 @@ default (or immediately after a significant trait/population refresh). Set
 `neuralSummaryInterval: 1` in `Stats` options when per-tick diagnostic precision is
 required.
 
+### Active-population hot loop
+
+The update phase now uses a dense, indexable active-cell list instead of copying
+`activeCells` into a temporary Set snapshot every tick. The list captures its
+length before processing, so births append for the next tick and deaths become
+cheap tombstones that are compacted once after the phase. The Set remains the
+membership index used by the rest of the public grid API; the update, energy
+exclusivity, and snapshot paths use the dense list.
+
+Target descriptors also carry their already-computed similarity into cell sensor,
+combat, and movement decisions. Those consumers reuse the value rather than
+re-entering DNA comparison. For DNA-to-DNA comparisons, the similarity cache
+stores a primitive symmetric value; each genome invalidates its own cache when
+its genes change, and the reciprocal entry validates the partner without a
+per-pair revision-object allocation. Adapter-based genomes retain the revision
+record path because they do not provide the same invalidation contract.
+
+Measured against parent commit `395ebd0` using three fresh Node processes per
+60×60 scenario (65% seeded density, 20 warmup ticks, 30 measured ticks, seed
+424242):
+
+| Scenario          | Parent median | Current median |     Improvement |
+| ----------------- | ------------: | -------------: | --------------: |
+| Trimmed mean tick |      59.68 ms |       38.23 ms | **35.9% lower** |
+| Raw mean tick     |      62.46 ms |       40.25 ms | **35.6% lower** |
+
+A larger 100×100 / 80% seeded stress run (5 warmup, 10 measured ticks) also
+improved from **476.70 ms/tick** to **299.55 ms/tick** trimmed (**37.2% lower**)
+and from **505.44 ms/tick** to **311.40 ms/tick** raw (**38.4% lower**). These
+measurements are hardware- and runtime-specific; repeat fresh-process medians
+when comparing future changes. Population trajectories can differ slightly
+because reproduction includes runtime entropy; no performance threshold was
+relaxed.
+
 ## Runtime architecture
 
 The simulation and presentation loops are separate budgets:
