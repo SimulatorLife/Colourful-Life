@@ -47,7 +47,7 @@ This document captures how the Colourful Life simulation composes its core syste
 - Implemented in [`src/cell.js`](../src/cell.js), each `Cell` instance encapsulates DNA-derived behaviour, neural wiring, and telemetry gathered during simulation ticks.
 - Maintains rolling histories for decisions, risk memories, and mating preferences so overlays and analytics modules can display recent context.
 - Applies DNA-driven caps (e.g. crowding tolerance, neural fatigue profiles, diversity appetites) when responding to environment and interaction hooks.
-- Emits decision traces consumed by telemetry pipelines and overlays.
+- Emits decision traces consumed by telemetry pipelines and overlays. Tracing is opt-in through the simulation `decisionTelemetry` setting; when disabled, compact decision state still drives neural reinforcement and experience feedback without retaining diagnostic history for every organism.
 
 ### EnergySystem
 

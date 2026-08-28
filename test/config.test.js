@@ -74,6 +74,20 @@ test("resolveConsumptionDensityPenalty falls back when override is invalid", asy
   );
 });
 
+test("decision telemetry is opt-in for simulation defaults", async () => {
+  const { resolveSimulationDefaults } = await configModulePromise;
+
+  assert.is(resolveSimulationDefaults().decisionTelemetry, false);
+  assert.is(
+    resolveSimulationDefaults({ decisionTelemetry: true }).decisionTelemetry,
+    true,
+  );
+  assert.is(
+    resolveSimulationDefaults({ decisionTelemetry: "false" }).decisionTelemetry,
+    false,
+  );
+});
+
 test("resolveSimulationDefaults ignores null overrides", async () => {
   const { resolveSimulationDefaults, SIMULATION_DEFAULTS } = await configModulePromise;
 

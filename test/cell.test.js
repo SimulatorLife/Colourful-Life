@@ -748,6 +748,55 @@ test("movement sensors update DNA-tuned resource trend signal", () => {
   approxEqual(cell._resourceSignal, expectedSignal, 1e-12, "resource trend signal");
 });
 
+test("compact decision telemetry preserves neural feedback without trace history", () => {
+  const cell = new Cell(0, 0, new DNA(80, 90, 100), 8, {
+    decisionTelemetry: false,
+  });
+  const feedback = [];
+  let evaluationOptions = null;
+
+  cell.brain = {
+    connectionCount: 1,
+    evaluateGroup(_group, _sensors, options) {
+      evaluationOptions = options;
+
+      return {
+        values: { rest: 5, pursue: 0, avoid: 0, cohere: 0, explore: 0 },
+        activationCount: 1,
+        sensors: new Float32Array(16),
+      };
+    },
+    applySensorFeedback(payload) {
+      feedback.push(payload);
+    },
+  };
+
+  cell.executeMovementStrategy([[cell]], 0, 0, [], [], [], {
+    rows: 1,
+    cols: 1,
+    localDensity: 0.1,
+    densityEffectMultiplier: 1,
+    tileEnergy: 0.5,
+    tileEnergyDelta: 0,
+    maxTileEnergy: 2,
+    moveRandomly: () => {},
+  });
+  cell.manageEnergy(0, 0, {
+    localDensity: 0.1,
+    densityEffectMultiplier: 1,
+    maxTileEnergy: 2,
+  });
+
+  assert.is(cell.decisionTelemetry, false);
+  assert.equal(evaluationOptions, { trace: false });
+  assert.is(feedback.length, 1, "compact mode should still train the neural policy");
+  assert.is(
+    cell.decisionHistory.length,
+    0,
+    "compact mode should not retain trace history",
+  );
+});
+
 test("neural rest action queues DNA-driven fatigue recovery bonus", () => {
   const dna = new DNA(180, 90, 60);
 

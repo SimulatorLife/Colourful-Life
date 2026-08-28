@@ -29,6 +29,30 @@ DNA-derived scoring and neural influence for the bounded candidate budget.
 Measurements are hardware- and runtime-specific; compare medians from fresh
 processes rather than treating these values as a universal guarantee.
 
+### Diagnostic-trace profile
+
+A second profile isolates the cost of diagnostic neural traces using the same
+fixed seed and dense world. The benchmark defaults to the production setting
+(`PERF_SIM_DECISION_TELEMETRY=0`); set it to `1` to include per-decision sensor
+and activation traces:
+
+```sh
+PERF_INCLUDE_SIM=1 \
+PERF_SIM_ROWS=60 PERF_SIM_COLS=60 PERF_SIM_DENSITY=0.65 \
+PERF_SIM_WARMUP=20 PERF_SIM_ITERATIONS=30 \
+PERF_SIM_DECISION_TELEMETRY=1 pnpm run benchmark
+```
+
+Across three fresh-process samples on the same machine, the median fell from
+**59.00 ms/tick** with traces enabled to **52.95 ms/tick** with traces
+disabled (**10.3% faster**). Raw means fell from **64.43** to **54.62 ms/tick**
+(**15.2% faster**). Final populations remained 529 in both modes. The trace
+switch does not change neural decisions or reinforcement feedback: the fast path
+keeps a compact sensor vector, outcome, and activation context for learning while
+removing diagnostic trace/history materialization. Enable `decisionTelemetry` in
+simulation configuration when that analysis is needed; it is intentionally not
+part of the hot production loop.
+
 A subsystem profile of the same workload identified `handleReproduction` and
 its neural mate previews as the dominant CPU path after energy preparation.
 Before the change, every selected candidate could trigger a full reproduction

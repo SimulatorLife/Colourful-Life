@@ -641,6 +641,9 @@ export const SIMULATION_DEFAULTS = Object.freeze({
   lowDiversityReproMultiplier: 0.57,
   speedMultiplier: 1,
   autoPauseOnBlur: false,
+  // Decision traces are diagnostic data, not simulation state. Keep them off in
+  // the production loop; inspectors can opt in when they need neural detail.
+  decisionTelemetry: false,
 });
 
 const BOOLEAN_DEFAULT_KEYS = Object.freeze([
@@ -654,6 +657,7 @@ const BOOLEAN_DEFAULT_KEYS = Object.freeze([
   "showSelectionZones",
   "showGridLines",
   "autoPauseOnBlur",
+  "decisionTelemetry",
 ]);
 
 /**

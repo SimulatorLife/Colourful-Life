@@ -2663,6 +2663,7 @@ export default class GridManager {
       ctx = null,
       cellSize = 8,
       stats,
+      decisionTelemetry = false,
       maxTileEnergy,
       initialTileEnergyFraction,
       selectionManager,
@@ -2718,6 +2719,7 @@ export default class GridManager {
     this.ctx = resolvedCtx;
     this.cellSize = resolvedCellSize;
     this.stats = resolvedStats;
+    this.decisionTelemetry = decisionTelemetry !== false;
     this.renderStrategy = normalizeRenderStrategy(
       options?.renderStrategy,
       RenderStrategy.AUTO,
@@ -6621,7 +6623,9 @@ export default class GridManager {
     const availableEnergy = Math.max(0, this.energyGrid?.[row]?.[col] ?? 0);
     const requestedEnergy = spawnEnergy ?? availableEnergy;
     const energy = Math.min(this.maxTileEnergy, requestedEnergy, availableEnergy);
-    const cell = new Cell(row, col, dna, energy);
+    const cell = new Cell(row, col, dna, energy, {
+      decisionTelemetry: this.decisionTelemetry,
+    });
 
     this.setCell(row, col, cell, { absorbTileEnergy: false });
 
@@ -9180,6 +9184,7 @@ export default class GridManager {
             } else {
               const offspring = Cell.breed(cell, bestMate.target, mutationMultiplier, {
                 maxTileEnergy: this.maxTileEnergy,
+                decisionTelemetry: this.decisionTelemetry,
               });
 
               if (offspring) {

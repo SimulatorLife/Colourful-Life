@@ -195,7 +195,7 @@ export default class Cell {
   static chanceToMutate = MUTATION_CHANCE_BASELINE;
   static geneMutationRange = 0.2;
 
-  constructor(row, col, dna, energy) {
+  constructor(row, col, dna, energy, { decisionTelemetry = true } = {}) {
     this.row = row;
     this.col = col;
     this.dna = dna || DNA.random();
@@ -206,6 +206,7 @@ export default class Cell {
     this.lifespan = this.dna.lifespanDNA();
     this.sight = this.dna.sight();
     this.energy = energy;
+    this.decisionTelemetry = decisionTelemetry !== false;
     this.neurons = this.brain?.neuronCount || this.dna.neurons();
     this.strategy = this.dna.strategy();
     this.movementGenes = this.dna.movementGenes();
@@ -420,7 +421,8 @@ export default class Cell {
   }
 
   static breed(parentA, parentB, mutationMultiplier = 1, options = {}) {
-    const { maxTileEnergy } = options || {};
+    const { maxTileEnergy, decisionTelemetry = parentA?.decisionTelemetry !== false } =
+      options || {};
     const row = parentA.row;
     const col = parentA.col;
     const avgChance = (parentA.dna.mutationChance() + parentB.dna.mutationChance()) / 2;
@@ -591,7 +593,9 @@ export default class Cell {
     parentB.energy = Math.max(0, parentB.energy - investB);
     const energyAfterA = parentA.energy;
     const energyAfterB = parentB.energy;
-    const offspring = new Cell(row, col, childDNA, offspringEnergy);
+    const offspring = new Cell(row, col, childDNA, offspringEnergy, {
+      decisionTelemetry,
+    });
 
     parentA.#recordReproductionEnergyOutcome({
       success: true,
@@ -2610,16 +2614,33 @@ export default class Cell {
     return Boolean(this.brain && this.brain.connectionCount > 0);
   }
 
-  #registerDecisionContext(group, sensors, evaluation, activationLoad = 0) {
+  #registerDecisionContext(
+    group,
+    sensors,
+    evaluation,
+    activationLoad = 0,
+    diagnostic = this.decisionTelemetry !== false,
+  ) {
     if (!evaluation) return null;
 
-    const safeSensors =
-      sensors && typeof sensors === "object" && !Array.isArray(sensors)
+    // Learning needs a stable sensor vector and output values until the cell
+    // finishes its energy pass. Diagnostic consumers additionally need cloned
+    // sensor objects and full traces; keep those expensive representations out
+    // of the normal population loop.
+    const safeSensors = diagnostic
+      ? sensors && typeof sensors === "object" && !Array.isArray(sensors)
         ? Object.fromEntries(
             Object.entries(sensors).map(([key, value]) => [key, Number(value) || 0]),
           )
+        : null
+      : sensors;
+    const sensorVector = diagnostic
+      ? Array.isArray(evaluation.sensors)
+        ? evaluation.sensors
+        : null
+      : evaluation.sensors && typeof evaluation.sensors.length === "number"
+        ? new Float32Array(evaluation.sensors)
         : null;
-    const sensorVector = Array.isArray(evaluation.sensors) ? evaluation.sensors : null;
     const activationCount = Math.max(
       0,
       activationLoad || evaluation.activationCount || 0,
@@ -2629,9 +2650,13 @@ export default class Cell {
       group,
       sensors: safeSensors,
       sensorVector,
-      outputs: evaluation.values ? { ...evaluation.values } : null,
+      outputs: diagnostic
+        ? evaluation.values
+          ? { ...evaluation.values }
+          : null
+        : evaluation.values,
       activationCount,
-      trace: evaluation.trace ?? null,
+      trace: diagnostic ? (evaluation.trace ?? null) : null,
       outcome: null,
     };
 
@@ -2876,6 +2901,74 @@ export default class Cell {
     }
 
     const perActivationCost = dynamicLoad > 0 ? dynamicCost / dynamicLoad : 0;
+
+    if (this.decisionTelemetry === false) {
+      const baselineShare = baselineCost / pending.length;
+      const rewardContext = { energyBefore, energyAfter, maxTileEnergy };
+      const decisions = pending;
+
+      for (let i = 0; i < decisions.length; i++) {
+        const decision = decisions[i];
+        const activationCount = Math.max(0, decision.activationCount || 0);
+
+        decision.energyImpact = {
+          cognitive: baselineShare + activationCount * perActivationCost,
+        };
+        decision.neuralFatigue = neuralFatigueSnapshot;
+
+        if (decision.outcome && typeof decision.outcome === "object") {
+          const rewardSignal = this.#resolveDecisionReward(decision, rewardContext);
+
+          if (Number.isFinite(rewardSignal)) {
+            decision.outcome.rewardSignal = clamp(rewardSignal, -1, 1);
+          }
+        }
+      }
+
+      this.#updateOpportunitySignal({
+        decisions,
+        energyBefore,
+        energyAfter,
+        maxTileEnergy,
+      });
+
+      if (this.brain && typeof this.brain.applySensorFeedback === "function") {
+        for (let i = 0; i < decisions.length; i++) {
+          const decision = decisions[i];
+
+          if (!decision.sensorVector) continue;
+
+          const energyCost = Number.isFinite(decision.energyImpact?.cognitive)
+            ? decision.energyImpact.cognitive
+            : 0;
+          const fatigueBefore = decision.neuralFatigue?.before;
+          const fatigueAfter = decision.neuralFatigue?.after;
+          const fatigueDelta =
+            Number.isFinite(fatigueBefore) && Number.isFinite(fatigueAfter)
+              ? fatigueBefore - fatigueAfter
+              : 0;
+          const rewardSignal = Number.isFinite(decision.outcome?.rewardSignal)
+            ? clamp(decision.outcome.rewardSignal, -1, 1)
+            : 0;
+
+          this.brain.applySensorFeedback({
+            group: decision.group,
+            sensorVector: decision.sensorVector,
+            activationCount: decision.activationCount,
+            energyCost,
+            fatigueDelta,
+            rewardSignal,
+            maxTileEnergy,
+          });
+        }
+      }
+
+      this._pendingDecisionContexts = [];
+      this._decisionContextIndex.clear();
+
+      return;
+    }
+
     const baselineShare = pending.length > 0 ? baselineCost / pending.length : 0;
 
     const decisions = pending.map((context) => {
@@ -5808,7 +5901,12 @@ export default class Cell {
       return null;
     }
 
-    const result = this.brain.evaluateGroup(group, sensors, { trace: true });
+    const telemetryEnabled = this.decisionTelemetry !== false;
+    const result = this.brain.evaluateGroup(
+      group,
+      sensors,
+      telemetryEnabled ? { trace: true } : { trace: false },
+    );
 
     this.#integrateRiskMemory(group, sensors, result?.sensors ?? null);
 
@@ -5822,7 +5920,13 @@ export default class Cell {
 
     this._neuralLoad += activationLoad;
 
-    this.#registerDecisionContext(group, sensors, result, activationLoad);
+    this.#registerDecisionContext(
+      group,
+      sensors,
+      result,
+      activationLoad,
+      telemetryEnabled,
+    );
 
     return result.values;
   }

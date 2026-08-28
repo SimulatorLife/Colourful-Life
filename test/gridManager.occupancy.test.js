@@ -45,6 +45,31 @@ test("GridManager prevents moves into occupied cells", async () => {
   assert.is(cellB.col, 2, "blocking cell column should remain unchanged");
 });
 
+test("GridManager propagates the opt-in decision telemetry mode to spawned cells", async () => {
+  const [{ default: GridManager }, { default: DNA }] = await Promise.all([
+    import("../src/grid/gridManager.js"),
+    import("../src/genome.js"),
+  ]);
+
+  class TestGridManager extends GridManager {
+    init() {}
+    consumeEnergy() {}
+  }
+
+  const quietGrid = new TestGridManager(2, 2, baseOptions);
+  const quietCell = quietGrid.spawnCell(0, 0, { dna: new DNA(1, 2, 3) });
+  const tracedGrid = new TestGridManager(2, 2, {
+    ...baseOptions,
+    decisionTelemetry: true,
+  });
+  const tracedCell = tracedGrid.spawnCell(0, 0, { dna: new DNA(4, 5, 6) });
+
+  assert.is(quietGrid.decisionTelemetry, false);
+  assert.is(quietCell.decisionTelemetry, false);
+  assert.is(tracedGrid.decisionTelemetry, true);
+  assert.is(tracedCell.decisionTelemetry, true);
+});
+
 test("GridManager.spawnCell refuses to overwrite occupied tiles", async () => {
   const [{ default: GridManager }, { default: Cell }, { default: DNA }] =
     await Promise.all([

@@ -70,6 +70,7 @@ const configuration = {
     cellSize: envNumber("PERF_SIM_CELL_SIZE", envNumber("PERF_CELL_SIZE", 5), {
       min: 1,
     }),
+    decisionTelemetry: envNumber("PERF_SIM_DECISION_TELEMETRY", 0, { min: 0 }) > 0,
     seedDensity: envFloat("PERF_SIM_DENSITY", 0.65, { min: 0.05, max: 0.98 }),
     seed: envNumber("PERF_SIM_SEED", 424242, { min: 0 }),
   },
@@ -422,6 +423,7 @@ if (deterministicScenario) {
         showDensity: false,
         showEnergy: false,
         showFitness: false,
+        decisionTelemetry: simulationConfig.decisionTelemetry,
         statsOptions: {
           historySize: 240,
           traitResampleInterval: 240,

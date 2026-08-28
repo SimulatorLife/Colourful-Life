@@ -245,6 +245,7 @@ export default class SimulationEngine {
       ctx: this.ctx,
       cellSize: this.cellSize,
       stats: this.stats,
+      decisionTelemetry: defaults.decisionTelemetry,
       initialTileEnergyFraction: defaults.initialTileEnergyFraction,
       selectionManager: this.selectionManager,
       interactionSystemFactory: ({ adapter, gridManager }) =>
