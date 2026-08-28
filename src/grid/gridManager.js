@@ -7958,14 +7958,19 @@ export default class GridManager {
       return;
     }
 
+    // Activity rate is the organism's action cadence. Gate before target
+    // discovery so inactive organisms do not pay for perception, reproduction,
+    // combat, or movement work that would be discarded by the old post-reproduction
+    // gate. This keeps the hot path proportional to active decision-makers while
+    // preserving the DNA-driven action probability.
+    if (this.#random() > act) {
+      return;
+    }
+
     const targets = this.findTargets(row, col, cell, targetsCtx);
 
     try {
       if (this.handleReproduction(row, col, cell, targets, reproductionCtx)) {
-        return;
-      }
-
-      if (this.#random() > act) {
         return;
       }
 

@@ -18,6 +18,7 @@ function createStubCell({
   energy = 5,
   age = 0,
   reproductionCooldown = 0,
+  activityRate = 0,
 } = {}) {
   return {
     id,
@@ -32,7 +33,7 @@ function createStubCell({
     offspring: 0,
     density: { enemyBias: { min: 0, max: 0 } },
     dna: {
-      activityRate: () => 0,
+      activityRate: () => activityRate,
       reproductionThresholdFrac: () => 0,
       allyThreshold: () => 0.9,
       enemyThreshold: () => 0.1,
@@ -58,6 +59,38 @@ function createStubCell({
     },
   };
 }
+
+test("processCell gates target discovery when activity roll declines", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+
+  class HooksGrid extends GridManager {
+    init() {}
+    findTargets() {
+      throw new Error("inactive cells must not discover targets");
+    }
+  }
+
+  const gm = new HooksGrid(1, 1, baseOptions);
+
+  gm.rng = () => 0.9;
+  const cell = createStubCell({ id: "inactive", activityRate: 0.25 });
+
+  gm.setCell(0, 0, cell);
+
+  gm.processCell(0, 0, {
+    stats: baseOptions.stats,
+    eventManager: { activeEvents: [] },
+    densityGrid: [[0]],
+    processed: { processTickRevision: 1 },
+    densityEffectMultiplier: 1,
+    societySimilarity: 1,
+    enemySimilarity: 0,
+    eventStrengthMultiplier: 1,
+    mutationMultiplier: 1,
+  });
+
+  assert.is(cell.age, 1, "energy and aging should still run for inactive cells");
+});
 
 test("processCell dedupes the same cell twice in one tick via the revision tracker", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");

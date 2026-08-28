@@ -124,8 +124,8 @@ test("GridManager bounds dense perception candidates", async () => {
   const origin = createDenseCell("origin");
   let placed = 0;
 
-  for (let row = 0; row < gm.rows && placed < 250; row += 1) {
-    for (let col = 0; col < gm.cols && placed < 250; col += 1) {
+  for (let row = 0; row < gm.rows && placed < 300; row += 1) {
+    for (let col = 0; col < gm.cols && placed < 300; col += 1) {
       if (row === 10 && col === 10) continue;
 
       gm.placeCell(row, col, createDenseCell(`${row}:${col}`));
@@ -138,7 +138,7 @@ test("GridManager bounds dense perception candidates", async () => {
   const visibleTargetCount =
     targets.mates.length + targets.enemies.length + targets.society.length;
 
-  assert.ok(placed >= 250, "dense fixture should populate the world");
+  assert.ok(placed >= 300, "dense fixture should populate the world");
   assert.ok(
     visibleTargetCount <= 24,
     "dense scans should use a fixed candidate budget",

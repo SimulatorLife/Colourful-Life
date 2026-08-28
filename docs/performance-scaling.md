@@ -62,6 +62,38 @@ four nearest candidates per decision. This makes neural mate-selection work
 O(1) per organism with respect to the visible candidate pool instead of scaling
 with its full width, without removing genome-driven or neural behaviour.
 
+### Dense-world action scheduling
+
+`activityRate` is now the action cadence for the whole decision phase. The tick loop
+gates before target discovery, so an organism that will not act does not pay for
+perception, mate scoring, combat selection, or movement work that would be discarded.
+This fixes the previous ordering bug where reproduction and target discovery ran
+before the activity gate. Energy management, aging, mortality, and all genome-driven
+probabilities still run for every organism; only the already-skipped action phase is
+omitted.
+
+The target query also bounds dense perception at 65% occupancy to 24 candidates per
+organism. Sparse worlds keep complete indexed visibility. This prevents the
+interaction phase from multiplying work by the number of neighbors in a full sight
+window while retaining genome and neural scoring for every evaluated candidate.
+
+Measured in fresh processes using the fixed-seed 60×60 / 65% benchmark:
+
+| Scenario                                     |         Before |        Current |          Change |
+| -------------------------------------------- | -------------: | -------------: | --------------: |
+| First dense tick                             |      448.58 ms |      351.72 ms | **21.6% lower** |
+| 20-tick warmup + 30 measured ticks (trimmed) |  53.56 ms/tick |  41.76 ms/tick | **22.0% lower** |
+| 100×100 / 80%, first 3 ticks (trimmed)       | 686.78 ms/tick | 487.11 ms/tick | **29.1% lower** |
+
+The current 60×60 run ended at 584 organisms versus 529 before because bounded
+perception changes the deterministic interaction trajectory; this is expected and
+not a relaxed benchmark threshold.
+
+Neural topology summaries are diagnostic telemetry and now refresh every 30 ticks by
+default (or immediately after a significant trait/population refresh). Set
+`neuralSummaryInterval: 1` in `Stats` options when per-tick diagnostic precision is
+required.
+
 ## Runtime architecture
 
 The simulation and presentation loops are separate budgets:
