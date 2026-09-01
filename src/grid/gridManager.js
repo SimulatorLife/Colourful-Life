@@ -547,6 +547,42 @@ const IMAGE_DATA_SPARSE_AREA_RATIO = 12;
 const IMAGE_DATA_SPARSE_MIN_TILES = 1;
 
 /**
+ * Per-resolution facade for cached obstacle bitmap entries.
+ *
+ * `GridManager` previously exposed `obstacleRenderCache.caches` directly so
+ * collaborator methods reached through a four-segment chain (`store.caches.get`,
+ * `store.caches.set`, ...). That forced every call site to know about the
+ * internal `Map` shape. This wrapper keeps the underlying `Map` (still named
+ * `caches` for backwards compatibility with tests) but exposes single-step
+ * operations so collaborators only talk to their immediate neighbour.
+ */
+class ObstacleRenderCacheStore {
+  constructor() {
+    this.revision = 0;
+    this.caches = new Map();
+    this.lastBasePaint = null;
+  }
+
+  getEntry(key) {
+    return this.caches.get(key);
+  }
+
+  setEntry(key, entry) {
+    this.caches.set(key, entry);
+  }
+
+  deleteEntry(key) {
+    return this.caches.delete(key);
+  }
+
+  markAllEntriesDirty() {
+    for (const entry of this.caches.values()) {
+      entry.dirty = true;
+    }
+  }
+}
+
+/**
  * Primary orchestrator for cell lifecycle, energy management, and spatial
  * interactions. `GridManager` owns the grid data structures, applies movement
  * and reproduction rules, coordinates energy updates, and relays leaderboard
@@ -7197,11 +7233,7 @@ export default class GridManager {
   }
 
   #resetObstacleRenderCache() {
-    this.obstacleRenderCache = {
-      revision: 0,
-      caches: new Map(),
-      lastBasePaint: null,
-    };
+    this.obstacleRenderCache = new ObstacleRenderCacheStore();
   }
 
   #markObstacleRenderDirty() {
@@ -7211,10 +7243,7 @@ export default class GridManager {
 
     this.obstacleRenderCache.revision += 1;
     this.obstacleRenderCache.lastBasePaint = null;
-
-    for (const cache of this.obstacleRenderCache.caches.values()) {
-      cache.dirty = true;
-    }
+    this.obstacleRenderCache.markAllEntriesDirty();
   }
 
   #handleObstacleGridEmptied() {
@@ -7293,7 +7322,7 @@ export default class GridManager {
     }
 
     const key = Number.isFinite(lineWidthScale) ? lineWidthScale.toFixed(4) : "default";
-    let entry = this.obstacleRenderCache.caches.get(key);
+    let entry = this.obstacleRenderCache.getEntry(key);
 
     if (!entry) {
       const fillSurface = this.#createObstacleSurface(width, height);
@@ -7314,7 +7343,7 @@ export default class GridManager {
         dirty: true,
         hasAny: false,
       };
-      this.obstacleRenderCache.caches.set(key, entry);
+      this.obstacleRenderCache.setEntry(key, entry);
     } else {
       entry.lineWidthScale = Number.isFinite(lineWidthScale)
         ? lineWidthScale
@@ -7324,7 +7353,7 @@ export default class GridManager {
       entry.stroke = this.#ensureObstacleSurface(entry.stroke, width, height);
 
       if (!entry.fill || !entry.stroke) {
-        this.obstacleRenderCache.caches.delete(key);
+        this.obstacleRenderCache.deleteEntry(key);
 
         return null;
       }
