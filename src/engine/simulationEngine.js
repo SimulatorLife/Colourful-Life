@@ -24,6 +24,7 @@ import {
 import { coerceBoolean } from "../utils/primitives.js";
 import { invokeWithErrorBoundary } from "../utils/error.js";
 import {
+  allocateCanvas,
   ensureCanvasDimensions,
   resolveCanvas,
   resolveTimingProviders,
@@ -1836,4 +1837,4 @@ export default class SimulationEngine {
   }
 }
 
-export { ensureCanvasDimensions, resolveCanvas };
+export { allocateCanvas, ensureCanvasDimensions, resolveCanvas };

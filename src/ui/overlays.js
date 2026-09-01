@@ -5,6 +5,7 @@ import { toPlainObject } from "../utils/object.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 import { resolveNonEmptyString } from "../utils/primitives.js";
 import { getDensityAt } from "../grid/densityUtils.js";
+import { allocateCanvas } from "../engine/environment.js";
 
 const DEFAULT_FITNESS_TOP_PERCENT = 0.1;
 const FITNESS_GRADIENT_STEPS = 5;
@@ -148,31 +149,15 @@ function createOverlayCacheSlot() {
 }
 
 function defaultOverlaySurfaceFactory(width, height) {
-  if (!(width > 0) || !(height > 0)) return null;
-  if (typeof OffscreenCanvas === "function") {
-    try {
-      const surface = new OffscreenCanvas(width, height);
-      const ctx =
-        typeof surface.getContext === "function" ? surface.getContext("2d") : null;
+  const surface = allocateCanvas(width, height);
 
-      if (ctx) return { surface, ctx };
-    } catch (_) {
-      /* fall through to DOM canvas */
-    }
-  }
-  if (typeof document !== "undefined" && typeof document.createElement === "function") {
-    const surface = document.createElement("canvas");
-
-    if (surface && typeof surface.getContext === "function") {
-      surface.width = width;
-      surface.height = height;
-      const ctx = surface.getContext("2d");
-
-      if (ctx) return { surface, ctx };
-    }
+  if (!surface || typeof surface.getContext !== "function") {
+    return null;
   }
 
-  return null;
+  const ctx = surface.getContext("2d");
+
+  return ctx ? { surface, ctx } : null;
 }
 
 const overlayCacheSlots = Object.freeze({
@@ -1236,24 +1221,13 @@ function createGridLineCanvas(width, height) {
     return null;
   }
 
-  if (typeof OffscreenCanvas === "function") {
-    try {
-      return new OffscreenCanvas(width, height);
-    } catch (error) {
-      warnOnce("Failed to allocate OffscreenCanvas for grid lines.", error);
-    }
+  try {
+    return allocateCanvas(width, height);
+  } catch (error) {
+    warnOnce("Failed to allocate canvas for grid lines.", error);
+
+    return null;
   }
-
-  if (typeof document !== "undefined" && typeof document.createElement === "function") {
-    const canvas = document.createElement("canvas");
-
-    canvas.width = width;
-    canvas.height = height;
-
-    return canvas;
-  }
-
-  return null;
 }
 
 function paintGridLinesToContext(

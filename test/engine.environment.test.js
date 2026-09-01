@@ -1,5 +1,6 @@
 import { assert, test } from "#tests/harness";
 import {
+  allocateCanvas,
   buildHeadlessCanvasOverrides,
   createHeadlessCanvas,
   resolveCanvas,
@@ -333,4 +334,124 @@ test("createHeadlessCanvas stub tolerates overlay rendering helpers", () => {
       },
     );
   });
+});
+
+test("allocateCanvas returns an OffscreenCanvas when available", () => {
+  const originalOffscreenCanvas = globalThis.OffscreenCanvas;
+
+  class StubOffscreenCanvas {
+    constructor(width, height) {
+      this.width = width;
+      this.height = height;
+    }
+  }
+
+  globalThis.OffscreenCanvas = StubOffscreenCanvas;
+
+  try {
+    const canvas = allocateCanvas(64, 32);
+
+    assert.instance(canvas, StubOffscreenCanvas);
+    assert.is(canvas.width, 64);
+    assert.is(canvas.height, 32);
+  } finally {
+    globalThis.OffscreenCanvas = originalOffscreenCanvas;
+  }
+});
+
+test("allocateCanvas falls back to a DOM canvas when OffscreenCanvas throws", () => {
+  const originalOffscreenCanvas = globalThis.OffscreenCanvas;
+  const originalDocument = globalThis.document;
+
+  class ThrowingOffscreenCanvas {
+    constructor() {
+      throw new Error("boom");
+    }
+  }
+
+  const created = [];
+
+  const fakeDocument = {
+    createElement(tag) {
+      if (tag !== "canvas") return null;
+
+      const canvas = {
+        width: 0,
+        height: 0,
+      };
+
+      created.push(canvas);
+
+      return canvas;
+    },
+  };
+
+  globalThis.OffscreenCanvas = ThrowingOffscreenCanvas;
+  globalThis.document = fakeDocument;
+
+  try {
+    const canvas = allocateCanvas(20, 10);
+
+    assert.equal(created.length, 1, "DOM canvas should be created exactly once");
+    assert.is(canvas, created[0]);
+    assert.is(canvas.width, 20);
+    assert.is(canvas.height, 10);
+  } finally {
+    globalThis.OffscreenCanvas = originalOffscreenCanvas;
+    globalThis.document = originalDocument;
+  }
+});
+
+test("allocateCanvas falls back to a DOM canvas when OffscreenCanvas is unavailable", () => {
+  const originalOffscreenCanvas = globalThis.OffscreenCanvas;
+  const originalDocument = globalThis.document;
+
+  const fakeDocument = {
+    createElement(tag) {
+      if (tag !== "canvas") return null;
+
+      const canvas = { width: 0, height: 0 };
+
+      canvas.tagName = "CANVAS";
+
+      return canvas;
+    },
+  };
+
+  globalThis.OffscreenCanvas = undefined;
+  globalThis.document = fakeDocument;
+
+  try {
+    const canvas = allocateCanvas(8, 4);
+
+    assert.type(canvas, "object");
+    assert.is(canvas.width, 8);
+    assert.is(canvas.height, 4);
+  } finally {
+    globalThis.OffscreenCanvas = originalOffscreenCanvas;
+    globalThis.document = originalDocument;
+  }
+});
+
+test("allocateCanvas returns null when neither backing store is available", () => {
+  const originalOffscreenCanvas = globalThis.OffscreenCanvas;
+  const originalDocument = globalThis.document;
+
+  globalThis.OffscreenCanvas = undefined;
+  globalThis.document = undefined;
+
+  try {
+    assert.is(allocateCanvas(10, 10), null);
+  } finally {
+    globalThis.OffscreenCanvas = originalOffscreenCanvas;
+    globalThis.document = originalDocument;
+  }
+});
+
+test("allocateCanvas rejects non-positive dimensions", () => {
+  assert.is(allocateCanvas(0, 10), null);
+  assert.is(allocateCanvas(10, 0), null);
+  assert.is(allocateCanvas(-1, 10), null);
+  assert.is(allocateCanvas(10, -1), null);
+  assert.is(allocateCanvas(Number.NaN, 10), null);
 });
