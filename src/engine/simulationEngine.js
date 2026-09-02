@@ -8,6 +8,7 @@ import {
   ENERGY_REGEN_RATE_DEFAULT,
   COMBAT_EDGE_SHARPNESS_DEFAULT,
   COMBAT_TERRITORY_EDGE_FACTOR,
+  MAX_TILE_ENERGY,
   SIMULATION_DEFAULTS,
   resolveSimulationDefaults,
   LEADERBOARD_INTERVAL_MIN_MS,
@@ -252,7 +253,7 @@ export default class SimulationEngine {
         new InteractionSystem({
           adapter,
           gridManager,
-          combatTerritoryEdgeFactor: GridManager.combatTerritoryEdgeFactor,
+          combatTerritoryEdgeFactor: COMBAT_TERRITORY_EDGE_FACTOR,
         }),
       initialObstaclePreset,
       initialObstaclePresetOptions: config.initialObstaclePresetOptions,
@@ -967,7 +968,7 @@ export default class SimulationEngine {
       showGridLines: this.state.showGridLines ?? false,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
-        : GridManager.maxTileEnergy,
+        : MAX_TILE_ENERGY,
       snapshot: this.telemetry.snapshot,
       activeEvents: this.eventManager.activeEvents,
       getEventColor: this.getEventColor,
@@ -1300,7 +1301,7 @@ export default class SimulationEngine {
       showGridLines: this.state.showGridLines ?? false,
       maxTileEnergy: Number.isFinite(this.grid?.maxTileEnergy)
         ? this.grid.maxTileEnergy
-        : GridManager.maxTileEnergy,
+        : MAX_TILE_ENERGY,
       snapshot: this.telemetry.snapshot,
       activeEvents: this.eventManager?.activeEvents,
       getEventColor: this.getEventColor,
