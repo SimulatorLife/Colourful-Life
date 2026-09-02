@@ -45,7 +45,8 @@
       "@swc/core": "1.14.0",
       "node-gyp-build-optional-packages": "5.2.2",
       "@eslint/eslintrc>globals": "16.5.0",
-      "@parcel/packager-js>globals": "16.5.0"
+      "@parcel/packager-js>globals": "16.5.0",
+      "flatted": "^3.4.2"
     }
   },
   "lint-staged": {
