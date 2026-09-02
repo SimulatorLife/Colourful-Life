@@ -161,6 +161,72 @@ test("createHeadlessUiManager setters respect notify suppression", () => {
   assert.is(manager.getShowGridLines(), true);
 });
 
+test("createHeadlessUiManager setters tolerate null and non-object options payloads", () => {
+  const notifications = [];
+  const manager = createHeadlessUiManager({
+    onSettingChange: (key, value) => notifications.push([key, value]),
+  });
+
+  // Regression: the setters used to destructure `{ notify }` from the
+  // options argument, which threw `TypeError: Cannot read properties of null`
+  // whenever a caller forwarded `null` or any non-object payload. Each
+  // setter below would have crashed before the guard was added.
+  manager.setUpdatesPerSecond(120, null);
+  manager.setEventFrequencyMultiplier(1.4, null);
+  manager.setEventStrengthMultiplier(0.8, null);
+  manager.setMutationMultiplier(1.2, null);
+  manager.setDensityEffectMultiplier(0.6, null);
+  manager.setSocietySimilarity(0.4, null);
+  manager.setEnemySimilarity(0.55, null);
+  manager.setEnergyRegenRate(0.3, null);
+  manager.setEnergyDiffusionRate(0.35, null);
+  manager.setInitialTileEnergyFraction(0.6, null);
+  manager.setLowDiversityReproMultiplier(0.4, null);
+  manager.setCombatEdgeSharpness(2.5, null);
+  manager.setCombatTerritoryEdgeFactor(0.45, null);
+  manager.setMaxConcurrentEvents(5, null);
+  manager.setLifeEventFadeTicks(72, null);
+  manager.setLifeEventLimit(16, null);
+  manager.setLeaderboardIntervalMs(900, null);
+  manager.setLeaderboardSize(9, null);
+  manager.setAutoPauseOnBlur(true, null);
+  manager.setShowObstacles(false, null);
+  manager.setShowGridLines(true, null);
+
+  // Non-object payloads (numbers, booleans, strings) must also avoid the
+  // destructuring crash and fall back to the default notification path.
+  manager.setUpdatesPerSecond(80, 0);
+  manager.setShowEnergy(true, "off");
+
+  // Each invocation that actually changed a value should still notify,
+  // because the default `notify` flag is `true`.
+  assert.is(notifications.length > 0, true, "default notifications should fire");
+  assert.ok(
+    notifications.some(([key]) => key === "updatesPerSecond"),
+    "updatesPerSecond updates should notify by default",
+  );
+  assert.ok(
+    notifications.some(([key]) => key === "autoPauseOnBlur"),
+    "autoPauseOnBlur updates should notify by default",
+  );
+  assert.is(manager.getUpdatesPerSecond(), 80);
+  assert.is(manager.getAutoPauseOnBlur(), true);
+  assert.is(manager.getShowObstacles(), false);
+  assert.is(manager.getShowGridLines(), true);
+
+  // Confirm explicit `{ notify: false }` still suppresses notifications even
+  // after the guard routes through the safe reader.
+  const beforeCount = notifications.length;
+
+  manager.setShowObstacles(true, { notify: false });
+  assert.is(
+    notifications.length,
+    beforeCount,
+    "explicit notify:false should still suppress emissions",
+  );
+  assert.is(manager.getShowObstacles(), true);
+});
+
 test("createHeadlessUiManager clamps energy rates to the unit interval", () => {
   const notifications = [];
   const manager = createHeadlessUiManager({
