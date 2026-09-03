@@ -42,7 +42,8 @@ function attachBooleanSettingAccessors(
     }
 
     if (typeof target[setterName] !== "function") {
-      target[setterName] = (value, { notify: shouldNotify = true } = {}) => {
+      target[setterName] = (value, options) => {
+        const shouldNotify = readNotifyFlag(options);
         const normalized = coerceBoolean(value, settings[key]);
 
         if (settings[key] === normalized) return;
@@ -57,6 +58,29 @@ function attachBooleanSettingAccessors(
   }
 
   return target;
+}
+
+/**
+ * Safely extracts the boolean `notify` flag from a setter's options argument.
+ *
+ * Why it matters: headless UI setters historically destructured the options
+ * argument with `{ notify = true } = {}`, which throws
+ * `TypeError: Cannot read properties of null` whenever a caller forwards
+ * `null` (or any non-object) — a real boundary that automation, telemetry
+ * adapters, and partial updates all routinely hit. Reading the flag through
+ * optional chaining keeps the API surface intact while letting non-object
+ * payloads fall back to the default notification behaviour.
+ *
+ * @param {unknown} options - Raw options argument forwarded by the caller.
+ * @returns {boolean} `false` only when callers explicitly opt out via
+ *   `{ notify: false }`; defaults to `true` for every other shape.
+ */
+function readNotifyFlag(options) {
+  if (options == null || typeof options !== "object") {
+    return true;
+  }
+
+  return typeof options.notify === "boolean" ? options.notify : true;
 }
 
 // Headless UI consumers historically depended on a single, monolithic manager
@@ -413,7 +437,9 @@ export function createHeadlessUiManager(options = {}) {
       return settings.paused;
     },
     getUpdatesPerSecond: () => settings.updatesPerSecond,
-    setUpdatesPerSecond: (value, { notify: shouldNotify = true } = {}) => {
+    setUpdatesPerSecond: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (updateIfFinite("updatesPerSecond", value, { min: 1, round: true })) {
         const safeBase = baseUpdatesPerSecond > 0 ? baseUpdatesPerSecond : 1;
 
@@ -424,7 +450,9 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getEventFrequencyMultiplier: () => settings.eventFrequencyMultiplier,
-    setEventFrequencyMultiplier: (value, { notify: shouldNotify = true } = {}) => {
+    setEventFrequencyMultiplier: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("eventFrequencyMultiplier", value, { min: 0 }) &&
         shouldNotify
@@ -432,7 +460,9 @@ export function createHeadlessUiManager(options = {}) {
         notify("eventFrequencyMultiplier", settings.eventFrequencyMultiplier);
       }
     },
-    setEventStrengthMultiplier: (value, { notify: shouldNotify = true } = {}) => {
+    setEventStrengthMultiplier: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("eventStrengthMultiplier", value, { min: 0 }) &&
         shouldNotify
@@ -442,13 +472,17 @@ export function createHeadlessUiManager(options = {}) {
     },
     getMaxConcurrentEvents: () => settings.maxConcurrentEvents,
     getMutationMultiplier: () => settings.mutationMultiplier,
-    setMutationMultiplier: (value, { notify: shouldNotify = true } = {}) => {
+    setMutationMultiplier: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (updateIfFinite("mutationMultiplier", value, { min: 0 }) && shouldNotify) {
         notify("mutationMultiplier", settings.mutationMultiplier);
       }
     },
     getDensityEffectMultiplier: () => settings.densityEffectMultiplier,
-    setDensityEffectMultiplier: (value, { notify: shouldNotify = true } = {}) => {
+    setDensityEffectMultiplier: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("densityEffectMultiplier", value, { min: 0 }) &&
         shouldNotify
@@ -457,7 +491,9 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getSocietySimilarity: () => settings.societySimilarity,
-    setSocietySimilarity: (value, { notify: shouldNotify = true } = {}) => {
+    setSocietySimilarity: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("societySimilarity", value, { min: 0, max: 1 }) &&
         shouldNotify
@@ -466,7 +502,9 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getEnemySimilarity: () => settings.enemySimilarity,
-    setEnemySimilarity: (value, { notify: shouldNotify = true } = {}) => {
+    setEnemySimilarity: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("enemySimilarity", value, { min: 0, max: 1 }) &&
         shouldNotify
@@ -478,7 +516,9 @@ export function createHeadlessUiManager(options = {}) {
     getCombatEdgeSharpness: () => settings.combatEdgeSharpness,
     getCombatTerritoryEdgeFactor: () => settings.combatTerritoryEdgeFactor,
     getEnergyRegenRate: () => settings.energyRegenRate,
-    setEnergyRegenRate: (value, { notify: shouldNotify = true } = {}) => {
+    setEnergyRegenRate: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("energyRegenRate", value, { min: 0, max: 1 }) &&
         shouldNotify
@@ -487,7 +527,9 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getEnergyDiffusionRate: () => settings.energyDiffusionRate,
-    setEnergyDiffusionRate: (value, { notify: shouldNotify = true } = {}) => {
+    setEnergyDiffusionRate: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("energyDiffusionRate", value, { min: 0, max: 1 }) &&
         shouldNotify
@@ -496,7 +538,9 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getInitialTileEnergyFraction: () => settings.initialTileEnergyFraction,
-    setInitialTileEnergyFraction: (value, { notify: shouldNotify = true } = {}) => {
+    setInitialTileEnergyFraction: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("initialTileEnergyFraction", value, { min: 0, max: 1 }) &&
         shouldNotify
@@ -511,7 +555,9 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getLowDiversityReproMultiplier: () => settings.lowDiversityReproMultiplier,
-    setLowDiversityReproMultiplier: (value, { notify: shouldNotify = true } = {}) => {
+    setLowDiversityReproMultiplier: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("lowDiversityReproMultiplier", value, { min: 0, max: 1 }) &&
         shouldNotify
@@ -519,12 +565,16 @@ export function createHeadlessUiManager(options = {}) {
         notify("lowDiversityReproMultiplier", settings.lowDiversityReproMultiplier);
       }
     },
-    setCombatEdgeSharpness: (value, { notify: shouldNotify = true } = {}) => {
+    setCombatEdgeSharpness: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (updateIfFinite("combatEdgeSharpness", value, { min: 0.1 }) && shouldNotify) {
         notify("combatEdgeSharpness", settings.combatEdgeSharpness);
       }
     },
-    setCombatTerritoryEdgeFactor: (value, { notify: shouldNotify = true } = {}) => {
+    setCombatTerritoryEdgeFactor: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("combatTerritoryEdgeFactor", value, { min: 0, max: 1 }) &&
         shouldNotify
@@ -532,7 +582,9 @@ export function createHeadlessUiManager(options = {}) {
         notify("combatTerritoryEdgeFactor", settings.combatTerritoryEdgeFactor);
       }
     },
-    setMaxConcurrentEvents: (value, { notify: shouldNotify = true } = {}) => {
+    setMaxConcurrentEvents: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("maxConcurrentEvents", value, {
           min: 0,
@@ -545,7 +597,9 @@ export function createHeadlessUiManager(options = {}) {
     },
     getLifeEventFadeTicks: () => settings.lifeEventFadeTicks,
     getLifeEventLimit: () => settings.lifeEventLimit,
-    setLifeEventFadeTicks: (value, { notify: shouldNotify = true } = {}) => {
+    setLifeEventFadeTicks: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("lifeEventFadeTicks", value, { min: 1, round: Math.round }) &&
         shouldNotify
@@ -553,7 +607,9 @@ export function createHeadlessUiManager(options = {}) {
         notify("lifeEventFadeTicks", settings.lifeEventFadeTicks);
       }
     },
-    setLifeEventLimit: (value, { notify: shouldNotify = true } = {}) => {
+    setLifeEventLimit: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("lifeEventLimit", value, { min: 0, round: Math.floor }) &&
         shouldNotify
@@ -562,7 +618,8 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getLeaderboardIntervalMs: () => settings.leaderboardIntervalMs,
-    setLeaderboardIntervalMs: (value, { notify: shouldNotify = true } = {}) => {
+    setLeaderboardIntervalMs: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
       const sanitized = sanitizeNumber(value, {
         fallback: Number.NaN,
         min: 0,
@@ -581,7 +638,9 @@ export function createHeadlessUiManager(options = {}) {
       }
     },
     getLeaderboardSize: () => settings.leaderboardSize,
-    setLeaderboardSize: (value, { notify: shouldNotify = true } = {}) => {
+    setLeaderboardSize: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
+
       if (
         updateIfFinite("leaderboardSize", value, {
           min: 0,
@@ -617,7 +676,8 @@ export function createHeadlessUiManager(options = {}) {
     renderMetrics: () => {},
     renderLeaderboard: () => {},
     getAutoPauseOnBlur: () => settings.autoPauseOnBlur,
-    setAutoPauseOnBlur: (value, { notify: shouldNotify = true } = {}) => {
+    setAutoPauseOnBlur: (value, options) => {
+      const shouldNotify = readNotifyFlag(options);
       const normalized = coerceBoolean(value, settings.autoPauseOnBlur);
 
       if (settings.autoPauseOnBlur === normalized) return;
