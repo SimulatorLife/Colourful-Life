@@ -287,6 +287,46 @@ export function ensureCanvasDimensions(canvas, config) {
 }
 
 /**
+ * Allocates an `OffscreenCanvas` when the runtime exposes one and falls back to
+ * a detached `<canvas>` element otherwise. Centralising the fallback keeps
+ * overlay renderers, grid managers, and surface caches from re-implementing the
+ * same wiring (each duplicate had drifted in its try/catch coverage and
+ * fallback handling).
+ *
+ * @param {number} width - Canvas width in pixels. Non-positive values return
+ *   `null` so callers do not have to guard against zero-sized allocations.
+ * @param {number} height - Canvas height in pixels. Non-positive values return
+ *   `null`.
+ * @returns {HTMLCanvasElement|OffscreenCanvas|null} The allocated canvas, or
+ *   `null` when neither backing store is available.
+ */
+export function allocateCanvas(width, height) {
+  if (!(width > 0) || !(height > 0)) return null;
+
+  if (typeof OffscreenCanvas === "function") {
+    try {
+      return new OffscreenCanvas(width, height);
+    } catch (_) {
+      // Fall through to the DOM canvas fallback when OffscreenCanvas is
+      // defined but refuses the requested dimensions.
+    }
+  }
+
+  if (typeof document !== "undefined" && typeof document.createElement === "function") {
+    const canvas = document.createElement("canvas");
+
+    if (canvas) {
+      canvas.width = width;
+      canvas.height = height;
+
+      return canvas;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Resolves the timing primitives used by {@link SimulationEngine}. Callers can
  * inject custom implementations (e.g. for tests or headless environments).
  * Fallbacks mirror browser behaviour to keep the engine portable.

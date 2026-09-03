@@ -34,6 +34,7 @@ import {
   supportsPackedColor,
 } from "../utils/colorRecords.js";
 import { RenderStrategy, normalizeRenderStrategy } from "./renderStrategy.js";
+import { allocateCanvas } from "../engine/environment.js";
 import {
   MAX_TILE_ENERGY,
   ENERGY_REGEN_RATE_DEFAULT,
@@ -6956,16 +6957,9 @@ export default class GridManager {
     let canvas = existingCanvas;
 
     if (!canvas || canvas.width !== width || canvas.height !== height) {
-      if (typeof OffscreenCanvas === "function") {
-        canvas = new OffscreenCanvas(width, height);
-      } else if (
-        typeof document !== "undefined" &&
-        typeof document.createElement === "function"
-      ) {
-        canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-      } else {
+      canvas = allocateCanvas(width, height);
+
+      if (!canvas) {
         this.#resetImageDataBuffer();
 
         return false;
@@ -7253,18 +7247,7 @@ export default class GridManager {
   }
 
   #createObstacleSurface(width, height) {
-    let canvas = null;
-
-    if (typeof OffscreenCanvas === "function") {
-      canvas = new OffscreenCanvas(width, height);
-    } else if (
-      typeof document !== "undefined" &&
-      typeof document.createElement === "function"
-    ) {
-      canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-    }
+    const canvas = allocateCanvas(width, height);
 
     if (!canvas) {
       return null;
