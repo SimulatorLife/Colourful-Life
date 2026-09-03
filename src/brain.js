@@ -1234,7 +1234,14 @@ export default class Brain {
 
       if (!this.#isSensor(node)) {
         if (reachable.has(node)) {
-          // continue traversing even if already marked to ensure upstream search
+          // Intentionally empty: the node is already in `reachable`, but we must
+          // still fall through and walk its incoming edges below. A neuron may
+          // be queued on the stack several times (each downstream path pushes
+          // it independently), and only by walking upstream every time we pop
+          // it can we surface parents that the other paths have not yet seen.
+          // Replacing this empty branch with an early `continue` would silently
+          // drop upstream sources for neurons that sit behind shared ancestors,
+          // leaving stale connections in the brain after pruning.
         } else {
           reachable.add(node);
         }
