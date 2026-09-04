@@ -132,8 +132,8 @@ export function createHeadlessCanvas(config = {}) {
 export function buildHeadlessCanvasOverrides(config, size) {
   if (!size) return null;
 
-  const width = Number.isFinite(size.width) && size.width > 0 ? size.width : null;
-  const height = Number.isFinite(size.height) && size.height > 0 ? size.height : null;
+  const width = pickFirstFinitePositive([size.width], null);
+  const height = pickFirstFinitePositive([size.height], null);
 
   if (width == null && height == null) {
     return null;
@@ -244,36 +244,20 @@ export function resolveCanvas(canvas, documentRef, options = {}) {
  * @throws {Error} When no width/height can be resolved.
  */
 export function ensureCanvasDimensions(canvas, config) {
-  const toPositiveDimension = (candidate) => {
-    const numeric = toFiniteOrNull(candidate);
-
-    return numeric != null && numeric > 0 ? numeric : null;
-  };
-
-  const pickDimension = (candidates) =>
-    candidates.reduce(
-      (selected, candidate) => selected ?? toPositiveDimension(candidate),
-      null,
-    );
-
-  const width = pickDimension([
-    config?.width,
-    config?.canvasWidth,
-    config?.canvasSize?.width,
-    canvas?.width,
-  ]);
-  const height = pickDimension([
-    config?.height,
-    config?.canvasHeight,
-    config?.canvasSize?.height,
-    canvas?.height,
-  ]);
+  const width = pickFirstFinitePositive(
+    [config?.width, config?.canvasWidth, config?.canvasSize?.width, canvas?.width],
+    null,
+  );
+  const height = pickFirstFinitePositive(
+    [config?.height, config?.canvasHeight, config?.canvasSize?.height, canvas?.height],
+    null,
+  );
 
   if (canvas && width != null) canvas.width = width;
   if (canvas && height != null) canvas.height = height;
 
-  const canvasWidth = toPositiveDimension(canvas?.width);
-  const canvasHeight = toPositiveDimension(canvas?.height);
+  const canvasWidth = pickFirstFinitePositive([canvas?.width], null);
+  const canvasHeight = pickFirstFinitePositive([canvas?.height], null);
 
   if (canvasWidth != null && canvasHeight != null) {
     return { width: canvasWidth, height: canvasHeight };
