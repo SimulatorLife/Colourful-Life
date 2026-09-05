@@ -608,11 +608,9 @@ export default class SimulationEngine {
       this.#applyCanvasResolution(width, height);
     };
 
-    win.addEventListener("resize", handleResize);
-
-    return () => {
-      win.removeEventListener("resize", handleResize);
-    };
+    return this.#registerListeners([
+      { target: win, type: "resize", handler: handleResize },
+    ]);
   }
 
   #installAutoPauseHandlers(win, doc) {
@@ -645,16 +643,52 @@ export default class SimulationEngine {
       this.#handleAutoPauseResume();
     };
 
-    doc?.addEventListener("visibilitychange", visibilityHandler);
-    win.addEventListener("blur", blurHandler);
-    win.addEventListener("focus", focusHandler);
-    win.addEventListener("pageshow", pageShowHandler);
+    const registrations = [
+      doc && { target: doc, type: "visibilitychange", handler: visibilityHandler },
+      { target: win, type: "blur", handler: blurHandler },
+      { target: win, type: "focus", handler: focusHandler },
+      { target: win, type: "pageshow", handler: pageShowHandler },
+    ].filter(Boolean);
+
+    return this.#registerListeners(registrations);
+  }
+
+  /**
+   * Registers a batch of event listeners atomically. If any registration
+   * throws, every previously-attached listener is rolled back so a partially
+   * wired observer/timer chain cannot outlive its owner.
+   *
+   * @param {Array<{target: {addEventListener:Function,removeEventListener:Function},
+   *   type:string, handler:Function}>} registrations
+   * @returns {() => void} Disposer that detaches every registered listener.
+   */
+  #registerListeners(registrations) {
+    const attached = [];
+
+    try {
+      for (const { target, type, handler } of registrations) {
+        target.addEventListener(type, handler);
+        attached.push({ target, type, handler });
+      }
+    } catch (error) {
+      for (const entry of attached) {
+        try {
+          entry.target.removeEventListener(entry.type, entry.handler);
+        } catch {
+          // Ignore secondary teardown failures so the original error surfaces.
+        }
+      }
+      throw error;
+    }
 
     return () => {
-      doc?.removeEventListener("visibilitychange", visibilityHandler);
-      win.removeEventListener("blur", blurHandler);
-      win.removeEventListener("focus", focusHandler);
-      win.removeEventListener("pageshow", pageShowHandler);
+      for (const entry of attached) {
+        try {
+          entry.target.removeEventListener(entry.type, entry.handler);
+        } catch {
+          // Best-effort cleanup; detach remaining listeners even if one fails.
+        }
+      }
     };
   }
 
