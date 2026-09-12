@@ -286,6 +286,63 @@ test("updateEvent removes expired events before exposing the active list", () =>
   manager.generateRandomEvent = originalGenerator;
 });
 
+test("updateEvent applies caller-supplied spawnCooldownRange through the policy", () => {
+  const rows = 20;
+  const cols = 25;
+  const sequence = [0.12, 0.34, 0.28, 0.51, 0.76, 0.18, 0.63, 0.42];
+  const rng = makeSequenceRng(sequence.slice());
+  const manager = new EventManager(rows, cols, rng, {
+    startWithEvent: false,
+    spawnCooldownRange: { min: 50, max: 60 },
+  });
+
+  manager.updateEvent(1, 2);
+
+  const expected = expectedEventFromSequence(
+    sequence.slice(0, 7),
+    rows,
+    cols,
+    EVENT_TYPES,
+  );
+
+  assert.equal(manager.activeEvents[0], expected);
+
+  const base = Math.floor(sequence[7] * (60 - 50) + 50);
+
+  assert.is(
+    manager.cooldown,
+    Math.floor(base / 1),
+    "cooldown should be drawn from the configured range",
+  );
+});
+
+test("updateEvent scales cooldown by the frequency multiplier via the policy", () => {
+  const rows = 15;
+  const cols = 20;
+  const sequence = [0.11, 0.22, 0.33, 0.44, 0.55, 0.66, 0.77, 0.88];
+  const rng = makeSequenceRng(sequence.slice());
+  const manager = new EventManager(rows, cols, rng, { startWithEvent: false });
+
+  manager.updateEvent(0.5, 2);
+
+  const base = Math.floor(sequence[7] * (480 - 180) + 180);
+
+  assert.is(
+    manager.cooldown,
+    Math.floor(base / 0.5),
+    "frequency multiplier should compress the cadence",
+  );
+});
+
+test("EventManager sanitises spawnCooldownRange overrides", () => {
+  const manager = new EventManager(10, 10, Math.random, {
+    spawnCooldownRange: { min: 80, max: -10 },
+  });
+
+  assert.is(manager.spawnCooldownRange.min, 0, "negative max is clamped to min");
+  assert.is(manager.spawnCooldownRange.max, 80, "swapped bounds are re-ordered");
+});
+
 test("updateEvent recovers when activeEvents becomes a non-array", () => {
   const manager = new EventManager(6, 6, Math.random, { startWithEvent: false });
   const originalGenerator = manager.generateRandomEvent;
