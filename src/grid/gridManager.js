@@ -7,7 +7,7 @@ import {
 } from "../utils/math.js";
 import { isArrayLike, takeTopBy } from "../utils/collections.js";
 import { resolveCellColor } from "../utils/cell.js";
-import { warnOnce } from "../utils/error.js";
+import { invokeWithErrorBoundary, warnOnce } from "../utils/error.js";
 import DNA from "../genome.js";
 import Cell from "../cell.js";
 import { computeFitness } from "../stats/fitness.js";
@@ -9027,23 +9027,16 @@ export default class GridManager {
         return null;
       }
 
-      try {
-        const threshold = individual.resolveReproductionEnergyThreshold(
-          partner,
-          options,
-        );
+      const threshold = invokeWithErrorBoundary(
+        individual.resolveReproductionEnergyThreshold,
+        [partner, options],
+        {
+          message: "Failed to resolve neural reproduction energy threshold.",
+          reporter: warnOnce,
+        },
+      );
 
-        return Number.isFinite(threshold) ? threshold : null;
-      } catch (error) {
-        if (process?.env?.NODE_ENV !== "production") {
-          console.warn("Failed to resolve neural reproduction energy threshold", {
-            error,
-            individual,
-          });
-        }
-
-        return null;
-      }
+      return Number.isFinite(threshold) ? threshold : null;
     };
     const parentEnergyThreshold = resolveEnergyThreshold(cell, bestMate.target, {
       densityEffectMultiplier,
