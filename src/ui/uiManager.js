@@ -6128,42 +6128,46 @@ export default class UIManager {
     this.#applyOverlayToggle("showGridLines", value, options);
   }
 
-  setLifeEventFadeTicks(value, { notify = true } = {}) {
-    const { value: sanitized, bounds } = clampSliderValue("lifeEventFadeTicks", value, {
-      fallback: this.lifeEventFadeTicks,
-    });
-
-    if (!Number.isFinite(sanitized)) {
-      return;
-    }
-
-    const normalized = normalizeSliderStepValue(sanitized, bounds, {
-      defaultMin: 1,
-      defaultStep: 1,
-    });
-    const changed = this.lifeEventFadeTicks !== normalized;
-
-    this.lifeEventFadeTicks = normalized;
-    this.#syncSliderInput("lifeEventFadeTicks", normalized);
-
-    if (this.lifeEventFadeSlider) {
-      this.lifeEventFadeSlider.value = String(normalized);
-    }
-
-    this.#updateLifeEventControlsState();
-
-    if (changed) {
-      if (notify) {
-        this.#notifySettingChange("lifeEventFadeTicks", normalized);
-      }
-
-      this.#scheduleUpdate();
-    }
+  setLifeEventFadeTicks(value, options) {
+    this.#applyLifeEventSliderSetting(
+      "lifeEventFadeTicks",
+      "lifeEventFadeSlider",
+      value,
+      {
+        ...options,
+        defaultMin: 1,
+      },
+    );
   }
 
-  setLifeEventLimit(value, { notify = true } = {}) {
-    const { value: sanitized, bounds } = clampSliderValue("lifeEventLimit", value, {
-      fallback: this.lifeEventLimit,
+  setLifeEventLimit(value, options) {
+    this.#applyLifeEventSliderSetting("lifeEventLimit", "lifeEventLimitSlider", value, {
+      ...options,
+      defaultMin: 0,
+    });
+  }
+
+  /**
+   * Shared implementation for the life-event marker slider setters. Both
+   * `setLifeEventFadeTicks` and `setLifeEventLimit` follow the same flow:
+   * clamp/snap a candidate, push the value into the manager, sync the slider
+   * input, refresh marker controls, and (when the value changed) notify
+   * observers and request a frame. Centralising the flow keeps the per-setting
+   * setters tiny and prevents drift between the fade/limit variants.
+   *
+   * @param {string} key - Setting key (e.g. `"lifeEventFadeTicks"`).
+   * @param {string} sliderField - Name of the slider DOM-element field on the
+   *   manager (e.g. `"lifeEventFadeSlider"`).
+   * @param {unknown} value - Candidate value provided by the caller.
+   * @param {{ notify?: boolean, defaultMin?: number } & object} [options]
+   *   - Optional overrides; `notify` defaults to `true` and `defaultMin`
+   *   defines the fallback lower bound used when the resolved slider config
+   *   omits a minimum.
+   */
+  #applyLifeEventSliderSetting(key, sliderField, value, options = {}) {
+    const { notify = true, defaultMin } = options;
+    const { value: sanitized, bounds } = clampSliderValue(key, value, {
+      fallback: this[key],
     });
 
     if (!Number.isFinite(sanitized)) {
@@ -6171,23 +6175,25 @@ export default class UIManager {
     }
 
     const normalized = normalizeSliderStepValue(sanitized, bounds, {
-      defaultMin: 0,
+      defaultMin,
       defaultStep: 1,
     });
-    const changed = this.lifeEventLimit !== normalized;
+    const changed = this[key] !== normalized;
 
-    this.lifeEventLimit = normalized;
-    this.#syncSliderInput("lifeEventLimit", normalized);
+    this[key] = normalized;
+    this.#syncSliderInput(key, normalized);
 
-    if (this.lifeEventLimitSlider) {
-      this.lifeEventLimitSlider.value = String(normalized);
+    const slider = this[sliderField];
+
+    if (slider) {
+      slider.value = String(normalized);
     }
 
     this.#updateLifeEventControlsState();
 
     if (changed) {
       if (notify) {
-        this.#notifySettingChange("lifeEventLimit", normalized);
+        this.#notifySettingChange(key, normalized);
       }
 
       this.#scheduleUpdate();
