@@ -1,14 +1,25 @@
 import { EVENT_TYPES } from "./eventEffects.js";
-import {
-  clamp,
-  randomRange,
-  sanitizeNumber,
-  sanitizePositiveInteger,
-} from "../utils/math.js";
+import { clamp, randomRange, sanitizePositiveInteger } from "../utils/math.js";
 import { warnOnce, invokeWithErrorBoundary } from "../utils/error.js";
 import { defaultIsEventAffecting } from "./eventContext.js";
+import {
+  DEFAULT_SPAWN_COOLDOWN_RANGE,
+  planRandomEvent,
+  planSpawnCooldown,
+  resolveSpawnCooldownRange,
+  sanitizeRandomEventConfig,
+} from "./eventGenerationPolicy.js";
 
-export { defaultIsEventAffecting as isEventAffecting };
+export {
+  clampEventStart,
+  DEFAULT_RANDOM_EVENT_CONFIG,
+  DEFAULT_SPAWN_COOLDOWN_RANGE,
+  resolveSpawnCooldownRange,
+  sampleEventSpan,
+  sanitizeRandomEventConfig,
+} from "./eventGenerationPolicy.js";
+
+export { defaultIsEventAffecting as isEventAffecting } from "./eventContext.js";
 
 function normalizeEventTypes(candidate) {
   if (!Array.isArray(candidate)) {
@@ -29,154 +40,6 @@ const WARNINGS = Object.freeze({
     "Custom event color resolver threw; falling back to default palette.",
   pickEventType: "Custom event type picker threw; falling back to default selector.",
 });
-
-export const DEFAULT_RANDOM_EVENT_CONFIG = Object.freeze({
-  durationRange: Object.freeze({ min: 300, max: 900 }),
-  strengthRange: Object.freeze({ min: 0.25, max: 1 }),
-  span: Object.freeze({ min: 10, ratio: 1 / 3 }),
-});
-
-function sanitizeNumericRange(range, fallback, { min: minBound, max: maxBound } = {}) {
-  const candidate = range ?? {};
-  const rawMin = Number.isFinite(candidate.min)
-    ? candidate.min
-    : Array.isArray(candidate) && Number.isFinite(candidate[0])
-      ? candidate[0]
-      : undefined;
-  const rawMax = Number.isFinite(candidate.max)
-    ? candidate.max
-    : Array.isArray(candidate) && Number.isFinite(candidate[1])
-      ? candidate[1]
-      : undefined;
-
-  if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) {
-    return { ...fallback };
-  }
-
-  let min = rawMin;
-  let max = rawMax;
-
-  if (min > max) {
-    [min, max] = [max, min];
-  }
-
-  if (Number.isFinite(minBound)) {
-    min = Math.max(min, minBound);
-  }
-
-  if (Number.isFinite(maxBound)) {
-    max = Math.min(max, maxBound);
-  }
-
-  if (max < min) {
-    return { ...fallback };
-  }
-
-  return { min, max };
-}
-
-function sanitizeSpanConfig(candidate, fallback) {
-  if (!candidate || typeof candidate !== "object") {
-    return { ...fallback };
-  }
-
-  const ratioCandidate = candidate.ratio ?? candidate.fraction ?? candidate.maxFraction;
-
-  const min = sanitizeNumber(candidate.min, {
-    fallback: fallback.min,
-    min: 1,
-    round: Math.floor,
-  });
-
-  const ratio = sanitizeNumber(ratioCandidate, {
-    fallback: fallback.ratio,
-    min: 0,
-    max: 1,
-  });
-
-  return { min, ratio };
-}
-
-export function sanitizeRandomEventConfig(candidate) {
-  if (!candidate || typeof candidate !== "object") {
-    return {
-      durationRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.durationRange },
-      strengthRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.strengthRange },
-      span: { ...DEFAULT_RANDOM_EVENT_CONFIG.span },
-    };
-  }
-
-  const durationRange = sanitizeNumericRange(
-    candidate.durationRange,
-    DEFAULT_RANDOM_EVENT_CONFIG.durationRange,
-    {
-      min: 1,
-    },
-  );
-  const strengthRange = sanitizeNumericRange(
-    candidate.strengthRange,
-    DEFAULT_RANDOM_EVENT_CONFIG.strengthRange,
-    { min: 0 },
-  );
-  const span = sanitizeSpanConfig(candidate.span, DEFAULT_RANDOM_EVENT_CONFIG.span);
-
-  return { durationRange, strengthRange, span };
-}
-
-/**
- * Samples the horizontal or vertical span (in grid cells) that a randomly
- * generated event should cover. The helper defends against misconfigured
- * ranges by clamping values to sane bounds so downstream code never receives a
- * zero or negative length.
- *
- * @param {number} limit - Maximum available span, typically the grid dimension
- *   under consideration.
- * @param {() => number} rng - Random number generator returning a float in the
- *   range `[0, 1)`.
- * @param {{min?: number, ratio?: number}} [spanConfig=DEFAULT_RANDOM_EVENT_CONFIG.span]
- *   - Caller-supplied overrides for the minimum span and the fraction of the
- *   limit to target. Missing or invalid properties fall back to
- *   `DEFAULT_RANDOM_EVENT_CONFIG.span`.
- * @returns {number} Integer span guaranteed to be at least 1 and at most the
- *   provided limit.
- */
-export function sampleEventSpan(
-  limit,
-  rng,
-  spanConfig = DEFAULT_RANDOM_EVENT_CONFIG.span,
-) {
-  const maxSpan = Math.max(1, Math.floor(limit));
-  const { min: sanitizedMin, ratio } = sanitizeSpanConfig(
-    spanConfig,
-    DEFAULT_RANDOM_EVENT_CONFIG.span,
-  );
-  const minSpan = Math.min(sanitizedMin, maxSpan);
-  const spanCandidate = Math.max(minSpan, Math.floor(maxSpan * ratio));
-  const upperExclusive = spanCandidate === minSpan ? minSpan + 1 : spanCandidate + 1;
-  const raw = Math.floor(randomRange(minSpan, upperExclusive, rng));
-
-  return clamp(raw, 1, maxSpan);
-}
-
-/**
- * Ensures an event's starting coordinate keeps the requested span within the
- * grid bounds. When the grid is smaller than the span, the event is forced to
- * start at `0`, which effectively covers the entire axis without wrapping.
- *
- * @param {number} rawStart - Proposed starting index for the event.
- * @param {number} span - Number of cells the event should cover.
- * @param {number} limit - Total number of cells along the axis being targeted.
- * @returns {number} Clamped starting index in the inclusive range `[0, limit - span]`.
- */
-export function clampEventStart(rawStart, span, limit) {
-  const maxStart = Math.max(0, Math.floor(limit) - span);
-
-  if (maxStart <= 0) {
-    return 0;
-  }
-
-  return clamp(rawStart, 0, maxStart);
-}
 
 /**
  * Ensures the manager maintains an array for `activeEvents`, replacing invalid
@@ -232,7 +95,9 @@ function advanceEventLifecycle(events) {
 /**
  * Spawns a new environmental event when the cooldown has elapsed and the pool
  * has capacity. On success the new event is appended to the provided array and
- * the next cooldown duration is returned.
+ * the next cooldown duration is returned. The cadence decision itself is
+ * delegated to `planSpawnCooldown` so the mechanism stays focused on lifecycle
+ * bookkeeping.
  *
  * @param {Object} params
  * @param {Array} params.events
@@ -240,6 +105,7 @@ function advanceEventLifecycle(events) {
  * @param {number} params.frequencyMultiplier
  * @param {number} params.maxConcurrent
  * @param {() => Object|null} params.generateEvent
+ * @param {{min:number,max:number}} params.cooldownRange
  * @param {() => number} params.rng
  * @returns {number}
  */
@@ -249,6 +115,7 @@ function maybeSpawnEvent({
   frequencyMultiplier,
   maxConcurrent,
   generateEvent,
+  cooldownRange,
   rng,
 }) {
   const canSpawn =
@@ -268,9 +135,11 @@ function maybeSpawnEvent({
 
   events.push(nextEvent);
 
-  const base = Math.floor(randomRange(180, 480, rng));
-
-  return Math.max(0, Math.floor(base / Math.max(0.01, frequencyMultiplier)));
+  return planSpawnCooldown({
+    rng,
+    frequencyMultiplier,
+    cooldownRange,
+  });
 }
 
 /**
@@ -305,6 +174,9 @@ export default class EventManager {
    *   strengthRange?: {min:number,max:number}|number[],
    *   span?: {min:number,ratio?:number,fraction?:number,maxFraction?:number},
    * }} [options.randomEventConfig] Tunable ranges used when generating random events.
+   * @param {{min?:number,max?:number}|number[]} [options.spawnCooldownRange]
+   *   - Optional override for the cooldown window applied between spawns.
+   *   Falls back to {@link DEFAULT_SPAWN_COOLDOWN_RANGE}.
    */
   constructor(rows, cols, rng = Math.random, options = {}) {
     this.rows = rows;
@@ -320,9 +192,11 @@ export default class EventManager {
       eventTypes: injectedEventTypes,
       pickEventType,
       randomEventConfig,
+      spawnCooldownRange,
     } = options || {};
 
     this.randomEventConfig = sanitizeRandomEventConfig(randomEventConfig);
+    this.spawnCooldownRange = resolveSpawnCooldownRange(spawnCooldownRange);
     // Allow callers to override the event color palette without changing defaults.
     const defaultResolver = (eventType) =>
       EventManager.EVENT_COLORS[eventType] ?? EventManager.DEFAULT_EVENT_COLOR;
@@ -454,27 +328,15 @@ export default class EventManager {
   }
 
   generateRandomEvent() {
-    const eventType = this.pickEventType();
-    // Bias durations so events are visible but not constant
-    const { durationRange, strengthRange, span } = this.randomEventConfig;
-    const duration = Math.floor(
-      randomRange(durationRange.min, durationRange.max, this.rng),
-    );
-    const strength = randomRange(strengthRange.min, strengthRange.max, this.rng);
-    const rawX = Math.floor(randomRange(0, this.cols, this.rng));
-    const rawY = Math.floor(randomRange(0, this.rows, this.rng));
-    const width = sampleEventSpan(this.cols, this.rng, span);
-    const height = sampleEventSpan(this.rows, this.rng, span);
-    const x = clampEventStart(rawX, width, this.cols);
-    const y = clampEventStart(rawY, height, this.rows);
-    const affectedArea = {
-      x,
-      y,
-      width,
-      height,
-    };
+    const plan = planRandomEvent({
+      pickEventType: this.pickEventType,
+      randomEventConfig: this.randomEventConfig,
+      rows: this.rows,
+      cols: this.cols,
+      rng: this.rng,
+    });
 
-    return { eventType, duration, affectedArea, strength, remaining: duration };
+    return { ...plan, remaining: plan.duration };
   }
 
   reset({ startWithEvent = false } = {}) {
@@ -505,6 +367,7 @@ export default class EventManager {
       frequencyMultiplier,
       maxConcurrent,
       generateEvent: () => this.generateRandomEvent(),
+      cooldownRange: this.spawnCooldownRange,
       rng: this.rng,
     });
 
