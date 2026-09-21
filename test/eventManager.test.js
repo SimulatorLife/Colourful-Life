@@ -1,5 +1,6 @@
 import { assert, test } from "#tests/harness";
 import EventManager, {
+  DEFAULT_RANDOM_EVENT_CONFIG,
   sanitizeRandomEventConfig,
   sampleEventSpan,
   clampEventStart,
@@ -230,7 +231,8 @@ test("updateEvent spawns new events after the queue empties", () => {
   assert.equal(manager.activeEvents[0], expected);
   assert.equal(manager.currentEvent, expected);
 
-  const base = Math.floor(sequence[7] * (480 - 180) + 180);
+  const { min: cooldownMin, max: cooldownMax } = DEFAULT_RANDOM_EVENT_CONFIG.cooldown;
+  const base = Math.floor(sequence[7] * (cooldownMax - cooldownMin) + cooldownMin);
 
   assert.is(manager.cooldown, Math.floor(base / 1));
   assert.is(rng.getCalls(), sequence.length, "all RNG samples should be consumed");
@@ -253,6 +255,27 @@ test("updateEvent counts down cooldown and spawns once ready", () => {
   assert.is(manager.activeEvents.length, 1, "event spawns once cooldown reaches zero");
   assert.is(rng.getCalls(), sequence.length, "spawn should consume the RNG sequence");
   assert.ok(manager.cooldown > 0, "cooldown resets after spawning");
+});
+
+test("updateEvent honours a custom cooldown range from randomEventConfig", () => {
+  const rows = 30;
+  const cols = 45;
+  const sequence = [0.12, 0.34, 0.28, 0.51, 0.76, 0.18, 0.63, 0.42];
+  const rng = makeSequenceRng(sequence.slice());
+  const customCooldown = { min: 50, max: 100 };
+  const manager = new EventManager(rows, cols, rng, {
+    startWithEvent: false,
+    randomEventConfig: { cooldown: customCooldown },
+  });
+
+  manager.updateEvent(1, 3);
+
+  const base = Math.floor(
+    sequence[7] * (customCooldown.max - customCooldown.min) + customCooldown.min,
+  );
+
+  assert.is(manager.cooldown, Math.floor(base / 1));
+  assert.is(rng.getCalls(), sequence.length);
 });
 
 test("updateEvent removes expired events before exposing the active list", () => {
