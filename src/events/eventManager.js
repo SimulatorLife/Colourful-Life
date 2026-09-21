@@ -34,6 +34,10 @@ export const DEFAULT_RANDOM_EVENT_CONFIG = Object.freeze({
   durationRange: Object.freeze({ min: 300, max: 900 }),
   strengthRange: Object.freeze({ min: 0.25, max: 1 }),
   span: Object.freeze({ min: 10, ratio: 1 / 3 }),
+  // Respawn cooldown bounds (in ticks) sampled after a successful spawn. The
+  // base sample is divided by the frequency multiplier at call time, so the
+  // raw range intentionally lives at full-tempo pacing.
+  cooldownRange: Object.freeze({ min: 180, max: 480 }),
 });
 
 function sanitizeNumericRange(range, fallback, { min: minBound, max: maxBound } = {}) {
@@ -103,6 +107,7 @@ export function sanitizeRandomEventConfig(candidate) {
       durationRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.durationRange },
       strengthRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.strengthRange },
       span: { ...DEFAULT_RANDOM_EVENT_CONFIG.span },
+      cooldownRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.cooldownRange },
     };
   }
 
@@ -119,8 +124,13 @@ export function sanitizeRandomEventConfig(candidate) {
     { min: 0 },
   );
   const span = sanitizeSpanConfig(candidate.span, DEFAULT_RANDOM_EVENT_CONFIG.span);
+  const cooldownRange = sanitizeNumericRange(
+    candidate.cooldownRange,
+    DEFAULT_RANDOM_EVENT_CONFIG.cooldownRange,
+    { min: 1 },
+  );
 
-  return { durationRange, strengthRange, span };
+  return { durationRange, strengthRange, span, cooldownRange };
 }
 
 /**
@@ -241,6 +251,10 @@ function advanceEventLifecycle(events) {
  * @param {number} params.maxConcurrent
  * @param {() => Object|null} params.generateEvent
  * @param {() => number} params.rng
+ * @param {{min:number,max:number}} [params.cooldownRange=DEFAULT_RANDOM_EVENT_CONFIG.cooldownRange]
+ *   - Inclusive [min, max) bounds for the next cooldown drawn after a
+ *   successful spawn. Mirrors `durationRange`/`strengthRange` so deployments
+ *   can tune respawn pacing without editing the simulation core.
  * @returns {number}
  */
 function maybeSpawnEvent({
@@ -250,6 +264,7 @@ function maybeSpawnEvent({
   maxConcurrent,
   generateEvent,
   rng,
+  cooldownRange = DEFAULT_RANDOM_EVENT_CONFIG.cooldownRange,
 }) {
   const canSpawn =
     Array.isArray(events) &&
@@ -268,7 +283,14 @@ function maybeSpawnEvent({
 
   events.push(nextEvent);
 
-  const base = Math.floor(randomRange(180, 480, rng));
+  const { min: cooldownMin, max: cooldownMax } = sanitizeNumericRange(
+    cooldownRange,
+    DEFAULT_RANDOM_EVENT_CONFIG.cooldownRange,
+    {
+      min: 1,
+    },
+  );
+  const base = Math.floor(randomRange(cooldownMin, cooldownMax, rng));
 
   return Math.max(0, Math.floor(base / Math.max(0.01, frequencyMultiplier)));
 }
@@ -304,6 +326,7 @@ export default class EventManager {
    *   durationRange?: {min:number,max:number}|number[],
    *   strengthRange?: {min:number,max:number}|number[],
    *   span?: {min:number,ratio?:number,fraction?:number,maxFraction?:number},
+   *   cooldownRange?: {min:number,max:number}|number[],
    * }} [options.randomEventConfig] Tunable ranges used when generating random events.
    */
   constructor(rows, cols, rng = Math.random, options = {}) {
@@ -506,6 +529,7 @@ export default class EventManager {
       maxConcurrent,
       generateEvent: () => this.generateRandomEvent(),
       rng: this.rng,
+      cooldownRange: this.randomEventConfig.cooldownRange,
     });
 
     // Maintain compatibility: expose the first active event as currentEvent
