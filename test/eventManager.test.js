@@ -236,6 +236,40 @@ test("updateEvent spawns new events after the queue empties", () => {
   assert.is(rng.getCalls(), sequence.length, "all RNG samples should be consumed");
 });
 
+test("randomEventConfig cooldownRange tunes the next-event cooldown", () => {
+  const rows = 30;
+  const cols = 45;
+  const sequence = [0.12, 0.34, 0.28, 0.51, 0.76, 0.18, 0.63, 0.42];
+  const rng = makeSequenceRng(sequence.slice());
+  const config = {
+    cooldownRange: { min: 600, max: 900 },
+  };
+  const manager = new EventManager(rows, cols, rng, {
+    startWithEvent: false,
+    randomEventConfig: config,
+  });
+
+  manager.updateEvent(1, 3);
+
+  const expected = expectedEventFromSequence(
+    sequence.slice(0, 7),
+    rows,
+    cols,
+    EVENT_TYPES,
+  );
+
+  assert.is(manager.activeEvents.length, 1, "a new event should be spawned");
+  assert.equal(manager.activeEvents[0], expected);
+
+  const base = Math.floor(sequence[7] * (900 - 600) + 600);
+
+  assert.is(
+    manager.cooldown,
+    Math.floor(base / 1),
+    "cooldown should respect the configured cooldownRange",
+  );
+});
+
 test("updateEvent counts down cooldown and spawns once ready", () => {
   const rows = 20;
   const cols = 20;
