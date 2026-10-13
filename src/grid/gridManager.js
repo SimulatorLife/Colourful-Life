@@ -498,6 +498,7 @@ function computeCrowdingFeedback({
 }
 
 const DECAY_EPSILON = 1e-4;
+const MULTIPLIER_EPSILON = 1e-9;
 const TARGET_DESCRIPTOR_POOL_DECAY = 0.82;
 const TARGET_DESCRIPTOR_POOL_MIN = 256;
 
@@ -5446,7 +5447,7 @@ export default class GridManager {
         }
       }
 
-      if (regenMultiplier !== 1) {
+      if (Math.abs(regenMultiplier - 1) > MULTIPLIER_EPSILON) {
         regen *= regenMultiplier;
       }
 
