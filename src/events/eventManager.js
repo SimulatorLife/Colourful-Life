@@ -34,6 +34,7 @@ export const DEFAULT_RANDOM_EVENT_CONFIG = Object.freeze({
   durationRange: Object.freeze({ min: 300, max: 900 }),
   strengthRange: Object.freeze({ min: 0.25, max: 1 }),
   span: Object.freeze({ min: 10, ratio: 1 / 3 }),
+  cooldown: Object.freeze({ min: 180, max: 480 }),
 });
 
 function sanitizeNumericRange(range, fallback, { min: minBound, max: maxBound } = {}) {
@@ -103,6 +104,7 @@ export function sanitizeRandomEventConfig(candidate) {
       durationRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.durationRange },
       strengthRange: { ...DEFAULT_RANDOM_EVENT_CONFIG.strengthRange },
       span: { ...DEFAULT_RANDOM_EVENT_CONFIG.span },
+      cooldown: { ...DEFAULT_RANDOM_EVENT_CONFIG.cooldown },
     };
   }
 
@@ -119,8 +121,13 @@ export function sanitizeRandomEventConfig(candidate) {
     { min: 0 },
   );
   const span = sanitizeSpanConfig(candidate.span, DEFAULT_RANDOM_EVENT_CONFIG.span);
+  const cooldown = sanitizeNumericRange(
+    candidate.cooldown,
+    DEFAULT_RANDOM_EVENT_CONFIG.cooldown,
+    { min: 1 },
+  );
 
-  return { durationRange, strengthRange, span };
+  return { durationRange, strengthRange, span, cooldown };
 }
 
 /**
@@ -237,6 +244,7 @@ function advanceEventLifecycle(events) {
  * @param {Object} params
  * @param {Array} params.events
  * @param {number} params.cooldown
+ * @param {{min: number, max: number}} params.cooldownRange
  * @param {number} params.frequencyMultiplier
  * @param {number} params.maxConcurrent
  * @param {() => Object|null} params.generateEvent
@@ -246,6 +254,7 @@ function advanceEventLifecycle(events) {
 function maybeSpawnEvent({
   events,
   cooldown,
+  cooldownRange,
   frequencyMultiplier,
   maxConcurrent,
   generateEvent,
@@ -268,7 +277,14 @@ function maybeSpawnEvent({
 
   events.push(nextEvent);
 
-  const base = Math.floor(randomRange(180, 480, rng));
+  const range = cooldownRange ?? DEFAULT_RANDOM_EVENT_CONFIG.cooldown;
+  const min = Number.isFinite(range?.min)
+    ? range.min
+    : DEFAULT_RANDOM_EVENT_CONFIG.cooldown.min;
+  const max = Number.isFinite(range?.max)
+    ? range.max
+    : DEFAULT_RANDOM_EVENT_CONFIG.cooldown.max;
+  const base = Math.floor(randomRange(min, max, rng));
 
   return Math.max(0, Math.floor(base / Math.max(0.01, frequencyMultiplier)));
 }
@@ -502,6 +518,7 @@ export default class EventManager {
     this.cooldown = maybeSpawnEvent({
       events,
       cooldown: this.cooldown,
+      cooldownRange: this.randomEventConfig.cooldown,
       frequencyMultiplier,
       maxConcurrent,
       generateEvent: () => this.generateRandomEvent(),
