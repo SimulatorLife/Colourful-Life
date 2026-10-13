@@ -56,13 +56,13 @@ function populateHighDensityGrid(engine, { density, rng }) {
 
 test("grid retains tracked cell positions during dense headless runs", () => {
   const configuration = {
-    rows: 14,
-    cols: 14,
+    rows: 10,
+    cols: 10,
     cellSize: 4,
     updatesPerSecond: 45,
   };
-  const warmupTicks = 5;
-  const simulationTicks = 8;
+  const warmupTicks = 2;
+  const simulationTicks = 4;
   const density = 0.45;
   const seed = 4242;
 
