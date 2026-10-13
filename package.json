@@ -69,6 +69,6 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "parcel": "^2.16.4",
-    "prettier": "^3.9.9"
+    "prettier": "^3.9.10"
   }
 }
