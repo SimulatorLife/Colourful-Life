@@ -1,5 +1,9 @@
 import { assert, test } from "#tests/harness";
 import { approxEqual } from "./helpers/assertions.js";
+import {
+  __dangerousGetWarnOnceSize,
+  __dangerousResetWarnOnce,
+} from "../src/utils/error.js";
 
 test("GridManager.tryMove updates a cell's stored coordinates", async () => {
   const { default: GridManager } = await import("../src/grid/gridManager.js");
@@ -2083,5 +2087,170 @@ test("density counts stay consistent through spawn, movement, and removal", asyn
     assert.ok(density.every((row) => row.every((value) => Math.abs(value) < 1e-6)));
   } finally {
     GridManager.prototype.init = originalInit;
+  }
+});
+
+test("GridManager routes threshold-resolver failures through warnOnce", async () => {
+  const { default: GridManager } = await import("../src/grid/gridManager.js");
+  const { default: Cell } = await import("../src/cell.js");
+  const { default: DNA } = await import("../src/genome.js");
+  const { MAX_TILE_ENERGY } = await import("../src/config.js");
+
+  class TestGridManager extends GridManager {
+    init() {}
+  }
+
+  __dangerousResetWarnOnce();
+  const originalWarn = console.warn;
+  const warnings = [];
+
+  console.warn = (...args) => {
+    warnings.push(args);
+  };
+
+  let births = 0;
+  const stats = {
+    onBirth: () => {
+      births += 1;
+    },
+    onDeath() {},
+    recordMateChoice() {},
+  };
+
+  const gm = new TestGridManager(2, 3, {
+    eventManager: { activeEvents: [] },
+    stats,
+  });
+
+  gm.rebuildActiveCells();
+
+  const densityGrid = Array.from({ length: 2 }, () =>
+    Array.from({ length: 3 }, () => 0),
+  );
+
+  const dnaA = new DNA(0, 0, 0);
+  const dnaB = new DNA(0, 0, 0);
+
+  dnaA.reproductionThresholdFrac = () => 0.3;
+  dnaB.reproductionThresholdFrac = () => 0.3;
+  dnaA.parentalInvestmentFrac = () => 0.5;
+  dnaB.parentalInvestmentFrac = () => 0.5;
+  dnaA.offspringEnergyDemandFrac = () => 0.05;
+  dnaB.offspringEnergyDemandFrac = () => 0.05;
+  dnaA.offspringEnergyTransferEfficiency = () => 1;
+  dnaB.offspringEnergyTransferEfficiency = () => 1;
+  dnaA.offspringViabilityBuffer = () => 1;
+  dnaB.offspringViabilityBuffer = () => 1;
+
+  const parent = new Cell(0, 1, dnaA, MAX_TILE_ENERGY * 0.5);
+  const mate = new Cell(0, 2, dnaB, MAX_TILE_ENERGY * 0.55);
+
+  parent.computeReproductionProbability = () => 1;
+  parent.decideReproduction = () => ({ probability: 1, usedNetwork: true });
+  mate.computeReproductionProbability = () => 1;
+  mate.decideReproduction = () => ({ probability: 1, usedNetwork: true });
+
+  const thrown = new Error("resolver blew up");
+  let parentCalls = 0;
+  let mateCalls = 0;
+
+  parent.resolveReproductionEnergyThreshold = () => {
+    parentCalls += 1;
+    throw thrown;
+  };
+  mate.resolveReproductionEnergyThreshold = () => {
+    mateCalls += 1;
+    throw thrown;
+  };
+
+  const mateEntry = parent.evaluateMateCandidate({
+    row: mate.row,
+    col: mate.col,
+    target: mate,
+  }) || {
+    target: mate,
+    row: mate.row,
+    col: mate.col,
+    similarity: 1,
+    diversity: 0,
+    selectionWeight: 1,
+    preferenceScore: 1,
+  };
+
+  parent.selectMateWeighted = () => ({
+    chosen: mateEntry,
+    evaluated: [mateEntry],
+    mode: "preference",
+  });
+  parent.findBestMate = () => mateEntry;
+
+  gm.setCell(0, 1, parent);
+  gm.setCell(0, 2, mate);
+
+  const originalRandom = Math.random;
+  const originalBreed = Cell.breed;
+
+  Math.random = () => 0;
+  Cell.breed = (parentA, parentB, mutationMultiplier, options) => {
+    const result = originalBreed.call(
+      Cell,
+      parentA,
+      parentB,
+      mutationMultiplier,
+      options,
+    );
+
+    if (result) return result;
+
+    const fallbackEnergy = Math.max(
+      0.01 * MAX_TILE_ENERGY,
+      Math.min(parentA.energy, parentB.energy) * 0.1,
+    );
+    const offspring = new Cell(parentA.row, parentA.col, parentA.dna, fallbackEnergy);
+
+    parentA.energy = Math.max(0, parentA.energy - fallbackEnergy * 0.5);
+    parentB.energy = Math.max(0, parentB.energy - fallbackEnergy * 0.5);
+
+    return offspring;
+  };
+
+  try {
+    const reproduced = gm.handleReproduction(
+      0,
+      1,
+      parent,
+      { mates: [mateEntry], society: [] },
+      {
+        stats,
+        densityGrid,
+        densityEffectMultiplier: 1,
+        mutationMultiplier: 1,
+      },
+    );
+
+    assert.is(reproduced, true, "reproduction should fall back when resolver throws");
+    assert.is(births, 1, "fallback path should still produce an offspring");
+    assert.ok(parentCalls >= 1, "parent resolver should be consulted");
+    assert.ok(mateCalls >= 1, "mate resolver should be consulted");
+    assert.is(
+      warnings.length,
+      1,
+      "warnOnce should emit a single warning per unique resolver failure",
+    );
+    assert.match(
+      warnings[0][0],
+      /Failed to resolve neural reproduction energy threshold/,
+    );
+    assert.is(warnings[0][1], thrown, "warning should forward the original error");
+    assert.is(
+      __dangerousGetWarnOnceSize(),
+      1,
+      "deduplication should retain exactly one resolver failure entry",
+    );
+  } finally {
+    Math.random = originalRandom;
+    Cell.breed = originalBreed;
+    console.warn = originalWarn;
+    __dangerousResetWarnOnce();
   }
 });
