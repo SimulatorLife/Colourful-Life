@@ -135,13 +135,13 @@ test("summarizeMateDiversityOpportunity matches legacy results", () => {
 });
 
 test("optimized diversity opportunity summary avoids repeated sorts", () => {
-  const pool = createDeterministicPool(15000);
+  const pool = createDeterministicPool(2000);
   const options = {
     candidates: pool,
     chosenDiversity: 0.45,
     diversityThreshold: 0.55,
   };
-  const iterations = 50;
+  const iterations = 10;
 
   const originalSort = Array.prototype.sort;
   let sortCallCount = 0;

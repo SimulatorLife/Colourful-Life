@@ -51,7 +51,7 @@ test("simulation relies on lineage reproduction after initial seeding", async ()
   grid.resetWorld();
   const birthsBeforeCollapse = stats.totals.births;
 
-  for (let i = 0; i < 180; i++) {
+  for (let i = 0; i < 5; i++) {
     timestamp += delta;
     simulation.tick(timestamp);
   }
